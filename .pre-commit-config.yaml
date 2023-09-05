@@ -1,0 +1,56 @@
+default_language_version:
+  python: "3.11"
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v2.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-toml
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+  - repo: https://github.com/provinzkraut/unasyncd
+    rev: "v0.6.0"
+    hooks:
+      - id: unasyncd
+        additional_dependencies: ["ruff"]
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: "v0.0.286"
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.5
+    hooks:
+      - id: codespell
+        exclude: "tests/openapi/typescript_converter/test_converter"
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        args: [--config=./pyproject.toml]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.5.1"
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          [
+            aiosqlite,
+            async_timeout,
+            asyncmy,
+            asyncpg,
+            asyncpg_stubs,
+            oracledb,
+            psycopg,
+            pytest,
+            pytest-mock,
+            pytest-timeout,
+            sqlalchemy>=2.0.12,
+          ]
