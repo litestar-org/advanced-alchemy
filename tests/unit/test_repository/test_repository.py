@@ -7,21 +7,21 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
-from sqla_repo import (
+from advanced_alchemy import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
     base,
     wrap_sqlalchemy_exception,
 )
-from sqla_repo.exceptions import ConflictError, RepositoryError
-from sqla_repo.filters import (
+from advanced_alchemy.exceptions import ConflictError, RepositoryError
+from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
     LimitOffset,
     NotInCollectionFilter,
     OnBeforeAfter,
 )
+from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import String
 from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession

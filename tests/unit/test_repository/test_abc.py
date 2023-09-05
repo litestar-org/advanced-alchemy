@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-from sqla_repo.exceptions import NotFoundError
-from sqla_repo.repository.testing.generic_mock_repository import GenericAsyncMockRepository
+from advanced_alchemy.exceptions import NotFoundError
+from advanced_alchemy.repository.testing.generic_mock_repository import GenericAsyncMockRepository
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch

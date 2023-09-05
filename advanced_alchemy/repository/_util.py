@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from sqla_repo.exceptions import ConflictError, RepositoryError
+from advanced_alchemy.exceptions import ConflictError, RepositoryError
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import InstrumentedAttribute
 
-    from sqla_repo.base import ModelProtocol
+    from advanced_alchemy.base import ModelProtocol
 
 
 @contextmanager

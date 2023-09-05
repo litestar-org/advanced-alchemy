@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Tuple, TypeVar
 if TYPE_CHECKING:
     from sqlalchemy import Select
 
-    from sqla_repo import base
+    from advanced_alchemy import base
 
     from ._async import SQLAlchemyAsyncRepository
     from ._sync import SQLAlchemySyncRepository

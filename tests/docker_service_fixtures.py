@@ -55,7 +55,7 @@ class DockerServiceRegistry:
             "docker",
             "compose",
             f"--file={Path(__file__).parent / 'docker-compose.yml'}",
-            f"--project-name=sqla_repo-{worker_id}",
+            f"--project-name=advanced_alchemy-{worker_id}",
         ]
 
     def _get_docker_ip(self) -> str:

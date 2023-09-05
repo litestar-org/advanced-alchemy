@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Protocol, Type, Union, cast
 from uuid import uuid4
 
 import pytest
-from sqla_repo import base
-from sqla_repo.exceptions import ConflictError, RepositoryError
-from sqla_repo.filters import LimitOffset
-from sqla_repo.repository.testing.generic_mock_repository import (
+from advanced_alchemy import base
+from advanced_alchemy.exceptions import ConflictError, RepositoryError
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository.testing.generic_mock_repository import (
     GenericAsyncMockRepository,
     GenericSyncMockRepository,
 )

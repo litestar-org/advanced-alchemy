@@ -3,10 +3,10 @@ from __future__ import annotations
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from sqla_repo.exceptions import NotFoundError
+from advanced_alchemy.exceptions import NotFoundError
 
 if TYPE_CHECKING:
-    from sqla_repo.filters import FilterTypes
+    from advanced_alchemy.filters import FilterTypes
 
 T = TypeVar("T")
 CollectionT = TypeVar("CollectionT")

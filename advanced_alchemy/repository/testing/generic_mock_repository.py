@@ -8,8 +8,8 @@ from datetime import datetime, timezone, tzinfo
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 from uuid import uuid4
 
-from sqla_repo import AbstractAsyncRepository, AbstractSyncRepository, FilterTypes
-from sqla_repo.exceptions import ConflictError, RepositoryError
+from advanced_alchemy import AbstractAsyncRepository, AbstractSyncRepository, FilterTypes
+from advanced_alchemy.exceptions import ConflictError, RepositoryError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, MutableMapping

@@ -1,5 +1,5 @@
 [project]
-name = "sqla_repo"
+name = "advanced_alchemy"
 version = "0.1.0"
 description = ""
 authors = [
@@ -77,7 +77,7 @@ ignore = [
     "PERF203",  # ignore for now; investigate
 
 ]
-src = ["sqla_repo", "tests"]
+src = ["advanced_alchemy", "tests"]
 target-version = "py38"
 line-length = 120
 
@@ -145,17 +145,17 @@ add_editors_note = true
 ruff_fix = true
 
 [tool.unasyncd.files]
-"sqla_repo/repository/_async.py" = "sqla_repo/repository/_sync.py"
-"sqla_repo/repository/abc/_async.py" = "sqla_repo/repository/abc/_sync.py"
+"advanced_alchemy/repository/_async.py" = "advanced_alchemy/repository/_sync.py"
+"advanced_alchemy/repository/abc/_async.py" = "advanced_alchemy/repository/abc/_sync.py"
 
-[tool.unasyncd.per_file_add_replacements."sqla_repo/repository/abc/_async.py"]
+[tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/abc/_async.py"]
 "AbstractAsyncRepository" = "AbstractSyncRepository"
 "AsyncRepoT" = "SyncRepoT"
 
-[tool.unasyncd.per_file_add_replacements."sqla_repo/repository/_async.py"]
+[tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
-"sqla_repo.repository.abc.AbstractAsyncRepository" = "sqla_repo.repository.abc.AbstractSyncRepository"
+"advanced_alchemy.repository.abc.AbstractAsyncRepository" = "advanced_alchemy.repository.abc.AbstractSyncRepository"
 
 
 

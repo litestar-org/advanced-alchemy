@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqla_repo import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
-from sqla_repo.base import BigIntAuditBase, BigIntBase
+from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

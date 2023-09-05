@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqla_repo import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository, base
-from sqla_repo.base import UUIDAuditBase, UUIDBase
+from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository, base
+from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
