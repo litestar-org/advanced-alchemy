@@ -19,12 +19,15 @@ classifiers = [
   "Topic :: Software Development",
   "Typing :: Typed",
   "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Topic :: Database",
+  "Topic :: Database :: Database Engines/Servers",
 ]
 dependencies = [
   "sqlalchemy>=2.0.20",
   "msgspec>=0.18.2",
 ]
-description = ""
+description = "Ready-to-go SQLAlchemy concoctions."
 keywords = [
   "network",
   "api",
