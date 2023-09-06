@@ -1,85 +1,110 @@
 [project]
-name = "advanced_alchemy"
-version = "0.1.0"
-description = ""
 authors = [
-    {name = "Cody Fincher", email = "cody.fincher@gmail.com"},
-    {name = "Peter Schutt", email = "peter.github@proton.me"},
-    {name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de"},
+  {name = "Cody Fincher", email = "cody.fincher@gmail.com"},
+  {name = "Peter Schutt", email = "peter.github@proton.me"},
+  {name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de"},
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "License :: OSI Approved :: MIT License",
+  "Natural Language :: English",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python",
+  "Topic :: Software Development",
+  "Typing :: Typed",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Topic :: Database",
+  "Topic :: Database :: Database Engines/Servers",
 ]
 dependencies = [
-    "sqlalchemy>=2.0.20",
-    "msgspec>=0.18.2",
+  "sqlalchemy>=2.0.20",
+  "msgspec>=0.18.2",
 ]
-requires-python = ">=3.8"
-readme = "README.md"
+description = "Ready-to-go SQLAlchemy concoctions."
+keywords = [
+  "network",
+  "api",
+  "http",
+  "litestar",
+  "websocket",
+]
 license = {text = "MIT"}
+name = "advanced_alchemy"
+readme = "README.md"
+requires-python = ">=3.8"
+version = "0.1.0"
 
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.pdm.dev-dependencies]
-test = [
-    "pytest>=7.4.1",
-    "anyio<4.0.0",
-    "pytest-lazy-fixture>=0.6.3",
-    "pytest-asyncio>=0.21.1",
-    "pytest-mock>=3.11.1",
-    "time-machine>=2.12.0",
+dev = [
+  "asyncmy>=0.2.8",
+  "asyncpg>=0.28.0",
+  "oracledb>=1.4.0",
+  "redis>=5.0.0",
+  "duckdb-engine>=0.9.2",
+  "aiosqlite>=0.19.0",
+  "psycopg>=3.1.10",
+  "pytest-xdist>=3.3.1",
+  "sqlalchemy-spanner>=1.6.2",
 ]
 linting = [
-    "pre-commit>=3.4.0",
-    "black>=23.7.0",
+  "pre-commit>=3.4.0",
+  "black>=23.7.0",
 ]
-dev = [
-    "asyncmy>=0.2.8",
-    "asyncpg>=0.28.0",
-    "oracledb>=1.4.0",
-    "redis>=5.0.0",
-    "duckdb-engine>=0.9.2",
-    "aiosqlite>=0.19.0",
-    "psycopg>=3.1.10",
-    "pytest-xdist>=3.3.1",
-    "sqlalchemy-spanner>=1.6.2",
+test = [
+  "pytest>=7.4.1",
+  "anyio<4.0.0",
+  "pytest-lazy-fixture>=0.6.3",
+  "pytest-asyncio>=0.21.1",
+  "pytest-mock>=3.11.1",
+  "time-machine>=2.12.0",
 ]
 
 [tool.black]
 line-length = 120
 
 [tool.ruff]
-select = ["ALL"]
 ignore = [
-    "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
-    "B010", # flake8-bugbear - do not call setattr with a constant attribute value
-    "D100", # pydocstyle - missing docstring in public module
-    "D101", # pydocstyle - missing docstring in public class
-    "D102", # pydocstyle - missing docstring in public method
-    "D103", # pydocstyle - missing docstring in public function
-    "D104", # pydocstyle - missing docstring in public package
-    "D105", # pydocstyle - missing docstring in magic method
-    "D106", # pydocstyle - missing docstring in public nested class
-    "D107", # pydocstyle - missing docstring in __init__
-    "D202", # pydocstyle - no blank lines allowed after function docstring
-    "D205", # pydocstyle - 1 blank line required between summary line and description
-    "D415", # pydocstyle - first line should end with a period, question mark, or exclamation point
-    "E501", # pycodestyle line too long, handled by black
-    "PLW2901", # pylint - for loop variable overwritten by assignment target
-    "RUF012", # Ruff-specific rule - annotated with classvar
-    "ANN401",
-    "ANN102",
-    "ANN101",
-    "FBT",
-    "PLR0913",  # too many arguments
-    "PT",
-    "TD",
-    "ARG002",   # ignore for now; investigate
-    "PERF203",  # ignore for now; investigate
-
+  "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "B010", # flake8-bugbear - do not call setattr with a constant attribute value
+  "D100", # pydocstyle - missing docstring in public module
+  "D101", # pydocstyle - missing docstring in public class
+  "D102", # pydocstyle - missing docstring in public method
+  "D103", # pydocstyle - missing docstring in public function
+  "D104", # pydocstyle - missing docstring in public package
+  "D105", # pydocstyle - missing docstring in magic method
+  "D106", # pydocstyle - missing docstring in public nested class
+  "D107", # pydocstyle - missing docstring in __init__
+  "D202", # pydocstyle - no blank lines allowed after function docstring
+  "D205", # pydocstyle - 1 blank line required between summary line and description
+  "D415", # pydocstyle - first line should end with a period, question mark, or exclamation point
+  "E501", # pycodestyle line too long, handled by black
+  "PLW2901", # pylint - for loop variable overwritten by assignment target
+  "RUF012", # Ruff-specific rule - annotated with classvar
+  "ANN401",
+  "ANN102",
+  "ANN101",
+  "FBT",
+  "PLR0913", # too many arguments
+  "PT",
+  "TD",
+  "ARG002", # ignore for now; investigate
+  "PERF203", # ignore for now; investigate
 ]
+line-length = 120
+select = ["ALL"]
 src = ["advanced_alchemy", "tests"]
 target-version = "py38"
-line-length = 120
 
 [tool.ruff.pydocstyle]
 convention = "google"
@@ -89,56 +114,55 @@ max-complexity = 12
 
 [tool.ruff.pep8-naming]
 classmethod-decorators = [
-    "sqlalchemy.ext.declarative.declared_attr",
-    "sqlalchemy.orm.declared_attr.directive",
-    "sqlalchemy.orm.declared_attr",
+  "sqlalchemy.ext.declarative.declared_attr",
+  "sqlalchemy.orm.declared_attr.directive",
+  "sqlalchemy.orm.declared_attr",
 ]
 
 [tool.ruff.per-file-ignores]
 "tests/**/*.*" = [
-    "A",
-    "ARG",
-    "B",
-    "BLE",
-    "C901",
-    "D",
-    "DTZ",
-    "EM",
-    "FBT",
-    "G",
-    "N",
-    "PGH",
-    "PIE",
-    "PLR",
-    "PLW",
-    "PTH",
-    "RSE",
-    "S",
-    "S101",
-    "SIM",
-    "TCH",
-    "TRY",
-    "UP006",
-    "SLF001"
+  "A",
+  "ARG",
+  "B",
+  "BLE",
+  "C901",
+  "D",
+  "DTZ",
+  "EM",
+  "FBT",
+  "G",
+  "N",
+  "PGH",
+  "PIE",
+  "PLR",
+  "PLW",
+  "PTH",
+  "RSE",
+  "S",
+  "S101",
+  "SIM",
+  "TCH",
+  "TRY",
+  "UP006",
+  "SLF001",
 ]
 
 [tool.mypy]
-strict = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-warn_unused_configs = true
-warn_unreachable = true
-warn_return_any = true
-disallow_untyped_decorators = true
 disallow_any_generics = false
+disallow_untyped_decorators = true
 implicit_reexport = false
 show_error_codes = true
+strict = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_decorators = false
 disable_error_code = "attr-defined"
-
+disallow_untyped_decorators = false
+module = "tests.*"
 
 [tool.unasyncd]
 add_editors_note = true
@@ -154,36 +178,33 @@ ruff_fix = true
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
-"sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "advanced_alchemy.repository.abc.AbstractAsyncRepository" = "advanced_alchemy.repository.abc.AbstractSyncRepository"
-
-
+"sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 
 [tool.pytest.ini_options]
 addopts = "-m='not integration' --dist=loadgroup"
 asyncio_mode = "auto"
 
 markers = [
-    "integration: SQLAlchemy integration tests",
-    "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
-    "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
-    "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
-    "psycopg_sync: SQLAlchemy Postgres (psycopg sync) Tests",
-    "aiosqlite: SQLAlchemy SQLite (aiosqlite) Tests",
-    "sqlite: SQLAlchemy SQLite (sqlite) Tests",
-    "oracledb: SQLAlchemy Oracle (oracledb) Tests",
-    "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
-    "duckdb: SQLAlchemy Duckdb (duckdb-engine) Tests",
+  "integration: SQLAlchemy integration tests",
+  "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
+  "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
+  "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
+  "psycopg_sync: SQLAlchemy Postgres (psycopg sync) Tests",
+  "aiosqlite: SQLAlchemy SQLite (aiosqlite) Tests",
+  "sqlite: SQLAlchemy SQLite (sqlite) Tests",
+  "oracledb: SQLAlchemy Oracle (oracledb) Tests",
+  "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
+  "duckdb: SQLAlchemy Duckdb (duckdb-engine) Tests",
 ]
 
 filterwarnings = [
-    "ignore::DeprecationWarning:pkg_resources.*",
-    "ignore::DeprecationWarning:google.rpc",
-    "ignore::DeprecationWarning:google.gcloud",
-    "ignore::DeprecationWarning:google.iam",
-    "ignore::DeprecationWarning:google",
+  "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:google.rpc",
+  "ignore::DeprecationWarning:google.gcloud",
+  "ignore::DeprecationWarning:google.iam",
+  "ignore::DeprecationWarning:google",
 ]
-
 
 [tool.codespell]
 ignore-words-list = "selectin"
