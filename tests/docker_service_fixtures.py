@@ -47,16 +47,20 @@ async def wait_until_responsive(
     raise RuntimeError(msg)
 
 
+USE_LEGACY_DOCKER_COMPOSE: bool = bool(os.environ.get("USE_LEGACY_DOCKER_COMPOSE", None))
+
+
 class DockerServiceRegistry:
     def __init__(self, worker_id: str) -> None:
         self._running_services: set[str] = set()
         self.docker_ip = self._get_docker_ip()
-        self._base_command = [
-            "docker",
-            "compose",
-            f"--file={Path(__file__).parent / 'docker-compose.yml'}",
-            f"--project-name=advanced_alchemy-{worker_id}",
-        ]
+        self._base_command = ["docker-compose"] if USE_LEGACY_DOCKER_COMPOSE else ["docker", "compose"]
+        self._base_command.extend(
+            [
+                f"--file={Path(__file__).parent / 'docker-compose.yml'}",
+                f"--project-name=advanced_alchemy-{worker_id}",
+            ],
+        )
 
     def _get_docker_ip(self) -> str:
         docker_host = os.environ.get("DOCKER_HOST", "").strip()

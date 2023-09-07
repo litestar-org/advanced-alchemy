@@ -105,5 +105,3 @@ docs-serve: docs-clean 								## Serve the docs locally
 
 docs: docs-clean 									## Dump the existing built docs and rebuild them
 	$(ENV_PREFIX)sphinx-build -M html docs docs/_build/ -E -a -j auto --keep-going
-
-
