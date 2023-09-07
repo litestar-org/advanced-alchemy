@@ -16,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 
 from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.filters import (
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
+
+WhereClauseT = ColumnExpressionArgument[bool]
 
 
 class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]):
@@ -249,7 +252,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
     def _get_insertmanyvalues_max_parameters(self, chunk_size: int | None = None) -> int:
         return chunk_size if chunk_size is not None else DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
 
-    async def exists(self, *filters: FilterTypes, **kwargs: Any) -> bool:
+    async def exists(self, *filters: FilterTypes | ColumnElement[bool], **kwargs: Any) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
 
         Args:
@@ -444,7 +447,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     async def count(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
     ) -> int:
@@ -461,9 +464,10 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
         """
         statement = self._get_base_stmt(statement)
         fragment = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True).order_by(None)
-        statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
+        statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
+        statement += lambda s: s.order_by(None)
         statement = self._filter_select_by_kwargs(statement, kwargs)
+        statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
         results = await self._execute(statement)
         return cast(int, results.scalar_one())
 
@@ -577,7 +581,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     async def list_and_count(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -637,7 +641,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     async def _list_and_count_window(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
@@ -673,7 +677,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     async def _list_and_count_basic(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
@@ -775,10 +779,9 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
         Args:
             data: Instance to update existing, or be created. Identifier used to determine if an
                 existing instance exists is the value of an attribute on ``data`` named as value of
-                :attr:`~advanced_alchemy.abc.AbstractAsyncRepository.id_attribute`.
+                :attr:`~litestar.repository.AbstractAsyncRepository.id_attribute`.
             attribute_names: an iterable of attribute names to pass into the ``update`` method.
-            with_for_update: indicating FOR UPDATE should be used, or may be a dictionary containing
-                flags to indicate a more specific set of FOR UPDATE flags for the SELECT
+            with_for_update: indicating FOR UPDATE should be used, or may be a dictionary containing flags to indicate a more specific set of FOR UPDATE flags for the SELECT
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_refresh: Refresh object from session before returning. Defaults to
@@ -809,7 +812,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     async def list(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
@@ -912,7 +915,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     def _apply_filters(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         apply_pagination: bool = True,
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
@@ -968,6 +971,8 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                 )
+            elif isinstance(filter_, ColumnElement):
+                statement = self._filter_by_expression(expression=filter_, statement=statement)
             else:
                 msg = f"Unexpected filter: {filter_}"  # type: ignore[unreachable]
                 raise RepositoryError(msg)
@@ -975,38 +980,38 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
 
     def _filter_in_collection(
         self,
-        field_name: str,
+        field_name: str | InstrumentedAttribute,
         values: abc.Collection[Any],
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
         if not values:
             return statement
-        field = getattr(self.model_type, field_name)
+        field = get_instrumented_attr(self.model_type, field_name)
         statement += lambda s: s.where(field.in_(values))
         return statement
 
     def _filter_not_in_collection(
         self,
-        field_name: str,
+        field_name: str | InstrumentedAttribute,
         values: abc.Collection[Any],
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
         if not values:
             return statement
-        field = getattr(self.model_type, field_name)
+        field = get_instrumented_attr(self.model_type, field_name)
         statement += lambda s: s.where(field.notin_(values))
         return statement
 
     def _filter_on_datetime_field(
         self,
-        field_name: str,
+        field_name: str | InstrumentedAttribute,
         statement: StatementLambdaElement,
         before: datetime | None = None,
         after: datetime | None = None,
         on_or_before: datetime | None = None,
         on_or_after: datetime | None = None,
     ) -> StatementLambdaElement:
-        field = getattr(self.model_type, field_name)
+        field = get_instrumented_attr(self.model_type, field_name)
         if before is not None:
             statement += lambda s: s.where(field < before)
         if after is not None:
@@ -1026,10 +1031,22 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
             statement = self._filter_by_where(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
         return statement
 
-    def _filter_by_where(self, statement: StatementLambdaElement, key: str, val: Any) -> StatementLambdaElement:
-        model_type = self.model_type
-        field = get_instrumented_attr(model_type, key)
-        statement += lambda s: s.where(field == val)
+    def _filter_by_expression(
+        self,
+        statement: StatementLambdaElement,
+        expression: ColumnElement[bool],
+    ) -> StatementLambdaElement:
+        statement += lambda s: s.filter(expression)
+        return statement
+
+    def _filter_by_where(
+        self,
+        statement: StatementLambdaElement,
+        field_name: str | InstrumentedAttribute,
+        value: Any,
+    ) -> StatementLambdaElement:
+        field = get_instrumented_attr(self.model_type, field_name)
+        statement += lambda s: s.where(field == value)
         return statement
 
     def _filter_by_like(
@@ -1050,11 +1067,11 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
     def _filter_by_not_like(
         self,
         statement: StatementLambdaElement,
-        field_name: str,
+        field_name: str | InstrumentedAttribute,
         value: str,
         ignore_case: bool,
     ) -> StatementLambdaElement:
-        field = getattr(self.model_type, field_name)
+        field = get_instrumented_attr(self.model_type, field_name)
         search_text = f"%{value}%"
         if ignore_case:
             statement += lambda s: s.where(field.not_ilike(search_text))
