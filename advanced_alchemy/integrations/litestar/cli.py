@@ -132,7 +132,7 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = _get_database_migration_plugin(app)
     if directory is None:
-        directory = plugin._alembic_config.script_location
+        directory = plugin._alembic_config.script_location  # noqa: SLF001
     input_confirmed = (
         True
         if no_prompt
