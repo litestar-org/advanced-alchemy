@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from advanced_alchemy.base import orm_registry
 from sqlalchemy import Column, engine_from_config, pool
 
+from advanced_alchemy.base import orm_registry
 from alembic import context
 from alembic.autogenerate import rewriter
 from alembic.operations import ops
 
 if TYPE_CHECKING:
-    from advanced_alchemy.alembic.commands import AlembicCommandConfig
     from sqlalchemy.engine import Connection
 
+    from advanced_alchemy.alembic.commands import AlembicCommandConfig
     from alembic.runtime.environment import EnvironmentContext
 
 __all__ = ["do_run_migrations", "run_migrations_offline", "run_migrations_online"]
@@ -54,7 +54,7 @@ def order_columns(
         op.table_name,
         columns,
         schema=op.schema,
-        # TODO: Remove when https://github.com/sqlalchemy/alembic/issues/1193 is fixed
+        # TODO: Remove when https://github.com/sqlalchemy/alembic/issues/1193 is fixed  # noqa: FIX002
         _namespace_metadata=op._namespace_metadata,  # noqa: SLF001
         **op.kw,
     )
