@@ -289,7 +289,15 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
             ],
         ),
         pytest.param(
-            "oracle_engine",
+            "oracle18c_engine",
+            marks=[
+                pytest.mark.oracledb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_engine",
             marks=[
                 pytest.mark.oracledb,
                 pytest.mark.integration,
