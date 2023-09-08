@@ -34,6 +34,7 @@ keywords = [
   "litestar",
   "sanic",
   "fastapi",
+  "socketify",
 ]
 license = {text = "MIT"}
 name = "advanced_alchemy"
@@ -56,10 +57,18 @@ dev = [
   "psycopg>=3.1.10",
   "pytest-xdist>=3.3.1",
   "sqlalchemy-spanner>=1.6.2",
+  "alembic>=1.12.0",
+]
+integrations = [
+  "litestar[cli]>=2.0.0",
+  "fastapi>=0.101.0",
+  "sanic>=23.6.0",
+  "socketify>=0.0.27",
 ]
 linting = [
   "pre-commit>=3.4.0",
   "black>=23.7.0",
+  "mypy>=1.5.1",
 ]
 test = [
   "pytest>=7.4.1",
