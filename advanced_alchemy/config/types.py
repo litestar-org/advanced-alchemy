@@ -11,6 +11,7 @@ from typing import (
     Iterable,
     Mapping,
     Protocol,
+    Sequence,
     Type,
     TypeGuard,
     final,
@@ -160,3 +161,4 @@ class Empty:
 
 EmptyType: TypeAlias = Type[Empty]
 TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"
+TypeDecodersSequence: TypeAlias = "Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
