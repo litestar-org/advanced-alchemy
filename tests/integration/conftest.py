@@ -57,8 +57,8 @@ def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture()
-def oracle_engine(docker_ip: str, oracle_service: None) -> Engine:
-    """Postgresql instance for end-to-end testing.
+def oracle18c_engine(docker_ip: str, oracle_service: None) -> Engine:
+    """Oracle 18c instance for end-to-end testing.
 
     Args:
         docker_ip: IP address for TCP connection to Docker containers.
@@ -74,7 +74,34 @@ def oracle_engine(docker_ip: str, oracle_service: None) -> Engine:
             "user": "app",
             "password": "super-secret",
             "host": docker_ip,
-            "port": 1512,
+            "port": 1513,
+            "service_name": "xepdb1",
+            "encoding": "UTF-8",
+            "nencoding": "UTF-8",
+        },
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
+def oracle23c_engine(docker_ip: str, oracle_service: None) -> Engine:
+    """Oracle 23c instance for end-to-end testing.
+
+    Args:
+        docker_ip: IP address for TCP connection to Docker containers.
+        oracle_service: ...
+
+    Returns:
+        Async SQLAlchemy engine instance.
+    """
+    return create_engine(
+        "oracle+oracledb://:@",
+        thick_mode=False,
+        connect_args={
+            "user": "app",
+            "password": "super-secret",
+            "host": docker_ip,
+            "port": 1513,
             "service_name": "xepdb1",
             "encoding": "UTF-8",
             "nencoding": "UTF-8",
@@ -136,7 +163,15 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
             ],
         ),
         pytest.param(
-            "oracle_engine",
+            "oracle18c_engine",
+            marks=[
+                pytest.mark.oracledb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_engine",
             marks=[
                 pytest.mark.oracledb,
                 pytest.mark.integration,
