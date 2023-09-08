@@ -29,11 +29,11 @@ dependencies = [
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = [
-  "network",
-  "api",
-  "http",
+  "sqlalchemy",
+  "alembic",
   "litestar",
-  "websocket",
+  "sanic",
+  "fastapi",
 ]
 license = {text = "MIT"}
 name = "advanced_alchemy"
