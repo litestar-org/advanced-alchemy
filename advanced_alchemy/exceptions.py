@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ("ConflictError", "NotFoundError", "RepositoryError")
-
 
 class AdvancedAlchemyError(Exception):
     """Base exception class from which all Advanced Alchemy exceptions inherit."""
@@ -47,6 +45,13 @@ class MissingDependencyError(AdvancedAlchemyError, ImportError):
             f"'pip install advanced_alchemy[{install_package or package}]' to install advanced_alchemy with the required extra "
             f"or 'pip install {install_package or package}' to install the package separately",
         )
+
+
+class ImproperConfigurationError(AdvancedAlchemyError):
+    """Improper Configuration error.
+
+    This exception is raised only when a module depends on a dependency that has not been installed.
+    """
 
 
 class SerializationError(AdvancedAlchemyError):

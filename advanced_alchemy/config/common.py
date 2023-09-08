@@ -8,7 +8,7 @@ from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config import Empty
 from advanced_alchemy.config.engine import EngineConfig
 from advanced_alchemy.config.types import simple_asdict
-from advanced_alchemy.exceptions import ImproperlyConfiguredException
+from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
     from typing import Any
@@ -116,7 +116,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     def __post_init__(self) -> None:
         if self.connection_string is not None and self.engine_instance is not None:
             msg = "Only one of 'connection_string' or 'engine_instance' can be provided."
-            raise ImproperlyConfiguredException(msg)
+            raise ImproperConfigurationError(msg)
 
     @property
     def engine_config_dict(self) -> dict[str, Any]:
@@ -149,7 +149,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
         if self.connection_string is None:
             msg = "One of 'connection_string' or 'engine_instance' must be provided."
-            raise ImproperlyConfiguredException(msg)
+            raise ImproperConfigurationError(msg)
 
         engine_config = self.engine_config_dict
         try:

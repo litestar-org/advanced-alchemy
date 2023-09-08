@@ -19,20 +19,17 @@ from uuid import UUID
 
 import msgspec
 
-from advanced_alchemy.config.types import Empty, EmptyType, Serializer, TypeDecodersSequence
-from advanced_alchemy.exceptions import SerializationException
+from advanced_alchemy.config.types import Empty, EmptyType, TypeDecodersSequence
+from advanced_alchemy.exceptions import SerializationError
 
 if TYPE_CHECKING:
     from advanced_alchemy.config.types import TypeEncodersMap
 
 __all__ = (
     "decode_json",
-    "decode_msgpack",
     "default_deserializer",
     "default_serializer",
     "encode_json",
-    "encode_msgpack",
-    "get_serializer",
 )
 
 T = TypeVar("T")
@@ -122,8 +119,6 @@ def default_deserializer(
 
 _msgspec_json_encoder = msgspec.json.Encoder(enc_hook=default_serializer)
 _msgspec_json_decoder = msgspec.json.Decoder(dec_hook=default_deserializer)
-_msgspec_msgpack_encoder = msgspec.msgpack.Encoder(enc_hook=default_serializer)
-_msgspec_msgpack_decoder = msgspec.msgpack.Decoder(dec_hook=default_deserializer)
 
 
 def encode_json(value: Any, serializer: Callable[[Any], Any] | None = None) -> bytes:
@@ -137,12 +132,12 @@ def encode_json(value: Any, serializer: Callable[[Any], Any] | None = None) -> b
         JSON as bytes
 
     Raises:
-        SerializationException: If error encoding ``obj``.
+        SerializationError: If error encoding ``obj``.
     """
     try:
         return msgspec.json.encode(value, enc_hook=serializer) if serializer else _msgspec_json_encoder.encode(value)
     except (TypeError, msgspec.EncodeError) as msgspec_error:
-        raise SerializationException(str(msgspec_error)) from msgspec_error
+        raise SerializationError(str(msgspec_error)) from msgspec_error
 
 
 @overload
@@ -181,7 +176,7 @@ def decode_json(  # type: ignore  # noqa: PGH003
         An object
 
     Raises:
-        SerializationException: If error decoding ``value``.
+        SerializationError: If error decoding ``value``.
     """
     try:
         if target_type is Empty:
@@ -192,80 +187,4 @@ def decode_json(  # type: ignore  # noqa: PGH003
             type=target_type,
         )
     except msgspec.DecodeError as msgspec_error:
-        raise SerializationException(str(msgspec_error)) from msgspec_error
-
-
-def encode_msgpack(value: Any, serializer: Callable[[Any], Any] | None = default_serializer) -> bytes:
-    """Encode a value into MessagePack.
-
-    Args:
-        value: Value to encode
-        serializer: Optional callable to support non-natively supported types
-
-    Returns:
-        MessagePack as bytes
-
-    Raises:
-        SerializationException: If error encoding ``obj``.
-    """
-    try:
-        if serializer is None or serializer is default_serializer:
-            return _msgspec_msgpack_encoder.encode(value)
-        return msgspec.msgpack.encode(value, enc_hook=serializer)
-    except (TypeError, msgspec.EncodeError) as msgspec_error:
-        raise SerializationException(str(msgspec_error)) from msgspec_error
-
-
-@overload
-def decode_msgpack(value: bytes) -> Any:
-    ...
-
-
-@overload
-def decode_msgpack(value: bytes, type_decoders: TypeDecodersSequence | None) -> Any:
-    ...
-
-
-@overload
-def decode_msgpack(value: bytes, target_type: type[T]) -> T:
-    ...
-
-
-@overload
-def decode_msgpack(value: bytes, target_type: type[T], type_decoders: TypeDecodersSequence | None) -> T:
-    ...
-
-
-def decode_msgpack(value: bytes, target_type: type[T] | EmptyType = Empty, type_decoders: TypeDecodersSequence | None = None) -> Any:  # type: ignore[misc]
-    """Decode a MessagePack string/bytes into an object.
-
-    Args:
-        value: Value to decode
-        target_type: An optional type to decode the data into
-        type_decoders: Optional sequence of type decoders
-
-    Returns:
-        An object
-
-    Raises:
-        SerializationException: If error decoding ``value``.
-    """
-    try:
-        if target_type is Empty:
-            return _msgspec_msgpack_decoder.decode(value)
-        return msgspec.msgpack.decode(
-            value,
-            dec_hook=partial(default_deserializer, type_decoders=type_decoders),
-            type=target_type,
-        )
-    except msgspec.DecodeError as msgspec_error:
-        raise SerializationException(str(msgspec_error)) from msgspec_error
-
-
-def get_serializer(type_encoders: TypeEncodersMap | None = None) -> Serializer:
-    """Get the serializer for the given type encoders."""
-
-    if type_encoders:
-        return partial(default_serializer, type_encoders=type_encoders)
-
-    return default_serializer
+        raise SerializationError(str(msgspec_error)) from msgspec_error
