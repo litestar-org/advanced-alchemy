@@ -3,15 +3,14 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
-from pytest import FixtureRequest
-from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session, sessionmaker
-
 from litestar.app import Litestar
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyPlugin
 from litestar.contrib.sqlalchemy.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from litestar.contrib.sqlalchemy.plugins.init.config.sync import SQLAlchemySyncConfig
+from pytest import FixtureRequest
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 
 @pytest.fixture()
@@ -21,10 +20,11 @@ async def sync_sqlalchemy_plugin(engine: Engine, session_maker: sessionmaker[Ses
 
 @pytest.fixture()
 async def async_sqlalchemy_plugin(
-    async_engine: AsyncEngine, async_session_maker: async_sessionmaker[AsyncSession]
+    async_engine: AsyncEngine,
+    async_session_maker: async_sessionmaker[AsyncSession],
 ) -> SQLAlchemyPlugin:
     return SQLAlchemyPlugin(
-        config=SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker)
+        config=SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker),
     )
 
 
