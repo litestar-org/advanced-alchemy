@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+
 from advanced_alchemy.exceptions import NotFoundError
 from advanced_alchemy.repository.testing.generic_mock_repository import GenericAsyncMockRepository
 

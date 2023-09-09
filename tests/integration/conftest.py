@@ -21,8 +21,9 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:
     This prevents errors such as "Table '...' is already defined for
     this MetaData instance...
     """
-    from advanced_alchemy import base
     from sqlalchemy.orm import DeclarativeBase
+
+    from advanced_alchemy import base
 
     class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         ...

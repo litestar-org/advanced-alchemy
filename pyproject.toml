@@ -147,6 +147,10 @@ classmethod-decorators = [
   "SLF001",
 ]
 
+[tool.ruff.isort]
+known-first-party = ["advanced_alchemy", "tests"]
+
+
 [tool.mypy]
 disallow_any_generics = false
 disallow_untyped_decorators = true
