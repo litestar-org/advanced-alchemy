@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Literal
 
-from advanced_alchemy.config import Empty
 from advanced_alchemy.config.serialization import decode_json, encode_json
+from advanced_alchemy.config.types import Empty
 
 if TYPE_CHECKING:
     from typing import Any, Mapping

@@ -171,7 +171,7 @@ def oracle23c_responsive(host: str) -> bool:
     try:
         conn = oracledb.connect(
             host=host,
-            port=1512,
+            port=1510,
             user="app",
             service_name="xepdb1",
             password="super-secret",
