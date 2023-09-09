@@ -1,5 +1,5 @@
 from typing import Union
-from advanced_alchemy.exceptions import MissingDependencyError
+
 from mayim import Executor, Mayim
 from mayim.extension.statistics import (
     display_statistics,
@@ -7,8 +7,11 @@ from mayim.extension.statistics import (
     setup_query_counter,
 )
 from mayim.registry import InterfaceRegistry, Registry
+
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.exceptions import MissingDependencyError
+
 try:
     from sanic.helpers import Default, _default
     from sanic.log import logger
@@ -31,14 +34,13 @@ class SanicAdvancedAlchemyExtension(Extension):
     def __init__(
         self,
         *,
-        config: SQLAlchemyAsyncConfig|SQLAlchemySyncConfig|None = None,
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | None = None,
         counters: Union[Default, bool] = _default,
     ) -> None:
         if not SANIC_INSTALLED:
+            msg = "Could not locate either Sanic or Sanic Extensions. Both libraries must be installed to use Advanced Alchemy. Try: pip install sanic[ext]"
             raise MissingDependencyError(
-                "Could not locate either Sanic or Sanic Extensions. "
-                "Both libraries must be installed to use Advanced Alchemy. "
-                "Try: pip install sanic[ext]"
+                msg,
             )
         self.executors = executors or []
         for executor in self.executors:
@@ -56,7 +58,8 @@ class SanicAdvancedAlchemyExtension(Extension):
                 bootstrap.dependency(executor)
             else:
                 bootstrap.add_dependency(
-                    executor, lambda *_: Mayim.get(executor)
+                    executor,
+                    lambda *_: Mayim.get(executor),
                 )
 
         @self.app.before_server_start
@@ -77,7 +80,8 @@ class SanicAdvancedAlchemyExtension(Extension):
                 bootstrap.dependency(executor)
             else:
                 bootstrap.add_dependency(
-                    executor, lambda *_: Mayim.get(executor)
+                    executor,
+                    lambda *_: Mayim.get(executor),
                 )
         if display_statistics(self.counters, self.executors):
             self.app.signal(Event.HTTP_LIFECYCLE_REQUEST)(setup_query_counter)
