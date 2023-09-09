@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 from advanced_alchemy.base import orm_registry
-from advanced_alchemy.config import Empty
 from advanced_alchemy.config.engine import EngineConfig
-from advanced_alchemy.config.types import simple_asdict
+from advanced_alchemy.config.types import Empty, filter_empty
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             A string keyed dict of config kwargs for the SQLAlchemy :func:`create_engine <sqlalchemy.create_engine>`
             function.
         """
-        return simple_asdict(self.engine_config, exclude_empty=True)
+        return filter_empty(dataclasses.asdict(self.engine_config))
 
     @property
     def session_config_dict(self) -> dict[str, Any]:
@@ -136,7 +136,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             A string keyed dict of config kwargs for the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`
             class.
         """
-        return simple_asdict(self.session_config, exclude_empty=True)
+        return filter_empty(dataclasses.asdict(self.session_config))
 
     def create_engine(self) -> EngineT:
         """Return an engine. If none exists yet, create one.
