@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Engine
     from sqlalchemy.ext.asyncio import AsyncEngine
 
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from alembic.runtime.environment import ProcessRevisionDirectiveFn
     from alembic.script.base import Script
 
@@ -69,7 +70,8 @@ class AlembicSpannerImpl(DefaultImpl):
 
 
 class AlembicCommands:
-    def __init__(self) -> None:
+    def __init__(self, sqlalchemy_config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> None:
+        self.sqlalchemy_config = sqlalchemy_config
         self.config = self._get_alembic_command_config()
 
     def upgrade(
@@ -194,7 +196,7 @@ class AlembicCommands:
     ) -> None:
         """Initialize a new scripts directory."""
         template = "sync"
-        if isinstance(self.plugin_config, SQLAlchemyAsyncConfig):
+        if isinstance(self.sqlalchemy_config, SQLAlchemyAsyncConfig):
             template = "asyncio"
         if multidb:
             template = f"{template}-multidb"
@@ -224,16 +226,16 @@ class AlembicCommands:
 
     def _get_alembic_command_config(self) -> AlembicCommandConfig:
         kwargs = {}
-        if self.plugin_config.alembic_config.script_config:
-            kwargs["file_"] = self.plugin_config.alembic_config.script_config
-        if self.plugin_config.alembic_config.template_path:
-            kwargs["template_directory"] = self.plugin_config.alembic_config.template_path
+        if self.sqlalchemy_config.alembic_config.script_config:
+            kwargs["file_"] = self.sqlalchemy_config.alembic_config.script_config
+        if self.sqlalchemy_config.alembic_config.template_path:
+            kwargs["template_directory"] = self.sqlalchemy_config.alembic_config.template_path
         kwargs.update(
             {
-                "engine": self.plugin_config.create_engine(),  # type: ignore[dict-item]
-                "version_table_name": self.plugin_config.alembic_config.version_table_name,
+                "engine": self.sqlalchemy_config.create_engine(),  # type: ignore[dict-item]
+                "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
             },
         )
         self.config = AlembicCommandConfig(**kwargs)  # type: ignore  # noqa: PGH003
-        self.config.set_main_option("script_location", self.plugin_config.alembic_config.script_location)
+        self.config.set_main_option("script_location", self.sqlalchemy_config.alembic_config.script_location)
         return self.config
