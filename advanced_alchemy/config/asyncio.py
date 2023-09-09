@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from advanced_alchemy.config import Empty
+from advanced_alchemy.config.types import Empty
 
 from .common import (
     GenericAlembicConfig,
