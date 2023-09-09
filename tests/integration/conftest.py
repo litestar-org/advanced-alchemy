@@ -57,12 +57,12 @@ def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture()
-def oracle18c_engine(docker_ip: str, oracle_service: None) -> Engine:
+def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
     """Oracle 18c instance for end-to-end testing.
 
     Args:
         docker_ip: IP address for TCP connection to Docker containers.
-        oracle_service: ...
+        oracle18c_service: ...
 
     Returns:
         Async SQLAlchemy engine instance.
@@ -84,12 +84,12 @@ def oracle18c_engine(docker_ip: str, oracle_service: None) -> Engine:
 
 
 @pytest.fixture()
-def oracle23c_engine(docker_ip: str, oracle_service: None) -> Engine:
+def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
     """Oracle 23c instance for end-to-end testing.
 
     Args:
         docker_ip: IP address for TCP connection to Docker containers.
-        oracle_service: ...
+        oracle23c_service: ...
 
     Returns:
         Async SQLAlchemy engine instance.
@@ -101,7 +101,7 @@ def oracle23c_engine(docker_ip: str, oracle_service: None) -> Engine:
             "user": "app",
             "password": "super-secret",
             "host": docker_ip,
-            "port": 1513,
+            "port": 1510,
             "service_name": "xepdb1",
             "encoding": "UTF-8",
             "nencoding": "UTF-8",
