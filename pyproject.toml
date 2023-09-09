@@ -58,6 +58,7 @@ dev = [
   "psycopg>=3.1.10",
   "pytest-xdist>=3.3.1",
   "sqlalchemy-spanner>=1.6.2",
+  "litestar>=2.0.1",
 ]
 integrations = [
   "litestar[cli]>=2.0.0",
@@ -72,6 +73,7 @@ linting = [
 ]
 test = [
   "pytest>=7.4.1",
+  "pytest-xdist>=3.3.1",
   "anyio<4.0.0",
   "pytest-lazy-fixture>=0.6.3",
   "pytest-asyncio>=0.21.1",
