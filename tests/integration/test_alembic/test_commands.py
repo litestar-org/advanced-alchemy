@@ -5,9 +5,9 @@ from typing import Type
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
-from alembic.util.exc import CommandError
-
 from litestar.contrib.sqlalchemy.alembic import commands
+
+from alembic.util.exc import CommandError
 from tests.unit.test_contrib.test_sqlalchemy import models_uuid
 
 AuthorModel = Type[models_uuid.UUIDAuthor]
