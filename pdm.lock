@@ -6,7 +6,7 @@ groups = ["default", "dev", "integrations", "linting", "test"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:a88508450aac38b1fec88f93854613eae518b61d22148a5d72e4fcfe60a7dd0e"
+content_hash = "sha256:86cd0e391d6e06b909a09903718e892f50952ace954338150bb75791d7bc5efa"
 
 [[package]]
 name = "aiofiles"
@@ -544,7 +544,7 @@ files = [
 
 [[package]]
 name = "faker"
-version = "19.4.0"
+version = "19.6.0"
 requires_python = ">=3.8"
 summary = "Faker is a Python package that generates fake data for you."
 dependencies = [
@@ -552,8 +552,8 @@ dependencies = [
     "typing-extensions>=3.10.0.1; python_version <= \"3.8\"",
 ]
 files = [
-    {file = "Faker-19.4.0-py3-none-any.whl", hash = "sha256:11f0d2a6632d212e8ab89fd9152a1b8db777816e42f3579f8c63c11e43cec873"},
-    {file = "Faker-19.4.0.tar.gz", hash = "sha256:0c3a7cbaa6497dcc18819bfe31ae916d2180c31a3b1ea8907c948d94eb06955d"},
+    {file = "Faker-19.6.0-py3-none-any.whl", hash = "sha256:7cf705758f6cc5dd31f628e323f306a6d881e9a8a103f1e32e5f30a4cad0974c"},
+    {file = "Faker-19.6.0.tar.gz", hash = "sha256:d79d5ea59f31e00fbb882546840a4adb2fd0bae99b103db1ba5869f176bc530b"},
 ]
 
 [[package]]
@@ -1848,12 +1848,39 @@ files = [
 ]
 
 [[package]]
+name = "sanic-ext"
+version = "23.6.0"
+summary = "Extend your Sanic installation with some core functionality."
+dependencies = [
+    "pyyaml>=3.0.0",
+]
+files = [
+    {file = "sanic-ext-23.6.0.tar.gz", hash = "sha256:81dd136b6b7b79fda8b4fec2444d9822394555779c298a89155c67287a184902"},
+    {file = "sanic_ext-23.6.0-py3-none-any.whl", hash = "sha256:94eb84b7d1728c058e056c6fe6f4bcd39d370e826a83d1a38d977363c3b51159"},
+]
+
+[[package]]
 name = "sanic-routing"
 version = "23.6.0"
 summary = "Core routing component for Sanic"
 files = [
     {file = "sanic-routing-23.6.0.tar.gz", hash = "sha256:e3aa97a51af9ccc580e773e351ee2333a7c3f69f75cecbfd06a3a8ddca6e04e6"},
     {file = "sanic_routing-23.6.0-py3-none-any.whl", hash = "sha256:49f8d0c2aa3f99d2aa16f942e71a5056fe28241a42d29f4c369c04646ad3f737"},
+]
+
+[[package]]
+name = "sanic"
+version = "23.6.0"
+extras = ["ext"]
+requires_python = ">=3.8"
+summary = "A web server and web framework that's written to go fast. Build fast. Run fast."
+dependencies = [
+    "sanic-ext",
+    "sanic==23.6.0",
+]
+files = [
+    {file = "sanic-23.6.0-py3-none-any.whl", hash = "sha256:35136e9cbac1250636f6523326506c4867cbc8635bd15087d3b38fcdbd0bd855"},
+    {file = "sanic-23.6.0.tar.gz", hash = "sha256:ccb1e9fea9c868a67fe5a213ca4a64d92c410caca3bfefa0947f6d838f2bcf60"},
 ]
 
 [[package]]
@@ -2244,7 +2271,7 @@ files = [
 
 [[package]]
 name = "virtualenv"
-version = "20.24.4"
+version = "20.24.5"
 requires_python = ">=3.7"
 summary = "Virtual Python Environment builder"
 dependencies = [
@@ -2253,8 +2280,8 @@ dependencies = [
     "platformdirs<4,>=3.9.1",
 ]
 files = [
-    {file = "virtualenv-20.24.4-py3-none-any.whl", hash = "sha256:29c70bb9b88510f6414ac3e55c8b413a1f96239b6b789ca123437d5e892190cb"},
-    {file = "virtualenv-20.24.4.tar.gz", hash = "sha256:772b05bfda7ed3b8ecd16021ca9716273ad9f4467c801f27e83ac73430246dca"},
+    {file = "virtualenv-20.24.5-py3-none-any.whl", hash = "sha256:b80039f280f4919c77b30f1c23294ae357c4c8701042086e3fc005963e4e537b"},
+    {file = "virtualenv-20.24.5.tar.gz", hash = "sha256:e8361967f6da6fbdf1426483bfe9fca8287c242ac0bc30429905721cefbff752"},
 ]
 
 [[package]]
