@@ -27,9 +27,9 @@ services:
       APP_USER_PASSWORD: super-secret
       APP_USER: app
   oracle23c:
-    image: gvenzl/oracle-xe:18-slim-faststart
+    image: gvenzl/oracle-free:23-slim-faststart
     ports:
-      - "1513:1521" # use a non-standard port here
+      - "1510:1521" # use a non-standard port here
     environment:
       ORACLE_PASSWORD: super-secret
       APP_USER_PASSWORD: super-secret
