@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
   "sqlalchemy>=2.0.20",
   "msgspec>=0.18.2",
+  "alembic>=1.12.0",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = [
@@ -57,12 +58,11 @@ dev = [
   "psycopg>=3.1.10",
   "pytest-xdist>=3.3.1",
   "sqlalchemy-spanner>=1.6.2",
-  "alembic>=1.12.0",
 ]
 integrations = [
   "litestar[cli]>=2.0.0",
   "fastapi>=0.101.0",
-  "sanic>=23.6.0",
+  "sanic[ext]>=23.6.0",
   "socketify>=0.0.27",
 ]
 linting = [
