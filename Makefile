@@ -20,9 +20,10 @@ help: 		   										## Display this help text for Makefile
 
 .PHONY: upgrade
 upgrade:       										## Upgrade all dependencies to the latest stable versions
+	@echo "=> Updating all dependencies"
 	@if [ "$(USING_PDM)" ]; then $(PDM) update; fi
 	@echo "=> Dependencies Updated"
-	$(ENV_PREFIX)pre-commit autoupdate
+	@$(ENV_PREFIX)pre-commit autoupdate
 	@echo "=> Updated Pre-commit"
 
 # =============================================================================
@@ -37,55 +38,49 @@ install:											## Install the project and
 	@if [ "$(VENV_EXISTS)" ]; then echo "=> Removing existing virtual environment"; fi
 	if [ "$(VENV_EXISTS)" ]; then $(MAKE) destroy; fi
 	if [ "$(VENV_EXISTS)" ]; then $(MAKE) clean; fi
-	if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install -U wheel setuptools cython pip; fi
-	if [ "$(USING_PDM)" ]; then $(PDM) install -G:all; fi
+	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install -U wheel setuptools cython pip; fi
+	@if [ "$(USING_PDM)" ]; then $(PDM) install -G:all; fi
 	@echo "=> Install complete! Note: If you want to re-install re-run 'make install'"
 
 
 clean: 												## Cleanup temporary build artifacts
-	rm -rf .pytest_cache
-	rm -rf .ruff_cache
-	rm -rf .hypothesis
-	rm -rf build/
-	rm -rf dist/
-	rm -rf .eggs/
-	find . -name '*.egg-info' -exec rm -rf {} +
-	find . -name '*.egg' -exec rm -f {} +
-	find . -name '*.pyc' -exec rm -f {} +
-	find . -name '*.pyo' -exec rm -f {} +
-	find . -name '*~' -exec rm -f {} +
-	find . -name '__pycache__' -exec rm -rf {} +
-	find . -name '.ipynb_checkpoints' -exec rm -rf {} +
-	rm -rf .coverage
-	rm -rf coverage.xml
-	rm -rf coverage.json
-	rm -rf htmlcov/
-	rm -rf .pytest_cache
-	rm -rf tests/.pytest_cache
-	rm -rf tests/**/.pytest_cache
-	rm -rf .mypy_cache
-	find tools/downloads -type f -delete
+	@echo "=> Cleaning working directory"
+	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ -rf dist/ .eggs/
+	@find . -name '*.egg-info' -exec rm -rf {} +
+	@find . -name '*.egg' -exec rm -f {} +
+	@find . -name '*.pyc' -exec rm -f {} +
+	@find . -name '*.pyo' -exec rm -f {} +
+	@find . -name '*~' -exec rm -f {} +
+	@find . -name '__pycache__' -exec rm -rf {} +
+	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
+	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache
 	$(MAKE) docs-clean
 
 destroy: 											## Destroy the virtual environment
-	rm -rf .venv
+	@rm -rf .venv
 
 # =============================================================================
 # Tests, Linting, Coverage
 # =============================================================================
 .PHONY: lint
 lint: 												## Runs pre-commit hooks; includes ruff linting, codespell, black
-	$(ENV_PREFIX)pre-commit run --all-files
+	@echo "=> Running pre-commit process"
+	@$(ENV_PREFIX)pre-commit run --all-files
+	@echo "=> Pre-commit complete"
 
 .PHONY: test
 test:  												## Run the tests
-	$(ENV_PREFIX)pytest tests
+	@echo "=> Running test cases"
+	@$(ENV_PREFIX)pytest tests
+	@echo "=> Tests complete"
 
 .PHONY: coverage
 coverage:  											## Run the tests and generate coverage report
-	$(ENV_PREFIX)pytest tests --cov=app
-	$(ENV_PREFIX)coverage html
-	$(ENV_PREFIX)coverage xml
+	@echo "=> Running tests with coverage"
+	@$(ENV_PREFIX)pytest tests --cov=app
+	@$(ENV_PREFIX)coverage html
+	@$(ENV_PREFIX)coverage xml
+	@echo "=> Coverage report generated"
 
 .PHONY: check-all
 check-all: lint test coverage 						## Run all linting, tests, and coverage checks
@@ -95,13 +90,19 @@ check-all: lint test coverage 						## Run all linting, tests, and coverage chec
 # =============================================================================
 .PHONY: docs-install
 docs-install: 										## Install docs dependencies
-	$(PDM) install --group docs
+	@echo "=> Installing documentation dependencies"
+	@$(PDM) install --group docs
+	@echo "=> Installed documentation dependencies"
 
 docs-clean: 										## Dump the existing built docs
-	rm -rf docs/_build
+	@echo "=> Cleaning documentation build assets"
+	@rm -rf docs/_build
+	@echo "=> Removed existing documentation build assets"
 
 docs-serve: docs-clean 								## Serve the docs locally
+	@echo "=> Serving documentation"
 	$(ENV_PREFIX)sphinx-autobuild docs docs/_build/ -j auto --watch app --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
 
 docs: docs-clean 									## Dump the existing built docs and rebuild them
-	$(ENV_PREFIX)sphinx-build -M html docs docs/_build/ -E -a -j auto --keep-going
+	@echo "=> Building documentation"
+	@$(ENV_PREFIX)sphinx-build -M html docs docs/_build/ -E -a -j auto --keep-going
