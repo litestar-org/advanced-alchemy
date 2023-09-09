@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from advanced_alchemy.alembic import commands
 from litestar.app import Litestar
 from pytest import FixtureRequest
+
+from advanced_alchemy.alembic import commands
 
 if TYPE_CHECKING:
     pass

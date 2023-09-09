@@ -38,4 +38,4 @@ class Empty:
 
 
 EmptyType: TypeAlias = Type[Empty]
-TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]" 
+TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"

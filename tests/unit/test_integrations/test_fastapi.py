@@ -2,13 +2,14 @@ from typing import Annotated, Generator
 from unittest.mock import MagicMock
 
 import pytest
-from advanced_alchemy.config.sync import SQLAlchemySyncConfig
-from advanced_alchemy.integrations.fastapi import FastAPIAdvancedAlchemy
 from fastapi import Depends, FastAPI, Response
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
+
+from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.integrations.fastapi import FastAPIAdvancedAlchemy
 
 
 @pytest.fixture()
