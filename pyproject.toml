@@ -49,16 +49,17 @@ requires = ["hatchling"]
 
 [tool.pdm.dev-dependencies]
 dev = [
-  "asyncmy>=0.2.8",
-  "asyncpg>=0.28.0",
-  "oracledb>=1.4.0",
-  "redis>=5.0.0",
-  "duckdb-engine>=0.9.2",
-  "aiosqlite>=0.19.0",
-  "psycopg>=3.1.10",
-  "pytest-xdist>=3.3.1",
-  "sqlalchemy-spanner>=1.6.2",
-  "litestar>=2.0.1",
+    "asyncmy>=0.2.8",
+    "asyncpg>=0.28.0",
+    "oracledb>=1.4.0",
+    "redis>=5.0.0",
+    "duckdb-engine>=0.9.2",
+    "aiosqlite>=0.19.0",
+    "psycopg>=3.1.10",
+    "pytest-xdist>=3.3.1",
+    "sqlalchemy-spanner>=1.6.2",
+    "litestar>=2.0.1",
+    "fastapi>=0.103.1",
 ]
 integrations = [
   "litestar[cli]>=2.0.0",
@@ -72,13 +73,14 @@ linting = [
   "mypy>=1.5.1",
 ]
 test = [
-  "pytest>=7.4.1",
-  "pytest-xdist>=3.3.1",
-  "anyio<4.0.0",
-  "pytest-lazy-fixture>=0.6.3",
-  "pytest-asyncio>=0.21.1",
-  "pytest-mock>=3.11.1",
-  "time-machine>=2.12.0",
+    "pytest>=7.4.1",
+    "pytest-xdist>=3.3.1",
+    "anyio<4.0.0",
+    "pytest-lazy-fixture>=0.6.3",
+    "pytest-asyncio>=0.21.1",
+    "pytest-mock>=3.11.1",
+    "time-machine>=2.12.0",
+    "httpx>=0.24.1",
 ]
 
 [tool.black]
