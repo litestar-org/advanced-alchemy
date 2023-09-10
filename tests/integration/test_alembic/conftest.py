@@ -3,15 +3,13 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
-from advanced_alchemy.alembic import commands
-from pytest import FixtureRequest
-
-import pytest
-from advanced_alchemy.config import SQLAlchemySyncConfig, SQLAlchemyAsyncConfig
 from pytest import FixtureRequest
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
+
+from advanced_alchemy.alembic import commands
+from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 
 @pytest.fixture()

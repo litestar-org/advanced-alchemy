@@ -5,8 +5,8 @@ from typing import Type
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
-from advanced_alchemy.alembic import commands
 
+from advanced_alchemy.alembic import commands
 from alembic.util.exc import CommandError
 from tests import models_uuid
 
