@@ -82,6 +82,11 @@ test = [
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
 ]
+docs = [
+    "sphinx>=7.1.2",
+    "furo>=2023.9.10",
+    "sphinx-autobuild>=2021.3.14",
+]
 
 [tool.black]
 line-length = 120
