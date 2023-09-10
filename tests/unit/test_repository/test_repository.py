@@ -7,6 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from pytest_lazyfixture import lazy_fixture
+from sqlalchemy import String
+from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
+
 from advanced_alchemy import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
@@ -21,12 +27,6 @@ from advanced_alchemy.filters import (
     NotInCollectionFilter,
     OnBeforeAfter,
 )
-from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import String
-from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
-
 from tests.helpers import maybe_async
 
 if TYPE_CHECKING:

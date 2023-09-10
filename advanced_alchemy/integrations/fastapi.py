@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Generic, cast, overload
 
+from fastapi import Request  # noqa: TCH002
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
@@ -13,7 +14,7 @@ from advanced_alchemy.config.common import EngineT, SessionT
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI, Request
+    from fastapi import FastAPI
     from starlette.responses import Response
 
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig

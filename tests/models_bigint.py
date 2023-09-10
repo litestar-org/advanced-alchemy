@@ -4,10 +4,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List
 
-from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
-from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 
 
 class BigIntAuthor(BigIntAuditBase):
