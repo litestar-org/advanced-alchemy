@@ -1,6 +1,6 @@
 # advanced_alchemy
 
-A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy, 
+A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy,
 offering features such as:
 
 - Sync and async repositories, featuring common CRUD and highly optimized bulk operations
