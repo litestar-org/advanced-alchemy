@@ -1,53 +1,40 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
-
-import pytest
-from litestar.app import Litestar
-from pytest import FixtureRequest
-
-from advanced_alchemy.alembic import commands
-
-if TYPE_CHECKING:
-    pass
-
-
-@pytest.fixture()
-async def sync_alembic_commands(sync_app: Litestar) -> commands.AlembicCommands:
-    return commands.AlembicCommands(app=sync_app)
-
-
-@pytest.fixture()
-async def async_alembic_commands(async_app: Litestar) -> commands.AlembicCommands:
-    return commands.AlembicCommands(app=async_app)
-
-
-@pytest.fixture(params=[pytest.param("sync_alembic_commands"), pytest.param("async_alembic_commands")])
-async def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
-    return cast(commands.AlembicCommands, request.getfixturevalue(request.param))
-
-
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import pytest
 from advanced_alchemy.alembic import commands
-from litestar.app import Litestar
 from pytest import FixtureRequest
 
-if TYPE_CHECKING:
-    pass
+import pytest
+from advanced_alchemy.config import SQLAlchemySyncConfig, SQLAlchemyAsyncConfig
+from pytest import FixtureRequest
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 
 @pytest.fixture()
-async def sync_alembic_commands(sync_app: Litestar) -> commands.AlembicCommands:
-    return commands.AlembicCommands(app=sync_app)
+async def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
+    return SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker)
 
 
 @pytest.fixture()
-async def async_alembic_commands(async_app: Litestar) -> commands.AlembicCommands:
-    return commands.AlembicCommands(app=async_app)
+async def async_sqlalchemy_config(
+    async_engine: AsyncEngine,
+    async_session_maker: async_sessionmaker[AsyncSession],
+) -> SQLAlchemyAsyncConfig:
+    return SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker)
+
+
+@pytest.fixture()
+async def sync_alembic_commands(sync_sqlalchemy_config: SQLAlchemySyncConfig) -> commands.AlembicCommands:
+    return commands.AlembicCommands(sqlalchemy_config=sync_sqlalchemy_config)
+
+
+@pytest.fixture()
+async def async_alembic_commands(async_sqlalchemy_config: SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
+    return commands.AlembicCommands(sqlalchemy_config=async_sqlalchemy_config)
 
 
 @pytest.fixture(params=[pytest.param("sync_alembic_commands"), pytest.param("async_alembic_commands")])

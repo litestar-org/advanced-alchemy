@@ -11,6 +11,7 @@ from pytest import FixtureRequest
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
+from advanced_alchemy.integrations.litestar.plugin import SQLAlchemyPlugin, AlembicCommands
 
 
 @pytest.fixture()
@@ -36,6 +37,21 @@ async def sync_app(sync_sqlalchemy_plugin: SQLAlchemyPlugin) -> Litestar:
 @pytest.fixture()
 async def async_app(async_sqlalchemy_plugin: SQLAlchemyPlugin) -> Litestar:
     return Litestar(plugins=[async_sqlalchemy_plugin])
+
+
+@pytest.fixture()
+async def sync_alembic_commands(sync_app: Litestar) -> AlembicCommands:
+    return AlembicCommands(app=sync_app)
+
+
+@pytest.fixture()
+async def async_alembic_commands(async_app: Litestar) -> AlembicCommands:
+    return AlembicCommands(app=async_app)
+
+
+@pytest.fixture(params=[pytest.param("sync_alembic_commands"), pytest.param("async_alembic_commands")])
+async def alembic_commands(request: FixtureRequest) -> AlembicCommands:
+    return cast(AlembicCommands, request.getfixturevalue(request.param))
 
 
 @pytest.fixture(params=[pytest.param("sync_app"), pytest.param("async_app")])
