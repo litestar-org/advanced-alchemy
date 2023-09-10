@@ -179,8 +179,8 @@ def create_revision(
     """Create a new database revision."""
 
     def process_revision_directives(
-        context: MigrationContext,
-        revision: tuple[str],
+        context: MigrationContext,  # noqa: ARG001
+        revision: tuple[str],  # noqa: ARG001
         directives: list[MigrationScript],
     ) -> None:
         """Handle revision directives."""

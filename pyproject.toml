@@ -71,6 +71,7 @@ linting = [
   "pre-commit>=3.4.0",
   "black>=23.7.0",
   "mypy>=1.5.1",
+  "ruff>=0.0.287",
 ]
 test = [
   "pytest>=7.4.1",
@@ -187,6 +188,12 @@ module = "advanced_alchemy.integrations.litestar.cli"
 [[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
 warn_unreachable = false
+
+[[tool.mypy.overrides]]
+disable_error_code = "no-untyped-call"
+disallow_untyped_decorators = false
+module = "advanced_alchemy.integrations.sanic"
+warn_unused_ignores = false
 
 [tool.unasyncd]
 add_editors_note = true

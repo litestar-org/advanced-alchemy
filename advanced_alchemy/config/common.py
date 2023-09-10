@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.session import JoinTransactionMode
     from sqlalchemy.sql import TableClause
 
-    from advanced_alchemy.config import EmptyType
+    from advanced_alchemy.config.types import EmptyType
 
 __all__ = (
     "GenericSQLAlchemyConfig",
@@ -174,7 +174,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         session_kws = self.session_config_dict
         if session_kws.get("bind") is None:
             session_kws["bind"] = self.create_engine()
-        return self.session_maker_class(**session_kws)
+        self.session_maker = self.session_maker_class(**session_kws)
+        return self.session_maker
 
 
 @dataclass
