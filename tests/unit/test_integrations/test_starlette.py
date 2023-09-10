@@ -1,4 +1,4 @@
-from typing import Annotated, Generator, Union, cast
+from typing import TYPE_CHECKING, Annotated, Generator, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,8 +7,10 @@ from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 from pytest_mock import MockerFixture
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
+from starlette.requests import Request
+from typing_extensions import Callable, assert_type
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
@@ -47,9 +49,7 @@ def config(request: FixtureRequest) -> AnyConfig:
 
 @pytest.fixture()
 def alchemy(config: AnyConfig, app: FastAPI) -> StarletteAdvancedAlchemy:
-    alchemy = StarletteAdvancedAlchemy.from_config(config)
-    alchemy.init_app(app)
-    return alchemy
+    return StarletteAdvancedAlchemy(config, app=app)
 
 
 @pytest.fixture()
@@ -73,6 +73,23 @@ def mock_rollback(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
     return mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
 
 
+def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_config: SQLAlchemySyncConfig) -> None:
+    if TYPE_CHECKING:
+        sync_alchemy = StarletteAdvancedAlchemy(config=sync_config)
+        async_alchemy = StarletteAdvancedAlchemy(config=async_config)
+
+        assert_type(sync_alchemy.get_engine(), Engine)
+        assert_type(async_alchemy.get_engine(), AsyncEngine)
+
+        assert_type(sync_alchemy.get_sessionmaker(), Callable[[], Session])
+        assert_type(async_alchemy.get_sessionmaker(), Callable[[], AsyncSession])
+
+        request = Request(scope={})
+
+        assert_type(sync_alchemy.get_session(request), Session)
+        assert_type(async_alchemy.get_session(request), AsyncSession)
+
+
 def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncConfig) -> None:
     alchemy = StarletteAdvancedAlchemy.from_config(config)
     with pytest.raises(ImproperConfigurationError):
@@ -82,8 +99,7 @@ def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncCo
 def test_inject_engine(app: FastAPI) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
-    alchemy = StarletteAdvancedAlchemy.from_config(config=config)
-    alchemy.init_app(app)
+    alchemy = StarletteAdvancedAlchemy.from_config(config=config, app=app)
 
     @app.get("/")
     def handler(engine: Annotated[Engine, Depends(alchemy.get_engine)]) -> None:
@@ -220,11 +236,9 @@ def test_multiple_instances(app: FastAPI) -> None:
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
     config_2 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite:///test.db")
 
-    alchemy_1 = StarletteAdvancedAlchemy.from_config(config_1)
-    alchemy_1.init_app(app)
+    alchemy_1 = StarletteAdvancedAlchemy.from_config(config_1, app=app)
 
-    alchemy_2 = StarletteAdvancedAlchemy.from_config(config_2)
-    alchemy_2.init_app(app)
+    alchemy_2 = StarletteAdvancedAlchemy.from_config(config_2, app=app)
 
     @app.get("/")
     def handler(

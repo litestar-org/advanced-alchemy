@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Callable, Generic, Protocol, cast, overload
 
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request  # noqa: TCH002
@@ -13,6 +12,7 @@ from advanced_alchemy.config.common import EngineT, SessionT
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
     from starlette.applications import Starlette
     from starlette.responses import Response
 
@@ -27,6 +27,24 @@ class CommitStrategyExecutor(Protocol):
 
 
 class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
+    @overload
+    def __init__(
+        self: StarletteAdvancedAlchemy[AsyncEngine, AsyncSession],
+        config: SQLAlchemyAsyncConfig,
+        autocommit: CommitStrategy | None = None,
+        app: Starlette | None = None,
+    ) -> None:
+        ...
+
+    @overload
+    def __init__(
+        self: StarletteAdvancedAlchemy[Engine, Session],
+        config: SQLAlchemySyncConfig,
+        autocommit: CommitStrategy | None = None,
+        app: Starlette | None = None,
+    ) -> None:
+        ...
+
     def __init__(
         self,
         config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig,
@@ -45,20 +63,6 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         }
         if app is not None:
             self.init_app(app)
-
-    @classmethod
-    @overload
-    def from_config(cls, config: SQLAlchemyAsyncConfig) -> StarletteAdvancedAlchemy[AsyncEngine, AsyncSession]:
-        return StarletteAdvancedAlchemy[AsyncEngine, AsyncSession](config=config)
-
-    @classmethod
-    @overload
-    def from_config(cls, config: SQLAlchemySyncConfig) -> StarletteAdvancedAlchemy[Engine, Session]:
-        return StarletteAdvancedAlchemy[Engine, Session](config=config)
-
-    @classmethod
-    def from_config(cls, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> StarletteAdvancedAlchemy:
-        return cls(config=config)
 
     @staticmethod
     def _make_unique_state_key(app: Starlette, key: str) -> str:
