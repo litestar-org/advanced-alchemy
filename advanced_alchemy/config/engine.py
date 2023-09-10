@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from sqlalchemy.pool import Pool
     from typing_extensions import TypeAlias
 
-    from advanced_alchemy.config import EmptyType
+    from advanced_alchemy.config.types import EmptyType
 
 __all__ = ("EngineConfig",)
 
@@ -95,10 +95,10 @@ class EngineConfig:
     """Optional integer value which limits the size of dynamically generated column labels to that many characters. If
     less than 6, labels are generated as “_(counter)”. If ``None``, the value of ``dialect.max_identifier_length``,
     which may be affected via the
-    :attr:`create_engine.max_identifier_length parameter <sqlalchemy.create_engine.params.max_identifier_length>`, is
+    :attr:`get_engine.max_identifier_length parameter <sqlalchemy.get_engine.params.max_identifier_length>`, is
     used instead. The value of
-    :attr:`create_engine.label_length <sqlalchemy.create_engine.params.label_length>` may not be larger than that of
-    :attr:`create_engine.max_identifier_length <sqlalchemy.create_engine.params.max_identifier_length>`."""
+    :attr:`get_engine.label_length <sqlalchemy.get_engine.params.label_length>` may not be larger than that of
+    :attr:`get_engine.max_identifier_length <sqlalchemy.get_engine.params.max_identifier_length>`."""
     logging_name: str | EmptyType = Empty
     """String identifier which will be used within the “name” field of logging records generated within the
     “sqlalchemy.engine” logger. Defaults to a hexstring of the object`s id."""
@@ -169,7 +169,7 @@ class EngineConfig:
     query_cache_size: int | EmptyType = Empty
     """Size of the cache used to cache the SQL string form of queries. Set to zero to disable caching.
 
-    See :attr:`query_cache_size <sqlalchemy.create_engine.params.query_cache_size>` for more info.
+    See :attr:`query_cache_size <sqlalchemy.get_engine.params.query_cache_size>` for more info.
     """
     use_insertmanyvalues: bool | EmptyType = Empty
     """``True`` by default, use the “insertmanyvalues” execution style for INSERT..RETURNING statements by default."""

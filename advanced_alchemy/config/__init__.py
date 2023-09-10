@@ -5,8 +5,6 @@ from typing import (
     Any,
     Callable,
     Mapping,
-    Type,
-    final,
 )
 
 from advanced_alchemy.config.asyncio import AlembicAsyncConfig, AsyncSessionConfig, SQLAlchemyAsyncConfig
@@ -32,10 +30,4 @@ __all__ = (
 )
 
 
-@final
-class Empty:
-    """A sentinel class used as placeholder."""
-
-
-EmptyType: TypeAlias = Type[Empty]
 TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"

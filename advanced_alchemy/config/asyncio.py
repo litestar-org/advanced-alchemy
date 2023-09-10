@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.config import EmptyType
+    from advanced_alchemy.config.types import EmptyType
 
 __all__ = (
     "SQLAlchemyAsyncConfig",
