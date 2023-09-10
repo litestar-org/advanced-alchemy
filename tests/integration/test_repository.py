@@ -328,7 +328,7 @@ def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Eng
     """
     engine = cast(Engine, request.getfixturevalue(request.param))
     if engine.dialect.name.startswith("spanner") and repository_pk_type == "bigint":
-        pytest.skip(reason="Spanner does not support integer based primary keys")
+        pytest.skip(reason="Spanner does not support monotonically increasing primary keys")
     return engine
 
 

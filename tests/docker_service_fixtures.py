@@ -16,7 +16,7 @@ import oracledb
 import pytest
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import spanner
-from oracledb import DatabaseError, OperationalError
+from oracledb.exceptions import DatabaseError, OperationalError
 
 from tests.helpers import wrap_sync
 
@@ -167,13 +167,36 @@ async def postgres_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("postgres", check=postgres_responsive)
 
 
+async def postgres14_responsive(host: str) -> bool:
+    try:
+        conn = await asyncpg.connect(
+            host=host,
+            port=5424,
+            user="postgres",
+            database="postgres",
+            password="super-secret",
+        )
+    except (ConnectionError, asyncpg.CannotConnectNowError):
+        return False
+
+    try:
+        return (await conn.fetchrow("SELECT 1"))[0] == 1  # type: ignore
+    finally:
+        await conn.close()
+
+
+@pytest.fixture()
+async def postgres14_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("postgres", check=postgres_responsive)
+
+
 def oracle23c_responsive(host: str) -> bool:
     try:
         conn = oracledb.connect(
             host=host,
-            port=1510,
+            port=1513,
             user="app",
-            service_name="xepdb1",
+            service_name="FREEPDB1",
             password="super-secret",
         )
         with conn.cursor() as cursor:
