@@ -14,7 +14,7 @@ from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.config.types import CommitStrategy
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.integrations.fastapi import FastAPIAdvancedAlchemy
+from advanced_alchemy.integrations.starlette import StarletteAdvancedAlchemy
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 
@@ -46,8 +46,8 @@ def config(request: FixtureRequest) -> AnyConfig:
 
 
 @pytest.fixture()
-def alchemy(config: AnyConfig, app: FastAPI) -> FastAPIAdvancedAlchemy:
-    alchemy = FastAPIAdvancedAlchemy.from_config(config)
+def alchemy(config: AnyConfig, app: FastAPI) -> StarletteAdvancedAlchemy:
+    alchemy = StarletteAdvancedAlchemy.from_config(config)
     alchemy.init_app(app)
     return alchemy
 
@@ -74,7 +74,7 @@ def mock_rollback(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
 
 
 def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncConfig) -> None:
-    alchemy = FastAPIAdvancedAlchemy.from_config(config)
+    alchemy = StarletteAdvancedAlchemy.from_config(config)
     with pytest.raises(ImproperConfigurationError):
         alchemy.app
 
@@ -82,7 +82,7 @@ def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncCo
 def test_inject_engine(app: FastAPI) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
-    alchemy = FastAPIAdvancedAlchemy.from_config(config=config)
+    alchemy = StarletteAdvancedAlchemy.from_config(config=config)
     alchemy.init_app(app)
 
     @app.get("/")
@@ -94,7 +94,7 @@ def test_inject_engine(app: FastAPI) -> None:
         assert mock.call_args[0][0] is config.engine_instance
 
 
-def test_inject_session(app: FastAPI, alchemy: FastAPIAdvancedAlchemy, client: TestClient) -> None:
+def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client: TestClient) -> None:
     mock = MagicMock()
     SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
@@ -116,7 +116,7 @@ def test_inject_session(app: FastAPI, alchemy: FastAPIAdvancedAlchemy, client: T
 
 def test_session_no_autocommit(
     app: FastAPI,
-    alchemy: FastAPIAdvancedAlchemy,
+    alchemy: StarletteAdvancedAlchemy,
     client: TestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
@@ -134,7 +134,7 @@ def test_session_no_autocommit(
 
 def test_session_autocommit_always(
     app: FastAPI,
-    alchemy: FastAPIAdvancedAlchemy,
+    alchemy: StarletteAdvancedAlchemy,
     client: TestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
@@ -153,7 +153,7 @@ def test_session_autocommit_always(
 @pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
 def test_session_autocommit_match_status(
     app: FastAPI,
-    alchemy: FastAPIAdvancedAlchemy,
+    alchemy: StarletteAdvancedAlchemy,
     client: TestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
@@ -175,7 +175,7 @@ def test_session_autocommit_match_status(
 @pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
 def test_session_autocommit_rollback_for_status(
     app: FastAPI,
-    alchemy: FastAPIAdvancedAlchemy,
+    alchemy: StarletteAdvancedAlchemy,
     client: TestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
@@ -197,7 +197,7 @@ def test_session_autocommit_rollback_for_status(
 @pytest.mark.parametrize("autocommit_strategy", ["always", "match_status"])
 def test_session_autocommit_close_on_exception(
     app: FastAPI,
-    alchemy: FastAPIAdvancedAlchemy,
+    alchemy: StarletteAdvancedAlchemy,
     client: TestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
@@ -220,10 +220,10 @@ def test_multiple_instances(app: FastAPI) -> None:
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
     config_2 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite:///test.db")
 
-    alchemy_1 = FastAPIAdvancedAlchemy.from_config(config_1)
+    alchemy_1 = StarletteAdvancedAlchemy.from_config(config_1)
     alchemy_1.init_app(app)
 
-    alchemy_2 = FastAPIAdvancedAlchemy.from_config(config_2)
+    alchemy_2 = StarletteAdvancedAlchemy.from_config(config_2)
     alchemy_2.init_app(app)
 
     @app.get("/")

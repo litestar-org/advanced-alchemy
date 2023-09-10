@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Generic, Protocol, cast, overload
 
-from fastapi import Request  # noqa: TCH002
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request  # noqa: TCH002
 
 from advanced_alchemy.config.common import EngineT, SessionT
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
+    from starlette.applications import Starlette
     from starlette.responses import Response
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
@@ -26,15 +26,15 @@ class CommitStrategyExecutor(Protocol):
         ...
 
 
-class FastAPIAdvancedAlchemy(Generic[EngineT, SessionT]):
+class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
     def __init__(
         self,
         config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig,
         autocommit: CommitStrategy | None = None,
-        app: FastAPI | None = None,
+        app: Starlette | None = None,
     ) -> None:
         self.config = config
-        self._app: FastAPI
+        self._app: Starlette
         self.engine_key: str
         self.sessionmaker_key: str
         self.session_key: str
@@ -48,20 +48,20 @@ class FastAPIAdvancedAlchemy(Generic[EngineT, SessionT]):
 
     @classmethod
     @overload
-    def from_config(cls, config: SQLAlchemyAsyncConfig) -> FastAPIAdvancedAlchemy[AsyncEngine, AsyncSession]:
-        return FastAPIAdvancedAlchemy[AsyncEngine, AsyncSession](config=config)
+    def from_config(cls, config: SQLAlchemyAsyncConfig) -> StarletteAdvancedAlchemy[AsyncEngine, AsyncSession]:
+        return StarletteAdvancedAlchemy[AsyncEngine, AsyncSession](config=config)
 
     @classmethod
     @overload
-    def from_config(cls, config: SQLAlchemySyncConfig) -> FastAPIAdvancedAlchemy[Engine, Session]:
-        return FastAPIAdvancedAlchemy[Engine, Session](config=config)
+    def from_config(cls, config: SQLAlchemySyncConfig) -> StarletteAdvancedAlchemy[Engine, Session]:
+        return StarletteAdvancedAlchemy[Engine, Session](config=config)
 
     @classmethod
-    def from_config(cls, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> FastAPIAdvancedAlchemy:
+    def from_config(cls, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> StarletteAdvancedAlchemy:
         return cls(config=config)
 
     @staticmethod
-    def _make_unique_state_key(app: FastAPI, key: str) -> str:
+    def _make_unique_state_key(app: Starlette, key: str) -> str:
         i = 0
         while True:
             if not hasattr(app.state, key):
@@ -69,7 +69,7 @@ class FastAPIAdvancedAlchemy(Generic[EngineT, SessionT]):
             key = f"{key}_{i}"
             i += i
 
-    def init_app(self, app: FastAPI) -> None:
+    def init_app(self, app: Starlette) -> None:
         engine = self.config.get_engine()
         self.engine_key = self._make_unique_state_key(app, f"sqla_engine_{engine.name}")
         self.sessionmaker_key = self._make_unique_state_key(app, f"sqla_sessionmaker_{engine.name}")
@@ -119,11 +119,11 @@ class FastAPIAdvancedAlchemy(Generic[EngineT, SessionT]):
             delattr(request.state, self.session_key)
 
     @property
-    def app(self) -> FastAPI:
+    def app(self) -> Starlette:
         try:
             return self._app
         except AttributeError as e:
-            msg = "FastAPI app not initialized. Did you forget to call init_app?"
+            msg = "Application not initialized. Did you forget to call init_app?"
             raise ImproperConfigurationError(msg) from e
 
     def get_engine(self) -> EngineT:
