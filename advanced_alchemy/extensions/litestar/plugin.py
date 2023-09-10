@@ -92,7 +92,7 @@ class AdvancedAlchemyPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.S
         self._config = config
 
     def on_cli_init(self, cli: Group) -> None:
-        from advanced_alchemy.integrations.litestar.cli import database_group
+        from advanced_alchemy.extensions.litestar.cli import database_group
 
         cli.add_command(database_group)
         return super().on_cli_init(cli)

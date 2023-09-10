@@ -9,7 +9,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
-from advanced_alchemy.integrations.fastapi import FastAPIAdvancedAlchemy
+from advanced_alchemy.extensions.fastapi import FastAPIAdvancedAlchemy
 
 
 @pytest.fixture()
@@ -30,7 +30,7 @@ def config() -> SQLAlchemySyncConfig:
 
 @pytest.fixture()
 def alchemy(config: SQLAlchemySyncConfig, app: FastAPI) -> FastAPIAdvancedAlchemy:
-    alchemy = FastAPIAdvancedAlchemy(config=config)
+    alchemy: FastAPIAdvancedAlchemy = FastAPIAdvancedAlchemy(config=config)
     alchemy.init_app(app)
     return alchemy
 
