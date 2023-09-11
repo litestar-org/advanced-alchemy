@@ -2,11 +2,11 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "dev", "docs", "extensions", "linting", "test"]
+groups = ["default", "dev", "docs", "extensions", "linting", "test", "pytest-lazy-fixture"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:6466b74174d1c557acd7153067120c4ca4d119e41c7bd295b1f7b11c8b2430b1"
+content_hash = "sha256:8a1a9787e5f0f5abfa63a9ea96b406c36a28d65fdc25486051f45618db1945f3"
 
 [[package]]
 name = "aiofiles"

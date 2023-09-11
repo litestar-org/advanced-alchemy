@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type, cast
+from typing import Type
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import FixtureRequest
+from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
@@ -35,19 +36,9 @@ async def async_sqlalchemy_config(
     return SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker)
 
 
-@pytest.fixture()
-async def sync_alembic_commands(sync_sqlalchemy_config: SQLAlchemySyncConfig) -> commands.AlembicCommands:
-    return commands.AlembicCommands(sqlalchemy_config=sync_sqlalchemy_config)
-
-
-@pytest.fixture()
-async def async_alembic_commands(async_sqlalchemy_config: SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
-    return commands.AlembicCommands(sqlalchemy_config=async_sqlalchemy_config)
-
-
-@pytest.fixture(params=["sync_alembic_commands", "async_alembic_commands"], autouse=True)
+@pytest.fixture(params=[lazy_fixture("sync_sqlalchemy_config"), lazy_fixture("async_sqlalchemy_config")])
 def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
-    return cast(commands.AlembicCommands, request.getfixturevalue(request.param))
+    return commands.AlembicCommands(sqlalchemy_config=request.param)
 
 
 @pytest.fixture

@@ -90,6 +90,7 @@ test = [
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
 ]
+pytest-lazy-fixture = []
 
 [tool.black]
 line-length = 120
