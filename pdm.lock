@@ -2,11 +2,11 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "test", "integrations", "linting", "dev"]
+groups = ["default", "dev", "extensions", "linting", "test"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:0618b36541d50655d9a6e8230f54a2af62322c3c9e9446dc589c62338b9da542"
+content_hash = "sha256:8d5d79a8fff2f706081e4d041a53486a1c4b6923ab1fe43267d96d1baaa6cb9d"
 
 [[package]]
 name = "aiofiles"

@@ -61,11 +61,12 @@ dev = [
   "litestar>=2.0.1",
   "fastapi>=0.103.1",
 ]
-integrations = [
+extensions = [
   "litestar[cli]>=2.0.0",
   "fastapi>=0.101.0",
   "sanic[ext]>=23.6.0",
   "socketify>=0.0.27",
+  "msgspec>=0.18.2",
 ]
 linting = [
   "pre-commit>=3.4.0",
@@ -183,7 +184,7 @@ module = "tests.*"
 
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
-module = "advanced_alchemy.integrations.litestar.cli"
+module = "advanced_alchemy.extensions.litestar.cli"
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
@@ -192,7 +193,7 @@ warn_unreachable = false
 [[tool.mypy.overrides]]
 disable_error_code = "no-untyped-call"
 disallow_untyped_decorators = false
-module = "advanced_alchemy.integrations.sanic"
+module = "advanced_alchemy.extensions.sanic"
 warn_unused_ignores = false
 
 [tool.unasyncd]

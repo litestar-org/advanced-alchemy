@@ -8,6 +8,9 @@ from sqlalchemy import URL, Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from advanced_alchemy.alembic import commands
+from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -154,6 +157,8 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
 
 
 @pytest.fixture(
+    name="engine",
+    autouse=True,
     params=[
         pytest.param(
             "duckdb_engine",
@@ -206,7 +211,7 @@ def session_maker(engine: Engine) -> sessionmaker[Session]:
 
 
 @pytest.fixture()
-def session(engine: Engine, session_maker: sessionmaker[Session]) -> Generator[Session, None, None]:
+def session(session_maker: sessionmaker[Session]) -> Generator[Session, None, None]:
     session = session_maker()
     try:
         yield session
@@ -281,6 +286,8 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
 
 
 @pytest.fixture(
+    name="async_engine",
+    autouse=True,
     params=[
         pytest.param(
             "aiosqlite_engine",
@@ -335,3 +342,31 @@ async def async_session(
     finally:
         await session.rollback()
         await session.close()
+
+
+@pytest.fixture()
+async def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
+    return SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker)
+
+
+@pytest.fixture()
+async def async_sqlalchemy_config(
+    async_engine: AsyncEngine,
+    async_session_maker: async_sessionmaker[AsyncSession],
+) -> SQLAlchemyAsyncConfig:
+    return SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker)
+
+
+@pytest.fixture()
+async def sync_alembic_commands(sync_sqlalchemy_config: SQLAlchemySyncConfig) -> commands.AlembicCommands:
+    return commands.AlembicCommands(sqlalchemy_config=sync_sqlalchemy_config)
+
+
+@pytest.fixture()
+async def async_alembic_commands(async_sqlalchemy_config: SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
+    return commands.AlembicCommands(sqlalchemy_config=async_sqlalchemy_config)
+
+
+@pytest.fixture(params=["sync_alembic_commands", "async_alembic_commands"], autouse=True)
+async def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
+    return cast(commands.AlembicCommands, request.getfixturevalue(request.param))
