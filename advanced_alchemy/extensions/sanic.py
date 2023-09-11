@@ -141,8 +141,8 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT]):
 
         @self.app.before_server_start
         async def on_startup(_: Any) -> None:
-            setattr(self.app.ctx, self.engine_key, self.config.get_engine())
-            setattr(self.app.ctx, self.sessionmaker_key, self.config.create_session_maker())
+            setattr(self.app.ctx, self.engine_key, self.sqlalchemy_config.get_engine())
+            setattr(self.app.ctx, self.sessionmaker_key, self.sqlalchemy_config.create_session_maker())
 
         @self.app.after_server_stop
         async def on_shutdown(_: Any) -> None:
