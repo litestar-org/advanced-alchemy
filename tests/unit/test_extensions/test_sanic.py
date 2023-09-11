@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Annotated, Generator, Union, cast
+from typing import TYPE_CHECKING, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -27,9 +27,8 @@ def app() -> Sanic:
 
 
 @pytest.fixture()
-def client(app: Sanic) -> Generator[SanicTestClient, None, None]:
-    with SanicTestClient(app=app, raise_server_exceptions=False) as client:
-        yield client
+def client(app: Sanic) -> SanicTestClient:
+    return SanicTestClient(app=app)
 
 
 @pytest.fixture()
@@ -89,7 +88,7 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
 
 def test_init_app_not_called_raises(client: SanicTestClient, config: SQLAlchemySyncConfig) -> None:
     alchemy = SanicAdvancedAlchemy(sqlalchemy_config=config)
-    with pytest.raises(ImproperConfigurationError):
+    with pytest.raises(ImproperConfigurationError, AttributeError):
         alchemy.app
 
 
@@ -97,28 +96,31 @@ def test_inject_engine(app: Sanic) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
     alchemy = SanicAdvancedAlchemy(sqlalchemy_config=config)
+    app.ext.add_dependency(Engine, alchemy.get_engine)
 
     @app.get("/")
-    def handler(engine: Annotated[Engine, Depends(alchemy.get_engine)]) -> None:
+    def handler(engine: Engine) -> None:
         mock(engine)
 
-    with SanicTestClient(app=app) as client:
-        assert client.get("/").status_code == 200
-        assert mock.call_args[0][0] is config.engine_instance
+    client = SanicTestClient(app=app)
+    assert client.get("/")[1].status == 200
+    assert mock.call_args[0][0] is config.engine_instance
 
 
 def test_inject_session(app: Sanic, alchemy: SanicAdvancedAlchemy, client: SanicTestClient) -> None:
     mock = MagicMock()
-    SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
-    def some_dependency(session: SessionDependency) -> None:
+    def some_dependency(session: Session) -> None:
         mock(session)
+
+    app.ext.add_dependency(Session, alchemy.get_session)
+    app.ext.add_dependency(Session, some_dependency)
 
     @app.get("/")
-    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:
+    def handler(session: Session, some_dependency: Session) -> None:
         mock(session)
 
-    assert client.get("/").status_code == 200
+    assert client.get("/").status == 200
     assert mock.call_count == 2
     assert isinstance(
         mock.call_args_list[0].args[0],
@@ -135,12 +137,13 @@ def test_session_no_autocommit(
     mock_close: MagicMock,
 ) -> None:
     alchemy.autocommit_strategy = None
+    app.ext.add_dependency(Session, alchemy.get_session)
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> None:
+    def handler(session: Session) -> None:
         pass
 
-    assert client.get("/").status_code == 200
+    assert client.get("/")[1].status == 200
     mock_commit.assert_not_called()
     mock_close.assert_called_once()
 
@@ -153,17 +156,18 @@ def test_session_autocommit_always(
     mock_close: MagicMock,
 ) -> None:
     alchemy.autocommit_strategy = "always"
+    app.ext.add_dependency(Session, alchemy.get_session)
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> None:
+    def handler(session: Session) -> None:
         pass
 
-    assert client.get("/").status_code == 200
+    assert client.get("/")[1].status == 200
     mock_commit.assert_called_once()
     mock_close.assert_called_once()
 
 
-@pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
+@pytest.mark.parametrize("status", [200, 201, 202, 204, 206])
 def test_session_autocommit_match_status(
     app: Sanic,
     alchemy: SanicAdvancedAlchemy,
@@ -171,13 +175,14 @@ def test_session_autocommit_match_status(
     mock_commit: MagicMock,
     mock_close: MagicMock,
     mock_rollback: MagicMock,
-    status_code: int,
+    status: int,
 ) -> None:
     alchemy.autocommit_strategy = "match_status"
+    app.ext.add_dependency(Session, alchemy.get_session)
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> HTTPResponse:
-        return HTTPResponse(status=status_code)
+    def handler(session: Session) -> HTTPResponse:
+        return HTTPResponse(status=status)
 
     client.get("/")
     mock_commit.assert_called_once()
@@ -185,7 +190,7 @@ def test_session_autocommit_match_status(
     mock_rollback.assert_not_called()
 
 
-@pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
+@pytest.mark.parametrize("status", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
 def test_session_autocommit_rollback_for_status(
     app: Sanic,
     alchemy: SanicAdvancedAlchemy,
@@ -193,13 +198,14 @@ def test_session_autocommit_rollback_for_status(
     mock_commit: MagicMock,
     mock_close: MagicMock,
     mock_rollback: MagicMock,
-    status_code: int,
+    status: int,
 ) -> None:
     alchemy.autocommit_strategy = "match_status"
+    app.ext.add_dependency(Session, alchemy.get_session)
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> HTTPResponse:
-        return HTTPResponse(status=status_code)
+    def handler(session: Session) -> HTTPResponse:
+        return HTTPResponse(status=status)
 
     client.get("/")
     mock_commit.assert_not_called()
@@ -218,9 +224,10 @@ def test_session_autocommit_close_on_exception(
 ) -> None:
     alchemy.autocommit_strategy = autocommit_strategy
     mock_commit.side_effect = ValueError
+    app.ext.add_dependency(Session, alchemy.get_session)
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> None:
+    def handler(session: Session) -> None:
         pass
 
     client.get("/")
@@ -236,25 +243,29 @@ def test_multiple_instances(app: Sanic) -> None:
     alchemy_1 = SanicAdvancedAlchemy(sqlalchemy_config=config_1)
 
     alchemy_2 = SanicAdvancedAlchemy(sqlalchemy_config=config_2)
+    app.ext.add_dependency(Session, alchemy_1.get_session)
+    app.ext.add_dependency(Session, alchemy_2.get_session)
+    app.ext.add_dependency(Engine, alchemy_1.get_engine)
+    app.ext.add_dependency(Engine, alchemy_2.get_engine)
 
     @app.get("/")
     def handler(
-        session_1: Session = Depends(alchemy_1.get_session),
-        session_2: Session = Depends(alchemy_2.get_session),
-        engine_1: Engine = Depends(alchemy_1.get_engine),
-        engine_2: Engine = Depends(alchemy_2.get_engine),
+        session_1: Session,
+        session_2: Session,
+        engine_1: Engine,
+        engine_2: Engine,
     ) -> None:
         mock(session=session_1, engine=engine_1)
         mock(session=session_2, engine=engine_2)
 
-    with SanicTestClient(app=app) as client:
-        client.get("/")
+    client = SanicTestClient(app=app)
+    _response = client.get("/")
 
-        assert alchemy_1.engine_key != alchemy_2.engine_key
-        assert alchemy_1.sessionmaker_key != alchemy_2.sessionmaker_key
-        assert alchemy_1.session_key != alchemy_2.session_key
+    assert alchemy_1.engine_key != alchemy_2.engine_key
+    assert alchemy_1.sessionmaker_key != alchemy_2.sessionmaker_key
+    assert alchemy_1.session_key != alchemy_2.session_key
 
-        assert alchemy_1.get_engine() is not alchemy_2.get_engine()
-        assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
-        assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
-        assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
+    assert alchemy_1.get_engine() is not alchemy_2.get_engine()
+    assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
+    assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
+    assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]

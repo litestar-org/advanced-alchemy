@@ -37,7 +37,7 @@ class CommitStrategyExecutor(Protocol):
 
 
 class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT]):
-    name = "advanced_alchemy"
+    name = "AdvancedAlchemy"
 
     @overload
     def __init__(
