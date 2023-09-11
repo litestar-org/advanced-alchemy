@@ -105,7 +105,7 @@ class FastAPIAdvancedAlchemy(Generic[EngineT, SessionT]):
         return response
 
     async def on_startup(self) -> None:
-        setattr(self.app.state, self.engine_key, self.config.create_engine())
+        setattr(self.app.state, self.engine_key, self.config.get_engine())
         setattr(self.app.state, self.sessionmaker_key, self.config.create_session_maker())
 
     async def on_shutdown(self) -> None:

@@ -61,10 +61,16 @@ dev = [
   "litestar>=2.0.1",
   "fastapi>=0.103.1",
 ]
+docs = [
+  "sphinx>=7.1.2",
+  "furo>=2023.9.10",
+  "sphinx-autobuild>=2021.3.14",
+]
 extensions = [
   "litestar[cli]>=2.0.0",
   "fastapi>=0.101.0",
   "sanic[ext]>=23.6.0",
+  "sanic-testing>=23.6.0",
   "socketify>=0.0.27",
   "msgspec>=0.18.2",
 ]
@@ -83,11 +89,6 @@ test = [
   "pytest-mock>=3.11.1",
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
-]
-docs = [
-    "sphinx>=7.1.2",
-    "furo>=2023.9.10",
-    "sphinx-autobuild>=2021.3.14",
 ]
 
 [tool.black]

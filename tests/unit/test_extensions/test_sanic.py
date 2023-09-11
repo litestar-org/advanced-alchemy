@@ -2,33 +2,33 @@ from typing import TYPE_CHECKING, Annotated, Generator, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import Depends, FastAPI, Response
-from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 from pytest_mock import MockerFixture
+from sanic import HTTPResponse, Sanic
+from sanic_ext import Extend
+from sanic_testing.testing import SanicTestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
-from starlette.requests import Request
 from typing_extensions import Callable, assert_type
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.config.types import CommitStrategy
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
+from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 
 
 @pytest.fixture()
-def app() -> FastAPI:
-    return FastAPI()
+def app() -> Sanic:
+    return Sanic("TestSanic")
 
 
 @pytest.fixture()
-def client(app: FastAPI) -> Generator[TestClient, None, None]:
-    with TestClient(app=app, raise_server_exceptions=False) as client:
+def client(app: Sanic) -> Generator[SanicTestClient, None, None]:
+    with SanicTestClient(app=app, raise_server_exceptions=False) as client:
         yield client
 
 
@@ -48,8 +48,10 @@ def config(request: FixtureRequest) -> AnyConfig:
 
 
 @pytest.fixture()
-def alchemy(config: AnyConfig, app: FastAPI) -> StarletteAdvancedAlchemy:
-    return StarletteAdvancedAlchemy(config, app=app)
+def alchemy(config: AnyConfig, app: Sanic) -> SanicAdvancedAlchemy:
+    alchemy = SanicAdvancedAlchemy(sqlalchemy_config=config)
+    Extend.register(alchemy)
+    return alchemy
 
 
 @pytest.fixture()
@@ -75,8 +77,8 @@ def mock_rollback(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
 
 def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_config: SQLAlchemySyncConfig) -> None:
     if TYPE_CHECKING:
-        sync_alchemy = StarletteAdvancedAlchemy(config=sync_config)
-        async_alchemy = StarletteAdvancedAlchemy(config=async_config)
+        sync_alchemy = SanicAdvancedAlchemy(sqlalchemy_config=sync_config)
+        async_alchemy = SanicAdvancedAlchemy(sqlalchemy_config=async_config)
 
         assert_type(sync_alchemy.get_engine(), Engine)
         assert_type(async_alchemy.get_engine(), AsyncEngine)
@@ -84,33 +86,28 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
         assert_type(sync_alchemy.get_sessionmaker(), Callable[[], Session])
         assert_type(async_alchemy.get_sessionmaker(), Callable[[], AsyncSession])
 
-        request = Request(scope={})
 
-        assert_type(sync_alchemy.get_session(request), Session)
-        assert_type(async_alchemy.get_session(request), AsyncSession)
-
-
-def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncConfig) -> None:
-    alchemy = StarletteAdvancedAlchemy(config)
+def test_init_app_not_called_raises(client: SanicTestClient, config: SQLAlchemySyncConfig) -> None:
+    alchemy = SanicAdvancedAlchemy(sqlalchemy_config=config)
     with pytest.raises(ImproperConfigurationError):
         alchemy.app
 
 
-def test_inject_engine(app: FastAPI) -> None:
+def test_inject_engine(app: Sanic) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
-    alchemy = StarletteAdvancedAlchemy(config=config, app=app)
+    alchemy = SanicAdvancedAlchemy(sqlalchemy_config=config)
 
     @app.get("/")
     def handler(engine: Annotated[Engine, Depends(alchemy.get_engine)]) -> None:
         mock(engine)
 
-    with TestClient(app=app) as client:
+    with SanicTestClient(app=app) as client:
         assert client.get("/").status_code == 200
         assert mock.call_args[0][0] is config.engine_instance
 
 
-def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client: TestClient) -> None:
+def test_inject_session(app: Sanic, alchemy: SanicAdvancedAlchemy, client: SanicTestClient) -> None:
     mock = MagicMock()
     SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
@@ -131,9 +128,9 @@ def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client:
 
 
 def test_session_no_autocommit(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
+    app: Sanic,
+    alchemy: SanicAdvancedAlchemy,
+    client: SanicTestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
 ) -> None:
@@ -149,9 +146,9 @@ def test_session_no_autocommit(
 
 
 def test_session_autocommit_always(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
+    app: Sanic,
+    alchemy: SanicAdvancedAlchemy,
+    client: SanicTestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
 ) -> None:
@@ -168,9 +165,9 @@ def test_session_autocommit_always(
 
 @pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
 def test_session_autocommit_match_status(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
+    app: Sanic,
+    alchemy: SanicAdvancedAlchemy,
+    client: SanicTestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
     mock_rollback: MagicMock,
@@ -179,8 +176,8 @@ def test_session_autocommit_match_status(
     alchemy.autocommit_strategy = "match_status"
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> Response:
-        return Response(status_code=status_code)
+    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> HTTPResponse:
+        return HTTPResponse(status=status_code)
 
     client.get("/")
     mock_commit.assert_called_once()
@@ -190,9 +187,9 @@ def test_session_autocommit_match_status(
 
 @pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
 def test_session_autocommit_rollback_for_status(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
+    app: Sanic,
+    alchemy: SanicAdvancedAlchemy,
+    client: SanicTestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
     mock_rollback: MagicMock,
@@ -201,8 +198,8 @@ def test_session_autocommit_rollback_for_status(
     alchemy.autocommit_strategy = "match_status"
 
     @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> Response:
-        return Response(status_code=status_code)
+    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> HTTPResponse:
+        return HTTPResponse(status=status_code)
 
     client.get("/")
     mock_commit.assert_not_called()
@@ -212,9 +209,9 @@ def test_session_autocommit_rollback_for_status(
 
 @pytest.mark.parametrize("autocommit_strategy", ["always", "match_status"])
 def test_session_autocommit_close_on_exception(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
+    app: Sanic,
+    alchemy: SanicAdvancedAlchemy,
+    client: SanicTestClient,
     mock_commit: MagicMock,
     mock_close: MagicMock,
     autocommit_strategy: CommitStrategy,
@@ -231,14 +228,14 @@ def test_session_autocommit_close_on_exception(
     mock_close.assert_called_once()
 
 
-def test_multiple_instances(app: FastAPI) -> None:
+def test_multiple_instances(app: Sanic) -> None:
     mock = MagicMock()
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
     config_2 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite:///test.db")
 
-    alchemy_1 = StarletteAdvancedAlchemy(config_1, app=app)
+    alchemy_1 = SanicAdvancedAlchemy(sqlalchemy_config=config_1)
 
-    alchemy_2 = StarletteAdvancedAlchemy(config_2, app=app)
+    alchemy_2 = SanicAdvancedAlchemy(sqlalchemy_config=config_2)
 
     @app.get("/")
     def handler(
@@ -250,7 +247,7 @@ def test_multiple_instances(app: FastAPI) -> None:
         mock(session=session_1, engine=engine_1)
         mock(session=session_2, engine=engine_2)
 
-    with TestClient(app=app) as client:
+    with SanicTestClient(app=app) as client:
         client.get("/")
 
         assert alchemy_1.engine_key != alchemy_2.engine_key
