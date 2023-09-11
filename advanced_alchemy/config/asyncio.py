@@ -5,13 +5,12 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from advanced_alchemy.config.types import Empty
-
-from .common import (
+from advanced_alchemy.config.common import (
     GenericAlembicConfig,
     GenericSessionConfig,
     GenericSQLAlchemyConfig,
 )
+from advanced_alchemy.config.types import Empty
 
 if TYPE_CHECKING:
     from typing import Callable

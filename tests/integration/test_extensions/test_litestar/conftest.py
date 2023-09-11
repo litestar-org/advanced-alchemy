@@ -12,7 +12,7 @@ from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
-from advanced_alchemy.integrations.litestar.plugin import AlembicCommands, SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar.plugin import AlembicCommands
 
 
 @pytest.fixture()

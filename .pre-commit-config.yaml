@@ -26,6 +26,7 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
+        exclude: "docs"
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.5
     hooks:
@@ -40,6 +41,7 @@ repos:
     rev: "v1.5.1"
     hooks:
       - id: mypy
+        exclude: "docs"
         additional_dependencies:
           [
             aiosqlite,
@@ -51,10 +53,18 @@ repos:
             oracledb,
             psycopg,
             pytest,
+            pytest-asyncio,
+            pytest-lazy-fixture,
+            time-machine,
+            httpx,
+            "sanic[ext]",
+            socketify,
+            fastapi,
             pytest-mock,
             pytest-timeout,
             sqlalchemy>=2.0.12,
             msgspec,
             click,
-            litestar,
+            rich,
+            "litestar[cli]",
           ]

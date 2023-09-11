@@ -1,20 +1,9 @@
 from __future__ import annotations
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Mapping,
-)
-
 from advanced_alchemy.config.asyncio import AlembicAsyncConfig, AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
 from advanced_alchemy.config.engine import EngineConfig
 from advanced_alchemy.config.sync import AlembicSyncConfig, SQLAlchemySyncConfig, SyncSessionConfig
-
-if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
-
 
 __all__ = (
     "AsyncSessionConfig",
@@ -28,6 +17,3 @@ __all__ = (
     "SQLAlchemySyncConfig",
     "SyncSessionConfig",
 )
-
-
-TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"

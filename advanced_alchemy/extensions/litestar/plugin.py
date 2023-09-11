@@ -54,8 +54,8 @@ def _get_sqlalchemy_plugin(app: Litestar) -> SQLAlchemyPlugin | SQLAlchemyInitPl
 class AlembicCommands(_AlembicCommands):
     def __init__(self, app: Litestar) -> None:
         self._app = app
-        self.sqlalchemy_config = _get_sqlalchemy_plugin(self._app)._config  # type: ignore[assignment]
-        self.plugin_config = _get_advanced_alchemy_plugin(self._app)._config
+        self.sqlalchemy_config = _get_sqlalchemy_plugin(self._app)._config  # type: ignore[assignment]  # noqa: SLF001
+        self.plugin_config = _get_advanced_alchemy_plugin(self._app)._config  # noqa: SLF001
         self.config = self._get_alembic_command_config()
 
     def init(
@@ -92,7 +92,7 @@ class AdvancedAlchemyPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.S
         self._config = config
 
     def on_cli_init(self, cli: Group) -> None:
-        from advanced_alchemy.integrations.litestar.cli import database_group
+        from advanced_alchemy.extensions.litestar.cli import database_group
 
         cli.add_command(database_group)
         return super().on_cli_init(cli)

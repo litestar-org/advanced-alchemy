@@ -61,16 +61,18 @@ dev = [
   "litestar>=2.0.1",
   "fastapi>=0.103.1",
 ]
-integrations = [
+extensions = [
   "litestar[cli]>=2.0.0",
   "fastapi>=0.101.0",
   "sanic[ext]>=23.6.0",
   "socketify>=0.0.27",
+  "msgspec>=0.18.2",
 ]
 linting = [
   "pre-commit>=3.4.0",
   "black>=23.7.0",
   "mypy>=1.5.1",
+  "ruff>=0.0.287",
 ]
 test = [
   "pytest>=7.4.1",
@@ -81,6 +83,11 @@ test = [
   "pytest-mock>=3.11.1",
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
+]
+docs = [
+    "sphinx>=7.1.2",
+    "furo>=2023.9.10",
+    "sphinx-autobuild>=2021.3.14",
 ]
 
 [tool.black]
@@ -182,11 +189,17 @@ module = "tests.*"
 
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
-module = "advanced_alchemy.integrations.litestar.cli"
+module = "advanced_alchemy.extensions.litestar.cli"
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
 warn_unreachable = false
+
+[[tool.mypy.overrides]]
+disable_error_code = "no-untyped-call"
+disallow_untyped_decorators = false
+module = "advanced_alchemy.extensions.sanic"
+warn_unused_ignores = false
 
 [tool.unasyncd]
 add_editors_note = true

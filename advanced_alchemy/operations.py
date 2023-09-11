@@ -53,7 +53,9 @@ def visit_merge_into_clause(element: MergeClause, compiler: StrSQLCompiler, **kw
     values = ""
 
     if element.on_sets:
-        values = ", ".join(f"{name} = {column._compiler_dispatch(compiler, **kw)}" for name, column in set_list)
+        values = ", ".join(
+            f"{name} = {column._compiler_dispatch(compiler, **kw)}" for name, column in set_list  # noqa: SLF001
+        )
         merge_action = f" SET {values}"
 
     return f"WHEN MATCHED{case_predicate} THEN {element.command}{merge_action}"

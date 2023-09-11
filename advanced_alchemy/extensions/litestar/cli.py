@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, cast
 from litestar.cli._utils import LitestarGroup, console
 from rich.prompt import Confirm, Prompt
 
-from advanced_alchemy.integrations.litestar.plugin import AlembicCommands, _get_advanced_alchemy_plugin
+from advanced_alchemy.extensions.litestar.plugin import AlembicCommands, _get_advanced_alchemy_plugin
 
 if TYPE_CHECKING:
     from litestar import Litestar
@@ -179,8 +179,8 @@ def create_revision(
     """Create a new database revision."""
 
     def process_revision_directives(
-        context: MigrationContext,
-        revision: tuple[str],
+        context: MigrationContext,  # noqa: ARG001
+        revision: tuple[str],  # noqa: ARG001
         directives: list[MigrationScript],
     ) -> None:
         """Handle revision directives."""
