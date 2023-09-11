@@ -123,7 +123,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """Return the engine configuration as a dict.
 
         Returns:
-            A string keyed dict of config kwargs for the SQLAlchemy :func:`create_engine <sqlalchemy.create_engine>`
+            A string keyed dict of config kwargs for the SQLAlchemy :func:`get_engine <sqlalchemy.get_engine>`
             function.
         """
         return filter_empty(dataclasses.asdict(self.engine_config))
@@ -138,7 +138,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """
         return filter_empty(dataclasses.asdict(self.session_config))
 
-    def create_engine(self) -> EngineT:
+    def get_engine(self) -> EngineT:
         """Return an engine. If none exists yet, create one.
 
         Returns:
@@ -153,14 +153,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
         engine_config = self.engine_config_dict
         try:
-            self.engine_instance = self.create_engine_callable(self.connection_string, **engine_config)
+            return self.create_engine_callable(self.connection_string, **engine_config)
         except TypeError:
             # likely due to a dialect that doesn't support json type
             del engine_config["json_deserializer"]
             del engine_config["json_serializer"]
-            self.engine_instance = self.create_engine_callable(self.connection_string, **engine_config)
-
-        return self.engine_instance
+            return self.create_engine_callable(self.connection_string, **engine_config)
 
     def create_session_maker(self) -> Callable[[], SessionT]:
         """Get a session maker. If none exists yet, create one.
@@ -173,9 +171,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
         session_kws = self.session_config_dict
         if session_kws.get("bind") is None:
-            session_kws["bind"] = self.create_engine()
-        self.session_maker = self.session_maker_class(**session_kws)
-        return self.session_maker
+            session_kws["bind"] = self.get_engine()
+        return self.session_maker_class(**session_kws)
 
 
 @dataclass

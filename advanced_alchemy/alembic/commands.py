@@ -232,7 +232,7 @@ class AlembicCommands:
             kwargs["template_directory"] = self.sqlalchemy_config.alembic_config.template_path
         kwargs.update(
             {
-                "engine": self.sqlalchemy_config.create_engine(),  # type: ignore[dict-item]
+                "engine": self.sqlalchemy_config.get_engine(),  # type: ignore[dict-item]
                 "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
             },
         )

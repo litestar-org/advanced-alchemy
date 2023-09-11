@@ -37,13 +37,19 @@ def alchemy(config: SQLAlchemySyncConfig, app: FastAPI) -> FastAPIAdvancedAlchem
 
 def test_inject_engine(app: FastAPI, alchemy: FastAPIAdvancedAlchemy, client: TestClient) -> None:
     mock = MagicMock()
+    EngineDependency = Annotated[Session, Depends(alchemy.get_engine)]
+
+    def some_dependency(engine: EngineDependency) -> None:
+        mock(engine)
 
     @app.get("/")
-    def handler(engine: Annotated[Engine, Depends(alchemy.get_engine)]) -> None:
+    def handler(engine: EngineDependency, something: Annotated[None, Depends(some_dependency)]) -> None:
         mock(engine)
 
     assert client.get("/").status_code == 200
-    assert mock.call_args[0][0] is alchemy.config.create_engine()
+    assert mock.call_count == 2
+    assert isinstance(mock.call_args_list[0].args[0], Engine)
+    assert mock.call_args_list[1].args[0] is mock.call_args_list[0].args[0]
 
 
 def test_inject_session(app: FastAPI, alchemy: FastAPIAdvancedAlchemy, client: TestClient) -> None:

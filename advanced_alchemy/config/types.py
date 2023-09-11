@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence, Type, final
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence, Type, final
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
@@ -18,3 +18,5 @@ class Empty:
 EmptyType: TypeAlias = Type[Empty]
 TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"
 TypeDecodersSequence: TypeAlias = "Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
+
+CommitStrategy = Literal["always", "match_status"]
