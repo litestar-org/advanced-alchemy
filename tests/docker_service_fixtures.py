@@ -209,7 +209,7 @@ def oracle23c_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def oracle23c_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("oracle23c", check=oracle23c_responsive, timeout=60)
+    await docker_services.start("oracle23c", check=oracle23c_responsive, timeout=120)
 
 
 def oracle18c_responsive(host: str) -> bool:
