@@ -368,5 +368,5 @@ async def async_alembic_commands(async_sqlalchemy_config: SQLAlchemyAsyncConfig)
 
 
 @pytest.fixture(params=["sync_alembic_commands", "async_alembic_commands"], autouse=True)
-async def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
+def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
     return cast(commands.AlembicCommands, request.getfixturevalue(request.param))

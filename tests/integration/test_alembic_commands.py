@@ -25,7 +25,7 @@ def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Path:
     return path
 
 
-def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
+async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]
