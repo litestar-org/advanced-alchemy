@@ -231,7 +231,7 @@ def oracle18c_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def oracle18c_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("oracle18c", check=oracle18c_responsive, timeout=60)
+    await docker_services.start("oracle18c", check=oracle18c_responsive, timeout=120)
 
 
 def spanner_responsive(host: str) -> bool:

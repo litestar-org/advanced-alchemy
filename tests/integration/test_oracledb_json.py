@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 pytestmark = [
     pytest.mark.skipif(platform.uname()[4] != "x86_64", reason="oracle not available on this platform"),
     pytest.mark.integration,
-    pytest.mark.xdist_group("oracle"),
 ]
 
 
+@pytest.mark.xdist_group("oracle18")
 def test_18c_json_constraint_generation(oracle18c_engine: Engine) -> None:
     ddl = str(CreateTable(UUIDEventLog.__table__).compile(oracle18c_engine, dialect=oracle.dialect()))  # type: ignore
     assert "BLOB" in ddl.upper()
@@ -28,6 +28,7 @@ def test_18c_json_constraint_generation(oracle18c_engine: Engine) -> None:
         UUIDEventLog.metadata.create_all(conn)
 
 
+@pytest.mark.xdist_group("oracle23")
 def test_23c_json_constraint_generation(oracle23c_engine: Engine) -> None:
     ddl = str(CreateTable(UUIDEventLog.__table__).compile(oracle23c_engine, dialect=oracle.dialect()))  # type: ignore
     assert "BLOB" in ddl.upper()

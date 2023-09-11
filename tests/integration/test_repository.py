@@ -293,7 +293,7 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
             marks=[
                 pytest.mark.oracledb,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("oracle"),
+                pytest.mark.xdist_group("oracle18"),
             ],
         ),
         pytest.param(
@@ -301,7 +301,7 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
             marks=[
                 pytest.mark.oracledb,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("oracle"),
+                pytest.mark.xdist_group("oracle23"),
             ],
         ),
         pytest.param(
