@@ -99,7 +99,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
     ) -> ModelT:
-        """Add `data` to the collection.
+        """Add ``data`` to the collection.
 
         Args:
             data: Instance to be added to the collection.
@@ -126,7 +126,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
     ) -> list[ModelT]:
-        """Add Many `data` to the collection.
+        """Add many `data` to the collection.
 
         Args:
             data: list of Instances to be added to the collection.

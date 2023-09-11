@@ -260,7 +260,7 @@ class AbstractAsyncRepository(Generic[T], metaclass=ABCMeta):
 
     @staticmethod
     def check_not_found(item_or_none: T | None) -> T:
-        """Raise :class:`NotFoundError` if ``item_or_none`` is ``None``.
+        """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
 
         Args:
             item_or_none: Item (:class:`T <T>`) to be tested for existence.
