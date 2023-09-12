@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import Column, pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 
 from advanced_alchemy.base import orm_registry
 from alembic import context
@@ -115,11 +115,17 @@ async def run_migrations_online() -> None:
     """
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = config.db_url
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        future=True,
+
+    connectable = cast(
+        "AsyncEngine",
+        config.engine
+        if config.engine
+        else async_engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+            future=True,
+        ),
     )
     if connectable is None:
         msg = "Could not get engine from config.  Please ensure your `alembic.ini` according to the official Alembic documentation."
@@ -136,4 +142,5 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    loop = asyncio.get_event_loop()
+    asyncio.run_coroutine_threadsafe(run_migrations_online(), loop=loop)

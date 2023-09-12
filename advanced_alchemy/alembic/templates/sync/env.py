@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import Column, engine_from_config, pool
+from sqlalchemy import Column, Engine, engine_from_config, pool
 
 from advanced_alchemy.base import orm_registry
 from alembic import context
@@ -100,7 +100,6 @@ def do_run_migrations(connection: Connection) -> None:
         render_as_batch=config.render_as_batch,
         process_revision_directives=writer,  # type: ignore[arg-type]
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
@@ -113,11 +112,16 @@ def run_migrations_online() -> None:
     """
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = config.db_url
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        future=True,
+    connectable = cast(
+        "Engine",
+        config.engine
+        if config.engine
+        else engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+            future=True,
+        ),
     )
     if connectable is None:
         msg = "Could not get engine from config.  Please ensure your `alembic.ini` according to the official Alembic documentation."

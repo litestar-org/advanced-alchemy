@@ -46,6 +46,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         self.render_as_batch = render_as_batch
         self.user_module_prefix = user_module_prefix
         self.compare_type = compare_type
+        self.engine = engine
         self.db_url = engine.url.render_as_string(hide_password=False)
         if config_args is None:
             config_args = {}
