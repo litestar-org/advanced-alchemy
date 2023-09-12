@@ -584,9 +584,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
     async def list_and_count(
         self,
         *filters: FilterTypes | ColumnElement[bool],
-        auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        auto_refresh: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
         **kwargs: Any,
@@ -597,10 +595,6 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
             *filters: Types for specific filtering operations.
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
