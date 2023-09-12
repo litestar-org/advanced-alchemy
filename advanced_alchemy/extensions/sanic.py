@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, cast, overlo
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.common import EngineT, SessionT
 from advanced_alchemy.exceptions import MissingDependencyError
 
@@ -24,9 +23,10 @@ except ModuleNotFoundError:
     _default = Default()
 
 if TYPE_CHECKING:
-    from sanic import HTTPResponse, Request
+    from sanic import HTTPResponse, Request, Sanic
     from sqlalchemy.orm import Session
 
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.config.types import CommitStrategy
 
@@ -71,7 +71,6 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT]):
             raise MissingDependencyError(
                 msg,
             )
-        self._kind = "async" if isinstance(sqlalchemy_config, SQLAlchemyAsyncConfig) else "sync"
         self.sqlalchemy_config = sqlalchemy_config
         self.engine_key = "db_engine"
         self.sessionmaker_key = "sessionmaker"
@@ -82,6 +81,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT]):
             "match_status": self._commit_strategy_match_status,
         }
         self.counters = counters
+        self.app: Sanic
 
     async def _do_commit(self, session: Session | AsyncSession) -> None:
         if not isinstance(session, AsyncSession):
@@ -122,7 +122,12 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT]):
             delattr(request.ctx, self.session_key)
 
     def get_engine(self) -> EngineT:
-        return cast(EngineT, getattr(self.app.ctx, self.engine_key))
+        engine = cast(EngineT | None, getattr(self.app.ctx, self.engine_key, None))
+        if engine is not None:
+            return engine
+        engine = cast(EngineT, self.sqlalchemy_config.get_engine())
+        setattr(self.app.ctx, self.engine_key, engine)
+        return engine
 
     def get_sessionmaker(self) -> Callable[[], SessionT]:
         return cast(Callable[[], SessionT], getattr(self.app.ctx, self.sessionmaker_key))

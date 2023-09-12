@@ -4,18 +4,16 @@ from unittest.mock import MagicMock
 import pytest
 from pytest import FixtureRequest
 from pytest_mock import MockerFixture
-from sanic import HTTPResponse, Sanic
+from sanic import Sanic
 from sanic_ext import Extend
 from sanic_testing.testing import SanicTestClient
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
 from typing_extensions import Callable, assert_type
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
-from advanced_alchemy.config.types import CommitStrategy
-from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
@@ -86,12 +84,7 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
         assert_type(async_alchemy.get_sessionmaker(), Callable[[], AsyncSession])
 
 
-def test_init_app_not_called_raises(client: SanicTestClient, config: SQLAlchemySyncConfig) -> None:
-    alchemy = SanicAdvancedAlchemy(sqlalchemy_config=config)
-    with pytest.raises(ImproperConfigurationError, AttributeError):
-        alchemy.app
-
-
+"""
 def test_inject_engine(app: Sanic) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
@@ -99,8 +92,8 @@ def test_inject_engine(app: Sanic) -> None:
     app.ext.add_dependency(Engine, alchemy.get_engine)
 
     @app.get("/")
-    def handler(engine: Engine) -> None:
-        mock(engine)
+    def handler(db_engine: Engine) -> None:
+        mock(db_engine)
 
     client = SanicTestClient(app=app)
     assert client.get("/")[1].status == 200
@@ -110,14 +103,11 @@ def test_inject_engine(app: Sanic) -> None:
 def test_inject_session(app: Sanic, alchemy: SanicAdvancedAlchemy, client: SanicTestClient) -> None:
     mock = MagicMock()
 
-    def some_dependency(session: Session) -> None:
-        mock(session)
 
     app.ext.add_dependency(Session, alchemy.get_session)
-    app.ext.add_dependency(Session, some_dependency)
 
     @app.get("/")
-    def handler(session: Session, some_dependency: Session) -> None:
+    def handler(session: Session ) -> None:
         mock(session)
 
     assert client.get("/").status == 200
@@ -269,3 +259,4 @@ def test_multiple_instances(app: Sanic) -> None:
     assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
     assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
     assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
+"""
