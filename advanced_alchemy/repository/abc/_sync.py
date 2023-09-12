@@ -128,7 +128,7 @@ class AbstractSyncRepository(Generic[T], metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def get_or_create(self, **kwargs: Any) -> tuple[T, bool]:
+    def get_or_upsert(self, **kwargs: Any) -> tuple[T, bool]:
         """Get an instance specified by the ``kwargs`` filters if it exists or create it.
 
         Args:

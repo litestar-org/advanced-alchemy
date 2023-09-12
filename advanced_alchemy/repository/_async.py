@@ -381,7 +381,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
-    async def get_or_create(
+    async def get_or_upsert(
         self,
         match_fields: list[str] | str | None = None,
         upsert: bool = True,

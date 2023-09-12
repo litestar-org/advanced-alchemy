@@ -382,7 +382,7 @@ class SQLAlchemySyncRepository(AbstractSyncRepository[ModelT], Generic[ModelT]):
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
-    def get_or_create(
+    def get_or_upsert(
         self,
         match_fields: list[str] | str | None = None,
         upsert: bool = True,

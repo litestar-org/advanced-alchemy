@@ -423,7 +423,7 @@ def session(
         try:
             author_repo = models_uuid.AuthorSyncRepository(session=session)
             for author in raw_authors:
-                _ = author_repo.get_or_create(match_fields="name", **author)
+                _ = author_repo.get_or_upsert(match_fields="name", **author)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
                 rule_repo = models_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
@@ -745,20 +745,20 @@ async def test_repo_get_one_method(author_repo: AuthorRepository, first_author_i
         _ = await author_repo.get_one(name="I don't exist")
 
 
-async def test_repo_get_or_create_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
-    existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+async def test_repo_get_or_upsert_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    existing_obj, existing_created = await maybe_async(author_repo.get_or_upsert(name="Agatha Christie"))
     assert existing_obj.id == first_author_id
     assert existing_created is False
-    new_obj, new_created = await maybe_async(author_repo.get_or_create(name="New Author"))
+    new_obj, new_created = await maybe_async(author_repo.get_or_upsert(name="New Author"))
     assert new_obj.id is not None
     assert new_obj.name == "New Author"
     assert new_created
 
 
-async def test_repo_get_or_create_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     existing_obj, existing_created = await maybe_async(
-        author_repo.get_or_create(match_fields="name", name="Agatha Christie", dob=now.date()),
+        author_repo.get_or_upsert(match_fields="name", name="Agatha Christie", dob=now.date()),
     )
     assert existing_obj.id == first_author_id
     assert existing_obj.dob == now.date()
@@ -941,14 +941,14 @@ async def test_repo_json_methods(
     assert obj.config == updated.config
 
     get_obj, get_created = await maybe_async(
-        rule_repo.get_or_create(match_fields=["name"], name="Secondary loading rule.", config={"another": "object"}),
+        rule_repo.get_or_upsert(match_fields=["name"], name="Secondary loading rule.", config={"another": "object"}),
     )
     assert get_created is False
     assert get_obj.id is not None
     assert get_obj.config == {"another": "object"}
 
     new_obj, new_created = await maybe_async(
-        rule_repo.get_or_create(match_fields=["name"], name="New rule.", config={"new": "object"}),
+        rule_repo.get_or_upsert(match_fields=["name"], name="New rule.", config={"new": "object"}),
     )
     assert new_created is True
     assert new_obj.id is not None

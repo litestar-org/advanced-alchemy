@@ -428,11 +428,11 @@ async def test_get_one_or_none(
     assert none_instance is None
 
 
-async def test_get_or_create(
+async def test_get_or_upsert(
     repository_type: type[GenericAsyncMockRepository],
     create_audit_model_type: CreateAuditModelFixture,
 ) -> None:
-    """Test that the repository get_or_create returns a model record correctly."""
+    """Test that the repository get_or_upsert returns a model record correctly."""
 
     Model = create_audit_model_type(
         {"random_column": Mapped[str], "cool_attribute": mapped_column(String, nullable=True)},
@@ -441,20 +441,20 @@ async def test_get_or_create(
     instances = [Model(random_column="value 1", cool_attribute="yep"), Model(random_column="value 2")]
     mock_repo = repository_type[Model]()  # type: ignore[index]
     inserted_instances = await maybe_async(mock_repo.add_many(instances))
-    fetched_instance, fetched_created = await maybe_async(mock_repo.get_or_create(random_column="value 2"))
+    fetched_instance, fetched_created = await maybe_async(mock_repo.get_or_upsert(random_column="value 2"))
     assert await maybe_async(mock_repo.count()) == 2
     assert inserted_instances[1] == fetched_instance
     assert fetched_created is False
-    _, created = await maybe_async(mock_repo.get_or_create(random_column="value 3"))
+    _, created = await maybe_async(mock_repo.get_or_upsert(random_column="value 3"))
     assert await maybe_async(mock_repo.count()) == 3
     assert created
 
 
-async def test_get_or_create_match_fields(
+async def test_get_or_upsert_match_fields(
     repository_type: type[GenericAsyncMockRepository],
     create_audit_model_type: CreateAuditModelFixture,
 ) -> None:
-    """Test that the repository get_or_create returns a model record correctly."""
+    """Test that the repository get_or_upsert returns a model record correctly."""
 
     Model = create_audit_model_type(
         {"random_column": Mapped[str], "cool_attribute": mapped_column(String, nullable=True)},
@@ -464,7 +464,7 @@ async def test_get_or_create_match_fields(
     mock_repo = repository_type[Model]()  # type: ignore[index]
     inserted_instances = await maybe_async(mock_repo.add_many(instances))
     fetched_instance, fetched_created = await maybe_async(
-        mock_repo.get_or_create(match_fields=["random_column"], random_column="value 1", cool_attribute="other thing"),
+        mock_repo.get_or_upsert(match_fields=["random_column"], random_column="value 1", cool_attribute="other thing"),
     )
     assert await maybe_async(mock_repo.count()) == 2
     assert inserted_instances[0] == fetched_instance
