@@ -45,6 +45,8 @@ DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 
 WhereClauseT = ColumnExpressionArgument[bool]
 
+POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
+
 
 class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]):
     """SQLAlchemy based implementation of the repository interface."""
@@ -765,11 +767,8 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
     async def upsert_many(
         self,
         data: list[ModelT],
-        attribute_names: Iterable[str] | None = None,
-        with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
-        auto_refresh: bool | None = None,
     ) -> list[ModelT]:
         """Update or create instance.
 
@@ -780,12 +779,8 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
             data: Instance to update existing, or be created. Identifier used to determine if an
                 existing instance exists is the value of an attribute on ``data`` named as value of
                 :attr:`~advanced_alchemy.repository.AbstractAsyncRepository.id_attribute`.
-            attribute_names: an iterable of attribute names to pass into the ``update`` method.
-            with_for_update: indicating FOR UPDATE should be used, or may be a dictionary containing flags to indicate a more specific set of FOR UPDATE flags for the SELECT
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
 
@@ -795,19 +790,29 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
-        instances = []
+        instances, data_to_update, data_to_insert = [], [], []
         with wrap_sqlalchemy_exception():
+            existing_objs = await self.list(
+                CollectionFilter(
+                    field_name=self.id_attribute,
+                    values=[getattr(datum, self.id_attribute) for datum in data],
+                ),
+            )
+            existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs]
             for datum in data:
-                instance = await self._attach_to_session(datum, strategy="merge")
-                await self._flush_or_commit(auto_commit=auto_commit)
-                await self._refresh(
-                    instance,
-                    attribute_names=attribute_names,
-                    with_for_update=with_for_update,
-                    auto_refresh=auto_refresh,
+                if getattr(datum, self.id_attribute) in existing_ids:
+                    data_to_update.append(datum)
+                else:
+                    data_to_insert.append(datum)
+            if data_to_insert:
+                instances.extend(
+                    await self.add_many(data_to_insert, auto_commit=auto_commit, auto_expunge=auto_expunge),
                 )
-                self._expunge(instance, auto_expunge=auto_expunge)
-                instances.append(instance)
+            if data_to_update:
+                instances.extend(
+                    await self.update_many(data_to_update, auto_commit=auto_commit, auto_expunge=auto_expunge),
+                )
+
         return instances
 
     async def list(
