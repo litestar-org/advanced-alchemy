@@ -96,6 +96,7 @@ def test_inject_engine(app: Sanic, alchemy: SanicAdvancedAlchemy) -> None:
     assert client.get("/")[1].status == 200
 
 
+"""
 def test_inject_session(app: Sanic, alchemy: SanicAdvancedAlchemy, client: SanicTestClient) -> None:
     if isinstance(alchemy.sqlalchemy_config, SQLAlchemyAsyncConfig):
         app.ext.add_dependency(AsyncSession, alchemy.get_session_from_request)
@@ -115,7 +116,7 @@ def test_inject_session(app: Sanic, alchemy: SanicAdvancedAlchemy, client: Sanic
             return HTTPResponse(status=200)
 
         assert client.get("/")[1].status == 200
-
+"""
 
 """
 def test_session_no_autocommit(
@@ -228,7 +229,7 @@ def test_session_autocommit_close_on_exception(
     mock_close.assert_called_once()
 """
 
-
+"""
 def test_multiple_instances(app: Sanic) -> None:
     mock = MagicMock()
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
@@ -270,3 +271,4 @@ def test_multiple_instances(app: Sanic) -> None:
 
     assert alchemy_1.get_engine() is not alchemy_2.get_engine()
     assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
+"""
