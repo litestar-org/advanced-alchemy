@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class MergeClause(ClauseElement):
-    __visit_name__ = "merge_into_clause"
+    __visit_name__ = "merge_clause"
 
     def __init__(self, command: Literal["INSERT", "UPDATE", "DELETE"]) -> None:
         self.on_sets: dict[str, ColumnElement[Any]] = {}
@@ -29,7 +29,7 @@ class MergeClause(ClauseElement):
 
 
 @compiles(MergeClause)  # type: ignore[no-untyped-call, misc]
-def visit_merge_into_clause(element: MergeClause, compiler: StrSQLCompiler, **kw: Any) -> str:
+def visit_merge_clause(element: MergeClause, compiler: StrSQLCompiler, **kw: Any) -> str:
     case_predicate = ""
     if element.predicate is not None:
         case_predicate = f" AND {element.predicate._compiler_dispatch(compiler, **kw)!s}"  # noqa: SLF001
@@ -61,34 +61,27 @@ def visit_merge_into_clause(element: MergeClause, compiler: StrSQLCompiler, **kw
     return f"WHEN MATCHED{case_predicate} THEN {element.command}{merge_action}"
 
 
-class MergeInto(UpdateBase):
+class Merge(UpdateBase):
     __visit_name__ = "merge_into"
     _bind = None
     inherit_cache = True
 
-    def __init__(self, target: Any, source: Any, on: Any) -> None:
-        self.target = target
-        self.source = source
+    def __init__(self, into: Any, using: Any, on: Any) -> None:
+        self.into = into
+        self.using = using
         self.on = on
         self.clauses: list[ClauseElement] = []
 
-    def when_matched_then_update(self) -> MergeClause:
-        self.clauses.append(clause := MergeClause("UPDATE"))
-        return clause
-
-    def when_matched_then_delete(self) -> MergeClause:
-        self.clauses.append(clause := MergeClause("DELETE"))
-        return clause
-
-    def when_not_matched_then_insert(self) -> MergeClause:
-        self.clauses.append(clause := MergeClause("INSERT"))
+    def when_matched(self, operations: set[Literal["UPDATE", "DELETE", "INSERT"]]) -> MergeClause:
+        for op in operations:
+            self.clauses.append(clause := MergeClause(op))
         return clause
 
 
-@compiles(MergeInto)  # type: ignore[no-untyped-call, misc]
-def visit_merge_into(element: MergeInto, compiler: StrSQLCompiler, **kw: Any) -> str:
+@compiles(Merge)  # type: ignore[no-untyped-call, misc]
+def visit_merge_into(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
     clauses = " ".join(clause._compiler_dispatch(compiler, **kw) for clause in element.clauses)  # noqa: SLF001
-    sql_text = f"MERGE INTO {element.target} USING {element.source} ON {element.on}"
+    sql_text = f"MERGE INTO {element.into} USING {element.using} ON {element.on}"
 
     if clauses:
         sql_text += f" {clauses}"
