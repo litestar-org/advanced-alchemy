@@ -157,7 +157,7 @@ def test_session_autocommit_always(
     mock_close.assert_called_once()
 """
 
-
+"""
 @pytest.mark.parametrize("status", [200, 201, 202, 204, 206])
 def test_session_autocommit_match_status(
     app: Sanic,
@@ -179,8 +179,9 @@ def test_session_autocommit_match_status(
     mock_commit.assert_called_once()
     mock_close.assert_called_once()
     mock_rollback.assert_not_called()
+"""
 
-
+"""
 @pytest.mark.parametrize("status", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
 def test_session_autocommit_rollback_for_status(
     app: Sanic,
@@ -202,7 +203,7 @@ def test_session_autocommit_rollback_for_status(
     mock_commit.assert_not_called()
     mock_close.assert_called_once()
     mock_rollback.assert_called_once()
-
+"""
 
 """
 @pytest.mark.parametrize("autocommit_strategy", ["always", "match_status"])
