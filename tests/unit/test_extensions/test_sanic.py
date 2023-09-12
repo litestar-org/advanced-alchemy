@@ -137,9 +137,7 @@ def test_session_no_autocommit(
     mock_close.assert_called_once()
 """
 
-""
-
-
+"""
 def test_session_autocommit_always(
     app: Sanic,
     alchemy: SanicAdvancedAlchemy,
@@ -157,9 +155,7 @@ def test_session_autocommit_always(
     assert client.get("/")[1].status == 200
     mock_commit.assert_called_once()
     mock_close.assert_called_once()
-
-
-""
+"""
 
 
 @pytest.mark.parametrize("status", [200, 201, 202, 204, 206])
