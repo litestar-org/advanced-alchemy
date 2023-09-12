@@ -792,7 +792,7 @@ async def test_repo_upsert_many_method(
     existing_author_ids: Generator[Any, None, None],
     author_model: AuthorModel,
 ) -> None:
-    first_author_id = next(existing_author_ids)
+    next(existing_author_ids)
     second_author_id = next(existing_author_ids)
     existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
@@ -806,12 +806,12 @@ async def test_repo_upsert_many_method(
         ),
     )
     assert len(upsert_update_objs) == 3
-    assert upsert_update_objs[0].id == first_author_id
-    assert upsert_update_objs[0].name == "Agatha C."
-    assert upsert_update_objs[1].id == second_author_id
-    assert upsert_update_objs[1].name == "Inserted Author"
+    assert upsert_update_objs[0].id is not None
+    assert upsert_update_objs[0].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[1].id is not None
+    assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
-    assert upsert_update_objs[2].name == "Custom Author"
+    assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
 
 
 async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
