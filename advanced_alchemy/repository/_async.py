@@ -43,10 +43,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
+POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 WhereClauseT = ColumnExpressionArgument[bool]
-
-POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
 class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]):

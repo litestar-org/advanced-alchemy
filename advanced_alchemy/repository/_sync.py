@@ -44,10 +44,9 @@ if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
+POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 WhereClauseT = ColumnExpressionArgument[bool]
-
-POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
 class SQLAlchemySyncRepository(AbstractSyncRepository[ModelT], Generic[ModelT]):
