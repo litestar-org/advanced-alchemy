@@ -62,7 +62,7 @@ def visit_merge_clause(element: MergeClause, compiler: StrSQLCompiler, **kw: Any
 
 
 class Merge(UpdateBase):
-    __visit_name__ = "merge_into"
+    __visit_name__ = "merge"
     _bind = None
     inherit_cache = True
 
@@ -79,7 +79,7 @@ class Merge(UpdateBase):
 
 
 @compiles(Merge)  # type: ignore[no-untyped-call, misc]
-def visit_merge_into(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
+def visit_merge(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
     clauses = " ".join(clause._compiler_dispatch(compiler, **kw) for clause in element.clauses)  # noqa: SLF001
     sql_text = f"MERGE INTO {element.into} USING {element.using} ON {element.on}"
 

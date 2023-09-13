@@ -243,6 +243,30 @@ async def test_sqlalchemy_repo_update_many(
     mock_repo.session.commit.assert_not_called()
 
 
+async def test_sqlalchemy_repo_upsert_many(
+    mock_repo: SQLAlchemyAsyncRepository,
+    monkeypatch: MonkeyPatch,
+    mocker: MockerFixture,
+) -> None:
+    """Test expected method calls for update many operation."""
+
+    mock_instances = [MagicMock(), MagicMock(), MagicMock()]
+    monkeypatch.setattr(mock_repo, "model_type", UUIDModel)
+    mocker.patch.object(mock_repo, "_supports_merge_operations", return_value=False)
+    mocker.patch.object(mock_repo.session, "scalars", return_value=mock_instances)
+    mocker.patch.object(mock_repo, "list", return_value=mock_instances)
+    mocker.patch.object(mock_repo, "add_many", return_value=mock_instances)
+    mocker.patch.object(mock_repo, "update_many", return_value=mock_instances)
+
+    instances = await maybe_async(mock_repo.upsert_many(mock_instances))
+
+    assert len(instances) == 3
+    for row in instances:
+        assert row.id is not None
+
+    mock_repo.session.commit.assert_not_called()
+
+
 async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
     """Test expected method calls for delete operation."""
     mock_instance = MagicMock()
