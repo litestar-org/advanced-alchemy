@@ -854,18 +854,19 @@ async def test_repo_upsert_method(
 
 async def test_repo_upsert_many_method(
     author_repo: AuthorRepository,
-    existing_author_ids: Generator[Any, None, None],
     author_model: AuthorModel,
 ) -> None:
-    next(existing_author_ids)
-    second_author_id = next(existing_author_ids)
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73"
+        )
     existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
     upsert_update_objs = await maybe_async(
         author_repo.upsert_many(
             [
                 existing_obj,
-                author_model(id=second_author_id, name="Inserted Author"),
+                author_model(name="Inserted Author"),
                 author_model(name="Custom Author"),
             ],
         ),
