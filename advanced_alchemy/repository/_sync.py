@@ -874,13 +874,15 @@ class SQLAlchemySyncRepository(AbstractSyncRepository[ModelT], Generic[ModelT]):
                     data_to_insert.append(datum)
             if data_to_insert:
                 instances.extend(
-                    self.add_many(data_to_insert, auto_commit=auto_commit, auto_expunge=auto_expunge),
+                    self.add_many(data_to_insert, auto_commit=False, auto_expunge=False),
                 )
             if data_to_update:
                 instances.extend(
-                    self.update_many(data_to_update, auto_commit=auto_commit, auto_expunge=auto_expunge),
+                    self.update_many(data_to_update, auto_commit=False, auto_expunge=False),
                 )
-
+            self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
     def list(

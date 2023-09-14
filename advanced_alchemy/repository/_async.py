@@ -873,13 +873,15 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
                     data_to_insert.append(datum)
             if data_to_insert:
                 instances.extend(
-                    await self.add_many(data_to_insert, auto_commit=auto_commit, auto_expunge=auto_expunge),
+                    await self.add_many(data_to_insert, auto_commit=False, auto_expunge=False),
                 )
             if data_to_update:
                 instances.extend(
-                    await self.update_many(data_to_update, auto_commit=auto_commit, auto_expunge=auto_expunge),
+                    await self.update_many(data_to_update, auto_commit=False, auto_expunge=False),
                 )
-
+            await self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
     async def list(
