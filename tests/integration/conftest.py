@@ -58,12 +58,12 @@ def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture()
-def oracle_engine(docker_ip: str, oracle_service: None) -> Engine:
-    """Postgresql instance for end-to-end testing.
+def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
+    """Oracle 18c instance for end-to-end testing.
 
     Args:
         docker_ip: IP address for TCP connection to Docker containers.
-        oracle_service: ...
+        oracle18c_service: ...
 
     Returns:
         Async SQLAlchemy engine instance.
@@ -77,6 +77,33 @@ def oracle_engine(docker_ip: str, oracle_service: None) -> Engine:
             "host": docker_ip,
             "port": 1512,
             "service_name": "xepdb1",
+            "encoding": "UTF-8",
+            "nencoding": "UTF-8",
+        },
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
+def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
+    """Oracle 23c instance for end-to-end testing.
+
+    Args:
+        docker_ip: IP address for TCP connection to Docker containers.
+        oracle23c_service: ...
+
+    Returns:
+        Async SQLAlchemy engine instance.
+    """
+    return create_engine(
+        "oracle+oracledb://:@",
+        thick_mode=False,
+        connect_args={
+            "user": "app",
+            "password": "super-secret",
+            "host": docker_ip,
+            "port": 1513,
+            "service_name": "FREEPDB1",
             "encoding": "UTF-8",
             "nencoding": "UTF-8",
         },
@@ -127,6 +154,7 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
 
 
 @pytest.fixture(
+    name="engine",
     params=[
         pytest.param(
             "duckdb_engine",
@@ -137,11 +165,19 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
             ],
         ),
         pytest.param(
-            "oracle_engine",
+            "oracle18c_engine",
             marks=[
                 pytest.mark.oracledb,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("oracle"),
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_engine",
+            marks=[
+                pytest.mark.oracledb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
             ],
         ),
         pytest.param(
@@ -166,8 +202,13 @@ def engine(request: FixtureRequest) -> Engine:
 
 
 @pytest.fixture()
-def session(engine: Engine) -> Generator[Session, None, None]:
-    session = sessionmaker(bind=engine, expire_on_commit=False)()
+def session_maker(engine: Engine) -> sessionmaker[Session]:
+    return sessionmaker(bind=engine, expire_on_commit=False)
+
+
+@pytest.fixture()
+def session(session_maker: sessionmaker[Session]) -> Generator[Session, None, None]:
+    session = session_maker()
     try:
         yield session
     finally:
@@ -241,6 +282,7 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
 
 
 @pytest.fixture(
+    name="async_engine",
     params=[
         pytest.param(
             "aiosqlite_engine",
@@ -280,10 +322,41 @@ def async_engine(request: FixtureRequest) -> AsyncEngine:
 
 
 @pytest.fixture()
-async def async_session(async_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    session = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
+def async_session_maker(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(bind=async_engine, expire_on_commit=False)
+
+
+@pytest.fixture()
+async def async_session(
+    async_engine: AsyncEngine,
+    async_session_maker: async_sessionmaker[AsyncSession],
+) -> AsyncGenerator[AsyncSession, None]:
+    session = async_session_maker()
     try:
         yield session
     finally:
         await session.rollback()
         await session.close()
+
+
+# @pytest.fixture()
+# async def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
+#
+#
+# @pytest.fixture()
+# async def async_sqlalchemy_config(
+#     async_engine: AsyncEngine,
+#     async_session_maker: async_sessionmaker[AsyncSession],
+# ) -> SQLAlchemyAsyncConfig:
+#
+#
+# @pytest.fixture()
+# async def sync_alembic_commands(sync_sqlalchemy_config: SQLAlchemySyncConfig) -> commands.AlembicCommands:
+#
+#
+# @pytest.fixture()
+# async def async_alembic_commands(async_sqlalchemy_config: SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
+#
+#
+# @pytest.fixture(params=["sync_alembic_commands", "async_alembic_commands"], autouse=True)
+# def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:

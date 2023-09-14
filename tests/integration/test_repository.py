@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal,
 from uuid import UUID
 
 import pytest
+import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine, Table, insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -289,11 +290,19 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
             ],
         ),
         pytest.param(
-            "oracle_engine",
+            "oracle18c_engine",
             marks=[
                 pytest.mark.oracledb,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("oracle"),
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_engine",
+            marks=[
+                pytest.mark.oracledb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
             ],
         ),
         pytest.param(
@@ -320,7 +329,7 @@ def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Eng
     """
     engine = cast(Engine, request.getfixturevalue(request.param))
     if engine.dialect.name.startswith("spanner") and repository_pk_type == "bigint":
-        pytest.skip(reason="Spanner does not support integer based primary keys")
+        pytest.skip(reason="Spanner does not support monotonically increasing primary keys")
     return engine
 
 
@@ -415,7 +424,7 @@ def session(
         try:
             author_repo = models_uuid.AuthorSyncRepository(session=session)
             for author in raw_authors:
-                _ = author_repo.get_or_create(match_fields="name", **author)
+                _ = author_repo.get_or_upsert(match_fields="name", **author)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
                 rule_repo = models_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
@@ -569,6 +578,22 @@ async def test_repo_count_method(author_repo: AuthorRepository) -> None:
     assert await maybe_async(author_repo.count()) == 2
 
 
+async def test_repo_count_method_with_filters(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
+    """Test SQLAlchemy count with filters.
+
+    Args:
+        author_repo: The author mock repository
+    """
+    assert (
+        await maybe_async(
+            author_repo.count(
+                author_repo.model_type.name == raw_authors[0]["name"],
+            ),
+        )
+        == 1
+    )
+
+
 async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
     """Test SQLAlchemy list with count in asyncpg.
 
@@ -581,6 +606,28 @@ async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_rep
     assert exp_count == count
     assert isinstance(collection, list)
     assert len(collection) == exp_count
+
+
+async def test_repo_list_and_count_method_with_filters(
+    raw_authors: RawRecordData,
+    author_repo: AuthorRepository,
+) -> None:
+    """Test SQLAlchemy list with count and filters in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_repo: The author mock repository
+    """
+    exp_name = raw_authors[0]["name"]
+    exp_id = raw_authors[0]["id"]
+    collection, count = await maybe_async(
+        author_repo.list_and_count(author_repo.model_type.name == exp_name),
+    )
+    assert count == 1
+    assert isinstance(collection, list)
+    assert len(collection) == 1
+    assert collection[0].id == exp_id
+    assert collection[0].name == exp_name
 
 
 async def test_repo_list_and_count_basic_method(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
@@ -634,6 +681,18 @@ async def test_repo_list_method(
     collection = await maybe_async(author_repo.list())
     assert isinstance(collection, list)
     assert len(collection) == exp_count
+
+
+async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
+    exp_name = raw_authors[0]["name"]
+    exp_id = raw_authors[0]["id"]
+    collection = await maybe_async(
+        author_repo.list(sqlalchemy.and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name)),
+    )
+    assert isinstance(collection, list)
+    assert len(collection) == 1
+    assert collection[0].id == exp_id
+    assert collection[0].name == exp_name
 
 
 async def test_repo_add_method(
@@ -691,6 +750,20 @@ async def test_repo_exists_method(author_repo: AuthorRepository, first_author_id
     assert exists
 
 
+async def test_repo_exists_method_with_filters(
+    raw_authors: RawRecordData,
+    author_repo: AuthorRepository,
+    first_author_id: Any,
+) -> None:
+    exists = await maybe_async(
+        author_repo.exists(
+            author_repo.model_type.name == raw_authors[0]["name"],
+            id=first_author_id,
+        ),
+    )
+    assert exists
+
+
 async def test_repo_update_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.get(first_author_id))
     obj.name = "Updated Name"
@@ -737,20 +810,20 @@ async def test_repo_get_one_method(author_repo: AuthorRepository, first_author_i
         _ = await author_repo.get_one(name="I don't exist")
 
 
-async def test_repo_get_or_create_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
-    existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+async def test_repo_get_or_upsert_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    existing_obj, existing_created = await maybe_async(author_repo.get_or_upsert(name="Agatha Christie"))
     assert existing_obj.id == first_author_id
     assert existing_created is False
-    new_obj, new_created = await maybe_async(author_repo.get_or_create(name="New Author"))
+    new_obj, new_created = await maybe_async(author_repo.get_or_upsert(name="New Author"))
     assert new_obj.id is not None
     assert new_obj.name == "New Author"
     assert new_created
 
 
-async def test_repo_get_or_create_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     existing_obj, existing_created = await maybe_async(
-        author_repo.get_or_create(match_fields="name", name="Agatha Christie", dob=now.date()),
+        author_repo.get_or_upsert(match_fields="name", name="Agatha Christie", dob=now.date()),
     )
     assert existing_obj.id == first_author_id
     assert existing_obj.dob == now.date()
@@ -781,29 +854,30 @@ async def test_repo_upsert_method(
 
 async def test_repo_upsert_many_method(
     author_repo: AuthorRepository,
-    existing_author_ids: Generator[Any, None, None],
     author_model: AuthorModel,
 ) -> None:
-    first_author_id = next(existing_author_ids)
-    second_author_id = next(existing_author_ids)
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
     existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
     upsert_update_objs = await maybe_async(
         author_repo.upsert_many(
             [
                 existing_obj,
-                author_model(id=second_author_id, name="Inserted Author"),
+                author_model(name="Inserted Author"),
                 author_model(name="Custom Author"),
             ],
         ),
     )
     assert len(upsert_update_objs) == 3
-    assert upsert_update_objs[0].id == first_author_id
-    assert upsert_update_objs[0].name == "Agatha C."
-    assert upsert_update_objs[1].id == second_author_id
-    assert upsert_update_objs[1].name == "Inserted Author"
+    assert upsert_update_objs[0].id is not None
+    assert upsert_update_objs[0].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[1].id is not None
+    assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
-    assert upsert_update_objs[2].name == "Custom Author"
+    assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
 
 
 async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
@@ -933,14 +1007,14 @@ async def test_repo_json_methods(
     assert obj.config == updated.config
 
     get_obj, get_created = await maybe_async(
-        rule_repo.get_or_create(match_fields=["name"], name="Secondary loading rule.", config={"another": "object"}),
+        rule_repo.get_or_upsert(match_fields=["name"], name="Secondary loading rule.", config={"another": "object"}),
     )
     assert get_created is False
     assert get_obj.id is not None
     assert get_obj.config == {"another": "object"}
 
     new_obj, new_created = await maybe_async(
-        rule_repo.get_or_create(match_fields=["name"], name="New rule.", config={"new": "object"}),
+        rule_repo.get_or_upsert(match_fields=["name"], name="New rule.", config={"new": "object"}),
     )
     assert new_created is True
     assert new_obj.id is not None

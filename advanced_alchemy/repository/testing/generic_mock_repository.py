@@ -203,6 +203,19 @@ class GenericAsyncMockRepository(AbstractAsyncRepository[ModelT], Generic[ModelT
             a tuple that includes the instance and whether it needed to be created.
 
         """
+        return await self.get_or_upsert(match_fields=match_fields, **kwargs)
+
+    async def get_or_upsert(self, match_fields: list[str] | str | None = None, **kwargs: Any) -> tuple[ModelT, bool]:
+        """Get instance identified by ``kwargs`` or create or update if it doesn't exist.
+
+        Args:
+            match_fields: a list of keys to use to match the existing model.  When empty, all fields are matched.
+            **kwargs: Identifier of the instance to be retrieved.
+
+        Returns:
+            a tuple that includes the instance and whether it needed to be created.
+
+        """
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
             match_fields = [match_fields]
@@ -577,6 +590,19 @@ class GenericSyncMockRepository(AbstractSyncRepository[ModelT], Generic[ModelT])
         return self._find_or_raise_not_found(item_id)
 
     def get_or_create(self, match_fields: list[str] | str | None = None, **kwargs: Any) -> tuple[ModelT, bool]:
+        """Get instance identified by ``kwargs`` or create if it doesn't exist.
+
+        Args:
+            match_fields: a list of keys to use to match the existing model.  When empty, all fields are matched.
+            **kwargs: Identifier of the instance to be retrieved.
+
+        Returns:
+            a tuple that includes the instance and whether it needed to be created.
+
+        """
+        return self.get_or_upsert(match_fields=match_fields, **kwargs)
+
+    def get_or_upsert(self, match_fields: list[str] | str | None = None, **kwargs: Any) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
 
         Args:

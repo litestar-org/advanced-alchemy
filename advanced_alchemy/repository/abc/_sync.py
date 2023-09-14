@@ -128,7 +128,7 @@ class AbstractSyncRepository(Generic[T], metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def get_or_create(self, **kwargs: Any) -> tuple[T, bool]:
+    def get_or_upsert(self, **kwargs: Any) -> tuple[T, bool]:
         """Get an instance specified by the ``kwargs`` filters if it exists or create it.
 
         Args:
@@ -262,7 +262,7 @@ class AbstractSyncRepository(Generic[T], metaclass=ABCMeta):
 
     @staticmethod
     def check_not_found(item_or_none: T | None) -> T:
-        """Raise :class:`NotFoundError` if ``item_or_none`` is ``None``.
+        """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
 
         Args:
             item_or_none: Item (:class:`T <T>`) to be tested for existence.

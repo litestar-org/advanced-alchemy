@@ -26,14 +26,16 @@ classifiers = [
 dependencies = [
   "sqlalchemy>=2.0.20",
   "msgspec>=0.18.2",
+  "alembic>=1.12.0",
+  "typing_extensions; python_version <= \"3.9\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = [
-  "network",
-  "api",
-  "http",
+  "sqlalchemy",
+  "alembic",
   "litestar",
-  "websocket",
+  "sanic",
+  "fastapi",
 ]
 license = {text = "MIT"}
 name = "advanced_alchemy"
@@ -53,21 +55,41 @@ dev = [
   "redis>=5.0.0",
   "duckdb-engine>=0.9.2",
   "aiosqlite>=0.19.0",
-  "psycopg>=3.1.10",
+  "psycopg[c,pool,binary]>=3.1.10",
   "pytest-xdist>=3.3.1",
   "sqlalchemy-spanner>=1.6.2",
+  "litestar>=2.0.1",
+  "fastapi>=0.103.1",
+  "typing_extensions",
+]
+docs = [
+  "sphinx>=7.1.2",
+  "furo>=2023.9.10",
+  "sphinx-autobuild>=2021.3.14",
+]
+extensions = [
+  "litestar[cli]>=2.0.0",
+  "fastapi>=0.101.0",
+  "sanic[ext]>=23.6.0",
+  "sanic-testing>=23.6.0",
+  "socketify>=0.0.27",
+  "msgspec>=0.18.2",
 ]
 linting = [
   "pre-commit>=3.4.0",
   "black>=23.7.0",
+  "mypy>=1.5.1",
+  "ruff>=0.0.287",
 ]
 test = [
   "pytest>=7.4.1",
+  "pytest-xdist>=3.3.1",
   "anyio<4.0.0",
   "pytest-lazy-fixture>=0.6.3",
   "pytest-asyncio>=0.21.1",
   "pytest-mock>=3.11.1",
   "time-machine>=2.12.0",
+  "httpx>=0.24.1",
 ]
 
 [tool.black]
@@ -150,7 +172,6 @@ classmethod-decorators = [
 [tool.ruff.isort]
 known-first-party = ["advanced_alchemy", "tests"]
 
-
 [tool.mypy]
 disallow_any_generics = false
 disallow_untyped_decorators = true
@@ -167,6 +188,20 @@ warn_unused_ignores = true
 disable_error_code = "attr-defined"
 disallow_untyped_decorators = false
 module = "tests.*"
+
+[[tool.mypy.overrides]]
+disallow_untyped_decorators = false
+module = "advanced_alchemy.extensions.litestar.cli"
+
+[[tool.mypy.overrides]]
+module = "advanced_alchemy.alembic.templates.*.env"
+warn_unreachable = false
+
+[[tool.mypy.overrides]]
+disable_error_code = "no-untyped-call"
+disallow_untyped_decorators = false
+module = "advanced_alchemy.extensions.sanic"
+warn_unused_ignores = false
 
 [tool.unasyncd]
 add_editors_note = true

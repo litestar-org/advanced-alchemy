@@ -22,17 +22,18 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.0.287"
+    rev: "v0.0.289"
     hooks:
       - id: ruff
         args: ["--fix"]
+        exclude: "docs"
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.5
     hooks:
       - id: codespell
-        exclude: "tests/openapi/typescript_converter/test_converter"
+        exclude: "pdm.lock"
   - repo: https://github.com/psf/black
-    rev: 23.7.0
+    rev: 23.9.1
     hooks:
       - id: black
         args: [--config=./pyproject.toml]
@@ -40,9 +41,11 @@ repos:
     rev: "v1.5.1"
     hooks:
       - id: mypy
+        exclude: "docs"
         additional_dependencies:
           [
             aiosqlite,
+            alembic,
             async_timeout,
             asyncmy,
             asyncpg,
@@ -50,7 +53,18 @@ repos:
             oracledb,
             psycopg,
             pytest,
+            pytest-asyncio,
+            pytest-lazy-fixture,
+            time-machine,
+            httpx,
+            "sanic[ext]",
+            socketify,
+            fastapi,
             pytest-mock,
             pytest-timeout,
             sqlalchemy>=2.0.12,
+            msgspec,
+            click,
+            rich,
+            "litestar[cli]",
           ]

@@ -16,7 +16,7 @@ import oracledb
 import pytest
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import spanner
-from oracledb import DatabaseError, OperationalError
+from oracledb.exceptions import DatabaseError, OperationalError
 
 from tests.helpers import wrap_sync
 
@@ -47,16 +47,20 @@ async def wait_until_responsive(
     raise RuntimeError(msg)
 
 
+USE_LEGACY_DOCKER_COMPOSE: bool = bool(os.environ.get("USE_LEGACY_DOCKER_COMPOSE", None))
+
+
 class DockerServiceRegistry:
     def __init__(self, worker_id: str) -> None:
         self._running_services: set[str] = set()
         self.docker_ip = self._get_docker_ip()
-        self._base_command = [
-            "docker",
-            "compose",
-            f"--file={Path(__file__).parent / 'docker-compose.yml'}",
-            f"--project-name=advanced_alchemy-{worker_id}",
-        ]
+        self._base_command = ["docker-compose"] if USE_LEGACY_DOCKER_COMPOSE else ["docker", "compose"]
+        self._base_command.extend(
+            [
+                f"--file={Path(__file__).parent / 'docker-compose.yml'}",
+                f"--project-name=advanced_alchemy-{worker_id}",
+            ],
+        )
 
     def _get_docker_ip(self) -> str:
         docker_host = os.environ.get("DOCKER_HOST", "").strip()
@@ -163,7 +167,52 @@ async def postgres_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("postgres", check=postgres_responsive)
 
 
-def oracle_responsive(host: str) -> bool:
+async def postgres14_responsive(host: str) -> bool:
+    try:
+        conn = await asyncpg.connect(
+            host=host,
+            port=5424,
+            user="postgres",
+            database="postgres",
+            password="super-secret",
+        )
+    except (ConnectionError, asyncpg.CannotConnectNowError):
+        return False
+
+    try:
+        return (await conn.fetchrow("SELECT 1"))[0] == 1  # type: ignore
+    finally:
+        await conn.close()
+
+
+@pytest.fixture()
+async def postgres14_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("postgres", check=postgres_responsive)
+
+
+def oracle23c_responsive(host: str) -> bool:
+    try:
+        conn = oracledb.connect(
+            host=host,
+            port=1513,
+            user="app",
+            service_name="FREEPDB1",
+            password="super-secret",
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM dual")
+            resp = cursor.fetchone()
+        return resp[0] == 1  # type: ignore
+    except (OperationalError, DatabaseError, Exception):
+        return False
+
+
+@pytest.fixture()
+async def oracle23c_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("oracle23c", check=oracle23c_responsive, timeout=120)
+
+
+def oracle18c_responsive(host: str) -> bool:
     try:
         conn = oracledb.connect(
             host=host,
@@ -181,8 +230,8 @@ def oracle_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def oracle_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("oracle", check=oracle_responsive, timeout=60)
+async def oracle18c_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("oracle18c", check=oracle18c_responsive, timeout=120)
 
 
 def spanner_responsive(host: str) -> bool:

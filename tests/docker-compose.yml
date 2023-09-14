@@ -7,6 +7,12 @@ services:
       - "5423:5432" # use a non-standard port here
     environment:
       POSTGRES_PASSWORD: super-secret
+  postgres14:
+    image: postgres:14
+    ports:
+      - "5424:5432" # use a non-standard port here
+    environment:
+      POSTGRES_PASSWORD: super-secret
   mysql:
     image: mysql:latest
     ports:
@@ -18,10 +24,18 @@ services:
       MYSQL_DATABASE: db
       MYSQL_ROOT_HOST: "%"
       LANG: C.UTF-8
-  oracle:
+  oracle18c:
     image: gvenzl/oracle-xe:18-slim-faststart
     ports:
       - "1512:1521" # use a non-standard port here
+    environment:
+      ORACLE_PASSWORD: super-secret
+      APP_USER_PASSWORD: super-secret
+      APP_USER: app
+  oracle23c:
+    image: gvenzl/oracle-free:23-slim-faststart
+    ports:
+      - "1513:1521" # use a non-standard port here
     environment:
       ORACLE_PASSWORD: super-secret
       APP_USER_PASSWORD: super-secret
