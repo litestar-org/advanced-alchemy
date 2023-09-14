@@ -824,15 +824,15 @@ class SQLAlchemySyncRepository(AbstractSyncRepository[ModelT], Generic[ModelT]):
         into: Any,
         using: Any,
         on: Any,
-    ) -> StatementLambdaElement:
-        return lambda_stmt(lambda: Merge(into=into, using=using, on=on))
+    ) -> Merge:
+        return Merge(into=into, using=using, on=on)
 
     def upsert_many(
         self,
         data: list[ModelT],
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
-        no_merge: bool = True,
+        no_merge: bool = False,
     ) -> list[ModelT]:
         """Update or create instance.
 
@@ -855,12 +855,11 @@ class SQLAlchemySyncRepository(AbstractSyncRepository[ModelT], Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
-        instances, data_to_update, data_to_insert = [], [], []
+        instances: list[ModelT] = []
+        data_to_update: list[ModelT] = []
+        data_to_insert: list[ModelT] = []
 
         with wrap_sqlalchemy_exception():
-            if self._supports_merge_operations(force_disable_merge=no_merge):
-                statement = self._get_merge_stmt(into=self.model_type, using=data, on=self.id_attribute)
-                data = self.session.execute(statement)  # type: ignore[assignment]
             existing_objs = self.list(
                 CollectionFilter(
                     field_name=self.id_attribute,
