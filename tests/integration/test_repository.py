@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal,
 from uuid import UUID
 
 import pytest
+import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine, Table, insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -683,14 +684,11 @@ async def test_repo_list_method(
     assert len(collection) == exp_count
 
 
-async def test_repo_list_method_with_filters(
-    raw_authors: RawRecordData,
-    author_repo: AuthorRepository,
-) -> None:
+async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
     collection = await maybe_async(
-        author_repo.list(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
+        author_repo.list(sqlalchemy.and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name)),
     )
     assert isinstance(collection, list)
     assert len(collection) == 1
