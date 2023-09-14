@@ -858,7 +858,7 @@ async def test_repo_upsert_many_method(
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
         pytest.skip(
-            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73"
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
     existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
