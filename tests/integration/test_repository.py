@@ -587,7 +587,6 @@ async def test_repo_count_method_with_filters(raw_authors: RawRecordData, author
     assert (
         await maybe_async(
             author_repo.count(
-                author_repo.model_type.id == raw_authors[0]["id"],
                 author_repo.model_type.name == raw_authors[0]["name"],
             ),
         )
@@ -622,7 +621,7 @@ async def test_repo_list_and_count_method_with_filters(
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
     collection, count = await maybe_async(
-        author_repo.list_and_count(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
+        author_repo.list_and_count(author_repo.model_type.name == exp_name),
     )
     assert count == 1
     assert isinstance(collection, list)
