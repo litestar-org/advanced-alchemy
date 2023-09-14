@@ -70,6 +70,12 @@ class AlembicSpannerImpl(DefaultImpl):
     __dialect__ = "spanner+spanner"
 
 
+class AlembicDuckDBImpl(DefaultImpl):
+    """Alembic implementation for DuckDB."""
+
+    __dialect__ = "duckdb"
+
+
 class AlembicCommands:
     def __init__(self, sqlalchemy_config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> None:
         self.sqlalchemy_config = sqlalchemy_config
