@@ -137,9 +137,9 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         return cast(Callable[[], SessionT], getattr(self.app.state, self.sessionmaker_key))
 
     def get_session(self, request: Request) -> SessionT:
-        session = cast(SessionT | None, getattr(request.state, self.session_key, None))
+        session = getattr(request.state, self.session_key, None)
         if session is not None:
-            return session
+            return cast(SessionT, session)
 
         session = self.get_sessionmaker()()
         setattr(request.state, self.session_key, session)

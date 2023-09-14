@@ -138,9 +138,9 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
             delattr(request.ctx, self.session_key)
 
     def get_engine(self) -> EngineT:
-        engine = cast(EngineT | None, getattr(self.app.ctx, self.engine_key, None))
+        engine = getattr(self.app.ctx, self.engine_key, None)
         if engine is not None:
-            return engine
+            return cast(EngineT, engine)
         engine = cast(EngineT, self.engine)
         setattr(self.app.ctx, self.engine_key, engine)
         return engine
@@ -149,9 +149,9 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         return cast(Callable[[], SessionT], self.session_maker)
 
     def get_session(self, request: Request) -> SessionT:
-        session = cast(SessionT | None, getattr(request.ctx, self.session_key, None))
+        session = getattr(request.ctx, self.session_key, None)
         if session is not None:
-            return session
+            return cast(SessionT, session)
 
         session = cast("SessionT", self.session_maker())
         setattr(request.ctx, self.session_key, session)
