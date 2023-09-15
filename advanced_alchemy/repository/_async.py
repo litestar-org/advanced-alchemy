@@ -18,7 +18,7 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 
-from advanced_alchemy.exceptions import RepositoryError
+from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -32,7 +32,6 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
-from advanced_alchemy.repository.abc import AbstractAsyncRepository
 from advanced_alchemy.repository.typing import ModelT
 
 if TYPE_CHECKING:
@@ -48,11 +47,12 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 WhereClauseT = ColumnExpressionArgument[bool]
 
 
-class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]):
+class SQLAlchemyAsyncRepository(Generic[ModelT]):
     """SQLAlchemy based implementation of the repository interface."""
 
+    model_type: type[ModelT]
+    id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
-    id_attribute: str | InstrumentedAttribute
 
     def __init__(
         self,
@@ -93,6 +93,51 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
             msg = "Session improperly configure"
             raise ValueError(msg)
         self._dialect = self.session.bind.dialect
+
+    @classmethod
+    def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
+        """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
+
+        Args:
+            item: Anything that should have an attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` value.
+            id_attribute: Allows customization of the unique identifier to use for model fetching.
+                Defaults to `None`, but can reference any surrogate or candidate key for the table.
+
+        Returns:
+            The value of attribute on ``item`` named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`.
+        """
+        return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
+
+    @classmethod
+    def set_id_attribute_value(cls, item_id: Any, item: ModelT, id_attribute: str | None = None) -> ModelT:
+        """Return the ``item`` after the ID is set to the appropriate attribute.
+
+        Args:
+            item_id: Value of ID to be set on instance
+            item: Anything that should have an attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` value.
+            id_attribute: Allows customization of the unique identifier to use for model fetching.
+                Defaults to `None`, but can reference any surrogate or candidate key for the table.
+
+        Returns:
+            Item with ``item_id`` set to :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`
+        """
+        setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
+        return item
+
+    @staticmethod
+    def check_not_found(item_or_none: ModelT | None) -> ModelT:
+        """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
+
+        Args:
+            item_or_none: Item (:class:`T <T>`) to be tested for existence.
+
+        Returns:
+            The item, if it exists.
+        """
+        if item_or_none is None:
+            msg = "No item found when one was expected"
+            raise NotFoundError(msg)
+        return item_or_none
 
     async def add(
         self,
@@ -293,7 +338,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
             statement += lambda s: s.returning(model_type)
         return statement
 
-    async def get(  # type: ignore[override]
+    async def get(
         self,
         item_id: Any,
         auto_expunge: bool | None = None,
@@ -915,7 +960,7 @@ class SQLAlchemyAsyncRepository(AbstractAsyncRepository[ModelT], Generic[ModelT]
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instances
 
-    def filter_collection_by_kwargs(  # type:ignore[override]
+    def filter_collection_by_kwargs(
         self,
         collection: Select[tuple[ModelT]] | StatementLambdaElement,
         /,
