@@ -59,15 +59,15 @@ Running the docs locally
 
 To run or build the docs locally, you need to first install the required dependencies:
 
-``poetry install --with docs``
+``pdm install -G:docs``
 
 Then you can serve the documentation with ``make docs-serve``, or build them with ``make docs``.
 
 Creating a new release
 ----------------------
 
-1. Increment the version in ``pyproject.toml`` using `` poetry version <version>``. The version should follow
-   `semantic versioning <https://semver.org/>`_ and `PEP 440 <https://www.python.org/dev/peps/pep-0440/>`_.
+1. Increment the version in ``pyproject.toml``  The version should follow `semantic versioning <https://semver.org/>`_
+    and `PEP 440 <https://www.python.org/dev/peps/pep-0440/>`_.
 2. `Draft a new release <https://github.com/jolt-org/advanced-alchemy/releases/new>`_ on GitHub
 
    * Use ``vMAJOR.MINOR.PATCH`` (e.g. ``v1.2.3``) as both the tag and release title
