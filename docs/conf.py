@@ -1,18 +1,19 @@
 # Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+
+
+from advanced_alchemy.__metadata__ import __project__ as project
+from advanced_alchemy.__metadata__ import __version__ as version
+
+# -- Environmental Data ------------------------------------------------------
+
 
 # -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
-project = "advanced_alchemy"
-copyright = "2023, jolt org"
-author = "jolt org"
+project = project
+author = "Jolt Org"
+release = version
+copyright = "2023, Jolt Org"
 
 # -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
-
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
@@ -21,6 +22,12 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "docs.fix_missing_references",
+    "sphinx_copybutton",
+    "sphinx.ext.todo",
+    "sphinx.ext.viewcode",
+    "sphinx_click",
+    "sphinx_toolbox.collapse",
+    "sphinx_design",
 ]
 
 intersphinx_mapping = {
@@ -86,12 +93,78 @@ autodoc_typehints_format = "short"
 autodoc_type_aliases = {"FilterTypes": "FilterTypes"}
 
 autosectionlabel_prefix_document = True
-html_show_sourcelink = True
 
+todo_include_todos = True
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-
-html_theme = "furo"
+# -- Style configuration -----------------------------------------------------
+html_theme = "shibuya"
 html_static_path = ["_static"]
+html_css_files = ["css/custom.css"]
+html_show_sourcelink = True
+html_title = "Docs"
+html_favicon = "_static/logo.png"
+html_logo = "_static/logo.png"
+html_context = {
+    "source_type": "github",
+    "source_user": "jolt-org",
+    "source_repo": project.replace("_", "-"),
+}
+
+brand_colors = {
+    "--brand-main": {"rgb": "245, 0, 87", "hex": "#f50057"},
+    "--brand-secondary": {"rgb": "32, 32, 32", "hex": "#202020"},
+    "--brand-tertiary": {"rgb": "161, 173, 161", "hex": "#A1ADA1"},
+    "--brand-green": {"rgb": "0, 245, 151", "hex": "#00f597"},
+    "--brand-alert": {"rgb": "243, 96, 96", "hex": "#f36060"},
+    "--brand-dark": {"rgb": "0, 0, 0", "hex": "#000000"},
+    "--brand-light": {"rgb": "235, 221, 221", "hex": "#ebdddd"},
+}
+
+html_theme_options = {
+    "logo_target": "/",
+    "announcement": "This documentation is currently under development.",
+    "github_url": "https://github.com/jolt-org/advanced-alchemy",
+    "nav_links": [
+        {"title": "Home", "url": "https://advanced-alchemy.jolt.rs"},
+        {"title": "Docs", "url": "https://docs.advanced-alchemy.jolt.rs"},
+        {"title": "Code", "url": "https://github.com/jolt-org/advanced-alchemy"},
+    ],
+    "light_css_variables": {
+        # RGB
+        "--sy-rc-theme": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-text": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-invert": brand_colors["--brand-main"]["rgb"],
+        # "--sy-rc-bg": brand_colors["--brand-secondary"]["rgb"],
+        # Hex
+        "--sy-c-link": brand_colors["--brand-secondary"]["hex"],
+        # "--sy-c-foot-bg": "#191919",
+        "--sy-c-foot-divider": brand_colors["--brand-main"]["hex"],
+        "--sy-c-foot-text": brand_colors["--brand-dark"]["hex"],
+        "--sy-c-bold": brand_colors["--brand-main"]["hex"],
+        "--sy-c-heading": brand_colors["--brand-main"]["hex"],
+        "--sy-c-text-weak": brand_colors["--brand-main"]["hex"],
+        "--sy-c-text": brand_colors["--brand-dark"]["hex"],
+        "--sy-c-bg-weak": brand_colors["--brand-dark"]["rgb"],
+    },
+    "dark_css_variables": {
+        # RGB
+        "--sy-rc-theme": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-text": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-invert": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-bg": brand_colors["--brand-dark"]["rgb"],
+        # Hex
+        "--sy-c-link": brand_colors["--brand-main"]["hex"],
+        "--sy-c-foot-bg": brand_colors["--brand-dark"]["hex"],
+        "--sy-c-foot-divider": brand_colors["--brand-main"]["hex"],
+        "--sy-c-foot-text": brand_colors["--brand-light"]["hex"],
+        "--sy-c-bold": brand_colors["--brand-main"]["hex"],
+        "--sy-c-heading": brand_colors["--brand-main"]["hex"],
+        "--sy-c-text-weak": brand_colors["--brand-main"]["hex"],
+        "--sy-c-text": brand_colors["--brand-light"]["hex"],
+        "--sy-c-bg-weak": brand_colors["--brand-dark"]["hex"],
+        "--sy-c-bg": brand_colors["--brand-main"]["hex"],
+    },
+}

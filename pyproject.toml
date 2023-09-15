@@ -3,6 +3,7 @@ authors = [
   {name = "Cody Fincher", email = "cody.fincher@gmail.com"},
   {name = "Peter Schutt", email = "peter.github@proton.me"},
   {name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de"},
+  {name = "Jacob Coffee", email = "jacob@z7x.org"},
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -63,9 +64,14 @@ dev = [
   "typing_extensions",
 ]
 docs = [
-  "sphinx>=7.1.2",
-  "furo>=2023.9.10",
-  "sphinx-autobuild>=2021.3.14",
+    "sphinx>=7.1.2",
+    "sphinx-autobuild>=2021.3.14",
+    "sphinx-copybutton>=0.5.2",
+    "shibuya>=2023.9.3",
+    "sphinx-click>=5.0.1",
+    "sphinx-toolbox>=3.5.0",
+    "blacken-docs>=1.16.0",
+    "sphinx-design>=0.5.0",
 ]
 extensions = [
   "litestar[cli]>=2.0.0",
