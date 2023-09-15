@@ -4,7 +4,7 @@
 <p align="center">
   <!-- github-banner-start -->
   <img src="https://raw.githubusercontent.com/jolt-org/meta/2901c9c5c5895a83fbfa56944c33bca287f88d42/branding/SVG%20-%20Transparent/logo-full-wide.svg" alt="Litestar Logo - Light" width="20%" height="auto" />
-  <br>A [Jolt Organization](https://github.com/jolt-org) Project
+  <br>A <a href="https://github.com/jolt-org">Jolt Organization</a> Project
   <!-- github-banner-end -->
 </p>
 <!-- markdownlint-restore -->
