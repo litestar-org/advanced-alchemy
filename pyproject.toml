@@ -209,15 +209,9 @@ ruff_fix = true
 
 [tool.unasyncd.files]
 "advanced_alchemy/repository/_async.py" = "advanced_alchemy/repository/_sync.py"
-"advanced_alchemy/repository/abc/_async.py" = "advanced_alchemy/repository/abc/_sync.py"
-
-[tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/abc/_async.py"]
-"AbstractAsyncRepository" = "AbstractSyncRepository"
-"AsyncRepoT" = "SyncRepoT"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
-"advanced_alchemy.repository.abc.AbstractAsyncRepository" = "advanced_alchemy.repository.abc.AbstractSyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 
 [tool.pytest.ini_options]
