@@ -1,0 +1,51 @@
+/*brand_colors = {*/
+/*    "--brand-main": {"rgb": "0, 150, 76", "hex": "#00964c"},*/
+/*    "--brand-secondary": {"rgb": "99, 99, 99", "hex": "#636363"},*/
+/*    "--brand-green": {"rgb": "225, 39, 38", "hex": "#e12726"},*/
+/*    "--brand-alert": {"rgb": "241, 81, 82", "hex": "#f15152"},*/
+/*    "--brand-dark": {"rgb": "32, 32, 32", "hex": "#202020"},*/
+/*    "--brand-light": {"rgb": "235, 235, 233", "hex": "#EBEBE9"},*/
+/*}*/
+
+:root {
+    --brand-main: #f50057;
+    --brand-secondary: #202020;
+    --brand-tertiary: #A1ADA1;
+    --brand-green: #00f597;
+    --brand-alert: #f36060;
+    --brand-dark: #000000;
+    --brand-light: #ebdddd;
+}
+
+html.dark,
+html.light {
+}
+
+html.light {
+    --syntax-light-constant: var(--brand-main);
+    --syntax-light-meta: var(--brand-main);
+    /*  --syntax-light-text: #09090a;*/
+    /*  --syntax-light-cap-bg: #325b76;*/
+    /*  --syntax-light-pre-bg: #ddefff;*/
+    --syntax-light-keyword: var(--brand-main);
+    --syntax-light-property: var(--brand-green);
+}
+
+html.light .yue {
+    --yue-c-code-bg: var(--brand-secondary) !important;
+    --yue-c-code: var(--brand-green) !important;
+    /*--yue-c-black: #11a1ff !important;*/
+}
+
+html.dark {
+    --syntax-dark-keyword: var(--brand-main);
+    --syntax-dark-property: var(--brand-green);
+    --syntax-dark-constant: var(--brand-main);
+    --syntax-dark-meta: var(--brand-main);
+}
+
+html.dark .yue {
+    --yue-c-code-bg: var(--brand-light) !important;
+    --yue-c-code: var(--brand-secondary) !important;
+    /*--yue-c-black: #11a1ff !important;*/
+}

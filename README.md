@@ -1,4 +1,6 @@
-# advanced_alchemy
+# Advanced Alchemy
+
+## About
 
 A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy,
 offering features such as:
@@ -25,3 +27,13 @@ offering features such as:
   - Oracle via [oracledb](https://oracle.github.io/python-oracledb/)
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine>)
+
+## Usage
+
+> [!NOTE]\
+> This section has not been completed (yet!)
+
+## Contributing
+
+> [!NOTE]\
+> This section has not been completed (yet!)
