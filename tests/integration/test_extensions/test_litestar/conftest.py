@@ -4,15 +4,15 @@ from typing import cast
 
 import pytest
 from litestar.app import Litestar
-from litestar.contrib.sqlalchemy.plugins import SQLAlchemyPlugin
-from litestar.contrib.sqlalchemy.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
-from litestar.contrib.sqlalchemy.plugins.init.config.sync import SQLAlchemySyncConfig
 from pytest import FixtureRequest
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
-from advanced_alchemy.extensions.litestar.plugin import AlembicCommands
+from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 
 
 @pytest.fixture()
