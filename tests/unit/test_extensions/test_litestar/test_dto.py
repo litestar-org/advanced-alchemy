@@ -9,7 +9,7 @@ import pytest
 import sqlalchemy
 from litestar import Request, get
 from litestar.contrib.pydantic import PydanticInitPlugin
-from litestar.dto import DTOConfig, DTOField, Mark
+from litestar.dto import DTOField, Mark
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.enums import MediaType
 from litestar.serialization import encode_json
@@ -20,7 +20,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_
 from typing_extensions import Annotated
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, parse_type_from_element
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig, parse_type_from_element
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -119,7 +119,7 @@ async def test_model_read_dto(
     raw_author: bytes,
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
-    config = DTOConfig()
+    config = SQLAlchemyDTOConfig()
     dto_type = SQLAlchemyDTO[Annotated[author_model, config]]  # type: ignore
     model = await get_model_from_dto(dto_type, author_model, asgi_connection, raw_author)
     assert_model_values(
@@ -152,7 +152,7 @@ async def test_dto_exclude(
     raw_author: bytes,
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
-    config = DTOConfig(exclude={"id"})
+    config = SQLAlchemyDTOConfig(exclude={"id"})
     model = await get_model_from_dto(
         SQLAlchemyDTO[Annotated[author_model, config]],  # type: ignore
         author_model,
@@ -166,7 +166,7 @@ async def test_write_dto_field_default(base: type[DeclarativeBase], asgi_connect
     class Model(base):  # type: ignore
         field: Mapped[int] = mapped_column(default=3)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig(exclude={"id", "created", "updated"})]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={"id", "created", "updated"})]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"a":"b"}')
     assert_model_values(model, {"field": 3})
 
@@ -180,7 +180,7 @@ async def test_write_dto_for_model_field_factory_default(
     class Model(base):  # type: ignore
         field: Mapped[UUID] = mapped_column(default=lambda: val)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig(exclude={"id", "created", "updated"})]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={"id", "created", "updated"})]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"a":"b"}')
     assert_model_values(model, {"field": val})
 
@@ -196,7 +196,7 @@ async def test_write_dto_for_model_field_unsupported_default(
         field: Mapped[datetime] = mapped_column(default=func.now())
 
     with pytest.raises(ValueError):
-        await get_model_from_dto(SQLAlchemyDTO[Annotated[Model, DTOConfig()]], Model, asgi_connection, b"")
+        await get_model_from_dto(SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]], Model, asgi_connection, b"")
 
 
 async def test_dto_for_private_model_field(
@@ -208,7 +208,7 @@ async def test_dto_for_private_model_field(
             info={DTO_FIELD_META_KEY: DTOField(mark=Mark.PRIVATE)},
         )
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig()]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
     raw = b'{"id":"97108ac1-ffcb-411d-8b1e-d9183399f63b","created":"0001-01-01T00:00:00","updated":"0001-01-01T00:00:00","field":"0001-01-01T00:00:00"}'
     assert "field" not in vars(await get_model_from_dto(dto_type, Model, asgi_connection, raw))
 
@@ -231,7 +231,7 @@ async def test_dto_for_non_mapped_model_field(
     class Model(base):  # type: ignore
         field: ClassVar[datetime]
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig()]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
     raw = b'{"id": "97108ac1-ffcb-411d-8b1e-d9183399f63b","created":"0001-01-01T00:00:00","updated":"0001-01-01T00:00:00","field":"0001-01-01T00:00:00"}'
     assert "field" not in vars(await get_model_from_dto(dto_type, Model, asgi_connection, raw))
 
@@ -246,7 +246,7 @@ async def test_dto_mapped_as_dataclass_model_type(
         clz_var: ClassVar[str]
         field: Mapped[str]
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig(exclude={"id"})]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={"id"})]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"clz_var":"nope","field":"yep"}')
     assert_model_values(model, {"field": "yep"})
 
@@ -268,8 +268,7 @@ from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing_extensions import Annotated
 
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -282,7 +281,7 @@ class B(Base):
     __tablename__ = "b"
     a: Mapped[List[A]] = relationship("A")
 
-dto_type = SQLAlchemyDTO[Annotated[B, DTOConfig()]]
+dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
 """,
     )
 
@@ -311,8 +310,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing_extensions import Annotated
 
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -325,7 +323,7 @@ class B(Base):
     a_id: Mapped[int] = mapped_column(ForeignKey("a.id"))
     a: Mapped[A] = relationship(A)
 
-dto_type = SQLAlchemyDTO[Annotated[B, DTOConfig()]]
+dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
 """,
     )
     model = await get_model_from_dto(
@@ -355,7 +353,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing_extensions import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -389,7 +386,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing_extensions import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -461,8 +457,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing_extensions import Annotated
 
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -475,7 +470,7 @@ class B(Base):
     a_id: Mapped[Optional[int]] = mapped_column(ForeignKey("a.id"))
     a: Mapped[Optional[A]] = relationship(A)
 
-dto_type = SQLAlchemyDTO[Annotated[B, DTOConfig()]]
+dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
 """,
     )
     model = await get_model_from_dto(module.dto_type, module.B, asgi_connection, b'{"id": 2, "a_id": null, "a": null}')
@@ -525,8 +520,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing_extensions import Annotated
 
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
 from {base_module.__name__} import Base
 
@@ -538,7 +532,7 @@ class A(Base):
     b_id: Mapped[int] = mapped_column(ForeignKey("b.id"))
     b: Mapped[B] = relationship()
 
-dto_type = SQLAlchemyDTO[Annotated[A, DTOConfig()]]
+dto_type = SQLAlchemyDTO[Annotated[A, SQLAlchemyDTOConfig()]]
 """,
     )
 
@@ -570,7 +564,6 @@ from sqlalchemy.types import JSON, ARRAY
 from typing_extensions import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -598,7 +591,7 @@ async def test_no_type_hint_column(base: type[DeclarativeBase], asgi_connection:
         nullable_field = mapped_column(sqlalchemy.String)
         not_nullable_field = mapped_column(sqlalchemy.String, nullable=False, default="")
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig()]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b"{}")
     assert model.nullable_field is None
     assert model.not_nullable_field == ""
@@ -615,7 +608,7 @@ async def test_no_type_hint_scalar_relationship_with_nullable_fk(
         child_id = mapped_column(ForeignKey("child.id"))
         child = relationship(Child)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig(exclude={"child_id"})]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={"child_id"})]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b"{}")
     assert model.child is None
 
@@ -631,7 +624,7 @@ async def test_no_type_hint_scalar_relationship_with_not_nullable_fk(
         child_id = mapped_column(ForeignKey("child.id"), nullable=False)
         child = relationship(Child)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig(exclude={"child_id"})]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={"child_id"})]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"child": {}}')
     assert isinstance(model.child, Child)
 
@@ -646,7 +639,7 @@ async def test_no_type_hint_collection_relationship(
     class Model(base):  # type: ignore
         children = relationship(Child)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig()]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"children": []}')
     assert model.children == []
 
@@ -661,7 +654,7 @@ async def test_no_type_hint_collection_relationship_alt_collection_class(
     class Model(base):  # type: ignore
         children = relationship(Child, collection_class=set)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, DTOConfig()]]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"children": []}')
     assert model.children == set()
 
