@@ -12,7 +12,6 @@ from litestar.contrib.pydantic import PydanticInitPlugin
 from litestar.dto import DTOConfig, DTOField, Mark
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.enums import MediaType
-from litestar.exceptions import ImproperlyConfiguredException
 from litestar.serialization import encode_json
 from litestar.testing import RequestFactory
 from litestar.typing import FieldDefinition
@@ -20,6 +19,7 @@ from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
 from typing_extensions import Annotated
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, parse_type_from_element
 
 if TYPE_CHECKING:
@@ -667,6 +667,6 @@ async def test_no_type_hint_collection_relationship_alt_collection_class(
 
 
 def test_parse_type_from_element_failure() -> None:
-    with pytest.raises(ImproperlyConfiguredException) as exc:
+    with pytest.raises(ImproperConfigurationError) as exc:
         parse_type_from_element(1)  # type: ignore
-    assert str(exc.value) == "500: Unable to parse type from element '1'. Consider adding a type hint."
+    assert str(exc.value) == "Unable to parse type from element '1'. Consider adding a type hint."

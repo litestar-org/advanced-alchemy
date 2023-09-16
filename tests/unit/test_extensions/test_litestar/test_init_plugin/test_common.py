@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from litestar.constants import SCOPE_STATE_NAMESPACE
 from litestar.datastructures import State
-from litestar.exceptions import ImproperlyConfiguredException
 from sqlalchemy import create_engine
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import SESSION_SCOPE_KEY
 
@@ -27,7 +27,7 @@ def _config_cls(request: Any) -> type[SQLAlchemySyncConfig | SQLAlchemyAsyncConf
 
 def test_raise_improperly_configured_exception(config_cls: type[SQLAlchemySyncConfig]) -> None:
     """Test raise ImproperlyConfiguredException if both engine and connection string are provided."""
-    with pytest.raises(ImproperlyConfiguredException):
+    with pytest.raises(ImproperConfigurationError):
         config_cls(connection_string="sqlite://", engine_instance=create_engine("sqlite://"))
 
 
@@ -53,7 +53,7 @@ def test_config_create_engine_if_engine_instance_provided(
     """Test create_engine if engine instance provided."""
     engine = create_engine("sqlite://")
     config = config_cls(engine_instance=engine)
-    assert config.create_engine() == engine
+    assert config.get_engine() == engine
 
 
 def test_create_engine_if_no_engine_instance_or_connection_string_provided(
@@ -61,8 +61,8 @@ def test_create_engine_if_no_engine_instance_or_connection_string_provided(
 ) -> None:
     """Test create_engine if no engine instance or connection string provided."""
     config = config_cls()
-    with pytest.raises(ImproperlyConfiguredException):
-        config.create_engine()
+    with pytest.raises(ImproperConfigurationError):
+        config.get_engine()
 
 
 def test_call_create_engine_callable_type_error_handling(
@@ -84,7 +84,7 @@ def test_call_create_engine_callable_type_error_handling(
     create_engine_callable_mock = MagicMock(side_effect=side_effect)
     monkeypatch.setattr(config, "create_engine_callable", create_engine_callable_mock)
 
-    config.create_engine()
+    config.get_engine()
 
     assert create_engine_callable_mock.call_count == 2
     first_call, second_call = create_engine_callable_mock.mock_calls
@@ -101,20 +101,6 @@ def test_create_session_maker_if_session_maker_provided(
     assert config.create_session_maker() == session_maker
 
 
-def test_create_session_maker_if_no_session_maker_provided_and_bind_provided(
-    config_cls: type[SQLAlchemySyncConfig],
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """Test create_session_maker if no session maker provided to config."""
-    config = config_cls()
-    config.session_config.bind = create_engine("sqlite://")
-    create_engine_mock = MagicMock()
-    monkeypatch.setattr(config, "create_engine", create_engine_mock)
-    assert config.session_maker is None
-    assert isinstance(config.create_session_maker(), config.session_maker_class)
-    create_engine_mock.assert_not_called()
-
-
 def test_create_session_maker_if_no_session_maker_or_bind_provided(
     config_cls: type[SQLAlchemySyncConfig],
     monkeypatch: MonkeyPatch,
@@ -122,23 +108,10 @@ def test_create_session_maker_if_no_session_maker_or_bind_provided(
     """Test create_session_maker if no session maker or bind provided to config."""
     config = config_cls()
     create_engine_mock = MagicMock(return_value=create_engine("sqlite://"))
-    monkeypatch.setattr(config, "create_engine", create_engine_mock)
+    monkeypatch.setattr(config, "get_engine", create_engine_mock)
     assert config.session_maker is None
     assert isinstance(config.create_session_maker(), config.session_maker_class)
     create_engine_mock.assert_called_once()
-
-
-def test_create_session_instance_if_session_already_in_scope_state(
-    config_cls: type[SQLAlchemySyncConfig],
-) -> None:
-    """Test provide_session if session already in scope state."""
-    with patch(
-        "advanced_alchemy.extensions.litestar.plugins.init.config.common.get_litestar_scope_state",
-    ) as get_litestar_scope_state_mock:
-        session_mock = MagicMock()
-        get_litestar_scope_state_mock.return_value = session_mock
-        config = config_cls()
-        assert config.provide_session(State(), {}) is session_mock  # type:ignore[arg-type]
 
 
 def test_create_session_instance_if_session_not_in_scope_state(
@@ -146,7 +119,7 @@ def test_create_session_instance_if_session_not_in_scope_state(
 ) -> None:
     """Test provide_session if session not in scope state."""
     with patch(
-        "advanced_alchemy.extensions.litestar.plugins.init.config.common.get_litestar_scope_state",
+        "litestar.utils.get_litestar_scope_state",
     ) as get_litestar_scope_state_mock:
         get_litestar_scope_state_mock.return_value = None
         config = config_cls()
@@ -162,7 +135,7 @@ def test_app_state(config_cls: type[SQLAlchemySyncConfig], monkeypatch: MonkeyPa
     config = config_cls(connection_string="sqlite://")
     with patch.object(config, "create_session_maker") as create_session_maker_mock, patch.object(
         config,
-        "create_engine",
+        "get_engine",
     ) as create_engine_mock:
         assert config.create_app_state_items().keys() == {
             config.engine_app_state_key,

@@ -8,7 +8,6 @@ from litestar.dto.base_dto import AbstractDTO
 from litestar.dto.config import DTOConfig
 from litestar.dto.data_structures import DTOFieldDefinition
 from litestar.dto.field import DTO_FIELD_META_KEY, DTOField, Mark
-from litestar.exceptions import ImproperlyConfiguredException
 from litestar.types.empty import Empty
 from litestar.typing import FieldDefinition
 from litestar.utils.signature import ParsedSignature
@@ -27,6 +26,8 @@ from sqlalchemy.orm import (
     RelationshipDirection,
     RelationshipProperty,
 )
+
+from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
     from typing import Any, Generator
@@ -348,7 +349,7 @@ def parse_type_from_element(elem: ElementType) -> FieldDefinition:
         return FieldDefinition.from_annotation(elem.composite_class)
 
     msg = f"Unable to parse type from element '{elem}'. Consider adding a type hint."  # type: ignore[unreachable]
-    raise ImproperlyConfiguredException(
+    raise ImproperConfigurationError(
         msg,
     )
 

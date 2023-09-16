@@ -150,7 +150,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
         return {"Engine": Engine, "Session": Session}
 
-    async def on_shutdown(self, app: Litestar) -> None:
+    def on_shutdown(self, app: Litestar) -> None:
         """Disposes of the SQLAlchemy engine.
 
         Args:
@@ -160,7 +160,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             None
         """
         engine = cast("Engine", app.state.pop(self.engine_app_state_key))
-        await engine.dispose()  # type: ignore[func-returns-value]
+        engine.dispose()
 
     def create_app_state_items(self) -> dict[str, Any]:
         """Key/value pairs to be stored in application state."""

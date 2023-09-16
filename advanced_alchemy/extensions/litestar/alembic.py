@@ -1,9 +1,9 @@
 from contextlib import suppress
 
 from litestar import Litestar
-from litestar.exceptions import ImproperlyConfiguredException
 
 from advanced_alchemy.alembic.commands import AlembicCommands as _AlembicCommands
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
 
 
@@ -17,7 +17,7 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     with suppress(KeyError):
         return app.plugins.get(SQLAlchemyInitPlugin)
     msg = "Failed to initialize database migrations. The required plugin (SQLAlchemyPlugin or SQLAlchemyInitPlugin) is missing."
-    raise ImproperlyConfiguredException(
+    raise ImproperConfigurationError(
         msg,
     )
 

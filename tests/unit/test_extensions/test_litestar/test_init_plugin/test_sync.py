@@ -10,7 +10,10 @@ from litestar.types.asgi_types import HTTPResponseStartEvent
 from litestar.utils import set_litestar_scope_state
 from sqlalchemy.orm import Session
 
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.litestar.plugins import (
+    SQLAlchemyInitPlugin,
+    SQLAlchemySyncConfig,
+)
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import SESSION_SCOPE_KEY
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import autocommit_before_send_handler
 
@@ -24,7 +27,7 @@ def test_default_before_send_handler() -> None:
     """Test default_before_send_handler."""
 
     captured_scope_state: dict[str, Any] | None = None
-    config = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
+    config = SQLAlchemySyncConfig(connection_string="sqlite://")
     plugin = SQLAlchemyInitPlugin(config=config)
 
     @get()
