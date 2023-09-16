@@ -1,27 +1,27 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
-from litestar import Litestar, get
+from litestar import Litestar
 from litestar.controller import Controller
 from litestar.di import Provide
-from litestar.handlers.http_handlers.decorators import delete, patch, post
+from litestar.handlers.http_handlers.decorators import delete, get, patch, post
 from litestar.pagination import OffsetPagination
 from litestar.params import Parameter
-from litestar.repository.filters import LimitOffset
 from pydantic import BaseModel as _BaseModel
 from pydantic import TypeAdapter
 from sqlalchemy import ForeignKey, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
-from advanced_alchemy.extensions.litestar.base import UUIDAuditBase, UUIDBase
-from advanced_alchemy.extensions.litestar.plugins import AsyncSessionConfig, SQLAlchemyAsyncConfig, SQLAlchemyInitPlugin
-from advanced_alchemy.extensions.litestar.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+from advanced_alchemy.config import AsyncSessionConfig
+from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyInitPlugin, SQLAlchemyPlugin
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 if TYPE_CHECKING:
-    from datetime import date
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -153,7 +153,7 @@ class AuthorController(Controller):
     async def get_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(
+        author_id: UUID = Parameter(  # noqa: B008
             title="Author ID",
             description="The author to retrieve.",
         ),
@@ -170,7 +170,7 @@ class AuthorController(Controller):
         self,
         authors_repo: AuthorRepository,
         data: AuthorUpdate,
-        author_id: UUID = Parameter(
+        author_id: UUID = Parameter(  # noqa: B008
             title="Author ID",
             description="The author to update.",
         ),
@@ -180,13 +180,13 @@ class AuthorController(Controller):
         raw_obj.update({"id": author_id})
         obj = await authors_repo.update(AuthorModel(**raw_obj))
         await authors_repo.session.commit()
-        return Author.from_orm(obj)
+        return Author.model_validate(obj)
 
     @delete(path="/authors/{author_id:uuid}")
     async def delete_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(
+        author_id: UUID = Parameter(  # noqa: B008
             title="Author ID",
             description="The author to delete.",
         ),
@@ -201,12 +201,12 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=session_config,
 )  # Create 'db_session' dependency.
-sqlalchemy_plugin = SQLAlchemyInitPlugin(config=sqlalchemy_config)
+sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
 async def on_startup() -> None:
     """Initializes the database."""
-    async with sqlalchemy_config.create_engine().begin() as conn:
+    async with sqlalchemy_config.get_engine().begin() as conn:
         await conn.run_sync(UUIDBase.metadata.create_all)
 
 
@@ -215,4 +215,5 @@ app = Litestar(
     on_startup=[on_startup],
     plugins=[SQLAlchemyInitPlugin(config=sqlalchemy_config)],
     dependencies={"limit_offset": Provide(provide_limit_offset_pagination)},
+    signature_namespace={"date": date, "datetime": datetime, "UUID": UUID},
 )

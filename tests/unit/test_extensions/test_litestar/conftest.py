@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import random
 import string
 import sys
@@ -26,6 +27,11 @@ from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+
+
+@pytest.fixture(autouse=True)
+async def disable_implicit_sync_warning() -> None:
+    os.environ["LITESTAR_WARN_IMPLICIT_SYNC_TO_THREAD"] = "0"
 
 
 @pytest.fixture
