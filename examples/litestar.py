@@ -17,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyInitPlugin, SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
@@ -213,7 +213,7 @@ async def on_startup() -> None:
 app = Litestar(
     route_handlers=[AuthorController],
     on_startup=[on_startup],
-    plugins=[SQLAlchemyInitPlugin(config=sqlalchemy_config)],
-    dependencies={"limit_offset": Provide(provide_limit_offset_pagination)},
+    plugins=[sqlalchemy_plugin],
+    dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
     signature_namespace={"date": date, "datetime": datetime, "UUID": UUID},
 )
