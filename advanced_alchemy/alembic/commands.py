@@ -237,10 +237,12 @@ class AlembicCommands:
             kwargs["file_"] = self.sqlalchemy_config.alembic_config.script_config
         if self.sqlalchemy_config.alembic_config.template_path:
             kwargs["template_directory"] = self.sqlalchemy_config.alembic_config.template_path
-        kwargs |= {
-            "engine": self.sqlalchemy_config.get_engine(),  # type: ignore[dict-item]
-            "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
-        }
+        kwargs.update(
+            {
+                "engine": self.sqlalchemy_config.get_engine(),  # type: ignore[dict-item]
+                "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
+            },
+        )
         self.config = AlembicCommandConfig(**kwargs)  # type: ignore  # noqa: PGH003
         self.config.set_main_option("script_location", self.sqlalchemy_config.alembic_config.script_location)
         return self.config
