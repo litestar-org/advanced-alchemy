@@ -10,7 +10,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v4
         with:
@@ -41,16 +41,17 @@ jobs:
         shell: bash
     steps:
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - uses: pdm-project/setup-pdm@v3
-        name: Setup PDM
+        name: Set up PDM
         with:
           python-version: ${{ matrix.python-version }}
           allow-python-prereleases: true
           cache: true
+
       - name: Install dependencies
         run: pdm install
-      - name: Install dependencies
-        run: pdm install
+
       - name: Test
         run: pdm run pytest -m "" -n auto
