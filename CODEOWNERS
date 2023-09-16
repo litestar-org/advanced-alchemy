@@ -4,4 +4,4 @@
 # For more info about code owners see https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-example
 
 # Global Assignment
-*      @jolt-org/maintainers
+*      @jolt-org/maintainers @jolt-org/members
