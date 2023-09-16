@@ -6,6 +6,17 @@ from litestar.di import Provide
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
+from advanced_alchemy.filters import (
+    BeforeAfter,
+    CollectionFilter,
+    FilterTypes,
+    LimitOffset,
+    NotInCollectionFilter,
+    NotInSearchFilter,
+    OnBeforeAfter,
+    OrderBy,
+    SearchFilter,
+)
 
 if TYPE_CHECKING:
     from click import Group
@@ -14,6 +25,18 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 __all__ = ("SQLAlchemyInitPlugin",)
+
+signature_namespace_values = {
+    "BeforeAfter": BeforeAfter,
+    "OnBeforeAfter": OnBeforeAfter,
+    "CollectionFilter": CollectionFilter,
+    "LimitOffset": LimitOffset,
+    "OrderBy": OrderBy,
+    "SearchFilter": SearchFilter,
+    "NotInCollectionFilter": NotInCollectionFilter,
+    "NotInSearchFilter": NotInSearchFilter,
+    "FilterTypes": FilterTypes,
+}
 
 
 class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.SlotsBase):
@@ -50,5 +73,6 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         app_config.on_startup.insert(0, self._config.update_app_state)
         app_config.on_shutdown.append(self._config.on_shutdown)
         app_config.signature_namespace.update(self._config.signature_namespace)
+        app_config.signature_namespace.update(signature_namespace_values)
 
         return app_config

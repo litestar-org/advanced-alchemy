@@ -39,17 +39,10 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
 
 
 __all__ = (
-    "AsyncSessionConfig",
     "EngineConfig",
-    "GenericSQLAlchemyConfig",
-    "GenericSessionConfig",
-    "GenericAlembicConfig",
     "SQLAlchemyAsyncConfig",
     "SQLAlchemyInitPlugin",
     "SQLAlchemyPlugin",
     "SQLAlchemySerializationPlugin",
     "SQLAlchemySyncConfig",
-    "SyncSessionConfig",
-    "AlembicAsyncConfig",
-    "AlembicSyncConfig",
 )
