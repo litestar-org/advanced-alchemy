@@ -5,12 +5,16 @@ import os
 import random
 import string
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, TypeVar, cast
+from unittest.mock import ANY
 
 import pytest
 from litestar.app import Litestar
+from litestar.dto import DTOField, Mark
+from litestar.dto.data_structures import DTOFieldDefinition
 from litestar.testing import RequestFactory
 from litestar.types import (
     ASGIVersion,
@@ -18,6 +22,8 @@ from litestar.types import (
     Scope,
     ScopeSession,
 )
+from litestar.types.empty import Empty
+from litestar.typing import FieldDefinition
 from pytest import FixtureRequest, MonkeyPatch
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -32,6 +38,87 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlc
 @pytest.fixture(autouse=True)
 async def disable_implicit_sync_warning() -> None:
     os.environ["LITESTAR_WARN_IMPLICIT_SYNC_TO_THREAD"] = "0"
+
+
+@pytest.fixture
+def int_factory() -> Callable[[], int]:
+    return lambda: 2
+
+
+@pytest.fixture
+def expected_field_defs(int_factory: Callable[[], int]) -> list[DTOFieldDefinition]:
+    return [
+        DTOFieldDefinition.from_field_definition(
+            field_definition=FieldDefinition.from_kwarg(
+                annotation=int,
+                name="a",
+            ),
+            model_name=ANY,
+            default_factory=Empty,
+            dto_field=DTOField(),
+        ),
+        replace(
+            DTOFieldDefinition.from_field_definition(
+                field_definition=FieldDefinition.from_kwarg(
+                    annotation=int,
+                    name="b",
+                ),
+                model_name=ANY,
+                default_factory=Empty,
+                dto_field=DTOField(mark=Mark.READ_ONLY),
+            ),
+            metadata=ANY,
+            type_wrappers=ANY,
+            raw=ANY,
+            kwarg_definition=ANY,
+        ),
+        replace(
+            DTOFieldDefinition.from_field_definition(
+                field_definition=FieldDefinition.from_kwarg(
+                    annotation=int,
+                    name="c",
+                ),
+                model_name=ANY,
+                default_factory=Empty,
+                dto_field=DTOField(),
+            ),
+            metadata=ANY,
+            type_wrappers=ANY,
+            raw=ANY,
+            kwarg_definition=ANY,
+        ),
+        replace(
+            DTOFieldDefinition.from_field_definition(
+                field_definition=FieldDefinition.from_kwarg(
+                    annotation=int,
+                    name="d",
+                    default=1,
+                ),
+                model_name=ANY,
+                default_factory=Empty,
+                dto_field=DTOField(),
+            ),
+            metadata=ANY,
+            type_wrappers=ANY,
+            raw=ANY,
+            kwarg_definition=ANY,
+        ),
+        replace(
+            DTOFieldDefinition.from_field_definition(
+                field_definition=FieldDefinition.from_kwarg(
+                    annotation=int,
+                    name="e",
+                ),
+                model_name=ANY,
+                default_factory=int_factory,
+                dto_field=DTOField(),
+            ),
+            metadata=ANY,
+            type_wrappers=ANY,
+            raw=ANY,
+            kwarg_definition=ANY,
+        ),
+    ]
 
 
 @pytest.fixture
