@@ -11,6 +11,8 @@
 
 </div>
 
+Check out the [project documentation][project-docs] 📚 for more information.
+
 ## About
 
 A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy,
@@ -58,8 +60,12 @@ offering features such as:
 
 ## Contributing
 
-> [!NOTE]\
-> This section has not been completed (yet!)
+All [Jolt][jolt-org] projects will always be a community-centered, available for contributions of any size.
+Before contributing, please review the [contribution guide][contributing].
+If you have any questions, reach out to us on [Discord][discord], our org-wide [GitHub discussions][jolt-discussions] page,
+or the [project-specific GitHub discussions page][project-discussions].
+
+<hr>
 
 <!-- markdownlint-disable -->
 <p align="center">
@@ -68,3 +74,10 @@ offering features such as:
   <br>A <a href="https://github.com/jolt-org">Jolt Organization</a> Project
   <!-- github-banner-end -->
 </p>
+
+[jolt-org]: https://github.com/jolt-org
+[contributing]: https://docs.advanced-alchemy.jolt.rs/latest/contribution-guide.html
+[discord]: https://discord.gg/XpFNTjjtTK
+[jolt-discussions]: https://github.com/orgs/jolt-org/discussions
+[project-discussions]: https://github.com/jolt-org/advanced-alchemy/discussions
+[project-docs]: https://docs.advanced-alchemy.jolt.rs
