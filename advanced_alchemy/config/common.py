@@ -192,7 +192,7 @@ class GenericAlembicConfig:
     will be used.
     """
     version_table_name: str = "alembic_versions"
-    """Configure the name of the table used to hold the applied alembic revisions. The name of the table.
+    """Configure the name of the table used to hold the applied alembic revisions.
     Defaults to ``alembic_versions``.
     """
     version_table_schema: str | None = None
