@@ -8,12 +8,13 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Generator, TypeVar, cast
 from unittest.mock import ANY
 
 import pytest
 from litestar.app import Litestar
-from litestar.dto import DTOField, Mark
+from litestar.dto import AbstractDTO, DTOField, Mark
+from litestar.dto._backend import DTOBackend
 from litestar.dto.data_structures import DTOFieldDefinition
 from litestar.testing import RequestFactory
 from litestar.types import (
@@ -33,6 +34,15 @@ from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+
+
+@pytest.fixture(autouse=True)
+def reset_cached_dto_backends() -> Generator[None, None, None]:
+    DTOBackend._seen_model_names = set()
+    AbstractDTO._dto_backends = {}
+    yield
+    DTOBackend._seen_model_names = set()
+    AbstractDTO._dto_backends = {}
 
 
 @pytest.fixture(autouse=True)
