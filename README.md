@@ -7,6 +7,14 @@
   <br>A <a href="https://github.com/jolt-org">Jolt Organization</a> Project
   <!-- github-banner-end -->
 </p>
+
+
+<div align="center">
+  
+[![Tests And Linting](https://github.com/jolt-org/advanced-alchemy/actions/workflows/ci.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/ci.yaml)
+[![Latest Release](https://github.com/jolt-org/advanced-alchemy/actions/workflows/publish.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/publish.yaml)
+
+</div>
 <!-- markdownlint-restore -->
 
 ## About
