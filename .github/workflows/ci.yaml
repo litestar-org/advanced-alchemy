@@ -55,3 +55,43 @@ jobs:
 
       - name: Test
         run: pdm run pytest -m "" -n auto
+
+  build-docs:
+    needs:
+      - validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - uses: pdm-project/setup-pdm@v3
+        name: Set up PDM
+        with:
+          python-version: "3.11"
+          allow-python-prereleases: true
+          cache: true
+
+      - name: Install dependencies
+        run: pdm install -G:docs
+
+      - name: Build docs
+        run: pdm run make docs
+
+      - name: Save PR number
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        run: echo $PR_NUMBER > .pr_number
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: docs-preview
+          path: |
+            docs/_build/html
+            .pr_number
