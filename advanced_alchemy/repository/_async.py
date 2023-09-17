@@ -851,17 +851,15 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             return instance
 
     def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
-        return bool(
+        return (
             (
-                (
-                    self._dialect.server_version_info is not None
-                    and self._dialect.server_version_info[0] >= POSTGRES_VERSION_SUPPORTING_MERGE
-                    and self._dialect.name == "postgresql"
-                )
-                or self._dialect.name == "oracle"
+                self._dialect.server_version_info is not None
+                and self._dialect.server_version_info[0]
+                >= POSTGRES_VERSION_SUPPORTING_MERGE
+                and self._dialect.name == "postgresql"
             )
-            and not force_disable_merge,
-        )
+            or self._dialect.name == "oracle"
+        ) and not force_disable_merge
 
     def _get_merge_stmt(
         self,

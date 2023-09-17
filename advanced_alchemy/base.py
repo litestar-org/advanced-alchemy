@@ -165,7 +165,7 @@ def create_registry() -> registry:
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr
 
-        type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String})
+        type_annotation_map |= {EmailStr: String, AnyUrl: String, AnyHttpUrl: String}
     return registry(metadata=meta, type_annotation_map=type_annotation_map)
 
 
