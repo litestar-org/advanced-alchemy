@@ -31,7 +31,7 @@ upgrade:       										## Upgrade all dependencies to the latest stable versio
 # =============================================================================
 .PHONY: install-pdm
 install-pdm: 										## Install latest version of PDM
-	@curl -sSL https://pdm.fming.dev/dev/install-pdm.py | python3 -
+	@curl -sSL https://pdm.fming.dev/install-pdm.py | python3 -
 
 install:											## Install the project and
 	@if ! $(PDM) --version > /dev/null; then echo '=> Installing PDM'; $(MAKE) install-pdm; fi
