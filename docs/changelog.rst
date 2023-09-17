@@ -21,6 +21,7 @@ Documentation
 * (`84f1f53 <https://github.com/jolt-org/advanced-alchemy/commit/84f1f5316e999be0f8b11c237e633e974af181d3>`_)  - Update changelog (Jacob Coffee)
 * (`135a5d1 <https://github.com/jolt-org/advanced-alchemy/commit/135a5d1138302574f64755c7cba6e9856d764b0c>`_)  - Update release guide in CONTRIBUTING.rst (Jacob Coffee)
 * (`aef6b27 <https://github.com/jolt-org/advanced-alchemy/commit/aef6b27ebbbccca1006f1a8f1e22f1c71cf1958d>`_)  - Update readme (Jacob Coffee)
+* (`e966fbe <https://github.com/jolt-org/advanced-alchemy/commit/e966fbe696c860d522baf20d2263ea3f5ace6d3a>`_)  - Update changelog (Jacob Coffee)
 
 Miscellaneous Tasks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
