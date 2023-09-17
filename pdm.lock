@@ -6,7 +6,7 @@ groups = ["default", "dev", "docs", "extensions", "linting", "test"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:361b04b3b386ae433a01a65fd0f323afdf1e691f41bcd2f4fd5e0b3ac6e4785c"
+content_hash = "sha256:961911435279c9ad3712c5b7b7d5e0bfef84807a85f989e59049d73635f0d154"
 
 [[package]]
 name = "aiofiles"
