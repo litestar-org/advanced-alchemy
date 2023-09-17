@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from litestar import Litestar
     from litestar.datastructures.state import State
     from litestar.types import BeforeMessageSendHookHandler, Message, Scope
+
+    # noinspection PyUnresolvedReferences
     from litestar.types.asgi_types import HTTPResponseStartEvent
 
 
