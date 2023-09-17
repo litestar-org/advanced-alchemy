@@ -61,7 +61,9 @@ offering features such as:
 ## Contributing
 
 All [Jolt][jolt-org] projects will always be a community-centered, available for contributions of any size.
+
 Before contributing, please review the [contribution guide][contributing].
+
 If you have any questions, reach out to us on [Discord][discord], our org-wide [GitHub discussions][jolt-discussions] page,
 or the [project-specific GitHub discussions page][project-discussions].
 
