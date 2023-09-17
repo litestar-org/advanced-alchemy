@@ -1,6 +1,8 @@
 """Application ORM configuration."""
+
 from __future__ import annotations
 
+import contextlib
 import re
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
@@ -18,7 +20,7 @@ from sqlalchemy.orm import (
     registry,
 )
 
-from .types import GUID, BigIntIdentity, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, BigIntIdentity, DateTimeUTC, JsonB
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -160,13 +162,10 @@ def create_registry() -> registry:
         date: Date,
         dict: JsonB,
     }
-    try:
+    with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr
 
         type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String})
-    except ImportError:
-        pass
-
     return registry(metadata=meta, type_annotation_map=type_annotation_map)
 
 

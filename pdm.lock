@@ -6,7 +6,7 @@ groups = ["default", "dev", "docs", "extensions", "linting", "test"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:800170ba7d70d1405f5288520c8159ced4b455f0f0ec213958492ea8bf7e4bf9"
+content_hash = "sha256:961911435279c9ad3712c5b7b7d5e0bfef84807a85f989e59049d73635f0d154"
 
 [[package]]
 name = "aiofiles"
@@ -1841,15 +1841,6 @@ files = [
 ]
 
 [[package]]
-name = "psycopg-c"
-version = "3.1.10"
-requires_python = ">=3.7"
-summary = "PostgreSQL database adapter for Python -- C optimisation distribution"
-files = [
-    {file = "psycopg-c-3.1.10.tar.gz", hash = "sha256:0c923cfac7a8a3796c915c253f51b7c667358492924cbccecc18df9e79b103e9"},
-]
-
-[[package]]
 name = "psycopg-pool"
 version = "3.1.7"
 requires_python = ">=3.7"
@@ -1865,12 +1856,11 @@ files = [
 [[package]]
 name = "psycopg"
 version = "3.1.10"
-extras = ["binary", "c", "pool"]
+extras = ["binary", "pool"]
 requires_python = ">=3.7"
 summary = "PostgreSQL database adapter for Python"
 dependencies = [
     "psycopg-binary==3.1.10",
-    "psycopg-c==3.1.10",
     "psycopg-pool",
     "psycopg==3.1.10",
 ]

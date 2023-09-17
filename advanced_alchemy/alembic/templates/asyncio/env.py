@@ -119,8 +119,7 @@ async def run_migrations_online() -> None:
     connectable = cast(
         "AsyncEngine",
         config.engine
-        if config.engine
-        else async_engine_from_config(
+        or async_engine_from_config(
             configuration,
             prefix="sqlalchemy.",
             poolclass=pool.NullPool,

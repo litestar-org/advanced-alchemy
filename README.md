@@ -31,13 +31,25 @@ offering features such as:
 - Tested support for multiple database backends including:
 
   - SQLite via [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/) or [sqlite](https://docs.python.org/3/library/sqlite3.html)
-  - Postgres via [asyncpg](https://magicstack.github.io/asyncpg/current/)\_ or [psycopg3 (async or sync)](https://www.psycopg.org/psycopg3/)
+  - Postgres via [asyncpg](https://magicstack.github.io/asyncpg/current/) or [psycopg3 (async or sync)](https://www.psycopg.org/psycopg3/)
   - MySQL via [asyncmy](https://github.com/long2ice/asyncmy)
   - Oracle via [oracledb](https://oracle.github.io/python-oracledb/)
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine>)
 
 ## Usage
+
+### Litestar
+
+> [!NOTE]\
+> This section has not been completed (yet!)
+
+### Starlette/FastAPI
+
+> [!NOTE]\
+> This section has not been completed (yet!)
+
+### Sanic
 
 > [!NOTE]\
 > This section has not been completed (yet!)

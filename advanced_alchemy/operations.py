@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ClauseElement, ColumnElement, Executable, Select, UpdateBase
+from sqlalchemy import ClauseElement, ColumnElement, Executable, FromClause, Select, UpdateBase
 from sqlalchemy.ext.compiler import compiles
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ def visit_merge(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
 class InsertFromSelect(Executable, ClauseElement):
     inherit_cache = False
 
-    def __init__(self, table: Any, select: Select) -> None:
+    def __init__(self, table: FromClause, select: Select) -> None:
         self.table = table
         self.select = select
 
