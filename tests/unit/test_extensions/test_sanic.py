@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union, cast
+from typing import TYPE_CHECKING, Callable, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +12,7 @@ from sanic_testing.testing import SanicTestClient
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
-from typing_extensions import Callable, assert_type
+from typing_extensions import assert_type
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
