@@ -1,5 +1,5 @@
 # Configuration file for the Sphinx documentation builder.
-
+import os
 
 from advanced_alchemy.__metadata__ import __project__ as project
 from advanced_alchemy.__metadata__ import __version__ as version
@@ -11,6 +11,7 @@ from advanced_alchemy.__metadata__ import __version__ as version
 project = project
 author = "Jolt Org"
 release = version
+release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", version.rsplit(".")[0])
 copyright = "2023, Jolt Org"
 
 # -- General configuration ---------------------------------------------------
