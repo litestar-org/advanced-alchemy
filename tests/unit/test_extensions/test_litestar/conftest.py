@@ -5,10 +5,11 @@ import os
 import random
 import string
 import sys
+from collections.abc import Generator
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Generator, TypeVar, cast
+from typing import Any, Callable, TypeVar, cast
 from unittest.mock import ANY
 
 import pytest
