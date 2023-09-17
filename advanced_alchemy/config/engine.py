@@ -15,23 +15,25 @@ if TYPE_CHECKING:
     from advanced_alchemy.config.types import EmptyType
 
 try:
-    from msgspec.json import decode as decode_json
-    from msgspec.json import encode as _encode_json
+    from msgspec.json import Decoder, Encoder
+
+    encoder, decoder = Encoder(), Decoder()
+    decode_json = decoder.decode
 
     def encode_json(data: Any) -> str:
-        return _encode_json(data).decode("utf-8")
+        return encoder.encode(data).decode("utf-8")
 
 except ImportError:
     try:
-        from orjson import dumps as _encode_json  # type: ignore[no-redef]
+        from orjson import dumps as _encode_json
         from orjson import loads as decode_json  # type: ignore[no-redef]
 
         def encode_json(data: Any) -> str:
-            return _encode_json(data).decode("utf-8")
+            return _encode_json(data).decode("utf-8")  # type: ignore[no-any-return]
 
     except ImportError:
         from json import dumps as encode_json  # type: ignore[assignment]
-        from json import loads as decode_json  # type: ignore[no-redef]
+        from json import loads as decode_json  # type: ignore[assignment]
 
 __all__ = ("EngineConfig",)
 
