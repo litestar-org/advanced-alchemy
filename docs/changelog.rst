@@ -4,22 +4,23 @@ Changelog
 
 All commits to this project will be documented in this file.
 
-`Release [v0.1.0] - 2023-09-17 <https://github.com/jolt-org/advanced-alchemy/releases/tag/v0.1.0>`_
+[unreleased]
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-* `See All commits in v0.1.0 <https://github.com/jolt-org/advanced-alchemy/commits/v0.1.0>`_
-
-`1cf35db <https://github.com/jolt-org/advanced-alchemy/commit/1cf35dba8e42ecc562f3da6d6e05d1e932307289>`_ ... `b15426b <https://github.com/jolt-org/advanced-alchemy/commit/b15426b73b887c125fc90d62f9342e7766cd2b28>`_ | `See diff for 0.1.0 <https://github.com/jolt-org/advanced-alchemy/compare/1cf35dba8e42ecc562f3da6d6e05d1e932307289...b15426b73b887c125fc90d62f9342e7766cd2b28>`_
 
 Bug Fixes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * (`5239399 <https://github.com/jolt-org/advanced-alchemy/commit/5239399936d5216d5533232c73b35904aeb71f93>`_)  - Fix pdm version (Jacob Coffee)
+* (`d909d6a <https://github.com/jolt-org/advanced-alchemy/commit/d909d6ad53a2950d5fecf11477d0ecbbbc0c0df9>`_)  - Fix contributing section spacing (Jacob Coffee)
 
 Documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * (`01a307f <https://github.com/jolt-org/advanced-alchemy/commit/01a307faa9064fb164d08a6a5286f048b8f2d340>`_)  - Add badging (Jacob Coffee)
 * (`066c7ba <https://github.com/jolt-org/advanced-alchemy/commit/066c7ba28ce8d028b11285c71fdadbd026b03c4c>`_)  - Add documentation and PR preview documentation (#21) (Jacob Coffee)
+* (`84f1f53 <https://github.com/jolt-org/advanced-alchemy/commit/84f1f5316e999be0f8b11c237e633e974af181d3>`_)  - Update changelog (Jacob Coffee)
+* (`135a5d1 <https://github.com/jolt-org/advanced-alchemy/commit/135a5d1138302574f64755c7cba6e9856d764b0c>`_)  - Update release guide in CONTRIBUTING.rst (Jacob Coffee)
+* (`aef6b27 <https://github.com/jolt-org/advanced-alchemy/commit/aef6b27ebbbccca1006f1a8f1e22f1c71cf1958d>`_)  - Update readme (Jacob Coffee)
 
 Miscellaneous Tasks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
