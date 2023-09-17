@@ -43,6 +43,9 @@ offering features such as:
 
 ## Usage
 
+> [!IMPORTANT]\
+> Check out [the installation guide][install-guide] in our official documentation!
+
 ### Litestar
 
 > [!NOTE]\
@@ -83,3 +86,4 @@ or the [project-specific GitHub discussions page][project-discussions].
 [jolt-discussions]: https://github.com/orgs/jolt-org/discussions
 [project-discussions]: https://github.com/jolt-org/advanced-alchemy/discussions
 [project-docs]: https://docs.advanced-alchemy.jolt.rs
+[install-guide]: https://docs.advanced-alchemy.jolt.rs/latest/#installation

@@ -1,8 +1,26 @@
-API reference
+=============
+API Reference
 =============
 
-.. toctree::
+The API reference is automatically generated from the docstrings in the code, and is useful for
+finding out what methods and attributes are available for a given class. The API reference is
+divided into several sections, each of which is listed below.
 
-    repository
-    filters
+.. note:: Private methods and attributes are not included in the API reference.
+
+Available API References
+------------------------
+
+.. toctree::
+    :titlesonly:
+
+    base
     exceptions
+    filters
+    operations
+    repository
+    types
+
+    alembic/index
+    config/index
+    extensions/index
