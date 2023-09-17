@@ -28,12 +28,12 @@ Usage
     :hidden:
 
     usage/index
-    api/index
+    reference/index
 
 .. toctree::
     :titlesonly:
     :caption: Development
     :hidden:
 
-    contribution-guide
     changelog
+    contribution-guide

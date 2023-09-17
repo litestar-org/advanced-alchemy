@@ -27,10 +27,15 @@ __all__ = (
 )
 
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
+"""Path to the Alembic templates."""
 ConnectionT = TypeVar("ConnectionT", bound="Connection | AsyncConnection")
+"""Type variable for a SQLAlchemy connection."""
 EngineT = TypeVar("EngineT", bound="Engine | AsyncEngine")
+"""Type variable for a SQLAlchemy engine."""
 SessionT = TypeVar("SessionT", bound="Session | AsyncSession")
+"""Type variable for a SQLAlchemy session."""
 SessionMakerT = TypeVar("SessionMakerT", bound="sessionmaker | async_sessionmaker")
+"""Type variable for a SQLAlchemy sessionmaker."""
 
 
 @dataclass
@@ -187,10 +192,12 @@ class GenericAlembicConfig:
     will be used.
     """
     version_table_name: str = "alembic_versions"
-    """Configure the name of the table used to hold the applied alembic revisions. Defaults to ``alembic_versions``.  THe name of the table
+    """Configure the name of the table used to hold the applied alembic revisions. The name of the table.
+    Defaults to ``alembic_versions``.
     """
     version_table_schema: str | None = None
-    """Configure the schema to use for the alembic revisions revisions. If unset, it defaults to connection's default schema."""
+    """Configure the schema to use for the alembic revisions revisions.
+    If unset, it defaults to connection's default schema."""
     script_location: str = "migrations"
     """A path to save generated migrations.
     """
