@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Tuple
 import pytest
 from litestar import get, post
 from litestar.di import Provide
-from litestar.dto import DTOConfig, DTOField, Mark
+from litestar.dto import DTOField, Mark
 from litestar.dto._backend import _rename_field
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.dto.types import RenameStrategy
@@ -126,7 +126,7 @@ def test_fields_alias_generator_sqlalchemy(
 ) -> None:
     test_data = BookAuthorTestData()
     json_data, instance = book_json_data(rename_strategy, test_data)
-    config = DTOConfig(rename_strategy=rename_strategy)
+    config = SQLAlchemyDTOConfig(rename_strategy=rename_strategy)
     dto = SQLAlchemyDTO[Annotated[Book, config]]
 
     @post(dto=dto, signature_namespace={"Book": Book})
@@ -466,8 +466,7 @@ from sqlalchemy import create_engine, Column, Integer, Sequence
 from sqlalchemy.orm import DeclarativeBase, Mapped, sessionmaker
 
 from litestar import Litestar, post
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
-from litestar.dto import DTOConfig
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
 engine = create_engine('sqlite:///:memory:', echo=True)
 Session = sessionmaker(bind=engine, expire_on_commit=False)
@@ -481,7 +480,7 @@ class Model(Base):
     val: Mapped[str]
 
 class ModelCreateDTO(SQLAlchemyDTO[Model]):
-    config = DTOConfig(exclude={"id"})
+    config = SQLAlchemyDTOConfig(exclude={"id"})
 
 ModelReturnDTO = SQLAlchemyDTO[Model]
 

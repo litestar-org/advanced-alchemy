@@ -486,7 +486,7 @@ async def test_forward_ref_relationship_resolution(
 
     The key part of this test is that the `B` type is only imported inside an `if TYPE_CHECKING:` block
     in `a_module`, so it should not be available for forward-ref resolution when `a_module` is imported. This
-    works due to related mapped classes (via `mapper.registry.mappers`) being added to foward-ref resolution
+    works due to related mapped classes (via `mapper.registry.mappers`) being added to forward-ref resolution
     namespace.
     """
     base_module = create_module(
