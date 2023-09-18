@@ -17,7 +17,7 @@ Code contributions
 Workflow
 ++++++++
 
-1. `Fork <https://github.com/jolt-org/advanced-alchemy/fork>`_ the `Advanced AlchemyAdvanced Alchemy repository <https://github.com/jolt-org/advanced-alchemy>`_
+1. `Fork <https://github.com/jolt-org/advanced-alchemy/fork>`_ the `Advanced Alchemy repository <https://github.com/jolt-org/advanced-alchemy>`_
 2. Clone your fork locally with git
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
