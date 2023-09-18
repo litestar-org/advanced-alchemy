@@ -68,3 +68,7 @@ repos:
             rich,
             "litestar[cli]",
           ]
+  - repo: https://github.com/sphinx-contrib/sphinx-lint
+    rev: "v0.6.8"
+    hooks:
+      - id: sphinx-lint
