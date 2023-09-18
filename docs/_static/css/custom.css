@@ -45,8 +45,8 @@ html.light {
 }
 
 html.light .yue {
-    --yue-c-code-bg: var(--brand-primary) !important;
-    --yue-c-code: var(--brand-light) !important;
+    --yue-c-code-bg: var(--brand-tertiary) !important;
+    --yue-c-code: var(--brand-primary) !important;
     /*--yue-c-black: #11a1ff !important;*/
 }
 
