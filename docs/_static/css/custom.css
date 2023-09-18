@@ -1,5 +1,5 @@
 /*brand_colors = {*/
-/*    "--brand-main": {"rgb": "0, 150, 76", "hex": "#00964c"},*/
+/*    "--brand-primary": {"rgb": "0, 150, 76", "hex": "#00964c"},*/
 /*    "--brand-secondary": {"rgb": "99, 99, 99", "hex": "#636363"},*/
 /*    "--brand-green": {"rgb": "225, 39, 38", "hex": "#e12726"},*/
 /*    "--brand-alert": {"rgb": "241, 81, 82", "hex": "#f15152"},*/
@@ -8,13 +8,26 @@
 /*}*/
 
 :root {
-    --brand-main: #f50057;
+    --brand-primary: #f50057;
+    --brand-primary-rgb: 245, 0, 87;
+
     --brand-secondary: #202020;
+    --brand-secondary-rgb: 32, 32, 32;
+
     --brand-tertiary: #A1ADA1;
+    --brand-tertiary-rgb: 161, 173, 161;
+
     --brand-green: #00f597;
+    --brand-green-rgb: 0, 245, 151;
+
     --brand-alert: #f36060;
+    --brand-alert-rgb: 243, 96, 96;
+
     --brand-dark: #000000;
+    --brand-dark-rgb: 0, 0, 0;
+
     --brand-light: #ebdddd;
+    --brand-light-rgb: 235, 221, 221;
 }
 
 html.dark,
@@ -22,26 +35,27 @@ html.light {
 }
 
 html.light {
-    --syntax-light-constant: var(--brand-main);
-    --syntax-light-meta: var(--brand-main);
+    --syntax-light-constant: var(--brand-primary);
+    --syntax-light-meta: var(--brand-primary);
     /*  --syntax-light-text: #09090a;*/
     /*  --syntax-light-cap-bg: #325b76;*/
     /*  --syntax-light-pre-bg: #ddefff;*/
-    --syntax-light-keyword: var(--brand-main);
-    --syntax-light-property: var(--brand-green);
+    --syntax-light-keyword: var(--brand-primary);
+    --syntax-light-property: var(--brand-secondary);
 }
 
 html.light .yue {
-    --yue-c-code-bg: var(--brand-secondary) !important;
-    --yue-c-code: var(--brand-green) !important;
+    --yue-c-code-bg: var(--brand-tertiary) !important;
+    --yue-c-code: var(--brand-primary) !important;
     /*--yue-c-black: #11a1ff !important;*/
 }
 
 html.dark {
-    --syntax-dark-keyword: var(--brand-main);
+    --syntax-dark-keyword: var(--brand-primary);
     --syntax-dark-property: var(--brand-green);
-    --syntax-dark-constant: var(--brand-main);
-    --syntax-dark-meta: var(--brand-main);
+    --syntax-dark-constant: var(--brand-primary);
+    --syntax-dark-meta: var(--brand-primary);
+    --syntax-dark-pre-bg: rgba(var(--brand-primary-rgb),0.1);
 }
 
 html.dark .yue {
