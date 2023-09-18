@@ -115,7 +115,7 @@ html_context = {
 }
 
 brand_colors = {
-    "--brand-main": {"rgb": "245, 0, 87", "hex": "#f50057"},
+    "--brand-primary": {"rgb": "245, 0, 87", "hex": "#f50057"},
     "--brand-secondary": {"rgb": "32, 32, 32", "hex": "#202020"},
     "--brand-tertiary": {"rgb": "161, 173, 161", "hex": "#A1ADA1"},
     "--brand-green": {"rgb": "0, 245, 151", "hex": "#00f597"},
@@ -135,37 +135,37 @@ html_theme_options = {
     ],
     "light_css_variables": {
         # RGB
-        "--sy-rc-theme": brand_colors["--brand-main"]["rgb"],
-        "--sy-rc-text": brand_colors["--brand-main"]["rgb"],
-        "--sy-rc-invert": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
+        "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
+        "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
         # "--sy-rc-bg": brand_colors["--brand-secondary"]["rgb"],
         # Hex
         "--sy-c-link": brand_colors["--brand-secondary"]["hex"],
         # "--sy-c-foot-bg": "#191919",
-        "--sy-c-foot-divider": brand_colors["--brand-main"]["hex"],
+        "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
         "--sy-c-foot-text": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bold": brand_colors["--brand-main"]["hex"],
-        "--sy-c-heading": brand_colors["--brand-main"]["hex"],
-        "--sy-c-text-weak": brand_colors["--brand-main"]["hex"],
+        "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
+        "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
+        "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
         "--sy-c-text": brand_colors["--brand-dark"]["hex"],
         "--sy-c-bg-weak": brand_colors["--brand-dark"]["rgb"],
     },
     "dark_css_variables": {
         # RGB
-        "--sy-rc-theme": brand_colors["--brand-main"]["rgb"],
-        "--sy-rc-text": brand_colors["--brand-main"]["rgb"],
-        "--sy-rc-invert": brand_colors["--brand-main"]["rgb"],
+        "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
+        "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
+        "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
         "--sy-rc-bg": brand_colors["--brand-dark"]["rgb"],
         # Hex
-        "--sy-c-link": brand_colors["--brand-main"]["hex"],
+        "--sy-c-link": brand_colors["--brand-primary"]["hex"],
         "--sy-c-foot-bg": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-foot-divider": brand_colors["--brand-main"]["hex"],
+        "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
         "--sy-c-foot-text": brand_colors["--brand-light"]["hex"],
-        "--sy-c-bold": brand_colors["--brand-main"]["hex"],
-        "--sy-c-heading": brand_colors["--brand-main"]["hex"],
-        "--sy-c-text-weak": brand_colors["--brand-main"]["hex"],
+        "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
+        "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
+        "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
         "--sy-c-text": brand_colors["--brand-light"]["hex"],
         "--sy-c-bg-weak": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bg": brand_colors["--brand-main"]["hex"],
+        "--sy-c-bg": brand_colors["--brand-primary"]["hex"],
     },
 }
