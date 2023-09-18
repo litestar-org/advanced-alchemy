@@ -32,6 +32,7 @@
 
 html.dark,
 html.light {
+    --sd-color-tabs-label-hover: var(--brand-green);
 }
 
 html.light {
