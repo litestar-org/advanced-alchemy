@@ -73,7 +73,7 @@ lint: 												## Runs pre-commit hooks; includes ruff linting, codespell, bl
 .PHONY: coverage
 coverage:  											## Run the tests and generate coverage report
 	@echo "=> Running tests with coverage"
-	@$(ENV_PREFIX)pytest tests --cov=app
+	@$(ENV_PREFIX)pytest tests --cov=advanced_alchemy
 	@$(ENV_PREFIX)coverage html
 	@$(ENV_PREFIX)coverage xml
 	@echo "=> Coverage report generated"
@@ -135,7 +135,7 @@ docs-clean: 										## Dump the existing built docs
 
 docs-serve: docs-clean 								## Serve the docs locally
 	@echo "=> Serving documentation"
-	$(ENV_PREFIX)sphinx-autobuild docs docs/_build/ -j auto --watch app --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
+	$(ENV_PREFIX)sphinx-autobuild docs docs/_build/ -j auto --watch advanced_alchemy --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
 
 docs: docs-clean 									## Dump the existing built docs and rebuild them
 	@echo "=> Building documentation"
