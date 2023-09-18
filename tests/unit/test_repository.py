@@ -664,7 +664,7 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
 async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository) -> None:
     """Test that repo raises exception if list receives unknown filter type."""
     with pytest.raises(RepositoryError):
-        await maybe_async(mock_repo.list("not a filter"))  # type:ignore[arg-type]
+        await maybe_async(mock_repo.list("not a filter"))
 
 
 async def test_sqlalchemy_repo_update(

@@ -905,7 +905,7 @@ async def test_repo_filter_on_before_after(author_repo: AuthorRepository) -> Non
         on_or_after=None,
     )
     existing_obj = await maybe_async(
-        author_repo.list(*[before_filter, OrderBy(field_name="created_at", sort_order="desc")]),  # type: ignore
+        author_repo.list(*[before_filter, OrderBy(field_name="created_at", sort_order="desc")]),
     )
     assert existing_obj[0].name == "Agatha Christie"
 
@@ -915,7 +915,7 @@ async def test_repo_filter_on_before_after(author_repo: AuthorRepository) -> Non
         on_or_before=None,
     )
     existing_obj = await maybe_async(
-        author_repo.list(*[after_filter, OrderBy(field_name="created_at", sort_order="desc")]),  # type: ignore
+        author_repo.list(*[after_filter, OrderBy(field_name="created_at", sort_order="desc")]),
     )
     assert existing_obj[0].name == "Agatha Christie"
 
