@@ -268,7 +268,7 @@ async def mssql_responsive(host: str) -> bool:
         database = "db"
         password = "super-secret"
         conn = await pyodbc.connect(
-            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host}; port={port}; database={database}; UID={user};",
+            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host},{port}; database={database}; UID={user};",
             password=password,
         )
         async with conn.cursor() as cursor:

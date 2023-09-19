@@ -321,6 +321,14 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
                 pytest.mark.xdist_group("spanner"),
             ],
         ),
+        pytest.param(
+            "mssql_engine",
+            marks=[
+                pytest.mark.mssql,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
     ],
 )
 def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Engine:
