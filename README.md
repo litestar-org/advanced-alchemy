@@ -40,6 +40,7 @@ offering features such as:
   - Oracle via [oracledb](https://oracle.github.io/python-oracledb/)
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine>)
+  - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc>)
 
 ## Usage
 
