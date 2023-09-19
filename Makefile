@@ -112,6 +112,10 @@ test-duckdb:
 test-spanner:
 	$(ENV_PREFIX)pytest tests -m='integration and spanner'
 
+.PHONY: test-mssql
+test-mssql:
+	$(ENV_PREFIX)pytest tests -m='integration and mssql'
+
 .PHONY: test-all-databases
 test-all-databases:
 	$(ENV_PREFIX)pytest tests -m='integration and integration'
