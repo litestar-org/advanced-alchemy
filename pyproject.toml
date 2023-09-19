@@ -44,13 +44,13 @@ requires-python = ">=3.8"
 version = "0.1.1"
 
 [project.urls]
-Homepage = "https://docs.advanced-alchemy.jolt.rs/latest/"
-Source = "https://github.com/jolt-org/advanced-alchemy"
-Documentation = "https://docs.advanced-alchemy.jolt.rs/latest/"
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
-Funding = "https://github.com/sponsors/jolt-org"
-Issue = "https://github.com/jolt-org/advanced-alchemy/issues/"
 Discord = "https://discord.gg/XpFNTjjtTK"
+Documentation = "https://docs.advanced-alchemy.jolt.rs/latest/"
+Funding = "https://github.com/sponsors/jolt-org"
+Homepage = "https://docs.advanced-alchemy.jolt.rs/latest/"
+Issue = "https://github.com/jolt-org/advanced-alchemy/issues/"
+Source = "https://github.com/jolt-org/advanced-alchemy"
 
 [build-system]
 build-backend = "hatchling.build"
@@ -256,15 +256,9 @@ filterwarnings = [
 
 [tool.codespell]
 ignore-words-list = "selectin"
-skip = 'pdm.lock'
+skip = 'pdm.lock, examples/us_state_lookup.json'
 
 [tool.git-cliff.changelog]
-header = """
-=========
-Changelog
-=========\n
-All commits to this project will be documented in this file.\n
-"""
 body = """
 {% if version %}\
     `Release [v{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }} <https://github.com/jolt-org/advanced-alchemy/releases/tag/v{{ version | trim_start_matches(pat="v") }}>`_
@@ -292,31 +286,37 @@ body = """
     {% endfor %}
 {% endfor %}\n
 """
-trim = true
 footer = """
 Advanced Alchemy Changelog
 """
+header = """
+=========
+Changelog
+=========\n
+All commits to this project will be documented in this file.\n
+"""
+trim = true
 
 [tool.git-cliff.git]
-conventional_commits = true
-filter_unconventional = true
-split_commits = false
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactor" },
-  { message = "^style", group = "Styling" },
-  { message = "^test", group = "Testing" },
-  { message = "^chore\\(release\\): prepare for", skip = true },
-  { message = "^chore", group = "Miscellaneous Tasks" },
-  { body = ".*security", group = "Security" },
+  {message = "^feat", group = "Features"},
+  {message = "^fix", group = "Bug Fixes"},
+  {message = "^doc", group = "Documentation"},
+  {message = "^perf", group = "Performance"},
+  {message = "^refactor", group = "Refactor"},
+  {message = "^style", group = "Styling"},
+  {message = "^test", group = "Testing"},
+  {message = "^chore\\(release\\): prepare for", skip = true},
+  {message = "^chore", group = "Miscellaneous Tasks"},
+  {body = ".*security", group = "Security"},
 ]
-protect_breaking_commits = false
+conventional_commits = true
 filter_commits = false
-tag_pattern = "v[0-9]*"
-skip_tags = "v0.1.0-beta.1"
+filter_unconventional = true
 ignore_tags = ""
-topo_order = false
+protect_breaking_commits = false
+skip_tags = "v0.1.0-beta.1"
 sort_commits = "oldest"
+split_commits = false
+tag_pattern = "v[0-9]*"
+topo_order = false
