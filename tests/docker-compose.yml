@@ -64,6 +64,6 @@ services:
     ports:
       - "11433:1433" # use a non-standard port here
     environment:
-      SA_PASSWORD: super-secret
+      SA_PASSWORD: Super-secret1
       MSSQL_PID: Express
       ACCEPT_EULA: "Y"

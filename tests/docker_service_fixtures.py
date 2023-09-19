@@ -264,10 +264,10 @@ async def spanner_service(docker_services: DockerServiceRegistry) -> None:
 async def mssql_responsive(host: str) -> bool:
     try:
         port = 11433
-        user = "app"
-        database = "db"
+        user = "sa"
+        database = "master"
         conn = await pyodbc.connect(
-            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host},{port}; database={database}; UID={user}; PWD=super-secret",
+            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host},{port}; database={database}; UID={user}; PWD=Super-secret1",
         )
         async with conn.cursor() as cursor:
             await cursor.execute("select 1 as is_available")

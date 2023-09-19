@@ -135,7 +135,7 @@ def mssql_engine(docker_ip: str, mssql_service: None) -> Engine:
         URL(
             drivername="mssql+pyodbc",
             username="sa",
-            password="super-secret",
+            password="Super-secret1",
             host=docker_ip,
             port=11433,
             database="master",
