@@ -8,6 +8,7 @@ import subprocess
 import sys
 import timeit
 from pathlib import Path
+from time import sleep
 from typing import Any, Awaitable, Callable, Generator
 
 import asyncmy
@@ -262,8 +263,9 @@ async def spanner_service(docker_services: DockerServiceRegistry) -> None:
 
 
 def mssql_responsive(host: str) -> bool:
+    sleep(1)
     try:
-        port = 11433
+        port = 1344
         user = "sa"
         database = "master"
         with pyodbc.connect(
@@ -274,7 +276,7 @@ def mssql_responsive(host: str) -> bool:
                 cursor.execute("select 1 as is_available")
                 resp = cursor.fetchone()
                 return resp[0] == 1  # type: ignore
-    except pyodbc.OperationalError:
+    except pyodbc.Error:
         return False
 
 

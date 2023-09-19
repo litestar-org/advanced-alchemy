@@ -137,7 +137,7 @@ def mssql_engine(docker_ip: str, mssql_service: None) -> Engine:
             username="sa",
             password="Super-secret1",
             host=docker_ip,
-            port=11433,
+            port=1344,
             database="master",
             query={
                 "driver": "ODBC Driver 18 for SQL Server",
