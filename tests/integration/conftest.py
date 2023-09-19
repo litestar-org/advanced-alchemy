@@ -129,6 +129,23 @@ def psycopg_engine(docker_ip: str, postgres_service: None) -> Engine:
 
 
 @pytest.fixture()
+def mssql_engine(docker_ip: str, mssql_service: None) -> Engine:
+    """MS SQL instance for end-to-end testing."""
+    return create_engine(
+        URL(
+            drivername="mssql+pyodbc",
+            username="sa",
+            password="super-secret",
+            host=docker_ip,
+            port=11433,
+            database="master",
+            query={},  # type:ignore[arg-type]
+        ),
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
 def sqlite_engine(tmp_path: Path) -> Generator[Engine, None, None]:
     """SQLite engine for end-to-end testing.
 
@@ -192,6 +209,13 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
             "sqlite_engine",
             marks=[
                 pytest.mark.sqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "mssql_engine",
+            marks=[
+                pytest.mark.mssql,
                 pytest.mark.integration,
             ],
         ),

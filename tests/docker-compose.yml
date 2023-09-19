@@ -59,3 +59,11 @@ services:
       DATABASE_NAME: test-database
     depends_on:
       - spanner
+  mssql:
+    image: mcr.microsoft.com/mssql/server:latest
+    ports:
+      - "11433:1433" # use a non-standard port here
+    environment:
+      SA_PASSWORD: super-secret
+      MSSQL_PID: Express
+      ACCEPT_EULA: "Y"

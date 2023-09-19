@@ -71,6 +71,7 @@ dev = [
   "fastapi>=0.103.1",
   "msgspec>=0.18.2",
   "orjson>=3.9.7",
+  "pyodbc>=4.0.39",
 ]
 docs = [
   "sphinx>=7.1.2",
@@ -230,7 +231,7 @@ SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 
 [tool.pytest.ini_options]
-addopts = "-m='not integration' --dist=loadgroup"
+addopts = "  --dist=loadgroup"
 asyncio_mode = "auto"
 
 markers = [
@@ -243,7 +244,8 @@ markers = [
   "sqlite: SQLAlchemy SQLite (sqlite) Tests",
   "oracledb: SQLAlchemy Oracle (oracledb) Tests",
   "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
-  "duckdb: SQLAlchemy Duckdb (duckdb-engine) Tests",
+  "duckdb: SQLAlchemy DuckDB (duckdb-engine) Tests",
+  "mssql: SQLAlchemy Microsoft SQL Server (pyodbc) Tests",
 ]
 
 filterwarnings = [

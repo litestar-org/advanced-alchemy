@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable, Generator
 import asyncmy
 import asyncpg
 import oracledb
+import pyodbc
 import pytest
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import spanner
@@ -258,3 +259,26 @@ def spanner_responsive(host: str) -> bool:
 async def spanner_service(docker_services: DockerServiceRegistry) -> None:
     os.environ["SPANNER_EMULATOR_HOST"] = "localhost:9010"
     await docker_services.start("spanner", timeout=60, check=spanner_responsive)
+
+
+async def mssql_responsive(host: str) -> bool:
+    try:
+        port = 11433
+        user = "app"
+        database = "db"
+        password = "super-secret"
+        conn = await pyodbc.connect(
+            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host}; port={port}; database={database}; UID={user};",
+            password=password,
+        )
+        async with conn.cursor() as cursor:
+            await cursor.execute("select 1 as is_available")
+            resp = await cursor.fetchone()
+        return resp[0] == 1  # type: ignore
+    except asyncmy.errors.OperationalError:
+        return False
+
+
+@pytest.fixture()
+async def mssql_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("mssql", check=mssql_responsive)

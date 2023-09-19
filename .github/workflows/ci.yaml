@@ -65,6 +65,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Install Microsoft ODBC
+        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
