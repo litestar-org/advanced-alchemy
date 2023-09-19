@@ -266,10 +266,8 @@ async def mssql_responsive(host: str) -> bool:
         port = 11433
         user = "app"
         database = "db"
-        password = "super-secret"  # nosonar
         conn = await pyodbc.connect(
-            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host},{port}; database={database}; UID={user};",
-            password=password,  # nosonar
+            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host},{port}; database={database}; UID={user}; PWD=super-secret",
         )
         async with conn.cursor() as cursor:
             await cursor.execute("select 1 as is_available")
