@@ -261,22 +261,23 @@ async def spanner_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("spanner", timeout=60, check=spanner_responsive)
 
 
-async def mssql_responsive(host: str) -> bool:
+def mssql_responsive(host: str) -> bool:
     try:
         port = 11433
         user = "sa"
         database = "master"
-        conn = await pyodbc.connect(
-            connstring=f"driver={{ODBC Driver 18 for SQL Server}};server={host},{port}; database={database}; UID={user}; PWD=Super-secret1",
-        )
-        async with conn.cursor() as cursor:
-            await cursor.execute("select 1 as is_available")
-            resp = await cursor.fetchone()
-        return resp[0] == 1  # type: ignore
-    except asyncmy.errors.OperationalError:
+        with pyodbc.connect(
+            connstring=f"encrypt=no; TrustServerCertificate=yes; driver={{ODBC Driver 18 for SQL Server}}; server={host},{port}; database={database}; UID={user}; PWD=Super-secret1",
+            timeout=2,
+        ) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("select 1 as is_available")
+                resp = cursor.fetchone()
+                return resp[0] == 1  # type: ignore
+    except pyodbc.OperationalError:
         return False
 
 
 @pytest.fixture()
 async def mssql_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("mssql", check=mssql_responsive)
+    await docker_services.start("mssql", timeout=45, pause=1, check=mssql_responsive)

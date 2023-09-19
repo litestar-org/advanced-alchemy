@@ -139,7 +139,11 @@ def mssql_engine(docker_ip: str, mssql_service: None) -> Engine:
             host=docker_ip,
             port=11433,
             database="master",
-            query={},  # type:ignore[arg-type]
+            query={
+                "driver": "ODBC Driver 18 for SQL Server",
+                "encrypt": "no",
+                "TrustServerCertificate": "yes",
+            },  # type:ignore[arg-type]
         ),
         poolclass=NullPool,
     )

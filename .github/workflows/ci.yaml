@@ -43,6 +43,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Install Microsoft ODBC Drivers
+        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
+
       - uses: pdm-project/setup-pdm@v3
         name: Set up PDM
         with:

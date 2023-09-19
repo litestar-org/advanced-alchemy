@@ -24,12 +24,12 @@ TagModel = Type[models_uuid.UUIDTag]
 
 
 @pytest.fixture()
-async def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
+def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
     return SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker)
 
 
 @pytest.fixture()
-async def async_sqlalchemy_config(
+def async_sqlalchemy_config(
     async_engine: AsyncEngine,
     async_session_maker: async_sessionmaker[AsyncSession],
 ) -> SQLAlchemyAsyncConfig:
@@ -37,12 +37,12 @@ async def async_sqlalchemy_config(
 
 
 @pytest.fixture(params=[lazy_fixture("sync_sqlalchemy_config"), lazy_fixture("async_sqlalchemy_config")])
-async def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
+def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
     return commands.AlembicCommands(sqlalchemy_config=request.param)
 
 
 @pytest.fixture
-async def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Path:
+def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Path:
     path = tmp_path / "project_dir"
     path.mkdir(exist_ok=True)
     monkeypatch.chdir(path)
