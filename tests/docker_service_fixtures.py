@@ -276,10 +276,10 @@ def mssql_responsive(host: str) -> bool:
                 cursor.execute("select 1 as is_available")
                 resp = cursor.fetchone()
                 return resp[0] == 1  # type: ignore
-    except pyodbc.Error:
+    except Exception:
         return False
 
 
 @pytest.fixture()
 async def mssql_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("mssql", timeout=45, pause=1, check=mssql_responsive)
+    await docker_services.start("mssql", timeout=60, pause=1, check=mssql_responsive)
