@@ -142,7 +142,7 @@ async def mysql_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def mysql_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("mysql", check=mysql_responsive)
+    await docker_services.start("mysql", timeout=45, pause=1, check=mysql_responsive)
 
 
 async def postgres_responsive(host: str) -> bool:
