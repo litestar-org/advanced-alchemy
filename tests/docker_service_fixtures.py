@@ -267,18 +267,18 @@ async def mssql_responsive(host: str) -> bool:
         port = 1344
         user = "sa"
         database = "master"
-        with pyodbc.connect(
+        conn = pyodbc.connect(
             connstring=f"encrypt=no; TrustServerCertificate=yes; driver={{ODBC Driver 18 for SQL Server}}; server={host},{port}; database={database}; UID={user}; PWD=Super-secret1",
             timeout=2,
-        ) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("select 1 as is_available")
-                resp = cursor.fetchone()
-                return resp[0] == 1  # type: ignore
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("select 1 as is_available")
+            resp = cursor.fetchone()
+            return resp[0] == 1  # type: ignore
     except Exception:
         return False
 
 
 @pytest.fixture()
 async def mssql_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("mssql", timeout=60, check=mssql_responsive)
+    await docker_services.start("mssql", timeout=60, pause=1, check=mssql_responsive)

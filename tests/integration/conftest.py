@@ -210,16 +210,17 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
             ],
         ),
         pytest.param(
-            "sqlite_engine",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-            ],
-        ),
-        pytest.param(
             "mssql_engine",
             marks=[
                 pytest.mark.mssql,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "sqlite_engine",
+            marks=[
+                pytest.mark.sqlite,
                 pytest.mark.integration,
             ],
         ),
