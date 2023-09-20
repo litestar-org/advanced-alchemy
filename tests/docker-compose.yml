@@ -60,7 +60,7 @@ services:
     depends_on:
       - spanner
   mssql:
-    image: mcr.microsoft.com/mssql/server:latest
+    image: mcr.microsoft.com/mssql/server:2022-latest
     ports:
       - "1344:1344" # use a non-standard port here
     environment:
