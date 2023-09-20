@@ -8,7 +8,6 @@ import subprocess
 import sys
 import timeit
 from pathlib import Path
-from time import sleep
 from typing import Any, Awaitable, Callable, Generator
 
 import asyncmy
@@ -262,8 +261,8 @@ async def spanner_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("spanner", timeout=60, check=spanner_responsive)
 
 
-def mssql_responsive(host: str) -> bool:
-    sleep(1)
+async def mssql_responsive(host: str) -> bool:
+    await asyncio.sleep(1)
     try:
         port = 1344
         user = "sa"
@@ -282,4 +281,4 @@ def mssql_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def mssql_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("mssql", timeout=60, pause=1, check=mssql_responsive)
+    await docker_services.start("mssql", timeout=60, check=mssql_responsive)
