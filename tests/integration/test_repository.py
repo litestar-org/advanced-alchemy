@@ -321,6 +321,14 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
                 pytest.mark.xdist_group("spanner"),
             ],
         ),
+        pytest.param(
+            "mssql_engine",
+            marks=[
+                pytest.mark.mssql,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
     ],
 )
 def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Engine:
@@ -926,7 +934,7 @@ async def test_repo_filter_search(author_repo: AuthorRepository) -> None:
     existing_obj = await maybe_async(author_repo.list(SearchFilter(field_name="name", value="GATH", ignore_case=False)))
     # sqlite & mysql are case insensitive by default with a `LIKE`
     dialect = author_repo.session.bind.dialect.name if author_repo.session.bind else "default"
-    expected_objs = 1 if dialect in {"sqlite", "mysql"} else 0
+    expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 0
     assert len(existing_obj) == expected_objs
     existing_obj = await maybe_async(author_repo.list(SearchFilter(field_name="name", value="GATH", ignore_case=True)))
     assert existing_obj[0].name == "Agatha Christie"
@@ -942,7 +950,7 @@ async def test_repo_filter_not_in_search(author_repo: AuthorRepository) -> None:
     )
     # sqlite & mysql are case insensitive by default with a `LIKE`
     dialect = author_repo.session.bind.dialect.name if author_repo.session.bind else "default"
-    expected_objs = 1 if dialect in {"sqlite", "mysql"} else 2
+    expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 2
     assert len(existing_obj) == expected_objs
     existing_obj = await maybe_async(
         author_repo.list(NotInSearchFilter(field_name="name", value="GATH", ignore_case=True)),

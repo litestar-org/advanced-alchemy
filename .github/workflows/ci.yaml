@@ -35,13 +35,16 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Install Microsoft ODBC Drivers
+        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
 
       - uses: pdm-project/setup-pdm@v3
         name: Set up PDM
@@ -64,6 +67,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Install Microsoft ODBC
+        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
 
       - name: Set up Python
         uses: actions/setup-python@v4

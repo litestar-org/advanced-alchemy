@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable, Generator
 import asyncmy
 import asyncpg
 import oracledb
+import pyodbc
 import pytest
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import spanner
@@ -141,7 +142,7 @@ async def mysql_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def mysql_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("mysql", check=mysql_responsive)
+    await docker_services.start("mysql", timeout=45, pause=1, check=mysql_responsive)
 
 
 async def postgres_responsive(host: str) -> bool:
@@ -258,3 +259,26 @@ def spanner_responsive(host: str) -> bool:
 async def spanner_service(docker_services: DockerServiceRegistry) -> None:
     os.environ["SPANNER_EMULATOR_HOST"] = "localhost:9010"
     await docker_services.start("spanner", timeout=60, check=spanner_responsive)
+
+
+async def mssql_responsive(host: str) -> bool:
+    await asyncio.sleep(1)
+    try:
+        port = 1344
+        user = "sa"
+        database = "master"
+        conn = pyodbc.connect(
+            connstring=f"encrypt=no; TrustServerCertificate=yes; driver={{ODBC Driver 18 for SQL Server}}; server={host},{port}; database={database}; UID={user}; PWD=Super-secret1",
+            timeout=2,
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("select 1 as is_available")
+            resp = cursor.fetchone()
+            return resp[0] == 1  # type: ignore
+    except Exception:
+        return False
+
+
+@pytest.fixture()
+async def mssql_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("mssql", timeout=60, pause=1, check=mssql_responsive)

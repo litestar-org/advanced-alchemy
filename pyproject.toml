@@ -41,7 +41,7 @@ license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.1.1"
+version = "0.2.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
@@ -71,6 +71,7 @@ dev = [
   "fastapi>=0.103.1",
   "msgspec>=0.18.2",
   "orjson>=3.9.7",
+  "pyodbc>=4.0.39",
 ]
 docs = [
   "sphinx>=7.1.2",
@@ -105,6 +106,32 @@ test = [
   "pytest-mock>=3.11.1",
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
+]
+
+[tool.pytest.ini_options]
+addopts = "-m='not integration' --dist=loadgroup"
+asyncio_mode = "auto"
+
+markers = [
+  "integration: SQLAlchemy integration tests",
+  "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
+  "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
+  "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
+  "psycopg_sync: SQLAlchemy Postgres (psycopg sync) Tests",
+  "aiosqlite: SQLAlchemy SQLite (aiosqlite) Tests",
+  "sqlite: SQLAlchemy SQLite (sqlite) Tests",
+  "oracledb: SQLAlchemy Oracle (oracledb) Tests",
+  "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
+  "duckdb: SQLAlchemy DuckDB (duckdb-engine) Tests",
+  "mssql: SQLAlchemy Microsoft SQL Server (pyodbc) Tests",
+]
+
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:google.rpc",
+  "ignore::DeprecationWarning:google.gcloud",
+  "ignore::DeprecationWarning:google.iam",
+  "ignore::DeprecationWarning:google",
 ]
 
 [tool.black]
@@ -228,31 +255,6 @@ ruff_fix = true
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
-
-[tool.pytest.ini_options]
-addopts = "-m='not integration' --dist=loadgroup"
-asyncio_mode = "auto"
-
-markers = [
-  "integration: SQLAlchemy integration tests",
-  "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
-  "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
-  "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
-  "psycopg_sync: SQLAlchemy Postgres (psycopg sync) Tests",
-  "aiosqlite: SQLAlchemy SQLite (aiosqlite) Tests",
-  "sqlite: SQLAlchemy SQLite (sqlite) Tests",
-  "oracledb: SQLAlchemy Oracle (oracledb) Tests",
-  "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
-  "duckdb: SQLAlchemy Duckdb (duckdb-engine) Tests",
-]
-
-filterwarnings = [
-  "ignore::DeprecationWarning:pkg_resources.*",
-  "ignore::DeprecationWarning:google.rpc",
-  "ignore::DeprecationWarning:google.gcloud",
-  "ignore::DeprecationWarning:google.iam",
-  "ignore::DeprecationWarning:google",
-]
 
 [tool.codespell]
 ignore-words-list = "selectin"

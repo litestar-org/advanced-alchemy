@@ -59,3 +59,12 @@ services:
       DATABASE_NAME: test-database
     depends_on:
       - spanner
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    ports:
+      - "1344:1433" # use a non-standard port here
+    environment:
+      SA_PASSWORD: Super-secret1
+      MSSQL_PID: Developer
+      ACCEPT_EULA: Accepted
+      MSSQL_TCP_PORT: 1433
