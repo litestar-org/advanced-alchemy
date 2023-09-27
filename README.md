@@ -66,7 +66,6 @@ app = Litestar(plugins=[plugin])
 
 ```python
 from fastapi import FastAPI
-from starlette.applications import Starlette
 
 from advanced_alchemy.config import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
