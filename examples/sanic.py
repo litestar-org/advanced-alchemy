@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from datetime import date  # noqa: TCH003
+from typing import Any
 from uuid import UUID  # noqa: TCH003
 
 from sanic import Request, Sanic
+from sanic_ext import Extend
 from sqlalchemy import ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
@@ -13,9 +15,6 @@ from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-
-if TYPE_CHECKING:
-    from datetime import date
 
 
 # the SQLAlchemy base includes a declarative model for you to use in your models.
@@ -100,6 +99,7 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
 )  # Create 'db_session' dependency.
 app = Sanic("AlchemySanicApp")
 alchemy = SanicAdvancedAlchemy(sqlalchemy_config=sqlalchemy_config)
+Extend.register(alchemy)
 app.ext.add_dependency(AsyncSession, provide_db_session)
 
 
