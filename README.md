@@ -53,7 +53,7 @@ offering features such as:
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
 
-from litestar.app import Litestar
+from litestar import Litestar
 
 plugin = SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig())
 
