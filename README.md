@@ -2,11 +2,11 @@
 
 <div align="center">
 
-| Project   |     | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|-----------|:----|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| CI/CD     |     | [![Latest Release](https://github.com/jolt-org/advanced-alchemy/actions/workflows/publish.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/publish.yaml) [![Tests And Linting](https://github.com/jolt-org/advanced-alchemy/actions/workflows/ci.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/ci.yaml) [![Documentation Building](https://github.com/jolt-org/advanced-alchemy/actions/workflows/docs.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/docs.yaml)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Quality   |     | [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=coverage)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy)                                                                                                                                                                                                                                                                        |
-| Community |     | [![Discord](https://img.shields.io/discord/1149784127659319356?labelColor=F50057&color=202020&label=chat%20on%20discord&logo=discord&logoColor=202020)](https://discord.gg/XpFNTjjtTK)                                                                                                                                                                                                                                                                                                                                              |
+| Project   |     | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------- | :-- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CI/CD     |     | [![Latest Release](https://github.com/jolt-org/advanced-alchemy/actions/workflows/publish.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/publish.yaml) [![Tests And Linting](https://github.com/jolt-org/advanced-alchemy/actions/workflows/ci.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/ci.yaml) [![Documentation Building](https://github.com/jolt-org/advanced-alchemy/actions/workflows/docs.yaml/badge.svg)](https://github.com/jolt-org/advanced-alchemy/actions/workflows/docs.yaml)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Quality   |     | [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=coverage)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=jolt-org_advanced-alchemy&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=jolt-org_advanced-alchemy)                            |
+| Community |     | [![Discord](https://img.shields.io/discord/1149784127659319356?labelColor=F50057&color=202020&label=chat%20on%20discord&logo=discord&logoColor=202020)](https://discord.gg/XpFNTjjtTK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Meta      |     | [![Jolt Project](https://img.shields.io/badge/Jolt%20Org-%E2%AD%90-F50057.svg?logo=python&labelColor=F50057&color=202020&logoColor=202020)](https://github.com/jolt-org/) [![types - Mypy](https://img.shields.io/badge/types-Mypy-F50057.svg?logo=python&labelColor=F50057&color=202020&logoColor=202020)](https://github.com/python/mypy) [![License - MIT](https://img.shields.io/badge/license-MIT-F50057.svg?logo=python&labelColor=F50057&color=202020&logoColor=202020)](https://spdx.org/licenses/) [![Jolt Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-%23202020.svg?&logo=github&logoColor=202020&labelColor=F50057)](https://github.com/sponsors/jolt-org) [![linting - Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json&labelColor=F50057)](https://github.com/astral-sh/ruff) [![code style - Black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&labelColor=F50057&logoColor=202020)](https://github.com/psf/black) |
 
 </div>
@@ -49,18 +49,62 @@ offering features such as:
 
 ### Litestar
 
-> [!NOTE]\
-> This section has not been completed (yet!)
+```python
+from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
 
-### Starlette/FastAPI
+from litestar.app import Litestar
 
-> [!NOTE]\
-> This section has not been completed (yet!)
+plugin = SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig())
+
+
+app = Litestar(plugins=[plugin])
+
+```
+
+### Starlette
+
+```python
+from fastapi import FastAPI
+
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
+
+app = FastAPI()
+alchemy = StarletteAdvancedAlchemy(
+    config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
+)
+```
+
+### FastAPI
+
+```python
+from starlette.applications import Starlette
+
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
+
+app = Starlette()
+alchemy = StarletteAdvancedAlchemy(
+    config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
+)
+```
 
 ### Sanic
 
-> [!NOTE]\
-> This section has not been completed (yet!)
+```python
+from sanic import Sanic
+from sanic_ext import Extend
+
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
+
+app = Sanic("AlchemySanicApp")
+alchemy = SanicAdvancedAlchemy(
+    sqlalchemy_config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
+)
+Extend.register(alchemy)
+```
 
 ## Contributing
 
