@@ -41,7 +41,7 @@ def order_columns(
     op: ops.CreateTableOp,
 ) -> ops.CreateTableOp:
     """Orders ID first and the audit columns at the end."""
-    special_names = {"id": -100, "sa_orm_sentinel": 3001, "created_at": 3002, "updated_at": 3002}
+    special_names = {"id": -100, "sa_orm_sentinel": 3001, "created_at": 3002, "updated_at": 3003}
     cols_by_key = [
         (
             special_names.get(col.key, index) if isinstance(col, Column) else 2000,
@@ -115,8 +115,7 @@ def run_migrations_online() -> None:
     connectable = cast(
         "Engine",
         config.engine
-        if config.engine
-        else engine_from_config(
+        or engine_from_config(
             configuration,
             prefix="sqlalchemy.",
             poolclass=pool.NullPool,
