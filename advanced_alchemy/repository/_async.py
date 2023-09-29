@@ -34,29 +34,6 @@ from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
 from advanced_alchemy.repository.typing import ModelT
 
-# pyright: reportMissingImports=false
-try:
-    from litestar.repository.filters import BeforeAfter as BeforeAfterLitestar
-    from litestar.repository.filters import CollectionFilter as CollectionFilterLitestar
-    from litestar.repository.filters import FilterTypes as FilterTypesLitestar
-    from litestar.repository.filters import LimitOffset as LimitOffsetLitestar
-    from litestar.repository.filters import NotInCollectionFilter as NotInCollectionFilterLitestar
-    from litestar.repository.filters import NotInSearchFilter as NotInSearchFilterLitestar
-    from litestar.repository.filters import OnBeforeAfter as OnBeforeAfterLitestar
-    from litestar.repository.filters import OrderBy as OrderByLitestar
-    from litestar.repository.filters import SearchFilter as SearchFilterLitestar
-except ImportError:
-    from advanced_alchemy.filters import BeforeAfter as BeforeAfterLitestar
-    from advanced_alchemy.filters import CollectionFilter as CollectionFilterLitestar
-    from advanced_alchemy.filters import FilterTypes as FilterTypesLitestar
-    from advanced_alchemy.filters import LimitOffset as LimitOffsetLitestar
-    from advanced_alchemy.filters import NotInCollectionFilter as NotInCollectionFilterLitestar
-    from advanced_alchemy.filters import NotInSearchFilter as NotInSearchFilterLitestar
-    from advanced_alchemy.filters import OnBeforeAfter as OnBeforeAfterLitestar
-    from advanced_alchemy.filters import OrderBy as OrderByLitestar
-    from advanced_alchemy.filters import SearchFilter as SearchFilterLitestar
-
-
 if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
@@ -324,7 +301,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def exists(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         **kwargs: Any,
     ) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
@@ -568,7 +545,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def count(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
     ) -> int:
@@ -702,7 +679,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def list_and_count(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
@@ -756,7 +733,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def _list_and_count_window(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
@@ -792,7 +769,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def _list_and_count_basic(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
@@ -955,7 +932,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def list(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
@@ -1058,7 +1035,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     def _apply_filters(
         self,
-        *filters: FilterTypes | FilterTypesLitestar | ColumnElement[bool],
+        *filters: FilterTypes | ColumnElement[bool],
         apply_pagination: bool = True,
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
@@ -1076,17 +1053,17 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             The select with filters applied.
         """
         for filter_ in filters:
-            if isinstance(filter_, (LimitOffset, LimitOffsetLitestar)):
+            if isinstance(filter_, (LimitOffset,)):
                 if apply_pagination:
                     statement = self._apply_limit_offset_pagination(filter_.limit, filter_.offset, statement=statement)
-            elif isinstance(filter_, (BeforeAfter, BeforeAfterLitestar)):
+            elif isinstance(filter_, (BeforeAfter,)):
                 statement = self._filter_on_datetime_field(
                     field_name=filter_.field_name,
                     before=filter_.before,
                     after=filter_.after,
                     statement=statement,
                 )
-            elif isinstance(filter_, (OnBeforeAfter, OnBeforeAfterLitestar)):
+            elif isinstance(filter_, (OnBeforeAfter,)):
                 statement = self._filter_on_datetime_field(
                     field_name=filter_.field_name,
                     on_or_before=filter_.on_or_before,
@@ -1094,20 +1071,20 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                     statement=statement,
                 )
 
-            elif isinstance(filter_, (NotInCollectionFilter, NotInCollectionFilterLitestar)):
+            elif isinstance(filter_, (NotInCollectionFilter,)):
                 statement = self._filter_not_in_collection(filter_.field_name, filter_.values, statement=statement)
-            elif isinstance(filter_, (CollectionFilter, CollectionFilterLitestar)):
+            elif isinstance(filter_, (CollectionFilter,)):
                 statement = self._filter_in_collection(filter_.field_name, filter_.values, statement=statement)
-            elif isinstance(filter_, (OrderBy, OrderByLitestar)):
+            elif isinstance(filter_, (OrderBy,)):
                 statement = self._order_by(statement, filter_.field_name, sort_desc=filter_.sort_order == "desc")
-            elif isinstance(filter_, (SearchFilter, SearchFilterLitestar)):
+            elif isinstance(filter_, (SearchFilter,)):
                 statement = self._filter_by_like(
                     statement,
                     filter_.field_name,
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                 )
-            elif isinstance(filter_, (NotInSearchFilter, NotInSearchFilterLitestar)):
+            elif isinstance(filter_, (NotInSearchFilter,)):
                 statement = self._filter_by_not_like(
                     statement,
                     filter_.field_name,
