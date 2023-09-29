@@ -141,5 +141,4 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    loop = asyncio.get_event_loop()
-    asyncio.run_coroutine_threadsafe(run_migrations_online(), loop=loop)
+    asyncio.run(run_migrations_online())

@@ -41,7 +41,7 @@ license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.2.1"
+version = "0.2.2"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
