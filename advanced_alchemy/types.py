@@ -5,8 +5,6 @@ import uuid
 from base64 import b64decode
 from typing import TYPE_CHECKING, Any, cast
 
-from msgspec.json import decode as decode_json
-from msgspec.json import encode as encode_json
 from sqlalchemy import DateTime, text, util
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
@@ -14,6 +12,8 @@ from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, BigInteger, Integer, SchemaType, TypeDecorator, TypeEngine
 from sqlalchemy.types import JSON as _JSON
+
+from advanced_alchemy._serialization import decode_json, encode_json
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
