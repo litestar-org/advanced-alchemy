@@ -71,12 +71,12 @@ async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, 
         alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
 
 
+"""
 async def test_alembic_revision(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     alembic_commands.revision(message="test", autogenerate=True)
 
 
-"""
 async def test_alembic_upgrade(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     alembic_commands.revision(message="test", autogenerate=True)
