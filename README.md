@@ -55,7 +55,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyA
 
 from litestar import Litestar
 
-plugin = SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig())
+plugin = SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"))
 
 
 app = Litestar(plugins=[plugin])
