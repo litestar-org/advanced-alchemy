@@ -4,7 +4,7 @@ Contribution guide
 Setting up the environment
 --------------------------
 
-1. Install `Pizza Delivery Man <https://pdm.fming.dev/latest/>`_
+1. Install `PDM <https://pdm.fming.dev/latest/>`_
 2. Run ``pdm install -G:all`` to create a `virtual environment <https://docs.python.org/3/tutorial/venv.html>`_ and install
    the dependencies
 3. If you're working on the documentation and need to build it locally, install the extra dependencies with ``pdm install -G:docs``
