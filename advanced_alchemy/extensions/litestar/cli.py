@@ -102,7 +102,7 @@ def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, n
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask("[bold]Are you sure you you want migrate the database to the `{revision}` revision?[/]")
+        else Confirm.ask(f"[bold]Are you sure you you want migrate the database to the `{revision}` revision?[/]")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
@@ -134,7 +134,7 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask("[bold]Are you sure you you want initialize the project in `{directory}`?[/]")
+        else Confirm.ask(f"[bold]Are you sure you you want initialize the project in `{directory}`?[/]")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app)
