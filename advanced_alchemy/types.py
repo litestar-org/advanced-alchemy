@@ -203,6 +203,18 @@ class EncryptedString(TypeDecorator):
         bindparam = type_coerce(bindparam, String)
         return self._handle_encrypted_data(bindparam)
 
+    def process_result_value(self, value: str | None, dialect: Dialect) -> str | None:
+        # sourcery skip: class-extract-method
+        if value is None:
+            return value
+        if self.backend == "pgcrypto":
+            return sql_func.pgp_sym_decrypt(value, self.passphrase)  # type: ignore[return-value]
+        if self.backend == "tink":
+            raise NotImplementedError
+        if self.backend == "cryptography":
+            raise NotImplementedError
+        return None  # type: ignore[unreachable]
+
     def column_expression(self, column: Any) -> Any:
         return self._handle_encrypted_data(column)
 
