@@ -3,9 +3,10 @@ from __future__ import annotations
 import datetime
 import uuid
 from base64 import b64decode
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
-from sqlalchemy import DateTime, text, util
+from sqlalchemy import DateTime, String, text, type_coerce, util
+from sqlalchemy import func as sql_func
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
@@ -174,3 +175,42 @@ JsonB = _JSON().with_variant(PG_JSONB, "postgresql").with_variant(ORA_JSONB, "or
 """A JSON type that uses  native ``JSONB`` where possible and ``Binary`` or ``Blob`` as
 an alternative.
 """
+
+
+class EncryptedString(TypeDecorator):
+    """Encrypted String
+
+    Configurable encrypted string field for SQL Alchemy
+
+    Raises:
+        NotImplementedError: Unsupported backend
+    """
+
+    # todo: should be BYTEA for postgres.  determine best field for others.  # noqa: FIX002
+    impl = BINARY
+
+    cache_ok = True
+
+    def __init__(self, passphrase: str, backend: Literal["pgcrypto", "tink", "cryptography"] = "cryptography") -> None:
+        super().__init__()
+        self.passphrase = passphrase
+        self.backend = backend
+
+    def bind_expression(self, bindparam: Any) -> Any:
+        # convert the bind's type from EncryptedString to
+        # String, so that it's passed as is without
+        # a dbapi.Binary wrapper
+        bindparam = type_coerce(bindparam, String)
+        return self._handle_encrypted_data(bindparam)
+
+    def column_expression(self, column: Any) -> Any:
+        return self._handle_encrypted_data(column)
+
+    def _handle_encrypted_data(self, column: Any) -> str:
+        if self.backend == "pgcrypto":
+            return sql_func.pgp_sym_encrypt(column, self.passphrase)  # type: ignore[return-value]
+        if self.backend == "tink":
+            raise NotImplementedError
+        if self.backend == "cryptography":
+            raise NotImplementedError
+        return None  # type: ignore[unreachable]
