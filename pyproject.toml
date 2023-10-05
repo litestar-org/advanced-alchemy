@@ -247,7 +247,8 @@ warn_unused_ignores = false
 
 [tool.unasyncd]
 add_editors_note = true
-ruff_fix = true
+ruff_fix = false
+transform_docstrings = true
 
 [tool.unasyncd.files]
 "advanced_alchemy/repository/_async.py" = "advanced_alchemy/repository/_sync.py"
@@ -258,9 +259,10 @@ SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
+SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
-"advanced_sqlalchemy.repository.SQLAlchemyAsyncRepository" = "advanced_sqlalchemy.repository.SQLAlchemySyncRepository"
-"advanced_sqlalchemy.repository._async.SQLAlchemyAsyncRepository" = "advanced_sqlalchemy.repository._sync.SQLAlchemySyncRepository"
+"advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 
 [tool.codespell]
