@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from litestar.di import Provide
@@ -63,12 +64,17 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         Args:
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
-        app_config.dependencies.update(
-            {
-                self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
-                self._config.session_dependency_key: Provide(self._config.provide_session, sync_to_thread=False),
-            },
-        )
+        with contextlib.suppress(ImportError):
+            from asyncpg.pgproto import pgproto
+
+            signature_namespace_values.update({"pgproto.UUID": pgproto.UUID})
+            app_config.type_encoders = {pgproto.UUID: str, **(app_config.type_encoders or {})}
+            app_config.dependencies.update(
+                {
+                    self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
+                    self._config.session_dependency_key: Provide(self._config.provide_session, sync_to_thread=False),
+                },
+            )
         app_config.before_send.append(self._config.before_send_handler)
         app_config.on_startup.insert(0, self._config.update_app_state)
         app_config.on_shutdown.append(self._config.on_shutdown)
