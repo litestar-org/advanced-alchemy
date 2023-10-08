@@ -14,7 +14,7 @@ from sqlalchemy import Engine, Table, insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
-from advanced_alchemy import SQLAlchemyAsyncRepository, base
+from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
 from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -42,21 +42,27 @@ TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
 
 AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
 AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
+AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor]
 
 AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
 RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
+RuleService = SQLAlchemyAsyncRepositoryService[AnyRule]
 
 AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
 BookRepository = SQLAlchemyAsyncRepository[AnyBook]
+BookService = SQLAlchemyAsyncRepositoryService[AnyBook]
 
 AnyTag = Union[models_uuid.UUIDTag, models_bigint.BigIntTag]
 TagRepository = SQLAlchemyAsyncRepository[AnyTag]
+TagService = SQLAlchemyAsyncRepositoryService[AnyTag]
 
 AnyItem = Union[models_uuid.UUIDItem, models_bigint.BigIntItem]
 ItemRepository = SQLAlchemyAsyncRepository[AnyItem]
+ItemService = SQLAlchemyAsyncRepositoryService[AnyItem]
 
 AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]
 ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
+ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
 
 RawRecordData = List[Dict[str, Any]]
 
@@ -511,6 +517,16 @@ def author_repo(any_session: AsyncSession | Session, repository_module: Any) -> 
 
 
 @pytest.fixture()
+def author_service(any_session: AsyncSession | Session, repository_module: Any) -> AuthorService:
+    """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
+    if isinstance(any_session, AsyncSession):
+        repo = repository_module.AuthorAsyncService(session=any_session)
+    else:
+        repo = repository_module.AuthorSyncService(session=any_session)
+    return cast(AuthorService, repo)
+
+
+@pytest.fixture()
 def rule_repo(any_session: AsyncSession | Session, repository_module: Any) -> RuleRepository:
     """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
     if isinstance(any_session, AsyncSession):
@@ -521,6 +537,16 @@ def rule_repo(any_session: AsyncSession | Session, repository_module: Any) -> Ru
 
 
 @pytest.fixture()
+def rule_service(any_session: AsyncSession | Session, repository_module: Any) -> RuleService:
+    """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
+    if isinstance(any_session, AsyncSession):
+        repo = repository_module.RuleAsyncService(session=any_session)
+    else:
+        repo = repository_module.RuleSyncService(session=any_session)
+    return cast(RuleService, repo)
+
+
+@pytest.fixture()
 def book_repo(any_session: AsyncSession | Session, repository_module: Any) -> BookRepository:
     """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
     if isinstance(any_session, AsyncSession):
@@ -528,6 +554,16 @@ def book_repo(any_session: AsyncSession | Session, repository_module: Any) -> Bo
     else:
         repo = repository_module.BookSyncRepository(session=any_session)
     return cast(BookRepository, repo)
+
+
+@pytest.fixture()
+def book_service(any_session: AsyncSession | Session, repository_module: Any) -> BookService:
+    """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
+    if isinstance(any_session, AsyncSession):
+        repo = repository_module.BookAsyncService(session=any_session)
+    else:
+        repo = repository_module.BookSyncService(session=any_session)
+    return cast(BookService, repo)
 
 
 @pytest.fixture()
@@ -542,6 +578,16 @@ def tag_repo(any_session: AsyncSession | Session, repository_module: Any) -> Ite
 
 
 @pytest.fixture()
+def tag_service(any_session: AsyncSession | Session, repository_module: Any) -> TagService:
+    """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
+    if isinstance(any_session, AsyncSession):
+        repo = repository_module.TagAsyncService(session=any_session)
+    else:
+        repo = repository_module.TagSyncService(session=any_session)
+    return cast(TagService, repo)
+
+
+@pytest.fixture()
 def item_repo(any_session: AsyncSession | Session, repository_module: Any) -> ItemRepository:
     """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
     if isinstance(any_session, AsyncSession):
@@ -550,6 +596,16 @@ def item_repo(any_session: AsyncSession | Session, repository_module: Any) -> It
         repo = repository_module.ItemSyncRepository(session=any_session)
 
     return cast(ItemRepository, repo)
+
+
+@pytest.fixture()
+def item_service(any_session: AsyncSession | Session, repository_module: Any) -> ItemService:
+    """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
+    if isinstance(any_session, AsyncSession):
+        repo = repository_module.ItemAsyncService(session=any_session)
+    else:
+        repo = repository_module.ItemSyncService(session=any_session)
+    return cast(ItemService, repo)
 
 
 @pytest.fixture()
@@ -619,6 +675,7 @@ async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_rep
 async def test_repo_list_and_count_method_with_filters(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
+    author_service: AuthorService,
 ) -> None:
     """Test SQLAlchemy list with count and filters in asyncpg.
 
@@ -661,6 +718,7 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 async def test_repo_created_updated(
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
@@ -684,6 +742,7 @@ async def test_repo_created_updated(
 async def test_repo_list_method(
     raw_authors_uuid: RawRecordData,
     author_repo: AuthorRepository,
+    author_service: AuthorService,
 ) -> None:
     exp_count = len(raw_authors_uuid)
     collection = await maybe_async(author_repo.list())
@@ -706,6 +765,7 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
 async def test_repo_add_method(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
@@ -721,6 +781,7 @@ async def test_repo_add_method(
 async def test_repo_add_many_method(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 2
@@ -761,6 +822,7 @@ async def test_repo_exists_method(author_repo: AuthorRepository, first_author_id
 async def test_repo_exists_method_with_filters(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     first_author_id: Any,
 ) -> None:
     exists = await maybe_async(
@@ -840,6 +902,7 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
 
 async def test_repo_upsert_method(
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     first_author_id: Any,
     author_model: AuthorModel,
     new_pk_id: Any,
@@ -862,6 +925,7 @@ async def test_repo_upsert_method(
 
 async def test_repo_upsert_many_method(
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -967,6 +1031,7 @@ async def test_repo_filter_order_by(author_repo: AuthorRepository) -> None:
 
 async def test_repo_filter_collection(
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     existing_author_ids: Generator[Any, None, None],
 ) -> None:
     first_author_id = next(existing_author_ids)
@@ -980,6 +1045,7 @@ async def test_repo_filter_collection(
 
 async def test_repo_filter_not_in_collection(
     author_repo: AuthorRepository,
+    author_service: AuthorService,
     existing_author_ids: Generator[Any, None, None],
 ) -> None:
     first_author_id = next(existing_author_ids)
@@ -996,6 +1062,7 @@ async def test_repo_filter_not_in_collection(
 async def test_repo_json_methods(
     raw_rules_uuid: RawRecordData,
     rule_repo: RuleRepository,
+    rule_service: RuleService,
     rule_model: RuleModel,
 ) -> None:
     if rule_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -1080,3 +1147,22 @@ async def test_lazy_load(
 async def test_repo_health_check(author_repo: AuthorRepository) -> None:
     healthy = await maybe_async(author_repo.check_health(author_repo.session))
     assert healthy
+
+
+# service tests
+async def test_service_filter_search(author_service: AuthorService) -> None:
+    existing_obj = await maybe_async(
+        author_service.list(SearchFilter(field_name="name", value="gath", ignore_case=False)),
+    )
+    assert existing_obj[0].name == "Agatha Christie"
+    existing_obj = await maybe_async(
+        author_service.list(SearchFilter(field_name="name", value="GATH", ignore_case=False)),
+    )
+    # sqlite & mysql are case insensitive by default with a `LIKE`
+    dialect = author_service.session.bind.dialect.name if author_service.session.bind else "default"
+    expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 0
+    assert len(existing_obj) == expected_objs
+    existing_obj = await maybe_async(
+        author_service.list(SearchFilter(field_name="name", value="GATH", ignore_case=True)),
+    )
+    assert existing_obj[0].name == "Agatha Christie"
