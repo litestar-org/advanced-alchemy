@@ -53,11 +53,11 @@ jobs:
             /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
             /usr/lib/jvm || true
           sudo apt-get autoremove -y \
-          && apt-get clean -y \
-          && rm -rf /root/.cache \
-          && rm -rf /var/apt/lists/* \
-          && rm -rf /var/cache/apt/* \
-          && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+          && sudo apt-get clean -y \
+          && sudo rm -rf /root/.cache \
+          && sudo rm -rf /var/apt/lists/* \
+          && sudo rm -rf /var/cache/apt/* \
+          && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
       - uses: pdm-project/setup-pdm@v3
         name: Set up PDM
