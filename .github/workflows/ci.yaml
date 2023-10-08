@@ -52,22 +52,12 @@ jobs:
             /usr/share/dotnet /usr/local/lib/android /opt/ghc \
             /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
             /usr/lib/jvm || true
-          sudo apt-get purge aria2 ansible azure-cli shellcheck rpm xorriso zsync \
-            esl-erlang firefox gfortran-8 gfortran-9 google-chrome-stable \
-            google-cloud-sdk imagemagick \
-            libmagickcore-dev libmagickwand-dev libmagic-dev ant ant-optional kubectl \
-            mercurial apt-transport-https mono-complete yarn chrpath libssl-dev libxft-dev \
-            libfreetype6 libfreetype6-dev libfontconfig1 libfontconfig1-dev \
-            snmp pollinate powershell ruby-full \
-            sphinxsearch subversion mongodb-org azure-cli microsoft-edge-stable \
-            -y -f >/dev/null 2>&1
-          sudo apt-get purge google-cloud-sdk -f -y >/dev/null 2>&1
-          sudo apt-get purge microsoft-edge-stable -f -y >/dev/null 2>&1 || true
-          sudo apt-get purge microsoft-edge-stable -f -y >/dev/null 2>&1 || true
-          sudo apt-get purge '~n ^php' -f -y >/dev/null 2>&1
-          sudo apt-get purge '~n ^dotnet' -f -y >/dev/null 2>&1
-          sudo apt-get autoremove -y >/dev/null 2>&1
-          sudo apt-get autoclean -y >/dev/null 2>&1
+          sudo apt-get autoremove -y \
+          && apt-get clean -y \
+          && rm -rf /root/.cache \
+          && rm -rf /var/apt/lists/* \
+          && rm -rf /var/cache/apt/* \
+          && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
       - uses: pdm-project/setup-pdm@v3
         name: Set up PDM
