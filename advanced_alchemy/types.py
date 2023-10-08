@@ -170,7 +170,7 @@ class DateTimeUTC(TypeDecorator):
 BigIntIdentity = BigInteger().with_variant(Integer, "sqlite")
 """A ``BigInteger`` variant that reverts to an ``Integer`` for unsupported variants."""
 
-JsonB = _JSON().with_variant(PG_JSONB, "postgresql").with_variant(ORA_JSONB, "oracle")
+JsonB = _JSON().with_variant(PG_JSONB, "postgresql", "cockroachdb").with_variant(ORA_JSONB, "oracle")
 """A JSON type that uses  native ``JSONB`` where possible and ``Binary`` or ``Blob`` as
 an alternative.
 """
