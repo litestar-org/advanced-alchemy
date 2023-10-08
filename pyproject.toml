@@ -110,6 +110,7 @@ test = [
   "pytest-mock>=3.11.1",
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
+  "pytz",
 ]
 
 [tool.pytest.ini_options]
