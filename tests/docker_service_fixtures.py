@@ -287,16 +287,13 @@ async def mssql_service(docker_services: DockerServiceRegistry) -> None:
 
 async def cockroachdb_responsive(host: str) -> bool:
     try:
-        conn = psycopg.connect(
-            dsn="postgresql://root@localhost:26257/defaultdb?sslmode=disable",
-        )
+        with psycopg.connect("postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable") as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("select 1 as is_available")
+                resp = cursor.fetchone()
+                return resp[0] == 1  # type: ignore
     except Exception:
         return False
-
-    try:
-        return (conn.fetchrow("SELECT 1"))[0] == 1  # type: ignore
-    finally:
-        conn.close()
 
 
 @pytest.fixture()

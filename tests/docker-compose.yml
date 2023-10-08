@@ -70,7 +70,7 @@ services:
       MSSQL_TCP_PORT: 1433
   cockroachdb:
     image: cockroachdb/cockroach:latest-v23.1
-    command: start-single-node --insecure --store=attrs=ssd,path=/var/lib/cockroach/
+    command: start-single-node --insecure
     restart: "no"
     expose:
       - "8080"
