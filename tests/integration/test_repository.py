@@ -1327,7 +1327,7 @@ async def test_service_exists_method(author_service: AuthorService, first_author
 async def test_service_update_method(author_service: AuthorService, first_author_id: Any) -> None:
     obj = await maybe_async(author_service.get(first_author_id))
     obj.name = "Updated Name2"
-    updated_obj = await maybe_async(author_service.update(obj))
+    updated_obj = await maybe_async(author_service.update(item_id=first_author_id, data=obj))
     assert updated_obj.name == obj.name
 
 
