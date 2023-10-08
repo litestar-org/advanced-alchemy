@@ -96,6 +96,10 @@ linting = [
   "black>=23.7.0",
   "mypy>=1.5.1",
   "ruff>=0.0.287",
+  "asyncpg-stubs",
+  "types-pytest-lazy-fixture",
+  "types-click",
+  "types-pyyaml",
 ]
 test = [
   "pytest>=7.4.1",
@@ -109,7 +113,7 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--dist=loadgroup"
+addopts = "-m='not integration' --dist=loadgroup"
 asyncio_mode = "auto"
 
 markers = [

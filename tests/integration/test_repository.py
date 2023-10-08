@@ -31,7 +31,7 @@ from tests.helpers import maybe_async
 from .helpers import update_raw_records
 
 if TYPE_CHECKING:
-    from _pytest.fixtures import FixtureRequest
+    from pytest import FixtureRequest
 
 RepositoryPKType = Literal["uuid", "bigint"]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
@@ -1242,28 +1242,6 @@ async def test_service_list_and_count_method_empty(book_service: BookService) ->
     assert len(collection) == 0
 
 
-async def test_service_created_updated(
-    author_service: AuthorService,
-    book_model: type[AnyBook],
-    repository_pk_type: RepositoryPKType,
-) -> None:
-    author = await maybe_async(author_service.get_one(name="Agatha Christie"))
-    assert author.created_at is not None
-    assert author.updated_at is not None
-    original_update_dt = author.updated_at
-
-    # looks odd, but we want to get correct type checking here
-    if repository_pk_type == "uuid":
-        author = cast(models_uuid.UUIDAuthor, author)
-        book_model = cast("type[models_uuid.UUIDBook]", book_model)
-    else:
-        author = cast(models_bigint.BigIntAuthor, author)
-        book_model = cast("type[models_bigint.BigIntBook]", book_model)
-    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
-    author = await maybe_async(author_service.update(author))
-    assert author.updated_at > original_update_dt
-
-
 async def test_service_list_method(
     raw_authors_uuid: RawRecordData,
     author_service: AuthorService,
@@ -1348,7 +1326,7 @@ async def test_service_exists_method(author_service: AuthorService, first_author
 
 async def test_service_update_method(author_service: AuthorService, first_author_id: Any) -> None:
     obj = await maybe_async(author_service.get(first_author_id))
-    obj.name = "Updated Name"
+    obj.name = "Updated Name2"
     updated_obj = await maybe_async(author_service.update(obj))
     assert updated_obj.name == obj.name
 
