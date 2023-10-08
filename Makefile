@@ -118,7 +118,7 @@ test-mssql:
 
 .PHONY: test-all-databases
 test-all-databases:
-	$(ENV_PREFIX)pytest tests -m='integration and integration'
+	$(ENV_PREFIX)pytest tests -m='integration'
 
 .PHONY: check-all
 check-all: lint test coverage 						## Run all linting, tests, and coverage checks
