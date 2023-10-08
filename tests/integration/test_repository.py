@@ -675,7 +675,6 @@ async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_rep
 async def test_repo_list_and_count_method_with_filters(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
-    author_service: AuthorService,
 ) -> None:
     """Test SQLAlchemy list with count and filters in asyncpg.
 
@@ -718,7 +717,6 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 async def test_repo_created_updated(
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
@@ -742,7 +740,6 @@ async def test_repo_created_updated(
 async def test_repo_list_method(
     raw_authors_uuid: RawRecordData,
     author_repo: AuthorRepository,
-    author_service: AuthorService,
 ) -> None:
     exp_count = len(raw_authors_uuid)
     collection = await maybe_async(author_repo.list())
@@ -765,7 +762,6 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
 async def test_repo_add_method(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
@@ -781,7 +777,6 @@ async def test_repo_add_method(
 async def test_repo_add_many_method(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 2
@@ -822,7 +817,6 @@ async def test_repo_exists_method(author_repo: AuthorRepository, first_author_id
 async def test_repo_exists_method_with_filters(
     raw_authors: RawRecordData,
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     first_author_id: Any,
 ) -> None:
     exists = await maybe_async(
@@ -902,7 +896,6 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
 
 async def test_repo_upsert_method(
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     first_author_id: Any,
     author_model: AuthorModel,
     new_pk_id: Any,
@@ -925,7 +918,6 @@ async def test_repo_upsert_method(
 
 async def test_repo_upsert_many_method(
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -1031,7 +1023,6 @@ async def test_repo_filter_order_by(author_repo: AuthorRepository) -> None:
 
 async def test_repo_filter_collection(
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     existing_author_ids: Generator[Any, None, None],
 ) -> None:
     first_author_id = next(existing_author_ids)
@@ -1045,7 +1036,6 @@ async def test_repo_filter_collection(
 
 async def test_repo_filter_not_in_collection(
     author_repo: AuthorRepository,
-    author_service: AuthorService,
     existing_author_ids: Generator[Any, None, None],
 ) -> None:
     first_author_id = next(existing_author_ids)
@@ -1159,10 +1149,306 @@ async def test_service_filter_search(author_service: AuthorService) -> None:
         author_service.list(SearchFilter(field_name="name", value="GATH", ignore_case=False)),
     )
     # sqlite & mysql are case insensitive by default with a `LIKE`
-    dialect = author_service.session.bind.dialect.name if author_service.session.bind else "default"
+    dialect = (
+        author_service.repository.session.bind.dialect.name if author_service.repository.session.bind else "default"
+    )
     expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 0
     assert len(existing_obj) == expected_objs
     existing_obj = await maybe_async(
         author_service.list(SearchFilter(field_name="name", value="GATH", ignore_case=True)),
     )
     assert existing_obj[0].name == "Agatha Christie"
+
+
+async def test_service_count_method(author_service: AuthorService) -> None:
+    """Test SQLAlchemy count.
+
+    Args:
+        author_service: The author mock repository
+    """
+    assert await maybe_async(author_service.count()) == 2
+
+
+async def test_service_count_method_with_filters(raw_authors: RawRecordData, author_service: AuthorService) -> None:
+    """Test SQLAlchemy count with filters.
+
+    Args:
+        author_service: The author mock repository
+    """
+    assert (
+        await maybe_async(
+            author_service.count(
+                author_service.repository.model_type.name == raw_authors[0]["name"],
+            ),
+        )
+        == 1
+    )
+
+
+async def test_service_list_and_count_method(raw_authors: RawRecordData, author_service: AuthorService) -> None:
+    """Test SQLAlchemy list with count in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_service: The author mock repository
+    """
+    exp_count = len(raw_authors)
+    collection, count = await maybe_async(author_service.list_and_count())
+    assert exp_count == count
+    assert isinstance(collection, list)
+    assert len(collection) == exp_count
+
+
+async def test_service_list_and_count_method_with_filters(
+    raw_authors: RawRecordData,
+    author_service: AuthorService,
+) -> None:
+    """Test SQLAlchemy list with count and filters in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_service: The author mock repository
+    """
+    exp_name = raw_authors[0]["name"]
+    exp_id = raw_authors[0]["id"]
+    collection, count = await maybe_async(
+        author_service.list_and_count(author_service.repository.model_type.name == exp_name),
+    )
+    assert count == 1
+    assert isinstance(collection, list)
+    assert len(collection) == 1
+    assert collection[0].id == exp_id
+    assert collection[0].name == exp_name
+
+
+async def test_service_list_and_count_basic_method(raw_authors: RawRecordData, author_service: AuthorService) -> None:
+    """Test SQLAlchemy basic list with count in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_service: The author mock repository
+    """
+    exp_count = len(raw_authors)
+    collection, count = await maybe_async(author_service.list_and_count(force_basic_query_mode=True))
+    assert exp_count == count
+    assert isinstance(collection, list)
+    assert len(collection) == exp_count
+
+
+async def test_service_list_and_count_method_empty(book_service: BookService) -> None:
+    collection, count = await maybe_async(book_service.list_and_count())
+    assert count == 0
+    assert isinstance(collection, list)
+    assert len(collection) == 0
+
+
+async def test_service_created_updated(
+    author_service: AuthorService,
+    book_model: type[AnyBook],
+    repository_pk_type: RepositoryPKType,
+) -> None:
+    author = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    assert author.created_at is not None
+    assert author.updated_at is not None
+    original_update_dt = author.updated_at
+
+    # looks odd, but we want to get correct type checking here
+    if repository_pk_type == "uuid":
+        author = cast(models_uuid.UUIDAuthor, author)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+    else:
+        author = cast(models_bigint.BigIntAuthor, author)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
+    author = await maybe_async(author_service.update(author))
+    assert author.updated_at > original_update_dt
+
+
+async def test_service_list_method(
+    raw_authors_uuid: RawRecordData,
+    author_service: AuthorService,
+) -> None:
+    exp_count = len(raw_authors_uuid)
+    collection = await maybe_async(author_service.list())
+    assert isinstance(collection, list)
+    assert len(collection) == exp_count
+
+
+async def test_service_list_method_with_filters(raw_authors: RawRecordData, author_service: AuthorService) -> None:
+    exp_name = raw_authors[0]["name"]
+    exp_id = raw_authors[0]["id"]
+    collection = await maybe_async(
+        author_service.list(
+            sqlalchemy.and_(
+                author_service.repository.model_type.id == exp_id,
+                author_service.repository.model_type.name == exp_name,
+            ),
+        ),
+    )
+    assert isinstance(collection, list)
+    assert len(collection) == 1
+    assert collection[0].id == exp_id
+    assert collection[0].name == exp_name
+
+
+async def test_service_create_method(
+    raw_authors: RawRecordData,
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    exp_count = len(raw_authors) + 1
+    new_author = author_model(name="Testing", dob=datetime.now().date())
+    obj = await maybe_async(author_service.create(new_author))
+    count = await maybe_async(author_service.count())
+    assert exp_count == count
+    assert isinstance(obj, author_model)
+    assert new_author.name == obj.name
+    assert obj.id is not None
+
+
+async def test_service_create_many_method(
+    raw_authors: RawRecordData,
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    exp_count = len(raw_authors) + 2
+    objs = await maybe_async(
+        author_service.create_many(
+            [
+                author_model(name="Testing 2", dob=datetime.now().date()),
+                author_model(name="Cody", dob=datetime.now().date()),
+            ],
+        ),
+    )
+    count = await maybe_async(author_service.count())
+    assert exp_count == count
+    assert isinstance(objs, list)
+    assert len(objs) == 2
+    for obj in objs:
+        assert obj.id is not None
+        assert obj.name in {"Testing 2", "Cody"}
+
+
+async def test_service_update_many_method(author_service: AuthorService) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip("Skipped on emulator")
+
+    objs = await maybe_async(author_service.list())
+    for idx, obj in enumerate(objs):
+        obj.name = f"Update {idx}"
+    objs = await maybe_async(author_service.update_many(list(objs)))
+    for obj in objs:
+        assert obj.name.startswith("Update")
+
+
+async def test_service_exists_method(author_service: AuthorService, first_author_id: Any) -> None:
+    exists = await maybe_async(author_service.exists(id=first_author_id))
+    assert exists
+
+
+async def test_service_update_method(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    obj.name = "Updated Name"
+    updated_obj = await maybe_async(author_service.update(obj))
+    assert updated_obj.name == obj.name
+
+
+async def test_service_delete_method(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.delete(first_author_id))
+    assert obj.id == first_author_id
+
+
+async def test_service_delete_many_method(author_service: AuthorService, author_model: AuthorModel) -> None:
+    data_to_insert = [author_model(name="author name %d" % chunk) for chunk in range(2000)]
+    _ = await maybe_async(author_service.create_many(data_to_insert))
+    all_objs = await maybe_async(author_service.list())
+    ids_to_delete = [existing_obj.id for existing_obj in all_objs]
+    objs = await maybe_async(author_service.delete_many(ids_to_delete))
+    await maybe_async(author_service.repository.session.commit())
+    assert len(objs) > 0
+    data, count = await maybe_async(author_service.list_and_count())
+    assert data == []
+    assert count == 0
+
+
+async def test_service_get_method(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    assert obj.name == "Agatha Christie"
+
+
+async def test_service_get_one_or_none_method(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get_one_or_none(id=first_author_id))
+    assert obj is not None
+    assert obj.name == "Agatha Christie"
+    none_obj = await maybe_async(author_service.get_one_or_none(name="I don't exist"))
+    assert none_obj is None
+
+
+async def test_service_get_one_method(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get_one(id=first_author_id))
+    assert obj is not None
+    assert obj.name == "Agatha Christie"
+    with pytest.raises(RepositoryError):
+        _ = await author_service.get_one(name="I don't exist")
+
+
+async def test_service_get_or_upsert_method(author_service: AuthorService, first_author_id: Any) -> None:
+    existing_obj, existing_created = await maybe_async(author_service.get_or_upsert(name="Agatha Christie"))
+    assert existing_obj.id == first_author_id
+    assert existing_created is False
+    new_obj, new_created = await maybe_async(author_service.get_or_upsert(name="New Author"))
+    assert new_obj.id is not None
+    assert new_obj.name == "New Author"
+    assert new_created
+
+
+async def test_service_upsert_method(
+    author_service: AuthorService,
+    first_author_id: Any,
+    author_model: AuthorModel,
+    new_pk_id: Any,
+) -> None:
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_obj = await maybe_async(author_service.upsert(item_id=first_author_id, data=existing_obj))
+    assert upsert_update_obj.id == first_author_id
+    assert upsert_update_obj.name == "Agatha C."
+
+    upsert_insert_obj = await maybe_async(author_service.upsert(author_model(name="An Author")))
+    assert upsert_insert_obj.id is not None
+    assert upsert_insert_obj.name == "An Author"
+
+    # ensures that it still works even if the ID is added before insert
+    upsert2_insert_obj = await maybe_async(
+        author_service.upsert(author_model(item_id=new_pk_id, name="Another Author")),
+    )
+    assert upsert2_insert_obj.id is not None
+    assert upsert2_insert_obj.name == "Another Author"
+
+
+async def test_service_upsert_many_method(
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_objs = await maybe_async(
+        author_service.upsert_many(
+            [
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+        ),
+    )
+    assert len(upsert_update_objs) == 3
+    assert upsert_update_objs[0].id is not None
+    assert upsert_update_objs[0].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[1].id is not None
+    assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[2].id is not None
+    assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")

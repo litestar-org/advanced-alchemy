@@ -282,8 +282,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
 
     def update(
         self,
-        item_id: Any,
         data: ModelT | dict[str, Any],
+        item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -294,8 +294,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         """Wrap repository update operation.
 
         Args:
-            item_id: Identifier of item to be updated.
             data: Representation to be updated.
+            item_id: Identifier of item to be updated.
             attribute_names: an iterable of attribute names to pass into the ``update``
                 method.
             with_for_update: indicating FOR UPDATE should be used, or may be a
@@ -348,8 +348,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
 
     def upsert(
         self,
-        item_id: Any,
         data: ModelT | dict[str, Any],
+        item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
@@ -359,10 +359,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         """Wrap repository upsert operation.
 
         Args:
-            item_id: Identifier of the object for upsert.
             data: Instance to update existing, or be created. Identifier used to determine if an
                 existing instance exists is the value of an attribute on `data` named as value of
                 `self.id_attribute`.
+            item_id: Identifier of the object for upsert.
             attribute_names: an iterable of attribute names to pass into the ``update`` method.
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
