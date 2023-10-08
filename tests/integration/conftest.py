@@ -331,7 +331,7 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
 async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) -> AsyncEngine:
     """Cockroach DB async engine instance for end-to-end testing."""
     return create_async_engine(
-        url="cockroachdb+asyncpg://root@localhost:26257/defaultdb?sslmode=disable",
+        url="cockroachdb+asyncpg://root@localhost:26257/defaultdb",
         poolclass=NullPool,
     )
 
