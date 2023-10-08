@@ -1414,13 +1414,13 @@ async def test_service_upsert_method(
     assert upsert_update_obj.id == first_author_id
     assert upsert_update_obj.name == "Agatha C."
 
-    upsert_insert_obj = await maybe_async(author_service.upsert(author_model(name="An Author")))
+    upsert_insert_obj = await maybe_async(author_service.upsert(data=author_model(name="An Author")))
     assert upsert_insert_obj.id is not None
     assert upsert_insert_obj.name == "An Author"
 
     # ensures that it still works even if the ID is added before insert
     upsert2_insert_obj = await maybe_async(
-        author_service.upsert(author_model(item_id=new_pk_id, name="Another Author")),
+        author_service.upsert(author_model(id=new_pk_id, name="Another Author")),
     )
     assert upsert2_insert_obj.id is not None
     assert upsert2_insert_obj.name == "Another Author"
