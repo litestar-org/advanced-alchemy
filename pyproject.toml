@@ -41,7 +41,7 @@ license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.2.2"
+version = "0.3.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
@@ -96,6 +96,10 @@ linting = [
   "black>=23.7.0",
   "mypy>=1.5.1",
   "ruff>=0.0.287",
+  "asyncpg-stubs",
+  "types-pytest-lazy-fixture",
+  "types-click",
+  "types-pyyaml",
 ]
 test = [
   "pytest>=7.4.1",
@@ -106,6 +110,7 @@ test = [
   "pytest-mock>=3.11.1",
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
+  "pytz",
 ]
 
 [tool.pytest.ini_options]
@@ -248,12 +253,21 @@ warn_unused_ignores = false
 [tool.unasyncd]
 add_editors_note = true
 ruff_fix = true
+transform_docstrings = true
 
 [tool.unasyncd.files]
 "advanced_alchemy/repository/_async.py" = "advanced_alchemy/repository/_sync.py"
+"advanced_alchemy/service/_async.py" = "advanced_alchemy/service/_sync.py"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+"sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
+
+[tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
+SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
+SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
+"advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 
 [tool.codespell]

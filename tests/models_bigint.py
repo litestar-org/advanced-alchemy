@@ -7,7 +7,12 @@ from typing import List
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy import (
+    SQLAlchemyAsyncRepository,
+    SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncRepository,
+    SQLAlchemySyncRepositoryService,
+)
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 
 
@@ -163,3 +168,90 @@ class ItemSyncRepository(SQLAlchemySyncRepository[BigIntItem]):
     """Item repository."""
 
     model_type = BigIntItem
+
+
+# Services
+
+
+class RuleAsyncService(SQLAlchemyAsyncRepositoryService[BigIntRule]):
+    """Rule repository."""
+
+    repository_type = RuleAsyncRepository
+
+
+class AuthorAsyncService(SQLAlchemyAsyncRepositoryService[BigIntAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorAsyncRepository
+
+
+class BookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntBook]):
+    """Book repository."""
+
+    repository_type = BookAsyncRepository
+
+
+class EventLogAsyncService(SQLAlchemyAsyncRepositoryService[BigIntEventLog]):
+    """Event log repository."""
+
+    repository_type = EventLogAsyncRepository
+
+
+class ModelWithFetchedValueAsyncService(SQLAlchemyAsyncRepositoryService[BigIntModelWithFetchedValue]):
+    """BigIntModelWithFetchedValue repository."""
+
+    repository_type = ModelWithFetchedValueAsyncRepository
+
+
+class TagAsyncService(SQLAlchemyAsyncRepositoryService[BigIntTag]):
+    """Tag repository."""
+
+    repository_type = TagAsyncRepository
+
+
+class ItemAsyncService(SQLAlchemyAsyncRepositoryService[BigIntItem]):
+    """Item repository."""
+
+    repository_type = ItemAsyncRepository
+
+
+class RuleSyncService(SQLAlchemySyncRepositoryService[BigIntRule]):
+    """Rule repository."""
+
+    repository_type = RuleSyncRepository
+
+
+class AuthorSyncService(SQLAlchemySyncRepositoryService[BigIntAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorSyncRepository
+
+
+class BookSyncService(SQLAlchemySyncRepositoryService[BigIntBook]):
+    """Book repository."""
+
+    repository_type = BookSyncRepository
+
+
+class EventLogSyncService(SQLAlchemySyncRepositoryService[BigIntEventLog]):
+    """Event log repository."""
+
+    repository_type = EventLogSyncRepository
+
+
+class ModelWithFetchedValueSyncService(SQLAlchemySyncRepositoryService[BigIntModelWithFetchedValue]):
+    """BigIntModelWithFetchedValue repository."""
+
+    repository_type = ModelWithFetchedValueSyncRepository
+
+
+class TagSyncService(SQLAlchemySyncRepositoryService[BigIntTag]):
+    """Tag repository."""
+
+    repository_type = TagSyncRepository
+
+
+class ItemSyncService(SQLAlchemySyncRepositoryService[BigIntItem]):
+    """Item repository."""
+
+    repository_type = ItemSyncRepository

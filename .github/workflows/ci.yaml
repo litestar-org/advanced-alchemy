@@ -45,6 +45,19 @@ jobs:
 
       - name: Install Microsoft ODBC Drivers
         run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
+      - name: Free additional space
+        run: |
+          sudo docker rmi $(docker image ls -aq) >/dev/null 2>&1 || true
+          sudo rm -rf \
+            /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
+            /usr/lib/jvm || true
+          sudo apt-get autoremove -y \
+          && sudo apt-get clean -y \
+          && sudo rm -rf /root/.cache \
+          && sudo rm -rf /var/apt/lists/* \
+          && sudo rm -rf /var/cache/apt/* \
+          && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
       - uses: pdm-project/setup-pdm@v3
         name: Set up PDM
