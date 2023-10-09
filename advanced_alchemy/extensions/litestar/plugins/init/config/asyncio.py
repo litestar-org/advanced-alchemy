@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, cast
 
 from litestar.constants import HTTP_RESPONSE_START
-from litestar.status_codes import HTTP_200_OK, HTTP_300_MULTIPLE_CHOICES
+from litestar.status_codes import HTTP_200_OK, HTTP_300_MULTIPLE_CHOICES, HTTP_302_FOUND, HTTP_303_SEE_OTHER
 from litestar.utils import delete_litestar_scope_state, get_litestar_scope_state, set_litestar_scope_state
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -62,7 +62,9 @@ async def autocommit_before_send_handler(message: Message, scope: Scope) -> None
     session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
     try:
         if session is not None and message["type"] == HTTP_RESPONSE_START:
-            if HTTP_200_OK <= cast("HTTPResponseStartEvent", message)["status"] < HTTP_300_MULTIPLE_CHOICES:
+            if (
+                HTTP_200_OK <= cast("HTTPResponseStartEvent", message)["status"] < HTTP_300_MULTIPLE_CHOICES
+            ) or message["status"] in {HTTP_302_FOUND, HTTP_303_SEE_OTHER}:
                 await session.commit()
             else:
                 await session.rollback()
