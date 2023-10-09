@@ -58,7 +58,7 @@ async def test_before_send_handler_success_response(create_scope: Callable[..., 
     mock_session.commit.assert_awaited_once()
 
 
-async def test_before_send_handler_error_response(create_scope: Callable[..., Scope]) -> None:
+async def test_before_send_handler_redirect_response(create_scope: Callable[..., Scope]) -> None:
     """Test that the session is committed given a success response."""
     config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
@@ -70,7 +70,27 @@ async def test_before_send_handler_error_response(create_scope: Callable[..., Sc
     set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
-        "status": random.randint(300, 599),
+        "status": random.randint(302, 303),
+        "headers": {},
+    }
+    await autocommit_before_send_handler(http_response_start, http_scope)
+    mock_session.commit.assert_awaited_once()
+
+
+async def test_before_send_handler_error_response(create_scope: Callable[..., Scope]) -> None:
+    """Test that the session is committed given a success response."""
+    config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler=autocommit_before_send_handler,
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
+    mock_session = MagicMock(spec=AsyncSession)
+    http_scope = create_scope(app=app)
+    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    status_codes = [i for i in range(300, 600) if i not in {302, 303}]
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.choice(status_codes),
         "headers": {},
     }
     await autocommit_before_send_handler(http_response_start, http_scope)
