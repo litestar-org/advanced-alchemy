@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, cast
 
 from litestar.constants import HTTP_RESPONSE_START
-from litestar.status_codes import HTTP_200_OK, HTTP_300_MULTIPLE_CHOICES, HTTP_302_FOUND, HTTP_303_SEE_OTHER
 from litestar.utils import delete_litestar_scope_state, get_litestar_scope_state, set_litestar_scope_state
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -16,7 +15,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Coroutine
 
     from litestar import Litestar
     from litestar.datastructures.state import State
@@ -49,29 +48,60 @@ async def default_before_send_handler(message: Message, scope: Scope) -> None:
         delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
 
 
-async def autocommit_before_send_handler(message: Message, scope: Scope) -> None:
-    """Handle commit/rollback, closing and cleaning up sessions before sending.
-
+def auto_commit_handler(
+    commit_on_redirect: bool = False,
+    extra_commit_statuses: set[int] | None = None,
+    extra_rollback_statuses: set[int] | None = None,
+) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
+    """Set up the handler to issue a transactin commit or rollback based on specified status codes
     Args:
-        message: ASGI-``Message``
-        scope: An ASGI-``Scope``
+        commit_on_redirect: issue a commit when the response status is a redirect (3XX)
+        extra_commit_statuses: a set of additional status codes that trigger a commit
+        extra_rollback_statuses: a set of additional status codes that trigger a rollback
 
     Returns:
-        None
+        The handler callable
     """
-    session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
-    try:
-        if session is not None and message["type"] == HTTP_RESPONSE_START:
-            if (
-                HTTP_200_OK <= cast("HTTPResponseStartEvent", message)["status"] < HTTP_300_MULTIPLE_CHOICES
-            ) or message["status"] in {HTTP_302_FOUND, HTTP_303_SEE_OTHER}:
-                await session.commit()
-            else:
-                await session.rollback()
-    finally:
-        if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
-            await session.close()
-            delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
+    if extra_commit_statuses is None:
+        extra_commit_statuses = set()
+
+    if extra_rollback_statuses is None:
+        extra_rollback_statuses = set()
+
+    if len(extra_commit_statuses & extra_rollback_statuses) > 0:
+        msg = "Extra rollback statuses and commit statuses must not share any status codes"
+        raise ValueError(msg)
+
+    async def handler(message: Message, scope: Scope) -> None:
+        """Handle commit/rollback, closing and cleaning up sessions before sending.
+
+        Args:
+            message: ASGI-``Message``
+            scope: An ASGI-``Scope``
+
+        Returns:
+            None
+        """
+        session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+        try:
+            if session is not None and message["type"] == HTTP_RESPONSE_START:
+                commit_range = range(200, 300 if not commit_on_redirect else 400)
+                if (
+                    cast("HTTPResponseStartEvent", message)["status"] in commit_range
+                    or message["status"] in extra_commit_statuses
+                ) and message["status"] not in extra_rollback_statuses:
+                    await session.commit()
+                else:
+                    await session.rollback()
+        finally:
+            if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
+                await session.close()
+                delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
+
+    return handler
+
+
+autocommit_before_send_handler = auto_commit_handler()
 
 
 @dataclass
