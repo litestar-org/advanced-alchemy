@@ -72,6 +72,8 @@ def autocommit_handler(
         msg = "Extra rollback statuses and commit statuses must not share any status codes"
         raise ValueError(msg)
 
+    commit_range = range(200, 300 if not commit_on_redirect else 400)
+
     async def handler(message: Message, scope: Scope) -> None:
         """Handle commit/rollback, closing and cleaning up sessions before sending.
 
@@ -85,7 +87,6 @@ def autocommit_handler(
         session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
         try:
             if session is not None and message["type"] == HTTP_RESPONSE_START:
-                commit_range = range(200, 300 if not commit_on_redirect else 400)
                 if (
                     cast("HTTPResponseStartEvent", message)["status"] in commit_range
                     or message["status"] in extra_commit_statuses
