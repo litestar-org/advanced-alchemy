@@ -48,7 +48,7 @@ async def default_before_send_handler(message: Message, scope: Scope) -> None:
         delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
 
 
-def autocommit_handler(
+def autocommit_handler_maker(
     commit_on_redirect: bool = False,
     extra_commit_statuses: set[int] | None = None,
     extra_rollback_statuses: set[int] | None = None,
@@ -102,7 +102,7 @@ def autocommit_handler(
     return handler
 
 
-autocommit_before_send_handler = autocommit_handler()
+autocommit_before_send_handler = autocommit_handler_maker()
 
 
 @dataclass
