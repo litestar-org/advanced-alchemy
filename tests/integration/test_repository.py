@@ -1033,6 +1033,9 @@ async def test_repo_filter_collection(
     existing_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=[second_author_id])))
     assert existing_obj[0].name == "Leo Tolstoy"
 
+    no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=[])))
+    assert no_obj is None
+
 
 async def test_repo_filter_not_in_collection(
     author_repo: AuthorRepository,
