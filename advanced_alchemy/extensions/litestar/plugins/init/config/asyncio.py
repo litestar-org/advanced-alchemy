@@ -55,9 +55,9 @@ def autocommit_handler_maker(
 ) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
     """Set up the handler to issue a transactin commit or rollback based on specified status codes
     Args:
-        commit_on_redirect: issue a commit when the response status is a redirect (3XX)
-        extra_commit_statuses: a set of additional status codes that trigger a commit
-        extra_rollback_statuses: a set of additional status codes that trigger a rollback
+        commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
+        extra_commit_statuses: A set of additional status codes that trigger a commit
+        extra_rollback_statuses: A set of additional status codes that trigger a rollback
 
     Returns:
         The handler callable
