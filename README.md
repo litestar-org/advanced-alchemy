@@ -81,6 +81,7 @@ session_factory = sessionmaker(engine, expire_on_commit=False)
 
 with session_factory() as db_session:
   repo = UserRepository(session=db_session)
+  # 1) Create multiple users with `add_many`
   bulk_users = [
     {email: 'cody@advanced-alchemy.dev','name': 'Cody'},
     {email: 'janek@advanced-alchemy.dev','name': 'Janek'},

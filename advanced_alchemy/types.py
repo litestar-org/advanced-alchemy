@@ -51,7 +51,7 @@ class GUID(TypeDecorator):
     def process_bind_param(self, value: bytes | str | uuid.UUID | None, dialect: Dialect) -> bytes | str | None:
         if value is None:
             return value
-        if dialect.name in {"postgresql", "duckdb"}:
+        if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
             return str(value)
         value = self.to_uuid(value)
         if value is None:
