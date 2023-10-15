@@ -252,7 +252,6 @@ warn_unused_ignores = false
 
 [tool.unasyncd]
 add_editors_note = true
-ruff_fix = true
 transform_docstrings = true
 
 [tool.unasyncd.files]
