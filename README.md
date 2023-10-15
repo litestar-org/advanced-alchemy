@@ -70,7 +70,7 @@ class User(UUIDBase):
     name: Mapped[str]
 
 class UserRepository(SQLAlchemySyncRepository[USState]):
-    """US State repository."""
+    """User repository."""
 
     model_type = USState
 
