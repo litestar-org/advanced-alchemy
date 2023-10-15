@@ -44,10 +44,18 @@ offering features such as:
 
 ## Usage
 
+### Installation
+
+```shell
+pip install advanced-alchemy
+```
+
 > [!IMPORTANT]\
 > Check out [the installation guide][install-guide] in our official documentation!
 
 ### Repositories
+
+Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD operations on your SQLAlchemy models.
 
 ```python
 from advanced_alchemy.base import UUIDBase
@@ -95,13 +103,17 @@ with session_factory() as db_session:
   print(f"Found {remaining_count} remaining records after delete.")
 ```
 
+For a full standalone example, see the sample [here][standalone-example]
+
 ### Web Frameworks
 
 Advanced Alchemy works with nearly all Python web frameworks. Several helpers for popular libraries are included, and additional PRs to support others are welcomed.
 
 #### Litestar
 
-Advanced Alchemy is the official SQLAlchemy integration for Litsetar. See the full example [here][litestar-example]
+Advanced Alchemy is the official SQLAlchemy integration for Litsetar.
+
+In addition to installed with `pip install advanced-alchemy`, It can be installed installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
 
 ```python
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
@@ -115,9 +127,9 @@ alchemy = SQLAlchemyPlugin(
 app = Litestar(plugins=[alchemy])
 ```
 
-#### FastAPI
+For a full Litestar example, check [here][litestar-example]
 
-See the full example [here][fastapi-example]
+#### FastAPI
 
 ```python
 from fastapi import FastAPI
@@ -130,6 +142,8 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+
+For a full CRUD example, see [here][fastapi-example]
 
 #### Starlette
 
@@ -188,4 +202,5 @@ or the [project-specific GitHub discussions page][project-discussions].
 [project-docs]: https://docs.advanced-alchemy.jolt.rs
 [install-guide]: https://docs.advanced-alchemy.jolt.rs/latest/#installation
 [fastapi-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/fastapi.py
-[litestar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litstar.py
+[litestar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litestar.py
+[standalone-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/standalone.py
