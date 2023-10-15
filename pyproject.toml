@@ -131,7 +131,8 @@ markers = [
   "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
   "duckdb: SQLAlchemy DuckDB (duckdb-engine) Tests",
   "mssql: SQLAlchemy Microsoft SQL Server (pyodbc) Tests",
-  "cockroachdb: SQLAlchemy CockroachDB (psycopg2 & asyncpg) Tests",
+  "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
+  "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]
 
 filterwarnings = [

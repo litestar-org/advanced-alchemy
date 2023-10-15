@@ -40,7 +40,7 @@ class GUID(TypeDecorator):
         self.binary = binary
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
-        if dialect.name in {"postgresql", "duckdb"}:
+        if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
             return dialect.type_descriptor(PG_UUID())
         if dialect.name == "oracle":
             return dialect.type_descriptor(ORA_RAW(16))

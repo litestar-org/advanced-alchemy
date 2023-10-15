@@ -219,9 +219,9 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
             ],
         ),
         pytest.param(
-            "cockroach_engine",
+            "cockroachdb_engine",
             marks=[
-                pytest.mark.psycopg_sync,
+                pytest.mark.cockroachdb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("cockroachdb"),
             ],
@@ -373,7 +373,7 @@ async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) ->
         pytest.param(
             "cockroachdb_async_engine",
             marks=[
-                pytest.mark.psycopg_async,
+                pytest.mark.cockroachdb_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("cockroachdb"),
             ],

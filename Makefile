@@ -116,6 +116,14 @@ test-spanner:
 test-mssql:
 	$(ENV_PREFIX)pytest tests -m='integration and mssql'
 
+.PHONY: test-cockroachdb-sync
+test-cockroachdb-sync:
+	$(ENV_PREFIX)pytest tests -m='integration and cockroachdb_sync'
+
+.PHONY: test-cockroachdb-async
+test-cockroachdb-async:
+	$(ENV_PREFIX)pytest tests -m='integration and cockroachdb_async'
+
 .PHONY: test-all-databases
 test-all-databases:
 	$(ENV_PREFIX)pytest tests -m='integration'
