@@ -69,10 +69,10 @@ class User(UUIDBase):
     email: Mapped[str]
     name: Mapped[str]
 
-class UserRepository(SQLAlchemySyncRepository[USState]):
+class UserRepository(SQLAlchemySyncRepository[User]):
     """User repository."""
 
-    model_type = USState
+    model_type = User
 
 # use any compatible sqlalchemy engine.
 engine = create_engine("duckdb:///:memory:")
