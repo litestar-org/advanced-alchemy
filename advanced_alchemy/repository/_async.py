@@ -1106,6 +1106,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
         if not values:
+            statement += lambda s: s.where(text("1=-1"))
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
         statement += lambda s: s.where(field.in_(values))
