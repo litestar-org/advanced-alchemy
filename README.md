@@ -97,7 +97,7 @@ with session_factory() as db_session:
 
 ### Web Frameworks
 
-Advanced Alchemy works with nearly all Python web frameworks. Several native integrations, and additional PRs to support others are welcomed.
+Advanced Alchemy works with nearly all Python web frameworks. Several helpers for popular libraries are included, and additional PRs to support others are welcomed.
 
 #### Litestar
 
@@ -188,4 +188,4 @@ or the [project-specific GitHub discussions page][project-discussions].
 [project-docs]: https://docs.advanced-alchemy.jolt.rs
 [install-guide]: https://docs.advanced-alchemy.jolt.rs/latest/#installation
 [fastapi-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/fastapi.py
-[litstar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litstar.py
+[litestar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litstar.py
