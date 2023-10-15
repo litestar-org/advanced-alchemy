@@ -40,7 +40,7 @@ class GUID(TypeDecorator):
         self.binary = binary
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
-        if dialect.name in {"postgresql", "duckdb"}:
+        if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
             return dialect.type_descriptor(PG_UUID())
         if dialect.name == "oracle":
             return dialect.type_descriptor(ORA_RAW(16))
@@ -51,7 +51,7 @@ class GUID(TypeDecorator):
     def process_bind_param(self, value: bytes | str | uuid.UUID | None, dialect: Dialect) -> bytes | str | None:
         if value is None:
             return value
-        if dialect.name in {"postgresql", "duckdb"}:
+        if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
             return str(value)
         value = self.to_uuid(value)
         if value is None:
@@ -170,7 +170,7 @@ class DateTimeUTC(TypeDecorator):
 BigIntIdentity = BigInteger().with_variant(Integer, "sqlite")
 """A ``BigInteger`` variant that reverts to an ``Integer`` for unsupported variants."""
 
-JsonB = _JSON().with_variant(PG_JSONB, "postgresql").with_variant(ORA_JSONB, "oracle")
+JsonB = _JSON().with_variant(PG_JSONB, "postgresql", "cockroachdb").with_variant(ORA_JSONB, "oracle")
 """A JSON type that uses  native ``JSONB`` where possible and ``Binary`` or ``Blob`` as
 an alternative.
 """

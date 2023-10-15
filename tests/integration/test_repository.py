@@ -335,6 +335,14 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
                 pytest.mark.xdist_group("mssql"),
             ],
         ),
+        pytest.param(
+            "cockroachdb_engine",
+            marks=[
+                pytest.mark.cockroachdb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
     ],
 )
 def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Engine:
@@ -344,6 +352,8 @@ def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Eng
     engine = cast(Engine, request.getfixturevalue(request.param))
     if engine.dialect.name.startswith("spanner") and repository_pk_type == "bigint":
         pytest.skip(reason="Spanner does not support monotonically increasing primary keys")
+    elif engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
+        pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
     return engine
 
 
@@ -455,6 +465,56 @@ def session(
         finally:
             session.rollback()
             session.close()
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            "aiosqlite_engine",
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "asyncmy_engine",
+            marks=[
+                pytest.mark.asyncmy,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mysql"),
+            ],
+        ),
+        pytest.param(
+            "asyncpg_engine",
+            marks=[
+                pytest.mark.asyncpg,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[
+                pytest.mark.psycopg_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[
+                pytest.mark.cockroachdb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+    ],
+)
+def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> AsyncEngine:
+    async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
+    if async_engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
+        pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
+    return async_engine
 
 
 @pytest.fixture()

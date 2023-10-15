@@ -41,6 +41,7 @@ offering features such as:
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine>)
   - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc>)
+  - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
 
 ## Usage
 
@@ -80,6 +81,7 @@ session_factory = sessionmaker(engine, expire_on_commit=False)
 
 with session_factory() as db_session:
   repo = UserRepository(session=db_session)
+  # 1) Create multiple users with `add_many`
   bulk_users = [
     {email: 'cody@advanced-alchemy.dev','name': 'Cody'},
     {email: 'janek@advanced-alchemy.dev','name': 'Janek'},

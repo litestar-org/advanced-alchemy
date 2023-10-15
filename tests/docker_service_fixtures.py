@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable, Generator
 import asyncmy
 import asyncpg
 import oracledb
+import psycopg
 import pyodbc
 import pytest
 from google.auth.credentials import AnonymousCredentials
@@ -282,3 +283,19 @@ async def mssql_responsive(host: str) -> bool:
 @pytest.fixture()
 async def mssql_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("mssql", timeout=60, pause=1, check=mssql_responsive)
+
+
+async def cockroachdb_responsive(host: str) -> bool:
+    try:
+        with psycopg.connect("postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable") as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("select 1 as is_available")
+                resp = cursor.fetchone()
+                return resp[0] == 1  # type: ignore
+    except Exception:
+        return False
+
+
+@pytest.fixture()
+async def cockroachdb_service(docker_services: DockerServiceRegistry) -> None:
+    await docker_services.start("cockroachdb", timeout=60, pause=1, check=cockroachdb_responsive)
