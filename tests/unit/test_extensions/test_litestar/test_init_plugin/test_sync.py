@@ -15,7 +15,10 @@ from advanced_alchemy.extensions.litestar.plugins import (
     SQLAlchemySyncConfig,
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import SESSION_SCOPE_KEY
-from advanced_alchemy.extensions.litestar.plugins.init.config.sync import autocommit_before_send_handler
+from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
+    autocommit_before_send_handler,
+    autocommit_handler_maker,
+)
 
 if TYPE_CHECKING:
     from typing import Any, Callable
@@ -71,4 +74,64 @@ def test_before_send_handler_error_response(create_scope: Callable[..., Scope]) 
         "headers": {},
     }
     autocommit_before_send_handler(http_response_start, http_scope)
+    mock_session.rollback.assert_called_once()
+
+
+def test_autocommit_handler_maker_redirect_response(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker commits on redirect"""
+    autocommit_redirect_handler = autocommit_handler_maker(commit_on_redirect=True)
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler=autocommit_redirect_handler,
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
+    mock_session = MagicMock(spec=Session)
+    http_scope = create_scope(app=app)
+    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.randint(300, 399),
+        "headers": {},
+    }
+    autocommit_redirect_handler(http_response_start, http_scope)
+    mock_session.commit.assert_called_once()
+
+
+def test_autocommit_handler_maker_commit_statuses(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker commits on explicit statuses"""
+    custom_autocommit_handler = autocommit_handler_maker(extra_commit_statuses={302, 303})
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler=custom_autocommit_handler,
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
+    mock_session = MagicMock(spec=Session)
+    http_scope = create_scope(app=app)
+    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.randint(302, 303),
+        "headers": {},
+    }
+    custom_autocommit_handler(http_response_start, http_scope)
+    mock_session.commit.assert_called_once()
+
+
+def test_autocommit_handler_maker_rollback_statuses(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker rolls back on explicit statuses"""
+    custom_autocommit_handler = autocommit_handler_maker(commit_on_redirect=True, extra_rollback_statuses={307, 308})
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler=custom_autocommit_handler,
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
+    mock_session = MagicMock(spec=Session)
+    http_scope = create_scope(app=app)
+    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.randint(307, 308),
+        "headers": {},
+    }
+    custom_autocommit_handler(http_response_start, http_scope)
     mock_session.rollback.assert_called_once()
