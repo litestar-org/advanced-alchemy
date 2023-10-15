@@ -467,10 +467,54 @@ def session(
             session.close()
 
 
-@pytest.fixture(autouse=True)
-def _async_engine(async_engine: AsyncEngine, repository_pk_type: RepositoryPKType) -> None:
+@pytest.fixture(
+    params=[
+        pytest.param(
+            "aiosqlite_engine",
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "asyncmy_engine",
+            marks=[
+                pytest.mark.asyncmy,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mysql"),
+            ],
+        ),
+        pytest.param(
+            "asyncpg_engine",
+            marks=[
+                pytest.mark.asyncpg,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[
+                pytest.mark.psycopg_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[
+                pytest.mark.cockroachdb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+    ],
+)
+def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> AsyncEngine:
+    async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     if async_engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
         pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
+    return async_engine
 
 
 @pytest.fixture()
