@@ -1033,6 +1033,10 @@ async def test_repo_filter_collection(
     existing_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=[second_author_id])))
     assert existing_obj[0].name == "Leo Tolstoy"
 
+
+async def test_repo_filter_no_obj_collection(
+    author_repo: AuthorRepository,
+) -> None:
     no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=[])))
     assert no_obj is None
 
@@ -1050,6 +1054,13 @@ async def test_repo_filter_not_in_collection(
         author_repo.list(NotInCollectionFilter(field_name="id", values=[second_author_id])),
     )
     assert existing_obj[0].name == "Agatha Christie"
+
+
+async def test_repo_filter_not_in_no_obj_collection(
+    author_repo: AuthorRepository,
+) -> None:
+    existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=[])))
+    assert len(existing_obj) > 0
 
 
 async def test_repo_json_methods(
