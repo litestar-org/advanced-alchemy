@@ -116,7 +116,7 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-m='not integration' --dist=loadgroup"
+addopts = "-m='not integration' --dist=loadgroup -n auto"
 asyncio_mode = "auto"
 
 markers = [
