@@ -467,8 +467,9 @@ def session(
             session.close()
 
 
+@pytest.fixture(autouse=True)
 def _async_engine(async_engine: AsyncEngine, repository_pk_type: RepositoryPKType) -> None:
-    if engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
+    if async_engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
         pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
 
 
