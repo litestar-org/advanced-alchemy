@@ -60,6 +60,7 @@ Advanced Alchemy includes a set of asynchronous and synchronous repository class
 
 ```python
 from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped, Session, sessionmaker
@@ -106,6 +107,62 @@ with session_factory() as db_session:
 ```
 
 For a full standalone example, see the sample [here][standalone-example]
+
+### Services
+
+Advanced Alchemy includes an additional service class to make working with a repository easier. This class is designed to accept data as a dictionary or SQLAlchemy model and it will handle the type conversions for you.
+
+Here's the same example from above but using a service to create the data:
+
+```python
+from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy import SQLAlchemySyncRepository, SQLAlchemyAsyncRepositoryService
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Mapped, sessionmaker
+
+class User(UUIDBase):
+    # you can optionally override the generated table name by manually setting it.
+    __tablename__ = "user_account"  # type: ignore[assignment]
+    email: Mapped[str]
+    name: Mapped[str]
+
+class UserRepository(SQLAlchemySyncRepository[User]):
+    """User repository."""
+
+    model_type = User
+class UserService(SQLAlchemyAsyncRepositoryService[User]):
+    """User repository."""
+
+    repository_type = UserRepository
+
+# use any compatible sqlalchemy engine.
+engine = create_engine("duckdb:///:memory:")
+session_factory = sessionmaker(engine, expire_on_commit=False)
+
+with session_factory() as db_session:
+  service = UserService(session=db_session)
+  # 1) Create multiple users with `add_many`
+  objs = service.create_many([
+    {email: 'cody@advanced-alchemy.dev','name': 'Cody'},
+    {email: 'janek@advanced-alchemy.dev','name': 'Janek'},
+    {email: 'peter@advanced-alchemy.dev','name': 'Peter'},
+    {email: 'jacob@advanced-alchemy.dev','name': 'Jacob'}
+  ])
+  print(f"Created {len(objs)} new objects.")
+
+  # 2) Select paginated data and total row count.  Pass additional filters as kwargs
+  created_objs, total_objs = service.list_and_count(name="Cody", LimitOffset(limit=10, offset=0))
+  print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
+
+  # 3) Let's remove the batch of records selected.
+  deleted_objs = service.delete_many([new_obj.id for new_obj in created_objs])
+  print(f"Removed {len(deleted_objs)} records out of a total of {total_objs}.")
+
+  # 4) Let's count the remaining rows
+  remaining_count = service.count()
+  print(f"Found {remaining_count} remaining records after delete.")
+```
 
 ### Web Frameworks
 
