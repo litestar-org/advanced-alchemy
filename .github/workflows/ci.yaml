@@ -29,6 +29,11 @@ jobs:
       - name: Execute Pre-Commit
         run: pre-commit run --show-diff-on-failure --color=always --all-files
 
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
   test:
     runs-on: ubuntu-latest
     strategy:
