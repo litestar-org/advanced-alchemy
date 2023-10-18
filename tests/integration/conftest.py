@@ -174,6 +174,15 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
     )
 
 
+@pytest.fixture()
+def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
+    """CockroachDB instance for end-to-end testing."""
+    return create_engine(
+        url="cockroachdb://root@localhost:26257/defaultdb?sslmode=disable",
+        poolclass=NullPool,
+    )
+
+
 @pytest.fixture(
     name="engine",
     params=[
@@ -207,6 +216,14 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
                 pytest.mark.psycopg_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_engine",
+            marks=[
+                pytest.mark.cockroachdb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
             ],
         ),
         pytest.param(
@@ -310,6 +327,15 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
     )
 
 
+@pytest.fixture()
+async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) -> AsyncEngine:
+    """Cockroach DB async engine instance for end-to-end testing."""
+    return create_async_engine(
+        url="cockroachdb+asyncpg://root@localhost:26257/defaultdb",
+        poolclass=NullPool,
+    )
+
+
 @pytest.fixture(
     name="async_engine",
     params=[
@@ -342,6 +368,14 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
                 pytest.mark.psycopg_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[
+                pytest.mark.cockroachdb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
             ],
         ),
     ],

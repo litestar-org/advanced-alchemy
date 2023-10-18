@@ -42,7 +42,6 @@ install:											## Install the project and
 	if [ "$(VENV_EXISTS)" ]; then $(MAKE) clean; fi
 	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install --quiet -U wheel setuptools cython pip; fi
 	@if [ "$(USING_PDM)" ]; then $(PDM) install -G:all; fi
-	@.venv/bin/pre-commit install
 	@echo "=> Install complete! Note: If you want to re-install re-run 'make install'"
 
 
@@ -117,9 +116,17 @@ test-spanner:
 test-mssql:
 	$(ENV_PREFIX)pytest tests -m='integration and mssql'
 
+.PHONY: test-cockroachdb-sync
+test-cockroachdb-sync:
+	$(ENV_PREFIX)pytest tests -m='integration and cockroachdb_sync'
+
+.PHONY: test-cockroachdb-async
+test-cockroachdb-async:
+	$(ENV_PREFIX)pytest tests -m='integration and cockroachdb_async'
+
 .PHONY: test-all-databases
 test-all-databases:
-	$(ENV_PREFIX)pytest tests -m='integration and integration'
+	$(ENV_PREFIX)pytest tests -m='integration'
 
 .PHONY: check-all
 check-all: lint test coverage 						## Run all linting, tests, and coverage checks

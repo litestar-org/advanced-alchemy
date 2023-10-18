@@ -9,7 +9,12 @@ from uuid import UUID
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository, base
+from advanced_alchemy import (
+    SQLAlchemyAsyncRepository,
+    SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncRepository,
+    SQLAlchemySyncRepositoryService,
+)
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 
 
@@ -53,7 +58,7 @@ class UUIDModelWithFetchedValue(UUIDBase):
 
 uuid_item_tag = Table(
     "uuid_item_tag",
-    base.orm_registry.metadata,
+    UUIDBase.metadata,
     Column("item_id", ForeignKey("uuid_item.id"), primary_key=True),
     Column("tag_id", ForeignKey("uuid_tag.id"), primary_key=True),
 )
@@ -161,3 +166,90 @@ class ItemSyncRepository(SQLAlchemySyncRepository[UUIDItem]):
     """Item repository."""
 
     model_type = UUIDItem
+
+
+# Services
+
+
+class RuleAsyncService(SQLAlchemyAsyncRepositoryService[UUIDRule]):
+    """Rule repository."""
+
+    repository_type = RuleAsyncRepository
+
+
+class AuthorAsyncService(SQLAlchemyAsyncRepositoryService[UUIDAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorAsyncRepository
+
+
+class BookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDBook]):
+    """Book repository."""
+
+    repository_type = BookAsyncRepository
+
+
+class EventLogAsyncService(SQLAlchemyAsyncRepositoryService[UUIDEventLog]):
+    """Event log repository."""
+
+    repository_type = EventLogAsyncRepository
+
+
+class ModelWithFetchedValueAsyncService(SQLAlchemyAsyncRepositoryService[UUIDModelWithFetchedValue]):
+    """UUIDModelWithFetchedValue repository."""
+
+    repository_type = ModelWithFetchedValueAsyncRepository
+
+
+class TagAsyncService(SQLAlchemyAsyncRepositoryService[UUIDTag]):
+    """Tag repository."""
+
+    repository_type = TagAsyncRepository
+
+
+class ItemAsyncService(SQLAlchemyAsyncRepositoryService[UUIDItem]):
+    """Item repository."""
+
+    repository_type = ItemAsyncRepository
+
+
+class RuleSyncService(SQLAlchemySyncRepositoryService[UUIDRule]):
+    """Rule repository."""
+
+    repository_type = RuleSyncRepository
+
+
+class AuthorSyncService(SQLAlchemySyncRepositoryService[UUIDAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorSyncRepository
+
+
+class BookSyncService(SQLAlchemySyncRepositoryService[UUIDBook]):
+    """Book repository."""
+
+    repository_type = BookSyncRepository
+
+
+class EventLogSyncService(SQLAlchemySyncRepositoryService[UUIDEventLog]):
+    """Event log repository."""
+
+    repository_type = EventLogSyncRepository
+
+
+class ModelWithFetchedValueSyncService(SQLAlchemySyncRepositoryService[UUIDModelWithFetchedValue]):
+    """UUIDModelWithFetchedValue repository."""
+
+    repository_type = ModelWithFetchedValueSyncRepository
+
+
+class TagSyncService(SQLAlchemySyncRepositoryService[UUIDTag]):
+    """Tag repository."""
+
+    repository_type = TagSyncRepository
+
+
+class ItemSyncService(SQLAlchemySyncRepositoryService[UUIDItem]):
+    """Item repository."""
+
+    repository_type = ItemSyncRepository

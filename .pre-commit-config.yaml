@@ -8,7 +8,7 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v4.5.0
     hooks:
       - id: check-ast
       - id: check-case-conflict
@@ -23,23 +23,23 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.0.291"
+    rev: "v0.1.0"
     hooks:
       - id: ruff
         args: ["--fix"]
         exclude: "docs"
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.5
+    rev: v2.2.6
     hooks:
       - id: codespell
         exclude: "pdm.lock|examples/us_state_lookup.json"
   - repo: https://github.com/psf/black
-    rev: 23.9.1
+    rev: 23.10.0
     hooks:
       - id: black
         args: [--config=./pyproject.toml]
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.5.1"
+    rev: "v1.6.0"
     hooks:
       - id: mypy
         exclude: "docs"
@@ -70,6 +70,6 @@ repos:
             "litestar[cli]",
           ]
   - repo: https://github.com/sphinx-contrib/sphinx-lint
-    rev: "v0.6.8"
+    rev: "v0.8.1"
     hooks:
       - id: sphinx-lint

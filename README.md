@@ -41,13 +41,156 @@ offering features such as:
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine>)
   - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc>)
+  - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
 
 ## Usage
+
+### Installation
+
+```shell
+pip install advanced-alchemy
+```
 
 > [!IMPORTANT]\
 > Check out [the installation guide][install-guide] in our official documentation!
 
-### Litestar
+### Repositories
+
+Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD operations on your SQLAlchemy models.
+
+```python
+from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository import SQLAlchemySyncRepository
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Mapped, sessionmaker
+
+
+class User(UUIDBase):
+    # you can optionally override the generated table name by manually setting it.
+    __tablename__ = "user_account"  # type: ignore[assignment]
+    email: Mapped[str]
+    name: Mapped[str]
+
+
+class UserRepository(SQLAlchemySyncRepository[User]):
+    """User repository."""
+
+    model_type = User
+
+
+# use any compatible sqlalchemy engine.
+engine = create_engine("duckdb:///:memory:")
+session_factory = sessionmaker(engine, expire_on_commit=False)
+
+# Initializes the database.
+with engine.begin() as conn:
+    User.metadata.create_all(conn)
+
+with session_factory() as db_session:
+    repo = UserRepository(session=db_session)
+    # 1) Create multiple users with `add_many`
+    bulk_users = [
+        {"email": 'cody@advanced-alchemy.dev', 'name': 'Cody'},
+        {"email": 'janek@advanced-alchemy.dev', 'name': 'Janek'},
+        {"email": 'peter@advanced-alchemy.dev', 'name': 'Peter'},
+        {"email": 'jacob@advanced-alchemy.dev', 'name': 'Jacob'}
+    ]
+    objs = repo.add_many([User(**raw_user) for raw_user in bulk_users])
+    db_session.commit()
+    print(f"Created {len(objs)} new objects.")
+
+    # 2) Select paginated data and total row count.  Pass additional filters as kwargs
+    # created_objs, total_objs = repo.list_and_count(name="Cody", filters=LimitOffset(limit=10, offset=0))
+    created_objs, total_objs = repo.list_and_count(LimitOffset(limit=10, offset=0), name="Cody")
+    print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
+
+    # 3) Let's remove the batch of records selected.
+    deleted_objs = repo.delete_many([new_obj.id for new_obj in created_objs])
+    print(f"Removed {len(deleted_objs)} records out of a total of {total_objs}.")
+
+    # 4) Let's count the remaining rows
+    remaining_count = repo.count()
+    print(f"Found {remaining_count} remaining records after delete.")
+```
+
+For a full standalone example, see the sample [here][standalone-example]
+
+### Services
+
+Advanced Alchemy includes an additional service class to make working with a repository easier. This class is designed to accept data as a dictionary or SQLAlchemy model and it will handle the type conversions for you.
+
+Here's the same example from above but using a service to create the data:
+
+```python
+from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy import SQLAlchemySyncRepository, SQLAlchemySyncRepositoryService
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Mapped, sessionmaker
+
+
+class User(UUIDBase):
+    # you can optionally override the generated table name by manually setting it.
+    __tablename__ = "user_account"  # type: ignore[assignment]
+    email: Mapped[str]
+    name: Mapped[str]
+
+
+class UserRepository(SQLAlchemySyncRepository[User]):
+    """User repository."""
+
+    model_type = User
+
+
+class UserService(SQLAlchemySyncRepositoryService[User]):
+    """User repository."""
+
+    repository_type = UserRepository
+
+
+# use any compatible sqlalchemy engine.
+engine = create_engine("duckdb:///:memory:")
+session_factory = sessionmaker(engine, expire_on_commit=False)
+
+# Initializes the database.
+with engine.begin() as conn:
+    User.metadata.create_all(conn)
+
+with session_factory() as db_session:
+    service = UserService(session=db_session)
+    # 1) Create multiple users with `add_many`
+    objs = service.create_many([
+        {"email": 'cody@advanced-alchemy.dev', 'name': 'Cody'},
+        {"email": 'janek@advanced-alchemy.dev', 'name': 'Janek'},
+        {"email": 'peter@advanced-alchemy.dev', 'name': 'Peter'},
+        {"email": 'jacob@advanced-alchemy.dev', 'name': 'Jacob'}
+    ])
+    print(objs)
+    print(f"Created {len(objs)} new objects.")
+
+    # 2) Select paginated data and total row count.  Pass additional filters as kwargs
+    created_objs, total_objs = service.list_and_count(LimitOffset(limit=10, offset=0), name="Cody")
+    print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
+
+    # 3) Let's remove the batch of records selected.
+    deleted_objs = service.delete_many([new_obj.id for new_obj in created_objs])
+    print(f"Removed {len(deleted_objs)} records out of a total of {total_objs}.")
+
+    # 4) Let's count the remaining rows
+    remaining_count = service.count()
+    print(f"Found {remaining_count} remaining records after delete.")
+```
+
+### Web Frameworks
+
+Advanced Alchemy works with nearly all Python web frameworks. Several helpers for popular libraries are included, and additional PRs to support others are welcomed.
+
+#### Litestar
+
+Advanced Alchemy is the official SQLAlchemy integration for Litsetar.
+
+In addition to installed with `pip install advanced-alchemy`, it can also be installed installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
 
 ```python
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
@@ -55,14 +198,15 @@ from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyA
 
 from litestar import Litestar
 
-plugin = SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"))
-
-
-app = Litestar(plugins=[plugin])
-
+alchemy = SQLAlchemyPlugin(
+  config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
+)
+app = Litestar(plugins=[alchemy])
 ```
 
-### FastAPI
+For a full Litestar example, check [here][litestar-example]
+
+#### FastAPI
 
 ```python
 from fastapi import FastAPI
@@ -76,7 +220,9 @@ alchemy = StarletteAdvancedAlchemy(
 )
 ```
 
-### Starlette
+For a full CRUD example, see [here][fastapi-example]
+
+#### Starlette
 
 ```python
 from starlette.applications import Starlette
@@ -90,7 +236,7 @@ alchemy = StarletteAdvancedAlchemy(
 )
 ```
 
-### Sanic
+#### Sanic
 
 ```python
 from sanic import Sanic
@@ -132,3 +278,6 @@ or the [project-specific GitHub discussions page][project-discussions].
 [project-discussions]: https://github.com/jolt-org/advanced-alchemy/discussions
 [project-docs]: https://docs.advanced-alchemy.jolt.rs
 [install-guide]: https://docs.advanced-alchemy.jolt.rs/latest/#installation
+[fastapi-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/fastapi.py
+[litestar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litestar.py
+[standalone-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/standalone.py
