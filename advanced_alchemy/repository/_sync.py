@@ -1002,7 +1002,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             ``True`` if healthy.
         """
 
-        return (  # type:ignore[no-any-return]
+        return (  # type: ignore[no-any-return]
             session.execute(cls._get_health_check_statement(session))
         ).scalar_one() == 1
 
@@ -1084,7 +1084,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 )
 
             elif isinstance(filter_, (NotInCollectionFilter,)):
-                if filter_.values is not None:  # noqa: PD011
+                if filter_.values is not None:
                     if self._prefer_any:
                         statement = self._filter_not_any_collection(
                             filter_.field_name,
@@ -1099,7 +1099,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                         )
 
             elif isinstance(filter_, (CollectionFilter,)):
-                if filter_.values is not None:  # noqa: PD011
+                if filter_.values is not None:
                     if self._prefer_any:
                         statement = self._filter_any_collection(filter_.field_name, filter_.values, statement=statement)
                     else:
