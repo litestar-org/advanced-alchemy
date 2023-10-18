@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type, cast
+from typing import Type, Union, cast
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
@@ -153,9 +153,12 @@ def async_sqlalchemy_config(
     )
 
 
+AnyConfig = Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]
+
+
 @pytest.fixture(params=["sync_sqlalchemy_config", "async_sqlalchemy_config"])
 def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
-    config = cast(SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, request.getfixturevalue(request.param))
+    config = cast(AnyConfig, request.getfixturevalue(request.param))
     return commands.AlembicCommands(sqlalchemy_config=config)
 
 
