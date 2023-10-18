@@ -53,6 +53,9 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
     model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
+    _prefer_any_clause: bool = False
+    prefer_any_clause_engines: tuple[str] | None = ("postgresql",)
+    """Database engines that prefer to use ``where field.id = ANY(:1)`` instead of ``where field.id IN (...)``."""
 
     def __init__(
         self,
@@ -93,6 +96,9 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             msg = "Session improperly configure"
             raise ValueError(msg)
         self._dialect = self.session.bind.dialect
+        self._prefer_any_clause = any(
+            self._dialect.name == engine_type for engine_type in self.prefer_any_clause_engines or ()
+        )
 
     @classmethod
     def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
@@ -255,6 +261,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 id_attribute if id_attribute is not None else self.id_attribute,
             )
             instances: list[ModelT] = []
+            if self._prefer_any_clause:
+                chunk_size = len(item_ids) + 1
             chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
             for idx in range(0, len(item_ids), chunk_size):
                 chunk = item_ids[idx : min(idx + chunk_size, len(item_ids))]
@@ -325,8 +333,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             return lambda_stmt(lambda: statement)
         return self.statement if statement is None else statement
 
-    @staticmethod
     def _get_delete_many_statement(
+        self,
         model_type: type[ModelT],
         id_attribute: InstrumentedAttribute,
         id_chunk: list[Any],
@@ -337,7 +345,10 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             statement = lambda_stmt(lambda: delete(model_type))
         elif statement_type == "select":
             statement = lambda_stmt(lambda: select(model_type))
-        statement += lambda s: s.where(id_attribute.in_(id_chunk))
+        if self._prefer_any_clause:
+            statement += lambda s: s.where(id_chunk=id_attribute.any_())
+        else:
+            statement += lambda s: s.where(id_attribute.in_(id_chunk))
         if supports_returning and statement_type != "select":
             statement += lambda s: s.returning(model_type)
         return statement
@@ -1034,7 +1045,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         statement += lambda s: s.limit(limit).offset(offset)
         return statement
 
-    def _apply_filters(
+    def _apply_filters(  # noqa: PLR0912, C901
         self,
         *filters: FilterTypes | ColumnElement[bool],
         apply_pagination: bool = True,
@@ -1073,9 +1084,26 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 )
 
             elif isinstance(filter_, (NotInCollectionFilter,)):
-                statement = self._filter_not_in_collection(filter_.field_name, filter_.values, statement=statement)
+                if filter_.values is not None:  # noqa: PD011
+                    if self._prefer_any_clause:
+                        statement = self._filter_not_any_collection(
+                            filter_.field_name,
+                            filter_.values,
+                            statement=statement,
+                        )
+                    else:
+                        statement = self._filter_not_in_collection(
+                            filter_.field_name,
+                            filter_.values,
+                            statement=statement,
+                        )
+
             elif isinstance(filter_, (CollectionFilter,)):
-                statement = self._filter_in_collection(filter_.field_name, filter_.values, statement=statement)
+                if filter_.values is not None:  # noqa: PD011
+                    if self._prefer_any_clause:
+                        statement = self._filter_any_collection(filter_.field_name, filter_.values, statement=statement)
+                    else:
+                        statement = self._filter_in_collection(filter_.field_name, filter_.values, statement=statement)
             elif isinstance(filter_, (OrderBy,)):
                 statement = self._order_by(statement, filter_.field_name, sort_desc=filter_.sort_order == "desc")
             elif isinstance(filter_, (SearchFilter,)):
@@ -1122,6 +1150,31 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
         statement += lambda s: s.where(field.notin_(values))
+        return statement
+
+    def _filter_any_collection(
+        self,
+        field_name: str | InstrumentedAttribute,
+        values: abc.Collection[Any],
+        statement: StatementLambdaElement,
+    ) -> StatementLambdaElement:
+        if not values:
+            statement += lambda s: s.where(text("1=-1"))
+            return statement
+        field = get_instrumented_attr(self.model_type, field_name)
+        statement += lambda s: s.where(values == field.any_())
+        return statement
+
+    def _filter_not_any_collection(
+        self,
+        field_name: str | InstrumentedAttribute,
+        values: abc.Collection[Any],
+        statement: StatementLambdaElement,
+    ) -> StatementLambdaElement:
+        if not values:
+            return statement
+        field = get_instrumented_attr(self.model_type, field_name)
+        statement += lambda s: s.where(values != field.any_())
         return statement
 
     def _filter_on_datetime_field(
