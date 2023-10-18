@@ -156,10 +156,13 @@ def async_sqlalchemy_config(
 AnyConfig = Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]
 
 
-@pytest.fixture(params=["sync_sqlalchemy_config", "async_sqlalchemy_config"])
+@pytest.fixture
 def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
-    config = cast(AnyConfig, request.getfixturevalue(request.param))
-    return commands.AlembicCommands(sqlalchemy_config=config)
+    sync_sqlalchemy_config = cast(SQLAlchemySyncConfig | None, request.getfixturevalue("sync_sqlalchemy_config"))
+    async_sqlalchemy_config = cast(SQLAlchemyAsyncConfig | None, request.getfixturevalue("async_sqlalchemy_config"))
+    return commands.AlembicCommands(
+        sqlalchemy_config=sync_sqlalchemy_config if sync_sqlalchemy_config is not None else async_sqlalchemy_config,  # type: ignore
+    )
 
 
 @pytest.fixture
