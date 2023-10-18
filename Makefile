@@ -82,7 +82,13 @@ coverage:  											## Run the tests and generate coverage report
 .PHONY: test
 test:  												## Run the tests
 	@echo "=> Running test cases"
-	@$(ENV_PREFIX)pytest tests -m 'not integration'
+	@$(ENV_PREFIX)pytest tests -m 'not integration' -n auto
+	@echo "=> Tests complete"
+
+.PHONY: test-all
+test-all:  												## Run the tests
+	@echo "=> Running all test cases"
+	@$(ENV_PREFIX)pytest tests -m '' -n auto
 	@echo "=> Tests complete"
 
 .PHONY: test-asyncpg
