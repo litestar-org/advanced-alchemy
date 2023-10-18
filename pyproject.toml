@@ -24,19 +24,9 @@ classifiers = [
   "Topic :: Database",
   "Topic :: Database :: Database Engines/Servers",
 ]
-dependencies = [
-  "sqlalchemy>=2.0.20",
-  "alembic>=1.12.0",
-  "typing_extensions",
-]
+dependencies = ["sqlalchemy>=2.0.20", "alembic>=1.12.0", "typing_extensions"]
 description = "Ready-to-go SQLAlchemy concoctions."
-keywords = [
-  "sqlalchemy",
-  "alembic",
-  "litestar",
-  "sanic",
-  "fastapi",
-]
+keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi"]
 license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
@@ -74,6 +64,7 @@ dev = [
   "msgspec>=0.18.2",
   "orjson>=3.9.7",
   "pyodbc>=4.0.39",
+  "duckdb>=0.9.0",
 ]
 docs = [
   "sphinx>=7.1.2",
@@ -119,8 +110,6 @@ test = [
 
 [tool.pytest.ini_options]
 addopts = [
-  "-m",
-  "'not integration'",
   "--dist",
   "loadgroup",
   "-n",
@@ -153,6 +142,31 @@ filterwarnings = [
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
+]
+
+[tool.coverage.run]
+concurrency = ["multiprocessing", "thread"]
+omit = [
+  "*/tests/*",
+  "advanced_alchemy/alembic/templates/*",
+  "advanced_alchemy/extensions/litestar/cli.py",
+  "advanced_alchemy/alembic/commands.py",
+  "advanced_alchemy/types.py",
+  "advanced_alchemy/operations.py",
+  "advanced_alchemy/service/*",
+]
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+  'pragma: no cover',
+  'if TYPE_CHECKING:',
+  'except ImportError as e:',
+  'except ImportError:',
+  '\.\.\.',
+  'raise NotImplementedError',
+  'if VERSION.startswith("1"):',
+  'if pydantic.VERSION.startswith("1"):',
 ]
 
 [tool.black]

@@ -40,7 +40,7 @@ install:											## Install the project and
 	@if [ "$(VENV_EXISTS)" ]; then echo "=> Removing existing virtual environment"; fi
 	@if [ "$(VENV_EXISTS)" ]; then $(MAKE) destroy; fi
 	@if [ "$(VENV_EXISTS)" ]; then $(MAKE) clean; fi
-	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install --quiet -U wheel setuptools cython pip; fi
+	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install --quiet -U wheel setuptools cython mypy build pip; fi
 	@if [ "$(USING_PDM)" ]; then $(PDM) install -G:all; fi
 	@echo "=> Install complete! Note: If you want to re-install re-run 'make install'"
 
@@ -73,7 +73,8 @@ lint: 												## Runs pre-commit hooks; includes ruff linting, codespell, bl
 .PHONY: coverage
 coverage:  											## Run the tests and generate coverage report
 	@echo "=> Running tests with coverage"
-	@$(ENV_PREFIX)pytest tests --cov=advanced_alchemy
+	@make test
+	@echo "=> Generating coverage report"
 	@$(ENV_PREFIX)coverage html
 	@$(ENV_PREFIX)coverage xml
 	@echo "=> Coverage report generated"
@@ -81,7 +82,7 @@ coverage:  											## Run the tests and generate coverage report
 .PHONY: test
 test:  												## Run the tests
 	@echo "=> Running test cases"
-	@$(ENV_PREFIX)pytest tests
+	@$(ENV_PREFIX)pytest tests -m 'not integration'
 	@echo "=> Tests complete"
 
 .PHONY: test-asyncpg
