@@ -113,12 +113,24 @@ test = [
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
   "pytz",
+  "coverage",
+  "pytest-cov",
 ]
 
 [tool.pytest.ini_options]
-addopts = "-m='not integration' --dist=loadgroup -n auto"
+addopts = [
+  "-m",
+  "'not integration'",
+  "--dist",
+  "loadgroup",
+  "-n",
+  "auto",
+  "--cov-report",
+  "term-missing",
+  "--cov",
+  "advanced_alchemy",
+]
 asyncio_mode = "auto"
-
 markers = [
   "integration: SQLAlchemy integration tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
