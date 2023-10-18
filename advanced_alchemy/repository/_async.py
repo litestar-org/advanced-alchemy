@@ -919,7 +919,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             existing_objs = await self.list(
                 CollectionFilter(
                     field_name=self.id_attribute,
-                    values=[getattr(datum, self.id_attribute) for datum in data] if data else None,
+                    values=[getattr(datum, self.id_attribute) for datum in data],
                 ),
             )
             existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs]
