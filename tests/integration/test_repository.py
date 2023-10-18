@@ -1101,6 +1101,13 @@ async def test_repo_filter_no_obj_collection(
     assert no_obj == []
 
 
+async def test_repo_filter_null_collection(
+    author_repo: AuthorRepository,
+) -> None:
+    no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=None)))
+    assert len(no_obj) > 0
+
+
 async def test_repo_filter_not_in_collection(
     author_repo: AuthorRepository,
     existing_author_ids: Generator[Any, None, None],
@@ -1120,6 +1127,13 @@ async def test_repo_filter_not_in_no_obj_collection(
     author_repo: AuthorRepository,
 ) -> None:
     existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=[])))
+    assert len(existing_obj) > 0
+
+
+async def test_repo_filter_not_in_null_collection(
+    author_repo: AuthorRepository,
+) -> None:
+    existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=None)))
     assert len(existing_obj) > 0
 
 
