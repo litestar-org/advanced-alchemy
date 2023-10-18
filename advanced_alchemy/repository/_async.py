@@ -1045,7 +1045,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         statement += lambda s: s.limit(limit).offset(offset)
         return statement
 
-    def _apply_filters(  # noqa: PLR0912, C901
+    def _apply_filters(
         self,
         *filters: FilterTypes | ColumnElement[bool],
         apply_pagination: bool = True,

@@ -56,7 +56,12 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     match_fields: list[str] | str | None = None
     _prefer_any_clause: bool = False
     prefer_any_clause_engines: tuple[str] | None = ("postgresql",)
-    """Database engines that prefer to use ``where field.id = ANY(:1)`` instead of ``where field.id IN (...)``."""
+    """Prefer ``ANY`` over ``IN``
+
+    Some database engines are optimized for the ``ANY`` operation over ``IN``.
+
+    When possible, utilize``where field.id = ANY(:1)`` instead of ``where field.id IN (...)``.
+    """
 
     def __init__(
         self,
@@ -1046,7 +1051,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         statement += lambda s: s.limit(limit).offset(offset)
         return statement
 
-    def _apply_filters(  # noqa: C901, PLR0912
+    def _apply_filters(
         self,
         *filters: FilterTypes | ColumnElement[bool],
         apply_pagination: bool = True,
