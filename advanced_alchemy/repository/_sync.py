@@ -9,6 +9,7 @@ from sqlalchemy import (
     Select,
     StatementLambdaElement,
     TextClause,
+    any_,
     delete,
     lambda_stmt,
     over,
@@ -345,7 +346,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         elif statement_type == "select":
             statement = lambda_stmt(lambda: select(model_type))
         if self._prefer_any:
-            statement += lambda s: s.where(id_chunk=id_attribute.any_())
+            statement += lambda s: s.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
         else:
             statement += lambda s: s.where(id_attribute.in_(id_chunk))
         if supports_returning and statement_type != "select":
@@ -1161,7 +1162,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             statement += lambda s: s.where(text("1=-1"))
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(values == field.any_())
+        statement += lambda s: s.where(any_(values) == field)  # type: ignore[arg-type]
         return statement
 
     def _filter_not_any_collection(
@@ -1173,7 +1174,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         if not values:
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(values != field.any_())
+        statement += lambda s: s.where(any_(values) != field)  # type: ignore[arg-type]
         return statement
 
     def _filter_on_datetime_field(
