@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type
+from typing import Type, cast
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import FixtureRequest
-from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.alembic import commands
 from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -22,23 +21,142 @@ ModelWithFetchedValue = Type[models_uuid.UUIDModelWithFetchedValue]
 ItemModel = Type[models_uuid.UUIDItem]
 TagModel = Type[models_uuid.UUIDTag]
 
+pytestmark = [
+    pytest.mark.integration,
+]
 
-@pytest.fixture()
-def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
-    return SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker)
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            "sqlite_engine",
+            marks=[
+                pytest.mark.sqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "duckdb_engine",
+            marks=[
+                pytest.mark.duckdb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("duckdb"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_engine",
+            marks=[
+                pytest.mark.oracledb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_engine",
+            marks=[
+                pytest.mark.oracledb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_engine",
+            marks=[
+                pytest.mark.psycopg_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "spanner_engine",
+            marks=[
+                pytest.mark.spanner,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("spanner"),
+            ],
+        ),
+        pytest.param(
+            "mssql_engine",
+            marks=[
+                pytest.mark.mssql,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_engine",
+            marks=[
+                pytest.mark.cockroachdb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+    ],
+)
+def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
+    engine = cast(Engine, request.getfixturevalue(request.param))
+
+    return SQLAlchemySyncConfig(engine_instance=engine, session_maker=sessionmaker(bind=engine, expire_on_commit=False))
 
 
-@pytest.fixture()
+@pytest.fixture(
+    name="async_engine",
+    params=[
+        pytest.param(
+            "aiosqlite_engine",
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "asyncmy_engine",
+            marks=[
+                pytest.mark.asyncmy,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mysql"),
+            ],
+        ),
+        pytest.param(
+            "asyncpg_engine",
+            marks=[
+                pytest.mark.asyncpg,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[
+                pytest.mark.psycopg_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[
+                pytest.mark.cockroachdb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+    ],
+)
 def async_sqlalchemy_config(
-    async_engine: AsyncEngine,
-    async_session_maker: async_sessionmaker[AsyncSession],
+    request: FixtureRequest,
 ) -> SQLAlchemyAsyncConfig:
-    return SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker)
+    async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
+    return SQLAlchemyAsyncConfig(
+        engine_instance=async_engine,
+        session_maker=async_sessionmaker(bind=async_engine, expire_on_commit=False),
+    )
 
 
-@pytest.fixture(params=[lazy_fixture("sync_sqlalchemy_config"), lazy_fixture("async_sqlalchemy_config")])
+@pytest.fixture(params=["sync_sqlalchemy_config", "async_sqlalchemy_config"])
 def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
-    return commands.AlembicCommands(sqlalchemy_config=request.param)
+    config = cast(SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, request.getfixturevalue(request.param))
+    return commands.AlembicCommands(sqlalchemy_config=config)
 
 
 @pytest.fixture

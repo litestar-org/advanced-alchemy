@@ -6,7 +6,7 @@ groups = ["default", "dev", "docs", "extensions", "linting", "test"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:ebf12c119e6b51241e85bf3963d4574ccc0e196dc28074f753791fb91d4d86cb"
+content_hash = "sha256:ab9a7c7e5d59b771b4557a54db39b6dab85ef301e4f1df5f71d1c30fd8dcca42"
 
 [[package]]
 name = "aiofiles"
@@ -869,7 +869,7 @@ files = [
 
 [[package]]
 name = "faker"
-version = "19.10.0"
+version = "19.11.0"
 requires_python = ">=3.8"
 summary = "Faker is a Python package that generates fake data for you."
 dependencies = [
@@ -877,8 +877,8 @@ dependencies = [
     "typing-extensions>=3.10.0.1; python_version <= \"3.8\"",
 ]
 files = [
-    {file = "Faker-19.10.0-py3-none-any.whl", hash = "sha256:f321e657ed61616fbfe14dbb9ccc6b2e8282652bbcfcb503c1bd0231ff834df6"},
-    {file = "Faker-19.10.0.tar.gz", hash = "sha256:63da90512d0cb3acdb71bd833bb3071cb8a196020d08b8567a01d232954f1820"},
+    {file = "Faker-19.11.0-py3-none-any.whl", hash = "sha256:e28090068293c5a83e7f4d636417d45fae1031ca8a8136cc2415549ebc2111e2"},
+    {file = "Faker-19.11.0.tar.gz", hash = "sha256:a62a3fd3bfa3122d4f57dfa26a1cc37d76751a76c8ddd63cf9d24078c57913a4"},
 ]
 
 [[package]]

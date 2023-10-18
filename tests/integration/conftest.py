@@ -187,6 +187,13 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
     name="engine",
     params=[
         pytest.param(
+            "sqlite_engine",
+            marks=[
+                pytest.mark.sqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
             "duckdb_engine",
             marks=[
                 pytest.mark.duckdb,
@@ -234,13 +241,6 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
                 pytest.mark.xdist_group("mssql"),
             ],
         ),
-        pytest.param(
-            "sqlite_engine",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-            ],
-        ),
     ],
 )
 def engine(request: FixtureRequest) -> Engine:
@@ -248,13 +248,8 @@ def engine(request: FixtureRequest) -> Engine:
 
 
 @pytest.fixture()
-def session_maker(engine: Engine) -> sessionmaker[Session]:
-    return sessionmaker(bind=engine, expire_on_commit=False)
-
-
-@pytest.fixture()
-def session(session_maker: sessionmaker[Session]) -> Generator[Session, None, None]:
-    session = session_maker()
+def session(engine: Engine) -> Generator[Session, None, None]:
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
     try:
         yield session
     finally:
@@ -385,16 +380,10 @@ def async_engine(request: FixtureRequest) -> AsyncEngine:
 
 
 @pytest.fixture()
-def async_session_maker(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(bind=async_engine, expire_on_commit=False)
-
-
-@pytest.fixture()
 async def async_session(
     async_engine: AsyncEngine,
-    async_session_maker: async_sessionmaker[AsyncSession],
 ) -> AsyncGenerator[AsyncSession, None]:
-    session = async_session_maker()
+    session = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
     try:
         yield session
     finally:

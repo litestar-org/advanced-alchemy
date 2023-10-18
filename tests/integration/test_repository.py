@@ -33,6 +33,10 @@ from .helpers import update_raw_records
 if TYPE_CHECKING:
     from pytest import FixtureRequest
 
+pytestmark = [
+    pytest.mark.integration,
+]
+
 RepositoryPKType = Literal["uuid", "bigint"]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
 RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
