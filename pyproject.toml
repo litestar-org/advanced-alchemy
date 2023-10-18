@@ -193,6 +193,7 @@ classmethod-decorators = [
 ]
 
 [tool.ruff.per-file-ignores]
+"advanced_alchemy/repository/*.py" = ['PLR0912', 'C901']
 "tests/**/*.*" = [
   "A",
   "ARG",
