@@ -40,8 +40,16 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: "Login to GitHub Container Registry"
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
       - name: Install Microsoft ODBC Drivers
         run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
@@ -88,6 +96,7 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
