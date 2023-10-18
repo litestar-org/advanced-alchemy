@@ -53,9 +53,9 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
     model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
-    _prefer_any_clause: bool = False
-    prefer_any_clause_engines: tuple[str] | None = ("postgresql",)
-    """Database engines that prefer to use ``where field.id = ANY(:1)`` instead of ``where field.id IN (...)``."""
+    _prefer_any: bool = False
+    prefer_any_dialects: tuple[str] | None = ("postgresql",)
+    """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
 
     def __init__(
         self,
@@ -96,9 +96,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             msg = "Session improperly configure"
             raise ValueError(msg)
         self._dialect = self.session.bind.dialect
-        self._prefer_any_clause = any(
-            self._dialect.name == engine_type for engine_type in self.prefer_any_clause_engines or ()
-        )
+        self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
     @classmethod
     def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
@@ -261,7 +259,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 id_attribute if id_attribute is not None else self.id_attribute,
             )
             instances: list[ModelT] = []
-            if self._prefer_any_clause:
+            if self._prefer_any:
                 chunk_size = len(item_ids) + 1
             chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
             for idx in range(0, len(item_ids), chunk_size):
@@ -345,7 +343,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             statement = lambda_stmt(lambda: delete(model_type))
         elif statement_type == "select":
             statement = lambda_stmt(lambda: select(model_type))
-        if self._prefer_any_clause:
+        if self._prefer_any:
             statement += lambda s: s.where(id_chunk=id_attribute.any_())
         else:
             statement += lambda s: s.where(id_attribute.in_(id_chunk))
@@ -1085,7 +1083,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
             elif isinstance(filter_, (NotInCollectionFilter,)):
                 if filter_.values is not None:  # noqa: PD011
-                    if self._prefer_any_clause:
+                    if self._prefer_any:
                         statement = self._filter_not_any_collection(
                             filter_.field_name,
                             filter_.values,
@@ -1100,7 +1098,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
             elif isinstance(filter_, (CollectionFilter,)):
                 if filter_.values is not None:  # noqa: PD011
-                    if self._prefer_any_clause:
+                    if self._prefer_any:
                         statement = self._filter_any_collection(filter_.field_name, filter_.values, statement=statement)
                     else:
                         statement = self._filter_in_collection(filter_.field_name, filter_.values, statement=statement)
