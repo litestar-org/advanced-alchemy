@@ -17,7 +17,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Pre-Commit
-        run: python -m pip install pre-commit
+        run: python -m pip install pre-commit && pre-commit install
 
       - name: Load cached Pre-Commit Dependencies
         id: cached-pre-commit-dependencies
@@ -30,78 +30,58 @@ jobs:
         run: pre-commit run --show-diff-on-failure --color=always --all-files
 
   test:
-    runs-on: ubuntu-latest
+    name: "test (${{ matrix.python-version }}"
     strategy:
       fail-fast: true
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
-    timeout-minutes: 45
-    defaults:
-      run:
-        shell: bash
+    uses: ./.github/workflows/test.yaml
+    with:
+      coverage: ${{ matrix.python-version == '3.11' }}
+      python-version: ${{ matrix.python-version }}
+  sonar:
+    needs:
+      - test
+      - validate
+    if: github.event.pull_request.head.repo.fork == false && github.repository_owner == 'jolt-org'
+    runs-on: ubuntu-latest
     steps:
-      - name: "Login to GitHub Container Registry"
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{github.actor}}
-          password: ${{secrets.GITHUB_TOKEN}}
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-
-      - name: Install Microsoft ODBC Drivers
-        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
-
-      - name: Free additional space
-        run: |
-          sudo docker rmi $(docker image ls -aq) >/dev/null 2>&1 || true
-          sudo rm -rf \
-            /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
-            /usr/lib/jvm || true
-          sudo apt-get autoremove -y \
-          && sudo apt-get clean -y \
-          && sudo rm -rf /root/.cache \
-          && sudo rm -rf /var/apt/lists/* \
-          && sudo rm -rf /var/cache/apt/* \
-          && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
-
-      - name: Set up python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Create cache file
-        run: echo '${{ matrix.python-version }}' > ./matrix-file.txt
-
-      - uses: pdm-project/setup-pdm@v3
-        name: Set up PDM
-        with:
-          python-version: ${{ matrix.python-version }}
-          allow-python-prereleases: true
-          cache: true
-          cache-dependency-path: |
-            ./pdm.lock
-            ./matrix-file.txt
-      - name: Install base libraries
-        # install a few core libraries for testing and building
-        run: pip install nodeenv cython setuptools mypy cython pip --upgrade --quiet --user
-      - name: Install dependencies
-        run: pdm install -G:all
-      - name: Test with Coverage
-        run: pdm run pytest -m "" -n auto --cov=advanced_alchemy --cov-report=xml
-      - uses: actions/upload-artifact@v3
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
         with:
           name: coverage-xml
-          path: coverage.xml
+
+      - name: Fix coverage file for sonarcloud
+        run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: sonarsource/sonarcloud-github-action@master
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  codeql:
+    needs:
+      - test
+      - validate
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL Without Dependencies
+        uses: github/codeql-action/init@v2
+        with:
+          setup-python-dependencies: false
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
 
   build-docs:
     needs:

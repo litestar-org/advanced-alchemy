@@ -1,0 +1,86 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: true
+        type: string
+      coverage:
+        required: false
+        type: boolean
+        default: false
+      os:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      timeout:
+        required: false
+        type: number
+        default: 30
+
+jobs:
+  test:
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: ${{ inputs.timeout }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Microsoft ODBC Drivers
+        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
+
+      - name: Free additional space
+        run: |
+          sudo docker rmi $(docker image ls -aq) >/dev/null 2>&1 || true
+          sudo rm -rf \
+            /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
+            /usr/lib/jvm || true
+          sudo apt-get autoremove -y \
+          && sudo apt-get clean -y \
+          && sudo rm -rf /root/.cache \
+          && sudo rm -rf /var/apt/lists/* \
+          && sudo rm -rf /var/cache/apt/* \
+          && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+
+      - name: Set up python ${{ inputs.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - uses: pdm-project/setup-pdm@v3
+        name: Set up PDM
+        with:
+          python-version: ${{ inputs.python-version }}
+          allow-python-prereleases: false
+          cache: true
+          cache-dependency-path: |
+            ./pdm.lock
+
+      - name: Install base libraries
+        # install a few core libraries for testing and building
+        run: pip install nodeenv cython setuptools mypy cython pip --upgrade --quiet --user
+
+      - name: Install dependencies
+        run: pdm install -G:all
+
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
+
+      - name: Test
+        if: ${{ !inputs.coverage }}
+        run: pdm run pytest  tests -n auto
+
+      - name: Test with coverage
+        if: inputs.coverage
+        run: pdm run pytest tests -m "" --cov=advanced_alchemy --cov-report=xml -n auto
+
+      - uses: actions/upload-artifact@v3
+        if: inputs.coverage
+        with:
+          name: coverage-xml
+          path: coverage.xml
