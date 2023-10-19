@@ -656,7 +656,7 @@ async def test_sqlalchemy_repo_list_with_null_collection_filter(
     mock_repo.statement.where.return_value = mock_repo.statement
     mocker.patch.object(mock_repo, "_filter_in_collection", return_value=mock_repo.statement)
     await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))
-    assert mock_repo._filter_in_collection.assert_not_called()
+    mock_repo._filter_in_collection.assert_not_called()
 
 
 async def test_sqlalchemy_repo_empty_list_with_collection_filter(
@@ -705,7 +705,7 @@ async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
     mock_repo.statement.where.return_value = mock_repo.statement
     mocker.patch.object(mock_repo, "_filter_not_in_collection", return_value=mock_repo.statement)
     await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, None)))
-    assert mock_repo._filter_not_in_collection.assert_not_called()
+    mock_repo._filter_not_in_collection.assert_not_called()
 
 
 async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository) -> None:
