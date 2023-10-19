@@ -38,9 +38,9 @@ install-pdm: 										## Install latest version of PDM
 install:											## Install the project and
 	@if ! $(PDM) --version > /dev/null; then echo '=> Installing PDM'; $(MAKE) install-pdm; fi
 	@if [ "$(VENV_EXISTS)" ]; then echo "=> Removing existing virtual environment"; fi
-	if [ "$(VENV_EXISTS)" ]; then $(MAKE) destroy; fi
-	if [ "$(VENV_EXISTS)" ]; then $(MAKE) clean; fi
-	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install --quiet -U wheel setuptools cython pip; fi
+	@if [ "$(VENV_EXISTS)" ]; then $(MAKE) destroy; fi
+	@if [ "$(VENV_EXISTS)" ]; then $(MAKE) clean; fi
+	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install --quiet -U wheel setuptools cython mypy build pip; fi
 	@if [ "$(USING_PDM)" ]; then $(PDM) install -G:all; fi
 	@echo "=> Install complete! Note: If you want to re-install re-run 'make install'"
 
@@ -56,7 +56,7 @@ clean: 												## Cleanup temporary build artifacts
 	@find . -name '__pycache__' -exec rm -rf {} +
 	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
 	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache
-	$(MAKE) docs-clean
+	@$(MAKE) docs-clean
 
 destroy: 											## Destroy the virtual environment
 	@rm -rf .venv
@@ -73,7 +73,8 @@ lint: 												## Runs pre-commit hooks; includes ruff linting, codespell, bl
 .PHONY: coverage
 coverage:  											## Run the tests and generate coverage report
 	@echo "=> Running tests with coverage"
-	@$(ENV_PREFIX)pytest tests --cov=advanced_alchemy
+	@make test
+	@echo "=> Generating coverage report"
 	@$(ENV_PREFIX)coverage html
 	@$(ENV_PREFIX)coverage xml
 	@echo "=> Coverage report generated"
@@ -81,7 +82,13 @@ coverage:  											## Run the tests and generate coverage report
 .PHONY: test
 test:  												## Run the tests
 	@echo "=> Running test cases"
-	@$(ENV_PREFIX)pytest tests
+	@$(ENV_PREFIX)pytest tests -m 'not integration' -n auto
+	@echo "=> Tests complete"
+
+.PHONY: test-all
+test-all:  												## Run the tests
+	@echo "=> Running all test cases"
+	@$(ENV_PREFIX)pytest tests -m '' -n auto
 	@echo "=> Tests complete"
 
 .PHONY: test-asyncpg
