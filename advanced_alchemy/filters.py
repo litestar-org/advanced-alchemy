@@ -58,8 +58,10 @@ class CollectionFilter(Generic[T]):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    values: abc.Collection[T]
-    """Values for ``IN`` clause."""
+    values: abc.Collection[T] | None
+    """Values for ``IN`` clause.
+
+    An empty list will return an empty result set, however, if ``None``, the filter is not applied to the query, and all rows are returned. """
 
 
 @dataclass
@@ -68,8 +70,10 @@ class NotInCollectionFilter(Generic[T]):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    values: abc.Collection[T]
-    """Values for ``NOT IN`` clause."""
+    values: abc.Collection[T] | None
+    """Values for ``NOT IN`` clause.
+
+    An empty list or ``None`` will return all rows."""
 
 
 @dataclass

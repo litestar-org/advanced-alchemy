@@ -920,7 +920,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             existing_objs = self.list(
                 CollectionFilter(
                     field_name=self.id_attribute,
-                    values=[getattr(datum, self.id_attribute) for datum in data],
+                    values=[getattr(datum, self.id_attribute) for datum in data] if data else None,
                 ),
             )
             existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs]

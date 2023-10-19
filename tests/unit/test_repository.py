@@ -644,6 +644,21 @@ async def test_sqlalchemy_repo_list_with_collection_filter(
     mock_repo._filter_in_collection.assert_called_with(field_name, values, statement=mock_repo.statement)
 
 
+async def test_sqlalchemy_repo_list_with_null_collection_filter(
+    mock_repo: SQLAlchemyAsyncRepository,
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+    mocker: MockerFixture,
+) -> None:
+    """Test behavior of list operation given CollectionFilter."""
+    field_name = "id"
+    mock_repo_execute.return_value = MagicMock()
+    mock_repo.statement.where.return_value = mock_repo.statement
+    mocker.patch.object(mock_repo, "_filter_in_collection", return_value=mock_repo.statement)
+    await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))
+    mock_repo._filter_in_collection.assert_not_called()
+
+
 async def test_sqlalchemy_repo_empty_list_with_collection_filter(
     mock_repo: SQLAlchemyAsyncRepository,
     monkeypatch: MonkeyPatch,
@@ -676,6 +691,21 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
     await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, values)))
     assert mock_repo._filter_not_in_collection.call_count == 1
     mock_repo._filter_not_in_collection.assert_called_with(field_name, values, statement=mock_repo.statement)
+
+
+async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
+    mock_repo: SQLAlchemyAsyncRepository,
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+    mocker: MockerFixture,
+) -> None:
+    """Test behavior of list operation given CollectionFilter."""
+    field_name = "id"
+    mock_repo_execute.return_value = MagicMock()
+    mock_repo.statement.where.return_value = mock_repo.statement
+    mocker.patch.object(mock_repo, "_filter_not_in_collection", return_value=mock_repo.statement)
+    await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, None)))
+    mock_repo._filter_not_in_collection.assert_not_called()
 
 
 async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository) -> None:
