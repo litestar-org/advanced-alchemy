@@ -101,7 +101,6 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
 
 
 @pytest.fixture(
-    name="async_engine",
     params=[
         pytest.param(
             "aiosqlite_engine",
