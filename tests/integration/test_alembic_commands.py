@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Type, Union, cast
+from typing import Type, cast
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import FixtureRequest
+from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
@@ -153,15 +154,23 @@ def async_sqlalchemy_config(
     )
 
 
-AnyConfig = Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]
+@pytest.fixture(
+    params=[lazy_fixture("sync_sqlalchemy_config"), lazy_fixture("async_sqlalchemy_config")],
+    ids=["sync", "async"],
+)
+def any_config(request: FixtureRequest) -> SQLAlchemySyncConfig | SQLAlchemyAsyncConfig:
+    """Return a session for the current session"""
+    if isinstance(request.param, SQLAlchemyAsyncConfig):
+        request.getfixturevalue("async_sqlalchemy_config")
+    else:
+        request.getfixturevalue("sync_sqlalchemy_config")
+    return request.param  # type: ignore[no-any-return]
 
 
-@pytest.fixture
-def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
-    sync_sqlalchemy_config = cast(Optional[SQLAlchemySyncConfig], request.getfixturevalue("sync_sqlalchemy_config"))
-    async_sqlalchemy_config = cast(SQLAlchemyAsyncConfig, request.getfixturevalue("async_sqlalchemy_config"))
+@pytest.fixture()
+def alembic_commands(any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
     return commands.AlembicCommands(
-        sqlalchemy_config=sync_sqlalchemy_config if sync_sqlalchemy_config is not None else async_sqlalchemy_config,
+        sqlalchemy_config=any_config,
     )
 
 
