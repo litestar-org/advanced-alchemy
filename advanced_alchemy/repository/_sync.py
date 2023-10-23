@@ -36,6 +36,7 @@ from advanced_alchemy.filters import (
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
 from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.utils.deprecation import deprecated
 
 if TYPE_CHECKING:
     from collections import abc
@@ -115,7 +116,12 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
 
     @classmethod
-    def set_id_attribute_value(cls, item_id: Any, item: ModelT, id_attribute: str | None = None) -> ModelT:
+    def set_id_attribute_value(
+        cls,
+        item_id: Any,
+        item: ModelT,
+        id_attribute: str | None = None,
+    ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
         Args:
@@ -441,6 +447,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
+    @deprecated(version="0.3.5", alternative="SQLAlchemyAsyncRepository.get_or_upsert", kind="method")
     def get_or_create(
         self,
         match_fields: list[str] | str | None = None,

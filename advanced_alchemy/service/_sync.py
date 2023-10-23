@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
+from sqlalchemy.orm import InstrumentedAttribute, Session
+
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
 
@@ -17,7 +19,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from sqlalchemy import Select, StatementLambdaElement
-    from sqlalchemy.orm import InstrumentedAttribute, Session
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -88,7 +89,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return self.repository.count(*filters, **kwargs) > 0
+        return self.repository.exists(*filters, **kwargs)
 
     def get(
         self,
@@ -314,7 +315,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             Updated representation.
         """
         data = self.to_model(data, "update")
-        data = self.repository.set_id_attribute_value(item_id, data)
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = cast("str", id_attribute.description)
+        if item_id is not None:
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
         return self.repository.update(
             data=data,
             attribute_names=attribute_names,
@@ -457,7 +461,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         """
         match_fields = match_fields or self.match_fields
         validated_model = self.to_model(kwargs, "create")
-        return self.repository.get_or_create(
+        return self.repository.get_or_upsert(
             match_fields=match_fields,
             upsert=upsert,
             attribute_names=attribute_names,

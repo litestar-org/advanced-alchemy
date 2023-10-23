@@ -25,6 +25,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.repository._util import get_instrumented_attr
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 
@@ -1416,10 +1417,30 @@ async def test_service_exists_method(author_service: AuthorService, first_author
     assert exists
 
 
-async def test_service_update_method(author_service: AuthorService, first_author_id: Any) -> None:
+async def test_service_update_method_item_id(author_service: AuthorService, first_author_id: Any) -> None:
     obj = await maybe_async(author_service.get(first_author_id))
     obj.name = "Updated Name2"
     updated_obj = await maybe_async(author_service.update(item_id=first_author_id, data=obj))
+    assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_no_item_id(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    obj.name = "Updated Name2"
+    updated_obj = await maybe_async(author_service.update(data=obj))
+    assert updated_obj.id == first_author_id
+    assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_instrumented_attribute(
+    author_service: AuthorService,
+    first_author_id: Any,
+) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    id_attribute = get_instrumented_attr(author_service.repository.model_type, "id")
+    obj.name = "Updated Name2"
+    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute, item_id=first_author_id))
+    assert updated_obj.id == first_author_id
     assert updated_obj.name == obj.name
 
 
@@ -1522,3 +1543,10 @@ async def test_service_upsert_many_method(
     assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
     assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    with pytest.deprecated_call():
+        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+        assert existing_obj.id == first_author_id
+        assert existing_created is False

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
+from sqlalchemy.orm import InstrumentedAttribute
+
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
 
@@ -16,7 +18,6 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import InstrumentedAttribute
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -87,7 +88,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return await self.repository.count(*filters, **kwargs) > 0
+        return await self.repository.exists(*filters, **kwargs)
 
     async def get(
         self,
@@ -313,7 +314,10 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Updated representation.
         """
         data = await self.to_model(data, "update")
-        data = self.repository.set_id_attribute_value(item_id, data)
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = cast("str", id_attribute.description)
+        if item_id is not None:
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
         return await self.repository.update(
             data=data,
             attribute_names=attribute_names,
@@ -456,7 +460,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """
         match_fields = match_fields or self.match_fields
         validated_model = await self.to_model(kwargs, "create")
-        return await self.repository.get_or_create(
+        return await self.repository.get_or_upsert(
             match_fields=match_fields,
             upsert=upsert,
             attribute_names=attribute_names,
