@@ -28,9 +28,9 @@ def warn_deprecation(
     """Warn about a call to a (soon to be) deprecated function.
 
     Args:
-        version: Litestar version where the deprecation will occur
+        version: Advanced Alchemy version where the deprecation will occur
         deprecated_name: Name of the deprecated function
-        removal_in: Litestar version where the deprecated function will be removed
+        removal_in: Advanced Alchemy version where the deprecated function will be removed
         alternative: Name of a function that should be used instead
         info: Additional information
         pending: Use ``PendingDeprecationWarning`` instead of ``DeprecationWarning``
@@ -52,7 +52,7 @@ def warn_deprecation(
 
     parts.extend(
         (
-            f"Deprecated in litestar {version}",
+            f"Deprecated in advanced-alchemy {version}",
             f"This {kind} will be removed in {removal_in or 'the next major version'}",
         ),
     )
