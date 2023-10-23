@@ -195,6 +195,15 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         engine = cast("Engine", app.state.pop(self.engine_app_state_key))
         engine.dispose()
 
+    def create_all_metadata(self, app: Litestar) -> None:
+        """Create all metadata
+
+        Args:
+            app (Litestar): The ``Litestar`` instance
+        """
+        with self.get_engine().begin() as conn:
+            self.alembic_config.target_metadata.create_all(bind=conn)
+
     def create_app_state_items(self) -> dict[str, Any]:
         """Key/value pairs to be stored in application state."""
         return {
