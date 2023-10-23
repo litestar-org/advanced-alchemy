@@ -88,7 +88,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return self.repository.count(*filters, **kwargs) > 0
+        return self.repository.exists(*filters, **kwargs)
 
     def get(
         self,

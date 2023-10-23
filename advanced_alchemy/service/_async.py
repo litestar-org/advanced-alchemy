@@ -87,7 +87,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return await self.repository.count(*filters, **kwargs) > 0
+        return await self.repository.exists(*filters, **kwargs)
 
     async def get(
         self,
