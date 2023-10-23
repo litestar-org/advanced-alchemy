@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from litestar import Litestar, get
 from litestar.testing import create_test_client
@@ -48,11 +48,10 @@ async def test_create_all_default(monkeypatch: MonkeyPatch) -> None:
 
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     plugin = SQLAlchemyInitPlugin(config=config)
-    with patch.object(
-        config,
-        "create_all_metadata",
-    ) as create_all_metadata_mock, create_test_client(route_handlers=[], plugins=[plugin]) as _client:
-        create_all_metadata_mock.assert_not_called()
+    mock_fx = MagicMock()
+    monkeypatch.setattr(config, "create_all_metadata", mock_fx)
+    with create_test_client(route_handlers=[], plugins=[plugin]) as _client:
+        mock_fx.assert_not_called()
 
 
 async def test_create_all(monkeypatch: MonkeyPatch) -> None:
@@ -60,11 +59,10 @@ async def test_create_all(monkeypatch: MonkeyPatch) -> None:
 
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://", create_all=True)
     plugin = SQLAlchemyInitPlugin(config=config)
-    with patch.object(
-        config,
-        "create_all_metadata",
-    ) as create_all_metadata_mock, create_test_client(route_handlers=[], plugins=[plugin]) as _client:
-        create_all_metadata_mock.assert_called_once()
+    mock_fx = MagicMock()
+    monkeypatch.setattr(config, "create_all_metadata", mock_fx)
+    with create_test_client(route_handlers=[], plugins=[plugin]) as _client:
+        mock_fx.assert_called_once()
 
 
 async def test_before_send_handler_success_response(create_scope: Callable[..., Scope]) -> None:
