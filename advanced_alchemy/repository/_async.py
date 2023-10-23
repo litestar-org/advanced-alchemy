@@ -114,7 +114,12 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
 
     @classmethod
-    def set_id_attribute_value(cls, item_id: Any, item: ModelT, id_attribute: str | None = None) -> ModelT:
+    def set_id_attribute_value(
+        cls,
+        item_id: Any,
+        item: ModelT,
+        id_attribute: str | None = None,
+    ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
         Args:

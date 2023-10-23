@@ -25,6 +25,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.repository._util import get_instrumented_attr
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 
@@ -1427,6 +1428,18 @@ async def test_service_update_method_no_item_id(author_service: AuthorService, f
     obj = await maybe_async(author_service.get(first_author_id))
     obj.name = "Updated Name2"
     updated_obj = await maybe_async(author_service.update(data=obj))
+    assert updated_obj.id == first_author_id
+    assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_instrumented_attribute(
+    author_service: AuthorService,
+    first_author_id: Any,
+) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    id_attribute = get_instrumented_attr(author_service.repository.model_type, "id")
+    obj.name = "Updated Name2"
+    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute, item_id=first_author_id))
     assert updated_obj.id == first_author_id
     assert updated_obj.name == obj.name
 

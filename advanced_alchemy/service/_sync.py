@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
+from sqlalchemy.orm import InstrumentedAttribute, Session
+
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
 
@@ -17,7 +19,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from sqlalchemy import Select, StatementLambdaElement
-    from sqlalchemy.orm import InstrumentedAttribute, Session
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -314,8 +315,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             Updated representation.
         """
         data = self.to_model(data, "update")
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = cast("str", id_attribute.description)
         if item_id is not None:
-            data = self.repository.set_id_attribute_value(item_id, data)
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
         return self.repository.update(
             data=data,
             attribute_names=attribute_names,
