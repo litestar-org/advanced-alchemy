@@ -1522,3 +1522,10 @@ async def test_service_upsert_many_method(
     assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
     assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    with pytest.deprecated_call():
+        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+        assert existing_obj.id == first_author_id
+        assert existing_created is False

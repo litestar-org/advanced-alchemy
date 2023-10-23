@@ -457,7 +457,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         """
         match_fields = match_fields or self.match_fields
         validated_model = self.to_model(kwargs, "create")
-        return self.repository.get_or_create(
+        return self.repository.get_or_upsert(
             match_fields=match_fields,
             upsert=upsert,
             attribute_names=attribute_names,
