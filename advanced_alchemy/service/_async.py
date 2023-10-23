@@ -313,7 +313,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Updated representation.
         """
         data = await self.to_model(data, "update")
-        data = self.repository.set_id_attribute_value(item_id, data)
+        if item_id is not None:
+            data = self.repository.set_id_attribute_value(item_id, data)
         return await self.repository.update(
             data=data,
             attribute_names=attribute_names,

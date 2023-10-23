@@ -1416,10 +1416,18 @@ async def test_service_exists_method(author_service: AuthorService, first_author
     assert exists
 
 
-async def test_service_update_method(author_service: AuthorService, first_author_id: Any) -> None:
+async def test_service_update_method_item_id(author_service: AuthorService, first_author_id: Any) -> None:
     obj = await maybe_async(author_service.get(first_author_id))
     obj.name = "Updated Name2"
     updated_obj = await maybe_async(author_service.update(item_id=first_author_id, data=obj))
+    assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_no_item_id(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    obj.name = "Updated Name2"
+    updated_obj = await maybe_async(author_service.update(data=obj))
+    assert updated_obj.id == first_author_id
     assert updated_obj.name == obj.name
 
 
