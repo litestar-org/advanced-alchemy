@@ -24,24 +24,14 @@ classifiers = [
   "Topic :: Database",
   "Topic :: Database :: Database Engines/Servers",
 ]
-dependencies = [
-  "sqlalchemy>=2.0.20",
-  "alembic>=1.12.0",
-  "typing_extensions",
-]
+dependencies = ["sqlalchemy>=2.0.20", "alembic>=1.12.0", "typing_extensions"]
 description = "Ready-to-go SQLAlchemy concoctions."
-keywords = [
-  "sqlalchemy",
-  "alembic",
-  "litestar",
-  "sanic",
-  "fastapi",
-]
+keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi"]
 license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.3.3"
+version = "0.3.4"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
@@ -74,6 +64,7 @@ dev = [
   "msgspec>=0.18.2",
   "orjson>=3.9.7",
   "pyodbc>=4.0.39",
+  "duckdb>=0.9.0",
 ]
 docs = [
   "sphinx>=7.1.2",
@@ -113,12 +104,22 @@ test = [
   "time-machine>=2.12.0",
   "httpx>=0.24.1",
   "pytz",
+  "coverage",
+  "pytest-cov",
 ]
 
 [tool.pytest.ini_options]
-addopts = "-m='not integration' --dist=loadgroup -n auto"
+addopts = [
+  "--dist",
+  "loadgroup",
+  "-n",
+  "auto",
+  "--cov-report",
+  "term-missing",
+  "--cov",
+  "advanced_alchemy",
+]
 asyncio_mode = "auto"
-
 markers = [
   "integration: SQLAlchemy integration tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
@@ -141,6 +142,31 @@ filterwarnings = [
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
+]
+
+[tool.coverage.run]
+concurrency = ["multiprocessing", "thread"]
+omit = [
+  "*/tests/*",
+  "advanced_alchemy/alembic/templates/*",
+  "advanced_alchemy/extensions/litestar/cli.py",
+  "advanced_alchemy/alembic/commands.py",
+  "advanced_alchemy/types.py",
+  "advanced_alchemy/operations.py",
+  "advanced_alchemy/service/*",
+]
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+  'pragma: no cover',
+  'if TYPE_CHECKING:',
+  'except ImportError as e:',
+  'except ImportError:',
+  '\.\.\.',
+  'raise NotImplementedError',
+  'if VERSION.startswith("1"):',
+  'if pydantic.VERSION.startswith("1"):',
 ]
 
 [tool.black]
@@ -173,6 +199,7 @@ ignore = [
   "TD",
   "ARG002", # ignore for now; investigate
   "PERF203", # ignore for now; investigate
+  "PD011", # pandas
 ]
 line-length = 120
 select = ["ALL"]
@@ -257,7 +284,9 @@ warn_unused_ignores = false
 
 [tool.unasyncd]
 add_editors_note = true
+cache = false
 ruff_fix = true
+update_docstrings = true
 
 [tool.unasyncd.files]
 "advanced_alchemy/repository/_async.py" = "advanced_alchemy/repository/_sync.py"
