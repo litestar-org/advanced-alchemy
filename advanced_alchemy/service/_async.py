@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
 from sqlalchemy.orm import InstrumentedAttribute
 
+from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
 
@@ -316,6 +317,12 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         data = await self.to_model(data, "update")
         if isinstance(id_attribute, InstrumentedAttribute):
             id_attribute = cast("str", id_attribute.description)
+        if item_id is None and self.repository.get_id_attribute_value(item=data, id_attribute=id_attribute) is None:
+            msg = (
+                "Could not identify ID attribute value.  One of the following is required: "
+                f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
+            )
+            raise RepositoryError(msg)
         if item_id is not None:
             data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
         return await self.repository.update(
