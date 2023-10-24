@@ -323,9 +323,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 "Could not identify ID attribute value.  One of the following is required: "
                 f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
             )
-            raise RepositoryError(
-                msg,
-            )
+            raise RepositoryError(msg)
         if item_id is not None:
             data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
         return self.repository.update(
