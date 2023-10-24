@@ -1552,6 +1552,6 @@ async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, fir
         assert existing_created is False
 
 
-async def test_service_update_no_pk(author_service: AuthorService, first_author_id: Any) -> None:
+async def test_service_update_no_pk(author_service: AuthorService) -> None:
     with pytest.raises(RepositoryError):
         _existing_obj = await maybe_async(author_service.update(data={"name": "Agatha Christie"}))
