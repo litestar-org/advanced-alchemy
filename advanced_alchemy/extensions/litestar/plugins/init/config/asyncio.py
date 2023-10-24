@@ -53,7 +53,7 @@ def autocommit_handler_maker(
     extra_commit_statuses: set[int] | None = None,
     extra_rollback_statuses: set[int] | None = None,
 ) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
-    """Set up the handler to issue a transactin commit or rollback based on specified status codes
+    """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
         commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
         extra_commit_statuses: A set of additional status codes that trigger a commit
@@ -195,6 +195,15 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         engine = cast("AsyncEngine", app.state.pop(self.engine_app_state_key))
         await engine.dispose()
+
+    async def create_all_metadata(self, app: Litestar) -> None:
+        """Create all metadata
+
+        Args:
+            app (Litestar): The ``Litestar`` instance
+        """
+        async with self.get_engine().begin() as conn:
+            await conn.run_sync(self.alembic_config.target_metadata.create_all)
 
     def create_app_state_items(self) -> dict[str, Any]:
         """Key/value pairs to be stored in application state."""

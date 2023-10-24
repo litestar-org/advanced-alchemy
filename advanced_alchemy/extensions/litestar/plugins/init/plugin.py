@@ -77,6 +77,8 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         )
         app_config.before_send.append(self._config.before_send_handler)
         app_config.on_startup.insert(0, self._config.update_app_state)
+        if self._config.create_all:
+            app_config.on_startup.append(self._config.create_all_metadata)
         app_config.on_shutdown.append(self._config.on_shutdown)
         app_config.signature_namespace.update(self._config.signature_namespace)
         app_config.signature_namespace.update(signature_namespace_values)

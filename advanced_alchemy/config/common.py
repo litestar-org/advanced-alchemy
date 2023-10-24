@@ -117,6 +117,13 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     If set, the plugin will use the provided instance rather than instantiate an engine.
     """
+    create_all: bool = False
+    """If true, all models are automatically created on engine creation."""
+
+    metadata: MetaData | None = None
+    """Optional metadata to use.
+
+      If set, the plugin will use the provided instance rather than the default metadata."""
 
     def __post_init__(self) -> None:
         if self.connection_string is not None and self.engine_instance is not None:
