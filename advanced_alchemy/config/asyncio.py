@@ -67,3 +67,4 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     def __post_init__(self) -> None:
         if self.metadata:
             self.alembic_config.target_metadata = self.metadata
+        super().__post_init__()
