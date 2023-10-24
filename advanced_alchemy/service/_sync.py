@@ -319,7 +319,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         if isinstance(id_attribute, InstrumentedAttribute):
             id_attribute = cast("str", id_attribute.description)
         if item_id is None and self.repository.get_id_attribute_value(item=data, id_attribute=id_attribute) is None:
-            msg = f"Could not identify ID attribute value.  One of the following is required: ``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
+            msg = (
+                "Could not identify ID attribute value.  One of the following is required: "
+                f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
+            )
             raise RepositoryError(
                 msg,
             )
