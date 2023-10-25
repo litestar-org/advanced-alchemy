@@ -12,7 +12,7 @@ from litestar.dto._backend import _rename_field
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.dto.types import RenameStrategy
 from litestar.testing import create_test_client
-from sqlalchemy import Column, ForeignKey, Integer, String, Table
+from sqlalchemy import Column, ForeignKey, Integer, String, Table, func, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -56,6 +56,9 @@ class Book(Base):
     bar: Mapped[str] = mapped_column(default="Hello")  # pyright: ignore
     SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
+    number_of_reviews: Mapped[int | None] = column_property(
+        select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),
+    )
 
 
 @dataclass
@@ -70,6 +73,7 @@ class BookAuthorTestData:
     book_spam_bar: str = "GoodBye"
     book_review_id: str = "23432"
     book_review: str = "Excellent!"
+    number_of_reviews: int | None = None
 
 
 @pytest.fixture
@@ -94,6 +98,7 @@ def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dic
                     _rename_field(name="review", strategy=rename_strategy): test_data.book_review,
                 },
             ],
+            _rename_field(name="number_of_reviews", strategy=rename_strategy): test_data.number_of_reviews,
         }
         book = Book(
             id=test_data.book_id,
@@ -145,6 +150,35 @@ def test_fields_alias_generator_sqlalchemy(
 
         response_callback = client.post("/", json=json_data)
         assert response_callback.json() == json_data
+
+
+class ConcreteBase(Base):
+    pass
+
+
+func_result_query = select(func.count(1)).scalar_subquery()
+model_with_func_query = select(ConcreteBase, func_result_query.label("func_result")).subquery()
+
+
+class ModelWithFunc(Base):
+    __table__ = model_with_func_query
+    func_result: Mapped[int | None] = column_property(model_with_func_query.c.func_result)
+
+
+def test_model_using_func() -> None:
+    instance = ModelWithFunc(id="hi")
+    config = SQLAlchemyDTOConfig()
+    dto = SQLAlchemyDTO[Annotated[ModelWithFunc, config]]
+
+    @get(dto=dto, signature_namespace={"ModelWithFunc": ModelWithFunc})
+    def get_handler() -> ModelWithFunc:
+        return instance
+
+    with create_test_client(
+        route_handlers=[get_handler],
+    ) as client:
+        response_callback = client.get("/")
+        assert response_callback
 
 
 def test_dto_with_association_proxy(create_module: Callable[[str], ModuleType]) -> None:
