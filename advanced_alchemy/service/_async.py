@@ -435,6 +435,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         self,
         match_fields: list[str] | None = None,
         upsert: bool = True,
+        create: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -449,6 +450,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 empty, all fields are matched.
             upsert: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
+            create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
                 method.
             with_for_update: indicating FOR UPDATE should be used, or may be a
@@ -470,6 +472,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         return await self.repository.get_or_upsert(
             match_fields=match_fields,
             upsert=upsert,
+            create=create,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,

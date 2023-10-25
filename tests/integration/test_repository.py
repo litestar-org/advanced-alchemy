@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
-from advanced_alchemy.exceptions import RepositoryError
+from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -957,6 +957,24 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
     assert existing_obj.id == first_author_id
     assert existing_obj.dob == now.date()
     assert existing_created is False
+
+
+async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    now = datetime.now()
+    existing_obj, existing_created = await maybe_async(
+        author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
+    )
+    assert existing_obj.id == first_author_id
+    assert existing_obj.dob != now.date()
+    assert existing_created is False
+
+
+async def test_repo_get_or_upsert_match_filter_no_create(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    now = datetime.now()
+    with pytest.raises(NotFoundError):
+        _ = await maybe_async(
+            author_repo.get_or_upsert(match_fields="name", create=False, name="Agatha Christie123", dob=now.date()),
+        )
 
 
 async def test_repo_upsert_method(

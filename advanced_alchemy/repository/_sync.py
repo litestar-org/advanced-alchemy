@@ -499,6 +499,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         self,
         match_fields: list[str] | str | None = None,
         upsert: bool = True,
+        create: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -513,6 +514,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 empty, all fields are matched.
             upsert: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
+            create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
                 method.
             with_for_update: indicating FOR UPDATE should be used, or may be a
@@ -543,6 +545,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         else:
             match_filter = kwargs
         existing = self.get_one_or_none(**match_filter)
+        if not create:
+            self.check_not_found(existing)
         if not existing:
             return self.add(self.model_type(**kwargs)), True  # pyright: ignore[reportGeneralTypeIssues]
         if upsert:
@@ -896,6 +900,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
+        match_fields: list[str] | str | None = None,
     ) -> list[ModelT]:
         """Update or create instance.
 
@@ -912,6 +917,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             The updated or created instance.
