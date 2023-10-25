@@ -9,6 +9,7 @@ from sqlalchemy import (
     Select,
     StatementLambdaElement,
     TextClause,
+    and_,
     any_,
     delete,
     lambda_stmt,
@@ -59,6 +60,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     _prefer_any: bool = False
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
+    _prefer_merge: bool
 
     def __init__(
         self,
@@ -100,6 +102,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             raise ValueError(msg)
         self._dialect = self.session.bind.dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+        self._prefer_merge = self._supports_merge_operations()
 
     @classmethod
     def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
@@ -837,6 +840,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
+        match_fields: list[str] | str | None = None,
     ) -> ModelT:
         """Update or create instance.
 
@@ -857,6 +861,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             The updated or created instance.
@@ -864,6 +870,22 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        if match_fields:
+            match_filter = {
+                field_name: getattr(data, field_name, None)
+                for field_name in match_fields
+                if getattr(data, field_name, None) is not None
+            }
+        elif getattr(data, self.id_attribute, None) is not None:
+            match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
+        else:
+            match_filter = data.to_dict()
+        existing = self.get_one_or_none(**match_filter)
+        if not existing:
+            return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
             instance = self._attach_to_session(data, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
@@ -929,14 +951,26 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        match_filter: list[FilterTypes | ColumnElement[bool]] = [
+            CollectionFilter(
+                field_name=self.id_attribute,
+                values=[getattr(datum, self.id_attribute) for datum in data] if data else None,
+            ),
+        ]
+        if match_fields:
+            for field_name in match_fields:
+                field = get_instrumented_attr(self.model_type, field_name)
+                matched_values = [getattr(datum, field_name) for datum in data if datum is not None]
+                if self._prefer_any:
+                    match_filter.append(and_(any(*[matched_values or []]) == field))  # type: ignore[arg-type]
+                else:
+                    match_filter.append(and_(field.in_(matched_values)))
 
         with wrap_sqlalchemy_exception():
-            existing_objs = self.list(
-                CollectionFilter(
-                    field_name=self.id_attribute,
-                    values=[getattr(datum, self.id_attribute) for datum in data] if data else None,
-                ),
-            )
+            existing_objs = self.list(*match_filter, auto_expunge=False)
             existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs]
             for datum in data:
                 if getattr(datum, self.id_attribute) in existing_ids:

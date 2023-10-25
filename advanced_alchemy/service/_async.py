@@ -365,6 +365,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
+        match_fields: list[str] | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -383,7 +384,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             Updated or created representation.
@@ -397,6 +399,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             auto_refresh=auto_refresh,
+            match_fields=match_fields,
         )
 
     async def upsert_many(
@@ -405,6 +408,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
+        match_fields: list[str] | None = None,
     ) -> list[ModelT]:
         """Wrap repository upsert operation.
 
@@ -418,7 +422,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             Updated or created representation.
@@ -429,6 +434,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             no_merge=no_merge,
+            match_fields=match_fields,
         )
 
     async def get_or_upsert(
