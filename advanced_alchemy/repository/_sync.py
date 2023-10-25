@@ -900,7 +900,6 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
-        match_fields: list[str] | str | None = None,
     ) -> list[ModelT]:
         """Update or create instance.
 
@@ -917,8 +916,6 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            match_fields: a list of keys to use to match the existing model.  When
-                empty, all fields are matched.
 
         Returns:
             The updated or created instance.
