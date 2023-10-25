@@ -26,6 +26,7 @@ from sqlalchemy.orm import (
     RelationshipDirection,
     RelationshipProperty,
 )
+from sqlalchemy.sql.expression import ColumnClause, Label
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
@@ -38,7 +39,7 @@ __all__ = ("SQLAlchemyDTO",)
 
 T = TypeVar("T", bound="DeclarativeBase | Collection[DeclarativeBase]")
 
-ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty"
+ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"
 SQLA_NS = {**vars(orm), **vars(sql)}
 
 
@@ -102,8 +103,8 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
         elem: ElementType
         if isinstance(orm_descriptor.property, ColumnProperty):
-            if not isinstance(orm_descriptor.property.expression, Column):
-                msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}'"
+            if not isinstance(orm_descriptor.property.expression, (Column, ColumnClause, Label)):
+                msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}, {type(orm_descriptor.property.expression)}'"
                 raise NotImplementedError(msg)
             elem = orm_descriptor.property.expression
         elif isinstance(orm_descriptor.property, (RelationshipProperty, CompositeProperty)):
@@ -123,6 +124,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         except KeyError:
             field_definition = parse_type_from_element(elem)
 
+        dto_field = elem.info.get(DTO_FIELD_META_KEY, DTOField()) if hasattr(elem, "info") else DTOField()
         return [
             DTOFieldDefinition.from_field_definition(
                 field_definition=replace(
@@ -131,7 +133,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                     default=default,
                 ),
                 default_factory=default_factory,
-                dto_field=elem.info.get(DTO_FIELD_META_KEY, DTOField()),
+                dto_field=dto_field,
                 model_name=model_name,
             ),
         ]
@@ -348,7 +350,7 @@ def parse_type_from_element(elem: ElementType) -> FieldDefinition:
     if isinstance(elem, CompositeProperty):
         return FieldDefinition.from_annotation(elem.composite_class)
 
-    msg = f"Unable to parse type from element '{elem}'. Consider adding a type hint."  # type: ignore[unreachable]
+    msg = f"Unable to parse type from element '{elem}'. Consider adding a type hint."
     raise ImproperConfigurationError(
         msg,
     )
