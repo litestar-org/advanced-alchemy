@@ -102,7 +102,6 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             raise ValueError(msg)
         self._dialect = self.session.bind.dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
-        self._prefer_merge = self._supports_merge_operations()
 
     @classmethod
     def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
