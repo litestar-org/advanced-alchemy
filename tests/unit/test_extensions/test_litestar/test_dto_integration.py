@@ -56,7 +56,7 @@ class Book(Base):
     bar: Mapped[str] = mapped_column(default="Hello")  # pyright: ignore
     SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
-    number_of_reviews: Mapped[Optional[int]] = column_property(
+    number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),
     )
 
@@ -162,7 +162,7 @@ model_with_func_query = select(ConcreteBase, func_result_query.label("func_resul
 
 class ModelWithFunc(Base):
     __table__ = model_with_func_query
-    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)
+    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)  # noqa: UP007
 
 
 def test_model_using_func() -> None:
