@@ -18,6 +18,7 @@ from sqlalchemy.orm import (
     mapped_column,
     orm_insert_sentinel,
     registry,
+    Mapper
 )
 
 from advanced_alchemy.types import GUID, BigIntIdentity, DateTimeUTC, JsonB
@@ -78,8 +79,9 @@ class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol."""
 
     __table__: FromClause
+    __mapper__: Mapper
     __name__: ClassVar[str]
-
+    
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
