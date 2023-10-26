@@ -969,11 +969,23 @@ async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepo
     assert existing_created is False
 
 
-async def test_repo_get_or_upsert_match_filter_no_create(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_and_update(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    existing_obj, existing_updated = await maybe_async(
+        author_repo.get_and_update(name="Agatha Christie"),
+    )
+    assert existing_obj.id == first_author_id
+    assert existing_updated is False
+
+
+async def test_repo_get_and_upsert_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     with pytest.raises(NotFoundError):
         _ = await maybe_async(
-            author_repo.get_or_upsert(match_fields="name", create=False, name="Agatha Christie123", dob=now.date()),
+            author_repo.get_and_update(match_fields="name", name="Agatha Christie123", dob=now.date()),
+        )
+    with pytest.raises(NotFoundError):
+        _ = await maybe_async(
+            author_repo.get_and_update(name="Agatha Christie123"),
         )
 
 
@@ -1509,6 +1521,16 @@ async def test_service_get_or_upsert_method(author_service: AuthorService, first
     assert new_obj.id is not None
     assert new_obj.name == "New Author"
     assert new_created
+
+
+async def test_service_get_and_update_method(author_service: AuthorService, first_author_id: Any) -> None:
+    existing_obj, existing_created = await maybe_async(
+        author_service.get_and_update(name="Agatha Christie", match_fields="name"),
+    )
+    assert existing_obj.id == first_author_id
+    assert existing_created is False
+    with pytest.raises(NotFoundError):
+        _ = await maybe_async(author_service.get_and_update(name="New Author"))
 
 
 async def test_service_upsert_method(
