@@ -955,7 +955,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         match_filter: list[FilterTypes | ColumnElement[bool]] = [
             CollectionFilter(
                 field_name=self.id_attribute,
-                values=[getattr(datum, self.id_attribute) for datum in data] if data else None,
+                values=[getattr(datum, self.id_attribute) for datum in data if datum is not None] if data else None,
             ),
         ]
         if match_fields:
@@ -969,7 +969,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
         with wrap_sqlalchemy_exception():
             existing_objs = await self.list(*match_filter, auto_expunge=False)
-            existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs]
+            existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs if datum is not None]
             for datum in data:
                 if getattr(datum, self.id_attribute) in existing_ids:
                     data_to_update.append(datum)
