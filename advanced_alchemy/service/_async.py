@@ -434,7 +434,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     async def get_or_upsert(
         self,
         match_fields: list[str] | None = None,
-        upsert: bool = True,
+        update: bool = True,
         create: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -448,7 +448,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Args:
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
-            upsert: When using match_fields and actual model values differ from
+            update: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
             create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
@@ -471,7 +471,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         validated_model = await self.to_model(kwargs, "create")
         return await self.repository.get_or_upsert(
             match_fields=match_fields,
-            upsert=upsert,
+            update=update,
             create=create,
             attribute_names=attribute_names,
             with_for_update=with_for_update,

@@ -485,7 +485,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         """
         return await self.get_or_upsert(
             match_fields=match_fields,
-            upsert=upsert,
+            update=upsert,
+            create=upsert,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,
@@ -497,7 +498,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
     async def get_or_upsert(
         self,
         match_fields: list[str] | str | None = None,
-        upsert: bool = True,
+        update: bool = True,
         create: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -511,7 +512,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Args:
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
-            upsert: When using match_fields and actual model values differ from
+            update: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
             create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
@@ -548,7 +549,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             self.check_not_found(existing)
         if not existing:
             return await self.add(self.model_type(**kwargs)), True  # pyright: ignore[reportGeneralTypeIssues]
-        if upsert:
+        if update:
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, None)
                 if field and field != new_field_value:
