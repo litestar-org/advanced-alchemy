@@ -1027,6 +1027,55 @@ async def test_repo_upsert_many_method(
     assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
 
 
+async def test_repo_upsert_many_method_match(
+    author_repo: AuthorRepository,
+    author_model: AuthorModel,
+) -> None:
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_objs = await maybe_async(
+        author_repo.upsert_many(
+            data=[
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["id"],
+        ),
+    )
+    assert len(upsert_update_objs) == 3
+
+
+async def test_repo_upsert_many_method_match_non_id(
+    author_repo: AuthorRepository,
+    author_model: AuthorModel,
+) -> None:
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_count = await maybe_async(author_repo.count())
+    existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    _ = await maybe_async(
+        author_repo.upsert_many(
+            data=[
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["name"],
+        ),
+    )
+    existing_count_now = await maybe_async(author_repo.count())
+
+    assert existing_count_now == existing_count + 1
+
+
 async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
     before_filter = BeforeAfter(
         field_name="created_at",
@@ -1535,6 +1584,32 @@ async def test_service_upsert_method(
     assert upsert2_insert_obj.name == "Another Author"
 
 
+async def test_service_upsert_method_match(
+    author_service: AuthorService,
+    first_author_id: Any,
+    author_model: AuthorModel,
+    new_pk_id: Any,
+) -> None:
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_obj = await maybe_async(author_service.upsert(data=existing_obj, match_fields=["name"]))
+    assert upsert_update_obj.id != first_author_id
+    assert upsert_update_obj.name == "Agatha C."
+
+    upsert_insert_obj = await maybe_async(
+        author_service.upsert(data=author_model(name="An Author"), match_fields=["name"]),
+    )
+    assert upsert_insert_obj.id is not None
+    assert upsert_insert_obj.name == "An Author"
+
+    # ensures that it still works even if the ID is added before insert
+    upsert2_insert_obj = await maybe_async(
+        author_service.upsert(author_model(id=new_pk_id, name="Another Author"), match_fields=["name"]),
+    )
+    assert upsert2_insert_obj.id is not None
+    assert upsert2_insert_obj.name == "Another Author"
+
+
 async def test_service_upsert_many_method(
     author_service: AuthorService,
     author_model: AuthorModel,
@@ -1561,6 +1636,61 @@ async def test_service_upsert_many_method(
     assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
     assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_service_upsert_many_method_match_fields_id(
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_objs = await maybe_async(
+        author_service.upsert_many(
+            [
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["id"],
+        ),
+    )
+    assert len(upsert_update_objs) == 3
+    assert upsert_update_objs[0].id is not None
+    assert upsert_update_objs[0].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[1].id is not None
+    assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[2].id is not None
+    assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_service_upsert_many_method_match_fields_non_id(
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_count = await maybe_async(author_service.count())
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    _ = await maybe_async(
+        author_service.upsert_many(
+            [
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["name"],
+        ),
+    )
+    existing_count_now = await maybe_async(author_repo.count())
+
+    assert existing_count_now == existing_count + 1
 
 
 async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, first_author_id: Any) -> None:
