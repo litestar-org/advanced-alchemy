@@ -13,6 +13,7 @@ from sqlalchemy.event import listens_for
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
+    Mapper,
     Session,
     declared_attr,
     mapped_column,
@@ -78,6 +79,7 @@ class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol."""
 
     __table__: FromClause
+    __mapper__: Mapper
     __name__: ClassVar[str]
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
@@ -135,6 +137,7 @@ class CommonTableAttributes:
 
     __name__: ClassVar[str]
     __table__: FromClause
+    __mapper__: Mapper
 
     # noinspection PyMethodParameters
     @declared_attr.directive
