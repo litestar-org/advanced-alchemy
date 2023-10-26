@@ -959,7 +959,7 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
     assert existing_created is False
 
 
-async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_upsert_match_filter_no_update(author_repo: AuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", update=False, name="Agatha Christie", dob=now.date()),
@@ -1590,6 +1590,10 @@ async def test_service_upsert_method_match(
     author_model: AuthorModel,
     new_pk_id: Any,
 ) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
     existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
     upsert_update_obj = await maybe_async(
@@ -1682,7 +1686,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     existing_obj.name = "Agatha C."
     _ = await maybe_async(
         author_service.upsert_many(
-            [
+            data=[
                 existing_obj,
                 author_model(name="Inserted Author"),
                 author_model(name="Custom Author"),
