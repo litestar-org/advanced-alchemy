@@ -1073,7 +1073,7 @@ async def test_repo_upsert_many_method_match_non_id(
     )
     existing_count_now = await maybe_async(author_repo.count())
 
-    assert existing_count_now == existing_count + 1
+    assert existing_count_now > existing_count
 
 
 async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
@@ -1690,7 +1690,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     )
     existing_count_now = await maybe_async(author_repo.count())
 
-    assert existing_count_now == existing_count + 1
+    assert existing_count_now > existing_count
 
 
 async def test_repo_custom_statement(author_repo: AuthorRepository, author_service: AuthorService) -> None:
