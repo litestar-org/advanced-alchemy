@@ -373,7 +373,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing(
     mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=mock_instance))
     mock_repo_attach_to_session.return_value = mock_instance
 
-    instance, created = await maybe_async(mock_repo.get_or_upsert(id="instance-id", update=False))
+    instance, created = await maybe_async(mock_repo.get_or_upsert(id="instance-id", upsert=False))
 
     assert instance is mock_instance
     assert created is False
@@ -394,7 +394,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_upsert(
     mock_repo_attach_to_session.return_value = mock_instance
 
     instance, created = await maybe_async(
-        mock_repo.get_or_upsert(id="instance-id", update=True, an_extra_attribute="yep"),
+        mock_repo.get_or_upsert(id="instance-id", upsert=True, an_extra_attribute="yep"),
     )
 
     assert instance is mock_instance
@@ -415,7 +415,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_no_upsert(
     mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=mock_instance))
 
     instance, created = await maybe_async(
-        mock_repo.get_or_upsert(id="instance-id", update=False, an_extra_attribute="yep"),
+        mock_repo.get_or_upsert(id="instance-id", upsert=False, an_extra_attribute="yep"),
     )
 
     assert instance is mock_instance

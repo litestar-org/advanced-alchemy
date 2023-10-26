@@ -59,7 +59,6 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     _prefer_any: bool = False
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    _prefer_merge: bool
 
     def __init__(
         self,
