@@ -391,7 +391,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Updated or created representation.
         """
         data = await self.to_model(data, "upsert")
-        item_id = self.repository.get_id_attribute_value(item=data)
+        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)
         if item_id is not None:
             self.repository.set_id_attribute_value(item_id, data)
         return await self.repository.upsert(
