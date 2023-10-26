@@ -10,7 +10,7 @@ from uuid import UUID
 import pytest
 import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import Engine, Table, insert
+from sqlalchemy import Engine, Table, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -1691,6 +1691,17 @@ async def test_service_upsert_many_method_match_fields_non_id(
     existing_count_now = await maybe_async(author_repo.count())
 
     assert existing_count_now == existing_count + 1
+
+
+async def test_repo_custom_statement(author_repo: AuthorRepository, author_service: AuthorService) -> None:
+    """Test Repo with custom statement
+
+    Args:
+        author_repo: The author mock repository
+    """
+    service_type = type(author_service)
+    new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
+    assert await maybe_async(new_service.count()) == 2
 
 
 async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, first_author_id: Any) -> None:

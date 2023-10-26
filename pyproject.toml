@@ -148,7 +148,8 @@ filterwarnings = [
 concurrency = ["multiprocessing", "thread"]
 omit = [
   "*/tests/*",
-  "advanced_alchemy/alembic/templates/*",
+  "advanced_alchemy/alembic/templates/asyncio/env.py",
+  "advanced_alchemy/alembic/templates/sync/env.py",
   "advanced_alchemy/extensions/litestar/cli.py",
   "advanced_alchemy/alembic/commands.py",
   "advanced_alchemy/types.py",
