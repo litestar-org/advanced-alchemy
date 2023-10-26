@@ -487,8 +487,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         """
         return self.get_or_upsert(
             match_fields=match_fields,
-            update=upsert,
-            create=upsert,
+            upsert=upsert,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,
@@ -500,8 +499,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     def get_or_upsert(
         self,
         match_fields: list[str] | str | None = None,
-        update: bool = True,
-        create: bool = True,
+        upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -514,9 +512,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Args:
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
-            update: When using match_fields and actual model values differ from
+            upsert: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
-            create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
                 method.
             with_for_update: indicating FOR UPDATE should be used, or may be a
@@ -547,11 +544,9 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         else:
             match_filter = kwargs
         existing = self.get_one_or_none(**match_filter)
-        if not create:
-            self.check_not_found(existing)
         if not existing:
             return self.add(self.model_type(**kwargs)), True  # pyright: ignore[reportGeneralTypeIssues]
-        if update:
+        if upsert:
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, None)
                 if field and field != new_field_value:
