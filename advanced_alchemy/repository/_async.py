@@ -7,7 +7,6 @@ from sqlalchemy import (
     Select,
     StatementLambdaElement,
     TextClause,
-    and_,
     any_,
     delete,
     lambda_stmt,
@@ -963,15 +962,15 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 field = get_instrumented_attr(self.model_type, field_name)
                 matched_values = [getattr(datum, field_name) for datum in data if datum is not None]
                 if self._prefer_any:
-                    match_filter.append(and_(any(*[matched_values or []]) == field))  # type: ignore[arg-type]
+                    match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
                 else:
-                    match_filter.append(and_(field.in_(matched_values)))
+                    match_filter.append(field.in_(matched_values))
 
         with wrap_sqlalchemy_exception():
             existing_objs = await self.list(*match_filter, auto_expunge=False)
             existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs if datum is not None]
             for datum in data:
-                if getattr(datum, self.id_attribute) in existing_ids:
+                if getattr(datum, self.id_attribute) is not None in existing_ids:
                     data_to_update.append(datum)
                 else:
                     data_to_insert.append(datum)
