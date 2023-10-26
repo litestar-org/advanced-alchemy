@@ -1592,7 +1592,9 @@ async def test_service_upsert_method_match(
 ) -> None:
     existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
-    upsert_update_obj = await maybe_async(author_service.upsert(data=existing_obj, match_fields=["name"]))
+    upsert_update_obj = await maybe_async(
+        author_service.upsert(data=existing_obj.to_dict(exclude={"id"}), match_fields=["name"]),
+    )
     assert upsert_update_obj.id != first_author_id
     assert upsert_update_obj.name == "Agatha C."
 
@@ -1688,7 +1690,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
             match_fields=["name"],
         ),
     )
-    existing_count_now = await maybe_async(author_repo.count())
+    existing_count_now = await maybe_async(author_service.count())
 
     assert existing_count_now > existing_count
 

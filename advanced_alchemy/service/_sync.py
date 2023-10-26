@@ -392,7 +392,9 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             Updated or created representation.
         """
         data = self.to_model(data, "upsert")
-        self.repository.set_id_attribute_value(item_id, data)
+        item_id = self.repository.get_id_attribute_value(item=data)
+        if item_id is not None:
+            self.repository.set_id_attribute_value(item_id, data)
         return self.repository.upsert(
             data=data,
             attribute_names=attribute_names,
