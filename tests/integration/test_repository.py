@@ -962,7 +962,7 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
 async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     existing_obj, existing_created = await maybe_async(
-        author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
+        author_repo.get_or_upsert(match_fields="name", update=False, name="Agatha Christie", dob=now.date()),
     )
     assert existing_obj.id == first_author_id
     assert existing_obj.dob != now.date()
