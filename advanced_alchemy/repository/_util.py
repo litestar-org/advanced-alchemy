@@ -47,9 +47,8 @@ def get_instrumented_attr(model: type[ModelProtocol], key: str | InstrumentedAtt
 def model_from_dict(model: ModelT, **kwargs: Any) -> ModelT:
     """Return ORM Object from Dictionary."""
     data = {}
-    for column_name in model.__mapper__.columns.keys():
+    for column_name in model.__mapper__.columns.keys():  # noqa: SIM118
         column_val = kwargs.get(column_name, None)
         if column_val is not None:
             data[column_name] = column_val
     return model(**data)  # type: ignore  # noqa: PGH003
-
