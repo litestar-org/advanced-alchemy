@@ -581,8 +581,6 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
 
-
-
         Args:
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
