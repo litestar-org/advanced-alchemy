@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import Field, fields, is_dataclass
 from inspect import isclass
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Protocol, Type, TypeGuard, final, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Protocol, Type, final, runtime_checkable
 
 if TYPE_CHECKING:
     from typing import AbstractSet
 
-    from typing_extensions import TypeAlias
+    from typing_extensions import TypeAlias, TypeGuard
 
 
 @final
