@@ -478,7 +478,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         validated_model = await self.to_model(kwargs, "create")
         return await self.repository.get_or_upsert(
             match_fields=match_fields,
-            update=upsert,
+            upsert=upsert,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,

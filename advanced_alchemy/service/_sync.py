@@ -479,7 +479,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         validated_model = self.to_model(kwargs, "create")
         return self.repository.get_or_upsert(
             match_fields=match_fields,
-            update=upsert,
+            upsert=upsert,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,
