@@ -24,7 +24,11 @@ classifiers = [
   "Topic :: Database",
   "Topic :: Database :: Database Engines/Servers",
 ]
-dependencies = ["sqlalchemy>=2.0.20", "alembic>=1.12.0", "typing_extensions"]
+dependencies = [
+  "sqlalchemy>=2.0.20",
+  "alembic>=1.12.0",
+  "typing-extensions>=4.0.0",
+]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi"]
 license = {text = "MIT"}
