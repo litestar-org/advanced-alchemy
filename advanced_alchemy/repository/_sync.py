@@ -486,8 +486,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         """
         return self.get_or_upsert(
             match_fields=match_fields,
-            update=upsert,
-            create=upsert,
+            upsert=upsert,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,
