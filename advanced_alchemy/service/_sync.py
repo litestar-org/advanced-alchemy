@@ -442,7 +442,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
 
     def get_or_upsert(
         self,
-        match_fields: list[str] | None = None,
+        match_fields: list[str] | str | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -480,6 +480,49 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         return self.repository.get_or_upsert(
             match_fields=match_fields,
             update=upsert,
+            attribute_names=attribute_names,
+            with_for_update=with_for_update,
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+            auto_refresh=auto_refresh,
+            **validated_model.to_dict(),
+        )
+
+    def get_and_update(
+        self,
+        match_fields: list[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]:
+        """Wrap repository instance creation.
+
+        Args:
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
+            attribute_names: an iterable of attribute names to pass into the ``update``
+                method.
+            with_for_update: indicating FOR UPDATE should be used, or may be a
+                dictionary containing flags to indicate a more specific set of
+                FOR UPDATE flags for the SELECT
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
+            auto_refresh: Refresh object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
+            auto_commit: Commit objects before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            **kwargs: Identifier of the instance to be retrieved.
+
+        Returns:
+            Representation of updated instance.
+        """
+        match_fields = match_fields or self.match_fields
+        validated_model = self.to_model(kwargs, "update")
+        return self.repository.get_and_update(
+            match_fields=match_fields,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,
