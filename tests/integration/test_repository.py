@@ -988,6 +988,7 @@ async def test_repo_get_and_upsert_match_filter(author_repo: AuthorRepository, f
             author_repo.get_and_update(name="Agatha Christie123"),
         )
 
+
 async def test_repo_upsert_method(
     author_repo: AuthorRepository,
     first_author_id: Any,
