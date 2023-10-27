@@ -366,6 +366,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
+        match_fields: list[str] | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -384,13 +385,16 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             Updated or created representation.
         """
         data = self.to_model(data, "upsert")
-        self.repository.set_id_attribute_value(item_id, data)
+        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)
+        if item_id is not None:
+            self.repository.set_id_attribute_value(item_id, data)
         return self.repository.upsert(
             data=data,
             attribute_names=attribute_names,
@@ -398,6 +402,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             auto_refresh=auto_refresh,
+            match_fields=match_fields,
         )
 
     def upsert_many(
@@ -406,6 +411,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
+        match_fields: list[str] | None = None,
     ) -> list[ModelT]:
         """Wrap repository upsert operation.
 
@@ -419,7 +425,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             Updated or created representation.
@@ -430,6 +437,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             no_merge=no_merge,
+            match_fields=match_fields,
         )
 
     def get_or_upsert(
@@ -450,6 +458,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 empty, all fields are matched.
             upsert: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
+            create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
                 method.
             with_for_update: indicating FOR UPDATE should be used, or may be a

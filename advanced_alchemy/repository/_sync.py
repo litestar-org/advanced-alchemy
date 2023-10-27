@@ -907,6 +907,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
+        match_fields: list[str] | str | None = None,
     ) -> ModelT:
         """Update or create instance.
 
@@ -927,6 +928,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             The updated or created instance.
@@ -934,6 +937,22 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        if match_fields:
+            match_filter = {
+                field_name: getattr(data, field_name, None)
+                for field_name in match_fields
+                if getattr(data, field_name, None) is not None
+            }
+        elif getattr(data, self.id_attribute, None) is not None:
+            match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
+        else:
+            match_filter = data.to_dict()
+        existing = self.get_one_or_none(**match_filter)
+        if not existing:
+            return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
             instance = self._attach_to_session(data, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
@@ -970,6 +989,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
+        match_fields: list[str] | str | None = None,
     ) -> list[ModelT]:
         """Update or create instance.
 
@@ -986,6 +1006,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             The updated or created instance.
@@ -996,17 +1018,29 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        match_filter: list[FilterTypes | ColumnElement[bool]] = [
+            CollectionFilter(
+                field_name=self.id_attribute,
+                values=[getattr(datum, self.id_attribute) for datum in data if datum is not None] if data else None,
+            ),
+        ]
+        if match_fields:
+            for field_name in match_fields:
+                field = get_instrumented_attr(self.model_type, field_name)
+                matched_values = [getattr(datum, field_name) for datum in data if datum is not None]
+                if self._prefer_any:
+                    match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
+                else:
+                    match_filter.append(field.in_(matched_values))
 
         with wrap_sqlalchemy_exception():
-            existing_objs = self.list(
-                CollectionFilter(
-                    field_name=self.id_attribute,
-                    values=[getattr(datum, self.id_attribute) for datum in data] if data else None,
-                ),
-            )
-            existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs]
+            existing_objs = self.list(*match_filter, auto_expunge=False)
+            existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs if datum is not None]
             for datum in data:
-                if getattr(datum, self.id_attribute) in existing_ids:
+                if getattr(datum, self.id_attribute) is not None in existing_ids:
                     data_to_update.append(datum)
                 else:
                     data_to_insert.append(datum)

@@ -82,7 +82,7 @@ coverage:  											## Run the tests and generate coverage report
 .PHONY: test
 test:  												## Run the tests
 	@echo "=> Running test cases"
-	@$(ENV_PREFIX)pytest tests -m 'not integration' -n auto
+	@$(ENV_PREFIX)pytest tests -m 'not asyncmy and not oracledb and not spanner and not mssql and not cockroachdb_async and not cockroachdb_sync' -n auto
 	@echo "=> Tests complete"
 
 .PHONY: test-all
