@@ -968,6 +968,7 @@ async def test_repo_get_or_upsert_match_filter_no_update(author_repo: AuthorRepo
     assert existing_obj.dob != now.date()
     assert existing_created is False
 
+
 async def test_repo_get_and_update(author_repo: AuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     with pytest.raises(NotFoundError):
@@ -977,7 +978,6 @@ async def test_repo_get_and_update(author_repo: AuthorRepository, first_author_i
         assert existing_obj.id == first_author_id
         assert existing_obj.dob == now.date()
         assert existing_updated is True
-
 
 
 async def test_repo_get_and_update_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
