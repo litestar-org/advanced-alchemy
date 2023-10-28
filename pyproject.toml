@@ -69,6 +69,7 @@ dev = [
   "orjson>=3.9.7",
   "pyodbc>=4.0.39",
   "duckdb>=0.9.0",
+  "asgi-lifespan>=2.1.0",
 ]
 docs = [
   "sphinx>=7.1.2",

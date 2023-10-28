@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import random
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+from asgi_lifespan import LifespanManager
 from litestar import Litestar, get
 from litestar.testing import create_test_client
 from litestar.types.asgi_types import HTTPResponseStartEvent
@@ -48,21 +49,26 @@ async def test_create_all_default(monkeypatch: MonkeyPatch) -> None:
 
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     plugin = SQLAlchemyInitPlugin(config=config)
-    mock_fx = MagicMock()
-    monkeypatch.setattr(config, "create_all_metadata", mock_fx)
-    with create_test_client(route_handlers=[], plugins=[plugin]) as _client:
-        mock_fx.assert_not_called()
+    app = Litestar(route_handlers=[], plugins=[plugin])
+    with patch.object(
+        config,
+        "create_all_metadata",
+    ) as create_all_metadata_mock:
+        async with LifespanManager(app):
+            create_all_metadata_mock.assert_not_called()
 
 
 async def test_create_all(monkeypatch: MonkeyPatch) -> None:
     """Test default_before_send_handler."""
-
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://", create_all=True)
     plugin = SQLAlchemyInitPlugin(config=config)
-    mock_fx = MagicMock()
-    monkeypatch.setattr(config, "create_all_metadata", mock_fx)
-    with create_test_client(route_handlers=[], plugins=[plugin]) as _client:
-        mock_fx.assert_called_once()
+    app = Litestar(route_handlers=[], plugins=[plugin])
+    with patch.object(
+        config,
+        "create_all_metadata",
+    ) as create_all_metadata_mock:
+        async with LifespanManager(app):
+            create_all_metadata_mock.assert_called_once()
 
 
 async def test_before_send_handler_success_response(create_scope: Callable[..., Scope]) -> None:

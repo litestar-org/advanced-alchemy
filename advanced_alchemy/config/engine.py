@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Literal
 
 from advanced_alchemy._serialization import decode_json, encode_json
-from advanced_alchemy.config.types import Empty
+from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
     from typing import Any, Mapping
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from sqlalchemy.pool import Pool
     from typing_extensions import TypeAlias
 
-    from advanced_alchemy.config.types import EmptyType
+    from advanced_alchemy.utils.dataclass import EmptyType
 
 
 __all__ = ("EngineConfig",)

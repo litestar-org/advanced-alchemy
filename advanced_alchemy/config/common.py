@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config.engine import EngineConfig
-from advanced_alchemy.config.types import Empty
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.utils.dataclass import simple_asdict
+from advanced_alchemy.utils.dataclass import Empty, simple_asdict
 
 if TYPE_CHECKING:
     from typing import Any
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.session import JoinTransactionMode
     from sqlalchemy.sql import TableClause
 
-    from advanced_alchemy.config.types import EmptyType
+    from advanced_alchemy.utils.dataclass import EmptyType
 
 __all__ = (
     "GenericSQLAlchemyConfig",

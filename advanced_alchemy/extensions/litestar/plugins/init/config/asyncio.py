@@ -154,19 +154,14 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         self,
         app: Litestar,
     ) -> AsyncGenerator[None, None]:
-        engine = self.get_engine()
-        app.state.update(
-            {
-                self.engine_app_state_key: engine,
-                self.session_maker_app_state_key: self.create_session_maker(),
-            },
-        )
-        if self.create_all:
-            await self.create_all_metadata(app)
+        deps = self.create_app_state_items()
+        app.state.update(deps)
         try:
+            if self.create_all:
+                await self.create_all_metadata(app)
             yield
         finally:
-            await engine.dispose()
+            await cast("AsyncEngine", deps[self.engine_dependency_key]).dispose()
 
     def provide_engine(self, state: State) -> AsyncEngine:
         """Create an engine instance.
@@ -213,3 +208,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         async with self.get_engine().begin() as conn:
             await conn.run_sync(self.alembic_config.target_metadata.create_all)
+
+    def create_app_state_items(self) -> dict[str, Any]:
+        """Key/value pairs to be stored in application state."""
+        return {
+            self.engine_app_state_key: self.get_engine(),
+            self.session_maker_app_state_key: self.create_session_maker(),
+        }

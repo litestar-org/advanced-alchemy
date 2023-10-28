@@ -16,6 +16,7 @@ class Empty:
 
 
 EmptyType: TypeAlias = Type[Empty]
+"""Type alias for the :class:`Empty` sentinel class."""
 
 
 @runtime_checkable
