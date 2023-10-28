@@ -24,7 +24,11 @@ classifiers = [
   "Topic :: Database",
   "Topic :: Database :: Database Engines/Servers",
 ]
-dependencies = ["sqlalchemy>=2.0.20", "alembic>=1.12.0", "typing_extensions"]
+dependencies = [
+  "sqlalchemy>=2.0.20",
+  "alembic>=1.12.0",
+  "typing-extensions>=4.0.0",
+]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi"]
 license = {text = "MIT"}
@@ -65,6 +69,7 @@ dev = [
   "orjson>=3.9.7",
   "pyodbc>=4.0.39",
   "duckdb>=0.9.0",
+  "asgi-lifespan>=2.1.0",
 ]
 docs = [
   "sphinx>=7.1.2",

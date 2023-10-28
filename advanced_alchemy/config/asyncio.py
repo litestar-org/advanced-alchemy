@@ -10,14 +10,14 @@ from advanced_alchemy.config.common import (
     GenericSessionConfig,
     GenericSQLAlchemyConfig,
 )
-from advanced_alchemy.config.types import Empty
+from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
     from typing import Callable
 
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.config.types import EmptyType
+    from advanced_alchemy.utils.dataclass import EmptyType
 
 __all__ = (
     "SQLAlchemyAsyncConfig",

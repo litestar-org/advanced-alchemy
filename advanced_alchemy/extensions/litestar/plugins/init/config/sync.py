@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, cast
 
 from litestar.constants import HTTP_RESPONSE_START
 from litestar.utils import delete_litestar_scope_state, get_litestar_scope_state, set_litestar_scope_state
@@ -52,7 +53,7 @@ def autocommit_handler_maker(
     extra_commit_statuses: set[int] | None = None,
     extra_rollback_statuses: set[int] | None = None,
 ) -> Callable[[Message, Scope], None]:
-    """Set up the handler to issue a transactin commit or rollback based on specified status codes
+    """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
         commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
         extra_commit_statuses: A set of additional status codes that trigger a commit
@@ -71,7 +72,7 @@ def autocommit_handler_maker(
         msg = "Extra rollback statuses and commit statuses must not share any status codes"
         raise ValueError(msg)
 
-    commit_range = range(200, 300 if not commit_on_redirect else 400)
+    commit_range = range(200, 400 if commit_on_redirect else 300)
 
     def handler(message: Message, scope: Scope) -> None:
         """Handle commit/rollback, closing and cleaning up sessions before sending.
@@ -146,6 +147,20 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             session_kws["bind"] = self.get_engine()
         return self.session_maker_class(**session_kws)
 
+    @asynccontextmanager
+    async def lifespan(
+        self,
+        app: Litestar,
+    ) -> AsyncGenerator[None, None]:
+        deps = self.create_app_state_items()
+        app.state.update(deps)
+        try:
+            if self.create_all:
+                self.create_all_metadata(app)
+            yield
+        finally:
+            cast("Engine", deps[self.engine_dependency_key]).dispose()
+
     def provide_engine(self, state: State) -> Engine:
         """Create an engine instance.
 
@@ -182,18 +197,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             A string keyed dict of names to be added to the namespace for signature forward reference resolution.
         """
         return {"Engine": Engine, "Session": Session}
-
-    def on_shutdown(self, app: Litestar) -> None:
-        """Disposes of the SQLAlchemy engine.
-
-        Args:
-            app: The ``Litestar`` instance.
-
-        Returns:
-            None
-        """
-        engine = cast("Engine", app.state.pop(self.engine_app_state_key))
-        engine.dispose()
 
     def create_all_metadata(self, app: Litestar) -> None:
         """Create all metadata

@@ -6,7 +6,7 @@ groups = ["default", "dev", "docs", "extensions", "linting", "test"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:ab9a7c7e5d59b771b4557a54db39b6dab85ef301e4f1df5f71d1c30fd8dcca42"
+content_hash = "sha256:86967eadd644056d8378c17dac62afa1e65aff9068f9c94917597fcfde4a4269"
 
 [[package]]
 name = "aiofiles"
@@ -111,6 +111,19 @@ dependencies = [
 files = [
     {file = "apeye_core-1.1.4-py3-none-any.whl", hash = "sha256:084bc696448d3ac428fece41c1f2eb08fa9d9ce1d1b2f4d43187e3def4528a60"},
     {file = "apeye_core-1.1.4.tar.gz", hash = "sha256:72bb89fed3baa647cb81aa28e1d851787edcbf9573853b5d2b5f87c02f50eaf5"},
+]
+
+[[package]]
+name = "asgi-lifespan"
+version = "2.1.0"
+requires_python = ">=3.7"
+summary = "Programmatic startup/shutdown of ASGI apps."
+dependencies = [
+    "sniffio",
+]
+files = [
+    {file = "asgi-lifespan-2.1.0.tar.gz", hash = "sha256:5e2effaf0bfe39829cf2d64e7ecc47c7d86d676a6599f7afba378c31f5e3a308"},
+    {file = "asgi_lifespan-2.1.0-py3-none-any.whl", hash = "sha256:ed840706680e28428c01e14afb3875d7d76d3206f3d5b2f2294e059b5c23804f"},
 ]
 
 [[package]]
