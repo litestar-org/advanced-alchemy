@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
+from sqlalchemy.orm import InstrumentedAttribute
+
+from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
 
@@ -16,7 +19,6 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import InstrumentedAttribute
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -87,7 +89,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return await self.repository.count(*filters, **kwargs) > 0
+        return await self.repository.exists(*filters, **kwargs)
 
     async def get(
         self,
@@ -313,7 +315,16 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Updated representation.
         """
         data = await self.to_model(data, "update")
-        data = self.repository.set_id_attribute_value(item_id, data)
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = cast("str", id_attribute.description)
+        if item_id is None and self.repository.get_id_attribute_value(item=data, id_attribute=id_attribute) is None:
+            msg = (
+                "Could not identify ID attribute value.  One of the following is required: "
+                f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
+            )
+            raise RepositoryError(msg)
+        if item_id is not None:
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
         return await self.repository.update(
             data=data,
             attribute_names=attribute_names,
@@ -354,6 +365,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
+        match_fields: list[str] | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -372,13 +384,16 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             Updated or created representation.
         """
         data = await self.to_model(data, "upsert")
-        self.repository.set_id_attribute_value(item_id, data)
+        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)
+        if item_id is not None:
+            self.repository.set_id_attribute_value(item_id, data)
         return await self.repository.upsert(
             data=data,
             attribute_names=attribute_names,
@@ -386,6 +401,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             auto_refresh=auto_refresh,
+            match_fields=match_fields,
         )
 
     async def upsert_many(
@@ -394,6 +410,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
+        match_fields: list[str] | None = None,
     ) -> list[ModelT]:
         """Wrap repository upsert operation.
 
@@ -407,7 +424,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
 
         Returns:
             Updated or created representation.
@@ -418,11 +436,12 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             no_merge=no_merge,
+            match_fields=match_fields,
         )
 
     async def get_or_upsert(
         self,
-        match_fields: list[str] | None = None,
+        match_fields: list[str] | str | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -438,6 +457,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 empty, all fields are matched.
             upsert: When using match_fields and actual model values differ from
                 `kwargs`, perform an update operation on the model.
+            create: Should a model be created.  If no model is found, an exception is raised.
             attribute_names: an iterable of attribute names to pass into the ``update``
                 method.
             with_for_update: indicating FOR UPDATE should be used, or may be a
@@ -456,9 +476,52 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """
         match_fields = match_fields or self.match_fields
         validated_model = await self.to_model(kwargs, "create")
-        return await self.repository.get_or_create(
+        return await self.repository.get_or_upsert(
             match_fields=match_fields,
             upsert=upsert,
+            attribute_names=attribute_names,
+            with_for_update=with_for_update,
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+            auto_refresh=auto_refresh,
+            **validated_model.to_dict(),
+        )
+
+    async def get_and_update(
+        self,
+        match_fields: list[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]:
+        """Wrap repository instance creation.
+
+        Args:
+            match_fields: a list of keys to use to match the existing model.  When
+                empty, all fields are matched.
+            attribute_names: an iterable of attribute names to pass into the ``update``
+                method.
+            with_for_update: indicating FOR UPDATE should be used, or may be a
+                dictionary containing flags to indicate a more specific set of
+                FOR UPDATE flags for the SELECT
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
+            auto_refresh: Refresh object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
+            auto_commit: Commit objects before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            **kwargs: Identifier of the instance to be retrieved.
+
+        Returns:
+            Representation of updated instance.
+        """
+        match_fields = match_fields or self.match_fields
+        validated_model = await self.to_model(kwargs, "update")
+        return await self.repository.get_and_update(
+            match_fields=match_fields,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
             auto_commit=auto_commit,

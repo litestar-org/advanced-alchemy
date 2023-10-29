@@ -69,6 +69,9 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
 
             signature_namespace_values.update({"pgproto.UUID": pgproto.UUID})
             app_config.type_encoders = {pgproto.UUID: str, **(app_config.type_encoders or {})}
+        app_config.signature_namespace.update(self._config.signature_namespace)
+        app_config.signature_namespace.update(signature_namespace_values)
+        app_config.lifespan.append(self._config.lifespan)
         app_config.dependencies.update(
             {
                 self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
@@ -76,9 +79,4 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             },
         )
         app_config.before_send.append(self._config.before_send_handler)
-        app_config.on_startup.insert(0, self._config.update_app_state)
-        app_config.on_shutdown.append(self._config.on_shutdown)
-        app_config.signature_namespace.update(self._config.signature_namespace)
-        app_config.signature_namespace.update(signature_namespace_values)
-
         return app_config

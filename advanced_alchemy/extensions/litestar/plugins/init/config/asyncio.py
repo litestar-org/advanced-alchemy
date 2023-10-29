@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, cast
 
@@ -15,7 +16,8 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 
 if TYPE_CHECKING:
-    from typing import Any, Coroutine
+    from collections.abc import AsyncGenerator, Coroutine
+    from typing import Any
 
     from litestar import Litestar
     from litestar.datastructures.state import State
@@ -53,7 +55,7 @@ def autocommit_handler_maker(
     extra_commit_statuses: set[int] | None = None,
     extra_rollback_statuses: set[int] | None = None,
 ) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
-    """Set up the handler to issue a transactin commit or rollback based on specified status codes
+    """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
         commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
         extra_commit_statuses: A set of additional status codes that trigger a commit
@@ -72,7 +74,7 @@ def autocommit_handler_maker(
         msg = "Extra rollback statuses and commit statuses must not share any status codes"
         raise ValueError(msg)
 
-    commit_range = range(200, 300 if not commit_on_redirect else 400)
+    commit_range = range(200, 400 if commit_on_redirect else 300)
 
     async def handler(message: Message, scope: Scope) -> None:
         """Handle commit/rollback, closing and cleaning up sessions before sending.
@@ -147,6 +149,20 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             session_kws["bind"] = self.get_engine()
         return self.session_maker_class(**session_kws)
 
+    @asynccontextmanager
+    async def lifespan(
+        self,
+        app: Litestar,
+    ) -> AsyncGenerator[None, None]:
+        deps = self.create_app_state_items()
+        app.state.update(deps)
+        try:
+            if self.create_all:
+                await self.create_all_metadata(app)
+            yield
+        finally:
+            await cast("AsyncEngine", deps[self.engine_dependency_key]).dispose()
+
     def provide_engine(self, state: State) -> AsyncEngine:
         """Create an engine instance.
 
@@ -184,17 +200,14 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         return {"AsyncEngine": AsyncEngine, "AsyncSession": AsyncSession}
 
-    async def on_shutdown(self, app: Litestar) -> None:
-        """Disposes of the SQLAlchemy engine.
+    async def create_all_metadata(self, app: Litestar) -> None:
+        """Create all metadata
 
         Args:
-            app: The ``Litestar`` instance.
-
-        Returns:
-            None
+            app (Litestar): The ``Litestar`` instance
         """
-        engine = cast("AsyncEngine", app.state.pop(self.engine_app_state_key))
-        await engine.dispose()
+        async with self.get_engine().begin() as conn:
+            await conn.run_sync(self.alembic_config.target_metadata.create_all)
 
     def create_app_state_items(self) -> dict[str, Any]:
         """Key/value pairs to be stored in application state."""
@@ -202,11 +215,3 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.engine_app_state_key: self.get_engine(),
             self.session_maker_app_state_key: self.create_session_maker(),
         }
-
-    def update_app_state(self, app: Litestar) -> None:
-        """Set the app state with engine and session.
-
-        Args:
-            app: The ``Litestar`` instance.
-        """
-        app.state.update(self.create_app_state_items())

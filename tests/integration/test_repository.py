@@ -10,12 +10,12 @@ from uuid import UUID
 import pytest
 import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import Engine, Table, insert
+from sqlalchemy import Engine, Table, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
-from advanced_alchemy.exceptions import RepositoryError
+from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -25,6 +25,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.repository._util import get_instrumented_attr
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 
@@ -958,6 +959,36 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
     assert existing_created is False
 
 
+async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    now = datetime.now()
+    existing_obj, existing_created = await maybe_async(
+        author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
+    )
+    assert existing_obj.id == first_author_id
+    assert existing_obj.dob != now.date()
+    assert existing_created is False
+
+
+async def test_repo_get_and_update(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    existing_obj, existing_updated = await maybe_async(
+        author_repo.get_and_update(name="Agatha Christie"),
+    )
+    assert existing_obj.id == first_author_id
+    assert existing_updated is False
+
+
+async def test_repo_get_and_upsert_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    now = datetime.now()
+    with pytest.raises(NotFoundError):
+        _ = await maybe_async(
+            author_repo.get_and_update(match_fields="name", name="Agatha Christie123", dob=now.date()),
+        )
+    with pytest.raises(NotFoundError):
+        _ = await maybe_async(
+            author_repo.get_and_update(name="Agatha Christie123"),
+        )
+
+
 async def test_repo_upsert_method(
     author_repo: AuthorRepository,
     first_author_id: Any,
@@ -1006,6 +1037,55 @@ async def test_repo_upsert_many_method(
     assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
     assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_repo_upsert_many_method_match(
+    author_repo: AuthorRepository,
+    author_model: AuthorModel,
+) -> None:
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_objs = await maybe_async(
+        author_repo.upsert_many(
+            data=[
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["id"],
+        ),
+    )
+    assert len(upsert_update_objs) == 3
+
+
+async def test_repo_upsert_many_method_match_non_id(
+    author_repo: AuthorRepository,
+    author_model: AuthorModel,
+) -> None:
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_count = await maybe_async(author_repo.count())
+    existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    _ = await maybe_async(
+        author_repo.upsert_many(
+            data=[
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["name"],
+        ),
+    )
+    existing_count_now = await maybe_async(author_repo.count())
+
+    assert existing_count_now > existing_count
 
 
 async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
@@ -1416,10 +1496,30 @@ async def test_service_exists_method(author_service: AuthorService, first_author
     assert exists
 
 
-async def test_service_update_method(author_service: AuthorService, first_author_id: Any) -> None:
+async def test_service_update_method_item_id(author_service: AuthorService, first_author_id: Any) -> None:
     obj = await maybe_async(author_service.get(first_author_id))
     obj.name = "Updated Name2"
     updated_obj = await maybe_async(author_service.update(item_id=first_author_id, data=obj))
+    assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_no_item_id(author_service: AuthorService, first_author_id: Any) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    obj.name = "Updated Name2"
+    updated_obj = await maybe_async(author_service.update(data=obj))
+    assert updated_obj.id == first_author_id
+    assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_instrumented_attribute(
+    author_service: AuthorService,
+    first_author_id: Any,
+) -> None:
+    obj = await maybe_async(author_service.get(first_author_id))
+    id_attribute = get_instrumented_attr(author_service.repository.model_type, "id")
+    obj.name = "Updated Name2"
+    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute, item_id=first_author_id))
+    assert updated_obj.id == first_author_id
     assert updated_obj.name == obj.name
 
 
@@ -1472,6 +1572,16 @@ async def test_service_get_or_upsert_method(author_service: AuthorService, first
     assert new_created
 
 
+async def test_service_get_and_update_method(author_service: AuthorService, first_author_id: Any) -> None:
+    existing_obj, existing_created = await maybe_async(
+        author_service.get_and_update(name="Agatha Christie", match_fields="name"),
+    )
+    assert existing_obj.id == first_author_id
+    assert existing_created is False
+    with pytest.raises(NotFoundError):
+        _ = await maybe_async(author_service.get_and_update(name="New Author"))
+
+
 async def test_service_upsert_method(
     author_service: AuthorService,
     first_author_id: Any,
@@ -1491,6 +1601,38 @@ async def test_service_upsert_method(
     # ensures that it still works even if the ID is added before insert
     upsert2_insert_obj = await maybe_async(
         author_service.upsert(author_model(id=new_pk_id, name="Another Author")),
+    )
+    assert upsert2_insert_obj.id is not None
+    assert upsert2_insert_obj.name == "Another Author"
+
+
+async def test_service_upsert_method_match(
+    author_service: AuthorService,
+    first_author_id: Any,
+    author_model: AuthorModel,
+    new_pk_id: Any,
+) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_obj = await maybe_async(
+        author_service.upsert(data=existing_obj.to_dict(exclude={"id"}), match_fields=["name"]),
+    )
+    assert upsert_update_obj.id != first_author_id
+    assert upsert_update_obj.name == "Agatha C."
+
+    upsert_insert_obj = await maybe_async(
+        author_service.upsert(data=author_model(name="An Author"), match_fields=["name"]),
+    )
+    assert upsert_insert_obj.id is not None
+    assert upsert_insert_obj.name == "An Author"
+
+    # ensures that it still works even if the ID is added before insert
+    upsert2_insert_obj = await maybe_async(
+        author_service.upsert(author_model(id=new_pk_id, name="Another Author"), match_fields=["name"]),
     )
     assert upsert2_insert_obj.id is not None
     assert upsert2_insert_obj.name == "Another Author"
@@ -1522,3 +1664,81 @@ async def test_service_upsert_many_method(
     assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
     assert upsert_update_objs[2].id is not None
     assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_service_upsert_many_method_match_fields_id(
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    upsert_update_objs = await maybe_async(
+        author_service.upsert_many(
+            [
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["id"],
+        ),
+    )
+    assert len(upsert_update_objs) == 3
+    assert upsert_update_objs[0].id is not None
+    assert upsert_update_objs[0].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[1].id is not None
+    assert upsert_update_objs[1].name in ("Agatha C.", "Inserted Author", "Custom Author")
+    assert upsert_update_objs[2].id is not None
+    assert upsert_update_objs[2].name in ("Agatha C.", "Inserted Author", "Custom Author")
+
+
+async def test_service_upsert_many_method_match_fields_non_id(
+    author_service: AuthorService,
+    author_model: AuthorModel,
+) -> None:
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_count = await maybe_async(author_service.count())
+    existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    _ = await maybe_async(
+        author_service.upsert_many(
+            data=[
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["name"],
+        ),
+    )
+    existing_count_now = await maybe_async(author_service.count())
+
+    assert existing_count_now > existing_count
+
+
+async def test_repo_custom_statement(author_repo: AuthorRepository, author_service: AuthorService) -> None:
+    """Test Repo with custom statement
+
+    Args:
+        author_repo: The author mock repository
+    """
+    service_type = type(author_service)
+    new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
+    assert await maybe_async(new_service.count()) == 2
+
+
+async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, first_author_id: Any) -> None:
+    with pytest.deprecated_call():
+        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+        assert existing_obj.id == first_author_id
+        assert existing_created is False
+
+
+async def test_service_update_no_pk(author_service: AuthorService) -> None:
+    with pytest.raises(RepositoryError):
+        _existing_obj = await maybe_async(author_service.update(data={"name": "Agatha Christie"}))

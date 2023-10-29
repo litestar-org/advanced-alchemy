@@ -48,3 +48,8 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
 
     The configuration options are documented in the Alembic documentation.
     """
+
+    def __post_init__(self) -> None:
+        if self.metadata:
+            self.alembic_config.target_metadata = self.metadata
+        super().__post_init__()
