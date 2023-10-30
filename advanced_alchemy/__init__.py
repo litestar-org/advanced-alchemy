@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from advanced_alchemy.config import (
+    AlembicAsyncConfig,
+    AlembicSyncConfig,
+    AsyncSessionConfig,
+    SQLAlchemyAsyncConfig,
+    SQLAlchemySyncConfig,
+    SyncSessionConfig,
+)
 from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
 from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
 from advanced_alchemy.repository._util import wrap_sqlalchemy_exception
@@ -23,4 +31,10 @@ __all__ = (
     "SQLAlchemyAsyncRepositoryService",
     "ModelT",
     "wrap_sqlalchemy_exception",
+    "SQLAlchemyAsyncConfig",
+    "SQLAlchemySyncConfig",
+    "SyncSessionConfig",
+    "AlembicAsyncConfig",
+    "AlembicSyncConfig",
+    "AsyncSessionConfig",
 )
