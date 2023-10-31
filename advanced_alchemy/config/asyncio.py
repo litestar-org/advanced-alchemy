@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -68,3 +69,11 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         if self.metadata:
             self.alembic_config.target_metadata = self.metadata
         super().__post_init__()
+
+    @asynccontextmanager
+    async def get_session(
+        self,
+    ) -> AsyncGenerator[AsyncSession, None]:
+        session_maker = self.create_session_maker()
+        async with session_maker() as session:
+            yield session
