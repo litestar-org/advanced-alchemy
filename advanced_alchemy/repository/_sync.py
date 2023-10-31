@@ -96,7 +96,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         if not self.session.bind:
             # this shouldn't actually ever happen, but we include it anyway to properly
             # narrow down the types
-            msg = "Session improperly configure"
+            msg = "Session improperly configured"
             raise ValueError(msg)
         self._dialect = self.session.bind.dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
