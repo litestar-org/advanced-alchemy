@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, AsyncGenerator, Callable, Generator, cast
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, cast
 
 from litestar.constants import HTTP_RESPONSE_START
 from litestar.utils import delete_litestar_scope_state, get_litestar_scope_state, set_litestar_scope_state
@@ -221,11 +221,3 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             app: The ``Litestar`` instance.
         """
         app.state.update(self.create_app_state_items())
-
-    @contextmanager
-    def get_session(
-        self,
-    ) -> Generator[Session, None, None]:
-        session_maker = self.create_session_maker()
-        with session_maker() as session:
-            yield session

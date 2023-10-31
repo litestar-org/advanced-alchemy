@@ -215,11 +215,3 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.engine_app_state_key: self.get_engine(),
             self.session_maker_app_state_key: self.create_session_maker(),
         }
-
-    @asynccontextmanager
-    async def get_session(
-        self,
-    ) -> AsyncGenerator[AsyncSession, None]:
-        session_maker = self.create_session_maker()
-        async with session_maker() as session:
-            yield session
