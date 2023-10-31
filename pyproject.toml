@@ -31,7 +31,7 @@ dependencies = [
   "greenlet; sys_platform == \"darwin\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
-keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi"]
+keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
