@@ -83,7 +83,7 @@ def run_migrations_offline() -> None:
         version_table_pk=config.version_table_pk,
         user_module_prefix=config.user_module_prefix,
         render_as_batch=config.render_as_batch,
-        process_revision_directives=writer,  # type: ignore[arg-type]
+        process_revision_directives=writer,
     )
 
     with context.begin_transaction():
@@ -100,7 +100,7 @@ def do_run_migrations(connection: Connection) -> None:
         version_table_pk=config.version_table_pk,
         user_module_prefix=config.user_module_prefix,
         render_as_batch=config.render_as_batch,
-        process_revision_directives=writer,  # type: ignore[arg-type]
+        process_revision_directives=writer,
     )
 
     with context.begin_transaction():
