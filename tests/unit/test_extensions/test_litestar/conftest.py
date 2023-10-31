@@ -9,7 +9,7 @@ from collections.abc import Generator
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, AsyncGenerator, Callable, TypeVar, cast
 from unittest.mock import ANY
 
 import pytest
@@ -27,8 +27,8 @@ from litestar.types import (
 from litestar.types.empty import Empty
 from litestar.typing import FieldDefinition
 from pytest import FixtureRequest, MonkeyPatch
-from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy import Engine, NullPool, create_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
@@ -224,18 +224,54 @@ def scope(create_scope: Callable[..., Scope]) -> Scope:
 
 
 @pytest.fixture()
-async def sync_sqlalchemy_plugin(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemyPlugin:
+def engine() -> Generator[Engine, None, None]:
+    """SQLite engine for end-to-end testing.
+
+    Returns:
+        Async SQLAlchemy engine instance.
+    """
+    engine = create_engine("sqlite:///:memory:", poolclass=NullPool)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture()
+async def sync_sqlalchemy_plugin(
+    engine: Engine,
+    session_maker: sessionmaker[Session] | None = None,
+) -> SQLAlchemyPlugin:
     return SQLAlchemyPlugin(config=SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker))
+
+
+@pytest.fixture()
+async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
+    """SQLite engine for end-to-end testing.
+
+    Returns:
+        Async SQLAlchemy engine instance.
+    """
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=NullPool)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture()
 async def async_sqlalchemy_plugin(
     async_engine: AsyncEngine,
-    async_session_maker: async_sessionmaker[AsyncSession],
+    async_session_maker: async_sessionmaker[AsyncSession] | None = None,
 ) -> SQLAlchemyPlugin:
     return SQLAlchemyPlugin(
         config=SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker),
     )
+
+
+@pytest.fixture(params=[pytest.param("sync_sqlalchemy_plugin"), pytest.param("async_sqlalchemy_plugin")])
+async def plugin(request: FixtureRequest) -> SQLAlchemyPlugin:
+    return cast(SQLAlchemyPlugin, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
