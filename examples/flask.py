@@ -31,7 +31,7 @@ with app.app_context():
     repo.add(Message(text="Hello, world!"))
 
     message = repo.list()[0]
-    assert message.text == "Hello, world!"
+    assert message.text == "Hello, world!"  # noqa: S101
 
 
 # Not working
@@ -39,9 +39,10 @@ with app.app_context():
     with db.engine.begin() as conn:
         Message.metadata.create_all(conn)
 
-    session = db.session
+    session = db.session  # type: ignore  # noqa: PGH003
+
     repo = MessageRepository(session=session)
     repo.add(Message(text="Hello, world!"))
 
     message = repo.list()[0]
-    assert message.text == "Hello, world!"
+    assert message.text == "Hello, world!"  # noqa: S101
