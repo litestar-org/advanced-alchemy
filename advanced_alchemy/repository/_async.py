@@ -92,12 +92,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             self.statement = lambda_stmt(lambda: statement)
         else:
             self.statement = statement
-        if not self.session.bind:
-            # this shouldn't actually ever happen, but we include it anyway to properly
-            # narrow down the types
-            msg = "Session improperly configure"
-            raise ValueError(msg)
-        self._dialect = self.session.bind.dialect
+        self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
     @classmethod
