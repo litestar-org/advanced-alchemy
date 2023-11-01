@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from sqlalchemy import Select, StatementLambdaElement
+    from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -35,7 +36,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
 
     def __init__(
         self,
-        session: Session,
+        session: Session | scoped_session[Session],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,

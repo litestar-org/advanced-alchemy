@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generator
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -53,3 +54,11 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         if self.metadata:
             self.alembic_config.target_metadata = self.metadata
         super().__post_init__()
+
+    @contextmanager
+    def get_session(
+        self,
+    ) -> Generator[Session, None, None]:
+        session_maker = self.create_session_maker()
+        with session_maker() as session:
+            yield session

@@ -25,7 +25,7 @@ offering features such as:
 - Optimized JSON types including a custom JSON type for Oracle.
 
 - Pre-configured base classes with audit columns UUID or Big Integer primary keys and
-  a [sentinel column](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns>).
+  a [sentinel column](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns).
 - Synchronous and asynchronous repositories featuring:
   - Common CRUD operations for SQLAlchemy models
   - Bulk inserts, updates, upserts, and deletes with dialect-specific enhancements
@@ -39,8 +39,8 @@ offering features such as:
   - MySQL via [asyncmy](https://github.com/long2ice/asyncmy)
   - Oracle via [oracledb](https://oracle.github.io/python-oracledb/) (tested on 18c and 23c)
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
-  - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine>)
-  - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc>)
+  - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine)
+  - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc)
   - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
 
 ## Usage
@@ -187,7 +187,7 @@ Advanced Alchemy works with nearly all Python web frameworks. Several helpers fo
 
 #### Litestar
 
-Advanced Alchemy is the official SQLAlchemy integration for Litsetar.
+Advanced Alchemy is the official SQLAlchemy integration for Litestar.
 
 In addition to installed with `pip install advanced-alchemy`, it can also be installed installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
 

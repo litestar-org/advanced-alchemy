@@ -28,14 +28,15 @@ dependencies = [
   "sqlalchemy>=2.0.20",
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
+  "greenlet; sys_platform == \"darwin\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
-keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi"]
+keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.5.1"
+version = "0.5.3"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
@@ -88,6 +89,8 @@ extensions = [
   "sanic-testing>=23.6.0",
   "socketify>=0.0.27",
   "msgspec>=0.18.2",
+  "flask>=3.0.0",
+  "flask-sqlalchemy>=3.1.1",
 ]
 linting = [
   "pre-commit>=3.4.0",
@@ -300,14 +303,18 @@ update_docstrings = true
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+"async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
+"sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
 "advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
+"async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
+"sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.codespell]
 ignore-words-list = "selectin"
