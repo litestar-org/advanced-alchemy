@@ -187,7 +187,7 @@ Advanced Alchemy works with nearly all Python web frameworks. Several helpers fo
 
 #### Litestar
 
-Advanced Alchemy is the official SQLAlchemy integration for Litsetar.
+Advanced Alchemy is the official SQLAlchemy integration for Litestar.
 
 In addition to installed with `pip install advanced-alchemy`, it can also be installed installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
 
