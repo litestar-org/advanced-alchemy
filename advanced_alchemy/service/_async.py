@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -34,7 +35,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
 
     def __init__(
         self,
-        session: AsyncSession,
+        session: AsyncSession | async_scoped_session[AsyncSession],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,

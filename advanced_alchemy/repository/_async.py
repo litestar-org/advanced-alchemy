@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
@@ -63,7 +64,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self,
         *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        session: AsyncSession,
+        session: AsyncSession | async_scoped_session[AsyncSession],
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -1101,7 +1102,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             return collection
 
     @classmethod
-    async def check_health(cls, session: AsyncSession) -> bool:
+    async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool:
         """Perform a health check on the database.
 
         Args:
@@ -1116,7 +1117,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         ).scalar_one() == 1
 
     @staticmethod
-    def _get_health_check_statement(session: AsyncSession) -> TextClause:
+    def _get_health_check_statement(session: AsyncSession | async_scoped_session[AsyncSession]) -> TextClause:
         if session.bind and session.bind.dialect.name == "oracle":
             return text("SELECT 1 FROM DUAL")
         return text("SELECT 1")
