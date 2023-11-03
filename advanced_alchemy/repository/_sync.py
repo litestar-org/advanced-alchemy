@@ -1017,26 +1017,40 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
             match_fields = [match_fields]
-        match_filter: list[FilterTypes | ColumnElement[bool]] = [
-            CollectionFilter(
-                field_name=self.id_attribute,
-                values=[getattr(datum, self.id_attribute) for datum in data if datum is not None] if data else None,
-            ),
-        ]
+        if match_fields is None:
+            match_fields = [self.id_attribute]
+        match_filter: list[FilterTypes | ColumnElement[bool]] = []
         if match_fields:
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
-                matched_values = [getattr(datum, field_name) for datum in data if datum is not None]
+                matched_values = [
+                    getattr(datum, field_name) for datum in data if getattr(datum, field_name) is not None
+                ]
                 if self._prefer_any:
                     match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
                 else:
                     match_filter.append(field.in_(matched_values))
 
         with wrap_sqlalchemy_exception():
-            existing_objs = self.list(*match_filter, auto_expunge=False)
-            existing_ids = [getattr(datum, self.id_attribute) for datum in existing_objs if datum is not None]
+            existing_objs = self.list(
+                *match_filter,
+                auto_expunge=False,
+            )
+            for field_name in match_fields:
+                field = get_instrumented_attr(self.model_type, field_name)
+                matched_values = [getattr(datum, field_name) for datum in existing_objs if datum is not None]
+                if self._prefer_any:
+                    match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
+                else:
+                    match_filter.append(field.in_(matched_values))
+            existing_ids = [
+                getattr(datum, self.id_attribute)
+                for datum in existing_objs
+                if getattr(datum, self.id_attribute) is not None
+            ]
+            data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:
-                if getattr(datum, self.id_attribute) is not None in existing_ids:
+                if getattr(datum, self.id_attribute, None) in existing_ids:
                     data_to_update.append(datum)
                 else:
                     data_to_insert.append(datum)
@@ -1052,6 +1066,26 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
+
+    def _merge_on_match_fields(
+        self,
+        data: list[ModelT],
+        existing_data: list[ModelT],
+        match_fields: list[str] | str | None = None,
+    ) -> list[ModelT]:
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        if match_fields is None:
+            match_fields = [self.id_attribute]
+        for existing_datum in existing_data:
+            for row_id, datum in enumerate(data):
+                match = all(
+                    getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
+                )
+                if match and getattr(existing_datum, self.id_attribute) is not None:
+                    setattr(data[row_id], self.id_attribute, getattr(existing_datum, self.id_attribute))
+        return data
 
     def list(
         self,
