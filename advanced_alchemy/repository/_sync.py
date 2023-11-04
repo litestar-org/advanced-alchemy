@@ -528,7 +528,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             model value will be updated.
         """
         if match_fields := self._get_match_fields(
-            match_fields=match_fields, id_attribute=None
+            match_fields=match_fields,
+            id_attribute=None,
         ):
             match_filter = {
                 field_name: kwargs.get(field_name, None)
@@ -602,7 +603,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             NotFoundError: If no instance found identified by `item_id`.
         """
         if match_fields := self._get_match_fields(
-            match_fields=match_fields, id_attribute=None
+            match_fields=match_fields,
+            id_attribute=None,
         ):
             match_filter = {
                 field_name: kwargs.get(field_name, None)
@@ -932,7 +934,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         if match_fields := self._get_match_fields(
-            match_fields=match_fields, id_attribute=None
+            match_fields=match_fields,
+            id_attribute=None,
         ):
             match_filter = {
                 field_name: getattr(data, field_name, None)
