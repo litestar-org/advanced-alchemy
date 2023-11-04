@@ -526,10 +526,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        if match_fields := self._get_match_fields(
-            match_fields=match_fields,
-            id_attribute=None,
-        ):
+        match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields:
             match_filter = {
                 field_name: kwargs.get(field_name, None)
                 for field_name in match_fields
@@ -601,10 +599,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        if match_fields := self._get_match_fields(
-            match_fields=match_fields,
-            id_attribute=None,
-        ):
+        match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields:
             match_filter = {
                 field_name: kwargs.get(field_name, None)
                 for field_name in match_fields
@@ -932,10 +928,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        if match_fields := self._get_match_fields(
-            match_fields=match_fields,
-            id_attribute=None,
-        ):
+        match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields:
             match_filter = {
                 field_name: getattr(data, field_name, None)
                 for field_name in match_fields
@@ -1013,7 +1007,9 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
-        match_fields = self._get_match_fields(match_fields=match_fields, id_attribute=None)
+        match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields is None:
+            match_fields = [self.id_attribute]
         match_filter: list[FilterTypes | ColumnElement[bool]] = []
         if match_fields:
             for field_name in match_fields:
@@ -1065,13 +1061,11 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self,
         match_fields: list[str] | str | None = None,
         id_attribute: str | None = None,
-    ) -> list[str]:
+    ) -> list[str] | None:
         id_attribute = id_attribute or self.id_attribute
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
             match_fields = [match_fields]
-        if match_fields is None:
-            match_fields = [id_attribute]
         return match_fields
 
     def _merge_on_match_fields(
@@ -1081,6 +1075,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         match_fields: list[str] | str | None = None,
     ) -> list[ModelT]:
         match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields is None:
+            match_fields = [self.id_attribute]
         for existing_datum in existing_data:
             for row_id, datum in enumerate(data):
                 match = all(
