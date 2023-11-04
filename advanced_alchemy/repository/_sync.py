@@ -527,9 +527,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
+        match_fields = self._get_match_fields(match_fields=match_fields, id_attribute=None)
         if match_fields:
             match_filter = {
                 field_name: kwargs.get(field_name, None)
@@ -602,9 +600,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
+        match_fields = self._get_match_fields(match_fields=match_fields, id_attribute=None)
         if match_fields:
             match_filter = {
                 field_name: kwargs.get(field_name, None)
@@ -933,9 +929,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
+        match_fields = self._get_match_fields(match_fields=match_fields, id_attribute=None)
         if match_fields:
             match_filter = {
                 field_name: getattr(data, field_name, None)
@@ -1014,17 +1008,13 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
-        if match_fields is None:
-            match_fields = [self.id_attribute]
+        match_fields = self._get_match_fields(match_fields=match_fields, id_attribute=None)
         match_filter: list[FilterTypes | ColumnElement[bool]] = []
         if match_fields:
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
                 matched_values = [
-                    getattr(datum, field_name) for datum in data if getattr(datum, field_name) is not None
+                    field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
                 ]
                 if self._prefer_any:
                     match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
@@ -1043,11 +1033,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                     match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
                 else:
                     match_filter.append(field.in_(matched_values))
-            existing_ids = [
-                getattr(datum, self.id_attribute)
-                for datum in existing_objs
-                if getattr(datum, self.id_attribute) is not None
-            ]
+            existing_ids = self._get_object_ids(existing_objs=existing_objs)
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:
                 if getattr(datum, self.id_attribute, None) in existing_ids:
@@ -1067,17 +1053,29 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
+    def _get_object_ids(self, existing_objs: list[ModelT]) -> list[Any]:
+        return [obj_id for datum in existing_objs if (obj_id := getattr(datum, self.id_attribute)) is not None]
+
+    def _get_match_fields(
+        self,
+        match_fields: list[str] | str | None = None,
+        id_attribute: str | None = None,
+    ) -> list[str]:
+        id_attribute = id_attribute or self.id_attribute
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        if match_fields is None:
+            match_fields = [id_attribute]
+        return match_fields
+
     def _merge_on_match_fields(
         self,
         data: list[ModelT],
         existing_data: list[ModelT],
         match_fields: list[str] | str | None = None,
     ) -> list[ModelT]:
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
-        if match_fields is None:
-            match_fields = [self.id_attribute]
+        match_fields = self._get_match_fields(match_fields=match_fields)
         for existing_datum in existing_data:
             for row_id, datum in enumerate(data):
                 match = all(
