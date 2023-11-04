@@ -1043,9 +1043,9 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 else:
                     match_filter.append(field.in_(matched_values))
             existing_ids = [
-                getattr(datum, self.id_attribute)
+                obj_id
                 for datum in existing_objs
-                if getattr(datum, self.id_attribute) is not None
+                if (obj_id := getattr(datum, self.id_attribute)) is not None
             ]
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:
