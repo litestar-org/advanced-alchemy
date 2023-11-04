@@ -1023,7 +1023,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
                 matched_values = [
-                    getattr(datum, field_name) for datum in data if getattr(datum, field_name) is not None
+                    field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
                 ]
                 if self._prefer_any:
                     match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
