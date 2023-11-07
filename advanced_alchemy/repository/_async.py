@@ -1344,7 +1344,10 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
     ) -> StatementLambdaElement:
         for key, val in kwargs.items() if isinstance(kwargs, dict) else kwargs:
-            statement = self._filter_by_where(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
+            if val is None:
+                statement = self._filter_by_is(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
+            else:
+                statement = self._filter_by_where(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
         return statement
 
     def _filter_by_expression(
@@ -1353,6 +1356,16 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         expression: ColumnElement[bool],
     ) -> StatementLambdaElement:
         statement += lambda s: s.filter(expression)
+        return statement
+
+    def _filter_by_is(
+        self,
+        statement: StatementLambdaElement,
+        field_name: str | InstrumentedAttribute,
+        value: Any,
+    ) -> StatementLambdaElement:
+        field = get_instrumented_attr(self.model_type, field_name)
+        statement += lambda s: s.where(field.is_(value))
         return statement
 
     def _filter_by_where(
