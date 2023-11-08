@@ -394,6 +394,14 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
                 pytest.mark.xdist_group("cockroachdb"),
             ],
         ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
     ],
 )
 def async_engine(request: FixtureRequest) -> AsyncEngine:
