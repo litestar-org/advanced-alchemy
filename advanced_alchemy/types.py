@@ -151,6 +151,10 @@ class DateTimeUTC(TypeDecorator):
     impl = DateTime(timezone=True)
     cache_ok = True
 
+    @property
+    def python_type(self) -> type[datetime.datetime]:
+        return datetime.datetime
+
     def process_bind_param(self, value: datetime.datetime | None, dialect: Dialect) -> datetime.datetime | None:
         if value is None:
             return value
