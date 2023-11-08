@@ -236,7 +236,7 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
         pytest.param(
             "mssql_engine",
             marks=[
-                pytest.mark.mssql,
+                pytest.mark.mssql_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
             ],
