@@ -121,11 +121,11 @@ test-spanner:
 
 .PHONY: test-mssql-sync
 test-mssql-sync:
-	$(ENV_PREFIX)pytest tests -m='integration and mssql-sync'
+	$(ENV_PREFIX)pytest tests -m='integration and mssql_sync'
 
 .PHONY: test-mssql-async
 test-mssql-async:
-	$(ENV_PREFIX)pytest tests -m='integration and mssql-async'
+	$(ENV_PREFIX)pytest tests -m='integration and mssql_async'
 
 .PHONY: test-cockroachdb-sync
 test-cockroachdb-sync:
