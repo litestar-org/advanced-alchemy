@@ -236,7 +236,7 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
         pytest.param(
             "mssql_engine",
             marks=[
-                pytest.mark.mssql,
+                pytest.mark.mssql_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
             ],
@@ -331,6 +331,31 @@ async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) ->
     )
 
 
+@pytest.fixture()
+async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine:
+    """MS SQL instance for end-to-end testing."""
+    return create_async_engine(
+        URL(
+            drivername="mssql+aioodbc",
+            username="sa",
+            password="Super-secret1",
+            host=docker_ip,
+            port=1344,
+            database="master",
+            query={
+                "driver": "ODBC Driver 18 for SQL Server",
+                "encrypt": "no",
+                "TrustServerCertificate": "yes",
+                # NOTE: MARS_Connection is only needed for the concurrent async tests
+                # lack of this causes some tests to fail
+                # https://github.com/jolt-org/advanced-alchemy/actions/runs/6800623970/job/18493034767?pr=94
+                "MARS_Connection": "yes",
+            },  # type:ignore[arg-type]
+        ),
+        poolclass=NullPool,
+    )
+
+
 @pytest.fixture(
     name="async_engine",
     params=[
@@ -371,6 +396,14 @@ async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) ->
                 pytest.mark.cockroachdb_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
             ],
         ),
     ],

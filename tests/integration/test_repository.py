@@ -335,7 +335,7 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
         pytest.param(
             "mssql_engine",
             marks=[
-                pytest.mark.mssql,
+                pytest.mark.mssql_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
             ],
@@ -511,6 +511,14 @@ def session(
                 pytest.mark.cockroachdb_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
             ],
         ),
     ],
@@ -1081,6 +1089,32 @@ async def test_repo_upsert_many_method_match_non_id(
                 author_model(name="Custom Author"),
             ],
             match_fields=["name"],
+        ),
+    )
+    existing_count_now = await maybe_async(author_repo.count())
+
+    assert existing_count_now > existing_count
+
+
+async def test_repo_upsert_many_method_match_not_on_input(
+    author_repo: AuthorRepository,
+    author_model: AuthorModel,
+) -> None:
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+        pytest.skip(
+            "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
+        )
+    existing_count = await maybe_async(author_repo.count())
+    existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    existing_obj.name = "Agatha C."
+    _ = await maybe_async(
+        author_repo.upsert_many(
+            data=[
+                existing_obj,
+                author_model(name="Inserted Author"),
+                author_model(name="Custom Author"),
+            ],
+            match_fields=["id"],
         ),
     )
     existing_count_now = await maybe_async(author_repo.count())
