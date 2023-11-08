@@ -332,9 +332,9 @@ async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) ->
 
 
 @pytest.fixture()
-def mssql_async_engine(docker_ip: str, mssql_service: None) -> Engine:
+async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine:
     """MS SQL instance for end-to-end testing."""
-    return create_engine(
+    return create_async_engine(
         URL(
             drivername="mssql+aioodbc",
             username="sa",
