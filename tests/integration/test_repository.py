@@ -335,7 +335,7 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
         pytest.param(
             "mssql_engine",
             marks=[
-                pytest.mark.mssql,
+                pytest.mark.mssql_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
             ],
@@ -511,6 +511,14 @@ def session(
                 pytest.mark.cockroachdb_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
             ],
         ),
     ],
