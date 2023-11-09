@@ -40,7 +40,7 @@ offering features such as:
   - Oracle via [oracledb](https://oracle.github.io/python-oracledb/) (tested on 18c and 23c)
   - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine)
-  - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc)
+  - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc) or [aioodbc](https://github.com/aio-libs/aioodbc)
   - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
 
 ## Usage
