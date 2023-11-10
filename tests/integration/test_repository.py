@@ -785,7 +785,7 @@ async def test_repo_list_and_count_method_with_nullable_kwargs(
 
 
 async def test_repo_list_and_count_method_with_nullable_date_kwargs(
-    author_repo: AuthorRepository,
+    rule_repo: RuleRepository,
 ) -> None:
     """Test SQLAlchemy list with count and filters in asyncpg.
 
@@ -794,7 +794,7 @@ async def test_repo_list_and_count_method_with_nullable_date_kwargs(
         author_repo: The author mock repository
     """
     collection, count = await maybe_async(
-        author_repo.list_and_count(created_at=None),
+        rule_repo.list_and_count(enable_at=None),
     )
     assert count == 0
     assert isinstance(collection, list)

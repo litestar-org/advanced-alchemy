@@ -82,6 +82,7 @@ class UUIDRule(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
+    enable_at: Mapped[datetime | None]
 
 
 class RuleAsyncRepository(SQLAlchemyAsyncRepository[UUIDRule]):
