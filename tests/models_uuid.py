@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
@@ -82,7 +82,7 @@ class UUIDRule(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
-    enable_at: Mapped[datetime | None]
+    enable_at: Mapped[Optional[datetime]]  # noqa: UP007
 
 
 class RuleAsyncRepository(SQLAlchemyAsyncRepository[UUIDRule]):
