@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs", "extensions", "linting", "test"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:384c10dbcc74817a0e4e5c599133e991fcae6bf97347b607bab090809260ebad"
+content_hash = "sha256:e54840bd76763dfd312f0b4b20cfd2ab82e121916366cce86a0c37b0327d7883"
 
 [[package]]
 name = "aiofiles"
@@ -15,6 +15,19 @@ summary = "File support for asyncio."
 files = [
     {file = "aiofiles-23.2.1-py3-none-any.whl", hash = "sha256:19297512c647d4b27a2cf7c34caa7e405c0d60b5560618a29a9fe027b18b0107"},
     {file = "aiofiles-23.2.1.tar.gz", hash = "sha256:84ec2218d8419404abcb9f0c02df3f34c6e0a68ed41072acfb1cef5cbc29051a"},
+]
+
+[[package]]
+name = "aioodbc"
+version = "0.5.0"
+requires_python = ">=3.7"
+summary = "ODBC driver for asyncio."
+dependencies = [
+    "pyodbc>=5.0.1",
+]
+files = [
+    {file = "aioodbc-0.5.0-py3-none-any.whl", hash = "sha256:bcaf16f007855fa4bf0ce6754b1f72c6c5a3d544188849577ddd55c5dc42985e"},
+    {file = "aioodbc-0.5.0.tar.gz", hash = "sha256:cbccd89ce595c033a49c9e6b4b55bbace7613a104b8a46e3d4c58c4bc4f25075"},
 ]
 
 [[package]]
