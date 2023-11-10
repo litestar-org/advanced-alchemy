@@ -118,7 +118,7 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--dist", "loadgroup", "-n", "auto", "--cov-report", "term-missing", "--cov", "advanced_alchemy"]
+addopts = ["--dist", "loadgroup", "-n", "auto"]
 asyncio_mode = "auto"
 markers = [
   "integration: SQLAlchemy integration tests",
