@@ -801,6 +801,23 @@ async def test_repo_list_and_count_method_with_nullable_date_kwargs(
     assert len(collection) == 0
 
 
+async def test_service_list_and_count_method_with_nullable_date_kwargs(
+    rule_service: RuleService,
+) -> None:
+    """Test SQLAlchemy list with count and filters in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_repo: The author mock repository
+    """
+    collection, count = await maybe_async(
+        rule_service.list_and_count(enable_at=None),
+    )
+    assert count == 0
+    assert isinstance(collection, list)
+    assert len(collection) == 0
+
+
 async def test_repo_list_and_count_basic_method(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
     """Test SQLAlchemy basic list with count in asyncpg.
 
