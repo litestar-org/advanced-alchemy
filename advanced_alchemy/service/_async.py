@@ -31,7 +31,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepository[ModelT]]
-    match_fields: list[str] | None = None
+    match_fields: list[str] | str | None = None
 
     def __init__(
         self,
