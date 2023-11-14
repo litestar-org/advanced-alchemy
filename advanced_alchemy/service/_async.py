@@ -31,7 +31,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepository[ModelT]]
-    match_fields: list[str] | None = None
+    match_fields: list[str] | str | None = None
 
     def __init__(
         self,
@@ -366,7 +366,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
-        match_fields: list[str] | None = None,
+        match_fields: list[str] | str | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -411,7 +411,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
-        match_fields: list[str] | None = None,
+        match_fields: list[str] | str | None = None,
     ) -> list[ModelT]:
         """Wrap repository upsert operation.
 
