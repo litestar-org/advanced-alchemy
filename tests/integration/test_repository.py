@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal,
 from uuid import UUID
 
 import pytest
-import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import Engine, Table, insert, select
+from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -578,6 +577,14 @@ def any_session(request: FixtureRequest) -> AsyncSession | Session:
     return request.param  # type: ignore[no-any-return]
 
 
+@pytest.fixture(params=[lazy_fixture("engine"), lazy_fixture("async_engine")], ids=["sync", "async"])
+async def any_engine(
+    request: FixtureRequest,
+) -> Engine | AsyncEngine:
+    """Return a session for the current session"""
+    return cast("Engine | AsyncEngine", request.getfixturevalue(request.param))
+
+
 @pytest.fixture()
 def repository_module(repository_pk_type: RepositoryPKType) -> Any:
     return models_uuid if repository_pk_type == "uuid" else models_bigint
@@ -792,8 +799,43 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
     assert len(collection) == 0
 
 
+async def test_repo_created_updated(
+    any_session: AsyncSession | Session,
+    any_engine: Engine | AsyncEngine,
+    author_repo: AuthorRepository,
+    book_model: type[AnyBook],
+    repository_pk_type: RepositoryPKType,
+) -> None:
+    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    if isinstance(any_session, AsyncSession):
+        _ = SQLAlchemyAsyncConfig(
+            enable_touch_updated_timestamp_listener=True,
+            engine_instance=cast("AsyncEngine", any_engine),
+        )
+    else:
+        _ = SQLAlchemySyncConfig(
+            enable_touch_updated_timestamp_listener=True,
+            engine_instance=cast("Engine", any_engine),
+        )
+    assert author.created_at is not None
+    assert author.updated_at is not None
+    original_update_dt = author.updated_at
+
+    # looks odd, but we want to get correct type checking here
+    if repository_pk_type == "uuid":
+        author = cast(models_uuid.UUIDAuthor, author)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+    else:
+        author = cast(models_bigint.BigIntAuthor, author)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at > original_update_dt
+
+
 async def test_repo_created_updated_no_listener(
     any_session: AsyncSession | Session,
+    any_engine: Engine | AsyncEngine,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
@@ -808,9 +850,15 @@ async def test_repo_created_updated_no_listener(
         event.remove(AsyncSession, "before_flush", touch_updated_timestamp)
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     if isinstance(any_session, AsyncSession):
-        _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=False)
+        _ = SQLAlchemyAsyncConfig(
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=cast("AsyncEngine", any_engine),
+        )
     else:
-        _ = SQLAlchemySyncConfig(enable_touch_updated_timestamp_listener=False)
+        _ = SQLAlchemySyncConfig(
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=cast("Engine", any_engine),
+        )
 
     assert author.created_at is not None
     assert author.updated_at is not None
@@ -828,33 +876,6 @@ async def test_repo_created_updated_no_listener(
     assert author.updated_at == original_update_dt
 
 
-async def test_repo_created_updated(
-    any_session: AsyncSession | Session,
-    author_repo: AuthorRepository,
-    book_model: type[AnyBook],
-    repository_pk_type: RepositoryPKType,
-) -> None:
-    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-    if isinstance(any_session, AsyncSession):
-        _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=True)
-    else:
-        _ = SQLAlchemySyncConfig(enable_touch_updated_timestamp_listener=True)
-    assert author.created_at is not None
-    assert author.updated_at is not None
-    original_update_dt = author.updated_at
-
-    # looks odd, but we want to get correct type checking here
-    if repository_pk_type == "uuid":
-        author = cast(models_uuid.UUIDAuthor, author)
-        book_model = cast("type[models_uuid.UUIDBook]", book_model)
-    else:
-        author = cast(models_bigint.BigIntAuthor, author)
-        book_model = cast("type[models_bigint.BigIntBook]", book_model)
-    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
-    author = await maybe_async(author_repo.update(author))
-    assert author.updated_at > original_update_dt
-
-
 async def test_repo_list_method(
     raw_authors_uuid: RawRecordData,
     author_repo: AuthorRepository,
@@ -869,7 +890,7 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
     collection = await maybe_async(
-        author_repo.list(sqlalchemy.and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name)),
+        author_repo.list(and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name)),
     )
     assert isinstance(collection, list)
     assert len(collection) == 1
@@ -1508,7 +1529,7 @@ async def test_service_list_method_with_filters(raw_authors: RawRecordData, auth
     exp_id = raw_authors[0]["id"]
     collection = await maybe_async(
         author_service.list(
-            sqlalchemy.and_(
+            and_(
                 author_service.repository.model_type.id == exp_id,
                 author_service.repository.model_type.name == exp_name,
             ),
