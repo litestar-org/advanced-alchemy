@@ -17,9 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from time_machine import travel
 
 from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
-from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError
-from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -813,9 +811,11 @@ async def test_repo_created_updated(
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     original_update_dt = author.updated_at
-    frozen_datetime.shift(delta=timedelta(seconds=1))
     if isinstance(author_repo.session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
@@ -834,6 +834,10 @@ async def test_repo_created_updated(
     else:
         author = cast(models_bigint.BigIntAuthor, author)
         book_model = cast("type[models_bigint.BigIntBook]", book_model)
+    author.name = "Altered"
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at > original_update_dt
+    # test nested
     author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
     author = await maybe_async(author_repo.update(author))
     assert author.updated_at > original_update_dt
@@ -849,12 +853,13 @@ async def test_repo_created_updated_no_listener(
     from sqlalchemy.exc import InvalidRequestError
 
     from advanced_alchemy._listeners import touch_updated_timestamp
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 
     with contextlib.suppress(InvalidRequestError):
         event.remove(Session, "before_flush", touch_updated_timestamp)
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     original_update_dt = author.updated_at
-    frozen_datetime.shift(delta=timedelta(seconds=1))
     if isinstance(author_repo.session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(
             enable_touch_updated_timestamp_listener=False,
