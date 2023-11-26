@@ -814,7 +814,8 @@ async def test_repo_created_updated(
     repository_pk_type: RepositoryPKType,
 ) -> None:
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-
+    original_update_dt = author.updated_at
+    frozen_datetime.shift(delta=timedelta(seconds=1))
     if isinstance(author_repo.session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
@@ -825,7 +826,6 @@ async def test_repo_created_updated(
         )
     assert author.created_at is not None
     assert author.updated_at is not None
-    original_update_dt = author.updated_at
     frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
@@ -852,8 +852,9 @@ async def test_repo_created_updated_no_listener(
 
     with contextlib.suppress(InvalidRequestError):
         event.remove(Session, "before_flush", touch_updated_timestamp)
-        event.remove(AsyncSession, "before_flush", touch_updated_timestamp)
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
+    frozen_datetime.shift(delta=timedelta(seconds=1))
     if isinstance(author_repo.session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(
             enable_touch_updated_timestamp_listener=False,
@@ -867,7 +868,6 @@ async def test_repo_created_updated_no_listener(
 
     assert author.created_at is not None
     assert author.updated_at is not None
-    original_update_dt = author.updated_at
     frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
