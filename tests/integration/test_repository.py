@@ -796,6 +796,12 @@ async def test_repo_created_updated_no_listener(
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
+    from sqlalchemy import event
+
+    from advanced_alchemy._listeners import touch_updated_timestamp
+
+    event.remove(Session, "before_flush", touch_updated_timestamp)
+
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     if isinstance(any_session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=False)
