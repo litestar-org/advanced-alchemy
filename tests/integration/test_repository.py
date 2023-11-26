@@ -808,12 +808,10 @@ async def test_repo_created_updated(
 
     if isinstance(author_repo.session, AsyncSession):  # type: ignore[arg-type]
         _ = SQLAlchemyAsyncConfig(
-            enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
         _ = SQLAlchemySyncConfig(
-            enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     assert author.created_at is not None
