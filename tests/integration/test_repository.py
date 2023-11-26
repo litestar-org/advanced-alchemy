@@ -1,7 +1,9 @@
 """Unit tests for the SQLAlchemy Repository implementation."""
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
@@ -797,11 +799,13 @@ async def test_repo_created_updated_no_listener(
     repository_pk_type: RepositoryPKType,
 ) -> None:
     from sqlalchemy import event
+    from sqlalchemy.exc import InvalidRequestError
 
     from advanced_alchemy._listeners import touch_updated_timestamp
 
-    event.remove(Session, "before_flush", touch_updated_timestamp)
-
+    with contextlib.suppress(InvalidRequestError):
+        event.remove(Session, "before_flush", touch_updated_timestamp)
+        event.remove(AsyncSession, "before_flush", touch_updated_timestamp)
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     if isinstance(any_session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=False)
