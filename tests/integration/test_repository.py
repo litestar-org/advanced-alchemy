@@ -800,21 +800,21 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 
 async def test_repo_created_updated(
-    any_engine: Engine | AsyncEngine,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-    if isinstance(any_engine, AsyncEngine):
+
+    if isinstance(author_repo.session, AsyncSession):  # type: ignore[arg-type]
         _ = SQLAlchemyAsyncConfig(
-            enable_touch_updated_timestamp_listener=True,
-            engine_instance=any_engine,
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
         _ = SQLAlchemySyncConfig(
-            enable_touch_updated_timestamp_listener=True,
-            engine_instance=any_engine,
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     assert author.created_at is not None
     assert author.updated_at is not None
@@ -833,7 +833,6 @@ async def test_repo_created_updated(
 
 
 async def test_repo_created_updated_no_listener(
-    any_engine: Engine | AsyncEngine,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
@@ -847,12 +846,15 @@ async def test_repo_created_updated_no_listener(
         event.remove(Session, "before_flush", touch_updated_timestamp)
         event.remove(AsyncSession, "before_flush", touch_updated_timestamp)
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-    if isinstance(any_engine, AsyncEngine):
-        _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=False, engine_instance=any_engine)
+    if isinstance(author_repo.session, AsyncSession):  # type: ignore[arg-type]
+        _ = SQLAlchemyAsyncConfig(
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+        )
     else:
         _ = SQLAlchemySyncConfig(
             enable_touch_updated_timestamp_listener=False,
-            engine_instance=any_engine,
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
 
     assert author.created_at is not None
