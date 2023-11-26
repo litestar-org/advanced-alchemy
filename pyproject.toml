@@ -133,6 +133,7 @@ markers = [
   "duckdb: SQLAlchemy DuckDB (duckdb-engine) Tests",
   "mssql_sync: SQLAlchemy Microsoft SQL Server (pyodbc) Tests",
   "mssql_async: SQLAlchemy Microsoft SQL Server (aioodbc) Tests",
+  "mock_async: SQLAlchemy mock Tests",
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]

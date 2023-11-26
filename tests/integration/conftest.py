@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, AsyncGenerator, Generator, cast
+from unittest.mock import NonCallableMagicMock, create_autospec
 
 import pytest
 from pytest import FixtureRequest
@@ -356,6 +357,12 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
     )
 
 
+@pytest.fixture()
+async def mock_async_engine() -> NonCallableMagicMock:
+    """MS SQL instance forK end-to-end testing."""
+    return cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
+
+
 @pytest.fixture(
     name="async_engine",
     params=[
@@ -404,6 +411,14 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
                 pytest.mark.mssql_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[
+                pytest.mark.mock_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
