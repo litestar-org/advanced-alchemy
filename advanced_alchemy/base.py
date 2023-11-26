@@ -9,12 +9,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_chec
 from uuid import UUID, uuid4
 
 from sqlalchemy import Date, MetaData, Sequence, String
-from sqlalchemy.event import listens_for
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
     Mapper,
-    Session,
     declared_attr,
     mapped_column,
     orm_insert_sentinel,
@@ -37,7 +35,6 @@ __all__ = (
     "CommonTableAttributes",
     "create_registry",
     "ModelProtocol",
-    "touch_updated_timestamp",
     "UUIDAuditBase",
     "UUIDBase",
     "UUIDPrimaryKey",
@@ -55,23 +52,6 @@ convention: NamingSchemaParameter = {
     "pk": "pk_%(table_name)s",
 }
 """Templates for automated constraint name generation."""
-
-
-@listens_for(Session, "before_flush")
-def touch_updated_timestamp(session: Session, *_: Any) -> None:
-    """Set timestamp on update.
-
-    Called from SQLAlchemy's
-    :meth:`before_flush <sqlalchemy.orm.SessionEvents.before_flush>` event to bump the ``updated``
-    timestamp on modified instances.
-
-    Args:
-        session: The sync :class:`Session <sqlalchemy.orm.Session>` instance that underlies the async
-            session.
-    """
-    for instance in session.dirty:
-        if hasattr(instance, "updated_at"):
-            instance.updated_at = datetime.now(timezone.utc)
 
 
 @runtime_checkable

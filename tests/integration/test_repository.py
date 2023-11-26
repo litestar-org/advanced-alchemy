@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
+from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -788,12 +790,45 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
     assert len(collection) == 0
 
 
-async def test_repo_created_updated(
+async def test_repo_created_updated_no_listener(
+    any_session: AsyncSession | Session,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    if isinstance(any_session, AsyncSession):
+        _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=False)
+    else:
+        _ = SQLAlchemySyncConfig(enable_touch_updated_timestamp_listener=False)
+
+    assert author.created_at is not None
+    assert author.updated_at is not None
+    original_update_dt = author.updated_at
+
+    # looks odd, but we want to get correct type checking here
+    if repository_pk_type == "uuid":
+        author = cast(models_uuid.UUIDAuthor, author)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+    else:
+        author = cast(models_bigint.BigIntAuthor, author)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at == original_update_dt
+
+
+async def test_repo_created_updated(
+    any_session: AsyncSession | Session,
+    author_repo: AuthorRepository,
+    book_model: type[AnyBook],
+    repository_pk_type: RepositoryPKType,
+) -> None:
+    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    if isinstance(any_session, AsyncSession):
+        _ = SQLAlchemyAsyncConfig(enable_touch_updated_timestamp_listener=True)
+    else:
+        _ = SQLAlchemySyncConfig(enable_touch_updated_timestamp_listener=True)
     assert author.created_at is not None
     assert author.updated_at is not None
     original_update_dt = author.updated_at
