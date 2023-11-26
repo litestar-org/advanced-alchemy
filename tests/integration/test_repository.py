@@ -817,7 +817,7 @@ async def test_repo_created_updated(
     assert author.created_at is not None
     assert author.updated_at is not None
     original_update_dt = author.updated_at
-
+    await asyncio.sleep(1)  # wait a second to make sure the ts will change
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
