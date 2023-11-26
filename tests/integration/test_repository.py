@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
 from uuid import UUID
 
@@ -14,6 +14,7 @@ from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
+from time_machine import travel
 
 from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
@@ -36,6 +37,7 @@ from .helpers import update_raw_records
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
+    from time_machine import Coordinates
 
 pytestmark = [
     pytest.mark.integration,
@@ -799,7 +801,14 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
     assert len(collection) == 0
 
 
+@pytest.fixture()
+def frozen_datetime() -> Generator[Coordinates, None, None]:
+    with travel(datetime.utcnow, tick=False) as frozen:
+        yield frozen
+
+
 async def test_repo_created_updated(
+    frozen_datetime: Coordinates,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
@@ -817,7 +826,7 @@ async def test_repo_created_updated(
     assert author.created_at is not None
     assert author.updated_at is not None
     original_update_dt = author.updated_at
-    await asyncio.sleep(1)  # wait a second to make sure the ts will change
+    frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
@@ -831,6 +840,7 @@ async def test_repo_created_updated(
 
 
 async def test_repo_created_updated_no_listener(
+    frozen_datetime: Coordinates,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
@@ -858,7 +868,7 @@ async def test_repo_created_updated_no_listener(
     assert author.created_at is not None
     assert author.updated_at is not None
     original_update_dt = author.updated_at
-
+    frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
