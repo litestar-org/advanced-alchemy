@@ -8,7 +8,7 @@ import re
 from collections import abc, defaultdict
 from inspect import isclass, signature
 from random import sample
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, Type, TypeVar, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import ColumnElement, Dialect, Select, inspect
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 CollectionT = TypeVar("CollectionT")
 T = TypeVar("T")
 AnyObject = TypeVar("AnyObject", bound="Any")
-DatabaseRegistry = dict[type["BaseInMemoryRepository[T]"], "MultiStore[T]"]
+DatabaseRegistry = Dict[Type["BaseInMemoryRepository[T]"], "MultiStore[T]"]
 
 __all__ = ["SQLAlchemyAsyncMockRepository"]
 
@@ -507,7 +507,7 @@ class BaseInMemoryRepository(AbstractRepository[T]):
         return sample(self.__collection__().list(), size)
 
     def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:
-        for value in self._filter_result_by_kwargs(cast(list[T], collection), kwargs):
+        for value in self._filter_result_by_kwargs(cast(List[T], collection), kwargs):
             self.__filtered_store__.add(value)
         return collection
 
