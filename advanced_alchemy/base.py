@@ -38,6 +38,7 @@ __all__ = (
     "UUIDAuditBase",
     "UUIDBase",
     "UUIDPrimaryKey",
+    "orm_registry",
 )
 
 
