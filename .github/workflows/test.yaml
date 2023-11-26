@@ -73,14 +73,14 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.coverage }}
-        run: pdm run pytest  tests -n auto
+        run: pdm run pytest -m "" tests -n auto
 
       - name: Test with coverage
-        if: inputs.coverage
+        if: ${{ inputs.coverage }}
         run: pdm run pytest tests -m "" --cov=advanced_alchemy --cov-report=xml -n auto
 
       - uses: actions/upload-artifact@v3
-        if: inputs.coverage
+        if: ${{ inputs.coverage }}
         with:
           name: coverage-xml
           path: coverage.xml
