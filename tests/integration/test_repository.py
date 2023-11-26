@@ -806,7 +806,7 @@ async def test_repo_created_updated(
 ) -> None:
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
 
-    if isinstance(author_repo.session, AsyncSession):  # type: ignore[arg-type]
+    if isinstance(author_repo.session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
@@ -844,7 +844,7 @@ async def test_repo_created_updated_no_listener(
         event.remove(Session, "before_flush", touch_updated_timestamp)
         event.remove(AsyncSession, "before_flush", touch_updated_timestamp)
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-    if isinstance(author_repo.session, AsyncSession):  # type: ignore[arg-type]
+    if isinstance(author_repo.session, AsyncSession):
         _ = SQLAlchemyAsyncConfig(
             enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
