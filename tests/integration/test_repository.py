@@ -624,7 +624,7 @@ def author_repo(
     """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.AuthorAsyncMockRepository()
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.AuthorAsyncRepository(session=any_session)
     else:
         repo = repository_module.AuthorSyncRepository(session=any_session)
@@ -640,7 +640,7 @@ def author_service(
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.AuthorAsyncMockService(session=create_autospec(any_session, instance=True))
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.AuthorAsyncService(session=any_session)
     else:
         repo = repository_module.AuthorSyncService(session=any_session)
@@ -652,7 +652,7 @@ def rule_repo(any_session: AsyncSession | Session, repository_module: Any, reque
     """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.RuleAsyncMockRepository()
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.RuleAsyncRepository(session=any_session)
     else:
         repo = repository_module.RuleSyncRepository(session=any_session)
@@ -664,7 +664,7 @@ def rule_service(any_session: AsyncSession | Session, repository_module: Any, re
     """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.RuleAsyncMockService(session=create_autospec(any_session, instance=True))
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.RuleAsyncService(session=any_session)
     else:
         repo = repository_module.RuleSyncService(session=any_session)
@@ -676,7 +676,7 @@ def book_repo(any_session: AsyncSession | Session, repository_module: Any, reque
     """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.BookAsyncMockRepository()
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.BookAsyncRepository(session=any_session)
     else:
         repo = repository_module.BookSyncRepository(session=any_session)
@@ -688,7 +688,7 @@ def book_service(any_session: AsyncSession | Session, repository_module: Any, re
     """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.BookAsyncMockService(session=create_autospec(any_session, instance=True))
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.BookAsyncService(session=any_session)
     else:
         repo = repository_module.BookSyncService(session=any_session)
@@ -700,7 +700,7 @@ def tag_repo(any_session: AsyncSession | Session, repository_module: Any, reques
     """Return an TagAsyncRepository or TagSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.TagAsyncMockRepository()
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.TagAsyncRepository(session=any_session)
     else:
         repo = repository_module.TagSyncRepository(session=any_session)
@@ -713,7 +713,7 @@ def tag_service(any_session: AsyncSession | Session, repository_module: Any, req
     """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.TagAsyncMockService(session=create_autospec(any_session, instance=True))
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.TagAsyncService(session=any_session)
     else:
         repo = repository_module.TagSyncService(session=any_session)
@@ -725,7 +725,7 @@ def item_repo(any_session: AsyncSession | Session, repository_module: Any, reque
     """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.ItemAsyncMockRepository()
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.ItemAsyncRepository(session=any_session)
     else:
         repo = repository_module.ItemSyncRepository(session=any_session)
@@ -738,7 +738,7 @@ def item_service(any_session: AsyncSession | Session, repository_module: Any, re
     """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.ItemAsyncMockService(session=create_autospec(any_session, instance=True))
-    if isinstance(any_session, AsyncSession):
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.ItemAsyncService(session=any_session)
     else:
         repo = repository_module.ItemSyncService(session=any_session)
@@ -1395,8 +1395,9 @@ async def test_repo_json_methods(
 async def test_repo_fetched_value(
     model_with_fetched_value_repo: ModelWithFetchedValueRepository,
     model_with_fetched_value: ModelWithFetchedValue,
+    request: FixtureRequest,
 ) -> None:
-    if issubclass(model_with_fetched_value_repo, SQLAlchemyAsyncMockRepository):
+    if "mock_async_engine" in request.fixturenames:
         pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not works with fetched values")
     obj = await maybe_async(model_with_fetched_value_repo.add(model_with_fetched_value(val=1)))
     first_time = obj.updated
