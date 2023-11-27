@@ -16,6 +16,15 @@ from advanced_alchemy import (
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 
 
+class BigIntPublisher(BigIntBase):
+    name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
+    books: Mapped[List[BigIntBook]] = relationship(
+        lazy="selectin",
+        back_populates="publisher",
+        cascade="all, delete",
+    )
+
+
 class BigIntAuthor(BigIntAuditBase):
     """The Author domain object."""
 
@@ -33,11 +42,13 @@ class BigIntBook(BigIntBase):
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     author_id: Mapped[int] = mapped_column(ForeignKey("big_int_author.id"))  # pyright: ignore
+    publisher_id: Mapped[int] = mapped_column(ForeignKey("big_int_publisher.id"))
     author: Mapped[BigIntAuthor] = relationship(  # pyright: ignore
         lazy="joined",
         innerjoin=True,
         back_populates="books",
     )
+    publisher: Mapped[BigIntPublisher] = relationship(BigIntPublisher)
 
 
 class BigIntEventLog(BigIntAuditBase):
@@ -98,6 +109,12 @@ class AuthorAsyncRepository(SQLAlchemyAsyncRepository[BigIntAuthor]):
     model_type = BigIntAuthor
 
 
+class PublisherAsyncRepository(SQLAlchemyAsyncRepository[BigIntPublisher]):
+    """Publisher repository."""
+
+    model_type = BigIntPublisher
+
+
 class BookAsyncRepository(SQLAlchemyAsyncRepository[BigIntBook]):
     """Book repository."""
 
@@ -132,6 +149,12 @@ class AuthorSyncRepository(SQLAlchemySyncRepository[BigIntAuthor]):
     """Author repository."""
 
     model_type = BigIntAuthor
+
+
+class PublisherSyncRepository(SQLAlchemySyncRepository[BigIntPublisher]):
+    """Publisher repository."""
+
+    model_type = BigIntPublisher
 
 
 class BookSyncRepository(SQLAlchemySyncRepository[BigIntBook]):

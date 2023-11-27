@@ -18,6 +18,15 @@ from advanced_alchemy import (
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 
 
+class UUIDPublisher(UUIDBase):
+    name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
+    books: Mapped[List[UUIDBook]] = relationship(
+        lazy="selectin",
+        back_populates="publisher",
+        cascade="all, delete",
+    )
+
+
 class UUIDAuthor(UUIDAuditBase):
     """The UUIDAuthor domain object."""
 
@@ -35,7 +44,9 @@ class UUIDBook(UUIDBase):
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id"))  # pyright: ignore
+    publisher_id: Mapped[int] = mapped_column(ForeignKey("uuid_publisher.id"))
     author: Mapped[UUIDAuthor] = relationship(lazy="joined", innerjoin=True, back_populates="books")  # pyright: ignore
+    publisher: Mapped[UUIDPublisher] = relationship(UUIDPublisher)
 
 
 class UUIDEventLog(UUIDAuditBase):
@@ -96,6 +107,12 @@ class AuthorAsyncRepository(SQLAlchemyAsyncRepository[UUIDAuthor]):
     model_type = UUIDAuthor
 
 
+class PublisherAsyncRepository(SQLAlchemyAsyncRepository[UUIDPublisher]):
+    """Publisher repository."""
+
+    model_type = UUIDPublisher
+
+
 class BookAsyncRepository(SQLAlchemyAsyncRepository[UUIDBook]):
     """Book repository."""
 
@@ -130,6 +147,12 @@ class AuthorSyncRepository(SQLAlchemySyncRepository[UUIDAuthor]):
     """Author repository."""
 
     model_type = UUIDAuthor
+
+
+class PublisherSyncRepository(SQLAlchemySyncRepository[UUIDPublisher]):
+    """Publisher repository."""
+
+    model_type = UUIDPublisher
 
 
 class BookSyncRepository(SQLAlchemySyncRepository[UUIDBook]):
