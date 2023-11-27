@@ -133,7 +133,8 @@ markers = [
   "duckdb: SQLAlchemy DuckDB (duckdb-engine) Tests",
   "mssql_sync: SQLAlchemy Microsoft SQL Server (pyodbc) Tests",
   "mssql_async: SQLAlchemy Microsoft SQL Server (aioodbc) Tests",
-  "mock_async: SQLAlchemy mock Tests",
+  "mock_async: SQLAlchemy async mock Tests",
+  "mock_sync: SQLAlchemy sync mock Tests",
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]
@@ -293,19 +294,30 @@ update_docstrings = true
 
 [tool.unasyncd.files]
 "advanced_alchemy/repository/_async.py" = "advanced_alchemy/repository/_sync.py"
+"advanced_alchemy/repository/memory/_async.py" = "advanced_alchemy/repository/memory/_sync.py"
 "advanced_alchemy/service/_async.py" = "advanced_alchemy/service/_sync.py"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+"async_scoped_session" = "scoped_session"
+"sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
+"sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
+
+[tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/memory/_async.py"]
+SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
 "advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
+"advanced_alchemy.repository.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.SQLAlchemySyncMockRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"

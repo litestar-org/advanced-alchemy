@@ -13,6 +13,7 @@ from advanced_alchemy import (
     SQLAlchemyAsyncMockRepository,
     SQLAlchemyAsyncRepository,
     SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncMockRepository,
     SQLAlchemySyncRepository,
     SQLAlchemySyncRepositoryService,
 )
@@ -97,6 +98,12 @@ class RuleAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDRule]):
     model_type = UUIDRule
 
 
+class RuleSyncMockRepository(SQLAlchemySyncMockRepository[UUIDRule]):
+    """Rule repository."""
+
+    model_type = UUIDRule
+
+
 class AuthorAsyncRepository(SQLAlchemyAsyncRepository[UUIDAuthor]):
     """Author repository."""
 
@@ -107,6 +114,10 @@ class AuthorAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDAuthor]):
     model_type = UUIDAuthor
 
 
+class AuthorSyncMockRepository(SQLAlchemySyncMockRepository[UUIDAuthor]):
+    model_type = UUIDAuthor
+
+
 class BookAsyncRepository(SQLAlchemyAsyncRepository[UUIDBook]):
     """Book repository."""
 
@@ -114,6 +125,12 @@ class BookAsyncRepository(SQLAlchemyAsyncRepository[UUIDBook]):
 
 
 class BookAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDBook]):
+    """Book repository."""
+
+    model_type = UUIDBook
+
+
+class BookSyncMockRepository(SQLAlchemySyncMockRepository[UUIDBook]):
     """Book repository."""
 
     model_type = UUIDBook
@@ -143,6 +160,12 @@ class TagAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDTag]):
     model_type = UUIDTag
 
 
+class TagSyncMockRepository(SQLAlchemySyncMockRepository[UUIDTag]):
+    """Tag repository."""
+
+    model_type = UUIDTag
+
+
 class ItemAsyncRepository(SQLAlchemyAsyncRepository[UUIDItem]):
     """Item repository."""
 
@@ -150,6 +173,12 @@ class ItemAsyncRepository(SQLAlchemyAsyncRepository[UUIDItem]):
 
 
 class ItemAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDItem]):
+    """Item repository."""
+
+    model_type = UUIDItem
+
+
+class ItemSyncMockRepository(SQLAlchemySyncMockRepository[UUIDItem]):
     """Item repository."""
 
     model_type = UUIDItem
@@ -212,6 +241,12 @@ class RuleAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDRule]):
     repository_type = RuleAsyncMockRepository
 
 
+class RuleSyncMockService(SQLAlchemySyncRepositoryService[UUIDRule]):
+    """Rule repository."""
+
+    repository_type = RuleSyncMockRepository
+
+
 class AuthorAsyncService(SQLAlchemyAsyncRepositoryService[UUIDAuthor]):
     """Author repository."""
 
@@ -224,6 +259,12 @@ class AuthorAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDAuthor]):
     repository_type = AuthorAsyncMockRepository
 
 
+class AuthorSyncMockService(SQLAlchemySyncRepositoryService[UUIDAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorSyncMockRepository
+
+
 class BookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDBook]):
     """Book repository."""
 
@@ -234,6 +275,12 @@ class BookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDBook]):
     """Book repository."""
 
     repository_type = BookAsyncMockRepository
+
+
+class BookSyncMockService(SQLAlchemySyncRepositoryService[UUIDBook]):
+    """Book repository."""
+
+    repository_type = BookSyncMockRepository
 
 
 class EventLogAsyncService(SQLAlchemyAsyncRepositoryService[UUIDEventLog]):
@@ -260,6 +307,12 @@ class TagAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDTag]):
     repository_type = TagAsyncMockRepository
 
 
+class TagSyncMockService(SQLAlchemySyncRepositoryService[UUIDTag]):
+    """Tag repository."""
+
+    repository_type = TagSyncMockRepository
+
+
 class ItemAsyncService(SQLAlchemyAsyncRepositoryService[UUIDItem]):
     """Item repository."""
 
@@ -270,6 +323,12 @@ class ItemAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDItem]):
     """Item repository."""
 
     repository_type = ItemAsyncMockRepository
+
+
+class ItemSyncMockService(SQLAlchemySyncRepositoryService[UUIDItem]):
+    """Item repository."""
+
+    repository_type = ItemSyncMockRepository
 
 
 class RuleSyncService(SQLAlchemySyncRepositoryService[UUIDRule]):

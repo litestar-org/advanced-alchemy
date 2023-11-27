@@ -9,10 +9,10 @@ from advanced_alchemy.config import (
     SyncSessionConfig,
 )
 from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
-from advanced_alchemy.repository._memory import SQLAlchemyAsyncMockRepository
 from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
 from advanced_alchemy.repository._util import wrap_sqlalchemy_exception
-from advanced_alchemy.repository.abc import AbstractRepository
+from advanced_alchemy.repository.memory._async import SQLAlchemyAsyncMockRepository
+from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryReadService, SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryReadService, SQLAlchemySyncRepositoryService
@@ -28,7 +28,7 @@ __all__ = (
     "SQLAlchemyAsyncMockRepository",
     "SQLAlchemyAsyncRepository",
     "SQLAlchemySyncRepository",
-    "AbstractRepository",
+    "SQLAlchemySyncMockRepository",
     "SQLAlchemySyncRepositoryService",
     "SQLAlchemySyncRepositoryReadService",
     "SQLAlchemyAsyncRepositoryReadService",
