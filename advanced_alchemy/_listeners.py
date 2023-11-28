@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy.event import listens_for
-from sqlalchemy.orm import Session
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
-@listens_for(Session, "before_flush")
 def touch_updated_timestamp(session: Session, *_: Any) -> None:
     """Set timestamp on update.
 

@@ -814,16 +814,17 @@ async def test_repo_created_updated(
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 
-    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-    original_update_dt = author.updated_at
-    if isinstance(author_repo.session, AsyncSession):
-        _ = SQLAlchemyAsyncConfig(
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+        config = SQLAlchemyAsyncConfig(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
-        _ = SQLAlchemySyncConfig(
+        config = SQLAlchemySyncConfig(  # type: ignore[assignment,unreachable]
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
+    config.__post_init__()
+    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
     assert author.created_at is not None
     assert author.updated_at is not None
     frozen_datetime.shift(delta=timedelta(seconds=5))
@@ -858,19 +859,20 @@ async def test_repo_created_updated_no_listener(
 
     with contextlib.suppress(InvalidRequestError):
         event.remove(Session, "before_flush", touch_updated_timestamp)
-    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
-    original_update_dt = author.updated_at
-    if isinstance(author_repo.session, AsyncSession):
-        _ = SQLAlchemyAsyncConfig(
+
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+        config = SQLAlchemyAsyncConfig(
             enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
-        _ = SQLAlchemySyncConfig(
+        config = SQLAlchemySyncConfig(  # type: ignore[assignment,unreachable]
             enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
-
+    config.__post_init__()
+    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
     assert author.created_at is not None
     assert author.updated_at is not None
     frozen_datetime.shift(delta=timedelta(seconds=5))

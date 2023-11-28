@@ -134,7 +134,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             msg = "Only one of 'connection_string' or 'engine_instance' can be provided."
             raise ImproperConfigurationError(msg)
         if self.enable_touch_updated_timestamp_listener:
-            from advanced_alchemy._listeners import touch_updated_timestamp  # noqa: F401
+            from sqlalchemy import event
+            from sqlalchemy.orm import Session
+
+            from advanced_alchemy._listeners import touch_updated_timestamp
+
+            event.listen(Session, "before_flush", touch_updated_timestamp)
 
     @property
     def engine_config_dict(self) -> dict[str, Any]:

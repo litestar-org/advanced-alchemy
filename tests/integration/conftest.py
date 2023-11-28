@@ -191,6 +191,7 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -364,6 +365,7 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
