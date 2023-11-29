@@ -883,8 +883,8 @@ async def test_repo_list_and_count_basic_method(raw_authors: RawRecordData, auth
     assert len(collection) == exp_count
 
 
-async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> None:
-    collection, count = await maybe_async(book_repo.list_and_count())
+async def test_repo_list_and_count_method_empty(item_repo: ItemRepository) -> None:
+    collection, count = await maybe_async(item_repo.list_and_count())
     assert count == 0
     assert isinstance(collection, list)
     assert len(collection) == 0
@@ -894,6 +894,7 @@ async def test_repo_created_updated(
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
+    raw_publishers: RawRecordData,
 ) -> None:
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     assert author.created_at is not None
@@ -907,7 +908,7 @@ async def test_repo_created_updated(
     else:
         author = cast(models_bigint.BigIntAuthor, author)
         book_model = cast("type[models_bigint.BigIntBook]", book_model)
-    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
+    author.books.append(book_model(title="Testing", publisher_id=raw_publishers[0]["id"]))  # type: ignore[arg-type]
     author = await maybe_async(author_repo.update(author))
     assert author.updated_at > original_update_dt
 
@@ -1448,11 +1449,7 @@ async def test_repo_health_check(author_repo: AuthorRepository) -> None:
 
 
 @pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload", "defaultload"])
-async def test_repo_load(
-    book_repo: BookRepository,
-    author_model: AuthorModel,
-    strategy: SQLALoadStrategy,
-) -> None:
+async def test_repo_load(book_repo: BookRepository, author_model: AuthorModel, strategy: SQLALoadStrategy) -> None:
     await maybe_async(book_repo.session.expunge_all())
     books = await maybe_async(book_repo.load(author=strategy).list())
     for book in books:
@@ -1466,6 +1463,19 @@ async def test_repo_load_nested(
 ) -> None:
     await maybe_async(publisher_repo.session.expunge_all())
     publishers = await maybe_async(publisher_repo.load(books__author=True).list())
+    for publisher in publishers:
+        for book in publisher.books:
+            assert isinstance(book, book_model)
+            assert isinstance(book.author, author_model)
+
+
+async def test_repo_load_nested_ellipsis(
+    publisher_repo: PublisherRepository,
+    book_model: BookModel,
+    author_model: AuthorModel,
+) -> None:
+    await maybe_async(publisher_repo.session.expunge_all())
+    publishers = await maybe_async(publisher_repo.load(books=...).list())
     for publisher in publishers:
         for book in publisher.books:
             assert isinstance(book, book_model)
@@ -1595,8 +1605,8 @@ async def test_service_list_and_count_basic_method(raw_authors: RawRecordData, a
     assert len(collection) == exp_count
 
 
-async def test_service_list_and_count_method_empty(book_service: BookService) -> None:
-    collection, count = await maybe_async(book_service.list_and_count())
+async def test_service_list_and_count_method_empty(item_service: ItemService) -> None:
+    collection, count = await maybe_async(item_service.list_and_count())
     assert count == 0
     assert isinstance(collection, list)
     assert len(collection) == 0

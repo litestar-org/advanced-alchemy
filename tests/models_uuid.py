@@ -43,7 +43,7 @@ class UUIDBook(UUIDBase):
     """The Book domain object."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id"))  # pyright: ignore
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id", ondelete="CASCADE"))  # pyright: ignore
     publisher_id: Mapped[int] = mapped_column(ForeignKey("uuid_publisher.id"))
     author: Mapped[UUIDAuthor] = relationship(lazy="joined", innerjoin=True, back_populates="books")  # pyright: ignore
     publisher: Mapped[UUIDPublisher] = relationship(UUIDPublisher)

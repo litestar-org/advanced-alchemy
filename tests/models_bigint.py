@@ -41,7 +41,7 @@ class BigIntBook(BigIntBase):
     """The Book domain object."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[int] = mapped_column(ForeignKey("big_int_author.id"))  # pyright: ignore
+    author_id: Mapped[int] = mapped_column(ForeignKey("big_int_author.id", ondelete="CASCADE"))  # pyright: ignore
     publisher_id: Mapped[int] = mapped_column(ForeignKey("big_int_publisher.id"))
     author: Mapped[BigIntAuthor] = relationship(  # pyright: ignore
         lazy="joined",
