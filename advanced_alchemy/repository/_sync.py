@@ -34,8 +34,8 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.operations import Merge
+from advanced_alchemy.repository._load import SQLAlchemyLoad, SQLAlchemyLoadConfig, SQLALoadStrategy
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
-from advanced_alchemy.repository.load import LoadConfig, SQLAlchemyLoad, SQLALoadStrategy
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.utils.deprecation import deprecated
 
@@ -154,7 +154,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
 
     def load(
         self,
-        config: LoadConfig | None = None,
+        config: SQLAlchemyLoadConfig | None = None,
         /,
         **kwargs: bool | EllipsisType | SQLALoadStrategy,
     ) -> Self:

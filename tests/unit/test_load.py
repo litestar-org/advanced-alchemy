@@ -2,23 +2,23 @@ from __future__ import annotations
 
 import pytest
 
-from advanced_alchemy.repository.load import Load, LoadConfig
+from advanced_alchemy.repository._load import SQLAlchemyLoad, SQLAlchemyLoadConfig
 
 
 @pytest.mark.parametrize(
     ("load_1", "load_2", "expected"),
     [
-        (Load(a=True), Load(a=True), True),
-        (Load(a=True, b=True), Load(b=True, a=True), True),
-        (Load(a=False, a__b=True), Load(a__b=True), True),
-        (Load(a=False, a__b=False), Load(a=False, a__b=False), True),
-        (Load(a=True, a__b=False), Load(a=True, a__b=False), True),
-        (Load(a=False, a__b=False, a__b__c=True), Load(a__b__c=True), True),
-        (Load(a=True), Load(a=False), False),
-        (Load(LoadConfig(default_strategy="*"), a=True), Load(a=True), False),
+        (SQLAlchemyLoad(a=True), SQLAlchemyLoad(a=True), True),
+        (SQLAlchemyLoad(a=True, b=True), SQLAlchemyLoad(b=True, a=True), True),
+        (SQLAlchemyLoad(a=False, a__b=True), SQLAlchemyLoad(a__b=True), True),
+        (SQLAlchemyLoad(a=False, a__b=False), SQLAlchemyLoad(a=False, a__b=False), True),
+        (SQLAlchemyLoad(a=True, a__b=False), SQLAlchemyLoad(a=True, a__b=False), True),
+        (SQLAlchemyLoad(a=False, a__b=False, a__b__c=True), SQLAlchemyLoad(a__b__c=True), True),
+        (SQLAlchemyLoad(a=True), SQLAlchemyLoad(a=False), False),
+        (SQLAlchemyLoad(SQLAlchemyLoadConfig(default_strategy=...), a=True), SQLAlchemyLoad(a=True), False),
     ],
 )
-def test_load_eq(load_1: Load[str], load_2: Load[str], expected: Load[str]) -> None:
+def test_load_eq(load_1: SQLAlchemyLoad, load_2: SQLAlchemyLoad, expected: SQLAlchemyLoad) -> None:
     """Test load equality."""
     assert (load_1 == load_2) == expected
 
@@ -26,15 +26,15 @@ def test_load_eq(load_1: Load[str], load_2: Load[str], expected: Load[str]) -> N
 @pytest.mark.parametrize(
     ("load", "expected"),
     [
-        (Load(a=True), True),
-        (Load(a=False), True),
-        (Load(a=...), True),
-        (Load(LoadConfig(default_strategy="*")), True),
-        (Load(), False),
-        (Load(LoadConfig(default_strategy=None)), False),
+        (SQLAlchemyLoad(a=True), True),
+        (SQLAlchemyLoad(a=False), True),
+        (SQLAlchemyLoad(a=...), True),
+        (SQLAlchemyLoad(SQLAlchemyLoadConfig(default_strategy=...)), True),
+        (SQLAlchemyLoad(), False),
+        (SQLAlchemyLoad(SQLAlchemyLoadConfig(default_strategy=None)), False),
     ],
 )
-def test_load_bool(load: Load[str], expected: bool) -> None:
+def test_load_bool(load: SQLAlchemyLoad, expected: bool) -> None:
     """Test load truthiness"""
     assert bool(load) == expected
 
@@ -42,13 +42,13 @@ def test_load_bool(load: Load[str], expected: bool) -> None:
 @pytest.mark.parametrize(
     ("load", "expected"),
     [
-        (Load(a=...), True),
-        (Load(a__b=..., a__b__c=False), True),
-        (Load(LoadConfig(default_strategy="*")), True),
-        (Load(), False),
-        (Load(a__b=True), False),
+        (SQLAlchemyLoad(a=...), True),
+        (SQLAlchemyLoad(a__b=..., a__b__c=False), True),
+        (SQLAlchemyLoad(SQLAlchemyLoadConfig(default_strategy=...)), True),
+        (SQLAlchemyLoad(), False),
+        (SQLAlchemyLoad(a__b=True), False),
     ],
 )
-def test_has_wildcards(load: Load[str], expected: bool) -> None:
+def test_has_wildcards(load: SQLAlchemyLoad, expected: bool) -> None:
     """Test wildcard detection."""
     assert load.has_wildcards() == expected
