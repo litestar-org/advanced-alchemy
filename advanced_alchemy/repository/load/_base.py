@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+from abc import ABCMeta
 from dataclasses import dataclass
 from types import EllipsisType
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, Tuple, TypeVar, Union
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-    from typing import Any
+    from typing import Any, TypeAlias
 
 
 LoadT = TypeVar("LoadT", bound="Load[Any]")
 StrategyT = TypeVar("StrategyT", bound=str)
-LoadPath = tuple[tuple[str, ...], bool | EllipsisType | StrategyT]
+AnyStrategy: TypeAlias = Union[bool, EllipsisType, str]
+LoadPath: TypeAlias = Tuple[Tuple[str, ...], Union[bool, EllipsisType, StrategyT]]
 
 
 @dataclass
@@ -28,15 +29,13 @@ class FieldLoadConfig:
 @dataclass
 class LoadConfig:
     sep: str = "__"
-    default_strategy: str | None = None
+    default_strategy: AnyStrategy | None = None
 
     def __hash__(self) -> int:
         return hash((self.sep, self.default_strategy))
 
 
-class Load(Generic[StrategyT]):
-    loading_strategies: Sequence[str] | None = None
-
+class Load(Generic[StrategyT], metaclass=ABCMeta):
     def __init__(
         self,
         config: LoadConfig | None = None,
@@ -56,22 +55,20 @@ class Load(Generic[StrategyT]):
     def __bool__(self) -> bool:
         return bool(self._config.default_strategy or self._kwargs)
 
-    @property
-    def _loading_strategies(self) -> tuple[object, ...]:
-        if self.loading_strategies is None:
-            return (True, Ellipsis)
-        return (True, Ellipsis, *self.loading_strategies)
-
     def _load_paths(self, **kwargs: bool | EllipsisType | StrategyT) -> tuple[LoadPath[StrategyT], ...]:
         """Split loading paths into tuples."""
-        # Resolve path conflicts
-        # - {"a": False, "a__b": True} -> {"a": False}
+        # Resolve path conflicts: the last takes precedence
+        # - {"a": False, "a__b": True} -> {"a__b": True}
         to_remove: set[str] = set()
-        not_loaded: list[str] = [key for key, load in kwargs.items() if not load]
-        for key in not_loaded:
-            for kwarg, load in kwargs.items():
-                if kwarg != key and kwarg.startswith(key) and load in self._loading_strategies:
-                    to_remove.add(kwarg)
+        for key, strategy in kwargs.items():
+            for other_key, other_strategy in kwargs.items():
+                if (
+                    other_key != key
+                    and other_key.startswith(key)
+                    and not self.strategy_will_load(strategy)
+                    and other_strategy != strategy
+                ):
+                    to_remove.add(key)
         kwargs = {key: val for key, val in kwargs.items() if key not in to_remove}
         return tuple((tuple(key.split(self._config.sep)), kwargs[key]) for key in sorted(kwargs))
 
@@ -82,3 +79,8 @@ class Load(Generic[StrategyT]):
             True if there is at least one wildcard use, False otherwise
         """
         return self._config.default_strategy is not None or Ellipsis in self._kwargs.values()
+
+    def strategy_will_load(self, strategy: bool | EllipsisType | StrategyT | None) -> bool:
+        if strategy is False or strategy is None:
+            return False
+        return True

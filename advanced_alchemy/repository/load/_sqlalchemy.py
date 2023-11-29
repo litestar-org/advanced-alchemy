@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from types import EllipsisType
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, Union
 
 from sqlalchemy import inspect
 from sqlalchemy.orm import defaultload, joinedload, noload, raiseload, selectinload, subqueryload
@@ -10,7 +11,6 @@ from ._base import Load, LoadConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from types import EllipsisType
 
     from sqlalchemy.orm import Mapper, RelationshipProperty
     from sqlalchemy.orm.strategy_options import _AbstractLoad
@@ -19,74 +19,58 @@ if TYPE_CHECKING:
 
 
 SQLALoadStrategy = Literal["defaultload", "noload", "joinedload", "selectinload", "subqueryload", "raiseload"]
+AnySQLAtrategy: TypeAlias = Union[SQLALoadStrategy, bool, EllipsisType]
 
 
 @dataclass
 class SQLAlchemyLoadConfig(LoadConfig):
-    default_strategy: SQLALoadStrategy | None = None
+    default_strategy: AnySQLAtrategy | None = None
 
 
 class SQLAlchemyLoad(Load[SQLALoadStrategy]):
-    loading_strategies = ["defaultload", "joinedload", "noload", "raiseload", "selectinload", "subqueryload"]
+    _strategy_map: dict[SQLALoadStrategy, Callable[..., _AbstractLoad]] = {
+        "defaultload": defaultload,
+        "joinedload": joinedload,
+        "noload": noload,
+        "raiseload": raiseload,
+        "selectinload": selectinload,
+        "subqueryload": subqueryload,
+    }
 
     def __init__(
         self,
         config: LoadConfig | None = None,
         /,
-        **kwargs: bool | EllipsisType | SQLALoadStrategy,
+        **kwargs: AnySQLAtrategy,
     ) -> None:
         config_ = config if config is not None else SQLAlchemyLoadConfig()
         super().__init__(config_, **kwargs)
 
     @classmethod
-    def _strategy_to_load_fn(cls, strategy: SQLALoadStrategy) -> Callable[..., _AbstractLoad]:
-        match strategy:
-            case "defaultload":
-                return defaultload
-            case "noload":
-                return noload
-            case "joinedload":
-                return joinedload
-            case "selectinload":
-                return selectinload
-            case "subqueryload":
-                return subqueryload
-            case "raiseload":
-                return raiseload
-
-    def _loader_from_relationship(
-        self,
-        relationship: RelationshipProperty[Any],
-        load: bool = True,
-        wildcard: bool = False,
-        strategy: SQLALoadStrategy | None = None,
-    ) -> _AbstractLoad:  # sourcery skip: assign-if-exp, reintroduce-else
-        arg = "*" if wildcard else relationship.class_attribute
-        if not load:
-            return raiseload(arg)
-        if strategy is not None:
-            return self._strategy_to_load_fn(strategy)(arg)
-        if relationship.uselist:
-            return selectinload(arg)
-        return joinedload(arg)
+    def _strategy_to_load_fn(cls, strategy: AnySQLAtrategy, uselist: bool = False) -> Callable[..., _AbstractLoad]:
+        if not strategy:
+            return raiseload
+        if isinstance(strategy, str):
+            return cls._strategy_map[strategy]
+        if uselist:
+            return selectinload
+        return joinedload
 
     def _default_load_strategy(self) -> _AbstractLoad | None:
-        match self._config:
-            case SQLAlchemyLoadConfig():
-                if self._config.default_strategy is not None:
-                    return self._strategy_to_load_fn(self._config.default_strategy)("*")
-                return None
-            case LoadConfig(default_strategy="*"):
-                return defaultload("*")
-            case LoadConfig(default_strategy=None):
-                return None
-            case _:
-                msg = f"Unknown load strategy: {self._config.default_strategy}"
-                raise ValueError(msg)
+        if isinstance(self._config, SQLAlchemyLoadConfig):
+            if self._config.default_strategy is not None:
+                return self._strategy_to_load_fn(self._config.default_strategy)("*")
+            return None
+        if self._config.default_strategy == "*":
+            return defaultload("*")
+        if self._config.default_strategy is None:
+            return None
+        msg = f"Unknown load strategy: {self._config.default_strategy}"
+        raise ValueError(msg)
 
     def loaders(self, model_type: type[ModelT]) -> list[_AbstractLoad]:
         loaders: list[_AbstractLoad] = []
-        for path, load in self._paths:
+        for path, strategy in self._paths:
             mapper: Mapper[ModelT] = inspect(model_type, raiseerr=True)
             if not path:
                 continue
@@ -94,15 +78,13 @@ class SQLAlchemyLoad(Load[SQLALoadStrategy]):
             relationship: RelationshipProperty[Any] | None = None
             # Builder loaders
             for i, key in enumerate(path):
-                should_load, wildcard, strategy = True, False, None
-                if isinstance(load, str):
-                    strategy = load
-                elif load is Ellipsis:
-                    wildcard = True
-                elif not load and i == len(path) - 1:
-                    should_load = False
+                key_strategy = strategy
+                current_prefix_strategy = self._kwargs.get(self._config.sep.join(path[: i + 1]), None)
+                if not self.strategy_will_load(strategy) and self.strategy_will_load(current_prefix_strategy):
+                    key_strategy = True
                 relationship = mapper.relationships[key]
-                key_loader = self._loader_from_relationship(relationship, should_load, wildcard, strategy)
+                load_arg = "*" if strategy is Ellipsis else relationship.class_attribute
+                key_loader = self._strategy_to_load_fn(key_strategy, bool(relationship.uselist))(load_arg)
                 loader_chain.append(key_loader)
                 if relationship is not None:
                     mapper = inspect(relationship.entity.class_, raiseerr=True)
@@ -114,3 +96,10 @@ class SQLAlchemyLoad(Load[SQLALoadStrategy]):
         if (default_load := self._default_load_strategy()) is not None:
             loaders.append(default_load)
         return loaders
+
+    def strategy_will_load(self, strategy: SQLALoadStrategy | bool | EllipsisType | None) -> bool:
+        if strategy is False or strategy is None:
+            return False
+        if isinstance(strategy, str):
+            return strategy not in ["noload", "raiseload"]
+        return True

@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from advanced_alchemy import (
     SQLAlchemyAsyncRepository,
     SQLAlchemyAsyncRepositoryService,
+    SQLAlchemyLoad,
+    SQLAlchemyLoadConfig,
     SQLALoadStrategy,
     base,
 )
@@ -1448,47 +1450,45 @@ async def test_repo_health_check(author_repo: AuthorRepository) -> None:
     assert healthy
 
 
-@pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload", "defaultload"])
-async def test_repo_load(book_repo: BookRepository, author_model: AuthorModel, strategy: SQLALoadStrategy) -> None:
+@pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload"])
+async def test_repo_load_strategy(
+    book_repo: BookRepository,
+    author_model: AuthorModel,
+    strategy: SQLALoadStrategy,
+) -> None:
     await maybe_async(book_repo.session.expunge_all())
     books = await maybe_async(book_repo.load(author=strategy).list())
     for book in books:
         assert isinstance(book.author, author_model)
 
 
+@pytest.mark.parametrize(
+    "load_kwargs",
+    [{"books": ...}, {"books__author": True}, {"books": False, "books__author": True}],
+)
 async def test_repo_load_nested(
     publisher_repo: PublisherRepository,
     book_model: BookModel,
     author_model: AuthorModel,
+    load_kwargs: dict[str, Any],
 ) -> None:
     await maybe_async(publisher_repo.session.expunge_all())
-    publishers = await maybe_async(publisher_repo.load(books__author=True).list())
+    publishers = await maybe_async(publisher_repo.load(**load_kwargs).list())
     for publisher in publishers:
         for book in publisher.books:
             assert isinstance(book, book_model)
             assert isinstance(book.author, author_model)
 
 
-async def test_repo_load_nested_ellipsis(
-    publisher_repo: PublisherRepository,
-    book_model: BookModel,
-    author_model: AuthorModel,
-) -> None:
-    await maybe_async(publisher_repo.session.expunge_all())
-    publishers = await maybe_async(publisher_repo.load(books=...).list())
-    for publisher in publishers:
-        for book in publisher.books:
-            assert isinstance(book, book_model)
-            assert isinstance(book.author, author_model)
-
-
+@pytest.mark.parametrize("load_kwargs", [{"books": True}, {"books": ..., "books__author": False}])
 async def test_repo_load_partially_nested(
     publisher_repo: PublisherRepository,
     book_model: BookModel,
     author_model: AuthorModel,
+    load_kwargs: dict[str, Any],
 ) -> None:
     await maybe_async(publisher_repo.session.expunge_all())
-    publishers = await maybe_async(publisher_repo.load(books__author=False).list())
+    publishers = await maybe_async(publisher_repo.load(**load_kwargs).list())
     for publisher in publishers:
         for book in publisher.books:
             assert isinstance(book, book_model)
@@ -1496,8 +1496,8 @@ async def test_repo_load_partially_nested(
                 isinstance(book.author, author_model)
 
 
-@pytest.mark.parametrize("strategy", [False, "raiseload"])
-async def test_repo_raiseload(
+@pytest.mark.parametrize("strategy", [False, "raiseload", "defaultload"])
+async def test_repo_no_load_strategy(
     book_repo: BookRepository,
     author_model: AuthorModel,
     strategy: SQLALoadStrategy,
@@ -1507,6 +1507,22 @@ async def test_repo_raiseload(
     for book in books:
         with pytest.raises(InvalidRequestError):
             isinstance(book.author, author_model)
+
+
+@pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload"])
+async def test_repo_default_strategy(
+    publisher_repo: PublisherRepository,
+    book_model: BookModel,
+    author_model: AuthorModel,
+    strategy: SQLALoadStrategy,
+) -> None:
+    await maybe_async(publisher_repo.session.expunge_all())
+    publisher_repo._load = SQLAlchemyLoad(SQLAlchemyLoadConfig(default_strategy=strategy))
+    publishers = await maybe_async(publisher_repo.list())
+    for publisher in publishers:
+        for book in publisher.books:
+            assert isinstance(book, book_model)
+            assert isinstance(book.author, author_model)
 
 
 # service tests

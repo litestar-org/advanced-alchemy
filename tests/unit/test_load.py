@@ -10,9 +10,10 @@ from advanced_alchemy.repository.load import Load, LoadConfig
     [
         (Load(a=True), Load(a=True), True),
         (Load(a=True, b=True), Load(b=True, a=True), True),
-        (Load(a=False, a__b=True), Load(a=False), True),
+        (Load(a=False, a__b=True), Load(a__b=True), True),
         (Load(a=False, a__b=False), Load(a=False, a__b=False), True),
-        (Load(a=False, a__b=False, a__b__c=True), Load(a=False, a__b=False), True),
+        (Load(a=True, a__b=False), Load(a=True, a__b=False), True),
+        (Load(a=False, a__b=False, a__b__c=True), Load(a__b__c=True), True),
         (Load(a=True), Load(a=False), False),
         (Load(LoadConfig(default_strategy="*"), a=True), Load(a=True), False),
     ],

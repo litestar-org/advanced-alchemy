@@ -44,7 +44,6 @@ class BigIntBook(BigIntBase):
     author_id: Mapped[int] = mapped_column(ForeignKey("big_int_author.id", ondelete="CASCADE"))  # pyright: ignore
     publisher_id: Mapped[int] = mapped_column(ForeignKey("big_int_publisher.id"))
     author: Mapped[BigIntAuthor] = relationship(  # pyright: ignore
-        lazy="joined",
         innerjoin=True,
         back_populates="books",
     )
