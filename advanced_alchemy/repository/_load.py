@@ -26,9 +26,6 @@ class SQLAlchemyLoadConfig:
     sep: str = "__"
     default_strategy: AnySQLAtrategy | None = None
 
-    def __hash__(self) -> int:
-        return hash((self.sep, self.default_strategy))
-
 
 class SQLAlchemyLoad:
     _strategy_map: dict[SQLALoadStrategy, Callable[..., _AbstractLoad]] = {
@@ -103,8 +100,6 @@ class SQLAlchemyLoad:
         loaders: list[_AbstractLoad] = []
         for path, strategy in self._paths:
             mapper: Mapper[ModelT] = inspect(model_type, raiseerr=True)
-            if not path:
-                continue
             loader_chain: list[_AbstractLoad] = []
             relationship: RelationshipProperty[Any] | None = None
             # Builder loaders

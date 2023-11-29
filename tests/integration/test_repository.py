@@ -1464,7 +1464,12 @@ async def test_repo_load_strategy(
 
 @pytest.mark.parametrize(
     "load_kwargs",
-    [{"books": ...}, {"books__author": True}, {"books": False, "books__author": True}],
+    [
+        {"books": ...},
+        {"books": False, "books": ...},  # noqa: F601
+        {"books__author": True},
+        {"books": False, "books__author": True},
+    ],
 )
 async def test_repo_load_nested(
     publisher_repo: PublisherRepository,
@@ -1480,7 +1485,10 @@ async def test_repo_load_nested(
             assert isinstance(book.author, author_model)
 
 
-@pytest.mark.parametrize("load_kwargs", [{"books": True}, {"books": ..., "books__author": False}])
+@pytest.mark.parametrize(
+    "load_kwargs",
+    [{"books": True}, {"books": ..., "books__author": False}, {"books__author": False, "books": True}],
+)
 async def test_repo_load_partially_nested(
     publisher_repo: PublisherRepository,
     book_model: BookModel,
@@ -1523,6 +1531,23 @@ async def test_repo_default_strategy(
         for book in publisher.books:
             assert isinstance(book, book_model)
             assert isinstance(book.author, author_model)
+
+
+async def test_repo_load_nested_and_add(
+    publisher_repo: PublisherRepository,
+    publisher_model: PublisherModel,
+    author_model: AuthorModel,
+    book_model: BookModel,
+) -> None:
+    book = book_model(
+        title="The Silmarillion",
+        author=author_model(name="J.R.R Tolkien", dob=datetime(month=9, day=2, year=1973)),
+    )
+    publisher_instance = publisher_model(name="George Allen & Unwin", books=[book])
+    publisher = await maybe_async(publisher_repo.load(books=...).add(publisher_instance))
+    assert len(publisher.books) == 1
+    assert isinstance(publisher.books[0], book_model)
+    assert isinstance(publisher.books[0].author, author_model)
 
 
 # service tests
