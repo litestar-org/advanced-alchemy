@@ -32,7 +32,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.operations import Merge
-from advanced_alchemy.repository._load import AnySQLAtrategy, SQLAlchemyLoad, SQLAlchemyLoadConfig
+from advanced_alchemy.repository._load import SQLAlchemyLoad, SQLAlchemyLoadConfig
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.utils.deprecation import deprecated
@@ -45,6 +45,8 @@ if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
+
+    from advanced_alchemy.repository._load import AnySQLAtrategy
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15

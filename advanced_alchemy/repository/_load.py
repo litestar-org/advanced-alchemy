@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import EllipsisType
 from typing import TYPE_CHECKING, Any, Literal, Tuple, TypeAlias, Union
 
 from sqlalchemy import inspect
@@ -9,16 +8,16 @@ from sqlalchemy.orm import defaultload, joinedload, noload, raiseload, selectinl
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import EllipsisType
 
     from sqlalchemy.orm import Mapper, RelationshipProperty
     from sqlalchemy.orm.strategy_options import _AbstractLoad
 
     from advanced_alchemy import ModelT
 
-
-SQLALoadStrategy = Literal["defaultload", "noload", "joinedload", "selectinload", "subqueryload", "raiseload"]
-AnySQLAtrategy: TypeAlias = Union[SQLALoadStrategy, bool, EllipsisType]
-LoadPath: TypeAlias = Tuple[Tuple[str, ...], AnySQLAtrategy]
+    SQLALoadStrategy = Literal["defaultload", "noload", "joinedload", "selectinload", "subqueryload", "raiseload"]
+    AnySQLAtrategy: TypeAlias = Union[SQLALoadStrategy, bool, EllipsisType]
+    LoadPath: TypeAlias = Tuple[Tuple[str, ...], AnySQLAtrategy]
 
 
 @dataclass
