@@ -80,9 +80,7 @@ class SQLAlchemyLoad:
             return raiseload
         if isinstance(strategy, str):
             return cls._strategy_map[strategy]
-        if uselist:
-            return selectinload
-        return joinedload
+        return selectinload if uselist else joinedload
 
     def _default_load_strategy(self) -> _AbstractLoad | None:
         if self._config.default_strategy is not None:
