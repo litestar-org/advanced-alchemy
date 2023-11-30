@@ -1533,6 +1533,21 @@ async def test_repo_load_default_strategy(
             assert isinstance(book.author, author_model)
 
 
+async def test_repo_load_default_kwargs(
+    publisher_repo: PublisherRepository,
+    book_model: BookModel,
+    author_model: AuthorModel,
+) -> None:
+    await maybe_async(publisher_repo.session.expunge_all())
+    publisher_repo._load = SQLAlchemyLoad(books=True)
+    publishers = await maybe_async(publisher_repo.list())
+    for publisher in publishers:
+        for book in publisher.books:
+            assert isinstance(book, book_model)
+            with pytest.raises(InvalidRequestError):
+                isinstance(book.author, author_model)
+
+
 @pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload"])
 async def test_repo_load_default_strategy_and_kwargs(
     publisher_repo: PublisherRepository,
@@ -1561,6 +1576,17 @@ async def test_repo_load_nested_and_add(
     assert len(publisher.books) == 1
     assert isinstance(publisher.books[0], book_model)
     assert isinstance(publisher.books[0].author, author_model)
+
+
+async def test_repo_load_only_affect_next_query(book_repo: BookRepository, publisher_model: PublisherModel) -> None:
+    await maybe_async(book_repo.session.expunge_all())
+    books = await maybe_async(book_repo.load(publisher=True).list())
+    assert all(isinstance(book.publisher, publisher_model) for book in books)
+
+    await maybe_async(book_repo.session.expunge_all())
+    books = await maybe_async(book_repo.list())
+    with pytest.raises(InvalidRequestError):
+        assert all(isinstance(book.publisher, publisher_model) for book in books)
 
 
 # service tests

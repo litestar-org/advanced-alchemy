@@ -90,6 +90,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
         self.session = session
+        self.default_load = load or SQLAlchemyLoad()
         if isinstance(statement, Select):
             self.statement = lambda_stmt(lambda: statement)
         elif statement is None:
@@ -99,7 +100,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             self.statement = statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
-        self._load: SQLAlchemyLoad = load or SQLAlchemyLoad()
+        self._load: SQLAlchemyLoad = self.default_load
 
     @classmethod
     def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
@@ -157,6 +158,15 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         /,
         **kwargs: bool | EllipsisType | SQLALoadStrategy,
     ) -> Self:
+        """Set relationships to be loaded on the model
+
+        Args:
+            config: Override default load config. Defaults to None.
+            kwargs: Relationship paths to load
+
+        Returns:
+            The repository instance
+        """
         self._load = SQLAlchemyLoad(config, **kwargs)
         return self
 
@@ -1211,6 +1221,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         result = await self.session.execute(statement)
         if self._load and self._load.has_wildcards():
             result = result.unique()
+        self._load = self.default_load
         return result
 
     def _apply_limit_offset_pagination(
