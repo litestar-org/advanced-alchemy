@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Tuple, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Literal, Tuple, Union
 
 from sqlalchemy import inspect
 from sqlalchemy.orm import defaultload, joinedload, noload, raiseload, selectinload, subqueryload
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm import Mapper, RelationshipProperty
     from sqlalchemy.orm.strategy_options import _AbstractLoad
+    from typing_extensions import TypeAlias
 
     from advanced_alchemy import ModelT
 
