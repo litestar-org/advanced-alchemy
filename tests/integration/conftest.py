@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, AsyncGenerator, Generator, cast
+from unittest.mock import NonCallableMagicMock, create_autospec
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import URL, Engine, NullPool, create_engine
+from sqlalchemy import URL, Dialect, Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -183,6 +184,15 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
     )
 
 
+@pytest.fixture()
+async def mock_sync_engine() -> NonCallableMagicMock:
+    """Return a mocked Engine instance."""
+    mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
+    mock.dialect = create_autospec(Dialect, instance=True)
+    mock.dialect.name = "mock"
+    return mock
+
+
 @pytest.fixture(
     name="engine",
     params=[
@@ -236,9 +246,17 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
         pytest.param(
             "mssql_engine",
             marks=[
-                pytest.mark.mssql,
+                pytest.mark.mssql_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "mock_sync_engine",
+            marks=[
+                pytest.mark.mock_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
@@ -331,6 +349,37 @@ async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) ->
     )
 
 
+@pytest.fixture()
+async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine:
+    """MS SQL instance for end-to-end testing."""
+    return create_async_engine(
+        URL(
+            drivername="mssql+aioodbc",
+            username="sa",
+            password="Super-secret1",
+            host=docker_ip,
+            port=1344,
+            database="master",
+            query={
+                "driver": "ODBC Driver 18 for SQL Server",
+                "encrypt": "no",
+                "TrustServerCertificate": "yes",
+                # NOTE: MARS_Connection is only needed for the concurrent async tests
+                # lack of this causes some tests to fail
+                # https://github.com/jolt-org/advanced-alchemy/actions/runs/6800623970/job/18493034767?pr=94
+                "MARS_Connection": "yes",
+            },  # type:ignore[arg-type]
+        ),
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
+async def mock_async_engine() -> NonCallableMagicMock:
+    """Return a mocked AsyncEngine instance."""
+    return cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
+
+
 @pytest.fixture(
     name="async_engine",
     params=[
@@ -371,6 +420,22 @@ async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) ->
                 pytest.mark.cockroachdb_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[
+                pytest.mark.mock_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],

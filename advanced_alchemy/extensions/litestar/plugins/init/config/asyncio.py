@@ -5,10 +5,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, cast
 
 from litestar.constants import HTTP_RESPONSE_START
-from litestar.utils import delete_litestar_scope_state, get_litestar_scope_state, set_litestar_scope_state
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.litestar._utils import (
+    delete_aa_scope_state,
+    get_aa_scope_state,
+    set_aa_scope_state,
+)
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
     SESSION_SCOPE_KEY,
     SESSION_TERMINUS_ASGI_EVENTS,
@@ -44,10 +48,10 @@ async def default_before_send_handler(message: Message, scope: Scope) -> None:
     Returns:
         None
     """
-    session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+    session = cast("AsyncSession | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
     if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
         await session.close()
-        delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
+        delete_aa_scope_state(scope, SESSION_SCOPE_KEY)
 
 
 def autocommit_handler_maker(
@@ -86,7 +90,7 @@ def autocommit_handler_maker(
         Returns:
             None
         """
-        session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+        session = cast("AsyncSession | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
         try:
             if session is not None and message["type"] == HTTP_RESPONSE_START:
                 if (
@@ -99,7 +103,7 @@ def autocommit_handler_maker(
         finally:
             if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
                 await session.close()
-                delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
+                delete_aa_scope_state(scope, SESSION_SCOPE_KEY)
 
     return handler
 
@@ -184,11 +188,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             A session instance.
         """
-        session = cast("AsyncSession | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+        session = cast("AsyncSession | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
         if session is None:
             session_maker = cast("Callable[[], AsyncSession]", state[self.session_maker_app_state_key])
             session = session_maker()
-            set_litestar_scope_state(scope, SESSION_SCOPE_KEY, session)
+            set_aa_scope_state(scope, SESSION_SCOPE_KEY, session)
         return session
 
     @property

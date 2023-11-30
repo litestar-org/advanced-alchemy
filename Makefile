@@ -119,9 +119,13 @@ test-duckdb:
 test-spanner:
 	$(ENV_PREFIX)pytest tests -m='integration and spanner'
 
-.PHONY: test-mssql
-test-mssql:
-	$(ENV_PREFIX)pytest tests -m='integration and mssql'
+.PHONY: test-mssql-sync
+test-mssql-sync:
+	$(ENV_PREFIX)pytest tests -m='integration and mssql_sync'
+
+.PHONY: test-mssql-async
+test-mssql-async:
+	$(ENV_PREFIX)pytest tests -m='integration and mssql_async'
 
 .PHONY: test-cockroachdb-sync
 test-cockroachdb-sync:

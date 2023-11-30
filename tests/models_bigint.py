@@ -8,8 +8,10 @@ from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy import (
+    SQLAlchemyAsyncMockRepository,
     SQLAlchemyAsyncRepository,
     SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncMockRepository,
     SQLAlchemySyncRepository,
     SQLAlchemySyncRepositoryService,
 )
@@ -92,13 +94,45 @@ class RuleAsyncRepository(SQLAlchemyAsyncRepository[BigIntRule]):
     model_type = BigIntRule
 
 
+class RuleAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntRule]):
+    """Rule repository."""
+
+    model_type = BigIntRule
+
+
+class RuleSyncMockRepository(SQLAlchemySyncMockRepository[BigIntRule]):
+    """Rule repository."""
+
+    model_type = BigIntRule
+
+
 class AuthorAsyncRepository(SQLAlchemyAsyncRepository[BigIntAuthor]):
     """Author repository."""
 
     model_type = BigIntAuthor
 
 
+class AuthorAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntAuthor]):
+    model_type = BigIntAuthor
+
+
+class AuthorSyncMockRepository(SQLAlchemySyncMockRepository[BigIntAuthor]):
+    model_type = BigIntAuthor
+
+
 class BookAsyncRepository(SQLAlchemyAsyncRepository[BigIntBook]):
+    """Book repository."""
+
+    model_type = BigIntBook
+
+
+class BookAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntBook]):
+    """Book repository."""
+
+    model_type = BigIntBook
+
+
+class BookSyncMockRepository(SQLAlchemySyncMockRepository[BigIntBook]):
     """Book repository."""
 
     model_type = BigIntBook
@@ -122,7 +156,31 @@ class TagAsyncRepository(SQLAlchemyAsyncRepository[BigIntTag]):
     model_type = BigIntTag
 
 
+class TagAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntTag]):
+    """Tag repository."""
+
+    model_type = BigIntTag
+
+
+class TagSyncMockRepository(SQLAlchemySyncMockRepository[BigIntTag]):
+    """Tag repository."""
+
+    model_type = BigIntTag
+
+
 class ItemAsyncRepository(SQLAlchemyAsyncRepository[BigIntItem]):
+    """Item repository."""
+
+    model_type = BigIntItem
+
+
+class ItemAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntItem]):
+    """Item repository."""
+
+    model_type = BigIntItem
+
+
+class ItemSyncMockRepository(SQLAlchemySyncMockRepository[BigIntItem]):
     """Item repository."""
 
     model_type = BigIntItem
@@ -179,16 +237,52 @@ class RuleAsyncService(SQLAlchemyAsyncRepositoryService[BigIntRule]):
     repository_type = RuleAsyncRepository
 
 
+class RuleAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntRule]):
+    """Rule repository."""
+
+    repository_type = RuleAsyncMockRepository
+
+
+class RuleSyncMockService(SQLAlchemySyncRepositoryService[BigIntRule]):
+    """Rule repository."""
+
+    repository_type = RuleSyncMockRepository
+
+
 class AuthorAsyncService(SQLAlchemyAsyncRepositoryService[BigIntAuthor]):
     """Author repository."""
 
     repository_type = AuthorAsyncRepository
 
 
+class AuthorAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorAsyncMockRepository
+
+
+class AuthorSyncMockService(SQLAlchemySyncRepositoryService[BigIntAuthor]):
+    """Author repository."""
+
+    repository_type = AuthorSyncMockRepository
+
+
 class BookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntBook]):
     """Book repository."""
 
     repository_type = BookAsyncRepository
+
+
+class BookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntBook]):
+    """Book repository."""
+
+    repository_type = BookAsyncMockRepository
+
+
+class BookSyncMockService(SQLAlchemySyncRepositoryService[BigIntBook]):
+    """Book repository."""
+
+    repository_type = BookSyncMockRepository
 
 
 class EventLogAsyncService(SQLAlchemyAsyncRepositoryService[BigIntEventLog]):
@@ -209,10 +303,34 @@ class TagAsyncService(SQLAlchemyAsyncRepositoryService[BigIntTag]):
     repository_type = TagAsyncRepository
 
 
+class TagAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntTag]):
+    """Tag repository."""
+
+    repository_type = TagAsyncMockRepository
+
+
+class TagSyncMockService(SQLAlchemySyncRepositoryService[BigIntTag]):
+    """Tag repository."""
+
+    repository_type = TagSyncMockRepository
+
+
 class ItemAsyncService(SQLAlchemyAsyncRepositoryService[BigIntItem]):
     """Item repository."""
 
     repository_type = ItemAsyncRepository
+
+
+class ItemAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntItem]):
+    """Item repository."""
+
+    repository_type = ItemAsyncMockRepository
+
+
+class ItemSyncMockService(SQLAlchemySyncRepositoryService[BigIntItem]):
+    """Item repository."""
+
+    repository_type = ItemSyncMockRepository
 
 
 class RuleSyncService(SQLAlchemySyncRepositoryService[BigIntRule]):

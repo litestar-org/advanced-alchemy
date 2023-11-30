@@ -5,11 +5,15 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, AsyncGenerator, Callable, cast
 
 from litestar.constants import HTTP_RESPONSE_START
-from litestar.utils import delete_litestar_scope_state, get_litestar_scope_state, set_litestar_scope_state
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
+from advanced_alchemy.extensions.litestar._utils import (
+    delete_aa_scope_state,
+    get_aa_scope_state,
+    set_aa_scope_state,
+)
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
     SESSION_SCOPE_KEY,
     SESSION_TERMINUS_ASGI_EVENTS,
@@ -23,7 +27,6 @@ if TYPE_CHECKING:
     from litestar.datastructures.state import State
     from litestar.types import BeforeMessageSendHookHandler, Message, Scope
     from litestar.types.asgi_types import HTTPResponseStartEvent
-
 
 __all__ = (
     "SQLAlchemySyncConfig",
@@ -42,10 +45,10 @@ def default_before_send_handler(message: Message, scope: Scope) -> None:
     Returns:
         None
     """
-    session = cast("Session | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+    session = cast("Session | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
     if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
         session.close()
-        delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
+        delete_aa_scope_state(scope, SESSION_SCOPE_KEY)
 
 
 def autocommit_handler_maker(
@@ -84,7 +87,7 @@ def autocommit_handler_maker(
         Returns:
             None
         """
-        session = cast("Session | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+        session = cast("Session | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
         try:
             if session is not None and message["type"] == HTTP_RESPONSE_START:
                 if (
@@ -97,7 +100,7 @@ def autocommit_handler_maker(
         finally:
             if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
                 session.close()
-                delete_litestar_scope_state(scope, SESSION_SCOPE_KEY)
+                delete_aa_scope_state(scope, SESSION_SCOPE_KEY)
 
     return handler
 
@@ -182,11 +185,11 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             A session instance.
         """
-        session = cast("Session | None", get_litestar_scope_state(scope, SESSION_SCOPE_KEY))
+        session = cast("Session | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
         if session is None:
             session_maker = cast("Callable[[], Session]", state[self.session_maker_app_state_key])
             session = session_maker()
-            set_litestar_scope_state(scope, SESSION_SCOPE_KEY, session)
+            set_aa_scope_state(scope, SESSION_SCOPE_KEY, session)
         return session
 
     @property
