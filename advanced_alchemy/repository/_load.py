@@ -15,9 +15,10 @@ if TYPE_CHECKING:
 
     from advanced_alchemy import ModelT
 
-    SQLALoadStrategy = Literal["defaultload", "noload", "joinedload", "selectinload", "subqueryload", "raiseload"]
-    AnySQLAtrategy: TypeAlias = Union[SQLALoadStrategy, bool, EllipsisType]
+    AnySQLAtrategy: TypeAlias = Union["SQLALoadStrategy", bool, EllipsisType]
     LoadPath: TypeAlias = Tuple[Tuple[str, ...], AnySQLAtrategy]
+
+SQLALoadStrategy = Literal["defaultload", "noload", "joinedload", "selectinload", "subqueryload", "raiseload"]
 
 
 @dataclass
