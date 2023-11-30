@@ -1451,7 +1451,7 @@ async def test_repo_health_check(author_repo: AuthorRepository) -> None:
 
 
 @pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload"])
-async def test_repo_load_strategy(
+async def test_repo_load_include_strategy(
     book_repo: BookRepository,
     author_model: AuthorModel,
     strategy: SQLALoadStrategy,
@@ -1505,7 +1505,7 @@ async def test_repo_load_partially_nested(
 
 
 @pytest.mark.parametrize("strategy", [False, "raiseload", "defaultload"])
-async def test_repo_no_load_strategy(
+async def test_repo_load_exclude_strategy(
     book_repo: BookRepository,
     author_model: AuthorModel,
     strategy: SQLALoadStrategy,
@@ -1518,7 +1518,7 @@ async def test_repo_no_load_strategy(
 
 
 @pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload"])
-async def test_repo_default_strategy(
+async def test_repo_load_default_strategy(
     publisher_repo: PublisherRepository,
     book_model: BookModel,
     author_model: AuthorModel,
@@ -1531,6 +1531,19 @@ async def test_repo_default_strategy(
         for book in publisher.books:
             assert isinstance(book, book_model)
             assert isinstance(book.author, author_model)
+
+
+@pytest.mark.parametrize("strategy", [True, "joinedload", "selectinload", "subqueryload"])
+async def test_repo_load_default_strategy_and_kwargs(
+    publisher_repo: PublisherRepository,
+    strategy: SQLALoadStrategy,
+) -> None:
+    await maybe_async(publisher_repo.session.expunge_all())
+    publisher_repo._load = SQLAlchemyLoad(SQLAlchemyLoadConfig(default_strategy=strategy))
+    publishers = await maybe_async(publisher_repo.load(books=False).list())
+    for publisher in publishers:
+        with pytest.raises(InvalidRequestError):
+            len(publisher.books)
 
 
 async def test_repo_load_nested_and_add(
