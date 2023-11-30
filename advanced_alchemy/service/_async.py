@@ -23,14 +23,14 @@ if TYPE_CHECKING:
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository import SQLAlchemyAsyncMockRepository, SQLAlchemyAsyncRepository
     from advanced_alchemy.service.typing import FilterTypeT
 
 
 class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemyAsyncRepository[ModelT]]
+    repository_type: type[SQLAlchemyAsyncRepository[ModelT] | SQLAlchemyAsyncMockRepository[ModelT]]
     match_fields: list[str] | str | None = None
 
     def __init__(
