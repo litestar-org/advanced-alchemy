@@ -311,11 +311,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
             for column in relationship.local_columns:
                 column_relationships[column] = relationship
 
-        if state := inspect(data):
-            new_attrs: dict[str, Any] = state.dict
-        else:
-            new_attrs = {}
-
+        new_attrs = state.dict if (state := inspect(data)) else {}
         for column in obj_mapper.columns:
             if column.key not in new_attrs or not column.foreign_keys:
                 continue
