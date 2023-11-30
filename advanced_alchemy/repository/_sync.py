@@ -2,7 +2,7 @@
 # advanced_alchemy/repository/_async.py
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, cast
 
 from sqlalchemy import (
     Result,
@@ -42,6 +42,7 @@ from advanced_alchemy.utils.deprecation import deprecated
 if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
+    from typing import Self
 
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
     from sqlalchemy.orm.scoping import scoped_session
