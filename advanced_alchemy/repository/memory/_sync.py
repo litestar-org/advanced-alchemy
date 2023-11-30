@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from random import sample
 from typing import TYPE_CHECKING, Any, Generic, Iterable, List, cast, overload
 from unittest.mock import create_autospec
 
@@ -420,13 +419,6 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
 
     def list_and_count(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
-
-    def first(self) -> ModelT | None:
-        collection = self.__collection__().list()
-        return collection[0] if collection else None
-
-    def random(self, size: int = 1, **_: Any) -> list[ModelT]:
-        return sample(self.__collection__().list(), size)
 
     def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:
         for value in self._filter_result_by_kwargs(cast(List[ModelT], collection), kwargs):
