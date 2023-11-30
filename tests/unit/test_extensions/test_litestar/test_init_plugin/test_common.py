@@ -4,11 +4,11 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from litestar.constants import SCOPE_STATE_NAMESPACE
 from litestar.datastructures import State
 from sqlalchemy import create_engine
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.extensions.litestar._utils import _SCOPE_NAMESPACE
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import SESSION_SCOPE_KEY
 
@@ -119,15 +119,15 @@ def test_create_session_instance_if_session_not_in_scope_state(
 ) -> None:
     """Test provide_session if session not in scope state."""
     with patch(
-        "litestar.utils.get_litestar_scope_state",
-    ) as get_litestar_scope_state_mock:
-        get_litestar_scope_state_mock.return_value = None
+        "advanced_alchemy.extensions.litestar._utils.get_aa_scope_state",
+    ) as get_scope_state_mock:
+        get_scope_state_mock.return_value = None
         config = config_cls()
         state = State()
         state[config.session_maker_app_state_key] = MagicMock()
-        scope: Scope = {"state": {}}  # type:ignore[assignment]
+        scope: Scope = {}  # type:ignore[assignment]
         assert isinstance(config.provide_session(state, scope), MagicMock)
-        assert SESSION_SCOPE_KEY in scope["state"][SCOPE_STATE_NAMESPACE]
+        assert SESSION_SCOPE_KEY in scope[_SCOPE_NAMESPACE]  # type: ignore[literal-required]
 
 
 def test_app_state(config_cls: type[SQLAlchemySyncConfig], monkeypatch: MonkeyPatch) -> None:
