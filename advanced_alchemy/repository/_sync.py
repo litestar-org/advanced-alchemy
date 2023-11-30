@@ -34,7 +34,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.operations import Merge
-from advanced_alchemy.repository._load import SQLAlchemyLoad, SQLAlchemyLoadConfig, SQLALoadStrategy
+from advanced_alchemy.repository._load import AnySQLAtrategy, SQLAlchemyLoad, SQLAlchemyLoadConfig
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.utils.deprecation import deprecated
@@ -42,7 +42,6 @@ from advanced_alchemy.utils.deprecation import deprecated
 if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
-    from types import EllipsisType
 
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
     from sqlalchemy.orm.scoping import scoped_session
@@ -157,7 +156,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         self,
         config: SQLAlchemyLoadConfig | None = None,
         /,
-        **kwargs: bool | EllipsisType | SQLALoadStrategy,
+        **kwargs: AnySQLAtrategy,
     ) -> Self:
         """Set relationships to be loaded on the model
 
