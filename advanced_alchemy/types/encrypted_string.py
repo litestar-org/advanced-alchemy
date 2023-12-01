@@ -5,7 +5,7 @@ import base64
 import contextlib
 from typing import TYPE_CHECKING, Any, Callable
 
-from sqlalchemy import String, TypeDecorator
+from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
 cryptography = None
@@ -106,7 +106,13 @@ class EncryptedString(TypeDecorator):
         self.key = key
         self.backend = backend()
 
+    @property
+    def python_type(self) -> type[str]:
+        return str
+
     def load_dialect_impl(self, dialect: Dialect) -> Any:
+        if dialect.name in {"mysql", "mariadb"}:
+            return dialect.type_descriptor(String(length=65534))
         return dialect.type_descriptor(String())
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
@@ -124,3 +130,12 @@ class EncryptedString(TypeDecorator):
     def mount_vault(self) -> None:
         key = self.key() if callable(self.key) else self.key
         self.backend.mount_vault(key)
+
+
+class EncryptedText(EncryptedString):
+    """Encrypted Clob"""
+
+    impl = Text
+
+    def load_dialect_impl(self, dialect: Dialect) -> Any:
+        return dialect.type_descriptor(Text())
