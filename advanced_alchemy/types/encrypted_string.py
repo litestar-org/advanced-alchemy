@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import base64
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from sqlalchemy import String, TypeDecorator
 from sqlalchemy import func as sql_func
@@ -19,12 +19,12 @@ if TYPE_CHECKING:
 
 
 class EncryptionBackend(abc.ABC):
-    def mount(self, key: str | bytes) -> None:
+    def mount_vault(self, key: str | bytes) -> None:
         if isinstance(key, str):
             key = key.encode()
 
     @abc.abstractmethod
-    def init_engine(self, passphrase: bytes | str) -> None:  # pragma: nocover
+    def init_engine(self, key: bytes | str) -> None:  # pragma: nocover
         pass
 
     @abc.abstractmethod
@@ -39,10 +39,10 @@ class EncryptionBackend(abc.ABC):
 class PGCryptoBackend(EncryptionBackend):
     """PG Crypto backend."""
 
-    def init_engine(self, passphrase: bytes | str) -> None:
-        if isinstance(passphrase, str):
-            passphrase = passphrase.encode()
-        self.passphrase = base64.urlsafe_b64encode(passphrase)
+    def init_engine(self, key: bytes | str) -> None:
+        if isinstance(key, str):
+            key = key.encode()
+        self.passphrase = base64.urlsafe_b64encode(key)
 
     def encrypt(self, value: Any) -> str:
         if not isinstance(value, str):  # pragma: nocover
@@ -59,7 +59,7 @@ class PGCryptoBackend(EncryptionBackend):
 class FernetBackend(EncryptionBackend):
     """Encryption Using a Fernet backend"""
 
-    def mount(self, key: str | bytes) -> None:
+    def mount_vault(self, key: str | bytes) -> None:
         if isinstance(key, str):
             key = key.encode()
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
@@ -67,11 +67,11 @@ class FernetBackend(EncryptionBackend):
         engine_key = digest.finalize()
         self.init_engine(engine_key)
 
-    def init_engine(self, passphrase: bytes | str) -> None:
-        if isinstance(passphrase, str):
-            passphrase = passphrase.encode()
-        self.passphrase = base64.urlsafe_b64encode(passphrase)
-        self.fernet = Fernet(self.passphrase)
+    def init_engine(self, key: bytes | str) -> None:
+        if isinstance(key, str):
+            key = key.encode()
+        self.key = base64.urlsafe_b64encode(key)
+        self.fernet = Fernet(self.key)
 
     def encrypt(self, value: Any) -> str:
         if not isinstance(value, str):
@@ -98,12 +98,12 @@ class EncryptedString(TypeDecorator):
 
     def __init__(
         self,
-        passphrase: str | bytes,
+        key: str | bytes | Callable[[], str | bytes],
         backend: type[EncryptionBackend] = FernetBackend,
         **kwargs: Any,
     ) -> None:
         super().__init__()
-        self.passphrase = passphrase
+        self.key = key
         self.backend = backend()
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
@@ -112,11 +112,15 @@ class EncryptedString(TypeDecorator):
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
         if value is None:
             return value
-        self.backend.mount(self.passphrase)
+        self.mount_vault()
         return self.backend.encrypt(value)
 
     def process_result_value(self, value: Any, dialect: Dialect) -> str | None:
         if value is None:
             return value
-        self.backend.mount(self.passphrase)
+        self.mount_vault()
         return self.backend.decrypt(value)
+
+    def mount_vault(self) -> None:
+        key = self.key() if callable(self.key) else self.key
+        self.backend.mount_vault(key)

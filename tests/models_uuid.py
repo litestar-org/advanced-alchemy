@@ -52,7 +52,7 @@ class UUIDSecret(UUIDBase):
     """The secret domain model."""
 
     secret: Mapped[str] = mapped_column(
-        EncryptedString(passphrase="super_secret"),
+        EncryptedString(key="super_secret"),
     )
 
 
