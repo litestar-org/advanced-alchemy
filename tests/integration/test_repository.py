@@ -175,6 +175,7 @@ def fx_raw_secrets_uuid() -> RawRecordData:
         {
             "id": "f34545b9-663c-4fce-915d-dd1ae9cea42a",
             "secret": "I'm a secret!",
+            "long_secret": "It's clobbering time.",
         },
     ]
 
@@ -254,6 +255,7 @@ def fx_raw_secrets_bigint() -> RawRecordData:
         {
             "id": 2025,
             "secret": "I'm a secret!",
+            "long_secret": "It's clobbering time.",
         },
     ]
 
@@ -2062,6 +2064,8 @@ async def test_repo_encrypted_methods(
 ) -> None:
     existing_obj = await maybe_async(secret_repo.get(first_secret_id))
     assert existing_obj.secret == raw_secrets[0]["secret"]
+    assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
+
     exp_count = len(raw_secrets_uuid) + 1
     new_secret = secret_model(secret="hidden data")
     obj = await maybe_async(secret_repo.add(new_secret))
@@ -2071,5 +2075,7 @@ async def test_repo_encrypted_methods(
     assert new_secret.secret == obj.secret
     assert obj.id is not None
     obj.secret = "new secret value"
+    obj.long_secret = "new long secret value"
     updated = await maybe_async(secret_repo.update(obj))
     assert obj.secret == updated.secret
+    assert obj.long_secret == updated.long_secret

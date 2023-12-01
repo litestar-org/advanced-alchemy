@@ -18,7 +18,7 @@ from advanced_alchemy import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
-from advanced_alchemy.types.encrypted_string import EncryptedString
+from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
 
 
 class UUIDAuthor(UUIDAuditBase):
@@ -53,6 +53,9 @@ class UUIDSecret(UUIDBase):
 
     secret: Mapped[str] = mapped_column(
         EncryptedString(key="super_secret"),
+    )
+    long_secret: Mapped[str] = mapped_column(
+        EncryptedText(key="super_secret"),
     )
 
 

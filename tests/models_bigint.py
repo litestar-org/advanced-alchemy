@@ -17,6 +17,7 @@ from advanced_alchemy import (
 )
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 from advanced_alchemy.types import EncryptedString
+from advanced_alchemy.types.encrypted_string import EncryptedText
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -94,6 +95,9 @@ class BigIntSecret(BigIntBase):
 
     secret: Mapped[str] = mapped_column(
         EncryptedString(key="super_secret"),
+    )
+    long_secret: Mapped[str] = mapped_column(
+        EncryptedText(key="super_secret"),
     )
 
 
