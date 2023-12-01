@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import base64
 import contextlib
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import String, TypeDecorator, type_coerce
 from sqlalchemy import func as sql_func
@@ -99,12 +99,12 @@ class EncryptedString(TypeDecorator):
     def __init__(
         self,
         passphrase: str | bytes,
-        backend: Literal["cryptography", "pgcrypto"] = "cryptography",
+        backend: type[EncryptionBackend] = FernetBackend,
         **kwargs: Any,
     ) -> None:
         super().__init__()
         self.passphrase = passphrase
-        self.backend: EncryptionBackend = PGCryptoBackend() if backend == "pgcrypto" else FernetBackend()
+        self.backend = backend()
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
         return dialect.type_descriptor(String())
