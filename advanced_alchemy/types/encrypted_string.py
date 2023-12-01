@@ -5,7 +5,7 @@ import base64
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import String, TypeDecorator, type_coerce
+from sqlalchemy import String, TypeDecorator
 from sqlalchemy import func as sql_func
 
 cryptography = None
@@ -109,20 +109,13 @@ class EncryptedString(TypeDecorator):
     def load_dialect_impl(self, dialect: Dialect) -> Any:
         return dialect.type_descriptor(String())
 
-    def bind_expression(self, bindparam: Any) -> Any:
-        # convert the bind's type from EncryptedString to
-        # String, so that it's passed as is without
-        # a dbapi.Binary wrapper
-        bindparam = type_coerce(bindparam, String)
-        return self._handle_encrypted_data(bindparam)
-
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
         if value is None:
             return value
         self.backend.mount(self.passphrase)
         return self.backend.encrypt(value)
 
-    def process_result_value(self, value: Any, dialect: Dialect) -> Any:
+    def process_result_value(self, value: Any, dialect: Dialect) -> str | None:
         if value is None:
             return value
         self.backend.mount(self.passphrase)

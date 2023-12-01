@@ -1,9 +1,9 @@
 [project]
 authors = [
-  { name = "Cody Fincher", email = "cody.fincher@gmail.com" },
-  { name = "Peter Schutt", email = "peter.github@proton.me" },
-  { name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de" },
-  { name = "Jacob Coffee", email = "jacob@z7x.org" },
+  {name = "Cody Fincher", email = "cody.fincher@gmail.com"},
+  {name = "Peter Schutt", email = "peter.github@proton.me"},
+  {name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de"},
+  {name = "Jacob Coffee", email = "jacob@z7x.org"},
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -32,7 +32,7 @@ dependencies = [
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
-license = { text = "MIT" }
+license = {text = "MIT"}
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -178,22 +178,22 @@ line-length = 120
 
 [tool.ruff]
 ignore = [
-  "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
-  "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
-  "D100",    # pydocstyle - missing docstring in public module
-  "D101",    # pydocstyle - missing docstring in public class
-  "D102",    # pydocstyle - missing docstring in public method
-  "D103",    # pydocstyle - missing docstring in public function
-  "D104",    # pydocstyle - missing docstring in public package
-  "D105",    # pydocstyle - missing docstring in magic method
-  "D106",    # pydocstyle - missing docstring in public nested class
-  "D107",    # pydocstyle - missing docstring in __init__
-  "D202",    # pydocstyle - no blank lines allowed after function docstring
-  "D205",    # pydocstyle - 1 blank line required between summary line and description
-  "D415",    # pydocstyle - first line should end with a period, question mark, or exclamation point
-  "E501",    # pycodestyle line too long, handled by black
+  "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "B010", # flake8-bugbear - do not call setattr with a constant attribute value
+  "D100", # pydocstyle - missing docstring in public module
+  "D101", # pydocstyle - missing docstring in public class
+  "D102", # pydocstyle - missing docstring in public method
+  "D103", # pydocstyle - missing docstring in public function
+  "D104", # pydocstyle - missing docstring in public package
+  "D105", # pydocstyle - missing docstring in magic method
+  "D106", # pydocstyle - missing docstring in public nested class
+  "D107", # pydocstyle - missing docstring in __init__
+  "D202", # pydocstyle - no blank lines allowed after function docstring
+  "D205", # pydocstyle - 1 blank line required between summary line and description
+  "D415", # pydocstyle - first line should end with a period, question mark, or exclamation point
+  "E501", # pycodestyle line too long, handled by black
   "PLW2901", # pylint - for loop variable overwritten by assignment target
-  "RUF012",  # Ruff-specific rule - annotated with classvar
+  "RUF012", # Ruff-specific rule - annotated with classvar
   "ANN401",
   "ANN102",
   "ANN101",
@@ -201,9 +201,9 @@ ignore = [
   "PLR0913", # too many arguments
   "PT",
   "TD",
-  "ARG002",  # ignore for now; investigate
+  "ARG002", # ignore for now; investigate
   "PERF203", # ignore for now; investigate
-  "PD011",   # pandas
+  "PD011", # pandas
 ]
 line-length = 120
 select = ["ALL"]
@@ -273,6 +273,20 @@ disallow_untyped_decorators = false
 module = "tests.*"
 
 [[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = [
+  "asyncmy",
+  "pyodbc",
+  "google.auth.*",
+  "google.cloud.*",
+  "google.protobuf.*",
+  "pyarrow.*",
+  "pytest_docker.*",
+  "googleapiclient",
+  "googleapiclient.*",
+]
+
+[[tool.mypy.overrides]]
 disallow_untyped_decorators = false
 module = "advanced_alchemy.extensions.litestar.cli"
 
@@ -298,26 +312,26 @@ update_docstrings = true
 "advanced_alchemy/service/_async.py" = "advanced_alchemy/service/_sync.py"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
-SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/memory/_async.py"]
-SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
-SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
-"advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
 "advanced_alchemy.repository.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.SQLAlchemySyncMockRepository"
+"advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
@@ -367,16 +381,16 @@ trim = true
 
 [tool.git-cliff.git]
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactor" },
-  { message = "^style", group = "Styling" },
-  { message = "^test", group = "Testing" },
-  { message = "^chore\\(release\\): prepare for", skip = true },
-  { message = "^chore", group = "Miscellaneous Tasks" },
-  { body = ".*security", group = "Security" },
+  {message = "^feat", group = "Features"},
+  {message = "^fix", group = "Bug Fixes"},
+  {message = "^doc", group = "Documentation"},
+  {message = "^perf", group = "Performance"},
+  {message = "^refactor", group = "Refactor"},
+  {message = "^style", group = "Styling"},
+  {message = "^test", group = "Testing"},
+  {message = "^chore\\(release\\): prepare for", skip = true},
+  {message = "^chore", group = "Miscellaneous Tasks"},
+  {body = ".*security", group = "Security"},
 ]
 conventional_commits = true
 filter_commits = false

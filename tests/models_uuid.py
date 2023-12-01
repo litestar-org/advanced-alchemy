@@ -48,7 +48,7 @@ class UUIDEventLog(UUIDAuditBase):
     payload: Mapped[dict] = mapped_column(default={})  # pyright: ignore
 
 
-class UUIDSecret(UUIDAuditBase):
+class UUIDSecret(UUIDBase):
     """The secret domain model."""
 
     secret: Mapped[str] = mapped_column(
@@ -197,6 +197,18 @@ class ItemSyncMockRepository(SQLAlchemySyncMockRepository[UUIDItem]):
     """Item repository."""
 
     model_type = UUIDItem
+
+
+class SecretAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDSecret]):
+    """Secret repository."""
+
+    model_type = UUIDSecret
+
+
+class SecretSyncMockRepository(SQLAlchemySyncMockRepository[UUIDSecret]):
+    """Secret repository."""
+
+    model_type = UUIDSecret
 
 
 class AuthorSyncRepository(SQLAlchemySyncRepository[UUIDAuthor]):

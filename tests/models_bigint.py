@@ -89,7 +89,7 @@ class BigIntRule(BigIntAuditBase):
     config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
 
 
-class BigIntSecret(BigIntAuditBase):
+class BigIntSecret(BigIntBase):
     """The secret domain model."""
 
     secret: Mapped[str] = mapped_column(
@@ -205,6 +205,18 @@ class ItemSyncMockRepository(SQLAlchemySyncMockRepository[BigIntItem]):
     """Item repository."""
 
     model_type = BigIntItem
+
+
+class SecretAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntSecret]):
+    """Secret repository."""
+
+    model_type = BigIntSecret
+
+
+class SecretSyncMockRepository(SQLAlchemySyncMockRepository[BigIntSecret]):
+    """Secret repository."""
+
+    model_type = BigIntSecret
 
 
 class AuthorSyncRepository(SQLAlchemySyncRepository[BigIntAuthor]):

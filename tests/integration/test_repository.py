@@ -46,11 +46,18 @@ pytestmark = [
 ]
 
 RepositoryPKType = Literal["uuid", "bigint"]
+SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
 RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
 ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
 ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
 TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
+
+AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
+SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
+SecretService = SQLAlchemyAsyncRepositoryService[AnySecret]
+SecretMockRepository = SQLAlchemyAsyncMockRepository[AnySecret]
+AnySecretRepository = Union[SecretRepository, SecretMockRepository]
 
 AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
 AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
@@ -161,6 +168,17 @@ def fx_raw_rules_uuid() -> RawRecordData:
     ]
 
 
+@pytest.fixture(name="raw_secrets_uuid")
+def fx_raw_secrets_uuid() -> RawRecordData:
+    """secret representations."""
+    return [
+        {
+            "id": "f34545b9-663c-4fce-915d-dd1ae9cea42a",
+            "secret": "I'm a secret!",
+        },
+    ]
+
+
 @pytest.fixture(name="raw_authors_bigint")
 def fx_raw_authors_bigint() -> RawRecordData:
     """Unstructured author representations."""
@@ -229,6 +247,17 @@ def fx_raw_rules_bigint() -> RawRecordData:
     ]
 
 
+@pytest.fixture(name="raw_secrets_bigint")
+def fx_raw_secrets_bigint() -> RawRecordData:
+    """secret representations."""
+    return [
+        {
+            "id": 2025,
+            "secret": "I'm a secret!",
+        },
+    ]
+
+
 @pytest.fixture(params=["uuid", "bigint"])
 def repository_pk_type(request: FixtureRequest) -> RepositoryPKType:
     """Return the primary key type of the repository"""
@@ -284,6 +313,12 @@ def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBoo
 
 
 @pytest.fixture()
+def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
+    """Return the ``Secret`` model matching the current repository PK type"""
+    return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret
+
+
+@pytest.fixture()
 def new_pk_id(repository_pk_type: RepositoryPKType) -> Any:
     """Return an unused primary key, matching the current repository PK type"""
     if repository_pk_type == "uuid":
@@ -301,6 +336,18 @@ def existing_author_ids(raw_authors: RawRecordData) -> Iterator[Any]:
 def first_author_id(raw_authors: RawRecordData) -> Any:
     """Return the primary key of the first ``Author`` record of the current repository PK type"""
     return raw_authors[0]["id"]
+
+
+@pytest.fixture()
+def existing_secret_ids(raw_secrets: RawRecordData) -> Iterator[Any]:
+    """Return the existing primary keys based on the raw data provided"""
+    return (secret["id"] for secret in raw_secrets)
+
+
+@pytest.fixture()
+def first_secret_id(raw_secrets: RawRecordData) -> Any:
+    """Return the primary key of the first ``Secret`` record of the current repository PK type"""
+    return raw_secrets[0]["id"]
 
 
 @pytest.fixture(
@@ -410,12 +457,24 @@ def raw_rules(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> 
     return cast("RawRecordData", rules)
 
 
+@pytest.fixture()
+def raw_secrets(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Secret`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        secrets = request.getfixturevalue("raw_secrets_bigint")
+    else:
+        secrets = request.getfixturevalue("raw_secrets_uuid")
+    return cast("RawRecordData", secrets)
+
+
 def _seed_db_sync(
     *,
     engine: Engine,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     author_model: AuthorModel,
+    secret_model: SecretModel,
     rule_model: RuleModel,
 ) -> None:
     update_raw_records(raw_authors=raw_authors, raw_rules=raw_rules)
@@ -431,6 +490,11 @@ def _seed_db_sync(
                 author_model,
                 model_from_dict(rule_model, **raw_rule),  # type: ignore[type-var]
             )
+        for raw_secret in raw_secrets:
+            SQLAlchemySyncMockRepository.__database_add__(
+                secret_model,
+                model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
+            )
     else:
         with engine.begin() as conn:
             base.orm_registry.metadata.drop_all(conn)
@@ -441,6 +505,8 @@ def _seed_db_sync(
                 conn.execute(insert(author_model).values(author))
             for rule in raw_rules:
                 conn.execute(insert(rule_model).values(rule))
+            for secret in raw_secrets:
+                conn.execute(insert(secret_model).values(secret))
 
 
 def _seed_spanner(
@@ -464,8 +530,10 @@ def seed_db_sync(
     engine: Engine,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     author_model: AuthorModel,
     rule_model: RuleModel,
+    secret_model: SecretModel,
 ) -> None:
     if engine.dialect.name.startswith("spanner"):
         _seed_spanner(engine=engine, raw_authors_uuid=raw_authors, raw_rules_uuid=raw_rules)
@@ -474,8 +542,10 @@ def seed_db_sync(
             engine=engine,
             raw_authors=raw_authors,
             raw_rules=raw_rules,
+            raw_secrets=raw_secrets,
             author_model=author_model,
             rule_model=rule_model,
+            secret_model=secret_model,
         )
 
 
@@ -484,6 +554,7 @@ def session(
     engine: Engine,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     seed_db_sync: None,
 ) -> Generator[Session, None, None]:
     """Return a synchronous session for the current engine"""
@@ -494,6 +565,9 @@ def session(
             author_repo = models_uuid.AuthorSyncRepository(session=session)
             for author in raw_authors:
                 _ = author_repo.get_or_upsert(match_fields="name", **author)
+            secret_repo = models_uuid.SecretSyncRepository(session=session)
+            for secret in raw_secrets:
+                _ = secret_repo.get_or_upsert(**secret)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
                 rule_repo = models_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
@@ -583,8 +657,10 @@ async def seed_db_async(
     async_engine: AsyncEngine | NonCallableMagicMock,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     author_model: AuthorModel,
     rule_model: RuleModel,
+    secret_model: SecretModel,
 ) -> None:
     """Return an asynchronous session for the current engine"""
     # convert date/time strings to dt objects.
@@ -615,12 +691,18 @@ async def seed_db_async(
                 author_model,
                 model_from_dict(rule_model, **raw_rule),  # type: ignore[type-var]
             )
+        for raw_secret in raw_secrets:
+            SQLAlchemyAsyncMockRepository.__database_add__(
+                secret_model,
+                model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
+            )
     else:
         async with async_engine.begin() as conn:
             await conn.run_sync(base.orm_registry.metadata.drop_all)
             await conn.run_sync(base.orm_registry.metadata.create_all)
             await conn.execute(insert(author_model).values(raw_authors))
             await conn.execute(insert(rule_model).values(raw_rules))
+            await conn.execute(insert(secret_model).values(raw_secrets))
 
 
 @pytest.fixture(params=[lazy_fixture("session"), lazy_fixture("async_session")], ids=["sync", "async"])
@@ -656,6 +738,24 @@ def author_repo(
     else:
         repo = repository_module.AuthorSyncRepository(session=any_session)
     return cast(AuthorRepository, repo)
+
+
+@pytest.fixture()
+def secret_repo(
+    request: FixtureRequest,
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+) -> SecretRepository:
+    """Return an SecretAsyncRepository or SecretSyncRepository based on the current PK and session type"""
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.SecretAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.SecretSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
+        repo = repository_module.SecretAsyncRepository(session=any_session)
+    else:
+        repo = repository_module.SecretSyncRepository(session=any_session)
+    return cast(SecretRepository, repo)
 
 
 @pytest.fixture()
@@ -1951,3 +2051,25 @@ async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, 
 async def test_service_update_no_pk(author_service: AuthorService) -> None:
     with pytest.raises(RepositoryError):
         _existing_obj = await maybe_async(author_service.update(data={"name": "Agatha Christie"}))
+
+
+async def test_repo_encrypted_methods(
+    raw_secrets_uuid: RawRecordData,
+    secret_repo: SecretRepository,
+    raw_secrets: RawRecordData,
+    first_secret_id: Any,
+    secret_model: SecretModel,
+) -> None:
+    existing_obj = await maybe_async(secret_repo.get(first_secret_id))
+    assert existing_obj.secret == raw_secrets[0]["secret"]
+    exp_count = len(raw_secrets_uuid) + 1
+    new_secret = secret_model(secret="hidden data")
+    obj = await maybe_async(secret_repo.add(new_secret))
+    count = await maybe_async(secret_repo.count())
+    assert exp_count == count
+    assert isinstance(obj, secret_model)
+    assert new_secret.secret == obj.secret
+    assert obj.id is not None
+    obj.secret = "new secret value"
+    updated = await maybe_async(secret_repo.update(obj))
+    assert obj.secret == updated.secret
