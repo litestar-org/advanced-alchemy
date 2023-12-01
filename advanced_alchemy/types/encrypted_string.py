@@ -57,7 +57,7 @@ class PGCryptoBackend(EncryptionBackend):
 
 
 class FernetBackend(EncryptionBackend):
-    """Two-way encryption, data stored in db are encrypted but decrypted during query."""
+    """Encryption Using a Fernet backend"""
 
     def mount(self, key: str | bytes) -> None:
         if isinstance(key, str):
