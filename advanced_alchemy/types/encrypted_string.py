@@ -22,13 +22,9 @@ class EncryptionBackend(abc.ABC):
     def mount(self, key: str | bytes) -> None:
         if isinstance(key, str):
             key = key.encode()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(key)
-        engine_key = digest.finalize()
-        self._initialize(engine_key)
 
     @abc.abstractmethod
-    def _initialize(self, passphrase: bytes | str) -> None:  # pragma: nocover
+    def init_engine(self, passphrase: bytes | str) -> None:  # pragma: nocover
         pass
 
     @abc.abstractmethod
@@ -43,7 +39,7 @@ class EncryptionBackend(abc.ABC):
 class PGCryptoBackend(EncryptionBackend):
     """PG Crypto backend."""
 
-    def _initialize(self, passphrase: bytes | str) -> None:
+    def init_engine(self, passphrase: bytes | str) -> None:
         if isinstance(passphrase, str):
             passphrase = passphrase.encode()
         self.passphrase = base64.urlsafe_b64encode(passphrase)
@@ -63,7 +59,15 @@ class PGCryptoBackend(EncryptionBackend):
 class FernetBackend(EncryptionBackend):
     """Two-way encryption, data stored in db are encrypted but decrypted during query."""
 
-    def _initialize(self, passphrase: bytes | str) -> None:
+    def mount(self, key: str | bytes) -> None:
+        if isinstance(key, str):
+            key = key.encode()
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(key)
+        engine_key = digest.finalize()
+        self.init_engine(engine_key)
+
+    def init_engine(self, passphrase: bytes | str) -> None:
         if isinstance(passphrase, str):
             passphrase = passphrase.encode()
         self.passphrase = base64.urlsafe_b64encode(passphrase)
