@@ -569,7 +569,7 @@ def session(
                 _ = author_repo.get_or_upsert(match_fields="name", **author)
             secret_repo = models_uuid.SecretSyncRepository(session=session)
             for secret in raw_secrets:
-                _ = secret_repo.get_or_upsert(**secret)
+                _ = secret_repo.get_or_upsert(match_fields="id", **secret)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
                 rule_repo = models_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
