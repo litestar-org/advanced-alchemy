@@ -112,7 +112,7 @@ class EncryptedString(TypeDecorator):
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
         if dialect.name in {"mysql", "mariadb"}:
-            return dialect.type_descriptor(String(length=16383))
+            return dialect.type_descriptor(Text())
         return dialect.type_descriptor(String())
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
