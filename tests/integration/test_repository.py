@@ -2067,12 +2067,13 @@ async def test_repo_encrypted_methods(
     assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
 
     exp_count = len(raw_secrets_uuid) + 1
-    new_secret = secret_model(secret="hidden data")
+    new_secret = secret_model(secret="hidden data", long_secret="another longer secret")
     obj = await maybe_async(secret_repo.add(new_secret))
     count = await maybe_async(secret_repo.count())
     assert exp_count == count
     assert isinstance(obj, secret_model)
     assert new_secret.secret == obj.secret
+    assert new_secret.long_secret == obj.long_secret
     assert obj.id is not None
     obj.secret = "new secret value"
     obj.long_secret = "new long secret value"
