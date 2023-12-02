@@ -932,7 +932,7 @@ def frozen_datetime() -> Generator[Coordinates, None, None]:
         yield frozen
 
 
-async def test_repo_created_updated( 
+async def test_repo_created_updated(
     frozen_datetime: Coordinates,
     author_repo: AnyAuthorRepository,
     book_model: type[AnyBook],
@@ -940,6 +940,7 @@ async def test_repo_created_updated(
 ) -> None:
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+
     if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
         pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not update created/updated columns")
     if isinstance(author_repo, SQLAlchemyAsyncRepository):
@@ -947,8 +948,8 @@ async def test_repo_created_updated(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
-        config = SQLAlchemySyncConfig(  # type: ignore[assignment,unreachable]
-            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+            engine_instance=author_repo.session.get_bind(),
         )
     config.__post_init__()
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
@@ -994,9 +995,9 @@ async def test_repo_created_updated_no_listener(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
-        config = SQLAlchemySyncConfig(  # type: ignore[assignment,unreachable]
+        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
             enable_touch_updated_timestamp_listener=False,
-            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+            engine_instance=author_repo.session.get_bind(),
         )
     config.__post_init__()
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
@@ -1036,7 +1037,7 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
     else:
         collection = await maybe_async(
             author_repo.list(
-                sqlalchemy.and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
+                and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
             ),
         )
     assert isinstance(collection, list)
@@ -1715,7 +1716,7 @@ async def test_service_list_method_with_filters(raw_authors: RawRecordData, auth
     else:
         collection = await maybe_async(
             author_service.list(
-                sqlalchemy.and_(
+                and_(
                     author_service.repository.model_type.id == exp_id,
                     author_service.repository.model_type.name == exp_name,
                 ),
