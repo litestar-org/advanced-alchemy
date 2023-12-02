@@ -418,7 +418,10 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         return deleted
 
     def upsert(self, data: ModelT, **_: Any) -> ModelT:
-        return self.update(data) if data in self.__collection__() else self.add(data)
+        # sourcery skip: assign-if-exp, reintroduce-else
+        if data in self.__collection__():
+            return self.update(data)
+        return self.add(data)
 
     def upsert_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
         return [self.upsert(item) for item in data]

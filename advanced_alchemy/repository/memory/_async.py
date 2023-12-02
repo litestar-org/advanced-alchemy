@@ -415,6 +415,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         return deleted
 
     async def upsert(self, data: ModelT, **_: Any) -> ModelT:
+        # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
             return await self.update(data)
         return await self.add(data)
