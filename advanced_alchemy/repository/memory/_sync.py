@@ -334,6 +334,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         kwargs_ = self._exclude_unused_kwargs(kwargs)
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
+                # sourcery skip: remove-none-from-default-get
                 field_name: kwargs_.get(field_name, None)
                 for field_name in match_fields
                 if kwargs_.get(field_name, None) is not None
@@ -355,6 +356,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         kwargs_ = self._exclude_unused_kwargs(kwargs)
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
+                # sourcery skip: remove-none-from-default-get
                 field_name: kwargs_.get(field_name, None)
                 for field_name in match_fields
                 if kwargs_.get(field_name, None) is not None

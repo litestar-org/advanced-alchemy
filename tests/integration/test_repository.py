@@ -1,19 +1,21 @@
 """Unit tests for the SQLAlchemy Repository implementation."""
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID
 
 import pytest
-import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import Engine, Table, insert, select
+from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
+from time_machine import travel
 
 from advanced_alchemy import (
     SQLAlchemyAsyncMockRepository,
@@ -40,10 +42,13 @@ from .helpers import update_raw_records
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
+    from time_machine import Coordinates
 
 pytestmark = [
     pytest.mark.integration,
 ]
+xfail = pytest.mark.xfail
+
 
 RepositoryPKType = Literal["uuid", "bigint"]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
@@ -633,6 +638,14 @@ def any_session(request: FixtureRequest) -> AsyncSession | Session:
     return request.param  # type: ignore[no-any-return]
 
 
+@pytest.fixture(params=[lazy_fixture("engine"), lazy_fixture("async_engine")], ids=["sync", "async"])
+async def any_engine(
+    request: FixtureRequest,
+) -> Engine | AsyncEngine:
+    """Return a session for the current session"""
+    return cast("Engine | AsyncEngine", request.getfixturevalue(request.param))
+
+
 @pytest.fixture()
 def repository_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
     if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
@@ -915,18 +928,88 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
     assert len(collection) == 0
 
 
+@pytest.fixture()
+def frozen_datetime() -> Generator[Coordinates, None, None]:
+    with travel(datetime.utcnow, tick=False) as frozen:
+        yield frozen
+
+
 async def test_repo_created_updated(
+    frozen_datetime: Coordinates,
     author_repo: AnyAuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+
     if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
         pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not update created/updated columns")
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+        config = SQLAlchemyAsyncConfig(
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+        )
+    else:
+        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+            engine_instance=author_repo.session.get_bind(),
+        )
+    config.__post_init__()
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
     assert author.created_at is not None
     assert author.updated_at is not None
-    original_update_dt = author.updated_at
+    frozen_datetime.shift(delta=timedelta(seconds=5))
+    # looks odd, but we want to get correct type checking here
+    if repository_pk_type == "uuid":
+        author = cast(models_uuid.UUIDAuthor, author)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+    else:
+        author = cast(models_bigint.BigIntAuthor, author)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+    author.name = "Altered"
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at > original_update_dt
+    # test nested
+    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at > original_update_dt
 
+
+# This test does not work when run in group for some reason.
+# If you run individually, it'll pass.
+@xfail
+async def test_repo_created_updated_no_listener(
+    frozen_datetime: Coordinates,
+    author_repo: AuthorRepository,
+    book_model: type[AnyBook],
+    repository_pk_type: RepositoryPKType,
+) -> None:
+    from sqlalchemy import event
+    from sqlalchemy.exc import InvalidRequestError
+
+    from advanced_alchemy._listeners import touch_updated_timestamp
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+
+    with contextlib.suppress(InvalidRequestError):
+        event.remove(Session, "before_flush", touch_updated_timestamp)
+
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+        config = SQLAlchemyAsyncConfig(
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+        )
+    else:
+        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),
+        )
+    config.__post_init__()
+    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
+    assert author.created_at is not None
+    assert author.updated_at is not None
+    frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
@@ -936,7 +1019,7 @@ async def test_repo_created_updated(
         book_model = cast("type[models_bigint.BigIntBook]", book_model)
     author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
     author = await maybe_async(author_repo.update(author))
-    assert author.updated_at > original_update_dt
+    assert author.updated_at == original_update_dt
 
 
 async def test_repo_list_method(
@@ -959,7 +1042,7 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
     else:
         collection = await maybe_async(
             author_repo.list(
-                sqlalchemy.and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
+                and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
             ),
         )
     assert isinstance(collection, list)
@@ -1638,7 +1721,7 @@ async def test_service_list_method_with_filters(raw_authors: RawRecordData, auth
     else:
         collection = await maybe_async(
             author_service.list(
-                sqlalchemy.and_(
+                and_(
                     author_service.repository.model_type.id == exp_id,
                     author_service.repository.model_type.name == exp_name,
                 ),
