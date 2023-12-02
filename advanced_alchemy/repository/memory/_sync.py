@@ -272,11 +272,19 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
             match_fields = [match_fields]
         return match_fields
 
-    def _list_and_count_basic(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
+    def _list_and_count_basic(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]:
         result = self.list(*filters, **kwargs)
         return result, len(result)
 
-    def _list_and_count_window(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
+    def _list_and_count_window(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
 
     def _find_or_raise_not_found(self, id_: Any) -> ModelT:
@@ -410,6 +418,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         return deleted
 
     def upsert(self, data: ModelT, **_: Any) -> ModelT:
+        # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
             return self.update(data)
         return self.add(data)
@@ -417,7 +426,11 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
     def upsert_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
         return [self.upsert(item) for item in data]
 
-    def list_and_count(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
+    def list_and_count(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
 
     def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:

@@ -269,11 +269,19 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             match_fields = [match_fields]
         return match_fields
 
-    async def _list_and_count_basic(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
+    async def _list_and_count_basic(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]:
         result = await self.list(*filters, **kwargs)
         return result, len(result)
 
-    async def _list_and_count_window(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
+    async def _list_and_count_window(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]:
         return await self._list_and_count_basic(*filters, **kwargs)
 
     def _find_or_raise_not_found(self, id_: Any) -> ModelT:
@@ -407,6 +415,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         return deleted
 
     async def upsert(self, data: ModelT, **_: Any) -> ModelT:
+        # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
             return await self.update(data)
         return await self.add(data)
@@ -414,7 +423,11 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
     async def upsert_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
         return [await self.upsert(item) for item in data]
 
-    async def list_and_count(self, *filters: FilterTypes, **kwargs: Any) -> tuple[list[ModelT], int]:
+    async def list_and_count(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]:
         return await self._list_and_count_basic(*filters, **kwargs)
 
     def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:
