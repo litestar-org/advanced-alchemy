@@ -18,6 +18,7 @@ from advanced_alchemy import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
 
 
 class UUIDAuthor(UUIDAuditBase):
@@ -45,6 +46,17 @@ class UUIDEventLog(UUIDAuditBase):
 
     logged_at: Mapped[datetime] = mapped_column(default=datetime.now())  # pyright: ignore
     payload: Mapped[dict] = mapped_column(default={})  # pyright: ignore
+
+
+class UUIDSecret(UUIDBase):
+    """The secret domain model."""
+
+    secret: Mapped[str] = mapped_column(
+        EncryptedString(key="super_secret"),
+    )
+    long_secret: Mapped[str] = mapped_column(
+        EncryptedText(key="super_secret"),
+    )
 
 
 class UUIDModelWithFetchedValue(UUIDBase):
@@ -84,6 +96,12 @@ class UUIDRule(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
+
+
+class SecretAsyncRepository(SQLAlchemyAsyncRepository[UUIDSecret]):
+    """Secret repository."""
+
+    model_type = UUIDSecret
 
 
 class RuleAsyncRepository(SQLAlchemyAsyncRepository[UUIDRule]):
@@ -184,6 +202,18 @@ class ItemSyncMockRepository(SQLAlchemySyncMockRepository[UUIDItem]):
     model_type = UUIDItem
 
 
+class SecretAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDSecret]):
+    """Secret repository."""
+
+    model_type = UUIDSecret
+
+
+class SecretSyncMockRepository(SQLAlchemySyncMockRepository[UUIDSecret]):
+    """Secret repository."""
+
+    model_type = UUIDSecret
+
+
 class AuthorSyncRepository(SQLAlchemySyncRepository[UUIDAuthor]):
     """Author repository."""
 
@@ -194,6 +224,12 @@ class BookSyncRepository(SQLAlchemySyncRepository[UUIDBook]):
     """Book repository."""
 
     model_type = UUIDBook
+
+
+class SecretSyncRepository(SQLAlchemySyncRepository[UUIDSecret]):
+    """Secret repository."""
+
+    model_type = UUIDSecret
 
 
 class EventLogSyncRepository(SQLAlchemySyncRepository[UUIDEventLog]):
@@ -227,6 +263,12 @@ class ItemSyncRepository(SQLAlchemySyncRepository[UUIDItem]):
 
 
 # Services
+
+
+class SecretAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSecret]):
+    """Rule repository."""
+
+    repository_type = SecretAsyncRepository
 
 
 class RuleAsyncService(SQLAlchemyAsyncRepositoryService[UUIDRule]):
@@ -371,3 +413,9 @@ class ItemSyncService(SQLAlchemySyncRepositoryService[UUIDItem]):
     """Item repository."""
 
     repository_type = ItemSyncRepository
+
+
+class SecretSyncService(SQLAlchemySyncRepositoryService[UUIDSecret]):
+    """Rule repository."""
+
+    repository_type = SecretSyncRepository

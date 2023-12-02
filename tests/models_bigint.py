@@ -16,6 +16,8 @@ from advanced_alchemy import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase
+from advanced_alchemy.types import EncryptedString
+from advanced_alchemy.types.encrypted_string import EncryptedText
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -88,6 +90,17 @@ class BigIntRule(BigIntAuditBase):
     config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
 
 
+class BigIntSecret(BigIntBase):
+    """The secret domain model."""
+
+    secret: Mapped[str] = mapped_column(
+        EncryptedString(key="super_secret"),
+    )
+    long_secret: Mapped[str] = mapped_column(
+        EncryptedText(key="super_secret"),
+    )
+
+
 class RuleAsyncRepository(SQLAlchemyAsyncRepository[BigIntRule]):
     """Rule repository."""
 
@@ -150,6 +163,12 @@ class ModelWithFetchedValueAsyncRepository(SQLAlchemyAsyncRepository[BigIntModel
     model_type = BigIntModelWithFetchedValue
 
 
+class SecretAsyncRepository(SQLAlchemyAsyncRepository[BigIntSecret]):
+    """Secret repository."""
+
+    model_type = BigIntSecret
+
+
 class TagAsyncRepository(SQLAlchemyAsyncRepository[BigIntTag]):
     """Tag repository."""
 
@@ -168,6 +187,12 @@ class TagSyncMockRepository(SQLAlchemySyncMockRepository[BigIntTag]):
     model_type = BigIntTag
 
 
+class SecretSyncRepository(SQLAlchemySyncRepository[BigIntSecret]):
+    """Secret repository."""
+
+    model_type = BigIntSecret
+
+
 class ItemAsyncRepository(SQLAlchemyAsyncRepository[BigIntItem]):
     """Item repository."""
 
@@ -184,6 +209,18 @@ class ItemSyncMockRepository(SQLAlchemySyncMockRepository[BigIntItem]):
     """Item repository."""
 
     model_type = BigIntItem
+
+
+class SecretAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntSecret]):
+    """Secret repository."""
+
+    model_type = BigIntSecret
+
+
+class SecretSyncMockRepository(SQLAlchemySyncMockRepository[BigIntSecret]):
+    """Secret repository."""
+
+    model_type = BigIntSecret
 
 
 class AuthorSyncRepository(SQLAlchemySyncRepository[BigIntAuthor]):
@@ -229,6 +266,10 @@ class ItemSyncRepository(SQLAlchemySyncRepository[BigIntItem]):
 
 
 # Services
+class SecretAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSecret]):
+    """Rule repository."""
+
+    repository_type = SecretAsyncRepository
 
 
 class RuleAsyncService(SQLAlchemyAsyncRepositoryService[BigIntRule]):
@@ -361,6 +402,12 @@ class ModelWithFetchedValueSyncService(SQLAlchemySyncRepositoryService[BigIntMod
     """BigIntModelWithFetchedValue repository."""
 
     repository_type = ModelWithFetchedValueSyncRepository
+
+
+class SecretSyncService(SQLAlchemySyncRepositoryService[BigIntSecret]):
+    """Rule repository."""
+
+    repository_type = SecretSyncRepository
 
 
 class TagSyncService(SQLAlchemySyncRepositoryService[BigIntTag]):
