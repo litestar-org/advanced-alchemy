@@ -8,10 +8,10 @@ from asgi_lifespan import LifespanManager
 from litestar import Litestar, get
 from litestar.testing import create_test_client
 from litestar.types.asgi_types import HTTPResponseStartEvent
-from litestar.utils import set_litestar_scope_state
 from pytest import MonkeyPatch
 from sqlalchemy.orm import Session
 
+from advanced_alchemy.extensions.litestar._utils import set_aa_scope_state
 from advanced_alchemy.extensions.litestar.plugins import (
     SQLAlchemyInitPlugin,
     SQLAlchemySyncConfig,
@@ -81,7 +81,7 @@ def test_before_send_handler_success_response(create_scope: Callable[..., Scope]
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=Session)
     http_scope = create_scope(app=app)
-    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    set_aa_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(200, 299),
@@ -97,7 +97,7 @@ def test_before_send_handler_error_response(create_scope: Callable[..., Scope]) 
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=Session)
     http_scope = create_scope(app=app)
-    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    set_aa_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(300, 599),
@@ -117,7 +117,7 @@ def test_autocommit_handler_maker_redirect_response(create_scope: Callable[..., 
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=Session)
     http_scope = create_scope(app=app)
-    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    set_aa_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(300, 399),
@@ -137,7 +137,7 @@ def test_autocommit_handler_maker_commit_statuses(create_scope: Callable[..., Sc
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=Session)
     http_scope = create_scope(app=app)
-    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    set_aa_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(302, 303),
@@ -157,7 +157,7 @@ def test_autocommit_handler_maker_rollback_statuses(create_scope: Callable[..., 
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=Session)
     http_scope = create_scope(app=app)
-    set_litestar_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
+    set_aa_scope_state(http_scope, SESSION_SCOPE_KEY, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(307, 308),
