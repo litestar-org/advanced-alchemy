@@ -67,7 +67,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
 
     def count(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
     ) -> int:
@@ -180,7 +180,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
 
     def list_and_count(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
