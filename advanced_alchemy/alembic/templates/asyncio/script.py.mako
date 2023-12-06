@@ -24,6 +24,8 @@ __all__ = ["downgrade", "upgrade", "schema_upgrades", "schema_downgrades", "data
 sa.GUID = GUID
 sa.DateTimeUTC = DateTimeUTC
 sa.ORA_JSONB = ORA_JSONB
+sa.EncryptedString = EncryptedString
+sa.EncryptedText = EncryptedText
 
 # revision identifiers, used by Alembic.
 revision = ${repr(up_revision)}
