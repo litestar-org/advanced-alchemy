@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import base64
 import contextlib
+import os
 from typing import TYPE_CHECKING, Any, Callable
 
 from sqlalchemy import String, Text, TypeDecorator
@@ -98,7 +99,7 @@ class EncryptedString(TypeDecorator):
 
     def __init__(
         self,
-        key: str | bytes | Callable[[], str | bytes],
+        key: str | bytes | Callable[[], str | bytes] = os.urandom(32),
         backend: type[EncryptionBackend] = FernetBackend,
         **kwargs: Any,
     ) -> None:
