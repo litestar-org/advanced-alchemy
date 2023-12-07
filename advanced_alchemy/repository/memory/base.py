@@ -12,7 +12,7 @@ from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -27,13 +27,6 @@ AnyObject = TypeVar("AnyObject", bound="Any")
 
 class _NotSet:
     pass
-
-
-class _MISSING:
-    pass
-
-
-MISSING = _MISSING()
 
 
 class InMemoryStore(Generic[T]):
@@ -310,7 +303,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
         for relationship in obj_mapper.relationships:
             for column in relationship.local_columns:
                 column_relationships[column] = relationship
-
+        # sourcery skip: assign-if-exp
         if state := inspect(data):
             new_attrs: dict[str, Any] = state.dict
         else:

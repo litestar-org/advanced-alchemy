@@ -35,7 +35,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.utils.deprecation import deprecated
 
 if TYPE_CHECKING:
@@ -548,8 +548,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             )
         if upsert:
             for field_name, new_field_value in kwargs.items():
-                field = getattr(existing, field_name, None)
-                if field and field != new_field_value:
+                field = getattr(existing, field_name, MISSING)
+                if field is not MISSING and field != new_field_value:
                     setattr(existing, field_name, new_field_value)
             existing = self._attach_to_session(existing, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
@@ -610,8 +610,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         existing = self.get_one(**match_filter)
         updated = False
         for field_name, new_field_value in kwargs.items():
-            field = getattr(existing, field_name, None)
-            if field and field != new_field_value:
+            field = getattr(existing, field_name, MISSING)
+            if field is not MISSING and field != new_field_value:
                 updated = True
                 setattr(existing, field_name, new_field_value)
         existing = self._attach_to_session(existing, strategy="merge")
