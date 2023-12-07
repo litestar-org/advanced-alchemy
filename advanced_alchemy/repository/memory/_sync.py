@@ -22,7 +22,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.utils.deprecation import deprecated
 
 from .base import AnyObject, CollectionT, InMemoryStore, SQLAlchemyInMemoryStore, SQLAlchemyMultiStore
@@ -346,7 +346,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
             return (self.add(self.model_type(**kwargs_)), True)
         if upsert:
             for field_name, new_field_value in kwargs_.items():
-                field = getattr(existing, field_name, None)
+                field = getattr(existing, field_name, MISSING)
                 if field and field != new_field_value:
                     setattr(existing, field_name, new_field_value)
             existing = self.update(existing)
@@ -366,7 +366,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         existing = self.get_one(**match_filter)
         updated = False
         for field_name, new_field_value in kwargs_.items():
-            field = getattr(existing, field_name, None)
+            field = getattr(existing, field_name, MISSING)
             if field and field != new_field_value:
                 updated = True
                 setattr(existing, field_name, new_field_value)
