@@ -271,6 +271,7 @@ warn_unused_ignores = true
 disable_error_code = "attr-defined"
 disallow_untyped_decorators = false
 module = "tests.*"
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
