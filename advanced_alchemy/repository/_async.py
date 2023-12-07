@@ -548,7 +548,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         if upsert:
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, MISSING)
-                if field and field != new_field_value:
+                if field is not MISSING and field != new_field_value:
                     setattr(existing, field_name, new_field_value)
             existing = await self._attach_to_session(existing, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
@@ -610,7 +610,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         updated = False
         for field_name, new_field_value in kwargs.items():
             field = getattr(existing, field_name, MISSING)
-            if field and field != new_field_value:
+            if field is not MISSING and field != new_field_value:
                 updated = True
                 setattr(existing, field_name, new_field_value)
         existing = await self._attach_to_session(existing, strategy="merge")
