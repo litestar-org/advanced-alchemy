@@ -303,7 +303,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
         for relationship in obj_mapper.relationships:
             for column in relationship.local_columns:
                 column_relationships[column] = relationship
-
+        # sourcery skip: assign-if-exp
         if state := inspect(data):
             new_attrs: dict[str, Any] = state.dict
         else:
