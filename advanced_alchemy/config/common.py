@@ -123,11 +123,23 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Optional metadata to use.
 
       If set, the plugin will use the provided instance rather than the default metadata."""
+    enable_touch_updated_timestamp_listener: bool = True
+    """Enable Created/Updated Timestamp event listener.
+
+    This is a listener that will update ``created_at`` and ``updated_at`` columns on record modification.
+    Disable if you plan to bring your own update mechanism for these columns"""
 
     def __post_init__(self) -> None:
         if self.connection_string is not None and self.engine_instance is not None:
             msg = "Only one of 'connection_string' or 'engine_instance' can be provided."
             raise ImproperConfigurationError(msg)
+        if self.enable_touch_updated_timestamp_listener:
+            from sqlalchemy import event
+            from sqlalchemy.orm import Session
+
+            from advanced_alchemy._listeners import touch_updated_timestamp
+
+            event.listen(Session, "before_flush", touch_updated_timestamp)
 
     @property
     def engine_config_dict(self) -> dict[str, Any]:

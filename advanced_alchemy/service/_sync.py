@@ -24,14 +24,17 @@ if TYPE_CHECKING:
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.repository import SQLAlchemySyncRepository
+    from advanced_alchemy.repository import (
+        SQLAlchemySyncMockRepository,
+        SQLAlchemySyncRepository,
+    )
     from advanced_alchemy.service.typing import FilterTypeT
 
 
 class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemySyncRepository[ModelT]]
+    repository_type: type[SQLAlchemySyncRepository[ModelT] | SQLAlchemySyncMockRepository[ModelT]]
     match_fields: list[str] | str | None = None
 
     def __init__(
@@ -64,7 +67,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
 
     def count(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
     ) -> int:
@@ -177,7 +180,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
 
     def list_and_count(
         self,
-        *filters: FilterTypes,
+        *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,

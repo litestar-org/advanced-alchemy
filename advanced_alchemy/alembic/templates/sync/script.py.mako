@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from alembic import op
-from advanced_alchemy.types import GUID, ORA_JSONB, DateTimeUTC
+from advanced_alchemy.types import EncryptedString, EncryptedText, GUID, ORA_JSONB, DateTimeUTC
 from sqlalchemy import Text  # noqa: F401
 ${imports if imports else ""}
 if TYPE_CHECKING:
@@ -24,6 +24,8 @@ __all__ = ["downgrade", "upgrade", "schema_upgrades", "schema_downgrades", "data
 sa.GUID = GUID
 sa.DateTimeUTC = DateTimeUTC
 sa.ORA_JSONB = ORA_JSONB
+sa.EncryptedString = EncryptedString
+sa.EncryptedText = EncryptedText
 
 # revision identifiers, used by Alembic.
 revision: str = ${repr(up_revision)}

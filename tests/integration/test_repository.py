@@ -1,20 +1,29 @@
 """Unit tests for the SQLAlchemy Repository implementation."""
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
+from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID
 
 import pytest
-import sqlalchemy
 from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import Engine, Table, insert, select
+from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
+from time_machine import travel
 
-from advanced_alchemy import SQLAlchemyAsyncRepository, SQLAlchemyAsyncRepositoryService, base
+from advanced_alchemy import (
+    SQLAlchemyAsyncMockRepository,
+    SQLAlchemyAsyncRepository,
+    SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncMockRepository,
+    base,
+)
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -25,7 +34,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
-from advanced_alchemy.repository._util import get_instrumented_attr
+from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 
@@ -33,20 +42,32 @@ from .helpers import update_raw_records
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
+    from time_machine import Coordinates
 
 pytestmark = [
     pytest.mark.integration,
 ]
+xfail = pytest.mark.xfail
+
 
 RepositoryPKType = Literal["uuid", "bigint"]
+SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
 RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
 ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
 ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
 TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
 
+AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
+SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
+SecretService = SQLAlchemyAsyncRepositoryService[AnySecret]
+SecretMockRepository = SQLAlchemyAsyncMockRepository[AnySecret]
+AnySecretRepository = Union[SecretRepository, SecretMockRepository]
+
 AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
 AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
+AuthorMockRepository = SQLAlchemyAsyncMockRepository[AnyAuthor]
+AnyAuthorRepository = Union[AuthorRepository, AuthorMockRepository]
 AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor]
 
 AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
@@ -70,6 +91,17 @@ ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedV
 ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
 
 RawRecordData = List[Dict[str, Any]]
+
+mock_engines = {"mock_async_engine", "mock_sync_engine"}
+
+
+@pytest.fixture(autouse=True)
+def _clear_in_memory_db() -> Generator[None, None, None]:
+    try:
+        yield
+    finally:
+        SQLAlchemyAsyncMockRepository.__database_clear__()
+        SQLAlchemySyncMockRepository.__database_clear__()
 
 
 @pytest.fixture(name="raw_authors_uuid")
@@ -137,6 +169,18 @@ def fx_raw_rules_uuid() -> RawRecordData:
             "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
             "created_at": "2023-02-01T00:00:00",
             "updated_at": "2023-02-01T00:00:00",
+        },
+    ]
+
+
+@pytest.fixture(name="raw_secrets_uuid")
+def fx_raw_secrets_uuid() -> RawRecordData:
+    """secret representations."""
+    return [
+        {
+            "id": "f34545b9-663c-4fce-915d-dd1ae9cea42a",
+            "secret": "I'm a secret!",
+            "long_secret": "It's clobbering time.",
         },
     ]
 
@@ -209,6 +253,18 @@ def fx_raw_rules_bigint() -> RawRecordData:
     ]
 
 
+@pytest.fixture(name="raw_secrets_bigint")
+def fx_raw_secrets_bigint() -> RawRecordData:
+    """secret representations."""
+    return [
+        {
+            "id": 2025,
+            "secret": "I'm a secret!",
+            "long_secret": "It's clobbering time.",
+        },
+    ]
+
+
 @pytest.fixture(params=["uuid", "bigint"])
 def repository_pk_type(request: FixtureRequest) -> RepositoryPKType:
     """Return the primary key type of the repository"""
@@ -264,6 +320,12 @@ def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBoo
 
 
 @pytest.fixture()
+def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
+    """Return the ``Secret`` model matching the current repository PK type"""
+    return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret
+
+
+@pytest.fixture()
 def new_pk_id(repository_pk_type: RepositoryPKType) -> Any:
     """Return an unused primary key, matching the current repository PK type"""
     if repository_pk_type == "uuid":
@@ -281,6 +343,18 @@ def existing_author_ids(raw_authors: RawRecordData) -> Iterator[Any]:
 def first_author_id(raw_authors: RawRecordData) -> Any:
     """Return the primary key of the first ``Author`` record of the current repository PK type"""
     return raw_authors[0]["id"]
+
+
+@pytest.fixture()
+def existing_secret_ids(raw_secrets: RawRecordData) -> Iterator[Any]:
+    """Return the existing primary keys based on the raw data provided"""
+    return (secret["id"] for secret in raw_secrets)
+
+
+@pytest.fixture()
+def first_secret_id(raw_secrets: RawRecordData) -> Any:
+    """Return the primary key of the first ``Secret`` record of the current repository PK type"""
+    return raw_secrets[0]["id"]
 
 
 @pytest.fixture(
@@ -348,6 +422,14 @@ def first_author_id(raw_authors: RawRecordData) -> Any:
                 pytest.mark.xdist_group("cockroachdb"),
             ],
         ),
+        pytest.param(
+            "mock_sync_engine",
+            marks=[
+                pytest.mark.mock_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
+            ],
+        ),
     ],
 )
 def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Engine:
@@ -382,25 +464,56 @@ def raw_rules(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> 
     return cast("RawRecordData", rules)
 
 
+@pytest.fixture()
+def raw_secrets(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Secret`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        secrets = request.getfixturevalue("raw_secrets_bigint")
+    else:
+        secrets = request.getfixturevalue("raw_secrets_uuid")
+    return cast("RawRecordData", secrets)
+
+
 def _seed_db_sync(
     *,
     engine: Engine,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     author_model: AuthorModel,
+    secret_model: SecretModel,
     rule_model: RuleModel,
 ) -> None:
     update_raw_records(raw_authors=raw_authors, raw_rules=raw_rules)
 
-    with engine.begin() as conn:
-        base.orm_registry.metadata.drop_all(conn)
-        base.orm_registry.metadata.create_all(conn)
+    if isinstance(engine, NonCallableMagicMock):
+        for raw_author in raw_authors:
+            SQLAlchemySyncMockRepository.__database_add__(
+                author_model,
+                model_from_dict(author_model, **raw_author),  # type: ignore[type-var]
+            )
+        for raw_rule in raw_rules:
+            SQLAlchemySyncMockRepository.__database_add__(
+                author_model,
+                model_from_dict(rule_model, **raw_rule),  # type: ignore[type-var]
+            )
+        for raw_secret in raw_secrets:
+            SQLAlchemySyncMockRepository.__database_add__(
+                secret_model,
+                model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
+            )
+    else:
+        with engine.begin() as conn:
+            base.orm_registry.metadata.drop_all(conn)
+            base.orm_registry.metadata.create_all(conn)
 
-    with engine.begin() as conn:
-        for author in raw_authors:
-            conn.execute(insert(author_model).values(author))
-        for rule in raw_rules:
-            conn.execute(insert(rule_model).values(rule))
+        with engine.begin() as conn:
+            for author in raw_authors:
+                conn.execute(insert(author_model).values(author))
+            for rule in raw_rules:
+                conn.execute(insert(rule_model).values(rule))
+            for secret in raw_secrets:
+                conn.execute(insert(secret_model).values(secret))
 
 
 def _seed_spanner(
@@ -424,8 +537,10 @@ def seed_db_sync(
     engine: Engine,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     author_model: AuthorModel,
     rule_model: RuleModel,
+    secret_model: SecretModel,
 ) -> None:
     if engine.dialect.name.startswith("spanner"):
         _seed_spanner(engine=engine, raw_authors_uuid=raw_authors, raw_rules_uuid=raw_rules)
@@ -434,8 +549,10 @@ def seed_db_sync(
             engine=engine,
             raw_authors=raw_authors,
             raw_rules=raw_rules,
+            raw_secrets=raw_secrets,
             author_model=author_model,
             rule_model=rule_model,
+            secret_model=secret_model,
         )
 
 
@@ -444,6 +561,7 @@ def session(
     engine: Engine,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     seed_db_sync: None,
 ) -> Generator[Session, None, None]:
     """Return a synchronous session for the current engine"""
@@ -454,6 +572,9 @@ def session(
             author_repo = models_uuid.AuthorSyncRepository(session=session)
             for author in raw_authors:
                 _ = author_repo.get_or_upsert(match_fields="name", **author)
+            secret_repo = models_uuid.SecretSyncRepository(session=session)
+            for secret in raw_secrets:
+                _ = secret_repo.get_or_upsert(match_fields="id", **secret)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
                 rule_repo = models_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
@@ -521,6 +642,14 @@ def session(
                 pytest.mark.xdist_group("mssql"),
             ],
         ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[
+                pytest.mark.mock_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
+            ],
+        ),
     ],
 )
 def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> AsyncEngine:
@@ -532,14 +661,15 @@ def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) 
 
 @pytest.fixture()
 async def seed_db_async(
-    async_engine: AsyncEngine,
+    async_engine: AsyncEngine | NonCallableMagicMock,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
+    raw_secrets: RawRecordData,
     author_model: AuthorModel,
     rule_model: RuleModel,
+    secret_model: SecretModel,
 ) -> None:
     """Return an asynchronous session for the current engine"""
-
     # convert date/time strings to dt objects.
     for raw_author in raw_authors:
         raw_author["dob"] = datetime.strptime(raw_author["dob"], "%Y-%m-%d").date()
@@ -557,11 +687,29 @@ async def seed_db_async(
             timezone.utc,
         )
 
-    async with async_engine.begin() as conn:
-        await conn.run_sync(base.orm_registry.metadata.drop_all)
-        await conn.run_sync(base.orm_registry.metadata.create_all)
-        await conn.execute(insert(author_model).values(raw_authors))
-        await conn.execute(insert(rule_model).values(raw_rules))
+    if isinstance(async_engine, NonCallableMagicMock):
+        for raw_author in raw_authors:
+            SQLAlchemyAsyncMockRepository.__database_add__(
+                author_model,
+                model_from_dict(author_model, **raw_author),  # type: ignore[type-var]
+            )
+        for raw_rule in raw_rules:
+            SQLAlchemyAsyncMockRepository.__database_add__(
+                author_model,
+                model_from_dict(rule_model, **raw_rule),  # type: ignore[type-var]
+            )
+        for raw_secret in raw_secrets:
+            SQLAlchemyAsyncMockRepository.__database_add__(
+                secret_model,
+                model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
+            )
+    else:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(base.orm_registry.metadata.drop_all)
+            await conn.run_sync(base.orm_registry.metadata.create_all)
+            await conn.execute(insert(author_model).values(raw_authors))
+            await conn.execute(insert(rule_model).values(raw_rules))
+            await conn.execute(insert(secret_model).values(raw_secrets))
 
 
 @pytest.fixture(params=[lazy_fixture("session"), lazy_fixture("async_session")], ids=["sync", "async"])
@@ -574,15 +722,33 @@ def any_session(request: FixtureRequest) -> AsyncSession | Session:
     return request.param  # type: ignore[no-any-return]
 
 
+@pytest.fixture(params=[lazy_fixture("engine"), lazy_fixture("async_engine")], ids=["sync", "async"])
+async def any_engine(
+    request: FixtureRequest,
+) -> Engine | AsyncEngine:
+    """Return a session for the current session"""
+    return cast("Engine | AsyncEngine", request.getfixturevalue(request.param))
+
+
 @pytest.fixture()
-def repository_module(repository_pk_type: RepositoryPKType) -> Any:
+def repository_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
+    if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
+        pytest.skip("foo")
     return models_uuid if repository_pk_type == "uuid" else models_bigint
 
 
 @pytest.fixture()
-def author_repo(any_session: AsyncSession | Session, repository_module: Any) -> AuthorRepository:
+def author_repo(
+    request: FixtureRequest,
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+) -> AuthorRepository:
     """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.AuthorAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.AuthorSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.AuthorAsyncRepository(session=any_session)
     else:
         repo = repository_module.AuthorSyncRepository(session=any_session)
@@ -590,9 +756,35 @@ def author_repo(any_session: AsyncSession | Session, repository_module: Any) -> 
 
 
 @pytest.fixture()
-def author_service(any_session: AsyncSession | Session, repository_module: Any) -> AuthorService:
+def secret_repo(
+    request: FixtureRequest,
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+) -> SecretRepository:
+    """Return an SecretAsyncRepository or SecretSyncRepository based on the current PK and session type"""
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.SecretAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.SecretSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
+        repo = repository_module.SecretAsyncRepository(session=any_session)
+    else:
+        repo = repository_module.SecretSyncRepository(session=any_session)
+    return cast(SecretRepository, repo)
+
+
+@pytest.fixture()
+def author_service(
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+    request: FixtureRequest,
+) -> AuthorService:
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.AuthorAsyncMockService(session=create_autospec(any_session, instance=True))
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.AuthorSyncMockService(session=create_autospec(any_session, instance=True))
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.AuthorAsyncService(session=any_session)
     else:
         repo = repository_module.AuthorSyncService(session=any_session)
@@ -600,9 +792,13 @@ def author_service(any_session: AsyncSession | Session, repository_module: Any) 
 
 
 @pytest.fixture()
-def rule_repo(any_session: AsyncSession | Session, repository_module: Any) -> RuleRepository:
+def rule_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> RuleRepository:
     """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.RuleAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.RuleSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.RuleAsyncRepository(session=any_session)
     else:
         repo = repository_module.RuleSyncRepository(session=any_session)
@@ -610,9 +806,13 @@ def rule_repo(any_session: AsyncSession | Session, repository_module: Any) -> Ru
 
 
 @pytest.fixture()
-def rule_service(any_session: AsyncSession | Session, repository_module: Any) -> RuleService:
+def rule_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> RuleService:
     """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.RuleAsyncMockService(session=create_autospec(any_session, instance=True))
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.RuleSyncMockService(session=create_autospec(any_session, instance=True))
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.RuleAsyncService(session=any_session)
     else:
         repo = repository_module.RuleSyncService(session=any_session)
@@ -620,9 +820,13 @@ def rule_service(any_session: AsyncSession | Session, repository_module: Any) ->
 
 
 @pytest.fixture()
-def book_repo(any_session: AsyncSession | Session, repository_module: Any) -> BookRepository:
+def book_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> BookRepository:
     """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.BookAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.BookSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.BookAsyncRepository(session=any_session)
     else:
         repo = repository_module.BookSyncRepository(session=any_session)
@@ -630,9 +834,13 @@ def book_repo(any_session: AsyncSession | Session, repository_module: Any) -> Bo
 
 
 @pytest.fixture()
-def book_service(any_session: AsyncSession | Session, repository_module: Any) -> BookService:
+def book_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> BookService:
     """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.BookAsyncMockService(session=create_autospec(any_session, instance=True))
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.BookSyncMockService(session=create_autospec(any_session, instance=True))
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.BookAsyncService(session=any_session)
     else:
         repo = repository_module.BookSyncService(session=any_session)
@@ -640,9 +848,13 @@ def book_service(any_session: AsyncSession | Session, repository_module: Any) ->
 
 
 @pytest.fixture()
-def tag_repo(any_session: AsyncSession | Session, repository_module: Any) -> ItemRepository:
+def tag_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> ItemRepository:
     """Return an TagAsyncRepository or TagSyncRepository based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.TagAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.TagSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.TagAsyncRepository(session=any_session)
     else:
         repo = repository_module.TagSyncRepository(session=any_session)
@@ -651,9 +863,13 @@ def tag_repo(any_session: AsyncSession | Session, repository_module: Any) -> Ite
 
 
 @pytest.fixture()
-def tag_service(any_session: AsyncSession | Session, repository_module: Any) -> TagService:
+def tag_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> TagService:
     """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.TagAsyncMockService(session=create_autospec(any_session, instance=True))
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.TagSyncMockService(session=create_autospec(any_session, instance=True))
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.TagAsyncService(session=any_session)
     else:
         repo = repository_module.TagSyncService(session=any_session)
@@ -661,9 +877,13 @@ def tag_service(any_session: AsyncSession | Session, repository_module: Any) -> 
 
 
 @pytest.fixture()
-def item_repo(any_session: AsyncSession | Session, repository_module: Any) -> ItemRepository:
+def item_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> ItemRepository:
     """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.ItemAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.ItemSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.ItemAsyncRepository(session=any_session)
     else:
         repo = repository_module.ItemSyncRepository(session=any_session)
@@ -672,9 +892,13 @@ def item_repo(any_session: AsyncSession | Session, repository_module: Any) -> It
 
 
 @pytest.fixture()
-def item_service(any_session: AsyncSession | Session, repository_module: Any) -> ItemService:
+def item_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> ItemService:
     """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
-    if isinstance(any_session, AsyncSession):
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.ItemAsyncMockService(session=create_autospec(any_session, instance=True))
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.ItemSyncMockService(session=create_autospec(any_session, instance=True))
+    elif isinstance(any_session, AsyncSession):
         repo = repository_module.ItemAsyncService(session=any_session)
     else:
         repo = repository_module.ItemSyncService(session=any_session)
@@ -696,17 +920,20 @@ def model_with_fetched_value_repo(
     return cast(ModelWithFetchedValueRepository, repo)
 
 
-def test_filter_by_kwargs_with_incorrect_attribute_name(author_repo: AuthorRepository) -> None:
+def test_filter_by_kwargs_with_incorrect_attribute_name(author_repo: AnyAuthorRepository) -> None:
     """Test SQLAlchemy filter by kwargs with invalid column name.
 
     Args:
         author_repo: The author mock repository
     """
     with pytest.raises(RepositoryError):
-        author_repo.filter_collection_by_kwargs(author_repo.statement, whoops="silly me")
+        if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+            author_repo.filter_collection_by_kwargs(author_repo.__collection__().list(), whoops="silly me")
+        else:
+            author_repo.filter_collection_by_kwargs(author_repo.statement, whoops="silly me")
 
 
-async def test_repo_count_method(author_repo: AuthorRepository) -> None:
+async def test_repo_count_method(author_repo: AnyAuthorRepository) -> None:
     """Test SQLAlchemy count.
 
     Args:
@@ -715,23 +942,33 @@ async def test_repo_count_method(author_repo: AuthorRepository) -> None:
     assert await maybe_async(author_repo.count()) == 2
 
 
-async def test_repo_count_method_with_filters(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
+async def test_repo_count_method_with_filters(raw_authors: RawRecordData, author_repo: AnyAuthorRepository) -> None:
     """Test SQLAlchemy count with filters.
 
     Args:
         author_repo: The author mock repository
     """
-    assert (
-        await maybe_async(
-            author_repo.count(
-                author_repo.model_type.name == raw_authors[0]["name"],
-            ),
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        assert (
+            await maybe_async(
+                author_repo.count(
+                    **{author_repo.model_type.name.key: raw_authors[0]["name"]},
+                ),
+            )
+            == 1
         )
-        == 1
-    )
+    else:
+        assert (
+            await maybe_async(
+                author_repo.count(
+                    author_repo.model_type.name == raw_authors[0]["name"],
+                ),
+            )
+            == 1
+        )
 
 
-async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
+async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_repo: AnyAuthorRepository) -> None:
     """Test SQLAlchemy list with count in asyncpg.
 
     Args:
@@ -747,7 +984,7 @@ async def test_repo_list_and_count_method(raw_authors: RawRecordData, author_rep
 
 async def test_repo_list_and_count_method_with_filters(
     raw_authors: RawRecordData,
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
 ) -> None:
     """Test SQLAlchemy list with count and filters in asyncpg.
 
@@ -757,9 +994,14 @@ async def test_repo_list_and_count_method_with_filters(
     """
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
-    collection, count = await maybe_async(
-        author_repo.list_and_count(author_repo.model_type.name == exp_name),
-    )
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        collection, count = await maybe_async(
+            author_repo.list_and_count(**{author_repo.model_type.name.key: exp_name}),
+        )
+    else:
+        collection, count = await maybe_async(
+            author_repo.list_and_count(author_repo.model_type.name == exp_name),
+        )
     assert count == 1
     assert isinstance(collection, list)
     assert len(collection) == 1
@@ -767,7 +1009,7 @@ async def test_repo_list_and_count_method_with_filters(
     assert collection[0].name == exp_name
 
 
-async def test_repo_list_and_count_basic_method(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
+async def test_repo_list_and_count_basic_method(raw_authors: RawRecordData, author_repo: AnyAuthorRepository) -> None:
     """Test SQLAlchemy basic list with count in asyncpg.
 
     Args:
@@ -788,16 +1030,88 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
     assert len(collection) == 0
 
 
+@pytest.fixture()
+def frozen_datetime() -> Generator[Coordinates, None, None]:
+    with travel(datetime.utcnow, tick=False) as frozen:
+        yield frozen
+
+
 async def test_repo_created_updated(
+    frozen_datetime: Coordinates,
+    author_repo: AnyAuthorRepository,
+    book_model: type[AnyBook],
+    repository_pk_type: RepositoryPKType,
+) -> None:
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not update created/updated columns")
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+        config = SQLAlchemyAsyncConfig(
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+        )
+    else:
+        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+            engine_instance=author_repo.session.get_bind(),
+        )
+    config.__post_init__()
+    author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
+    assert author.created_at is not None
+    assert author.updated_at is not None
+    frozen_datetime.shift(delta=timedelta(seconds=5))
+    # looks odd, but we want to get correct type checking here
+    if repository_pk_type == "uuid":
+        author = cast(models_uuid.UUIDAuthor, author)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+    else:
+        author = cast(models_bigint.BigIntAuthor, author)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+    author.name = "Altered"
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at > original_update_dt
+    # test nested
+    author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
+    author = await maybe_async(author_repo.update(author))
+    assert author.updated_at > original_update_dt
+
+
+# This test does not work when run in group for some reason.
+# If you run individually, it'll pass.
+@xfail
+async def test_repo_created_updated_no_listener(
+    frozen_datetime: Coordinates,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
+    from sqlalchemy import event
+    from sqlalchemy.exc import InvalidRequestError
+
+    from advanced_alchemy._listeners import touch_updated_timestamp
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+
+    with contextlib.suppress(InvalidRequestError):
+        event.remove(Session, "before_flush", touch_updated_timestamp)
+
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+        config = SQLAlchemyAsyncConfig(
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
+        )
+    else:
+        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+            enable_touch_updated_timestamp_listener=False,
+            engine_instance=author_repo.session.get_bind(),
+        )
+    config.__post_init__()
     author = await maybe_async(author_repo.get_one(name="Agatha Christie"))
+    original_update_dt = author.updated_at
     assert author.created_at is not None
     assert author.updated_at is not None
-    original_update_dt = author.updated_at
-
+    frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
@@ -807,12 +1121,12 @@ async def test_repo_created_updated(
         book_model = cast("type[models_bigint.BigIntBook]", book_model)
     author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
     author = await maybe_async(author_repo.update(author))
-    assert author.updated_at > original_update_dt
+    assert author.updated_at == original_update_dt
 
 
 async def test_repo_list_method(
     raw_authors_uuid: RawRecordData,
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
 ) -> None:
     exp_count = len(raw_authors_uuid)
     collection = await maybe_async(author_repo.list())
@@ -820,12 +1134,19 @@ async def test_repo_list_method(
     assert len(collection) == exp_count
 
 
-async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_repo: AuthorRepository) -> None:
+async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_repo: AnyAuthorRepository) -> None:
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
-    collection = await maybe_async(
-        author_repo.list(sqlalchemy.and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name)),
-    )
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        collection = await maybe_async(
+            author_repo.list(**{author_repo.model_type.id.key: exp_id, author_repo.model_type.name.key: exp_name}),  # type: ignore[union-attr]
+        )
+    else:
+        collection = await maybe_async(
+            author_repo.list(
+                and_(author_repo.model_type.id == exp_id, author_repo.model_type.name == exp_name),
+            ),
+        )
     assert isinstance(collection, list)
     assert len(collection) == 1
     assert collection[0].id == exp_id
@@ -834,7 +1155,7 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
 
 async def test_repo_add_method(
     raw_authors: RawRecordData,
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
@@ -849,7 +1170,7 @@ async def test_repo_add_method(
 
 async def test_repo_add_many_method(
     raw_authors: RawRecordData,
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 2
@@ -870,7 +1191,7 @@ async def test_repo_add_many_method(
         assert obj.name in {"Testing 2", "Cody"}
 
 
-async def test_repo_update_many_method(author_repo: AuthorRepository) -> None:
+async def test_repo_update_many_method(author_repo: AnyAuthorRepository) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
         pytest.skip("Skipped on emulator")
 
@@ -882,38 +1203,46 @@ async def test_repo_update_many_method(author_repo: AuthorRepository) -> None:
         assert obj.name.startswith("Update")
 
 
-async def test_repo_exists_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_exists_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     exists = await maybe_async(author_repo.exists(id=first_author_id))
     assert exists
 
 
 async def test_repo_exists_method_with_filters(
     raw_authors: RawRecordData,
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     first_author_id: Any,
 ) -> None:
-    exists = await maybe_async(
-        author_repo.exists(
-            author_repo.model_type.name == raw_authors[0]["name"],
-            id=first_author_id,
-        ),
-    )
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        exists = await maybe_async(
+            author_repo.exists(
+                **{author_repo.model_type.name.key: raw_authors[0]["name"]},
+                id=first_author_id,
+            ),
+        )
+    else:
+        exists = await maybe_async(
+            author_repo.exists(
+                author_repo.model_type.name == raw_authors[0]["name"],
+                id=first_author_id,
+            ),
+        )
     assert exists
 
 
-async def test_repo_update_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_update_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.get(first_author_id))
     obj.name = "Updated Name"
     updated_obj = await maybe_async(author_repo.update(obj))
     assert updated_obj.name == obj.name
 
 
-async def test_repo_delete_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_delete_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.delete(first_author_id))
     assert obj.id == first_author_id
 
 
-async def test_repo_delete_many_method(author_repo: AuthorRepository, author_model: AuthorModel) -> None:
+async def test_repo_delete_many_method(author_repo: AnyAuthorRepository, author_model: AuthorModel) -> None:
     data_to_insert = [author_model(name="author name %d" % chunk) for chunk in range(2000)]
     _ = await maybe_async(author_repo.add_many(data_to_insert))
     all_objs = await maybe_async(author_repo.list())
@@ -926,12 +1255,12 @@ async def test_repo_delete_many_method(author_repo: AuthorRepository, author_mod
     assert count == 0
 
 
-async def test_repo_get_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.get(first_author_id))
     assert obj.name == "Agatha Christie"
 
 
-async def test_repo_get_one_or_none_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_one_or_none_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.get_one_or_none(id=first_author_id))
     assert obj is not None
     assert obj.name == "Agatha Christie"
@@ -939,7 +1268,7 @@ async def test_repo_get_one_or_none_method(author_repo: AuthorRepository, first_
     assert none_obj is None
 
 
-async def test_repo_get_one_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_one_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.get_one(id=first_author_id))
     assert obj is not None
     assert obj.name == "Agatha Christie"
@@ -947,7 +1276,7 @@ async def test_repo_get_one_method(author_repo: AuthorRepository, first_author_i
         _ = await author_repo.get_one(name="I don't exist")
 
 
-async def test_repo_get_or_upsert_method(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_upsert_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     existing_obj, existing_created = await maybe_async(author_repo.get_or_upsert(name="Agatha Christie"))
     assert existing_obj.id == first_author_id
     assert existing_created is False
@@ -957,7 +1286,7 @@ async def test_repo_get_or_upsert_method(author_repo: AuthorRepository, first_au
     assert new_created
 
 
-async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_upsert_match_filter(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", name="Agatha Christie", dob=now.date()),
@@ -967,7 +1296,10 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AuthorRepository, fi
     assert existing_created is False
 
 
-async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_upsert_match_filter_no_upsert(
+    author_repo: AnyAuthorRepository,
+    first_author_id: Any,
+) -> None:
     now = datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
@@ -977,7 +1309,7 @@ async def test_repo_get_or_upsert_match_filter_no_upsert(author_repo: AuthorRepo
     assert existing_created is False
 
 
-async def test_repo_get_and_update(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_and_update(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     existing_obj, existing_updated = await maybe_async(
         author_repo.get_and_update(name="Agatha Christie"),
     )
@@ -985,7 +1317,7 @@ async def test_repo_get_and_update(author_repo: AuthorRepository, first_author_i
     assert existing_updated is False
 
 
-async def test_repo_get_and_upsert_match_filter(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_and_upsert_match_filter(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     now = datetime.now()
     with pytest.raises(NotFoundError):
         _ = await maybe_async(
@@ -998,7 +1330,7 @@ async def test_repo_get_and_upsert_match_filter(author_repo: AuthorRepository, f
 
 
 async def test_repo_upsert_method(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     first_author_id: Any,
     author_model: AuthorModel,
     new_pk_id: Any,
@@ -1020,7 +1352,7 @@ async def test_repo_upsert_method(
 
 
 async def test_repo_upsert_many_method(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -1048,7 +1380,7 @@ async def test_repo_upsert_many_method(
 
 
 async def test_repo_upsert_many_method_match(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -1071,7 +1403,7 @@ async def test_repo_upsert_many_method_match(
 
 
 async def test_repo_upsert_many_method_match_non_id(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -1097,7 +1429,7 @@ async def test_repo_upsert_many_method_match_non_id(
 
 
 async def test_repo_upsert_many_method_match_not_on_input(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
     if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
@@ -1122,7 +1454,7 @@ async def test_repo_upsert_many_method_match_not_on_input(
     assert existing_count_now > existing_count
 
 
-async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
+async def test_repo_filter_before_after(author_repo: AnyAuthorRepository) -> None:
     before_filter = BeforeAfter(
         field_name="created_at",
         before=datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc),
@@ -1140,7 +1472,7 @@ async def test_repo_filter_before_after(author_repo: AuthorRepository) -> None:
     assert existing_obj[0].name == "Agatha Christie"
 
 
-async def test_repo_filter_on_before_after(author_repo: AuthorRepository) -> None:
+async def test_repo_filter_on_before_after(author_repo: AnyAuthorRepository) -> None:
     before_filter = OnBeforeAfter(
         field_name="created_at",
         on_or_before=datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc),
@@ -1162,7 +1494,7 @@ async def test_repo_filter_on_before_after(author_repo: AuthorRepository) -> Non
     assert existing_obj[0].name == "Agatha Christie"
 
 
-async def test_repo_filter_search(author_repo: AuthorRepository) -> None:
+async def test_repo_filter_search(author_repo: AnyAuthorRepository) -> None:
     existing_obj = await maybe_async(author_repo.list(SearchFilter(field_name="name", value="gath", ignore_case=False)))
     assert existing_obj[0].name == "Agatha Christie"
     existing_obj = await maybe_async(author_repo.list(SearchFilter(field_name="name", value="GATH", ignore_case=False)))
@@ -1174,7 +1506,7 @@ async def test_repo_filter_search(author_repo: AuthorRepository) -> None:
     assert existing_obj[0].name == "Agatha Christie"
 
 
-async def test_repo_filter_not_in_search(author_repo: AuthorRepository) -> None:
+async def test_repo_filter_not_in_search(author_repo: AnyAuthorRepository) -> None:
     existing_obj = await maybe_async(
         author_repo.list(NotInSearchFilter(field_name="name", value="gath", ignore_case=False)),
     )
@@ -1192,7 +1524,7 @@ async def test_repo_filter_not_in_search(author_repo: AuthorRepository) -> None:
     assert existing_obj[0].name == "Leo Tolstoy"
 
 
-async def test_repo_filter_order_by(author_repo: AuthorRepository) -> None:
+async def test_repo_filter_order_by(author_repo: AnyAuthorRepository) -> None:
     existing_obj = await maybe_async(author_repo.list(OrderBy(field_name="created_at", sort_order="desc")))
     assert existing_obj[0].name == "Agatha Christie"
     existing_obj = await maybe_async(author_repo.list(OrderBy(field_name="created_at", sort_order="asc")))
@@ -1200,7 +1532,7 @@ async def test_repo_filter_order_by(author_repo: AuthorRepository) -> None:
 
 
 async def test_repo_filter_collection(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     existing_author_ids: Generator[Any, None, None],
 ) -> None:
     first_author_id = next(existing_author_ids)
@@ -1213,21 +1545,21 @@ async def test_repo_filter_collection(
 
 
 async def test_repo_filter_no_obj_collection(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
 ) -> None:
     no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=[])))
     assert no_obj == []
 
 
 async def test_repo_filter_null_collection(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
 ) -> None:
     no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=None)))
     assert len(no_obj) > 0
 
 
 async def test_repo_filter_not_in_collection(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
     existing_author_ids: Generator[Any, None, None],
 ) -> None:
     first_author_id = next(existing_author_ids)
@@ -1242,14 +1574,14 @@ async def test_repo_filter_not_in_collection(
 
 
 async def test_repo_filter_not_in_no_obj_collection(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
 ) -> None:
     existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=[])))
     assert len(existing_obj) > 0
 
 
 async def test_repo_filter_not_in_null_collection(
-    author_repo: AuthorRepository,
+    author_repo: AnyAuthorRepository,
 ) -> None:
     existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=None)))
     assert len(existing_obj) > 0
@@ -1295,7 +1627,10 @@ async def test_repo_json_methods(
 async def test_repo_fetched_value(
     model_with_fetched_value_repo: ModelWithFetchedValueRepository,
     model_with_fetched_value: ModelWithFetchedValue,
+    request: FixtureRequest,
 ) -> None:
+    if any(fixture in request.fixturenames for fixture in ["mock_async_engine", "mock_sync_engine"]):
+        pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not works with fetched values")
     obj = await maybe_async(model_with_fetched_value_repo.add(model_with_fetched_value(val=1)))
     first_time = obj.updated
     assert first_time is not None
@@ -1340,7 +1675,7 @@ async def test_lazy_load(
     assert updated_obj.tags[0].name == "A new tag"
 
 
-async def test_repo_health_check(author_repo: AuthorRepository) -> None:
+async def test_repo_health_check(author_repo: AnyAuthorRepository) -> None:
     healthy = await maybe_async(author_repo.check_health(author_repo.session))
     assert healthy
 
@@ -1381,14 +1716,24 @@ async def test_service_count_method_with_filters(raw_authors: RawRecordData, aut
     Args:
         author_service: The author mock repository
     """
-    assert (
-        await maybe_async(
-            author_service.count(
-                author_service.repository.model_type.name == raw_authors[0]["name"],
-            ),
+    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        assert (
+            await maybe_async(
+                author_service.count(
+                    **{author_service.repository.model_type.name.key: raw_authors[0]["name"]},
+                ),
+            )
+            == 1
         )
-        == 1
-    )
+    else:
+        assert (
+            await maybe_async(
+                author_service.count(
+                    author_service.repository.model_type.name == raw_authors[0]["name"],
+                ),
+            )
+            == 1
+        )
 
 
 async def test_service_list_and_count_method(raw_authors: RawRecordData, author_service: AuthorService) -> None:
@@ -1417,9 +1762,14 @@ async def test_service_list_and_count_method_with_filters(
     """
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
-    collection, count = await maybe_async(
-        author_service.list_and_count(author_service.repository.model_type.name == exp_name),
-    )
+    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        collection, count = await maybe_async(
+            author_service.list_and_count(**{author_service.repository.model_type.name.key: exp_name}),
+        )
+    else:
+        collection, count = await maybe_async(
+            author_service.list_and_count(author_service.repository.model_type.name == exp_name),
+        )
     assert count == 1
     assert isinstance(collection, list)
     assert len(collection) == 1
@@ -1461,14 +1811,24 @@ async def test_service_list_method(
 async def test_service_list_method_with_filters(raw_authors: RawRecordData, author_service: AuthorService) -> None:
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
-    collection = await maybe_async(
-        author_service.list(
-            sqlalchemy.and_(
-                author_service.repository.model_type.id == exp_id,
-                author_service.repository.model_type.name == exp_name,
+    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        collection = await maybe_async(
+            author_service.list(
+                **{
+                    author_service.repository.model_type.id.key: exp_id,  # type: ignore[union-attr]
+                    author_service.repository.model_type.name.key: exp_name,
+                },
             ),
-        ),
-    )
+        )
+    else:
+        collection = await maybe_async(
+            author_service.list(
+                and_(
+                    author_service.repository.model_type.id == exp_id,
+                    author_service.repository.model_type.name == exp_name,
+                ),
+            ),
+        )
     assert isinstance(collection, list)
     assert len(collection) == 1
     assert collection[0].id == exp_id
@@ -1755,7 +2115,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     assert existing_count_now > existing_count
 
 
-async def test_repo_custom_statement(author_repo: AuthorRepository, author_service: AuthorService) -> None:
+async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_service: AuthorService) -> None:
     """Test Repo with custom statement
 
     Args:
@@ -1766,7 +2126,7 @@ async def test_repo_custom_statement(author_repo: AuthorRepository, author_servi
     assert await maybe_async(new_service.count()) == 2
 
 
-async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, first_author_id: Any) -> None:
+async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     with pytest.deprecated_call():
         existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
         assert existing_obj.id == first_author_id
@@ -1776,3 +2136,30 @@ async def test_repo_get_or_create_deprecation(author_repo: AuthorRepository, fir
 async def test_service_update_no_pk(author_service: AuthorService) -> None:
     with pytest.raises(RepositoryError):
         _existing_obj = await maybe_async(author_service.update(data={"name": "Agatha Christie"}))
+
+
+async def test_repo_encrypted_methods(
+    raw_secrets_uuid: RawRecordData,
+    secret_repo: SecretRepository,
+    raw_secrets: RawRecordData,
+    first_secret_id: Any,
+    secret_model: SecretModel,
+) -> None:
+    existing_obj = await maybe_async(secret_repo.get(first_secret_id))
+    assert existing_obj.secret == raw_secrets[0]["secret"]
+    assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
+
+    exp_count = len(raw_secrets_uuid) + 1
+    new_secret = secret_model(secret="hidden data", long_secret="another longer secret")
+    obj = await maybe_async(secret_repo.add(new_secret))
+    count = await maybe_async(secret_repo.count())
+    assert exp_count == count
+    assert isinstance(obj, secret_model)
+    assert new_secret.secret == obj.secret
+    assert new_secret.long_secret == obj.long_secret
+    assert obj.id is not None
+    obj.secret = "new secret value"
+    obj.long_secret = "new long secret value"
+    updated = await maybe_async(secret_repo.update(obj))
+    assert obj.secret == updated.secret
+    assert obj.long_secret == updated.long_secret

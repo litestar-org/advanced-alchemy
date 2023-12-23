@@ -14,6 +14,7 @@ __all__ = (
     "RowT",
     "SQLAlchemySyncRepositoryT",
     "SQLAlchemyAsyncRepositoryT",
+    "MISSING",
 )
 
 T = TypeVar("T")
@@ -26,3 +27,10 @@ RowT = TypeVar("RowT", bound=Tuple[Any, ...])
 
 SQLAlchemySyncRepositoryT = TypeVar("SQLAlchemySyncRepositoryT", bound="SQLAlchemySyncRepository")
 SQLAlchemyAsyncRepositoryT = TypeVar("SQLAlchemyAsyncRepositoryT", bound="SQLAlchemyAsyncRepository")
+
+
+class _MISSING:
+    pass
+
+
+MISSING = _MISSING()

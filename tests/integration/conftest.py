@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, AsyncGenerator, Generator, cast
+from unittest.mock import NonCallableMagicMock, create_autospec
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import URL, Engine, NullPool, create_engine
+from sqlalchemy import URL, Dialect, Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -183,6 +184,15 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
     )
 
 
+@pytest.fixture()
+async def mock_sync_engine() -> NonCallableMagicMock:
+    """Return a mocked Engine instance."""
+    mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
+    mock.dialect = create_autospec(Dialect, instance=True)
+    mock.dialect.name = "mock"
+    return mock
+
+
 @pytest.fixture(
     name="engine",
     params=[
@@ -191,6 +201,7 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -239,6 +250,14 @@ def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
                 pytest.mark.mssql_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "mock_sync_engine",
+            marks=[
+                pytest.mark.mock_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
@@ -356,6 +375,12 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
     )
 
 
+@pytest.fixture()
+async def mock_async_engine() -> NonCallableMagicMock:
+    """Return a mocked AsyncEngine instance."""
+    return cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
+
+
 @pytest.fixture(
     name="async_engine",
     params=[
@@ -364,6 +389,7 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -404,6 +430,14 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
                 pytest.mark.mssql_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[
+                pytest.mark.mock_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
