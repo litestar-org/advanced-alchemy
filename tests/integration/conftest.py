@@ -78,8 +78,6 @@ def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
             "host": docker_ip,
             "port": 1512,
             "service_name": "xepdb1",
-            "encoding": "UTF-8",
-            "nencoding": "UTF-8",
         },
         poolclass=NullPool,
     )
@@ -105,8 +103,6 @@ def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
             "host": docker_ip,
             "port": 1513,
             "service_name": "FREEPDB1",
-            "encoding": "UTF-8",
-            "nencoding": "UTF-8",
         },
         poolclass=NullPool,
     )
