@@ -169,7 +169,7 @@ class ConcreteBase(Base):
     pass
 
 
-func_result_query = select(func.count(1)).scalar_subquery()
+func_result_query = select(func.count()).scalar_subquery()
 model_with_func_query = select(ConcreteBase, func_result_query.label("func_result")).subquery()
 
 

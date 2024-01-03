@@ -205,7 +205,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
                 session = self.get_session(request)
                 setattr(request.ctx, self.session_key, session)
 
-        @self.app.middleware("response")
+        @self.app.middleware("response")  # type: ignore[arg-type]
         async def on_response(request: Request, response: HTTPResponse) -> None:
             session: Session | AsyncSession | None = getattr(request.ctx, self.session_key, None)
             if session is not None:
