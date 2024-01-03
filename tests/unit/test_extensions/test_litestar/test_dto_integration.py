@@ -8,7 +8,7 @@ import pytest
 from litestar import get, post
 from litestar.di import Provide
 from litestar.dto import DTOField, Mark
-from litestar.dto._backend import _rename_field
+from litestar.dto._backend import _camelize
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.dto.types import RenameStrategy
 from litestar.testing import create_test_client
@@ -59,6 +59,19 @@ class Book(Base):
     number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),
     )
+
+
+def _rename_field(name: str, strategy: RenameStrategy) -> str:
+    if callable(strategy):
+        return strategy(name)
+
+    if strategy == "camel":
+        return _camelize(value=name, capitalize_first_letter=False)
+
+    if strategy == "pascal":
+        return _camelize(value=name, capitalize_first_letter=True)
+
+    return name.lower() if strategy == "lower" else name.upper()
 
 
 @dataclass
@@ -156,7 +169,7 @@ class ConcreteBase(Base):
     pass
 
 
-func_result_query = select(func.count(1)).scalar_subquery()
+func_result_query = select(func.count()).scalar_subquery()
 model_with_func_query = select(ConcreteBase, func_result_query.label("func_result")).subquery()
 
 

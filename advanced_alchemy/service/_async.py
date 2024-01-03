@@ -249,17 +249,33 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
 class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[ModelT]):
     """Service object that operates on a repository object."""
 
-    async def create(self, data: ModelT | dict[str, Any]) -> ModelT:
+    async def create(
+        self,
+        data: ModelT | dict[str, Any],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+    ) -> ModelT:
         """Wrap repository instance creation.
 
         Args:
             data: Representation to be created.
-
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
+            auto_refresh: Refresh object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
+            auto_commit: Commit objects before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
         Returns:
             Representation of created instance.
         """
         data = await self.to_model(data, "create")
-        return await self.repository.add(data)
+        return await self.repository.add(
+            data=data,
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+            auto_refresh=auto_refresh,
+        )
 
     async def create_many(
         self,

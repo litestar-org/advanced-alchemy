@@ -219,7 +219,7 @@ class AlembicCommands:
     def list_templates(self) -> None:
         """List available templates."""
 
-        return migration_command.list_templates(config=self.config)  # type: ignore  # noqa: PGH003
+        return migration_command.list_templates(config=self.config)
 
     def stamp(
         self,
