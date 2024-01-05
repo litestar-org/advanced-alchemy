@@ -377,7 +377,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
         pytest.param(
             "oracle18c_engine",
             marks=[
-                pytest.mark.oracledb,
+                pytest.mark.oracledb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("oracle18"),
             ],
@@ -385,7 +385,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
         pytest.param(
             "oracle23c_engine",
             marks=[
-                pytest.mark.oracledb,
+                pytest.mark.oracledb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("oracle23"),
             ],
@@ -640,6 +640,22 @@ def session(
                 pytest.mark.mssql_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
             ],
         ),
         pytest.param(

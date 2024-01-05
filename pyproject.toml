@@ -55,7 +55,7 @@ requires = ["hatchling"]
 dev = [
   "asyncmy>=0.2.8",
   "asyncpg>=0.28.0",
-  "oracledb>=1.4.0,<2.0.0",
+  "oracledb>=1.4.0",
   "redis>=5.0.0",
   "duckdb-engine>=0.9.2",
   "aiosqlite>=0.19.0",
@@ -128,7 +128,8 @@ markers = [
   "psycopg_sync: SQLAlchemy Postgres (psycopg sync) Tests",
   "aiosqlite: SQLAlchemy SQLite (aiosqlite) Tests",
   "sqlite: SQLAlchemy SQLite (sqlite) Tests",
-  "oracledb: SQLAlchemy Oracle (oracledb) Tests",
+  "oracledb_sync: SQLAlchemy Oracle (oracledb sync) Tests",
+  "oracledb_async: SQLAlchemy Oracle (oracledb async) Tests",
   "spanner: SQLAlchemy Google Cloud Spanner (sqlalchemy-spanner) Tests",
   "duckdb: SQLAlchemy DuckDB (duckdb-engine) Tests",
   "mssql_sync: SQLAlchemy Microsoft SQL Server (pyodbc) Tests",
@@ -290,6 +291,10 @@ module = [
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
 module = "advanced_alchemy.extensions.litestar.cli"
+
+[[tool.mypy.overrides]]
+disallow_untyped_decorators = false
+module = "advanced_alchemy.types.json"
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"

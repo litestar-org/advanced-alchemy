@@ -107,9 +107,13 @@ test-psycopg-sync:
 test-asyncmy:
 	$(ENV_PREFIX)pytest tests -m='integration and asyncmy'
 
-.PHONY: test-oracledb
-test-oracledb:
-	$(ENV_PREFIX)pytest tests -m='integration and oracledb'
+.PHONY: test-oracledb-sync
+test-oracledb-sync:
+	$(ENV_PREFIX)pytest tests -m='integration and oracledb_sync'
+
+.PHONY: test-oracledb-async
+test-oracledb-async:
+	$(ENV_PREFIX)pytest tests -m='integration and oracledb_async'
 
 .PHONY: test-duckdb
 test-duckdb:
