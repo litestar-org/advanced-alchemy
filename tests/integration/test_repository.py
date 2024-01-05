@@ -377,7 +377,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
         pytest.param(
             "oracle18c_engine",
             marks=[
-                pytest.mark.oracledb,
+                pytest.mark.oracledb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("oracle18"),
             ],
@@ -385,7 +385,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
         pytest.param(
             "oracle23c_engine",
             marks=[
-                pytest.mark.oracledb,
+                pytest.mark.oracledb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("oracle23"),
             ],
@@ -643,6 +643,22 @@ def session(
             ],
         ),
         pytest.param(
+            "oracle18c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
+            ],
+        ),
+        pytest.param(
             "mock_async_engine",
             marks=[
                 pytest.mark.mock_async,
@@ -707,9 +723,9 @@ async def seed_db_async(
         async with async_engine.begin() as conn:
             await conn.run_sync(base.orm_registry.metadata.drop_all)
             await conn.run_sync(base.orm_registry.metadata.create_all)
-            await conn.execute(insert(author_model).values(raw_authors))
-            await conn.execute(insert(rule_model).values(raw_rules))
-            await conn.execute(insert(secret_model).values(raw_secrets))
+            await conn.execute(insert(author_model), raw_authors)
+            await conn.execute(insert(rule_model), raw_rules)
+            await conn.execute(insert(secret_model), raw_secrets)
 
 
 @pytest.fixture(params=[lazy_fixture("session"), lazy_fixture("async_session")], ids=["sync", "async"])

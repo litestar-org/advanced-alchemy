@@ -211,7 +211,7 @@ async def mock_sync_engine() -> NonCallableMagicMock:
         pytest.param(
             "oracle18c_engine",
             marks=[
-                pytest.mark.oracledb,
+                pytest.mark.oracledb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("oracle18"),
             ],
@@ -219,7 +219,7 @@ async def mock_sync_engine() -> NonCallableMagicMock:
         pytest.param(
             "oracle23c_engine",
             marks=[
-                pytest.mark.oracledb,
+                pytest.mark.oracledb_sync,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("oracle23"),
             ],
@@ -372,6 +372,56 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
 
 
 @pytest.fixture()
+async def oracle18c_async_engine(docker_ip: str, oracle18c_service: None) -> AsyncEngine:
+    """Oracle 18c instance for end-to-end testing.
+
+    Args:
+        docker_ip: IP address for TCP connection to Docker containers.
+        oracle18c_service: ...
+
+    Returns:
+        Async SQLAlchemy engine instance.
+    """
+    return create_async_engine(
+        "oracle+oracledb://:@",
+        thick_mode=False,
+        connect_args={
+            "user": "app",
+            "password": "super-secret",
+            "host": docker_ip,
+            "port": 1512,
+            "service_name": "xepdb1",
+        },
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
+async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> AsyncEngine:
+    """Oracle 23c instance for end-to-end testing.
+
+    Args:
+        docker_ip: IP address for TCP connection to Docker containers.
+        oracle23c_service: ...
+
+    Returns:
+        Async SQLAlchemy engine instance.
+    """
+    return create_async_engine(
+        "oracle+oracledb://:@",
+        thick_mode=False,
+        connect_args={
+            "user": "app",
+            "password": "super-secret",
+            "host": docker_ip,
+            "port": 1513,
+            "service_name": "FREEPDB1",
+        },
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
 async def mock_async_engine() -> NonCallableMagicMock:
     """Return a mocked AsyncEngine instance."""
     return cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
@@ -426,6 +476,22 @@ async def mock_async_engine() -> NonCallableMagicMock:
                 pytest.mark.mssql_async,
                 pytest.mark.integration,
                 pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
             ],
         ),
         pytest.param(
