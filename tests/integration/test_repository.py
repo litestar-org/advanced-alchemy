@@ -723,9 +723,9 @@ async def seed_db_async(
         async with async_engine.begin() as conn:
             await conn.run_sync(base.orm_registry.metadata.drop_all)
             await conn.run_sync(base.orm_registry.metadata.create_all)
-            await conn.execute(insert(author_model).values(raw_authors))
-            await conn.execute(insert(rule_model).values(raw_rules))
-            await conn.execute(insert(secret_model).values(raw_secrets))
+            await conn.execute(insert(author_model), raw_authors)
+            await conn.execute(insert(rule_model), raw_rules)
+            await conn.execute(insert(secret_model), raw_secrets)
 
 
 @pytest.fixture(params=[lazy_fixture("session"), lazy_fixture("async_session")], ids=["sync", "async"])
