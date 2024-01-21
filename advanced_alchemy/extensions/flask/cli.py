@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, cast
 
 from click import argument, group, option, prompt, echo, confirm
 from advanced_alchemy.config import engine
-from flask.cli import FlaskGroup  
+from flask.cli import FlaskGroup
 from click import secho
 from flask import current_app
 from flask.cli import with_appcontext
 from advanced_alchemy.alembic.commands import AlembicCommands
 
-if TYPE_CHECKING: 
+if TYPE_CHECKING:
     from flask_sqlalchemy.extension import SQLALchemy
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
@@ -70,7 +70,7 @@ def downgrade_database( revision: str, sql: bool, tag: str | None, no_prompt: bo
         else confirm(f"Are you sure you you want to downgrade the database to the `{revision}` revision?")
     )
     if input_confirmed:
-        _db = cast('SQLALchemy', current_app.extensions['sqlalchemy'])
+        _db = cast("SQLALchemy", current_app.extensions["sqlalchemy"])
         alembic_commands = AlembicCommands(engine=)
         alembic_commands.downgrade(revision=revision, sql=sql, tag=tag)
 
@@ -132,7 +132,7 @@ def upgrade_database( revision: str, sql: bool, tag: str | None, no_prompt: bool
 @with_appcontext
 def init_alembic( directory: str | None, multidb: bool, package: bool, no_prompt: bool) -> None:
     """Upgrade the database to the latest revision."""
-    secho("*Initializing database migrations.", align="left") 
+    secho("*Initializing database migrations.", align="left")
     if directory is None:
         directory = plugin._alembic_config.script_location  # noqa: SLF001
     input_confirmed = (
@@ -167,7 +167,7 @@ def init_alembic( directory: str | None, multidb: bool, package: bool, no_prompt
     is_flag=True,
 )
 def create_revision(
-    
+
     message: str | None,
     autogenerate: bool,
     sql: bool,
@@ -243,7 +243,7 @@ def create_revision(
 )
 @with_appcontext
 def merge_revisions(
-    
+
     revisions: str,
     message: str | None,
     branch_label: str | None,
