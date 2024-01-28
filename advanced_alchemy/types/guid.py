@@ -8,13 +8,18 @@ from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
 
-UUID_UTILS_INSTALLED = find_spec("uuid_utils")
-if UUID_UTILS_INSTALLED:
+if UUID_UTILS_INSTALLED := find_spec("uuid_utils"):
+    import uuid as core_uuid
+
     import uuid_utils as uuid
 else:
     import uuid  # type: ignore[no-redef,unused-ignore]
+    import uuid as core_uuid
+
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
+
+UuidT = uuid.UUID | core_uuid.UUID
 
 
 class GUID(TypeDecorator):
@@ -46,7 +51,7 @@ class GUID(TypeDecorator):
             return dialect.type_descriptor(BINARY(16))
         return dialect.type_descriptor(CHAR(32))
 
-    def process_bind_param(self, value: bytes | str | uuid.UUID | None, dialect: Dialect) -> bytes | str | None:
+    def process_bind_param(self, value: bytes | str | UuidT | None, dialect: Dialect) -> bytes | str | None:
         if value is None:
             return value
         if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
@@ -58,10 +63,10 @@ class GUID(TypeDecorator):
             return value.bytes
         return value.bytes if self.binary else value.hex
 
-    def process_result_value(self, value: bytes | str | uuid.UUID | None, dialect: Dialect) -> uuid.UUID | None:
+    def process_result_value(self, value: bytes | str | UuidT | None, dialect: Dialect) -> UuidT | None:
         if value is None:
             return value
-        if isinstance(value, uuid.UUID):
+        if isinstance(value, (uuid.UUID, core_uuid.UUID)):
             return value
         if dialect.name == "spanner+spanner":
             return uuid.UUID(bytes=b64decode(value))
@@ -70,8 +75,8 @@ class GUID(TypeDecorator):
         return uuid.UUID(hex=cast("str", value))
 
     @staticmethod
-    def to_uuid(value: Any) -> uuid.UUID | None:
-        if isinstance(value, uuid.UUID) or value is None:
+    def to_uuid(value: Any) -> UuidT | None:
+        if isinstance(value, (uuid.UUID, core_uuid.UUID)) or value is None:
             return value
         try:
             value = uuid.UUID(hex=value)
