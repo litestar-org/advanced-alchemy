@@ -101,7 +101,7 @@ class UUIDPrimaryKey:
 class UUIDv6PrimaryKey:
     """UUID v6 Primary Key Field Mixin."""
 
-    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid6, primary_key=True)
     """UUID Primary key column."""
 
     # noinspection PyMethodParameters
@@ -113,7 +113,7 @@ class UUIDv6PrimaryKey:
 class UUIDv7PrimaryKey:
     """UUID v7 Primary Key Field Mixin."""
 
-    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid7, primary_key=True)
     """UUID Primary key column."""
 
     # noinspection PyMethodParameters
