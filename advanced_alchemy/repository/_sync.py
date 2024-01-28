@@ -551,7 +551,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and field != new_field_value:
                     setattr(existing, field_name, new_field_value)
-            existing = self._attach_to_session(existing, strategy="merge")
+            existing = self._attach_to_session(existing, strategy="merge", load=True)
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(
                 existing,
@@ -941,7 +941,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         if not existing:
             return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
-            instance = self._attach_to_session(data, strategy="merge")
+            instance = self._attach_to_session(data, strategy="merge", load=True)
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(
                 instance,
@@ -1154,7 +1154,12 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             return text("SELECT 1 FROM DUAL")
         return text("SELECT 1")
 
-    def _attach_to_session(self, model: ModelT, strategy: Literal["add", "merge"] = "add") -> ModelT:
+    def _attach_to_session(
+        self,
+        model: ModelT,
+        strategy: Literal["add", "merge"] = "add",
+        load: bool = False,
+    ) -> ModelT:
         """Attach detached instance to the session.
 
         Args:
@@ -1162,6 +1167,13 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             strategy: How the instance should be attached.
                 - "add": New instance added to session
                 - "merge": Instance merged with existing, or new one added.
+            load: Boolean, when False, merge switches into
+                a "high performance" mode which causes it to forego emitting history
+                events as well as all database access.  This flag is used for
+                cases such as transferring graphs of objects into a session
+                from a second level cache, or to transfer just-loaded objects
+                into the session owned by a worker thread or process
+                without re-querying the database.
 
         Returns:
             Instance attached to the session - if `"merge"` strategy, may not be same instance
@@ -1171,7 +1183,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             self.session.add(model)
             return model
         if strategy == "merge":
-            return self.session.merge(model)
+            return self.session.merge(model, load=load)
         msg = "Unexpected value for `strategy`, must be `'add'` or `'merge'`"  # type: ignore[unreachable]
         raise ValueError(msg)
 

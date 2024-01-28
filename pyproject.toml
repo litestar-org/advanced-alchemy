@@ -145,10 +145,12 @@ markers = [
 
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:pkg_resources",
   "ignore::DeprecationWarning:google.rpc",
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
+  "ignore::DeprecationWarning:websockets.connection",
 ]
 
 [tool.coverage.run]

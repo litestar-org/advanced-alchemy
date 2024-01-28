@@ -1934,7 +1934,7 @@ async def test_service_update_method_instrumented_attribute(
     obj = await maybe_async(author_service.get(first_author_id))
     id_attribute = get_instrumented_attr(author_service.repository.model_type, "id")
     obj.name = "Updated Name2"
-    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute, item_id=first_author_id))
+    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute))
     assert str(updated_obj.id) == str(first_author_id)
     assert updated_obj.name == obj.name
 
