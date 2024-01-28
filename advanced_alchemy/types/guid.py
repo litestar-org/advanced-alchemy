@@ -19,8 +19,6 @@ else:
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 
-UuidT = uuid.UUID | core_uuid.UUID
-
 
 class GUID(TypeDecorator):
     """Platform-independent GUID type.
@@ -51,7 +49,11 @@ class GUID(TypeDecorator):
             return dialect.type_descriptor(BINARY(16))
         return dialect.type_descriptor(CHAR(32))
 
-    def process_bind_param(self, value: bytes | str | UuidT | None, dialect: Dialect) -> bytes | str | None:
+    def process_bind_param(
+        self,
+        value: bytes | str | uuid.UUID | core_uuid.UUID | None,
+        dialect: Dialect,
+    ) -> bytes | str | None:
         if value is None:
             return value
         if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
@@ -63,7 +65,11 @@ class GUID(TypeDecorator):
             return value.bytes
         return value.bytes if self.binary else value.hex
 
-    def process_result_value(self, value: bytes | str | UuidT | None, dialect: Dialect) -> UuidT | None:
+    def process_result_value(
+        self,
+        value: bytes | str | uuid.UUID | core_uuid.UUID | None,
+        dialect: Dialect,
+    ) -> uuid.UUID | core_uuid.UUID | None:
         if value is None:
             return value
         if isinstance(value, (uuid.UUID, core_uuid.UUID)):
@@ -75,7 +81,7 @@ class GUID(TypeDecorator):
         return uuid.UUID(hex=cast("str", value))
 
     @staticmethod
-    def to_uuid(value: Any) -> UuidT | None:
+    def to_uuid(value: Any) -> uuid.UUID | core_uuid.UUID | None:
         if isinstance(value, (uuid.UUID, core_uuid.UUID)) or value is None:
             return value
         try:
