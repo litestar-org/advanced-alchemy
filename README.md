@@ -192,10 +192,11 @@ Advanced Alchemy is the official SQLAlchemy integration for Litestar.
 In addition to installed with `pip install advanced-alchemy`, it can also be installed installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
 
 ```python
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
-from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
-
 from litestar import Litestar
+from litestar.plugins.sqlalchemy import SQLAlchemyPlugin, SQLAlchemyAsyncConfig
+# alternately...
+# from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
+# from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
 
 alchemy = SQLAlchemyPlugin(
   config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
