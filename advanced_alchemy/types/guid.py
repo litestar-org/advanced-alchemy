@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-import uuid
 from base64 import b64decode
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
 
+UUID_UTILS_INSTALLED = find_spec("uuid_utils")
+if UUID_UTILS_INSTALLED:
+    import uuid_utils as uuid
+else:
+    import uuid  # type: ignore[no-redef,unused-ignore]
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 

@@ -1,4 +1,5 @@
 """Unit tests for the SQLAlchemy Repository implementation."""
+
 from __future__ import annotations
 
 from datetime import datetime

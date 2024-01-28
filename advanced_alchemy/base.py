@@ -5,8 +5,8 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
-from uuid import UUID, uuid4
 
 from sqlalchemy import Date, MetaData, Sequence, String
 from sqlalchemy.orm import (
@@ -20,6 +20,12 @@ from sqlalchemy.orm import (
 )
 
 from advanced_alchemy.types import GUID, BigIntIdentity, DateTimeUTC, JsonB
+
+UUID_UTILS_INSTALLED = find_spec("uuid_utils")
+if UUID_UTILS_INSTALLED:
+    import uuid_utils as uuid
+else:
+    import uuid  # type: ignore[no-redef,unused-ignore]
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -37,13 +43,21 @@ __all__ = (
     "ModelProtocol",
     "UUIDAuditBase",
     "UUIDBase",
+    "UUIDv6AuditBase",
+    "UUIDv6Base",
+    "UUIDv7AuditBase",
+    "UUIDv7Base",
     "UUIDPrimaryKey",
+    "UUIDv7PrimaryKey",
+    "UUIDv6PrimaryKey",
     "orm_registry",
 )
 
 
 UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
 BigIntBaseT = TypeVar("BigIntBaseT", bound="BigIntBase")
+UUIDv6BaseT = TypeVar("UUIDv6BaseT", bound="UUIDv6Base")
+UUIDv7BaseT = TypeVar("UUIDv7BaseT", bound="UUIDv7Base")
 
 convention: NamingSchemaParameter = {
     "ix": "ix_%(column_0_label)s",
@@ -75,7 +89,31 @@ class ModelProtocol(Protocol):
 class UUIDPrimaryKey:
     """UUID Primary Key Field Mixin."""
 
-    id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, primary_key=True)
+    """UUID Primary key column."""
+
+    # noinspection PyMethodParameters
+    @declared_attr
+    def _sentinel(cls) -> Mapped[int]:
+        return orm_insert_sentinel(name="sa_orm_sentinel")
+
+
+class UUIDv6PrimaryKey:
+    """UUID v6 Primary Key Field Mixin."""
+
+    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, primary_key=True)
+    """UUID Primary key column."""
+
+    # noinspection PyMethodParameters
+    @declared_attr
+    def _sentinel(cls) -> Mapped[int]:
+        return orm_insert_sentinel(name="sa_orm_sentinel")
+
+
+class UUIDv7PrimaryKey:
+    """UUID v7 Primary Key Field Mixin."""
+
+    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, primary_key=True)
     """UUID Primary key column."""
 
     # noinspection PyMethodParameters
@@ -137,11 +175,16 @@ class CommonTableAttributes:
         return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
 
 
-def create_registry() -> registry:
+def create_registry(
+    custom_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+) -> registry:
     """Create a new SQLAlchemy registry."""
+    from uuid import UUID  # register the default UUID as well
+
     meta = MetaData(naming_convention=convention)
     type_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
+        uuid.UUID: GUID,
         datetime: DateTimeUTC,
         date: Date,
         dict: JsonB,
@@ -150,6 +193,8 @@ def create_registry() -> registry:
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr
 
         type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String})
+    if custom_annotation_map is not None:
+        type_annotation_map.update(custom_annotation_map)
     return registry(metadata=meta, type_annotation_map=type_annotation_map)
 
 
@@ -163,6 +208,30 @@ class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
 
 
 class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase):
+    """Base for declarative models with UUID primary keys and audit columns."""
+
+    registry = orm_registry
+
+
+class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
+    """Base for all SQLAlchemy declarative models with UUID primary keys."""
+
+    registry = orm_registry
+
+
+class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, DeclarativeBase):
+    """Base for declarative models with UUID primary keys and audit columns."""
+
+    registry = orm_registry
+
+
+class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
+    """Base for all SQLAlchemy declarative models with UUID primary keys."""
+
+    registry = orm_registry
+
+
+class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with UUID primary keys and audit columns."""
 
     registry = orm_registry
