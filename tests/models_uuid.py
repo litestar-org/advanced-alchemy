@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from importlib.util import find_spec
 from typing import List
-from uuid import UUID
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,6 +19,12 @@ from advanced_alchemy import (
 )
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
+
+UUID_UTILS_INSTALLED = find_spec("uuid_utils")
+if UUID_UTILS_INSTALLED:
+    from uuid_utils import UUID
+else:
+    from uuid import UUID  # type: ignore[assignment]
 
 
 class UUIDAuthor(UUIDAuditBase):
