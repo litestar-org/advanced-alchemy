@@ -65,10 +65,12 @@ class InMemoryStore(Generic[T]):
         return obj
 
     @overload
-    def get(self, key: Any, default: type[_NotSet] = _NotSet) -> T: ...
+    def get(self, key: Any, default: type[_NotSet] = _NotSet) -> T:
+        ...
 
     @overload
-    def get(self, key: Any, default: AnyObject) -> T | AnyObject: ...
+    def get(self, key: Any, default: AnyObject) -> T | AnyObject:
+        ...
 
     def get(self, key: Any, default: AnyObject | type[_NotSet] = _NotSet) -> T | AnyObject:
         """Get the object identified by `key`, or return `default` if set or raise a `KeyError` otherwise
