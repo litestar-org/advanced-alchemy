@@ -72,12 +72,10 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             database.remove_all()
 
     @overload
-    def __collection__(self) -> InMemoryStore[ModelT]:
-        ...
+    def __collection__(self) -> InMemoryStore[ModelT]: ...
 
     @overload
-    def __collection__(self, identity: type[AnyObject]) -> InMemoryStore[AnyObject]:
-        ...
+    def __collection__(self, identity: type[AnyObject]) -> InMemoryStore[AnyObject]: ...
 
     def __collection__(
         self,

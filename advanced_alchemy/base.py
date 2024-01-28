@@ -23,9 +23,12 @@ from advanced_alchemy.types import GUID, BigIntIdentity, DateTimeUTC, JsonB
 
 UUID_UTILS_INSTALLED = find_spec("uuid_utils")
 if UUID_UTILS_INSTALLED:
-    import uuid_utils as uuid
+    from uuid_utils import UUID, uuid4, uuid6, uuid7
 else:
-    import uuid  # type: ignore[no-redef,unused-ignore]
+    from uuid import UUID, uuid4  # type: ignore[assignment]
+
+    uuid6 = uuid4  # type: ignore[assignment]
+    uuid7 = uuid4  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -89,7 +92,7 @@ class ModelProtocol(Protocol):
 class UUIDPrimaryKey:
     """UUID Primary Key Field Mixin."""
 
-    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, primary_key=True)
+    id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True)
     """UUID Primary key column."""
 
     # noinspection PyMethodParameters
@@ -101,7 +104,7 @@ class UUIDPrimaryKey:
 class UUIDv6PrimaryKey:
     """UUID v6 Primary Key Field Mixin."""
 
-    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid6, primary_key=True)
+    id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True)
     """UUID Primary key column."""
 
     # noinspection PyMethodParameters
@@ -113,7 +116,7 @@ class UUIDv6PrimaryKey:
 class UUIDv7PrimaryKey:
     """UUID v7 Primary Key Field Mixin."""
 
-    id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid7, primary_key=True)
+    id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True)
     """UUID Primary key column."""
 
     # noinspection PyMethodParameters
@@ -179,12 +182,12 @@ def create_registry(
     custom_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
     """Create a new SQLAlchemy registry."""
-    from uuid import UUID  # register the default UUID as well
+    import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
     type_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
-        uuid.UUID: GUID,
+        core_uuid.UUID: GUID,
         datetime: DateTimeUTC,
         date: Date,
         dict: JsonB,

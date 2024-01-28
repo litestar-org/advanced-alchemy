@@ -11,7 +11,6 @@ try:
     def encode_json(data: Any) -> str:
         return encoder.encode(data).decode("utf-8")
 
-
 except ImportError:
     try:
         from orjson import dumps as _encode_json
