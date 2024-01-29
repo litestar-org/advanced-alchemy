@@ -558,7 +558,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and field != new_field_value:
                     setattr(existing, field_name, new_field_value)
-            existing = await self._attach_to_session(existing, strategy="merge", load=True)
+            existing = await self._attach_to_session(existing, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 existing,
