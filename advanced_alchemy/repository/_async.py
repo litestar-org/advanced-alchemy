@@ -1157,7 +1157,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self,
         model: ModelT,
         strategy: Literal["add", "merge"] = "add",
-        load: bool = False,
+        load: bool = True,
     ) -> ModelT:
         """Attach detached instance to the session.
 

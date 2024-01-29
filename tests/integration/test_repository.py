@@ -6,9 +6,9 @@ import asyncio
 import contextlib
 import os
 from datetime import datetime, timedelta, timezone
-from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
+from uuid import UUID
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
@@ -39,12 +39,6 @@ from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 
 from .helpers import update_raw_records
-
-UUID_UTILS_INSTALLED = find_spec("uuid_utils")
-if UUID_UTILS_INSTALLED:
-    from uuid_utils import UUID
-else:
-    from uuid import UUID  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest

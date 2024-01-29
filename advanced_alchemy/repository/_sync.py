@@ -855,7 +855,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[ModelT], int]:  # sourcery skip: extract-method
         """List records with total count.
 
         Args:
@@ -1158,7 +1158,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         self,
         model: ModelT,
         strategy: Literal["add", "merge"] = "add",
-        load: bool = False,
+        load: bool = True,
     ) -> ModelT:
         """Attach detached instance to the session.
 
