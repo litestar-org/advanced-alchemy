@@ -6,6 +6,7 @@ from unittest.mock import create_autospec
 
 from sqlalchemy import ColumnElement, Dialect, Select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from advanced_alchemy.exceptions import ConflictError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
@@ -93,7 +94,11 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         return item_or_none
 
     @classmethod
-    def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
+    def get_id_attribute_value(
+        cls,
+        item: ModelT | type[ModelT],
+        id_attribute: str | InstrumentedAttribute | None = None,
+    ) -> Any:
         """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
 
         Args:
@@ -104,6 +109,8 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         Returns:
             The value of attribute on ``item`` named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`.
         """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
         return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
 
     @classmethod
@@ -111,7 +118,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         cls,
         item_id: Any,
         item: ModelT,
-        id_attribute: str | None = None,
+        id_attribute: str | InstrumentedAttribute | None = None,
     ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
@@ -124,6 +131,8 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         Returns:
             Item with ``item_id`` set to :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`
         """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
 

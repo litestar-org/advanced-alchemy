@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "AuditColumns",
+    "SentinelColumn",
     "BigIntAuditBase",
     "BigIntBase",
     "BigIntPrimaryKey",
@@ -89,16 +90,17 @@ class ModelProtocol(Protocol):
         ...
 
 
+class SentinelColumn:
+    @declared_attr
+    def _sentinel(cls) -> Mapped[int]:
+        return orm_insert_sentinel(name="sa_orm_sentinel")
+
+
 class UUIDPrimaryKey:
     """UUID Primary Key Field Mixin."""
 
     id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True)
     """UUID Primary key column."""
-
-    # noinspection PyMethodParameters
-    @declared_attr
-    def _sentinel(cls) -> Mapped[int]:
-        return orm_insert_sentinel(name="sa_orm_sentinel")
 
 
 class UUIDv6PrimaryKey:
@@ -107,22 +109,12 @@ class UUIDv6PrimaryKey:
     id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True)
     """UUID Primary key column."""
 
-    # noinspection PyMethodParameters
-    @declared_attr
-    def _sentinel(cls) -> Mapped[int]:
-        return orm_insert_sentinel(name="sa_orm_sentinel")
-
 
 class UUIDv7PrimaryKey:
     """UUID v7 Primary Key Field Mixin."""
 
     id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True)
     """UUID Primary key column."""
-
-    # noinspection PyMethodParameters
-    @declared_attr
-    def _sentinel(cls) -> Mapped[int]:
-        return orm_insert_sentinel(name="sa_orm_sentinel")
 
 
 class BigIntPrimaryKey:
@@ -204,37 +196,37 @@ def create_registry(
 orm_registry = create_registry()
 
 
-class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase, SentinelColumn):
     """Base for all SQLAlchemy declarative models with UUID primary keys."""
 
     registry = orm_registry
 
 
-class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase):
+class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase, SentinelColumn):
     """Base for declarative models with UUID primary keys and audit columns."""
 
     registry = orm_registry
 
 
-class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase, SentinelColumn):
     """Base for all SQLAlchemy declarative models with UUID primary keys."""
 
     registry = orm_registry
 
 
-class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, DeclarativeBase):
+class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, DeclarativeBase, SentinelColumn):
     """Base for declarative models with UUID primary keys and audit columns."""
 
     registry = orm_registry
 
 
-class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase, SentinelColumn):
     """Base for all SQLAlchemy declarative models with UUID primary keys."""
 
     registry = orm_registry
 
 
-class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase):
+class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase, SentinelColumn):
     """Base for declarative models with UUID primary keys and audit columns."""
 
     registry = orm_registry

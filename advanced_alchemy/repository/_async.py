@@ -97,7 +97,11 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
     @classmethod
-    def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
+    def get_id_attribute_value(
+        cls,
+        item: ModelT | type[ModelT],
+        id_attribute: str | InstrumentedAttribute | None = None,
+    ) -> Any:
         """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
 
         Args:
@@ -108,6 +112,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Returns:
             The value of attribute on ``item`` named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`.
         """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
         return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
 
     @classmethod
@@ -115,7 +121,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         cls,
         item_id: Any,
         item: ModelT,
-        id_attribute: str | None = None,
+        id_attribute: str | InstrumentedAttribute | None = None,
     ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
@@ -128,6 +134,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Returns:
             Item with ``item_id`` set to :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`
         """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
 
@@ -688,7 +696,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         with wrap_sqlalchemy_exception():
             item_id = self.get_id_attribute_value(
                 data,
-                id_attribute=id_attribute.key if isinstance(id_attribute, InstrumentedAttribute) else id_attribute,
+                id_attribute=id_attribute,
             )
             # this will raise for not found, and will put the item in the session
             await self.get(item_id, id_attribute=id_attribute)
