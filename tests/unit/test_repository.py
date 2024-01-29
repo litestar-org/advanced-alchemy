@@ -730,7 +730,7 @@ async def test_sqlalchemy_repo_update(
     instance = await maybe_async(mock_repo.update(mock_instance))
 
     assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance)
+    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)
     mock_repo.session.flush.assert_called_once()
     mock_repo.session.expunge.assert_not_called()
     mock_repo.session.commit.assert_not_called()
@@ -745,7 +745,7 @@ async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository) -> N
     instance = await maybe_async(mock_repo.upsert(mock_instance))
 
     assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance)
+    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)
     mock_repo.session.flush.assert_called_once()
     mock_repo.session.expunge.assert_not_called()
     mock_repo.session.commit.assert_not_called()
