@@ -855,7 +855,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:  # sourcery skip: extract-method
+    ) -> tuple[list[ModelT], int]:
         """List records with total count.
 
         Args:
