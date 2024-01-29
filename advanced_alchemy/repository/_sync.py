@@ -945,11 +945,11 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
             match_filter = data.to_dict()
-        existing = self.get_one_or_none(**match_filter)
+        existing = self.exists(**match_filter)
         if not existing:
             return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
-            instance = self._attach_to_session(data, strategy="merge", load=True)
+            instance = self._attach_to_session(data, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(
                 instance,

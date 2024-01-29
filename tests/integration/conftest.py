@@ -26,9 +26,35 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:
 
     from advanced_alchemy import base
 
-    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase, base.SentinelColumn): ...
 
-    class NewUUIDAuditBase(base.UUIDPrimaryKey, base.CommonTableAttributes, base.AuditColumns, DeclarativeBase): ...
+    class NewUUIDAuditBase(
+        base.UUIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+        base.SentinelColumn,
+    ): ...
+
+    class NewUUIDv6Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase, base.SentinelColumn): ...
+
+    class NewUUIDv6AuditBase(
+        base.UUIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+        base.SentinelColumn,
+    ): ...
+
+    class NewUUIDv7Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase, base.SentinelColumn): ...
+
+    class NewUUIDv7AuditBase(
+        base.UUIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+        base.SentinelColumn,
+    ): ...
 
     class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
@@ -36,6 +62,10 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
     monkeypatch.setattr(base, "UUIDAuditBase", NewUUIDAuditBase)
+    monkeypatch.setattr(base, "UUIDv6Base", NewUUIDv6Base)
+    monkeypatch.setattr(base, "UUIDv6AuditBase", NewUUIDv6AuditBase)
+    monkeypatch.setattr(base, "UUIDv7Base", NewUUIDv7Base)
+    monkeypatch.setattr(base, "UUIDv7AuditBase", NewUUIDv7AuditBase)
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
     monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 
@@ -164,6 +194,7 @@ def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPat
 
     return create_engine(
         "spanner+spanner:///projects/emulator-test-project/instances/test-instance/databases/test-database",
+        poolclass=NullPool,
     )
 
 
