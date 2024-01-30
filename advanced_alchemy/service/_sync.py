@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
-from sqlalchemy.orm import InstrumentedAttribute, Session
-
 from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
@@ -20,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from sqlalchemy import Select, StatementLambdaElement
+    from sqlalchemy.orm import InstrumentedAttribute, Session
     from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.sql import ColumnElement
 
@@ -336,9 +335,14 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             Updated representation.
         """
         data = self.to_model(data, "update")
-        if isinstance(id_attribute, InstrumentedAttribute):
-            id_attribute = cast("str", id_attribute.description)
-        if item_id is None and self.repository.get_id_attribute_value(item=data, id_attribute=id_attribute) is None:
+        if (
+            item_id is None
+            and self.repository.get_id_attribute_value(
+                item=data,
+                id_attribute=id_attribute,
+            )
+            is None
+        ):
             msg = (
                 "Could not identify ID attribute value.  One of the following is required: "
                 f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"

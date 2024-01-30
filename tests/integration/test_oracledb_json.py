@@ -1,4 +1,5 @@
 """Unit tests for the SQLAlchemy Repository implementation for psycopg."""
+
 from __future__ import annotations
 
 import platform

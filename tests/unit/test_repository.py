@@ -1,4 +1,5 @@
 """Unit tests for the SQLAlchemy Repository implementation."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -729,22 +730,24 @@ async def test_sqlalchemy_repo_update(
     instance = await maybe_async(mock_repo.update(mock_instance))
 
     assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance)
+    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)
     mock_repo.session.flush.assert_called_once()
     mock_repo.session.expunge.assert_not_called()
     mock_repo.session.commit.assert_not_called()
     mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
 
 
-async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository) -> None:
+async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
     """Test the sequence of repo calls for upsert operation."""
     mock_instance = MagicMock()
     mock_repo.session.merge.return_value = mock_instance
 
     instance = await maybe_async(mock_repo.upsert(mock_instance))
+    mocker.patch.object(mock_repo, "exists", return_value=True)
+    mocker.patch.object(mock_repo, "count", return_value=1)
 
     assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance)
+    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)
     mock_repo.session.flush.assert_called_once()
     mock_repo.session.expunge.assert_not_called()
     mock_repo.session.commit.assert_not_called()

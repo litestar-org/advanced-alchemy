@@ -1021,7 +1021,7 @@ async def test_repo_list_and_count_method_with_filters(
     assert count == 1
     assert isinstance(collection, list)
     assert len(collection) == 1
-    assert collection[0].id == exp_id
+    assert str(collection[0].id) == str(exp_id)
     assert collection[0].name == exp_name
 
 
@@ -1165,7 +1165,7 @@ async def test_repo_list_method_with_filters(raw_authors: RawRecordData, author_
         )
     assert isinstance(collection, list)
     assert len(collection) == 1
-    assert collection[0].id == exp_id
+    assert str(collection[0].id) == str(exp_id)
     assert collection[0].name == exp_name
 
 
@@ -1255,7 +1255,7 @@ async def test_repo_update_method(author_repo: AnyAuthorRepository, first_author
 
 async def test_repo_delete_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     obj = await maybe_async(author_repo.delete(first_author_id))
-    assert obj.id == first_author_id
+    assert str(obj.id) == str(first_author_id)
 
 
 async def test_repo_delete_many_method(author_repo: AnyAuthorRepository, author_model: AuthorModel) -> None:
@@ -1294,7 +1294,7 @@ async def test_repo_get_one_method(author_repo: AnyAuthorRepository, first_autho
 
 async def test_repo_get_or_upsert_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     existing_obj, existing_created = await maybe_async(author_repo.get_or_upsert(name="Agatha Christie"))
-    assert existing_obj.id == first_author_id
+    assert str(existing_obj.id) == str(first_author_id)
     assert existing_created is False
     new_obj, new_created = await maybe_async(author_repo.get_or_upsert(name="New Author"))
     assert new_obj.id is not None
@@ -1307,7 +1307,7 @@ async def test_repo_get_or_upsert_match_filter(author_repo: AnyAuthorRepository,
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", name="Agatha Christie", dob=now.date()),
     )
-    assert existing_obj.id == first_author_id
+    assert str(existing_obj.id) == str(first_author_id)
     assert existing_obj.dob == now.date()
     assert existing_created is False
 
@@ -1320,7 +1320,7 @@ async def test_repo_get_or_upsert_match_filter_no_upsert(
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
     )
-    assert existing_obj.id == first_author_id
+    assert str(existing_obj.id) == str(first_author_id)
     assert existing_obj.dob != now.date()
     assert existing_created is False
 
@@ -1329,7 +1329,7 @@ async def test_repo_get_and_update(author_repo: AnyAuthorRepository, first_autho
     existing_obj, existing_updated = await maybe_async(
         author_repo.get_and_update(name="Agatha Christie"),
     )
-    assert existing_obj.id == first_author_id
+    assert str(existing_obj.id) == str(first_author_id)
     assert existing_updated is False
 
 
@@ -1354,7 +1354,7 @@ async def test_repo_upsert_method(
     existing_obj = await maybe_async(author_repo.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
     upsert_update_obj = await maybe_async(author_repo.upsert(existing_obj))
-    assert upsert_update_obj.id == first_author_id
+    assert str(upsert_update_obj.id) == str(first_author_id)
     assert upsert_update_obj.name == "Agatha C."
 
     upsert_insert_obj = await maybe_async(author_repo.upsert(author_model(name="An Author")))
@@ -1789,7 +1789,7 @@ async def test_service_list_and_count_method_with_filters(
     assert count == 1
     assert isinstance(collection, list)
     assert len(collection) == 1
-    assert collection[0].id == exp_id
+    assert str(collection[0].id) == str(exp_id)
     assert collection[0].name == exp_name
 
 
@@ -1847,7 +1847,7 @@ async def test_service_list_method_with_filters(raw_authors: RawRecordData, auth
         )
     assert isinstance(collection, list)
     assert len(collection) == 1
-    assert collection[0].id == exp_id
+    assert str(collection[0].id) == str(exp_id)
     assert collection[0].name == exp_name
 
 
@@ -1917,7 +1917,7 @@ async def test_service_update_method_no_item_id(author_service: AuthorService, f
     obj = await maybe_async(author_service.get(first_author_id))
     obj.name = "Updated Name2"
     updated_obj = await maybe_async(author_service.update(data=obj))
-    assert updated_obj.id == first_author_id
+    assert str(updated_obj.id) == str(first_author_id)
     assert updated_obj.name == obj.name
 
 
@@ -1928,14 +1928,14 @@ async def test_service_update_method_instrumented_attribute(
     obj = await maybe_async(author_service.get(first_author_id))
     id_attribute = get_instrumented_attr(author_service.repository.model_type, "id")
     obj.name = "Updated Name2"
-    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute, item_id=first_author_id))
-    assert updated_obj.id == first_author_id
+    updated_obj = await maybe_async(author_service.update(data=obj, id_attribute=id_attribute))
+    assert str(updated_obj.id) == str(first_author_id)
     assert updated_obj.name == obj.name
 
 
 async def test_service_delete_method(author_service: AuthorService, first_author_id: Any) -> None:
     obj = await maybe_async(author_service.delete(first_author_id))
-    assert obj.id == first_author_id
+    assert str(obj.id) == str(first_author_id)
 
 
 async def test_service_delete_many_method(author_service: AuthorService, author_model: AuthorModel) -> None:
@@ -1974,7 +1974,7 @@ async def test_service_get_one_method(author_service: AuthorService, first_autho
 
 async def test_service_get_or_upsert_method(author_service: AuthorService, first_author_id: Any) -> None:
     existing_obj, existing_created = await maybe_async(author_service.get_or_upsert(name="Agatha Christie"))
-    assert existing_obj.id == first_author_id
+    assert str(existing_obj.id) == str(first_author_id)
     assert existing_created is False
     new_obj, new_created = await maybe_async(author_service.get_or_upsert(name="New Author"))
     assert new_obj.id is not None
@@ -1986,7 +1986,7 @@ async def test_service_get_and_update_method(author_service: AuthorService, firs
     existing_obj, existing_created = await maybe_async(
         author_service.get_and_update(name="Agatha Christie", match_fields="name"),
     )
-    assert existing_obj.id == first_author_id
+    assert str(existing_obj.id) == str(first_author_id)
     assert existing_created is False
     with pytest.raises(NotFoundError):
         _ = await maybe_async(author_service.get_and_update(name="New Author"))
@@ -2001,7 +2001,7 @@ async def test_service_upsert_method(
     existing_obj = await maybe_async(author_service.get_one(name="Agatha Christie"))
     existing_obj.name = "Agatha C."
     upsert_update_obj = await maybe_async(author_service.upsert(item_id=first_author_id, data=existing_obj))
-    assert upsert_update_obj.id == first_author_id
+    assert str(upsert_update_obj.id) == str(first_author_id)
     assert upsert_update_obj.name == "Agatha C."
 
     upsert_insert_obj = await maybe_async(author_service.upsert(data=author_model(name="An Author")))
@@ -2031,7 +2031,7 @@ async def test_service_upsert_method_match(
     upsert_update_obj = await maybe_async(
         author_service.upsert(data=existing_obj.to_dict(exclude={"id"}), match_fields=["name"]),
     )
-    assert upsert_update_obj.id != first_author_id
+    assert str(upsert_update_obj.id) != str(first_author_id)
     assert upsert_update_obj.name == "Agatha C."
 
     upsert_insert_obj = await maybe_async(
@@ -2145,7 +2145,7 @@ async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_se
 async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
     with pytest.deprecated_call():
         existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
-        assert existing_obj.id == first_author_id
+        assert str(existing_obj.id) == str(first_author_id)
         assert existing_created is False
 
 

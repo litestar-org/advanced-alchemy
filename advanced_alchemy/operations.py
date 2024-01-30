@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ClauseElement, ColumnElement, Executable, FromClause, Select, UpdateBase
+from sqlalchemy import ClauseElement, ColumnElement, UpdateBase
 from sqlalchemy.ext.compiler import compiles
 
 if TYPE_CHECKING:
@@ -87,19 +87,3 @@ def visit_merge(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
         sql_text += f" {clauses}"
 
     return sql_text
-
-
-class InsertFromSelect(Executable, ClauseElement):
-    inherit_cache = False
-
-    def __init__(self, table: FromClause, select: Select) -> None:
-        self.table = table
-        self.select = select
-
-
-@compiles(InsertFromSelect)  # type: ignore[no-untyped-call, misc]
-def visit_insert_from_select(element: InsertFromSelect, compiler: StrSQLCompiler, **kw: Any) -> str:
-    return "INSERT INTO {} ({})".format(
-        compiler.process(element.table, asfrom=True, **kw),
-        compiler.process(element.select, **kw),
-    )

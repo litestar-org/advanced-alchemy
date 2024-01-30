@@ -1,4 +1,5 @@
 """Metadata for the Project."""
+
 from __future__ import annotations
 
 import importlib.metadata
