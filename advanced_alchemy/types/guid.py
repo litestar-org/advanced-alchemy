@@ -4,6 +4,7 @@ from base64 import b64decode
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
 
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
@@ -45,6 +46,8 @@ class GUID(TypeDecorator):
             return dialect.type_descriptor(PG_UUID())
         if dialect.name == "oracle":
             return dialect.type_descriptor(ORA_RAW(16))
+        if dialect.name == "mssql":
+            return dialect.type_descriptor(MSSQL_UNIQUEIDENTIFIER())
         if self.binary:
             return dialect.type_descriptor(BINARY(16))
         return dialect.type_descriptor(CHAR(32))
@@ -56,7 +59,7 @@ class GUID(TypeDecorator):
     ) -> bytes | str | None:
         if value is None:
             return value
-        if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
+        if dialect.name in {"postgresql", "duckdb", "cockroachdb", "mssql"}:
             return str(value)
         value = self.to_uuid(value)
         if value is None:
