@@ -176,7 +176,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             The added instance.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             instance = self._attach_to_session(data)
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(instance, auto_refresh=auto_refresh)
@@ -201,7 +201,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             The added instances.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             self.session.add_all(data)
             self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -232,7 +232,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             instance = self.get(item_id, id_attribute=id_attribute)
             self.session.delete(instance)
             self._flush_or_commit(auto_commit=auto_commit)
@@ -265,7 +265,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
 
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             id_attribute = get_instrumented_attr(
                 self.model_type,
                 id_attribute if id_attribute is not None else self.id_attribute,
@@ -387,7 +387,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
@@ -417,7 +417,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = (self._execute(statement)).scalar_one_or_none()
@@ -443,7 +443,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast("Result[tuple[ModelT]]", (self._execute(statement))).scalar_one_or_none()
@@ -650,7 +650,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._get_base_stmt(statement)
             fragment = self.get_id_attribute_value(self.model_type)
             statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
@@ -695,7 +695,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -741,7 +741,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(self.model_type, supports_returning)
             if supports_returning:
@@ -847,7 +847,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         statement += lambda s: s.add_columns(over(sql_func.count(field)))
         statement = self._apply_filters(*filters, statement=statement)
         statement = self._filter_select_by_kwargs(statement, kwargs)
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             result = self._execute(statement)
             count: int = 0
             instances: list[ModelT] = []
@@ -882,7 +882,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         statement = self._apply_filters(*filters, statement=statement)
         statement = self._filter_select_by_kwargs(statement, kwargs)
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             count_result = self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
             result = self._execute(statement)
@@ -949,7 +949,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         existing = self.get_one_or_none(**match_filter)
         if not existing:
             return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             instance = self._attach_to_session(data, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(
@@ -1029,7 +1029,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
                 else:
                     match_filter.append(field.in_(matched_values))
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             existing_objs = self.list(
                 *match_filter,
                 auto_expunge=False,
@@ -1117,7 +1117,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         statement = self._apply_filters(*filters, statement=statement)
         statement = self._filter_select_by_kwargs(statement, kwargs)
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             result = self._execute(statement)
             instances = list(result.scalars())
             for instance in instances:
@@ -1137,7 +1137,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             collection = lambda_stmt(lambda: collection)
             collection += lambda s: s.filter_by(**kwargs)
             return collection
