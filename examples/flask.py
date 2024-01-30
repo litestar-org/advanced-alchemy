@@ -39,7 +39,7 @@ with app.app_context():
     with db.engine.begin() as conn:
         Message.metadata.create_all(conn)
 
-    session = db.session  # type: ignore  # noqa: PGH003
+    session = db.session
     repo = MessageRepository(session=session)
     repo.add(Message(text="Hello, world!"))
 
