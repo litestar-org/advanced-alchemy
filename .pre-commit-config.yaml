@@ -3,7 +3,7 @@ default_language_version:
 default_install_hook_types: [commit-msg, pre-commit]
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.0.0
+    rev: v3.1.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
@@ -23,7 +23,7 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.1.11"
+    rev: "v0.1.14"
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -34,7 +34,7 @@ repos:
       - id: codespell
         exclude: "pdm.lock|examples/us_state_lookup.json"
   - repo: https://github.com/psf/black
-    rev: 23.12.1
+    rev: 24.1.1
     hooks:
       - id: black
         args: [--config=./pyproject.toml]
@@ -51,6 +51,7 @@ repos:
             asyncmy,
             asyncpg,
             asyncpg_stubs,
+            uuid_utils,
             oracledb,
             psycopg,
             pytest,

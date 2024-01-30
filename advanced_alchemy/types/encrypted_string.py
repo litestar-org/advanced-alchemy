@@ -94,7 +94,6 @@ class EncryptedString(TypeDecorator):
     """Used to store encrypted values in a database"""
 
     impl = String
-
     cache_ok = True
 
     def __init__(
@@ -139,6 +138,7 @@ class EncryptedText(EncryptedString):
     """Encrypted Clob"""
 
     impl = Text
+    cache_ok = True
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
         return dialect.type_descriptor(Text())

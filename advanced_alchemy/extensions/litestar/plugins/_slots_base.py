@@ -2,6 +2,7 @@
 
 See: https://stackoverflow.com/questions/53060607/python-3-6-5-multiple-bases-have-instance-lay-out-conflict-when-multi-inherit
 """
+
 from __future__ import annotations
 
 
