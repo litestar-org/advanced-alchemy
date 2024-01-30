@@ -1,4 +1,5 @@
 """Collection filter datastructures."""
+
 from __future__ import annotations
 
 from collections import abc  # noqa: TCH003
@@ -24,7 +25,9 @@ __all__ = (
 )
 
 
-FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter"
+FilterTypes: TypeAlias = (
+    "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter"
+)
 """Aggregate type alias of the types supported for collection filtering."""
 
 

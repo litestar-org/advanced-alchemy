@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
 
-from sqlalchemy.orm import InstrumentedAttribute
-
 from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
@@ -20,6 +18,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
+    from sqlalchemy.orm import InstrumentedAttribute
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -332,9 +331,14 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Updated representation.
         """
         data = await self.to_model(data, "update")
-        if isinstance(id_attribute, InstrumentedAttribute):
-            id_attribute = cast("str", id_attribute.description)
-        if item_id is None and self.repository.get_id_attribute_value(item=data, id_attribute=id_attribute) is None:
+        if (
+            item_id is None
+            and self.repository.get_id_attribute_value(
+                item=data,
+                id_attribute=id_attribute,
+            )
+            is None
+        ):
             msg = (
                 "Could not identify ID attribute value.  One of the following is required: "
                 f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"

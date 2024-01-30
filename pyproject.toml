@@ -47,6 +47,10 @@ Homepage = "https://docs.advanced-alchemy.jolt.rs/latest/"
 Issue = "https://github.com/jolt-org/advanced-alchemy/issues/"
 Source = "https://github.com/jolt-org/advanced-alchemy"
 
+[project.optional-dependencies]
+uuid = [
+  "uuid-utils>=0.6.1",
+]
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
@@ -104,9 +108,8 @@ linting = [
   "types-pyyaml",
 ]
 test = [
-  "pytest>=7.4.1",
+  "pytest>=7.4.1,<8.0.0",
   "pytest-xdist>=3.3.1",
-  "anyio<4.0.0",
   "pytest-lazy-fixture>=0.6.3",
   "pytest-asyncio>=0.21.1",
   "pytest-mock>=3.11.1",
@@ -142,10 +145,12 @@ markers = [
 
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:pkg_resources",
   "ignore::DeprecationWarning:google.rpc",
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
+  "ignore::DeprecationWarning:websockets.connection",
 ]
 
 [tool.coverage.run]

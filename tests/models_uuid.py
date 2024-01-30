@@ -17,7 +17,7 @@ from advanced_alchemy import (
     SQLAlchemySyncRepository,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+from advanced_alchemy.base import UUIDAuditBase, UUIDBase, UUIDv6Base, UUIDv7Base
 from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
 
 
@@ -48,7 +48,7 @@ class UUIDEventLog(UUIDAuditBase):
     payload: Mapped[dict] = mapped_column(default={})  # pyright: ignore
 
 
-class UUIDSecret(UUIDBase):
+class UUIDSecret(UUIDv7Base):
     """The secret domain model."""
 
     secret: Mapped[str] = mapped_column(
@@ -59,7 +59,7 @@ class UUIDSecret(UUIDBase):
     )
 
 
-class UUIDModelWithFetchedValue(UUIDBase):
+class UUIDModelWithFetchedValue(UUIDv6Base):
     """The ModelWithFetchedValue UUIDBase."""
 
     val: Mapped[int]  # pyright: ignore

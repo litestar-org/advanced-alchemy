@@ -1,4 +1,5 @@
 """Type aliases and constants used in the package config."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence

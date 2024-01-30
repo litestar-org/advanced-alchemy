@@ -22,8 +22,7 @@ if TYPE_CHECKING:
 
 
 class CommitStrategyExecutor(Protocol):
-    async def __call__(self, *, session: Session | AsyncSession, response: Response) -> None:
-        ...
+    async def __call__(self, *, session: Session | AsyncSession, response: Response) -> None: ...
 
 
 class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
@@ -33,8 +32,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         config: SQLAlchemyAsyncConfig,
         autocommit: CommitStrategy | None = None,
         app: Starlette | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
     def __init__(
@@ -42,8 +40,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         config: SQLAlchemySyncConfig,
         autocommit: CommitStrategy | None = None,
         app: Starlette | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def __init__(
         self,

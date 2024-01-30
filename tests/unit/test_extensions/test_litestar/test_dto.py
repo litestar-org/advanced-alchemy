@@ -67,8 +67,7 @@ def fx_raw_author() -> bytes:
 @pytest.fixture(name="asgi_connection")
 def fx_asgi_connection() -> Request[Any, Any, Any]:
     @get("/", name="handler_id", media_type=MediaType.JSON, type_decoders=PydanticInitPlugin.decoders())
-    def _handler() -> None:
-        ...
+    def _handler() -> None: ...
 
     return RequestFactory().get(path="/", route_handler=_handler)
 

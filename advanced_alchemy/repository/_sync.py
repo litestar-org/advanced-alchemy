@@ -98,7 +98,11 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
     @classmethod
-    def get_id_attribute_value(cls, item: ModelT | type[ModelT], id_attribute: str | None = None) -> Any:
+    def get_id_attribute_value(
+        cls,
+        item: ModelT | type[ModelT],
+        id_attribute: str | InstrumentedAttribute | None = None,
+    ) -> Any:
         """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
 
         Args:
@@ -109,6 +113,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             The value of attribute on ``item`` named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`.
         """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
         return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
 
     @classmethod
@@ -116,7 +122,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         cls,
         item_id: Any,
         item: ModelT,
-        id_attribute: str | None = None,
+        id_attribute: str | InstrumentedAttribute | None = None,
     ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
@@ -129,6 +135,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             Item with ``item_id`` set to :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`
         """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
 
@@ -642,14 +650,15 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        statement = self._get_base_stmt(statement)
-        fragment = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
-        statement += lambda s: s.order_by(None)
-        statement = self._filter_select_by_kwargs(statement, kwargs)
-        statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
-        results = self._execute(statement)
-        return cast(int, results.scalar_one())
+        with wrap_sqlalchemy_exception():
+            statement = self._get_base_stmt(statement)
+            fragment = self.get_id_attribute_value(self.model_type)
+            statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
+            statement += lambda s: s.order_by(None)
+            statement = self._filter_select_by_kwargs(statement, kwargs)
+            statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
+            results = self._execute(statement)
+            return cast(int, results.scalar_one())
 
     def update(
         self,
@@ -689,7 +698,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         with wrap_sqlalchemy_exception():
             item_id = self.get_id_attribute_value(
                 data,
-                id_attribute=id_attribute.key if isinstance(id_attribute, InstrumentedAttribute) else id_attribute,
+                id_attribute=id_attribute,
             )
             # this will raise for not found, and will put the item in the session
             self.get(item_id, id_attribute=id_attribute)
@@ -1154,7 +1163,12 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             return text("SELECT 1 FROM DUAL")
         return text("SELECT 1")
 
-    def _attach_to_session(self, model: ModelT, strategy: Literal["add", "merge"] = "add") -> ModelT:
+    def _attach_to_session(
+        self,
+        model: ModelT,
+        strategy: Literal["add", "merge"] = "add",
+        load: bool = True,
+    ) -> ModelT:
         """Attach detached instance to the session.
 
         Args:
@@ -1162,6 +1176,13 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             strategy: How the instance should be attached.
                 - "add": New instance added to session
                 - "merge": Instance merged with existing, or new one added.
+            load: Boolean, when False, merge switches into
+                a "high performance" mode which causes it to forego emitting history
+                events as well as all database access.  This flag is used for
+                cases such as transferring graphs of objects into a session
+                from a second level cache, or to transfer just-loaded objects
+                into the session owned by a worker thread or process
+                without re-querying the database.
 
         Returns:
             Instance attached to the session - if `"merge"` strategy, may not be same instance
@@ -1171,7 +1192,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             self.session.add(model)
             return model
         if strategy == "merge":
-            return self.session.merge(model)
+            return self.session.merge(model, load=load)
         msg = "Unexpected value for `strategy`, must be `'add'` or `'merge'`"  # type: ignore[unreachable]
         raise ValueError(msg)
 

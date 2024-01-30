@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import uuid
 from base64 import b64decode
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
+
+if UUID_UTILS_INSTALLED := find_spec("uuid_utils"):
+    import uuid as core_uuid
+
+    import uuid_utils as uuid
+else:
+    import uuid  # type: ignore[no-redef,unused-ignore]
+    import uuid as core_uuid
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
@@ -41,7 +49,11 @@ class GUID(TypeDecorator):
             return dialect.type_descriptor(BINARY(16))
         return dialect.type_descriptor(CHAR(32))
 
-    def process_bind_param(self, value: bytes | str | uuid.UUID | None, dialect: Dialect) -> bytes | str | None:
+    def process_bind_param(
+        self,
+        value: bytes | str | uuid.UUID | core_uuid.UUID | None,
+        dialect: Dialect,
+    ) -> bytes | str | None:
         if value is None:
             return value
         if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
@@ -53,10 +65,14 @@ class GUID(TypeDecorator):
             return value.bytes
         return value.bytes if self.binary else value.hex
 
-    def process_result_value(self, value: bytes | str | uuid.UUID | None, dialect: Dialect) -> uuid.UUID | None:
+    def process_result_value(
+        self,
+        value: bytes | str | uuid.UUID | core_uuid.UUID | None,
+        dialect: Dialect,
+    ) -> uuid.UUID | core_uuid.UUID | None:
         if value is None:
             return value
-        if isinstance(value, uuid.UUID):
+        if isinstance(value, (uuid.UUID, core_uuid.UUID)):
             return value
         if dialect.name == "spanner+spanner":
             return uuid.UUID(bytes=b64decode(value))
@@ -65,11 +81,19 @@ class GUID(TypeDecorator):
         return uuid.UUID(hex=cast("str", value))
 
     @staticmethod
-    def to_uuid(value: Any) -> uuid.UUID | None:
-        if isinstance(value, uuid.UUID) or value is None:
+    def to_uuid(value: Any) -> uuid.UUID | core_uuid.UUID | None:
+        if isinstance(value, (uuid.UUID, core_uuid.UUID)) or value is None:
             return value
         try:
             value = uuid.UUID(hex=value)
         except (TypeError, ValueError):
             value = uuid.UUID(bytes=value)
         return cast("uuid.UUID | None", value)
+
+    def compare_values(self, x: Any, y: Any) -> bool:
+        """Compare two values for equality."""
+        if isinstance(x, (uuid.UUID, core_uuid.UUID)):
+            x = str(x)
+        if isinstance(y, (uuid.UUID, core_uuid.UUID)):
+            y = str(y)
+        return x == y  # type: ignore[no-any-return]

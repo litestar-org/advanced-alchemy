@@ -1,3 +1,4 @@
+from advanced_alchemy import base, repository, service, types
 from advanced_alchemy.config import AlembicAsyncConfig, AlembicSyncConfig, AsyncSessionConfig, SyncSessionConfig
 
 from .alembic import AlembicCommands
@@ -12,6 +13,10 @@ from .plugins import (
 )
 
 __all__ = (
+    "base",
+    "types",
+    "repository",
+    "service",
     "AlembicCommands",
     "AlembicAsyncConfig",
     "AlembicSyncConfig",

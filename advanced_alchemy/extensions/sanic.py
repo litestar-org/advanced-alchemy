@@ -32,8 +32,7 @@ if TYPE_CHECKING:
 
 
 class CommitStrategyExecutor(Protocol):
-    async def __call__(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None:
-        ...
+    async def __call__(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None: ...
 
 
 class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT]):
@@ -49,8 +48,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
     def __init__(
@@ -62,12 +60,13 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def __init__(
-        self: SanicAdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]
-        | SanicAdvancedAlchemy[Engine, Session, sessionmaker[Session]],
+        self: (
+            SanicAdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]
+            | SanicAdvancedAlchemy[Engine, Session, sessionmaker[Session]]
+        ),
         *,
         sqlalchemy_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
         autocommit: CommitStrategy | None = None,
