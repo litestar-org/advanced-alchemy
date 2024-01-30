@@ -649,14 +649,15 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        statement = self._get_base_stmt(statement)
-        fragment = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
-        statement += lambda s: s.order_by(None)
-        statement = self._filter_select_by_kwargs(statement, kwargs)
-        statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
-        results = await self._execute(statement)
-        return cast(int, results.scalar_one())
+        with wrap_sqlalchemy_exception():
+            statement = self._get_base_stmt(statement)
+            fragment = self.get_id_attribute_value(self.model_type)
+            statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
+            statement += lambda s: s.order_by(None)
+            statement = self._filter_select_by_kwargs(statement, kwargs)
+            statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
+            results = await self._execute(statement)
+            return cast(int, results.scalar_one())
 
     async def update(
         self,

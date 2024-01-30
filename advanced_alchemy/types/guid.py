@@ -92,3 +92,11 @@ class GUID(TypeDecorator):
         except (TypeError, ValueError):
             value = uuid.UUID(bytes=value)
         return cast("uuid.UUID | None", value)
+
+    def compare_values(self, x: Any, y: Any) -> bool:
+        """Compare two values for equality."""
+        if isinstance(x, (uuid.UUID, core_uuid.UUID)):
+            x = str(x)
+        if isinstance(y, (uuid.UUID, core_uuid.UUID)):
+            y = str(y)
+        return x == y  # type: ignore[no-any-return]

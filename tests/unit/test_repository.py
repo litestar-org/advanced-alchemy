@@ -737,12 +737,14 @@ async def test_sqlalchemy_repo_update(
     mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
 
 
-async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository) -> None:
+async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
     """Test the sequence of repo calls for upsert operation."""
     mock_instance = MagicMock()
     mock_repo.session.merge.return_value = mock_instance
 
     instance = await maybe_async(mock_repo.upsert(mock_instance))
+    mocker.patch.object(mock_repo, "exists", return_value=True)
+    mocker.patch.object(mock_repo, "count", return_value=1)
 
     assert instance is mock_instance
     mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)

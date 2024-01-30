@@ -91,6 +91,11 @@ class ModelProtocol(Protocol):
 
 
 class SentinelColumn:
+    """Sentinel Placeholder Column
+
+    This is required by SQLAlchemy on tables with a UUID PK type.
+    """
+
     @declared_attr
     def _sentinel(cls) -> Mapped[int]:
         return orm_insert_sentinel(name="sa_orm_sentinel")
@@ -185,9 +190,13 @@ def create_registry(
         dict: JsonB,
     }
     with contextlib.suppress(ImportError):
-        from pydantic import AnyHttpUrl, AnyUrl, EmailStr
+        from pydantic import AnyHttpUrl, AnyUrl, EmailStr, Json
 
-        type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String})
+        type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB})
+    with contextlib.suppress(ImportError):
+        from msgspec import Struct
+
+        type_annotation_map[Struct] = JsonB
     if custom_annotation_map is not None:
         type_annotation_map.update(custom_annotation_map)
     return registry(metadata=meta, type_annotation_map=type_annotation_map)
