@@ -91,6 +91,11 @@ class ModelProtocol(Protocol):
 
 
 class SentinelColumn:
+    """Sentinel Placeholder Column
+
+    This is required by SQLAlchemy on tables with a UUID PK type.
+    """
+
     @declared_attr
     def _sentinel(cls) -> Mapped[int]:
         return orm_insert_sentinel(name="sa_orm_sentinel")
