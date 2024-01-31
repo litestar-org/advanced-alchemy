@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 
 
-class DateTimeUTC(TypeDecorator):
+class DateTimeUTC(TypeDecorator[Optional[datetime.datetime]]):
     """Timezone Aware DateTime.
 
     Ensure UTC is stored in the database and that TZ aware dates are returned for all dialects.
