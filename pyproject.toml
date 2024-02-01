@@ -51,6 +51,9 @@ Source = "https://github.com/jolt-org/advanced-alchemy"
 uuid = [
   "uuid-utils>=0.6.1",
 ]
+fsspec = [
+    "fsspec>=2023.12.2",
+]
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]

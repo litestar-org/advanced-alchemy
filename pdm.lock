@@ -2,10 +2,10 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "dev", "docs", "extensions", "linting", "test", "uuid"]
+groups = ["default", "dev", "docs", "extensions", "linting", "test", "uuid", "fsspec"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:6861d6001ce826be7575df158f9ba4bd1406a6068b1f72e7071ead96d99a9618"
+content_hash = "sha256:f001ace831a1395b6237d43a85e59db8dc8072fdbc523ae2672200360f1d00cf"
 
 [[package]]
 name = "aiofiles"
@@ -1061,6 +1061,17 @@ dependencies = [
 files = [
     {file = "flask_sqlalchemy-3.1.1-py3-none-any.whl", hash = "sha256:4ba4be7f419dc72f4efd8802d69974803c37259dd42f3913b0dcf75c9447e0a0"},
     {file = "flask_sqlalchemy-3.1.1.tar.gz", hash = "sha256:e4b68bb881802dda1a7d878b2fc84c06d1ee57fb40b874d3dc97dabfa36b8312"},
+]
+
+[[package]]
+name = "fsspec"
+version = "2023.12.2"
+requires_python = ">=3.8"
+summary = "File-system specification"
+groups = ["fsspec"]
+files = [
+    {file = "fsspec-2023.12.2-py3-none-any.whl", hash = "sha256:d800d87f72189a745fa3d6b033b9dc4a34ad069f60ca60b943a63599f5501960"},
+    {file = "fsspec-2023.12.2.tar.gz", hash = "sha256:8548d39e8810b59c38014934f6b31e57f40c1b20f911f4cc2b85389c7e9bf0cb"},
 ]
 
 [[package]]
