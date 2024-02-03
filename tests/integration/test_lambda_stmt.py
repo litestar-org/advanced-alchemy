@@ -41,8 +41,6 @@ def test_lambda_statement_quirks() -> None:
         repo.add(ile_de_france)
         db_session.commit()
 
-        print("\n" + "-" * 80 + "\n")
-
         # Using only the ORM, this works fine:
 
         stmt = select(State).where(State.country_id == usa.id).with_only_columns(func.count())
