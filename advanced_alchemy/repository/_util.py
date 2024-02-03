@@ -3,9 +3,10 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 
-from advanced_alchemy.exceptions import ConflictError, RepositoryError
+from advanced_alchemy.exceptions import IntegrityError, RepositoryError
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import InstrumentedAttribute
@@ -29,8 +30,8 @@ def wrap_sqlalchemy_exception() -> Any:
     """
     try:
         yield
-    except IntegrityError as exc:
-        raise ConflictError from exc
+    except SQLAlchemyIntegrityError as exc:
+        raise IntegrityError from exc
     except SQLAlchemyError as exc:
         msg = f"An exception occurred: {exc}"
         raise RepositoryError(msg) from exc

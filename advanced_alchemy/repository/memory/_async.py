@@ -8,7 +8,7 @@ from sqlalchemy import ColumnElement, Dialect, Select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from advanced_alchemy.exceptions import ConflictError, NotFoundError, RepositoryError
+from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -294,13 +294,13 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
     def _find_or_raise_not_found(self, id_: Any) -> ModelT:
         return self.check_not_found(self.__collection__().get_or_none(id_))
 
-    def _find_one_or_raise_conflict(self, result: list[ModelT]) -> ModelT:
+    def _find_one_or_raise_error(self, result: list[ModelT]) -> ModelT:
         if not result:
             msg = "No item found when one was expected"
-            raise ConflictError(msg)
+            raise IntegrityError(msg)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
-            raise ConflictError(msg)
+            raise IntegrityError(msg)
         return result[0]
 
     @classmethod
@@ -317,7 +317,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         result = self._filter_result_by_kwargs(self.__collection__().list(), kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
-            raise ConflictError(msg)
+            raise IntegrityError(msg)
         return result[0] if result else None
 
     @deprecated(version="0.3.5", alternative="SQLAlchemyAsyncRepository.get_or_upsert", kind="method")
@@ -390,7 +390,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             self.__database__.add(self.model_type, data)
         except KeyError as exc:
             msg = "Item already exist in collection"
-            raise ConflictError(msg) from exc
+            raise IntegrityError(msg) from exc
         return data
 
     async def add_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
