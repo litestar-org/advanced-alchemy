@@ -1374,7 +1374,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         statement: StatementLambdaElement,
         expression: ColumnElement[bool],
     ) -> StatementLambdaElement:
-        statement += lambda s: s.filter(expression)
+        statement += lambda s: s.where(expression)
         return statement
 
     def _filter_by_where(
