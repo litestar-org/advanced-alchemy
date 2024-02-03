@@ -87,7 +87,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
         self.session = session
-        if isinstance(statement, Select):
+        if statement is not None and not isinstance(statement, StatementLambdaElement):
             self.statement = lambda_stmt(lambda: statement)
         elif statement is None:
             statement = select(self.model_type)
@@ -338,9 +338,19 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     def _get_base_stmt(
         self,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        global_track_bound_values: bool = True,
+        track_closure_variables: bool = True,
+        enable_tracking: bool = True,
+        track_bound_values: bool = True,
     ) -> StatementLambdaElement:
-        if isinstance(statement, Select):
-            return lambda_stmt(lambda: statement)
+        if statement is not None and not isinstance(statement, StatementLambdaElement):
+            return lambda_stmt(
+                lambda: statement,
+                track_bound_values=track_bound_values,
+                global_track_bound_values=global_track_bound_values,
+                track_closure_variables=track_closure_variables,
+                enable_tracking=enable_tracking,
+            )
         return self.statement if statement is None else statement
 
     def _get_delete_many_statement(
@@ -651,10 +661,13 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
             Count of records returned by query, ignoring pagination.
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(statement, enable_tracking=False)
             fragment = self.get_id_attribute_value(self.model_type)
-            statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
-            statement += lambda s: s.order_by(None)
+            statement = statement.add_criteria(
+                lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
+                enable_tracking=False,
+            )
+            statement = statement.add_criteria(lambda s: s.order_by(None))
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             results = self._execute(statement)
