@@ -86,7 +86,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
         self.session = session
-        if statement is not None and not isinstance(statement, StatementLambdaElement):
+        if isinstance(statement, Select):
             self.statement = lambda_stmt(lambda: statement)
         elif statement is None:
             statement = select(self.model_type)
@@ -342,7 +342,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         enable_tracking: bool = True,
         track_bound_values: bool = True,
     ) -> StatementLambdaElement:
-        if statement is not None and not isinstance(statement, StatementLambdaElement):
+        if isinstance(statement, Select):
             return lambda_stmt(
                 lambda: statement,
                 track_bound_values=track_bound_values,
