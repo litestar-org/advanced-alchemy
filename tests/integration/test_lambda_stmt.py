@@ -80,3 +80,8 @@ def test_lambda_statement_quirks() -> None:
         states = repo.list(statement=stmt2)
         count = len(states)
         assert count == 2, f"Expected 2, got {count}"
+
+        _states, count = repo.list_and_count(statement=stmt2)
+        assert count == 2, f"Expected 2, got {count}"
+        _states, count = repo.list_and_count(statement=stmt2, force_basic_query_mode=True)
+        assert count == 2, f"Expected 2, got {count}"
