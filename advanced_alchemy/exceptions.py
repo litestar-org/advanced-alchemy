@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from advanced_alchemy.utils.deprecation import deprecated
+
 
 class AdvancedAlchemyError(Exception):
     """Base exception class from which all Advanced Alchemy exceptions inherit."""
@@ -63,6 +65,20 @@ class RepositoryError(AdvancedAlchemyError):
 
 
 class ConflictError(RepositoryError):
+    """Data integrity error."""
+
+    @deprecated(
+        version="0.7.1",
+        alternative="advanced_alchemy.exceptions.IntegrityError",
+        kind="method",
+        removal_in="1.0.0",
+        info="`ConflictError` has been renamed to `IntegrityError`",
+    )
+    def __init__(self, *args: Any, detail: str = "") -> None:
+        super().__init__(*args, detail=detail)
+
+
+class IntegrityError(RepositoryError):
     """Data integrity error."""
 
 

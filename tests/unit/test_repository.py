@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import String
-from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
+from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
 
@@ -20,7 +20,7 @@ from advanced_alchemy import (
     base,
     wrap_sqlalchemy_exception,
 )
-from advanced_alchemy.exceptions import ConflictError, RepositoryError
+from advanced_alchemy.exceptions import IntegrityError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -178,7 +178,7 @@ def test_sqlalchemy_sentinel(monkeypatch: MonkeyPatch) -> None:
 
 def test_wrap_sqlalchemy_integrity_error() -> None:
     """Test to ensure we wrap IntegrityError."""
-    with pytest.raises(ConflictError), wrap_sqlalchemy_exception():
+    with pytest.raises(IntegrityError), wrap_sqlalchemy_exception():
         raise IntegrityError(None, None, Exception())
 
 
