@@ -856,7 +856,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         """
         statement = self._get_base_stmt(statement)
         field = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.add_columns(over(sql_func.count(field)))
+        statement = statement.add_criteria(lambda s: s.add_columns(over(sql_func.count(field))), enable_tracking=False)
         statement = self._apply_filters(*filters, statement=statement)
         statement = self._filter_select_by_kwargs(statement, kwargs)
         with wrap_sqlalchemy_exception():
@@ -906,9 +906,11 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     def _get_count_stmt(self, statement: StatementLambdaElement) -> StatementLambdaElement:
         fragment = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
-        statement += lambda s: s.order_by(None)
-        return statement
+        statement = statement.add_criteria(
+            lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
+            enable_tracking=False,
+        )
+        return statement.add_criteria(lambda s: s.order_by(None))
 
     async def upsert(
         self,
