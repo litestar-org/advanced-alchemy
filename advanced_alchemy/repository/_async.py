@@ -337,9 +337,19 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
     def _get_base_stmt(
         self,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        global_track_bound_values: bool = True,
+        track_closure_variables: bool = True,
+        enable_tracking: bool = True,
+        track_bound_values: bool = True,
     ) -> StatementLambdaElement:
         if isinstance(statement, Select):
-            return lambda_stmt(lambda: statement)
+            return lambda_stmt(
+                lambda: statement,
+                track_bound_values=track_bound_values,
+                global_track_bound_values=global_track_bound_values,
+                track_closure_variables=track_closure_variables,
+                enable_tracking=enable_tracking,
+            )
         return self.statement if statement is None else statement
 
     def _get_delete_many_statement(
@@ -650,10 +660,13 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             Count of records returned by query, ignoring pagination.
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(statement, enable_tracking=False)
             fragment = self.get_id_attribute_value(self.model_type)
-            statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
-            statement += lambda s: s.order_by(None)
+            statement = statement.add_criteria(
+                lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
+                enable_tracking=False,
+            )
+            statement = statement.add_criteria(lambda s: s.order_by(None))
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             results = await self._execute(statement)
@@ -843,7 +856,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         """
         statement = self._get_base_stmt(statement)
         field = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.add_columns(over(sql_func.count(field)))
+        statement = statement.add_criteria(lambda s: s.add_columns(over(sql_func.count(field))), enable_tracking=False)
         statement = self._apply_filters(*filters, statement=statement)
         statement = self._filter_select_by_kwargs(statement, kwargs)
         with wrap_sqlalchemy_exception():
@@ -893,9 +906,11 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     def _get_count_stmt(self, statement: StatementLambdaElement) -> StatementLambdaElement:
         fragment = self.get_id_attribute_value(self.model_type)
-        statement += lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True)
-        statement += lambda s: s.order_by(None)
-        return statement
+        statement = statement.add_criteria(
+            lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
+            enable_tracking=False,
+        )
+        return statement.add_criteria(lambda s: s.order_by(None))
 
     async def upsert(
         self,
@@ -1373,7 +1388,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         statement: StatementLambdaElement,
         expression: ColumnElement[bool],
     ) -> StatementLambdaElement:
-        statement += lambda s: s.filter(expression)
+        statement += lambda s: s.where(expression)
         return statement
 
     def _filter_by_where(
