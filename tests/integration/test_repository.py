@@ -14,7 +14,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 from time_machine import travel
 
 from advanced_alchemy import (
@@ -53,6 +53,8 @@ xfail = pytest.mark.xfail
 RepositoryPKType = Literal["uuid", "bigint"]
 SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
+BookModel = Type[Union[models_uuid.UUIDBook, models_bigint.BigIntBook]]
+ChapterModel = Type[Union[models_uuid.UUIDChapter, models_bigint.BigIntChapter]]
 RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
 ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
 ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
@@ -133,8 +135,16 @@ def fx_raw_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
             "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
             "title": "Murder on the Orient Express",
             "author_id": raw_authors_uuid[0]["id"],
-            "author": raw_authors_uuid[0],
         },
+    ]
+
+
+@pytest.fixture(name="raw_chapters_uuid")
+def fx_raw_chapters_uuid(raw_books_uuid: RawRecordData) -> RawRecordData:
+    """Unstructured chapter representations."""
+    return [
+        {"id": UUID("28742892-003e-480d-9ca6-b5ffa6c927cf"), "name": "Chapter 1", "book_id": raw_books_uuid[0]["id"]},
+        {"id": UUID("04560e47-4602-4b9a-bfff-c01f4fbdc969"), "name": "Chapter 2", "book_id": raw_books_uuid[0]["id"]},
     ]
 
 
@@ -211,10 +221,19 @@ def fx_raw_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData:
     """Unstructured book representations."""
     return [
         {
+            "id": 2027,
             "title": "Murder on the Orient Express",
             "author_id": raw_authors_bigint[0]["id"],
-            "author": raw_authors_bigint[0],
         },
+    ]
+
+
+@pytest.fixture(name="raw_chapters_bigint")
+def fx_raw_chapters_bigint(raw_books_bigint: RawRecordData) -> RawRecordData:
+    """Unstructured chapter representations."""
+    return [
+        {"id": 2025, "name": "Chapter 1", "book_id": raw_books_bigint[0]["id"]},
+        {"id": 2026, "name": "Chapter 2", "book_id": raw_books_bigint[0]["id"]},
     ]
 
 
@@ -317,6 +336,14 @@ def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBoo
     if repository_pk_type == "uuid":
         return models_uuid.UUIDBook
     return models_bigint.BigIntBook
+
+
+@pytest.fixture()
+def chapter_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDChapter | models_bigint.BigIntChapter]:
+    """Return the ``Chapter`` model matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDChapter
+    return models_bigint.BigIntChapter
 
 
 @pytest.fixture()
@@ -445,6 +472,26 @@ def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Eng
 
 
 @pytest.fixture()
+def raw_books(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Book`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        books = request.getfixturevalue("raw_books_bigint")
+    else:
+        books = request.getfixturevalue("raw_books_uuid")
+    return cast("RawRecordData", books)
+
+
+@pytest.fixture()
+def raw_chapters(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Chapter`` data matching the current PK type."""
+    if repository_pk_type == "bigint":
+        chapters = request.getfixturevalue("raw_chapters_bigint")
+    else:
+        chapters = request.getfixturevalue("raw_chapters_uuid")
+    return cast("RawRecordData", chapters)
+
+
+@pytest.fixture()
 def raw_authors(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
     """Return raw ``Author`` data matching the current PK type"""
     if repository_pk_type == "bigint":
@@ -480,9 +527,13 @@ def _seed_db_sync(
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
     raw_secrets: RawRecordData,
+    raw_books: RawRecordData,
+    raw_chapters: RawRecordData,
     author_model: AuthorModel,
     secret_model: SecretModel,
     rule_model: RuleModel,
+    book_model: BookModel,
+    chapter_model: ChapterModel,
 ) -> None:
     update_raw_records(raw_authors=raw_authors, raw_rules=raw_rules)
 
@@ -510,6 +561,10 @@ def _seed_db_sync(
         with engine.begin() as conn:
             for author in raw_authors:
                 conn.execute(insert(author_model).values(author))
+            for book in raw_books:
+                conn.execute(insert(book_model).values(book))
+            for chapter in raw_chapters:
+                conn.execute(insert(chapter_model).values(chapter))
             for rule in raw_rules:
                 conn.execute(insert(rule_model).values(rule))
             for secret in raw_secrets:
@@ -538,9 +593,13 @@ def seed_db_sync(
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
     raw_secrets: RawRecordData,
+    raw_books: RawRecordData,
+    raw_chapters: RawRecordData,
     author_model: AuthorModel,
     rule_model: RuleModel,
     secret_model: SecretModel,
+    book_model: BookModel,
+    chapter_model: ChapterModel,
 ) -> None:
     if engine.dialect.name.startswith("spanner"):
         _seed_spanner(engine=engine, raw_authors_uuid=raw_authors, raw_rules_uuid=raw_rules)
@@ -550,9 +609,13 @@ def seed_db_sync(
             raw_authors=raw_authors,
             raw_rules=raw_rules,
             raw_secrets=raw_secrets,
+            raw_books=raw_books,
+            raw_chapters=raw_chapters,
             author_model=author_model,
             rule_model=rule_model,
             secret_model=secret_model,
+            book_model=book_model,
+            chapter_model=chapter_model,
         )
 
 
@@ -1282,6 +1345,35 @@ async def test_repo_get_one_or_none_method(author_repo: AnyAuthorRepository, fir
     assert obj.name == "Agatha Christie"
     none_obj = await maybe_async(author_repo.get_one_or_none(name="I don't exist"))
     assert none_obj is None
+
+
+async def test_repo_get_load_options(
+    author_repo: AnyAuthorRepository,
+    first_author_id: Any,
+    author_model: AuthorModel,
+    book_model: BookModel,
+) -> None:
+    obj = await maybe_async(
+        author_repo.get(
+            first_author_id,
+            load_options=selectinload(author_model.books).selectinload(book_model.chapters),
+        ),
+    )
+    assert "Chapter" in obj.books[0].chapters[0].name
+
+
+async def test_repo_list_load_options(
+    author_repo: AnyAuthorRepository,
+    author_model: AuthorModel,
+    book_model: BookModel,
+    chapter_model: ChapterModel,
+) -> None:
+    objs = await maybe_async(
+        author_repo.list(
+            load_options=selectinload(author_model.books.any(book_model.title == "Hyperion")),
+        ),
+    )
+    assert len(objs[0].books) == 0
 
 
 async def test_repo_get_one_method(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
