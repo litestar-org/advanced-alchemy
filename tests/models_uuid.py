@@ -33,12 +33,20 @@ class UUIDAuthor(UUIDAuditBase):
     )
 
 
+class UUIDChapter(UUIDBase):
+    """The Chapter domain object."""
+
+    name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
+    book_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_book.id"))  # pyright: ignore
+
+
 class UUIDBook(UUIDBase):
     """The Book domain object."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id"))  # pyright: ignore
     author: Mapped[UUIDAuthor] = relationship(lazy="joined", innerjoin=True, back_populates="books")  # pyright: ignore
+    chapters: Mapped[list[UUIDChapter]] = relationship(lazy="noload")  # pyright: ignore
 
 
 class UUIDEventLog(UUIDAuditBase):

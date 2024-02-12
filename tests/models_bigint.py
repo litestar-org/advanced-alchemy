@@ -33,6 +33,13 @@ class BigIntAuthor(BigIntAuditBase):
     )
 
 
+class BigIntChapter(BigIntBase):
+    """The Chapter domain object."""
+
+    name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
+    book_id: Mapped[int] = mapped_column(ForeignKey("big_int_book.id"))  # pyright: ignore
+
+
 class BigIntBook(BigIntBase):
     """The Book domain object."""
 
@@ -43,6 +50,7 @@ class BigIntBook(BigIntBase):
         innerjoin=True,
         back_populates="books",
     )
+    chapters: Mapped[list[BigIntChapter]] = relationship(lazy="noload")  # pyright: ignore
 
 
 class BigIntEventLog(BigIntAuditBase):
