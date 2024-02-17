@@ -183,7 +183,10 @@ exclude_lines = [
 line-length = 120
 
 [tool.ruff]
-ignore = [
+line-length = 120
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+lint.fixable = ["ALL"]
+lint.ignore = [
   "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
   "B010", # flake8-bugbear - do not call setattr with a constant attribute value
   "D100", # pydocstyle - missing docstring in public module
@@ -211,25 +214,24 @@ ignore = [
   "PERF203", # ignore for now; investigate
   "PD011", # pandas
 ]
-line-length = 120
-select = ["ALL"]
+lint.select = ["ALL"]
 src = ["advanced_alchemy", "tests"]
 target-version = "py38"
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 12
 
-[tool.ruff.pep8-naming]
+[tool.ruff.lint.pep8-naming]
 classmethod-decorators = [
   "sqlalchemy.ext.declarative.declared_attr",
   "sqlalchemy.orm.declared_attr.directive",
   "sqlalchemy.orm.declared_attr",
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "advanced_alchemy/repository/*.py" = ['PLR0912', 'C901']
 "tests/**/*.*" = [
   "A",
@@ -258,7 +260,7 @@ classmethod-decorators = [
   "SLF001",
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["advanced_alchemy", "tests"]
 
 [tool.mypy]
