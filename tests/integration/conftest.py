@@ -26,34 +26,31 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:
 
     from advanced_alchemy import base
 
-    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase, base.SentinelColumn): ...
+    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewUUIDAuditBase(
         base.UUIDPrimaryKey,
         base.CommonTableAttributes,
         base.AuditColumns,
         DeclarativeBase,
-        base.SentinelColumn,
     ): ...
 
-    class NewUUIDv6Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase, base.SentinelColumn): ...
+    class NewUUIDv6Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewUUIDv6AuditBase(
         base.UUIDPrimaryKey,
         base.CommonTableAttributes,
         base.AuditColumns,
         DeclarativeBase,
-        base.SentinelColumn,
     ): ...
 
-    class NewUUIDv7Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase, base.SentinelColumn): ...
+    class NewUUIDv7Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewUUIDv7AuditBase(
         base.UUIDPrimaryKey,
         base.CommonTableAttributes,
         base.AuditColumns,
         DeclarativeBase,
-        base.SentinelColumn,
     ): ...
 
     class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...

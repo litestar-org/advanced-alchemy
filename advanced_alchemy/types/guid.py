@@ -4,6 +4,7 @@ from base64 import b64decode
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
 
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
@@ -23,8 +24,10 @@ if TYPE_CHECKING:
 class GUID(TypeDecorator):
     """Platform-independent GUID type.
 
-    Uses PostgreSQL's UUID type, Oracle's RAW(16) type, otherwise uses
-    BINARY(16) or CHAR(32), storing as stringified hex values.
+    Uses PostgreSQL's UUID type (Postgres, DuckDB, Cockroach),
+    MSSQL's UNIQUEIDENTIFIER type, Oracle's RAW(16) type,
+    otherwise uses BINARY(16) or CHAR(32),
+    storing as stringified hex values.
 
     Will accept stringified UUIDs as a hexstring or an actual UUID
 
@@ -34,7 +37,7 @@ class GUID(TypeDecorator):
     cache_ok = True
 
     @property
-    def python_type(self) -> type[uuid.UUID]:
+    def python_type(self) -> type[uuid.UUID | core_uuid.UUID]:
         return uuid.UUID
 
     def __init__(self, *args: Any, binary: bool = True, **kwargs: Any) -> None:
@@ -45,6 +48,8 @@ class GUID(TypeDecorator):
             return dialect.type_descriptor(PG_UUID())
         if dialect.name == "oracle":
             return dialect.type_descriptor(ORA_RAW(16))
+        if dialect.name == "mssql":
+            return dialect.type_descriptor(MSSQL_UNIQUEIDENTIFIER())
         if self.binary:
             return dialect.type_descriptor(BINARY(16))
         return dialect.type_descriptor(CHAR(32))
@@ -56,7 +61,7 @@ class GUID(TypeDecorator):
     ) -> bytes | str | None:
         if value is None:
             return value
-        if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
+        if dialect.name in {"postgresql", "duckdb", "cockroachdb", "mssql"}:
             return str(value)
         value = self.to_uuid(value)
         if value is None:
@@ -92,8 +97,6 @@ class GUID(TypeDecorator):
 
     def compare_values(self, x: Any, y: Any) -> bool:
         """Compare two values for equality."""
-        if isinstance(x, (uuid.UUID, core_uuid.UUID)):
-            x = str(x)
-        if isinstance(y, (uuid.UUID, core_uuid.UUID)):
-            y = str(y)
-        return x == y  # type: ignore[no-any-return]
+        if isinstance(x, (uuid.UUID, core_uuid.UUID)) and isinstance(y, (uuid.UUID, core_uuid.UUID)):
+            return x.bytes == y.bytes
+        return cast("bool", x == y)
