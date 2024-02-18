@@ -17,7 +17,7 @@ on:
       timeout:
         required: false
         type: number
-        default: 45
+        default: 60
 
 jobs:
   test:
