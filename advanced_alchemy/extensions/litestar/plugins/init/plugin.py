@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 from litestar.di import Provide
@@ -20,14 +19,9 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 
-if UUID_UTILS_INSTALLED := find_spec("uuid_utils"):
-    from uuid_utils import UUID
-else:
-    from uuid import UUID  # type: ignore[no-redef,assignment]
 if TYPE_CHECKING:
     from click import Group
     from litestar.config.app import AppConfig
-    from litestar.types import TypeEncodersMap
 
     from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
@@ -43,9 +37,6 @@ signature_namespace_values = {
     "NotInCollectionFilter": NotInCollectionFilter,
     "NotInSearchFilter": NotInSearchFilter,
     "FilterTypes": FilterTypes,
-}
-type_encoders: TypeEncodersMap = {
-    UUID: str,
 }
 
 
@@ -78,9 +69,16 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
 
             signature_namespace_values.update({"pgproto.UUID": pgproto.UUID})
             app_config.type_encoders = {pgproto.UUID: str, **(app_config.type_encoders or {})}
+        with contextlib.suppress(ImportError):
+            from uuid_utils import UUID
+
+            signature_namespace_values.update({"UUID": UUID})
+            app_config.type_encoders = {
+                **(app_config.type_encoders or {}),
+                UUID: str,
+            }
         app_config.signature_namespace.update(self._config.signature_namespace)
         app_config.signature_namespace.update(signature_namespace_values)
-        app_config.type_encoders = {**(app_config.type_encoders or {}), **type_encoders}
         app_config.lifespan.append(self._config.lifespan)
         app_config.dependencies.update(
             {
