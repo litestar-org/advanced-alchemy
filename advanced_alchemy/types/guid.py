@@ -13,7 +13,7 @@ from typing_extensions import Buffer
 if UUID_UTILS_INSTALLED := find_spec("uuid_utils") and not TYPE_CHECKING:
     from uuid_utils import UUID
 else:
-    from uuid import UUID  # type: ignore[no-redef,assignment]
+    from uuid import UUID  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
