@@ -190,8 +190,8 @@ def create_registry(
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, Json
 
-        type_annotation_map.update(  # pyright: ignore[reportCallIssues,reportArgumentType]
-            {EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB},
+        type_annotation_map.update(  # pyright: ignore[reportCallIssue]
+            {EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB}, # pyright: ignore[reportArgumentType]
         )
     with contextlib.suppress(ImportError):
         from msgspec import Struct
