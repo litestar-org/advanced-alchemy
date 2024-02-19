@@ -8,14 +8,12 @@ from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
+from typing_extensions import Buffer
 
-if UUID_UTILS_INSTALLED := find_spec("uuid_utils"):
-    import uuid as core_uuid
-
-    import uuid_utils as uuid
+if (UUID_UTILS_INSTALLED := find_spec("uuid_utils")) and not TYPE_CHECKING:
+    from uuid_utils import UUID  # pyright: ignore[reportMissingImports]
 else:
-    import uuid  # type: ignore[no-redef,unused-ignore]
-    import uuid as core_uuid
+    from uuid import UUID  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
@@ -37,8 +35,8 @@ class GUID(TypeDecorator):
     cache_ok = True
 
     @property
-    def python_type(self) -> type[uuid.UUID | core_uuid.UUID]:
-        return uuid.UUID
+    def python_type(self) -> type[UUID]:
+        return UUID
 
     def __init__(self, *args: Any, binary: bool = True, **kwargs: Any) -> None:
         self.binary = binary
@@ -56,7 +54,7 @@ class GUID(TypeDecorator):
 
     def process_bind_param(
         self,
-        value: bytes | str | uuid.UUID | core_uuid.UUID | None,
+        value: bytes | str | UUID | None,
         dialect: Dialect,
     ) -> bytes | str | None:
         if value is None:
@@ -72,31 +70,31 @@ class GUID(TypeDecorator):
 
     def process_result_value(
         self,
-        value: bytes | str | uuid.UUID | core_uuid.UUID | None,
+        value: bytes | str | UUID | None,
         dialect: Dialect,
-    ) -> uuid.UUID | core_uuid.UUID | None:
+    ) -> UUID | None:
         if value is None:
             return value
-        if isinstance(value, (uuid.UUID, core_uuid.UUID)):
-            return value
+        if value.__class__.__name__ == "UUID":
+            return cast("UUID", value)
         if dialect.name == "spanner+spanner":
-            return uuid.UUID(bytes=b64decode(value))
+            return UUID(bytes=b64decode(cast("str | Buffer", value)))
         if self.binary:
-            return uuid.UUID(bytes=cast("bytes", value))
-        return uuid.UUID(hex=cast("str", value))
+            return UUID(bytes=cast("bytes", value))
+        return UUID(hex=cast("str", value))
 
     @staticmethod
-    def to_uuid(value: Any) -> uuid.UUID | core_uuid.UUID | None:
-        if isinstance(value, (uuid.UUID, core_uuid.UUID)) or value is None:
-            return value
+    def to_uuid(value: Any) -> UUID | None:
+        if value.__class__.__name__ == "UUID" or value is None:
+            return cast("UUID | None", value)
         try:
-            value = uuid.UUID(hex=value)
+            value = UUID(hex=value)
         except (TypeError, ValueError):
-            value = uuid.UUID(bytes=value)
-        return cast("uuid.UUID | None", value)
+            value = UUID(bytes=value)
+        return cast("UUID | None", value)
 
     def compare_values(self, x: Any, y: Any) -> bool:
         """Compare two values for equality."""
-        if isinstance(x, (uuid.UUID, core_uuid.UUID)) and isinstance(y, (uuid.UUID, core_uuid.UUID)):
-            return x.bytes == y.bytes
+        if x.__class__.__name__ == "UUID" and y.__class__.__name__ == "UUID":
+            return cast("bool", x.bytes == y.bytes)
         return cast("bool", x == y)

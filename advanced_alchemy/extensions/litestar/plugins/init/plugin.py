@@ -65,12 +65,12 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
         with contextlib.suppress(ImportError):
-            from asyncpg.pgproto import pgproto
+            from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
 
             signature_namespace_values.update({"pgproto.UUID": pgproto.UUID})
             app_config.type_encoders = {pgproto.UUID: str, **(app_config.type_encoders or {})}
         with contextlib.suppress(ImportError):
-            from uuid_utils import UUID
+            from uuid_utils import UUID  # pyright: ignore[reportMissingImports]
 
             signature_namespace_values.update({"UUID": UUID})
             app_config.type_encoders = {

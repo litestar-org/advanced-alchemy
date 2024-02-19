@@ -98,14 +98,15 @@ extensions = [
   "flask-sqlalchemy>=3.1.1",
 ]
 linting = [
-  "pre-commit>=3.4.0",
-  "black>=23.7.0",
-  "mypy>=1.5.1",
-  "ruff>=0.0.287",
-  "asyncpg-stubs",
-  "types-pytest-lazy-fixture",
-  "types-click",
-  "types-pyyaml",
+    "pre-commit>=3.4.0",
+    "black>=23.7.0",
+    "mypy>=1.5.1",
+    "ruff>=0.0.287",
+    "asyncpg-stubs",
+    "types-pytest-lazy-fixture",
+    "types-click",
+    "types-pyyaml",
+    "pyright>=1.1.350",
 ]
 test = [
   "pytest>=7.4.1,<8.0.0",
@@ -293,6 +294,8 @@ module = [
   "pytest_docker.*",
   "googleapiclient",
   "googleapiclient.*",
+  "uuid_utils",
+  "uuid_utils.*",
 ]
 
 [[tool.mypy.overrides]]
@@ -312,6 +315,19 @@ disable_error_code = "no-untyped-call"
 disallow_untyped_decorators = false
 module = "advanced_alchemy.extensions.sanic"
 warn_unused_ignores = false
+
+[tool.pyright]
+disableBytesTypePromotions = true
+exclude = [
+  "docs",
+  "tests/unit/test_extensions",
+  "tests/unit/test_repository.py",
+  "tests/helpers.py",
+  "tests/docker_service_fixtures.py",
+]
+include = ["advanced_alchemy", "tests"]
+pythonVersion = "3.8"
+reportUnnecessaryTypeIgnoreComments = true
 
 [tool.unasyncd]
 add_editors_note = true

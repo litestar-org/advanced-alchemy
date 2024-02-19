@@ -23,6 +23,7 @@ offering features such as:
 - Custom-built alembic configuration and CLI with optional framework integration
 - Utility base classes with audit columns, primary keys and utility functions
 - Optimized JSON types including a custom JSON type for Oracle.
+- Integrated support for UUID6 and UUID7 using [`uuid-utils`](https://github.com/aminalaee/uuid-utils) (install with the `uuid` extra)
 
 - Pre-configured base classes with audit columns UUID or Big Integer primary keys and
   a [sentinel column](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns).

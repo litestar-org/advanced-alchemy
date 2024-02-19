@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
-from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
 
 from sqlalchemy import Date, MetaData, Sequence, String
@@ -19,11 +18,10 @@ from sqlalchemy.orm import (
     registry,
 )
 
-from advanced_alchemy.types import GUID, BigIntIdentity, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
 
-UUID_UTILS_INSTALLED = find_spec("uuid_utils")
-if UUID_UTILS_INSTALLED:
-    from uuid_utils import UUID, uuid4, uuid6, uuid7
+if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
+    from uuid_utils import UUID, uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
 else:
     from uuid import UUID, uuid4  # type: ignore[assignment]
 
@@ -192,7 +190,9 @@ def create_registry(
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, Json
 
-        type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB})
+        type_annotation_map.update(  # pyright: ignore[reportCallIssue]
+            {EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB},  # pyright: ignore[reportArgumentType]
+        )
     with contextlib.suppress(ImportError):
         from msgspec import Struct
 
