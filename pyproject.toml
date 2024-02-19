@@ -98,15 +98,15 @@ extensions = [
   "flask-sqlalchemy>=3.1.1",
 ]
 linting = [
-  "pre-commit>=3.4.0",
-  "black>=23.7.0",
-  "mypy>=1.5.1",
-  "ruff>=0.0.287",
-  "asyncpg-stubs",
-  "types-pytest-lazy-fixture",
-  "types-click",
-  "types-pyyaml",
-  "pyright>=1.1.350",
+    "pre-commit>=3.4.0",
+    "black>=23.7.0",
+    "mypy>=1.5.1",
+    "ruff>=0.0.287",
+    "asyncpg-stubs",
+    "types-pytest-lazy-fixture",
+    "types-click",
+    "types-pyyaml",
+    "pyright>=1.1.350",
 ]
 test = [
   "pytest>=7.4.1,<8.0.0",

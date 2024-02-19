@@ -44,7 +44,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         *,
         sqlalchemy_config: SQLAlchemyAsyncConfig,
         autocommit: CommitStrategy | None = None,
-        counters: Default | bool = _default,
+        counters: Default | bool = _default,  # pyright: ignore[reportInvalidTypeForm]
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
@@ -56,7 +56,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         *,
         sqlalchemy_config: SQLAlchemySyncConfig,
         autocommit: CommitStrategy | None = None,
-        counters: Default | bool = _default,
+        counters: Default | bool = _default,  # pyright: ignore[reportInvalidTypeForm]
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
@@ -70,7 +70,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         *,
         sqlalchemy_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
         autocommit: CommitStrategy | None = None,
-        counters: Default | bool = _default,
+        counters: Default | bool = _default,  # pyright: ignore[reportInvalidTypeForm]
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
