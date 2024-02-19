@@ -21,8 +21,7 @@ from sqlalchemy.orm import (
 
 from advanced_alchemy.types import GUID, BigIntIdentity, DateTimeUTC, JsonB
 
-UUID_UTILS_INSTALLED = find_spec("uuid_utils")
-if UUID_UTILS_INSTALLED:
+if UUID_UTILS_INSTALLED := find_spec("uuid_utils") and not TYPE_CHECKING:
     from uuid_utils import UUID, uuid4, uuid6, uuid7
 else:
     from uuid import UUID, uuid4  # type: ignore[assignment]
