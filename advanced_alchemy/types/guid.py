@@ -10,8 +10,8 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
 from typing_extensions import Buffer
 
-if UUID_UTILS_INSTALLED := find_spec("uuid_utils") and not TYPE_CHECKING:
-    from uuid_utils import UUID
+if (UUID_UTILS_INSTALLED := find_spec("uuid_utils")) and not TYPE_CHECKING:
+    from uuid_utils import UUID  # pyright: ignore[reportMissingImports]
 else:
     from uuid import UUID  # type: ignore[assignment]
 

@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any, TypeAlias, TypeVar
 
 from advanced_alchemy.filters import FilterTypes
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001
 
-ModelDictT: TypeAlias = dict[str, Any] | ModelT
-ModelDictListT: TypeAlias = list[ModelT | dict[str, Any]] | list[dict[str, Any]]
+ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
+ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
 FilterTypeT = TypeVar("FilterTypeT", bound=FilterTypes)
