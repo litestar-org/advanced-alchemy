@@ -125,6 +125,7 @@ brand_colors = {
 }
 
 html_theme_options = {
+    "accent_color": "red",
     "logo_target": "/",
     "announcement": "This documentation is currently under development.",
     "github_url": "https://github.com/jolt-org/advanced-alchemy",
