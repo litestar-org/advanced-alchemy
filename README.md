@@ -57,7 +57,7 @@ pip install advanced-alchemy
 
 ### Repositories
 
-Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD 
+Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD
 operations on your SQLAlchemy models.
 
 <details>
@@ -123,7 +123,7 @@ For a full standalone example, see the sample [here][standalone-example]
 
 ### Services
 
-Advanced Alchemy includes an additional service class to make working with a repository easier. 
+Advanced Alchemy includes an additional service class to make working with a repository easier.
 This class is designed to accept data as a dictionary or SQLAlchemy model,
 and it will handle the type conversions for you.
 
@@ -193,7 +193,7 @@ with session_factory() as db_session:
 
 ### Web Frameworks
 
-Advanced Alchemy works with nearly all Python web frameworks. 
+Advanced Alchemy works with nearly all Python web frameworks.
 Several helpers for popular libraries are included, and additional PRs to support others are welcomed.
 
 #### Litestar
