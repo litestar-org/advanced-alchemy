@@ -57,7 +57,11 @@ pip install advanced-alchemy
 
 ### Repositories
 
-Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD operations on your SQLAlchemy models.
+Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD
+operations on your SQLAlchemy models.
+
+<details>
+<summary>Click to expand the example</summary>
 
 ```python
 from advanced_alchemy.base import UUIDBase
@@ -113,14 +117,18 @@ with session_factory() as db_session:
     remaining_count = repo.count()
     print(f"Found {remaining_count} remaining records after delete.")
 ```
+</details>
 
 For a full standalone example, see the sample [here][standalone-example]
 
 ### Services
 
-Advanced Alchemy includes an additional service class to make working with a repository easier. This class is designed to accept data as a dictionary or SQLAlchemy model and it will handle the type conversions for you.
+Advanced Alchemy includes an additional service class to make working with a repository easier.
+This class is designed to accept data as a dictionary or SQLAlchemy model,
+and it will handle the type conversions for you.
 
-Here's the same example from above but using a service to create the data:
+<details>
+<summary>Here's the same example from above but using a service to create the data:</summary>
 
 ```python
 from advanced_alchemy.base import UUIDBase
@@ -181,16 +189,22 @@ with session_factory() as db_session:
     remaining_count = service.count()
     print(f"Found {remaining_count} remaining records after delete.")
 ```
+</details>
 
 ### Web Frameworks
 
-Advanced Alchemy works with nearly all Python web frameworks. Several helpers for popular libraries are included, and additional PRs to support others are welcomed.
+Advanced Alchemy works with nearly all Python web frameworks.
+Several helpers for popular libraries are included, and additional PRs to support others are welcomed.
 
 #### Litestar
 
 Advanced Alchemy is the official SQLAlchemy integration for Litestar.
 
-In addition to installed with `pip install advanced-alchemy`, it can also be installed installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
+In addition to installing with `pip install advanced-alchemy`,
+it can also be installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
+
+<details>
+<summary>Litestar Example</summary>
 
 ```python
 from litestar import Litestar
@@ -204,10 +218,14 @@ alchemy = SQLAlchemyPlugin(
 )
 app = Litestar(plugins=[alchemy])
 ```
+</details>
 
 For a full Litestar example, check [here][litestar-example]
 
 #### FastAPI
+
+<details>
+<summary>FastAPI Example</summary>
 
 ```python
 from fastapi import FastAPI
@@ -220,10 +238,14 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+</details>
 
-For a full CRUD example, see [here][fastapi-example]
+For a full FastAPI example, see [here][fastapi-example]
 
 #### Starlette
+
+<details>
+<summary>Pre-built Example Apps</summary>
 
 ```python
 from starlette.applications import Starlette
@@ -236,8 +258,12 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+</details>
 
 #### Sanic
+
+<details>
+<summary>Pre-built Example Apps</summary>
 
 ```python
 from sanic import Sanic
@@ -252,6 +278,7 @@ alchemy = SanicAdvancedAlchemy(
 )
 Extend.register(alchemy)
 ```
+</details>
 
 ## Contributing
 
