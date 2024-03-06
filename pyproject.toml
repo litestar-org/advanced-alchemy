@@ -81,7 +81,7 @@ docs = [
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
   "sphinx-copybutton>=0.5.2",
-  "shibuya>=2023.9.3",
+  "shibuya==2023.10.26",
   "sphinx-click>=5.0.1",
   "sphinx-toolbox>=3.5.0",
   "blacken-docs>=1.16.0",
@@ -185,9 +185,13 @@ line-length = 120
 
 [tool.ruff]
 line-length = 120
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-lint.fixable = ["ALL"]
-lint.ignore = [
+src = ["advanced_alchemy", "tests"]
+target-version = "py38"
+
+[tool.ruff.lint]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+fixable = ["ALL"]
+ignore = [
   "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
   "B010", # flake8-bugbear - do not call setattr with a constant attribute value
   "D100", # pydocstyle - missing docstring in public module
@@ -215,9 +219,7 @@ lint.ignore = [
   "PERF203", # ignore for now; investigate
   "PD011", # pandas
 ]
-lint.select = ["ALL"]
-src = ["advanced_alchemy", "tests"]
-target-version = "py38"
+select = ["ALL"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

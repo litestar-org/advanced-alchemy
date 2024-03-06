@@ -20,6 +20,7 @@ Available API References
     operations
     repository
     types
+    service
 
     alembic/index
     config/index
