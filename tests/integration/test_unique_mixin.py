@@ -4,10 +4,10 @@ from collections.abc import Hashable
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import ColumnElement, UniqueConstraint, create_engine, func, select
+from sqlalchemy import ColumnElement, String, UniqueConstraint, create_engine, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import Mapped, Session
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase
 from advanced_alchemy.mixins import UniqueMixin
@@ -27,7 +27,7 @@ def generate_mock_data() -> Iterator[list[dict[str, Any]]]:
 
 class BigIntModelWithUniqueValue(UniqueMixin, BigIntBase):
     col_1: Mapped[int]
-    col_2: Mapped[str]
+    col_2: Mapped[str] = mapped_column(String(50))
     col_3: Mapped[int]
 
     __table_args__ = (UniqueConstraint("col_1", "col_3"),)
