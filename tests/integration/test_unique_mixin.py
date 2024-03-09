@@ -30,15 +30,15 @@ class BigIntModelWithUniqueValue(UniqueMixin, BigIntBase):
     col_2: Mapped[str]
     col_3: Mapped[int]
 
-    __table_args__ = (UniqueConstraint("col_1", "col_2"),)
+    __table_args__ = (UniqueConstraint("col_1", "col_3"),)
 
     @classmethod
     def unique_hash(cls, col_1: int, col_2: int, col_3: str) -> Hashable:
-        return (col_1, col_2)
+        return (col_1, col_3)
 
     @classmethod
     def unique_filter(cls, col_1: int, col_2: int, col_3: str) -> ColumnElement[bool]:
-        return (cls.col_1 == col_1) & (cls.col_2 == col_2)
+        return (cls.col_1 == col_1) & (cls.col_3 == col_3)
 
 
 def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
