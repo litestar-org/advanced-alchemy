@@ -18,7 +18,14 @@ on:
         required: false
         type: number
         default: 60
+concurrency:
+  group: test-${{ github.head_ref }}
+  cancel-in-progress: true
 
+env:
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "1"
+  SKIP_DOCKER_COMPOSE: "1"
 jobs:
   test:
     runs-on: ${{ inputs.os }}
@@ -30,25 +37,27 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install Microsoft ODBC Drivers
-        run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
-
-      - name: Free additional space
+      - if: runner.os == 'Linux'
+        name: Install Microsoft ODBC Drivers & Free additional space
         run: |
+          sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y || true
           sudo docker rmi $(docker image ls -aq) >/dev/null 2>&1 || true
           sudo rm -rf \
-            /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
-            /usr/lib/jvm || true
+          /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+          /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
+          /usr/lib/jvm || true
           sudo apt-get autoremove -y \
           && sudo apt-get clean -y \
           && sudo rm -rf /root/.cache \
           && sudo rm -rf /var/apt/lists/* \
           && sudo rm -rf /var/cache/apt/* \
           && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      - if: runner.os == 'Linux'
+        name: Start Database Services
+        run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml up -d
 
       - name: Set up python ${{ inputs.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
 
@@ -78,6 +87,10 @@ jobs:
       - name: Test with coverage
         if: ${{ inputs.coverage }}
         run: pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n auto
+
+      - if: runner.os == 'Linux'
+        name: Start Database Services
+        run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml down --remove-orphans --volumes
 
       - uses: actions/upload-artifact@v3
         if: ${{ inputs.coverage }}

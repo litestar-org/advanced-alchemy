@@ -82,13 +82,17 @@ coverage:  											## Run the tests and generate coverage report
 .PHONY: test
 test:  												## Run the tests
 	@echo "=> Running test cases"
-	@$(ENV_PREFIX)pytest tests -m 'not asyncmy and not oracledb and not spanner and not mssql and not cockroachdb_async and not cockroachdb_sync' -n auto
+	@docker compose  -f tests/docker-compose.yml --project-name=advanced-alchemy-test-0 up --force-recreate -d
+	@SKIP_DOCKER_COMPOSE=true $(ENV_PREFIX)pytest tests -m 'not asyncmy and not oracledb and not spanner and not mssql and not cockroachdb_async and not cockroachdb_sync' -n auto
+	@docker compose -f tests/docker-compose.yml f tests/docker-compose.overrides.yml --project-name=advanced-alchemy-test-0 down --remove-orphans --volumes
 	@echo "=> Tests complete"
 
 .PHONY: test-all
 test-all:  												## Run the tests
 	@echo "=> Running all test cases"
-	@$(ENV_PREFIX)pytest tests -m '' -n auto
+	@docker compose  -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml --project-name=advanced-alchemy-test-0 up --force-recreate -d
+	@SKIP_DOCKER_COMPOSE=true $(ENV_PREFIX)pytest tests -m '' -n auto
+	@docker compose -f tests/docker-compose.yml f tests/docker-compose.overrides.yml --project-name=advanced-alchemy-test-0 down --remove-orphans --volumes
 	@echo "=> Tests complete"
 
 .PHONY: test-asyncpg

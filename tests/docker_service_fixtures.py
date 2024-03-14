@@ -49,7 +49,8 @@ async def wait_until_responsive(
     raise RuntimeError(msg)
 
 
-USE_LEGACY_DOCKER_COMPOSE: bool = bool(os.environ.get("USE_LEGACY_DOCKER_COMPOSE", None))
+SKIP_DOCKER_COMPOSE: bool = bool(os.environ.get("SKIP_DOCKER_COMPOSE", False))
+USE_LEGACY_DOCKER_COMPOSE: bool = bool(os.environ.get("USE_LEGACY_DOCKER_COMPOSE", False))
 
 
 class DockerServiceRegistry:
@@ -60,11 +61,13 @@ class DockerServiceRegistry:
         self._base_command.extend(
             [
                 f"--file={Path(__file__).parent / 'docker-compose.yml'}",
-                f"--project-name=advanced_alchemy-{worker_id}",
+                f"--file={Path(__file__).parent / 'docker-compose.overrides.yml'}",
+                f"--project-name=advanced-alchemy-test-{worker_id}",
             ],
         )
 
-    def _get_docker_ip(self) -> str:
+    @staticmethod
+    def _get_docker_ip() -> str:
         docker_host = os.environ.get("DOCKER_HOST", "").strip()
         if not docker_host or docker_host.startswith("unix://"):
             return "127.0.0.1"
@@ -88,23 +91,26 @@ class DockerServiceRegistry:
         pause: float = 0.1,
         **kwargs: Any,
     ) -> None:
+        if SKIP_DOCKER_COMPOSE:
+            self._running_services.add(name)
         if name not in self._running_services:
             self.run_command("up", "-d", name)
             self._running_services.add(name)
 
-            await wait_until_responsive(
-                check=wrap_sync(check),
-                timeout=timeout,
-                pause=pause,
-                host=self.docker_ip,
-                **kwargs,
-            )
+        await wait_until_responsive(
+            check=wrap_sync(check),
+            timeout=timeout,
+            pause=pause,
+            host=self.docker_ip,
+            **kwargs,
+        )
 
     def stop(self, name: str) -> None:
         pass
 
     def down(self) -> None:
-        self.run_command("down", "-t", "5")
+        if not SKIP_DOCKER_COMPOSE:
+            self.run_command("down", "--remove-orphans", "--volumes", "-t", "10")
 
 
 @pytest.fixture(scope="session")
