@@ -992,6 +992,10 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         using: Any,
         on: Any,
     ) -> Merge:
+        """Generates a valid merge statement.
+
+        Users should not call this at the current time.
+        """
         return Merge(into=into, using=using, on=on)
 
     def upsert_many(
