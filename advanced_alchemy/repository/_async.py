@@ -1017,7 +1017,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
-                empty, all fields are matched.
+                empty, automatically infers an ``id`` to match by.
 
         Returns:
             The updated or created instance.
