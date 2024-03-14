@@ -1006,6 +1006,9 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         Update instances with the attribute values present on `data`, or create a new instance if
         one doesn't exist.
 
+        !!! tip
+            In most cases, you will want to set `match_fields` to the combination of attributes, excluded the primary key, that define uniqueness for a row.
+
         Args:
             data: Instance to update existing, or be created. Identifier used to determine if an
                 existing instance exists is the value of an attribute on ``data`` named as value of
@@ -1017,7 +1020,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             no_merge: Skip the usage of optimized Merge statements
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
-                empty, all fields are matched.
+                empty, automatically uses ``self.id_attribute`` (`id` by default) to match .
 
         Returns:
             The updated or created instance.
