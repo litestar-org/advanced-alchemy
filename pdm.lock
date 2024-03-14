@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs", "extensions", "linting", "test", "uuid"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:8c65cfa8dac253698e4e04ea44628201ec9aef64b597df8cf7999be1d4323016"
+content_hash = "sha256:2079b3682ea2f8efe37ff97a0116f134f6e0aea97f210489a344d520eb72929e"
 
 [[package]]
 name = "aiofiles"
@@ -3016,7 +3016,7 @@ files = [
 
 [[package]]
 name = "shibuya"
-version = "2024.1.17"
+version = "2023.10.26"
 requires_python = ">=3.7"
 summary = "A clean, responsive, and customizable Sphinx documentation theme with light/dark mode."
 groups = ["docs"]
@@ -3024,8 +3024,8 @@ dependencies = [
     "Sphinx",
 ]
 files = [
-    {file = "shibuya-2024.1.17-py3-none-any.whl", hash = "sha256:9ed1b4225b3b8abe9234908f197904158355c92ba24e1e8cd414e73d1a937465"},
-    {file = "shibuya-2024.1.17.tar.gz", hash = "sha256:e1c709c343d0fe948d7a1be2a4ec90b48cca12e06464b17654d6c0c94bb0f9f9"},
+    {file = "shibuya-2023.10.26-py3-none-any.whl", hash = "sha256:e8a8647005a410d929fe4fdd3af2b88c156efbca8582ce3803ebd7771d08cebb"},
+    {file = "shibuya-2023.10.26.tar.gz", hash = "sha256:878f866a8720776c878ff1d9e17f7731cf8923859ff6fec77999b469477764a1"},
 ]
 
 [[package]]
