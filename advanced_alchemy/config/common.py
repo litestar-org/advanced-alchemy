@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 __all__ = (
     "GenericSQLAlchemyConfig",
     "GenericSessionConfig",
+    "GenericAlembicConfig",
 )
 
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
