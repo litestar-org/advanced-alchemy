@@ -18,7 +18,10 @@ if TYPE_CHECKING:
 
 
 class UniqueMixin:
-    """Mixin for instantiating objects while ensuring uniqueness on some field(s)."""
+    """Mixin for instantiating objects while ensuring uniqueness on some field(s).
+
+    This is a slightly modified implementation derived from https://github.com/sqlalchemy/sqlalchemy/wiki/UniqueObject
+    """
 
     @classmethod
     async def as_unique_async(
