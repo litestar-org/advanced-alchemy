@@ -1,6 +1,17 @@
 version: "3"
 
 services:
+  mysql:
+    image: mysql:latest
+    ports:
+      - "3360:3306" # use a non-standard port here
+    environment:
+      MYSQL_ROOT_PASSWORD: super-secret
+      MYSQL_PASSWORD: super-secret
+      MYSQL_USER: app
+      MYSQL_DATABASE: db
+      MYSQL_ROOT_HOST: "%"
+      LANG: C.UTF-8
   oracle18c:
     image: gvenzl/oracle-xe:18-slim-faststart
     ports:

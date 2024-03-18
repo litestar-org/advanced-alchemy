@@ -172,7 +172,7 @@ async def postgres_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def postgres_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("postgres", check=postgres_responsive)
+    await docker_services.start("postgres", pause=1, check=postgres_responsive)
 
 
 async def postgres14_responsive(host: str) -> bool:
@@ -195,7 +195,7 @@ async def postgres14_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def postgres14_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("postgres", check=postgres_responsive)
+    await docker_services.start("postgres", pause=1, check=postgres_responsive)
 
 
 def oracle23c_responsive(host: str) -> bool:
@@ -217,7 +217,7 @@ def oracle23c_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def oracle23c_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("oracle23c", check=oracle23c_responsive, timeout=120)
+    await docker_services.start("oracle23c", check=oracle23c_responsive, pause=1, timeout=120)
 
 
 def oracle18c_responsive(host: str) -> bool:
@@ -239,7 +239,7 @@ def oracle18c_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def oracle18c_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("oracle18c", check=oracle18c_responsive, timeout=120)
+    await docker_services.start("oracle18c", check=oracle18c_responsive, pause=1, timeout=120)
 
 
 def spanner_responsive(host: str) -> bool:
@@ -265,7 +265,7 @@ def spanner_responsive(host: str) -> bool:
 @pytest.fixture()
 async def spanner_service(docker_services: DockerServiceRegistry) -> None:
     os.environ["SPANNER_EMULATOR_HOST"] = "localhost:9010"
-    await docker_services.start("spanner", timeout=60, check=spanner_responsive)
+    await docker_services.start("spanner", timeout=60, pause=1, check=spanner_responsive)
 
 
 async def mssql_responsive(host: str) -> bool:

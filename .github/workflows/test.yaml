@@ -82,11 +82,11 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.coverage }}
-        run: pdm run pytest --dist "loadgroup" -m "" tests -n auto
+        run: pdm run pytest --dist "loadgroup" -m "" tests -n 4
 
       - name: Test with coverage
         if: ${{ inputs.coverage }}
-        run: pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n auto
+        run: pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 4
 
       - if: runner.os == 'Linux'
         name: Start Database Services

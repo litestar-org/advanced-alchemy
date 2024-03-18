@@ -34,6 +34,7 @@ pytestmark = [
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
