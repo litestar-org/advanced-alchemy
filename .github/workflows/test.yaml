@@ -19,7 +19,7 @@ on:
         type: number
         default: 60
 env:
-  PYTHONUNBUFFERED: "1"
+  # PYTHONUNBUFFERED: "1"
   FORCE_COLOR: "1"
 jobs:
   test:
