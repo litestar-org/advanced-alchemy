@@ -82,10 +82,10 @@ jobs:
 
       - name: Test with coverage
         if: ${{ inputs.coverage }}
-        run: pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n auto
+        run: SKIP_DOCKER_COMPOSE=true pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n auto
 
       - if: runner.os == 'Linux'
-        name: Start Database Services
+        name: Stop Database Services
         run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml down --remove-orphans --volumes
 
       - uses: actions/upload-artifact@v3
