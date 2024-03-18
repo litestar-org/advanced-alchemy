@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
 from sqlalchemy import ColumnElement, select
 from sqlalchemy.exc import MultipleResultsFound
@@ -9,7 +10,9 @@ from advanced_alchemy.exceptions import MultipleResultsFoundError
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
+    from typing import Iterator
 
+    from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm import Session
@@ -17,11 +20,48 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 
+T = TypeVar("T")
+
+
+class _Result(NamedTuple, Generic[T]):
+    cache: dict[tuple[type[T], Hashable], T]
+    statement: Select[tuple[T]]
+    obj: T | None
+
+
 class UniqueMixin:
     """Mixin for instantiating objects while ensuring uniqueness on some field(s).
 
     This is a slightly modified implementation derived from https://github.com/sqlalchemy/sqlalchemy/wiki/UniqueObject
     """
+
+    @classmethod
+    @contextmanager
+    def _uniquify(
+        cls,
+        session: AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session],
+    ) -> Iterator[None]:
+        with session.no_autoflush:
+            try:
+                yield
+            except MultipleResultsFound as e:
+                msg = "Multiple rows matched the specified key"
+                raise MultipleResultsFoundError(msg) from e
+
+    @classmethod
+    def _check_uniqueness(
+        cls,
+        cache: dict[tuple[type[Self], Hashable], Self] | None,
+        session: AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session],
+        key: tuple[type[Self], Hashable],
+        *args: Any,
+        **kwargs: Any,
+    ) -> _Result[Self]:
+        if cache is None:
+            cache = {}
+            setattr(session, "_unique_cache", cache)
+        statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(2)
+        return _Result(cache, statement, cache.get(key))
 
     @classmethod
     async def as_unique_async(
@@ -42,22 +82,18 @@ class UniqueMixin:
         Returns:
             Self: The unique object instance.
         """
-        cache: dict[tuple[type[Self], Hashable], Self] | None = getattr(session, "_unique_cache", None)
-        if cache is None:
-            cache = {}
-            setattr(session, "_unique_cache", cache)
         key = cls, cls.unique_hash(*args, **kwargs)
-        if obj := cache.get(key):
+        cache, statement, obj = cls._check_uniqueness(
+            getattr(session, "_unique_cache", None),
+            session,
+            key,
+            *args,
+            **kwargs,
+        )
+        if obj:
             return obj
-
-        with session.no_autoflush:
-            statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(2)
-            try:
-                obj = (await session.execute(statement)).scalar_one_or_none()
-            except MultipleResultsFound as e:
-                msg = "Multiple rows matched the specified key"
-                raise MultipleResultsFoundError(msg) from e
-            else:
+        with cls._uniquify(session):
+            if (obj := (await session.execute(statement)).scalar_one_or_none()) is None:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
         return obj
@@ -82,22 +118,18 @@ class UniqueMixin:
         Returns:
             Self: The unique object instance.
         """
-        cache: dict[tuple[type[Self], Hashable], Self] | None = getattr(session, "_unique_cache", None)
-        if cache is None:
-            cache = {}
-            setattr(session, "_unique_cache", cache)
         key = cls, cls.unique_hash(*args, **kwargs)
-        if obj := cache.get(key):
+        cache, statement, obj = cls._check_uniqueness(
+            getattr(session, "_unique_cache", None),
+            session,
+            key,
+            *args,
+            **kwargs,
+        )
+        if obj:
             return obj
-
-        with session.no_autoflush:
-            statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(2)
-            try:
-                obj = session.execute(statement).scalar_one_or_none()
-            except MultipleResultsFound as e:
-                msg = "Multiple rows matched the specified key"
-                raise MultipleResultsFoundError(msg) from e
-            else:
+        with cls._uniquify(session):
+            if (obj := session.execute(statement).scalar_one_or_none()) is None:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
         return obj
