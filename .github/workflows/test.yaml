@@ -18,10 +18,6 @@ on:
         required: false
         type: number
         default: 60
-concurrency:
-  group: test-${{ github.head_ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONUNBUFFERED: "1"
   FORCE_COLOR: "1"
