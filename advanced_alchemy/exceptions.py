@@ -84,3 +84,7 @@ class IntegrityError(RepositoryError):
 
 class NotFoundError(RepositoryError):
     """An identity does not exist."""
+
+
+class MultipleResultsFoundError(AdvancedAlchemyError):
+    """A single database result was required but more than one were found."""

@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement, select
+from sqlalchemy.exc import MultipleResultsFound
+
+from advanced_alchemy.exceptions import MultipleResultsFoundError
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -30,23 +33,28 @@ class UniqueMixin:
 
         Args:
             session (AsyncSession | async_scoped_session[AsyncSession]): SQLAlchemy async session
-            *args (Any): Columns belonging to a table
-            **kwargs (Any): Columns belonging to a table
+            *args (Any): Values used to instantiate the instance if no duplicate exists
+            **kwargs (Any): Values used to instantiate the instance if no duplicate exists
 
         Returns:
             Self: The unique object instance.
         """
-        key = cls, cls.unique_hash(*args, **kwargs)
         cache: dict[tuple[type[Self], Hashable], Self] | None = getattr(session, "_unique_cache", None)
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)
+        key = cls, cls.unique_hash(*args, **kwargs)
         if obj := cache.get(key):
             return obj
 
         with session.no_autoflush:
-            statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(1)
-            if (obj := (await session.scalars(statement)).first()) is None:
+            statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(2)
+            try:
+                obj = (await session.execute(statement)).scalar_one_or_none()
+            except MultipleResultsFound as e:
+                msg = "Multiple rows matched the specified key"
+                raise MultipleResultsFoundError(msg) from e
+            else:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
         return obj
@@ -65,32 +73,42 @@ class UniqueMixin:
 
         Args:
             session (Session | scoped_session[Session]): SQLAlchemy sync session
-            *args (Any): Columns belonging to a table
-            **kwargs (Any): Columns belonging to a table
+            *args (Any): Values used to instantiate the instance if no duplicate exists
+            **kwargs (Any): Values used to instantiate the instance if no duplicate exists
 
         Returns:
             Self: The unique object instance.
         """
-        key = cls, cls.unique_hash(*args, **kwargs)
         cache: dict[tuple[type[Self], Hashable], Self] | None = getattr(session, "_unique_cache", None)
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)
+        key = cls, cls.unique_hash(*args, **kwargs)
         if obj := cache.get(key):
             return obj
 
         with session.no_autoflush:
-            statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(1)
-            if (obj := (session.scalars(statement)).first()) is None:
+            statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(2)
+            try:
+                obj = session.execute(statement).scalar_one_or_none()
+            except MultipleResultsFound as e:
+                msg = "Multiple rows matched the specified key"
+                raise MultipleResultsFoundError(msg) from e
+            else:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
         return obj
 
     @classmethod
-    def unique_hash(cls, *arg: Any, **kw: Any) -> Hashable:  # noqa: ARG003
+    def unique_hash(cls, *args: Any, **kwargs: Any) -> Hashable:  # noqa: ARG003
         """Generate a unique key based on the provided arguments.
 
         This method should be implemented in the subclass.
+
+
+        Args:
+            *args (Any): Values passed to the alternate classmethod constructors
+            **kwargs (Any): Values passed to the alternate classmethod constructors
 
         Raises:
             NotImplementedError: If not implemented in the subclass.
@@ -102,10 +120,15 @@ class UniqueMixin:
         raise NotImplementedError(msg)
 
     @classmethod
-    def unique_filter(cls, *arg: Any, **kw: Any) -> ColumnElement[bool]:  # noqa: ARG003
+    def unique_filter(cls, *args: Any, **kwargs: Any) -> ColumnElement[bool]:  # noqa: ARG003
         """Generate a filter condition for ensuring uniqueness.
 
         This method should be implemented in the subclass.
+
+
+        Args:
+            *args (Any): Values passed to the alternate classmethod constructors
+            **kwargs (Any): Values passed to the alternate classmethod constructors
 
         Raises:
             NotImplementedError: If not implemented in the subclass.

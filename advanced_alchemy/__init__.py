@@ -17,12 +17,13 @@ from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryReadService, SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryReadService, SQLAlchemySyncRepositoryService
 
-from .exceptions import IntegrityError, NotFoundError, RepositoryError
+from .exceptions import IntegrityError, MultipleResultsFoundError, NotFoundError, RepositoryError
 from .filters import FilterTypes
 
 __all__ = (
     "IntegrityError",
     "FilterTypes",
+    "MultipleResultsFoundError",
     "NotFoundError",
     "RepositoryError",
     "SQLAlchemyAsyncMockRepository",
