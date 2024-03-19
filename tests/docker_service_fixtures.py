@@ -110,7 +110,7 @@ class DockerServiceRegistry:
 
     def down(self) -> None:
         if not SKIP_DOCKER_COMPOSE:
-            self.run_command("down", "--remove-orphans", "--volumes", "-t", "10")
+            self.run_command("down", "-t", "10")
 
 
 @pytest.fixture(scope="session")
@@ -195,7 +195,7 @@ async def postgres14_responsive(host: str) -> bool:
 
 @pytest.fixture()
 async def postgres14_service(docker_services: DockerServiceRegistry) -> None:
-    await docker_services.start("postgres", pause=1, check=postgres_responsive)
+    await docker_services.start("postgres", pause=1, check=postgres14_responsive)
 
 
 def oracle23c_responsive(host: str) -> bool:
