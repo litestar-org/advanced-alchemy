@@ -4,6 +4,9 @@ import contextlib
 from typing import TYPE_CHECKING
 
 from litestar.di import Provide
+from litestar.dto import DTOData
+from litestar.pagination import ClassicPagination, CursorPagination, OffsetPagination
+from litestar.params import Dependency, Parameter
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
@@ -37,6 +40,12 @@ signature_namespace_values = {
     "NotInCollectionFilter": NotInCollectionFilter,
     "NotInSearchFilter": NotInSearchFilter,
     "FilterTypes": FilterTypes,
+    "OffsetPagination": OffsetPagination,
+    "ClassicPagination": ClassicPagination,
+    "CursorPagination": CursorPagination,
+    "Parameter": Parameter,
+    "Dependency": Dependency,
+    "DTOData": DTOData,
 }
 
 
