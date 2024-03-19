@@ -947,6 +947,7 @@ files = [
     {file = "duckdb-0.10.1-cp39-cp39-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:48d84577216010ee407913bad9dc47af4cbc65e479c91e130f7bd909a32caefe"},
     {file = "duckdb-0.10.1-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:6e65f00294c3b8576ae651e91e732ea1cefc4aada89c307fb02f49231fd11e1f"},
     {file = "duckdb-0.10.1-cp39-cp39-win_amd64.whl", hash = "sha256:30aa9dbbfc1f9607249fc148af9e6d6fd253fdc2f4c9924d4957d6a535558b4f"},
+    {file = "duckdb-0.10.1.tar.gz", hash = "sha256:0d5b6daa9bb54a635e371798994caa08f26d2f145ebcbc989e16b0a0104e84fb"},
 ]
 
 [[package]]
@@ -2610,7 +2611,7 @@ files = [
 
 [[package]]
 name = "pytest-asyncio"
-version = "0.23.5.post1"
+version = "0.23.6"
 requires_python = ">=3.8"
 summary = "Pytest support for asyncio"
 groups = ["test"]
@@ -2618,8 +2619,8 @@ dependencies = [
     "pytest<9,>=7.0.0",
 ]
 files = [
-    {file = "pytest-asyncio-0.23.5.post1.tar.gz", hash = "sha256:b9a8806bea78c21276bc34321bbf234ba1b2ea5b30d9f0ce0f2dea45e4685813"},
-    {file = "pytest_asyncio-0.23.5.post1-py3-none-any.whl", hash = "sha256:30f54d27774e79ac409778889880242b0403d09cabd65b727ce90fe92dd5d80e"},
+    {file = "pytest-asyncio-0.23.6.tar.gz", hash = "sha256:ffe523a89c1c222598c76856e76852b787504ddb72dd5d9b6617ffa8aa2cde5f"},
+    {file = "pytest_asyncio-0.23.6-py3-none-any.whl", hash = "sha256:68516fdd1018ac57b846c9846b954f0393b26f094764a28c955eabb0536a4e8a"},
 ]
 
 [[package]]
