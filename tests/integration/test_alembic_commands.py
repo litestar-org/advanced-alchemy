@@ -34,6 +34,7 @@ pytestmark = [
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -107,6 +108,7 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(

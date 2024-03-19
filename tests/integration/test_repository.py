@@ -364,6 +364,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -427,6 +428,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
             marks=[
                 pytest.mark.mock_sync,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
@@ -599,6 +601,7 @@ def session(
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -662,6 +665,7 @@ def session(
             marks=[
                 pytest.mark.mock_async,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
