@@ -109,6 +109,7 @@ linting = [
   "pyright>=1.1.350",
 ]
 test = [
+  "anyio",
   "pytest>=7.4.1,<8.0.0",
   "pytest-xdist>=3.3.1",
   "pytest-lazy-fixture>=0.6.3",
@@ -118,12 +119,23 @@ test = [
   "httpx>=0.24.1",
   "pytz",
   "coverage",
+  "pytest-click",
+  "pytest-sugar",
   "pytest-cov",
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--dist", "loadgroup", "-n", "4"]
+addopts = "-ra -q --doctest-glob='*.md'"
 asyncio_mode = "auto"
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:pkg_resources",
+  "ignore::DeprecationWarning:google.rpc",
+  "ignore::DeprecationWarning:google.gcloud",
+  "ignore::DeprecationWarning:google.iam",
+  "ignore::DeprecationWarning:google",
+  "ignore::DeprecationWarning:websockets.connection",
+]
 markers = [
   "integration: SQLAlchemy integration tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
@@ -143,18 +155,11 @@ markers = [
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]
-
-filterwarnings = [
-  "ignore::DeprecationWarning:pkg_resources.*",
-  "ignore::DeprecationWarning:pkg_resources",
-  "ignore::DeprecationWarning:google.rpc",
-  "ignore::DeprecationWarning:google.gcloud",
-  "ignore::DeprecationWarning:google.iam",
-  "ignore::DeprecationWarning:google",
-  "ignore::DeprecationWarning:websockets.connection",
-]
+minversion = "6.0"
+testpaths = ["tests"]
 
 [tool.coverage.run]
+branch = true
 concurrency = ["multiprocessing", "thread"]
 omit = [
   "*/tests/*",
@@ -167,6 +172,7 @@ omit = [
   "advanced_alchemy/service/*",
 ]
 parallel = true
+source = ["advanced_alchemy"]
 
 [tool.coverage.report]
 exclude_lines = [

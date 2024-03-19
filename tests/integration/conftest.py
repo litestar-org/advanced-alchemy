@@ -221,7 +221,6 @@ async def mock_sync_engine() -> NonCallableMagicMock:
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -277,7 +276,6 @@ async def mock_sync_engine() -> NonCallableMagicMock:
             marks=[
                 pytest.mark.mock_sync,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
@@ -459,7 +457,6 @@ async def mock_async_engine() -> NonCallableMagicMock:
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -523,7 +520,6 @@ async def mock_async_engine() -> NonCallableMagicMock:
             marks=[
                 pytest.mark.mock_async,
                 pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
             ],
         ),
     ],
