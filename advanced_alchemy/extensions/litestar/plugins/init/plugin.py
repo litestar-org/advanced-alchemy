@@ -70,13 +70,14 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             signature_namespace_values.update({"pgproto.UUID": pgproto.UUID})
             app_config.type_encoders = {pgproto.UUID: str, **(app_config.type_encoders or {})}
         with contextlib.suppress(ImportError):
-            from uuid_utils import UUID  # pyright: ignore[reportMissingImports]
+            import uuid_utils  # pyright: ignore[reportMissingImports]
 
-            signature_namespace_values.update({"UUID": UUID})
-            app_config.type_encoders = {
-                **(app_config.type_encoders or {}),
-                UUID: str,
-            }
+            signature_namespace_values.update({"uuid_utils.UUID": uuid_utils.UUID})
+            app_config.type_encoders = {uuid_utils.UUID: str, **(app_config.type_encoders or {})}
+            app_config.type_decoders = [
+                (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
+                *(app_config.type_decoders or []),
+            ]
         app_config.signature_namespace.update(self._config.signature_namespace)
         app_config.signature_namespace.update(signature_namespace_values)
         app_config.lifespan.append(self._config.lifespan)
