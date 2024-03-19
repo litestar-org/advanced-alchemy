@@ -91,7 +91,7 @@ test:  												## Run the tests
 test-all:  												## Run the tests
 	@echo "=> Running all test cases"
 	@docker compose  -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml --project-name=advanced-alchemy-test-0 up --force-recreate -d
-	@SKIP_DOCKER_COMPOSE=true $(ENV_PREFIX)pytest tests -m 'not asyncmy'  --dist "loadgroup" -n auto
+	@SKIP_DOCKER_COMPOSE=true $(ENV_PREFIX)pytest tests -m ''  --dist "loadgroup" -n auto
 	@docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml --project-name=advanced-alchemy-test-0 down --remove-orphans --volumes
 	@echo "=> Tests complete"
 

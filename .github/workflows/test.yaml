@@ -19,9 +19,9 @@ on:
         type: number
         default: 60
 env:
-  PYTHONUNBUFFERED: "1"
+  # PYTHONUNBUFFERED: "1"
   FORCE_COLOR: "1"
-  SKIP_DOCKER_COMPOSE: "1"
+  # SKIP_DOCKER_COMPOSE: "1"
 jobs:
   test:
     runs-on: ${{ inputs.os }}
@@ -48,9 +48,9 @@ jobs:
           && sudo rm -rf /var/apt/lists/* \
           && sudo rm -rf /var/cache/apt/* \
           && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
-      - if: runner.os == 'Linux'
-        name: Start Database Services
-        run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml up -d
+      # - if: runner.os == 'Linux'
+      #   name: Start Database Services
+      #   run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml up -d
 
       - name: Set up python ${{ inputs.python-version }}
         uses: actions/setup-python@v5
@@ -78,15 +78,15 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.coverage }}
-        run: pdm run pytest --dist "loadgroup" -m "not asyncmy" tests -n auto
+        run: pdm run pytest --dist "loadgroup" -m "" tests -n auto
 
       - name: Test with coverage
         if: ${{ inputs.coverage }}
-        run: pdm run pytest tests --dist "loadgroup" -m "not asyncmy" --cov=advanced_alchemy --cov-report=xml -n auto
+        run: pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n auto
 
-      - if: runner.os == 'Linux'
-        name: Stop Database Services
-        run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml down --remove-orphans --volumes
+      # - if: runner.os == 'Linux'
+      #   name: Stop Database Services
+      #   run: sudo docker compose -f tests/docker-compose.yml -f tests/docker-compose.overrides.yml down --remove-orphans --volumes
 
       - uses: actions/upload-artifact@v3
         if: ${{ inputs.coverage }}
