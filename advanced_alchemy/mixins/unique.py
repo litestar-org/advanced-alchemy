@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement, select
 
@@ -17,15 +17,6 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from sqlalchemy.orm.scoping import scoped_session
     from typing_extensions import Self
-
-
-T = TypeVar("T")
-
-
-class _Result(NamedTuple, Generic[T]):
-    cache: dict[tuple[type[T], Hashable], T]
-    statement: Select[tuple[T]]
-    obj: T | None
 
 
 class UniqueMixin:
@@ -51,12 +42,12 @@ class UniqueMixin:
         key: tuple[type[Self], Hashable],
         *args: Any,
         **kwargs: Any,
-    ) -> _Result[Self]:
+    ) -> tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Self | None]:
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)
         statement = select(cls).where(cls.unique_filter(*args, **kwargs)).limit(2)
-        return _Result(cache, statement, cache.get(key))
+        return cache, statement, cache.get(key)
 
     @classmethod
     async def as_unique_async(
