@@ -21,7 +21,7 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 
-from advanced_alchemy.exceptions import NotFoundError, RepositoryError
+from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -34,7 +34,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.operations import Merge
-from advanced_alchemy.repository._util import get_instrumented_attr, wrap_sqlalchemy_exception
+from advanced_alchemy.repository._util import get_instrumented_attr
 from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.utils.deprecation import deprecated
 

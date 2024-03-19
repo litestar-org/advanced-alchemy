@@ -25,3 +25,4 @@ Available API References
     alembic/index
     config/index
     extensions/index
+    mixins/index
