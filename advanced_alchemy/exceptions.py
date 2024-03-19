@@ -96,8 +96,8 @@ class MultipleResultsFoundError(AdvancedAlchemyError):
 
 @contextmanager
 def wrap_sqlalchemy_exception() -> Any:
-    """Do something within context to raise a `RepositoryError` chained
-    from an original `SQLAlchemyError`.
+    """Do something within context to raise a ``RepositoryError`` chained
+    from an original ``SQLAlchemyError``.
 
         >>> try:
         ...     with wrap_sqlalchemy_exception():
