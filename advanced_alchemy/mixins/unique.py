@@ -94,6 +94,7 @@ class UniqueMixin:
         """Instantiate and return a unique object within the provided session based on the given arguments.
 
         If an object with the same unique identifier already exists in the session, it is returned from the cache.
+
         Args:
             session (Session | scoped_session[Session]): SQLAlchemy sync session
             *args (Any): Values used to instantiate the instance if no duplicate exists
