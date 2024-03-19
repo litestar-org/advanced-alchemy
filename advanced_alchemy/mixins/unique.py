@@ -4,9 +4,8 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
 from sqlalchemy import ColumnElement, select
-from sqlalchemy.exc import MultipleResultsFound
 
-from advanced_alchemy.exceptions import MultipleResultsFoundError
+from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -37,16 +36,12 @@ class UniqueMixin:
 
     @classmethod
     @contextmanager
-    def _uniquify(
+    def _prevent_autoflush(
         cls,
         session: AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session],
     ) -> Iterator[None]:
-        with session.no_autoflush:
-            try:
-                yield
-            except MultipleResultsFound as e:
-                msg = "Multiple rows matched the specified key"
-                raise MultipleResultsFoundError(msg) from e
+        with session.no_autoflush, wrap_sqlalchemy_exception():
+            yield
 
     @classmethod
     def _check_uniqueness(
@@ -92,7 +87,7 @@ class UniqueMixin:
         )
         if obj:
             return obj
-        with cls._uniquify(session):
+        with cls._prevent_autoflush(session):
             if (obj := (await session.execute(statement)).scalar_one_or_none()) is None:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
@@ -128,7 +123,7 @@ class UniqueMixin:
         )
         if obj:
             return obj
-        with cls._uniquify(session):
+        with cls._prevent_autoflush(session):
             if (obj := session.execute(statement).scalar_one_or_none()) is None:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
