@@ -21,7 +21,9 @@ from sqlalchemy.orm import (
 from advanced_alchemy.types import GUID, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
 
 if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
-    from uuid_utils import UUID, uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
+    from uuid_utils import UUID  # pyright: ignore[reportMissingImports]
+    from uuid_utils.compat import uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
+
 else:
     from uuid import UUID, uuid4  # type: ignore[assignment]
 
