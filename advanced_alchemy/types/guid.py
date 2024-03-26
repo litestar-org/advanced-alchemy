@@ -3,6 +3,7 @@ from __future__ import annotations
 from base64 import b64decode
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
+from uuid import UUID
 
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
@@ -10,13 +11,10 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
 from typing_extensions import Buffer
 
-if (UUID_UTILS_INSTALLED := find_spec("uuid_utils")) and not TYPE_CHECKING:
-    from uuid_utils import UUID  # pyright: ignore[reportMissingImports]
-else:
-    from uuid import UUID  # type: ignore[assignment]
-
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
+
+UUID_UTILS_INSTALLED = find_spec("uuid_utils")
 
 
 class GUID(TypeDecorator):

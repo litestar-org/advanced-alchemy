@@ -62,7 +62,6 @@ repos:
             time-machine,
             httpx,
             "sanic[ext]",
-            socketify,
             fastapi,
             pytest-mock,
             pytest-timeout,
