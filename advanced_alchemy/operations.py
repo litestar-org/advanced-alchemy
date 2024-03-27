@@ -6,7 +6,7 @@ from sqlalchemy import ClauseElement, ColumnElement, UpdateBase
 from sqlalchemy.ext.compiler import compiles
 
 if TYPE_CHECKING:
-    from typing import Literal, Self
+    from typing import Literal
 
     from sqlalchemy.sql.compiler import StrSQLCompiler
 
@@ -19,11 +19,11 @@ class MergeClause(ClauseElement):
         self.predicate: ColumnElement[bool] | None = None
         self.command = command
 
-    def values(self, **kwargs: ColumnElement[Any]) -> Self:
+    def values(self, **kwargs: ColumnElement[Any]) -> MergeClause:
         self.on_sets = kwargs
         return self
 
-    def where(self, expr: ColumnElement[bool]) -> Self:
+    def where(self, expr: ColumnElement[bool]) -> MergeClause:
         self.predicate = expr
         return self
 

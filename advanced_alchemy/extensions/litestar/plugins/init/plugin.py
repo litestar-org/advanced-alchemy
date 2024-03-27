@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from litestar.di import Provide
 from litestar.dto import DTOData
@@ -46,6 +47,7 @@ signature_namespace_values = {
     "Parameter": Parameter,
     "Dependency": Dependency,
     "DTOData": DTOData,
+    "UUID": UUID,
 }
 
 
