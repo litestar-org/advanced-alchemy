@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ClauseElement, ColumnElement, UpdateBase
 from sqlalchemy.ext.compiler import compiles
 
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 if TYPE_CHECKING:
     from typing import Literal
 
@@ -19,11 +24,11 @@ class MergeClause(ClauseElement):
         self.predicate: ColumnElement[bool] | None = None
         self.command = command
 
-    def values(self, **kwargs: ColumnElement[Any]) -> MergeClause:
+    def values(self, **kwargs: ColumnElement[Any]) -> Self:
         self.on_sets = kwargs
         return self
 
-    def where(self, expr: ColumnElement[bool]) -> MergeClause:
+    def where(self, expr: ColumnElement[bool]) -> Self:
         self.predicate = expr
         return self
 

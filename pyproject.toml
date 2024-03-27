@@ -29,6 +29,7 @@ dependencies = [
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet; sys_platform == \"darwin\"",
+  "typing-extensions; python_version < \"3.11\""
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
