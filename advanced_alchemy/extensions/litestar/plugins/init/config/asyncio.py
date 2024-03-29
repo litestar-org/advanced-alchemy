@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, cast
 
+from litestar.cli._utils import console
 from litestar.constants import HTTP_RESPONSE_START
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
@@ -211,7 +213,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             app (Litestar): The ``Litestar`` instance
         """
         async with self.get_engine().begin() as conn:
-            await conn.run_sync(self.alembic_config.target_metadata.create_all)
+            try:
+                await conn.run_sync(self.alembic_config.target_metadata.create_all)
+            except OperationalError as exc:
+                console.print(f"[bold red] * Could not create target metadata.  Reason: {exc}")
 
     def create_app_state_items(self) -> dict[str, Any]:
         """Key/value pairs to be stored in application state."""
