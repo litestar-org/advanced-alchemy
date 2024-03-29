@@ -54,7 +54,10 @@ signature_namespace_values = {
 class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.SlotsBase):
     """SQLAlchemy application lifecycle configuration."""
 
-    def __init__(self, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | list[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]) -> None:
+    def __init__(
+        self,
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | list[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+    ) -> None:
         """Initialize ``SQLAlchemyPlugin``.
 
         Args:
@@ -88,8 +91,8 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             app_config.type_decoders = [
                 (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
                 *(app_config.type_decoders or []),
-            ] 
-        if isinstance( self._config, list):
+            ]
+        if isinstance(self._config, list):
             for _config in self._config:
                 signature_namespace_values.update(_config.signature_namespace)
                 app_config.lifespan.append(_config.lifespan)

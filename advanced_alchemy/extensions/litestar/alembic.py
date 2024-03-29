@@ -25,5 +25,9 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
 class AlembicCommands(_AlembicCommands):
     def __init__(self, app: Litestar) -> None:
         self._app = app
-        self.sqlalchemy_config = get_database_migration_plugin(self._app)._config  # noqa: SLF001
+        _config = get_database_migration_plugin(self._app)._config  # noqa: SLF001
+        if isinstance(_config, list):
+            self.sqlalchemy_config = _config[0]
+        else:
+            self.sqlalchemy_config = _config
         self.config = self._get_alembic_command_config()
