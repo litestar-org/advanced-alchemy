@@ -23,7 +23,7 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.3.3"
+    rev: "v0.3.4"
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -62,7 +62,6 @@ repos:
             time-machine,
             httpx,
             "sanic[ext]",
-            socketify,
             fastapi,
             pytest-mock,
             pytest-timeout,
