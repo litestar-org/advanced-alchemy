@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from litestar.di import Provide
@@ -54,14 +54,13 @@ signature_namespace_values = {
 class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.SlotsBase):
     """SQLAlchemy application lifecycle configuration."""
 
-    def __init__(self, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> None:
+    def __init__(self, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | list[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]) -> None:
         """Initialize ``SQLAlchemyPlugin``.
 
         Args:
             config: configure DB connection and hook handlers and dependencies.
         """
         self._config = config
-        self._alembic_config = config.alembic_config
 
     def on_cli_init(self, cli: Group) -> None:
         from advanced_alchemy.extensions.litestar.cli import database_group
@@ -75,6 +74,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         Args:
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
+        signature_namespace_values: dict[str, Any] = {}
         with contextlib.suppress(ImportError):
             from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
 
@@ -88,15 +88,29 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             app_config.type_decoders = [
                 (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
                 *(app_config.type_decoders or []),
-            ]
-        app_config.signature_namespace.update(self._config.signature_namespace)
+            ] 
+        if isinstance( self._config, list):
+            for _config in self._config:
+                signature_namespace_values.update(_config.signature_namespace)
+                app_config.lifespan.append(_config.lifespan)
+
+                app_config.dependencies.update(
+                    {
+                        _config.engine_dependency_key: Provide(_config.provide_engine, sync_to_thread=False),
+                        _config.session_dependency_key: Provide(_config.provide_session, sync_to_thread=False),
+                    },
+                )
+                app_config.before_send.append(_config.before_send_handler)
+        else:
+            signature_namespace_values.update(self._config.signature_namespace)
+            app_config.lifespan.append(self._config.lifespan)
+            app_config.dependencies.update(
+                {
+                    self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
+                    self._config.session_dependency_key: Provide(self._config.provide_session, sync_to_thread=False),
+                },
+            )
+            app_config.before_send.append(self._config.before_send_handler)
         app_config.signature_namespace.update(signature_namespace_values)
-        app_config.lifespan.append(self._config.lifespan)
-        app_config.dependencies.update(
-            {
-                self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
-                self._config.session_dependency_key: Provide(self._config.provide_session, sync_to_thread=False),
-            },
-        )
-        app_config.before_send.append(self._config.before_send_handler)
+
         return app_config
