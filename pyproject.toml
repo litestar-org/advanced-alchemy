@@ -55,6 +55,9 @@ uuid = [
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[tool.pdm]
+ignore_package_warnings = ["alabaster","sphinxcontrib-*","sphinx-*","sphinx","pre-commit"]
+
 [tool.pdm.dev-dependencies]
 dev = [
   "asyncmy>=0.2.8",
@@ -65,7 +68,6 @@ dev = [
   "aiosqlite>=0.19.0",
   "psycopg[pool,binary]>=3.1.10",
   "psycopg2-binary",
-  "pytest-xdist>=3.3.1",
   "sqlalchemy-spanner>=1.6.2",
   "sqlalchemy-cockroachdb>=2.0.0",
   "litestar>=2.0.1",
@@ -108,19 +110,19 @@ linting = [
   "pyright>=1.1.350",
 ]
 test = [
-  "anyio",
-  "pytest>=7.4.1,<8.0.0",
-  "pytest-xdist>=3.3.1",
-  "pytest-lazy-fixture>=0.6.3",
-  "pytest-asyncio>=0.21.1",
-  "pytest-mock>=3.11.1",
-  "time-machine>=2.12.0",
-  "httpx>=0.24.1",
-  "pytz",
-  "coverage",
-  "pytest-click",
-  "pytest-sugar",
-  "pytest-cov",
+    "anyio",
+    "pytest>=7.4.1,<8.0.0",
+    "pytest-xdist>=3.3.1",
+    "pytest-lazy-fixture>=0.6.3","pytest-asyncio",
+    "pytest-mock>=3.11.1",
+    "time-machine>=2.12.0",
+    "httpx>=0.24.1",
+    "pytz",
+    "coverage",
+    "pytest-click",
+    "pytest-sugar",
+    "pytest-cov",
+    "pytest-databases @ git+https://github.com/jolt-org/pytest-databases.git",
 ]
 
 [tool.pytest.ini_options]

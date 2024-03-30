@@ -1,13 +1,19 @@
-import asyncio
-from collections.abc import Generator
+from typing import Any
 
 import pytest
+from pytest_asyncio import is_async_test
 
-pytest_plugins = ["tests.docker_service_fixtures"]
+pytest_plugins = [
+    "pytest_databases.docker",
+    "pytest_databases.docker.oracle",
+    "pytest_databases.docker.postgres",
+    "pytest_databases.docker.mysql",
+    "pytest_databases.docker.mssql",
+]
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator["asyncio.AbstractEventLoop", None, None]:
-    loop = asyncio.get_event_loop_policy().get_event_loop()
-    yield loop
-    loop.close()
+def pytest_collection_modifyitems(items: Any) -> None:
+    pytest_asyncio_tests = (item for item in items if is_async_test(item))
+    session_scope_marker = pytest.mark.asyncio(scope="session")
+    for async_test in pytest_asyncio_tests:
+        async_test.add_marker(session_scope_marker, append=False)

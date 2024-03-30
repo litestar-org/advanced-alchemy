@@ -132,7 +132,7 @@ def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
 
 
 @pytest.fixture()
-def psycopg_engine(docker_ip: str, postgres_service: None) -> Engine:
+def psycopg_engine(docker_ip: str, postgres15_service: None) -> Engine:
     """Postgresql instance for end-to-end testing."""
     return create_engine(
         URL(
@@ -140,7 +140,7 @@ def psycopg_engine(docker_ip: str, postgres_service: None) -> Engine:
             username="postgres",
             password="super-secret",
             host=docker_ip,
-            port=5423,
+            port=5426,
             database="postgres",
             query={},  # type:ignore[arg-type]
         ),
@@ -311,7 +311,7 @@ async def aiosqlite_engine(tmp_path: Path) -> AsyncGenerator[AsyncEngine, None]:
 
 
 @pytest.fixture()
-async def asyncmy_engine(docker_ip: str, mysql_service: None) -> AsyncEngine:
+async def asyncmy_engine(docker_ip: str, mysql8_service: None) -> AsyncEngine:
     """Postgresql instance for end-to-end testing."""
     return create_async_engine(
         URL(
@@ -328,7 +328,7 @@ async def asyncmy_engine(docker_ip: str, mysql_service: None) -> AsyncEngine:
 
 
 @pytest.fixture()
-async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
+async def asyncpg_engine(docker_ip: str, postgres15_service: None) -> AsyncEngine:
     """Postgresql instance for end-to-end testing."""
     return create_async_engine(
         URL(
@@ -336,7 +336,7 @@ async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
             username="postgres",
             password="super-secret",
             host=docker_ip,
-            port=5423,
+            port=5426,
             database="postgres",
             query={},  # type:ignore[arg-type]
         ),
@@ -345,7 +345,7 @@ async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
 
 
 @pytest.fixture()
-async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
+async def psycopg_async_engine(docker_ip: str, postgres15_service: None) -> AsyncEngine:
     """Postgresql instance for end-to-end testing."""
     return create_async_engine(
         URL(
@@ -353,7 +353,7 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
             username="postgres",
             password="super-secret",
             host=docker_ip,
-            port=5423,
+            port=5426,
             database="postgres",
             query={},  # type:ignore[arg-type]
         ),
