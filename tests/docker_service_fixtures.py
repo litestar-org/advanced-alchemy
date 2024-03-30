@@ -61,7 +61,6 @@ class DockerServiceRegistry:
         self._base_command.extend(
             [
                 f"--file={Path(__file__).parent / 'docker-compose.yml'}",
-                f"--file={Path(__file__).parent / 'docker-compose.overrides.yml'}",
                 f"--project-name=advanced-alchemy-test-{worker_id}",
             ],
         )
@@ -110,7 +109,7 @@ class DockerServiceRegistry:
 
     def down(self) -> None:
         if not SKIP_DOCKER_COMPOSE:
-            self.run_command("down", "-t", "10")
+            self.run_command("down", "--volumes", "-t", "10")
 
 
 @pytest.fixture(scope="session")

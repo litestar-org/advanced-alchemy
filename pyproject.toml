@@ -124,7 +124,7 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-ra -q --doctest-glob='*.md'"
+addopts = ["--dist", "loadgroup", "-n", "auto","-ra","-q"]
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
