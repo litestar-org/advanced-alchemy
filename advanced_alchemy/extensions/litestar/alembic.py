@@ -1,10 +1,14 @@
-from contextlib import suppress
+from __future__ import annotations
 
-from litestar import Litestar
+from contextlib import suppress
+from typing import TYPE_CHECKING
 
 from advanced_alchemy.alembic.commands import AlembicCommands as _AlembicCommands
-from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
+
+if TYPE_CHECKING:
+    from litestar import Litestar
+
+    from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
 
 
 def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
@@ -13,6 +17,8 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     This function attempts to find and return either the SQLAlchemyPlugin or SQLAlchemyInitPlugin.
     If neither plugin is found, it raises an ImproperlyConfiguredException.
     """
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+    from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
 
     with suppress(KeyError):
         return app.plugins.get(SQLAlchemyInitPlugin)
