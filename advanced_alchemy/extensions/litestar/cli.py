@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, cast
 
 from click import argument, group, option
 from litestar.cli._utils import LitestarGroup, console
-from rich.prompt import Confirm, Prompt
 
 if TYPE_CHECKING:
     from litestar import Litestar
@@ -60,6 +59,8 @@ def show_database_revision(app: Litestar, verbose: bool) -> None:
 )
 def downgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:
     """Downgrade the database to the latest revision."""
+    from rich.prompt import Confirm
+
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Starting database downgrade process[/]", align="left")
@@ -100,6 +101,8 @@ def downgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None,
 )
 def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:
     """Upgrade the database to the latest revision."""
+    from rich.prompt import Confirm
+
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Starting database upgrade process[/]", align="left")
@@ -131,6 +134,8 @@ def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, n
 )
 def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: bool, no_prompt: bool) -> None:
     """Upgrade the database to the latest revision."""
+    from rich.prompt import Confirm
+
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands, get_database_migration_plugin
 
     console.rule("[yellow]Initializing database migrations.", align="left")
@@ -181,6 +186,8 @@ def create_revision(
     no_prompt: bool,
 ) -> None:
     """Create a new database revision."""
+    from rich.prompt import Prompt
+
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     def process_revision_directives(
@@ -253,6 +260,8 @@ def merge_revisions(
     no_prompt: bool,
 ) -> None:
     """Merge multiple revisions into a single new revision."""
+    from rich.prompt import Prompt
+
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Starting database upgrade process[/]", align="left")
@@ -298,6 +307,8 @@ def merge_revisions(
 )
 def stamp_revision(app: Litestar, revision: str, sql: bool, tag: str | None, purge: bool, no_prompt: bool) -> None:
     """Create a new database revision."""
+    from rich.prompt import Confirm
+
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Stamping database revision as current[/]", align="left")
