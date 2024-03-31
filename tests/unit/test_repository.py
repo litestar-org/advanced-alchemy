@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import String
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +27,7 @@ from advanced_alchemy.filters import (
     NotInCollectionFilter,
     OnBeforeAfter,
 )
-from tests.helpers import maybe_async
+from tests.helpers import lazy_fixture, maybe_async
 
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest

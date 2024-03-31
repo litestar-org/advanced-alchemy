@@ -6,7 +6,6 @@ from typing import Type, cast
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import FixtureRequest
-from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
@@ -15,6 +14,7 @@ from advanced_alchemy.alembic import commands
 from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from alembic.util.exc import CommandError
 from tests import models_uuid
+from tests.helpers import lazy_fixture
 
 AuthorModel = Type[models_uuid.UUIDAuthor]
 RuleModel = Type[models_uuid.UUIDRule]

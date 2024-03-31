@@ -11,7 +11,6 @@ from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
@@ -36,7 +35,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
 from tests import models_bigint, models_uuid
-from tests.helpers import maybe_async
+from tests.helpers import lazy_fixture, maybe_async
 
 from .helpers import update_raw_records
 
@@ -358,6 +357,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
 
 
 @pytest.fixture(
+    name="engine",
     params=[
         pytest.param(
             "sqlite_engine",
@@ -595,6 +595,7 @@ def session(
 
 
 @pytest.fixture(
+    name="async_engine",
     params=[
         pytest.param(
             "aiosqlite_engine",

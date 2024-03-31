@@ -58,7 +58,6 @@ repos:
             psycopg,
             pytest,
             pytest-asyncio,
-            pytest-lazy-fixture,
             time-machine,
             httpx,
             "sanic[ext]",
