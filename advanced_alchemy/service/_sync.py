@@ -8,7 +8,6 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Generic, Iterable, cast, overload
 
@@ -16,15 +15,13 @@ from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
-from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
-from advanced_alchemy.service.pagination import OffsetPagination
 
 from ._converters import to_schema
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
 
     from sqlalchemy import RowMapping, Select, StatementLambdaElement
     from sqlalchemy.orm import InstrumentedAttribute, Session
@@ -35,6 +32,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.repository import SQLAlchemySyncRepository
     from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+    from advanced_alchemy.service.pagination import OffsetPagination
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
 
 
@@ -243,43 +241,10 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
                 )
 
     @overload
-    def to_dto(self, data: ModelT) -> ModelT: ...
+    def to_schema(self, dto: type[ModelT], data: ModelT | RowMapping) -> ModelT: ...
 
     @overload
-    def to_dto(
-        self,
-        data: Sequence[ModelT],
-        total: int | None = None,
-        *filters: FilterTypes | ColumnElement[bool],
-    ) -> OffsetPagination[ModelT]: ...
-
-    def to_dto(
-        self,
-        data: ModelT | Sequence[ModelT],
-        total: int | None = None,
-        *filters: FilterTypes | ColumnElement[bool],
-    ) -> ModelT | OffsetPagination[ModelT]:
-        """Convert the object to a format expected by a DTO handler
-
-        Args:
-            data: The return from one of the service calls.
-            total: the total number of rows in the data
-            *filters: Collection route filters.
-
-        Returns:
-            The list of instances retrieved from the repository.
-        """
-        if not isinstance(data, Sequence | list):
-            return data
-        limit_offset = self.find_filter(LimitOffset, *filters)
-        total = total or len(data)
-        limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-        return OffsetPagination(
-            items=list(data),
-            limit=limit_offset.limit,
-            offset=limit_offset.offset,
-            total=total,
-        )
+    def to_schema(self, dto: type[ModelT], data: Sequence[ModelT] | list[RowMapping]) -> OffsetPagination[ModelT]: ...
 
     @overload
     def to_schema(self, dto: type[ModelDTOT], data: ModelT | RowMapping) -> ModelDTOT: ...
@@ -295,11 +260,11 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
 
     def to_schema(
         self,
-        dto: type[ModelDTOT],
+        dto: type[ModelT | ModelDTOT],
         data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
         total: int | None = None,
         *filters: FilterTypes,
-    ) -> ModelDTOT | OffsetPagination[ModelDTOT]:
+    ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.
 
         Args:

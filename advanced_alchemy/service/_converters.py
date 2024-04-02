@@ -11,14 +11,13 @@ from typing import (
 )
 from uuid import UUID
 
-from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import FilterTypes, LimitOffset
+from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service.pagination import OffsetPagination
 
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement, RowMapping
 
-    from advanced_alchemy.repository.typing import ModelT
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
 
 try:
@@ -96,11 +95,12 @@ def _find_filter(
 
 
 def to_schema(
-    dto: type[ModelDTOT],
+    dto: type[ModelT | ModelDTOT],
     data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
     total: int | None = None,
     *filters: FilterTypes,
-) -> ModelDTOT | OffsetPagination[ModelDTOT]:
+) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+
     if issubclass(dto, Struct):
         if not isinstance(data, Sequence | list):
             return convert(  # type: ignore  # noqa: PGH003
@@ -146,4 +146,14 @@ def to_schema(
             offset=limit_offset.offset,
             total=total,
         )
-    raise AdvancedAlchemyError(detail="Error converting result set to schema model")
+    if not isinstance(data, Sequence | list):
+        return cast("ModelT", data)
+    limit_offset = _find_filter(LimitOffset, *filters)
+    total = total or len(data)
+    limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
+    return OffsetPagination[ModelT](
+        items=cast("list[ModelT]", data),
+        limit=limit_offset.limit,
+        offset=limit_offset.offset,
+        total=total,
+    )
