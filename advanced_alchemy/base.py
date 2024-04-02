@@ -6,6 +6,7 @@ import contextlib
 import re
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
+from uuid import UUID
 
 from sqlalchemy import Date, MetaData, Sequence, String
 from sqlalchemy.orm import (
@@ -21,9 +22,10 @@ from sqlalchemy.orm import (
 from advanced_alchemy.types import GUID, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
 
 if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
-    from uuid_utils import UUID, uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
+    from uuid_utils.compat import uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
+
 else:
-    from uuid import UUID, uuid4  # type: ignore[assignment]
+    from uuid import uuid4  # type: ignore[assignment]
 
     uuid6 = uuid4  # type: ignore[assignment]
     uuid7 = uuid4  # type: ignore[assignment]
