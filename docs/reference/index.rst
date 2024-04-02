@@ -21,6 +21,7 @@ Available API References
     repository
     types
     service
+    utils
 
     alembic/index
     config/index

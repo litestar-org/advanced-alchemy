@@ -17,13 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 from time_machine import travel
 
-from advanced_alchemy import (
-    SQLAlchemyAsyncMockRepository,
-    SQLAlchemyAsyncRepository,
-    SQLAlchemyAsyncRepositoryService,
-    SQLAlchemySyncMockRepository,
-    base,
-)
+from advanced_alchemy import base
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -34,7 +28,17 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.repository import (
+    SQLAlchemyAsyncRepository,
+)
 from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
+from advanced_alchemy.repository.memory import (
+    SQLAlchemyAsyncMockRepository,
+    SQLAlchemySyncMockRepository,
+)
+from advanced_alchemy.service import (
+    SQLAlchemyAsyncRepositoryService,
+)
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 

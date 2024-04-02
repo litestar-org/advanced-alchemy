@@ -8,15 +8,16 @@ from typing import List
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from advanced_alchemy import (
+from advanced_alchemy.base import BigIntAuditBase, BigIntBase
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
-    SQLAlchemyAsyncRepository,
-    SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncMockRepository,
-    SQLAlchemySyncRepository,
+)
+from advanced_alchemy.service import (
+    SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.base import BigIntAuditBase, BigIntBase
 from advanced_alchemy.types import EncryptedString
 from advanced_alchemy.types.encrypted_string import EncryptedText
 

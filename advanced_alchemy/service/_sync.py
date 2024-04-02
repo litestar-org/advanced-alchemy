@@ -33,10 +33,8 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.repository import (
-        SQLAlchemySyncMockRepository,
-        SQLAlchemySyncRepository,
-    )
+    from advanced_alchemy.repository import SQLAlchemySyncRepository
+    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
 
 

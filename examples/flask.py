@@ -2,8 +2,8 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, sessionmaker
 
-from advanced_alchemy import SQLAlchemySyncRepository
 from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.repository import SQLAlchemySyncRepository
 
 SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
 

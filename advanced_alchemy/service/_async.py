@@ -32,7 +32,8 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.repository import SQLAlchemyAsyncMockRepository, SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
 
 

@@ -13,6 +13,7 @@ from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
     Mapper,
+    declarative_mixin,
     declared_attr,
     mapped_column,
     orm_insert_sentinel,
@@ -53,6 +54,8 @@ __all__ = (
     "UUIDPrimaryKey",
     "UUIDv7PrimaryKey",
     "UUIDv6PrimaryKey",
+    "SlugKey",
+    "SQLQuery",
     "orm_registry",
 )
 
@@ -175,6 +178,14 @@ class CommonTableAttributes:
         return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
 
 
+@declarative_mixin
+class SlugKey:
+    """Slug unique Field Model Mixin."""
+
+    __abstract__ = True
+    slug: Mapped[str] = mapped_column(String(length=100), nullable=False, unique=True)
+
+
 def create_registry(
     custom_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
@@ -253,3 +264,19 @@ class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, Dec
     """Base for declarative models with BigInt primary keys and audit columns."""
 
     registry = orm_registry
+
+
+class SQLQuery(DeclarativeBase):
+    """Base for all SQLAlchemy custom mapped objects."""
+
+    __allow_unmapped__ = True
+    registry = orm_registry
+
+    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+        """Convert model to dictionary.
+
+        Returns:
+            dict[str, Any]: A dict representation of the model
+        """
+        exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
+        return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
