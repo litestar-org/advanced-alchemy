@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID
@@ -1666,6 +1666,8 @@ async def test_lazy_load(
     item_model: ItemModel,
     tag_model: TagModel,
 ) -> None:
+    if getattr(tag_repo, "__collection__", None) is not None:
+        pytest.skip("Skipping lazy load testing on Mock repositories.")
     tag_obj = await maybe_async(tag_repo.add(tag_model(name="A new tag")))
     assert tag_obj
     new_items = await maybe_async(
@@ -1919,6 +1921,26 @@ async def test_service_update_method_no_item_id(author_service: AuthorService, f
     updated_obj = await maybe_async(author_service.update(data=obj))
     assert str(updated_obj.id) == str(first_author_id)
     assert updated_obj.name == obj.name
+
+
+async def test_service_update_method_data_is_dict(author_service: AuthorService, first_author_id: Any) -> None:
+    new_date = datetime.date(datetime.now())
+    updated_obj = await maybe_async(
+        author_service.update(item_id=first_author_id, data={"dob": new_date}),
+    )
+    assert updated_obj.dob == new_date
+    # ensure the other fields are not affected
+    assert updated_obj.name == "Agatha Christie"
+
+
+async def test_service_update_method_data_is_dict_with_none_value(
+    author_service: AuthorService,
+    first_author_id: Any,
+) -> None:
+    updated_obj = await maybe_async(author_service.update(item_id=first_author_id, data={"dob": None}))
+    assert cast(Union[date, None], updated_obj.dob) is None
+    # ensure the other fields are not affected
+    assert updated_obj.name == "Agatha Christie"
 
 
 async def test_service_update_method_instrumented_attribute(

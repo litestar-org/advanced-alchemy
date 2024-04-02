@@ -402,14 +402,10 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
 
     def update(self, data: ModelT, **_: Any) -> ModelT:
         self._find_or_raise_not_found(self.__collection__().key(data))
-        self.__collection__().update(data)
-        return data
+        return self.__collection__().update(data)
 
     def update_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
-        for obj in data:
-            if obj in self.__collection__():
-                self.__collection__().update(obj)
-        return data
+        return [self.__collection__().update(obj) for obj in data if obj in self.__collection__()]
 
     def delete(self, item_id: Any, **_: Any) -> ModelT:
         try:
