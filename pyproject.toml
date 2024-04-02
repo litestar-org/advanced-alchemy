@@ -311,6 +311,10 @@ module = [
 ]
 
 [[tool.mypy.overrides]]
+module = "advanced_alchemy._serialization"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
 disallow_untyped_decorators = false
 module = "advanced_alchemy.extensions.litestar.cli"
 
