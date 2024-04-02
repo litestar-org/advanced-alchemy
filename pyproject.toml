@@ -369,6 +369,10 @@ SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
+"AsyncIterator" = "Iterator"
+"collections.abc.AsyncIterator" = "collections.abc.Iterator"
+"SQLAlchemyAsyncConfigT" = "SQLAlchemySyncConfigT"
+"advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig" = "advanced_alchemy.config.sync.SQLAlchemySyncConfig"
 
 [tool.codespell]
 ignore-words-list = "selectin"

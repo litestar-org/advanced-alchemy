@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Generic, Iterable, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Iterable, cast, overload
 
 from sqlalchemy import Select
 from typing_extensions import Self
 
-from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository._util import model_from_dict
@@ -31,11 +30,10 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import InstrumentedAttribute
     from sqlalchemy.sql import ColumnElement
 
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.repository import SQLAlchemyAsyncMockRepository, SQLAlchemyAsyncRepository
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
-
-SQLAlchemyAsyncConfigT = TypeVar("SQLAlchemyAsyncConfigT", bound=SQLAlchemyAsyncConfig)
 
 
 class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
@@ -221,7 +219,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
         cls,
         session: AsyncSession | async_scoped_session[AsyncSession],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        config: SQLAlchemyAsyncConfigT | None = None,
+        config: SQLAlchemyAsyncConfig | None = None,
     ) -> AsyncIterator[Self]:
         """Context manager that returns instance of service object.
 

@@ -23,24 +23,32 @@ if TYPE_CHECKING:
 
 try:
     from msgspec import Struct, convert
-except ImportError: # pragma: nocover
-    class Struct: # type: ignore[no-redef]
+except ImportError:  # pragma: nocover
+
+    class Struct:  # type: ignore[no-redef]
         """Placeholder Implementation"""
-    def convert(*args:Any,**kwargs:Any) -> Any:   # type: ignore[no-redef] # noqa: ARG001
+
+    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
         """Placeholder implementation"""
         return {}
+
+
 try:
     from pydantic import BaseModel
     from pydantic.type_adapter import TypeAdapter
-except ImportError: # pragma: nocover
-    class BaseModel: # type: ignore[no-redef]
+except ImportError:  # pragma: nocover
+
+    class BaseModel:  # type: ignore[no-redef]
         """Placeholder Implementation"""
-    class TypeAdapter: # type: ignore[no-redef]
-            """Placeholder Implementation"""
+
+    class TypeAdapter:  # type: ignore[no-redef]
+        """Placeholder Implementation"""
 
 
 def _default_deserializer(
-    target_type: Any, value: Any, type_decoders: Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]] | None = None
+    target_type: Any,
+    value: Any,
+    type_decoders: Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]] | None = None,
 ) -> Any:  # pragma: no cover
     """Transform values non-natively supported by ``msgspec``
 
@@ -52,8 +60,6 @@ def _default_deserializer(
     Returns:
         A ``msgspec``-supported type
     """
-
- 
 
     if isinstance(value, target_type):
         return value
@@ -68,7 +74,6 @@ def _default_deserializer(
 
     msg = f"Unsupported type: {type(value)!r}"
     raise TypeError(msg)
-
 
 
 def _find_filter(
@@ -89,16 +94,16 @@ def _find_filter(
         None,
     )
 
+
 def to_schema(
-        dto: type[ModelDTOT],
-        data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
-        total: int | None = None,
-        \
-        *filters: FilterTypes,
+    dto: type[ModelDTOT],
+    data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
+    total: int | None = None,
+    *filters: FilterTypes,
 ) -> ModelDTOT | OffsetPagination[ModelDTOT]:
     if issubclass(dto, Struct):
         if not isinstance(data, Sequence | list):
-            return convert( # type: ignore  # noqa: PGH003
+            return convert(  # type: ignore  # noqa: PGH003
                 obj=data,
                 type=dto,
                 from_attributes=True,
@@ -113,7 +118,7 @@ def to_schema(
         total = total or len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
         return OffsetPagination[dto](  # type: ignore[valid-type]
-            items= convert(
+            items=convert(
                 obj=data,
                 type=list[dto],  # type: ignore[valid-type]
                 from_attributes=True,
@@ -131,7 +136,7 @@ def to_schema(
 
     if issubclass(dto, BaseModel):
         if not isinstance(data, Sequence | list):
-            return TypeAdapter(dto).validate_python(data) # type: ignore  # noqa: PGH003
+            return TypeAdapter(dto).validate_python(data)  # type: ignore  # noqa: PGH003
         limit_offset = _find_filter(LimitOffset, *filters)
         total = total if total else len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)

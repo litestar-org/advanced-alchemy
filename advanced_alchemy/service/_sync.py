@@ -10,12 +10,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Generic, Iterable, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Iterable, cast, overload
 
 from sqlalchemy import Select
 from typing_extensions import Self
 
-from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository._util import model_from_dict
@@ -25,21 +24,20 @@ from advanced_alchemy.service.pagination import OffsetPagination
 from ._converters import to_schema
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import Iterator
 
     from sqlalchemy import RowMapping, Select, StatementLambdaElement
     from sqlalchemy.orm import InstrumentedAttribute, Session
     from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.sql import ColumnElement
 
+    from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.repository import (
         SQLAlchemySyncMockRepository,
         SQLAlchemySyncRepository,
     )
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
-
-SQLAlchemyAsyncConfigT = TypeVar("SQLAlchemyAsyncConfigT", bound=SQLAlchemyAsyncConfig)
 
 
 class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
@@ -225,8 +223,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         cls,
         session: Session | scoped_session[Session],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        config: SQLAlchemyAsyncConfigT | None = None,
-    ) -> AsyncIterator[Self]:
+        config: SQLAlchemySyncConfig | None = None,
+    ) -> Iterator[Self]:
         """Context manager that returns instance of service object.
 
         Handles construction of the database session._create_select_for_model
