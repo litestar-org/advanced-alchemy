@@ -1666,6 +1666,8 @@ async def test_lazy_load(
     item_model: ItemModel,
     tag_model: TagModel,
 ) -> None:
+    if getattr(tag_repo, "__collection__", None) is not None:
+        pytest.skip("Skipping lazy load testing on Mock repositories.")
     tag_obj = await maybe_async(tag_repo.add(tag_model(name="A new tag")))
     assert tag_obj
     new_items = await maybe_async(
