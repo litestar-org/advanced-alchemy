@@ -1,4 +1,4 @@
-from advanced_alchemy import base, mixins, repository, service, types
+from advanced_alchemy import base, exceptions, mixins, repository, service, types
 from advanced_alchemy.config import AlembicAsyncConfig, AlembicSyncConfig, AsyncSessionConfig, SyncSessionConfig
 
 from .alembic import AlembicCommands
@@ -22,6 +22,7 @@ __all__ = (
     "repository",
     "service",
     "mixins",
+    "exceptions",
     "sync_autocommit_before_send_handler",
     "async_autocommit_before_send_handler",
     "sync_default_before_send_handler",

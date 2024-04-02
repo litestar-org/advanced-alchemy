@@ -6,16 +6,26 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
+from collections.abc import Sequence
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, Generic, Iterable, TypeVar, cast, overload
 
-from advanced_alchemy.exceptions import RepositoryError
+from sqlalchemy import Select
+from typing_extensions import Self
+
+from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
+from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.service.pagination import OffsetPagination
+
+from ._converters import to_schema
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import AsyncIterator
 
-    from sqlalchemy import Select, StatementLambdaElement
+    from sqlalchemy import RowMapping, Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm import InstrumentedAttribute
@@ -23,7 +33,9 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.repository import SQLAlchemyAsyncMockRepository, SQLAlchemyAsyncRepository
-    from advanced_alchemy.service.typing import FilterTypeT
+    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
+
+SQLAlchemyAsyncConfigT = TypeVar("SQLAlchemyAsyncConfigT", bound=SQLAlchemyAsyncConfig)
 
 
 class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
@@ -202,6 +214,104 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
             force_basic_query_mode=force_basic_query_mode,
             **kwargs,
         )
+
+    @classmethod
+    @asynccontextmanager
+    async def new(
+        cls,
+        session: AsyncSession | async_scoped_session[AsyncSession],
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        config: SQLAlchemyAsyncConfigT | None = None,
+    ) -> AsyncIterator[Self]:
+        """Context manager that returns instance of service object.
+
+        Handles construction of the database session._create_select_for_model
+
+        Returns:
+            The service object instance.
+        """
+        if not config and not session:
+            raise AdvancedAlchemyError(detail="Please supply an optional configuration or session to use.")
+
+        if session:
+            yield cls(statement=statement, session=session)
+        elif config:
+            async with config.get_session() as db_session:
+                yield cls(
+                    statement=statement,
+                    session=db_session,
+                )
+
+    @overload
+    def to_dto(self, data: ModelT) -> ModelT: ...
+
+    @overload
+    def to_dto(
+        self,
+        data: Sequence[ModelT],
+        total: int | None = None,
+        *filters: FilterTypes | ColumnElement[bool],
+    ) -> OffsetPagination[ModelT]: ...
+
+    def to_dto(
+        self,
+        data: ModelT | Sequence[ModelT],
+        total: int | None = None,
+        *filters: FilterTypes | ColumnElement[bool],
+    ) -> ModelT | OffsetPagination[ModelT]:
+        """Convert the object to a format expected by a DTO handler
+
+        Args:
+            data: The return from one of the service calls.
+            total: the total number of rows in the data
+            *filters: Collection route filters.
+
+        Returns:
+            The list of instances retrieved from the repository.
+        """
+        if not isinstance(data, Sequence | list):
+            return data
+        limit_offset = self.find_filter(LimitOffset, *filters)
+        total = total or len(data)
+        limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
+        return OffsetPagination(
+            items=list(data),
+            limit=limit_offset.limit,
+            offset=limit_offset.offset,
+            total=total,
+        )
+
+    @overload
+    def to_schema(self, dto: type[ModelDTOT], data: ModelT | RowMapping) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        dto: type[ModelDTOT],
+        data: Sequence[ModelT] | list[RowMapping],
+        total: int | None = None,
+        *filters: FilterTypes,
+    ) -> OffsetPagination[ModelDTOT]: ...
+
+    def to_schema(
+        self,
+        dto: type[ModelDTOT],
+        data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
+        total: int | None = None,
+        *filters: FilterTypes,
+    ) -> ModelDTOT | OffsetPagination[ModelDTOT]:
+        """Convert the object to a response schema.
+
+        Args:
+            dto: Collection route filters.
+            data: The return from one of the service calls.
+            total: the total number of rows in the data
+            *filters: Collection route filters.
+
+        Returns:
+            The list of instances retrieved from the repository.
+        """
+        return to_schema(dto, data, total, *filters)
 
     async def list(
         self,
