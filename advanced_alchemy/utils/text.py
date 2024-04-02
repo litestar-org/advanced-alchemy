@@ -1,4 +1,5 @@
 """General utility functions."""
+
 from __future__ import annotations
 
 import re
@@ -43,5 +44,3 @@ def slugify(value: str, allow_unicode: bool = False, separator: str | None = Non
     if separator is not None:
         return re.sub(r"[-\s]+", "-", value).strip("-_").replace("-", separator)
     return re.sub(r"[-\s]+", "-", value).strip("-_")
-
- 
