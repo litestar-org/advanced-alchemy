@@ -7,7 +7,7 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Iterable, overload
 
 from sqlalchemy import Select
 from typing_extensions import Self
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
     from advanced_alchemy.service.pagination import OffsetPagination
-    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
+    from advanced_alchemy.service.typing import ModelDTOT
 
 
 class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
@@ -277,6 +277,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
         """
         return to_schema(dto, data, total, *filters)
 
+    # this needs to stay at the end to make the vscode linter happy
     async def list(
         self,
         *filters: FilterTypes | ColumnElement[bool],
@@ -298,25 +299,6 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
             The list of instances retrieved from the repository.
         """
         return await self.repository.list(*filters, statement=statement, auto_expunge=auto_expunge, **kwargs)
-
-    @staticmethod
-    def find_filter(
-        filter_type: type[FilterTypeT],
-        *filters: FilterTypes | ColumnElement[bool],
-    ) -> FilterTypeT | None:
-        """Get the filter specified by filter type from the filters.
-
-        Args:
-            filter_type: The type of filter to find.
-            *filters: filter types to apply to the query
-
-        Returns:
-            The match filter instance or None
-        """
-        return next(
-            (cast("FilterTypeT | None", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
-            None,
-        )
 
 
 class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[ModelT]):

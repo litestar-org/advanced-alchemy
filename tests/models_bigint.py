@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import List
+from typing import Any, List
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from advanced_alchemy.base import BigIntAuditBase, BigIntBase
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.base import BigIntAuditBase, BigIntBase, SlugKey
+from advanced_alchemy.repository import (
+    SQLAlchemyAsyncRepository,
+    SQLAlchemyAsyncSlugRepository,
+    SQLAlchemySyncRepository,
+    SQLAlchemySyncSlugRepository,
+)
 from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
+    SQLAlchemyAsyncMockSlugRepository,
     SQLAlchemySyncMockRepository,
+    SQLAlchemySyncMockSlugRepository,
 )
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
@@ -36,6 +43,18 @@ class BigIntAuthor(BigIntAuditBase):
 
 class BigIntBook(BigIntBase):
     """The Book domain object."""
+
+    title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
+    author_id: Mapped[int] = mapped_column(ForeignKey("big_int_author.id"))  # pyright: ignore
+    author: Mapped[BigIntAuthor] = relationship(  # pyright: ignore
+        lazy="joined",
+        innerjoin=True,
+        back_populates="books",
+    )
+
+
+class BigIntSlugBook(BigIntBase, SlugKey):
+    """The Book domain object with a slug key."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     author_id: Mapped[int] = mapped_column(ForeignKey("big_int_author.id"))  # pyright: ignore
@@ -422,3 +441,99 @@ class ItemSyncService(SQLAlchemySyncRepositoryService[BigIntItem]):
     """Item repository."""
 
     repository_type = ItemSyncRepository
+
+
+# Slug book
+
+
+class SlugBookAsyncRepository(SQLAlchemyAsyncSlugRepository[BigIntSlugBook]):
+    """Slug Book repository."""
+
+    model_type = BigIntSlugBook
+
+
+class SlugBookSyncRepository(SQLAlchemySyncSlugRepository[BigIntSlugBook]):
+    """Slug Book repository."""
+
+    model_type = BigIntSlugBook
+
+
+class SlugBookAsyncMockRepository(SQLAlchemyAsyncMockSlugRepository[BigIntSlugBook]):
+    """Book repository."""
+
+    model_type = BigIntSlugBook
+
+
+class SlugBookSyncMockRepository(SQLAlchemySyncMockSlugRepository[BigIntSlugBook]):
+    """Book repository."""
+
+    model_type = BigIntSlugBook
+
+
+class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
+    """Book repository."""
+
+    repository_type = SlugBookAsyncRepository
+    match_fields = ["name"]
+
+    def __init__(self, **repo_kwargs: Any) -> None:
+        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)
+        self.model_type = self.repository.model_type
+
+    async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+        if isinstance(data, dict) and "slug" not in data and operation == "create":
+            data["slug"] = await self.repository.get_available_slug(data["name"])
+        if isinstance(data, dict) and "slug" not in data and "name" in data and operation == "update":
+            data["slug"] = await self.repository.get_available_slug(data["name"])
+        return await super().to_model(data, operation)
+
+
+class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
+    """Book repository."""
+
+    repository_type = SlugBookSyncRepository
+
+    def __init__(self, **repo_kwargs: Any) -> None:
+        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)
+        self.model_type = self.repository.model_type
+
+    def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+        if isinstance(data, dict) and "slug" not in data and operation == "create":
+            data["slug"] = self.repository.get_available_slug(data["name"])
+        if isinstance(data, dict) and "slug" not in data and "name" in data and operation == "update":
+            data["slug"] = self.repository.get_available_slug(data["name"])
+        return super().to_model(data, operation)
+
+
+class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
+    """Book repository."""
+
+    repository_type = SlugBookAsyncMockRepository
+
+    def __init__(self, **repo_kwargs: Any) -> None:
+        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)
+        self.model_type = self.repository.model_type
+
+    async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+        if isinstance(data, dict) and "slug" not in data and operation == "create":
+            data["slug"] = await self.repository.get_available_slug(data["name"])
+        if isinstance(data, dict) and "slug" not in data and "name" in data and operation == "update":
+            data["slug"] = await self.repository.get_available_slug(data["name"])
+        return await super().to_model(data, operation)
+
+
+class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
+    """Book repository."""
+
+    repository_type = SlugBookSyncMockRepository
+
+    def __init__(self, **repo_kwargs: Any) -> None:
+        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)
+        self.model_type = self.repository.model_type
+
+    def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+        if isinstance(data, dict) and "slug" not in data and operation == "create":
+            data["slug"] = self.repository.get_available_slug(data["name"])
+        if isinstance(data, dict) and "slug" not in data and "name" in data and operation == "update":
+            data["slug"] = self.repository.get_available_slug(data["name"])
+        return super().to_model(data, operation)
