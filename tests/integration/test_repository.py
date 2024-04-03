@@ -41,8 +41,7 @@ from advanced_alchemy.service import (
 from advanced_alchemy.utils.text import slugify
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
-
-from .helpers import update_raw_records
+from tests.integration.helpers import update_raw_records
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest

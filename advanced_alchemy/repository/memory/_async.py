@@ -22,11 +22,16 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.repository.memory.base import (
+    AnyObject,
+    CollectionT,
+    InMemoryStore,
+    SQLAlchemyInMemoryStore,
+    SQLAlchemyMultiStore,
+)
 from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
-
-from .base import AnyObject, CollectionT, InMemoryStore, SQLAlchemyInMemoryStore, SQLAlchemyMultiStore
 
 if TYPE_CHECKING:
     from collections import abc

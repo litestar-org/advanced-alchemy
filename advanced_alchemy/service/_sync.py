@@ -17,8 +17,7 @@ from typing_extensions import Self
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
-
-from ._converters import to_schema
+from advanced_alchemy.service._converters import to_schema
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
