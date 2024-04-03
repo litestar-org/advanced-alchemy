@@ -24,7 +24,6 @@ def database_group() -> None:
 @option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
 def show_database_revision(app: Litestar, verbose: bool) -> None:
     """Show current database revision."""
-
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Listing current revision[/]", align="left")
