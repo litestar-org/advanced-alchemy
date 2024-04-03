@@ -28,17 +28,17 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
-from advanced_alchemy.repository import (
-    SQLAlchemyAsyncRepository,
-)
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemyAsyncSlugRepository
 from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
 from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
     SQLAlchemySyncMockRepository,
+    SQLAlchemySyncMockSlugRepository,
 )
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
 )
+from advanced_alchemy.utils.text import slugify
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
 
@@ -62,6 +62,7 @@ ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models
 ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
 TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
 
+
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
 SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
 SecretService = SQLAlchemyAsyncRepositoryService[AnySecret]
@@ -77,6 +78,11 @@ AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor]
 AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
 RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
 RuleService = SQLAlchemyAsyncRepositoryService[AnyRule]
+
+SlugBookModel = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
+SlugBookRepository = SQLAlchemyAsyncSlugRepository[SlugBookModel]
+SlugBookService = SQLAlchemyAsyncRepositoryService[SlugBookModel]
+
 
 AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
 BookRepository = SQLAlchemyAsyncRepository[AnyBook]
@@ -138,6 +144,19 @@ def fx_raw_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
             "title": "Murder on the Orient Express",
             "author_id": raw_authors_uuid[0]["id"],
             "author": raw_authors_uuid[0],
+        },
+    ]
+
+
+@pytest.fixture(name="raw_slug_books_uuid")
+def fx_raw_slug_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
+    """Unstructured slug book representations."""
+    return [
+        {
+            "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
+            "title": "Murder on the Orient Express",
+            "slug": slugify("Murder on the Orient Express"),
+            "author_id": raw_authors_uuid[0]["id"],
         },
     ]
 
@@ -218,6 +237,18 @@ def fx_raw_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData:
             "title": "Murder on the Orient Express",
             "author_id": raw_authors_bigint[0]["id"],
             "author": raw_authors_bigint[0],
+        },
+    ]
+
+
+@pytest.fixture(name="raw_slug_books_bigint")
+def fx_raw_slug_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData:
+    """Unstructured slug book representations."""
+    return [
+        {
+            "title": "Murder on the Orient Express",
+            "slug": slugify("Murder on the Orient Express"),
+            "author_id": raw_authors_bigint[0]["id"],
         },
     ]
 
@@ -324,6 +355,16 @@ def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBoo
 
 
 @pytest.fixture()
+def slug_book_model(
+    repository_pk_type: RepositoryPKType,
+) -> type[models_uuid.UUIDSlugBook | models_bigint.BigIntSlugBook]:
+    """Return the ``SlugBook`` model matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDSlugBook
+    return models_bigint.BigIntSlugBook
+
+
+@pytest.fixture()
 def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
     """Return the ``Secret`` model matching the current repository PK type"""
     return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret
@@ -335,6 +376,18 @@ def new_pk_id(repository_pk_type: RepositoryPKType) -> Any:
     if repository_pk_type == "uuid":
         return UUID("baa0a5c7-5404-4821-bc76-6cf5e73c8219")
     return 10
+
+
+@pytest.fixture()
+def existing_slug_book_ids(raw_slug_books: RawRecordData) -> Iterator[Any]:
+    """Return the existing primary keys based on the raw data provided"""
+    return (book["id"] for book in raw_slug_books)
+
+
+@pytest.fixture()
+def first_slug_book_id(raw_slug_books: RawRecordData) -> Any:
+    """Return the primary key of the first ``Book`` record of the current repository PK type"""
+    return raw_slug_books[0]["id"]
 
 
 @pytest.fixture()
@@ -459,6 +512,16 @@ def raw_authors(request: FixtureRequest, repository_pk_type: RepositoryPKType) -
 
 
 @pytest.fixture()
+def raw_slug_books(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Author`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        books = request.getfixturevalue("raw_slug_books_bigint")
+    else:
+        books = request.getfixturevalue("raw_slug_books_uuid")
+    return cast("RawRecordData", books)
+
+
+@pytest.fixture()
 def raw_rules(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
     """Return raw ``Rule`` data matching the current PK type"""
     if repository_pk_type == "bigint":
@@ -482,11 +545,13 @@ def _seed_db_sync(
     *,
     engine: Engine,
     raw_authors: RawRecordData,
+    raw_slug_books: RawRecordData,
     raw_rules: RawRecordData,
     raw_secrets: RawRecordData,
     author_model: AuthorModel,
     secret_model: SecretModel,
     rule_model: RuleModel,
+    slug_book_model: SlugBookModel,
 ) -> None:
     update_raw_records(raw_authors=raw_authors, raw_rules=raw_rules)
 
@@ -506,6 +571,11 @@ def _seed_db_sync(
                 secret_model,
                 model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
             )
+        for raw_book in raw_slug_books:
+            SQLAlchemySyncMockSlugRepository.__database_add__(
+                slug_book_model,
+                model_from_dict(slug_book_model, **raw_book),  # type: ignore[type-var]
+            )
     else:
         with engine.begin() as conn:
             base.orm_registry.metadata.drop_all(conn)
@@ -518,6 +588,8 @@ def _seed_db_sync(
                 conn.execute(insert(rule_model).values(rule))
             for secret in raw_secrets:
                 conn.execute(insert(secret_model).values(secret))
+            for book in raw_slug_books:
+                conn.execute(insert(slug_book_model).values(book))  # type: ignore[arg-type]
 
 
 def _seed_spanner(
@@ -525,6 +597,7 @@ def _seed_spanner(
     engine: Engine,
     raw_authors_uuid: RawRecordData,
     raw_rules_uuid: RawRecordData,
+    raw_slug_books_uuid: RawRecordData,
 ) -> list[Table]:
     update_raw_records(raw_authors=raw_authors_uuid, raw_rules=raw_rules_uuid)
 
@@ -540,23 +613,32 @@ def _seed_spanner(
 def seed_db_sync(
     engine: Engine,
     raw_authors: RawRecordData,
+    raw_slug_books: RawRecordData,
     raw_rules: RawRecordData,
     raw_secrets: RawRecordData,
     author_model: AuthorModel,
     rule_model: RuleModel,
     secret_model: SecretModel,
+    slug_book_model: SlugBookModel,
 ) -> None:
     if engine.dialect.name.startswith("spanner"):
-        _seed_spanner(engine=engine, raw_authors_uuid=raw_authors, raw_rules_uuid=raw_rules)
+        _seed_spanner(
+            engine=engine,
+            raw_authors_uuid=raw_authors,
+            raw_rules_uuid=raw_rules,
+            raw_slug_books_uuid=raw_slug_books,
+        )
     else:
         _seed_db_sync(
             engine=engine,
             raw_authors=raw_authors,
             raw_rules=raw_rules,
             raw_secrets=raw_secrets,
+            raw_slug_books=raw_slug_books,
             author_model=author_model,
             rule_model=rule_model,
             secret_model=secret_model,
+            slug_book_model=slug_book_model,
         )
 
 

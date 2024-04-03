@@ -53,12 +53,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
     """The Book domain object with a slug key."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id"))  # pyright: ignore
-    author: Mapped[UUIDAuthor] = relationship(  # pyright: ignore
-        lazy="joined",
-        innerjoin=True,
-        back_populates="books",
-    )
+    author_id: Mapped[UUID]
 
 
 class UUIDEventLog(UUIDAuditBase):

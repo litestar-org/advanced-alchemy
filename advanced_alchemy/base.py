@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
 
-from sqlalchemy import Date, MetaData, Sequence, String
+from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -183,7 +183,26 @@ class SlugKey:
     """Slug unique Field Model Mixin."""
 
     __abstract__ = True
-    slug: Mapped[str] = mapped_column(String(length=100), nullable=False, unique=True)
+
+    @declared_attr
+    def slug(cls) -> Mapped[str]:
+        """Slug field."""
+        return mapped_column(
+            String(length=100),
+            nullable=False,
+        )
+
+    @classmethod
+    def __declare_last__(cls) -> None:
+        # Unique constraint for all dialects except Spanner
+        # Check if the engine is bound and if the dialect is 'spanner+spanner'
+        if hasattr(cls.__table__.metadata, "bind") and cls.__table__.metadata.bind.ngine.dialect.name.startswith(  # type: ignore[attr-defined]
+            "spanner",
+        ):
+            # Then, add a unique index instead
+            Index(f"ix_{cls.__tablename__}_slug_unique", cls.slug, unique=True)  # type: ignore[attr-defined]
+        else:
+            UniqueConstraint(cls.slug, name=f"uq_{cls.__tablename__}_slug")  # type: ignore[attr-defined]
 
 
 def create_registry(
