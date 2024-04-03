@@ -182,8 +182,6 @@ class CommonTableAttributes:
 class SlugKey:
     """Slug unique Field Model Mixin."""
 
-    __abstract__ = True
-
     @declared_attr
     def slug(cls) -> Mapped[str]:
         """Slug field."""
@@ -192,17 +190,27 @@ class SlugKey:
             nullable=False,
         )
 
-    @classmethod
-    def __declare_last__(cls) -> None:
-        # Unique constraint for all dialects except Spanner
-        # Check if the engine is bound and if the dialect is 'spanner+spanner'
-        if hasattr(cls.__table__.metadata, "bind") and cls.__table__.metadata.bind.ngine.dialect.name.startswith(  # type: ignore[attr-defined]
-            "spanner",
-        ):
-            # Then, add a unique index instead
-            Index(f"ix_{cls.__tablename__}_slug_unique", cls.slug, unique=True)  # type: ignore[attr-defined]
-        else:
-            UniqueConstraint(cls.slug, name=f"uq_{cls.__tablename__}_slug")  # type: ignore[attr-defined]
+    @staticmethod
+    def create_unique_index(*_args: Any, **kwargs: Any) -> bool:
+        return bool(kwargs["dialect"].name.startswith("spanner"))
+
+    @staticmethod
+    def create_constraint(*_args: Any, **kwargs: Any) -> bool:
+        return not kwargs["dialect"].name.startswith("spanner")
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple:
+        return (
+            UniqueConstraint(
+                cls.slug,
+                name=f"uq_{cls.__tablename__}_slug",  # type: ignore[attr-defined]
+            ).ddl_if(callable_=cls.create_constraint),
+            Index(
+                f"ix_{cls.__tablename__}_slug_unique",  # type: ignore[attr-defined]
+                cls.slug,
+                unique=True,
+            ).ddl_if(callable_=cls.create_unique_index),
+        )
 
 
 def create_registry(
