@@ -191,11 +191,11 @@ class SlugKey:
         )
 
     @staticmethod
-    def create_unique_index(*_args: Any, **kwargs: Any) -> bool:
+    def _create_unique_slug_index(*_args: Any, **kwargs: Any) -> bool:
         return bool(kwargs["dialect"].name.startswith("spanner"))
 
     @staticmethod
-    def create_constraint(*_args: Any, **kwargs: Any) -> bool:
+    def _create_unique_slug_constraint(*_args: Any, **kwargs: Any) -> bool:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
@@ -204,12 +204,12 @@ class SlugKey:
             UniqueConstraint(
                 cls.slug,
                 name=f"uq_{cls.__tablename__}_slug",  # type: ignore[attr-defined]
-            ).ddl_if(callable_=cls.create_constraint),
+            ).ddl_if(callable_=cls._create_unique_slug_constraint),
             Index(
                 f"ix_{cls.__tablename__}_slug_unique",  # type: ignore[attr-defined]
                 cls.slug,
                 unique=True,
-            ).ddl_if(callable_=cls.create_unique_index),
+            ).ddl_if(callable_=cls._create_unique_slug_index),
         )
 
 
