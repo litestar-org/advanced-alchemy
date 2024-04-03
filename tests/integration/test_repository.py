@@ -835,7 +835,7 @@ async def any_engine(
 @pytest.fixture()
 def repository_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
     if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
-        pytest.skip("foo")
+        pytest.skip("Skipping additional bigint mock repository tests")
     return models_uuid if repository_pk_type == "uuid" else models_bigint
 
 
