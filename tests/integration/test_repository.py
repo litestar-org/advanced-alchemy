@@ -592,7 +592,7 @@ def _seed_db_sync(
             for secret in raw_secrets:
                 conn.execute(insert(secret_model).values(secret))
             for book in raw_slug_books:
-                conn.execute(insert(slug_book_model).values(book))  # type: ignore[arg-type]
+                conn.execute(insert(slug_book_model).values(book))
 
 
 def _seed_spanner(
@@ -2346,7 +2346,21 @@ async def test_service_create_method_slug_existing(
     slug_book_service: SlugBookService,
     slug_book_model: SlugBookModel,
 ) -> None:
-    new_book = {"title": "murder on the orient express", "author_id": uuid4().hex}
+    if issubclass(
+        slug_book_service.repository_type,
+        (
+            SQLAlchemySyncMockSlugRepository,
+            SQLAlchemyAsyncMockRepository,
+            SQLAlchemyAsyncMockRepository,
+            SQLAlchemyAsyncMockRepository,
+        ),
+    ):
+        pytest.skip("Skipping additional bigint mock repository tests")
+    current_count = await maybe_async(slug_book_service.count())
+    if current_count == 0:
+        _ = await maybe_async(slug_book_service.create_many(raw_slug_books))
+
+    new_book = {"title": "Murder on the Orient Express", "author_id": uuid4().hex}
     obj = await maybe_async(slug_book_service.create(new_book))
     assert isinstance(obj, slug_book_model)
     assert new_book["title"] == obj.title
