@@ -53,7 +53,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
     """The Book domain object with a slug key."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[UUID]
+    author_id: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
 
 
 class UUIDEventLog(UUIDAuditBase):

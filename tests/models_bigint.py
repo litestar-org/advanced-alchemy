@@ -57,7 +57,7 @@ class BigIntSlugBook(BigIntBase, SlugKey):
     """The Book domain object with a slug key."""
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[int]
+    author_id: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
 
 
 class BigIntEventLog(BigIntAuditBase):
