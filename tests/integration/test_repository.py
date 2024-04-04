@@ -8,9 +8,11 @@ import os
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
+from msgspec import Struct
+from pydantic import BaseModel
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -38,6 +40,7 @@ from advanced_alchemy.repository.memory import (
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
 )
+from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.utils.text import slugify
 from tests import models_bigint, models_uuid
 from tests.helpers import maybe_async
@@ -60,6 +63,7 @@ RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
 ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
 ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
 TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
+SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
 
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
@@ -78,9 +82,9 @@ AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
 RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
 RuleService = SQLAlchemyAsyncRepositoryService[AnyRule]
 
-SlugBookModel = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
-SlugBookRepository = SQLAlchemyAsyncSlugRepository[SlugBookModel]
-SlugBookService = SQLAlchemyAsyncRepositoryService[SlugBookModel]
+AnySlugBook = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
+SlugBookRepository = SQLAlchemyAsyncSlugRepository[AnySlugBook]
+SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook]
 
 
 AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
@@ -356,7 +360,7 @@ def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBoo
 @pytest.fixture()
 def slug_book_model(
     repository_pk_type: RepositoryPKType,
-) -> type[models_uuid.UUIDSlugBook | models_bigint.BigIntSlugBook]:
+) -> SlugBookModel:
     """Return the ``SlugBook`` model matching the current repository PK type"""
     if repository_pk_type == "uuid":
         return models_uuid.UUIDSlugBook
@@ -946,6 +950,42 @@ def book_service(any_session: AsyncSession | Session, repository_module: Any, re
     else:
         repo = repository_module.BookSyncService(session=any_session)
     return cast(BookService, repo)
+
+
+@pytest.fixture()
+def slug_book_repo(
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+    request: FixtureRequest,
+) -> SlugBookRepository:
+    """Return an SlugBookAsyncRepository or SlugBookSyncRepository based on the current PK and session type"""
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.SlugBookAsyncMockRepository()
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.SlugBookSyncMockRepository()
+    elif isinstance(any_session, AsyncSession):
+        repo = repository_module.SlugBookAsyncRepository(session=any_session)
+    else:
+        repo = repository_module.SlugBookSyncRepository(session=any_session)
+    return cast(SlugBookRepository, repo)
+
+
+@pytest.fixture()
+def slug_book_service(
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+    request: FixtureRequest,
+) -> SlugBookService:
+    """Return an SlugBookAsyncService or SlugBookSyncService based on the current PK and session type"""
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.SlugBookAsyncMockService(session=create_autospec(any_session, instance=True))
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.SlugBookSyncMockService(session=create_autospec(any_session, instance=True))
+    elif isinstance(any_session, AsyncSession):
+        repo = repository_module.SlugBookAsyncService(session=any_session)
+    else:
+        repo = repository_module.SlugBookSyncService(session=any_session)
+    return cast(SlugBookService, repo)
 
 
 @pytest.fixture()
@@ -2286,3 +2326,81 @@ async def test_repo_encrypted_methods(
     updated = await maybe_async(secret_repo.update(obj))
     assert obj.secret == updated.secret
     assert obj.long_secret == updated.long_secret
+
+
+async def test_service_create_method_slug(
+    raw_slug_books: RawRecordData,
+    slug_book_service: SlugBookService,
+    slug_book_model: SlugBookModel,
+) -> None:
+    new_book = {"title": "a new book!!", "author_id": uuid4().hex}
+    obj = await maybe_async(slug_book_service.create(new_book))
+    assert isinstance(obj, slug_book_model)
+    assert new_book["title"] == obj.title
+    assert obj.slug == "a-new-book"
+    assert obj.id is not None
+
+
+async def test_service_create_method_slug_existing(
+    raw_slug_books: RawRecordData,
+    slug_book_service: SlugBookService,
+    slug_book_model: SlugBookModel,
+) -> None:
+    new_book = {"title": "murder on the orient express", "author_id": uuid4().hex}
+    obj = await maybe_async(slug_book_service.create(new_book))
+    assert isinstance(obj, slug_book_model)
+    assert new_book["title"] == obj.title
+    assert obj.slug != "murder-on-the-orient-express"
+    assert obj.id is not None
+
+
+async def test_service_create_many_method_slug(
+    raw_slug_books: RawRecordData,
+    slug_book_service: SlugBookService,
+    slug_book_model: SlugBookModel,
+) -> None:
+    objs = await maybe_async(
+        slug_book_service.create_many(
+            [
+                {"title": " extra!! ", "author_id": uuid4().hex},
+                {"title": "punctuated Book!!", "author_id": uuid4().hex},
+            ],
+        ),
+    )
+    assert isinstance(objs, list)
+    for obj in objs:
+        assert obj.id is not None
+        assert obj.slug in {"extra", "punctuated-book"}
+        assert obj.title in {" extra!! ", "punctuated Book!!"}
+
+
+class AuthorStruct(Struct):
+    name: str
+
+
+class AuthorBaseModel(BaseModel):
+    name: str
+
+
+async def test_service_paginated_to_schema(raw_authors: RawRecordData, author_service: AuthorService) -> None:
+    """Test SQLAlchemy list with count in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_service: The author mock repository
+    """
+    exp_count = len(raw_authors)
+    collection, count = await maybe_async(author_service.list_and_count())
+    model_dto = author_service.to_schema(data=collection, total=count)
+    pydantic_dto = author_service.to_schema(dto=AuthorBaseModel, data=collection, total=count)
+    msgspec_dto = author_service.to_schema(dto=AuthorStruct, data=collection, total=count)
+    assert exp_count == count
+    assert isinstance(model_dto, OffsetPagination)
+    assert isinstance(model_dto.items, list)
+    assert model_dto.total == exp_count
+    assert isinstance(pydantic_dto, OffsetPagination)
+    assert isinstance(pydantic_dto.items, list)
+    assert pydantic_dto.total == exp_count
+    assert isinstance(msgspec_dto, OffsetPagination)
+    assert isinstance(msgspec_dto.items, list)
+    assert msgspec_dto.total == exp_count

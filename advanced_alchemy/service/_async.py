@@ -239,28 +239,44 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
                 )
 
     @overload
-    def to_schema(self, dto: type[ModelT], data: ModelT | RowMapping) -> ModelT: ...
-
-    @overload
-    def to_schema(self, dto: type[ModelT], data: Sequence[ModelT] | list[RowMapping]) -> OffsetPagination[ModelT]: ...
-
-    @overload
-    def to_schema(self, dto: type[ModelDTOT], data: ModelT | RowMapping) -> ModelDTOT: ...
+    def to_schema(
+        self,
+        data: ModelT | RowMapping,
+        total: int | None = None,
+        dto: type[ModelT] | None = None,
+    ) -> ModelT: ...
 
     @overload
     def to_schema(
         self,
-        dto: type[ModelDTOT],
         data: Sequence[ModelT] | list[RowMapping],
         total: int | None = None,
+        dto: type[ModelT] | None = None,
+        *filters: FilterTypes,
+    ) -> OffsetPagination[ModelT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelT | RowMapping,
+        total: int | None = ...,
+        dto: type[ModelDTOT] = ...,
+    ) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelT] | list[RowMapping],
+        total: int | None = ...,
+        dto: type[ModelDTOT] = ...,
         *filters: FilterTypes,
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
         self,
-        dto: type[ModelT | ModelDTOT],
         data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
         total: int | None = None,
+        dto: type[ModelDTOT | ModelT] | None = None,
         *filters: FilterTypes,
     ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.
@@ -274,7 +290,9 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
         Returns:
             The list of instances retrieved from the repository.
         """
-        return to_schema(dto, data, total, *filters)
+        if dto is None:
+            dto = self.repository.model_type
+        return to_schema(data, total, dto, *filters)
 
     # this needs to stay at the end to make the vscode linter happy
     async def list(

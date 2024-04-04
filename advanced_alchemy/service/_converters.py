@@ -17,6 +17,7 @@ from advanced_alchemy.service.pagination import OffsetPagination
 
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement, RowMapping
+    from sqlalchemy.orm import DeclarativeBase
 
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
 
@@ -95,13 +96,12 @@ def _find_filter(
 
 
 def to_schema(
-    dto: type[ModelT | ModelDTOT],
     data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
     total: int | None = None,
+    dto: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
     *filters: FilterTypes,
 ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
-
-    if issubclass(dto, Struct):
+    if dto is not None and issubclass(dto, Struct):
         if not isinstance(data, Sequence | list):
             return convert(  # type: ignore  # noqa: PGH003
                 obj=data,
@@ -134,7 +134,7 @@ def to_schema(
             total=total,
         )
 
-    if issubclass(dto, BaseModel):
+    if dto is not None and issubclass(dto, BaseModel):
         if not isinstance(data, Sequence | list):
             return TypeAdapter(dto).validate_python(data)  # type: ignore  # noqa: PGH003
         limit_offset = _find_filter(LimitOffset, *filters)

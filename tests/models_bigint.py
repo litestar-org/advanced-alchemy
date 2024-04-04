@@ -473,7 +473,6 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
 
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)
-        self.model_type = self.repository.model_type
 
     async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -491,7 +490,6 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
 
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)
-        self.model_type = self.repository.model_type
 
     def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -509,7 +507,6 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
 
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)
-        self.model_type = self.repository.model_type
 
     async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -527,7 +524,6 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
 
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)
-        self.model_type = self.repository.model_type
 
     def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
