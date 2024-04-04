@@ -2379,6 +2379,7 @@ class AuthorStruct(Struct):
 
 
 class AuthorBaseModel(BaseModel):
+    model_config = {"from_attributes": True}
     name: str
 
 
