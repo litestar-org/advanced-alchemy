@@ -28,7 +28,7 @@ def run_script() -> None:
     with Session(engine) as session:
         repo = ItemRepository(session=session)
         # Add some data
-        Items = [
+        items = [
             Item(
                 name="Smartphone",
                 data={"price": 599.99, "brand": "XYZ"},
@@ -42,25 +42,25 @@ def run_script() -> None:
                 data={"not_price": 149.99, "brand": "DEF"},
             ),
         ]
-        repo.add_many(Items)
+        repo.add_many(items)
         session.commit()
 
     with Session(engine) as session:
         repo = ItemRepository(session=session)
 
         # Do some queries with JSON operations
-        statement = (Item.data["price"].as_float() == 599.99) & (
+        statement = (Item.data["price"].as_float() == 599.99) & (  # noqa: PLR2004
             Item.data["brand"].as_string() == "XYZ"
         )
-        assert repo.exists(statement)
+        assert repo.exists(statement)  # noqa: S101
 
         statement = Item.data.op("?")("price")
-        assert repo.count(statement) == 2
+        assert repo.count(statement) == 2  # noqa: PLR2004, S101
 
         statement = Item.data.op("?")("not_price")
         products = repo.list(statement)
-        assert len(products) == 1
-        assert products[0].name == "Headphones"
+        assert len(products) == 1  # noqa: S101
+        assert products[0].name == "Headphones"  # noqa: S101
 
 
 if __name__ == "__main__":
