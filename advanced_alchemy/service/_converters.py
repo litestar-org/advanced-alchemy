@@ -6,6 +6,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    List,
     Sequence,
     cast,
 )
@@ -102,7 +103,7 @@ def to_schema(
     *filters: FilterTypes,
 ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
     if dto is not None and issubclass(dto, Struct):
-        if not isinstance(data, Sequence | list):
+        if not isinstance(data, Sequence | List):
             return convert(  # type: ignore  # noqa: PGH003
                 obj=data,
                 type=dto,
@@ -135,7 +136,7 @@ def to_schema(
         )
 
     if dto is not None and issubclass(dto, BaseModel):
-        if not isinstance(data, Sequence | list):
+        if not isinstance(data, Sequence | List):
             return TypeAdapter(dto).validate_python(data)  # type: ignore  # noqa: PGH003
         limit_offset = _find_filter(LimitOffset, *filters)
         total = total if total else len(data)
@@ -146,7 +147,7 @@ def to_schema(
             offset=limit_offset.offset,
             total=total,
         )
-    if not isinstance(data, Sequence | list):
+    if not isinstance(data, Sequence | List):
         return cast("ModelT", data)
     limit_offset = _find_filter(LimitOffset, *filters)
     total = total or len(data)
