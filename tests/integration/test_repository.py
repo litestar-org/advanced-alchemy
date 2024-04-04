@@ -159,7 +159,7 @@ def fx_raw_slug_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
             "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
             "title": "Murder on the Orient Express",
             "slug": slugify("Murder on the Orient Express"),
-            "author_id": raw_authors_uuid[0]["id"],
+            "author_id": str(raw_authors_uuid[0]["id"]),
         },
     ]
 
@@ -251,7 +251,7 @@ def fx_raw_slug_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData
         {
             "title": "Murder on the Orient Express",
             "slug": slugify("Murder on the Orient Express"),
-            "author_id": raw_authors_bigint[0]["id"],
+            "author_id": str(raw_authors_bigint[0]["id"]),
         },
     ]
 
