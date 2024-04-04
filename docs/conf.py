@@ -1,18 +1,25 @@
 # Configuration file for the Sphinx documentation builder.
-import os
+from __future__ import annotations
 
-from advanced_alchemy.__metadata__ import __project__ as project
-from advanced_alchemy.__metadata__ import __version__ as version
+import os
+from functools import partial
+from typing import TYPE_CHECKING, Any
+
+from advanced_alchemy.__metadata__ import __project__, __version__
+
+if TYPE_CHECKING:
+    from sphinx.addnodes import document
+    from sphinx.application import Sphinx
 
 # -- Environmental Data ------------------------------------------------------
 
 
 # -- Project information -----------------------------------------------------
-project = project
-author = "Jolt Org"
-release = version
-release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", version.rsplit(".")[0])
-copyright = "2023, Jolt Org"
+project = __project__
+author = "Litestar Organization"
+release = __version__
+release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
+copyright = "2023, Litestar Organization"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
@@ -101,71 +108,90 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Style configuration -----------------------------------------------------
-html_theme = "shibuya"
+html_theme = "litestar_sphinx_theme"
 html_static_path = ["_static"]
-html_css_files = ["css/custom.css"]
-html_show_sourcelink = True
-html_title = "Docs"
-html_favicon = "_static/logo.png"
-html_logo = "_static/logo.png"
-html_context = {
-    "source_type": "github",
-    "source_user": "jolt-org",
-    "source_repo": project.replace("_", "-"),
-}
-
-brand_colors = {
-    "--brand-primary": {"rgb": "245, 0, 87", "hex": "#f50057"},
-    "--brand-secondary": {"rgb": "32, 32, 32", "hex": "#202020"},
-    "--brand-tertiary": {"rgb": "161, 173, 161", "hex": "#A1ADA1"},
-    "--brand-green": {"rgb": "0, 245, 151", "hex": "#00f597"},
-    "--brand-alert": {"rgb": "243, 96, 96", "hex": "#f36060"},
-    "--brand-dark": {"rgb": "0, 0, 0", "hex": "#000000"},
-    "--brand-light": {"rgb": "235, 221, 221", "hex": "#ebdddd"},
-}
+html_css_files = ["css/style.css"]
+html_show_sourcelink = False
+html_title = "Advanced Alchemy"
 
 html_theme_options = {
-    "logo_target": "/",
-    "announcement": "This documentation is currently under development.",
-    "github_url": "https://github.com/jolt-org/advanced-alchemy",
-    "nav_links": [
-        {"title": "Home", "url": "https://advanced-alchemy.jolt.rs"},
-        {"title": "Docs", "url": "https://docs.advanced-alchemy.jolt.rs"},
-        {"title": "Code", "url": "https://github.com/jolt-org/advanced-alchemy"},
-    ],
-    "light_css_variables": {
-        # RGB
-        "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
-        # "--sy-rc-bg": brand_colors["--brand-secondary"]["rgb"],
-        # Hex
-        "--sy-c-link": brand_colors["--brand-secondary"]["hex"],
-        # "--sy-c-foot-bg": "#191919",
-        "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-foot-text": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bg-weak": brand_colors["--brand-dark"]["rgb"],
+    "use_page_nav": False,
+    "github_repo_name": "advanced-alchemy",
+    "logo": {
+        "link": "https://docs.advanced-alchemy.litestar.dev",
     },
-    "dark_css_variables": {
-        # RGB
-        "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-bg": brand_colors["--brand-dark"]["rgb"],
-        # Hex
-        "--sy-c-link": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-foot-bg": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-foot-text": brand_colors["--brand-light"]["hex"],
-        "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text": brand_colors["--brand-light"]["hex"],
-        "--sy-c-bg-weak": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bg": brand_colors["--brand-primary"]["hex"],
+    "pygment_light_style": "xcode",
+    "pygment_dark_style": "lightbulb",
+    "navigation_with_keys": True,
+    "extra_navbar_items": {
+        "Documentation": "index",
+        "Community": {
+            "Contributing": {
+                "description": "Learn how to contribute to the Advanced Alchemy project",
+                "link": "https://docs.advanced-alchemy.litestar.dev/latest/contribution-guide.html",
+                "icon": "contributing",
+            },
+            "Code of Conduct": {
+                "description": "Review the etiquette for interacting with the Litestar community",
+                "link": "https://github.com/litestar-org/.github?tab=coc-ov-file",
+                "icon": "coc",
+            },
+            "Security": {
+                "description": "Overview of the Litestar Organization's security protocols",
+                "link": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
+                "icon": "coc",
+            },
+        },
+        "About": {
+            "Litestar Organization": {
+                "description": "Details about the Litestar organization",
+                "link": "https://litestar.dev/about/organization",
+                "icon": "org",
+            },
+            # TODO: Kind've awkward to do for each repo in this way.
+            # "Releases": {
+            #     "description": "Explore the release process, versioning, and deprecation policy for Litestar",
+            #     "link": "https://litestar.dev/about/litestar-releases",
+            #     "icon": "releases",
+            # },
+        },
+        "Release notes": {
+            "Changelog": "https://docs.advanced-alchemy.litestar.dev/latest/changelog.html",
+        },
+        "Help": {
+            "Discord Help Forum": {
+                "description": "Dedicated Discord help forum",
+                "link": "https://discord.gg/litestar-919193495116337154",
+                "icon": "coc",
+            },
+            "GitHub Discussions": {
+                "description": "GitHub Discussions ",
+                "link": "https://github.com/orgs/litestar-org/discussions",
+                "icon": "coc",
+            },
+            "Stack Overflow": {
+                "description": "We monitor the <code><b>litestar</b></code> tag on Stack Overflow",
+                "link": "https://stackoverflow.com/questions/tagged/litestar",
+                "icon": "coc",
+            },
+        },
     },
 }
+
+
+def update_html_context(
+    app: Sphinx,
+    pagename: str,
+    templatename: str,
+    context: dict[str, Any],
+    doctree: document,
+) -> None:
+    context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
+
+
+def setup(app: Sphinx) -> dict[str, bool]:
+    app.setup_extension("litestar_sphinx_theme")
+    app.setup_extension("pydata_sphinx_theme")
+    app.connect("html-page-context", update_html_context)
+
+    return {"parallel_read_safe": True, "parallel_write_safe": True}
