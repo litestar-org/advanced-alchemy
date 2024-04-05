@@ -2411,11 +2411,30 @@ async def test_service_paginated_to_schema(raw_authors: RawRecordData, author_se
     msgspec_dto = author_service.to_schema(dto=AuthorStruct, data=collection, total=count)
     assert exp_count == count
     assert isinstance(model_dto, OffsetPagination)
-    assert isinstance(model_dto.items, list)
+    assert isinstance(model_dto.items[0].name, str)
     assert model_dto.total == exp_count
     assert isinstance(pydantic_dto, OffsetPagination)
-    assert isinstance(pydantic_dto.items, list)
+    assert isinstance(pydantic_dto.items[0].name, str)
     assert pydantic_dto.total == exp_count
     assert isinstance(msgspec_dto, OffsetPagination)
-    assert isinstance(msgspec_dto.items, list)
+    assert isinstance(msgspec_dto.items[0].name, str)
     assert msgspec_dto.total == exp_count
+
+
+async def test_service_to_schema(
+    author_service: AuthorService,
+    first_author_id: Any,
+) -> None:
+    """Test SQLAlchemy list with count in asyncpg.
+
+    Args:
+        raw_authors: list of authors pre-seeded into the mock repository
+        author_service: The author mock repository
+    """
+    obj = await maybe_async(author_service.get(first_author_id))
+    model_dto = author_service.to_schema(data=obj)
+    pydantic_dto = author_service.to_schema(dto=AuthorBaseModel, data=obj)
+    msgspec_dto = author_service.to_schema(dto=AuthorStruct, data=obj)
+    assert isinstance(model_dto.name, str)
+    assert isinstance(pydantic_dto.name, str)
+    assert isinstance(msgspec_dto.name, str)
