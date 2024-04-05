@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs", "extensions", "linting", "test", "uuid"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:aa526afc2ff8b2000ca3592465d8146e6ca537093b0b45e63491779109af8cc5"
+content_hash = "sha256:5147702fae79fa344c73ae57afc0bb0b95fb9cf3a4afdc4f9cd99808b2595133"
 
 [[package]]
 name = "aiofiles"
@@ -2639,6 +2639,20 @@ dependencies = [
 files = [
     {file = "pytest-cov-5.0.0.tar.gz", hash = "sha256:5837b58e9f6ebd335b0f8060eecce69b662415b16dc503883a02f45dfeb14857"},
     {file = "pytest_cov-5.0.0-py3-none-any.whl", hash = "sha256:4f0764a1219df53214206bf1feea4633c3b558a2925c8b59f144f682861ce652"},
+]
+
+[[package]]
+name = "pytest-databases"
+version = "0.2.0"
+requires_python = ">=3.8"
+summary = "Reusable database fixtures for any and all databases."
+groups = ["test"]
+dependencies = [
+    "pytest",
+]
+files = [
+    {file = "pytest_databases-0.2.0-py3-none-any.whl", hash = "sha256:fb99d0ccc2d886250ce8c218e19282587ff66c990fcead6eac8961c233de9c6f"},
+    {file = "pytest_databases-0.2.0.tar.gz", hash = "sha256:deb251d97d53fdb076dffa566cf7dda174882b3ec93ed254c0d3f1422d7bb43d"},
 ]
 
 [[package]]

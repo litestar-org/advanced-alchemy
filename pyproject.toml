@@ -54,13 +54,6 @@ uuid = ["uuid-utils>=0.6.1"]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build]
-dev-mode-dirs = ["."]
-packages = ["advanced_alchemy", "advanced_alchemy.repository.memory"]
-
 [tool.pdm]
 ignore_package_warnings = [
   "alabaster",
@@ -136,6 +129,7 @@ test = [
   "coverage",
   "pytest-cov",
   "pytest-sugar>=1.0.0",
+  "pytest-databases>=0.2.1",
 ]
 
 [tool.pytest.ini_options]
