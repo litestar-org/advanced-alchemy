@@ -17,7 +17,7 @@ from typing_extensions import Self
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
-from advanced_alchemy.service._converters import to_schema
+from advanced_alchemy.service._converters import EMPTY_FILTER, to_schema
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -243,7 +243,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
     def to_schema(
         self,
         data: ModelT | RowMapping,
-        total: int | None = 1,
+        total: int | None = None,
+        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
         schema_type: type[ModelT] | None = None,
     ) -> ModelT: ...
 
@@ -252,15 +253,16 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: Sequence[ModelT] | list[RowMapping],
         total: int | None = None,
+        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
         schema_type: type[ModelT] | None = None,
-        *filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes],
     ) -> OffsetPagination[ModelT]: ...
 
     @overload
     def to_schema(
         self,
         data: ModelT | RowMapping,
-        total: int | None = 1,
+        total: int | None = None,
+        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
         schema_type: type[ModelDTOT] = ...,
     ) -> ModelDTOT: ...
 
@@ -269,16 +271,16 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: Sequence[ModelT] | list[RowMapping],
         total: int | None = None,
+        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
         schema_type: type[ModelDTOT] = ...,
-        *filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
         self,
         data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
         total: int | None = None,
+        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT | ModelT] | None = None,
-        *filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes],
     ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.
 
@@ -286,14 +288,14 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
             data: The return from one of the service calls.
             total: the total number of rows in the data
             schema_type: Collection route filters.
-            *filters: Collection route filters.
+            filters: Collection route filters.
 
         Returns:
             The list of instances retrieved from the repository.
         """
         if schema_type is None:
             schema_type = self.repository.model_type
-        return to_schema(data, total, schema_type, *filters)
+        return to_schema(data=data, total=total, filters=filters, schema_type=schema_type)
 
     # this needs to stay at the end to make the vscode linter happy
     def list(

@@ -46,6 +46,9 @@ except ImportError:  # pragma: nocover
         """Placeholder Implementation"""
 
 
+EMPTY_FILTER: list[FilterTypes] = []
+
+
 def _default_deserializer(
     target_type: Any,
     value: Any,
@@ -99,8 +102,8 @@ def _find_filter(
 def to_schema(
     data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
     total: int | None = None,
+    filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = EMPTY_FILTER,
     schema_type: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
-    *filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes],
 ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
     if schema_type is not None and issubclass(schema_type, Struct):
         if not isinstance(data, Sequence):
