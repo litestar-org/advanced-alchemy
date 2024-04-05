@@ -253,7 +253,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         data: Sequence[ModelT] | list[RowMapping],
         total: int | None = None,
         dto: type[ModelT] | None = None,
-        *filters: FilterTypes,
+        *filters: list[FilterTypes | ColumnElement[bool]],
     ) -> OffsetPagination[ModelT]: ...
 
     @overload
@@ -270,7 +270,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         data: Sequence[ModelT] | list[RowMapping],
         total: int | None = ...,
         dto: type[ModelDTOT] = ...,
-        *filters: FilterTypes,
+        *filters: list[FilterTypes | ColumnElement[bool]],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
@@ -278,7 +278,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
         total: int | None = None,
         dto: type[ModelDTOT | ModelT] | None = None,
-        *filters: FilterTypes,
+        *filters: list[FilterTypes | ColumnElement[bool]],
     ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.
 
