@@ -216,7 +216,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
     @contextmanager
     def new(
         cls,
-        session: Session | scoped_session[Session],
+        session: Session | scoped_session[Session] | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         config: SQLAlchemySyncConfig | None = None,
     ) -> Iterator[Self]:

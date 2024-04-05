@@ -215,7 +215,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
     @asynccontextmanager
     async def new(
         cls,
-        session: AsyncSession | async_scoped_session[AsyncSession],
+        session: AsyncSession | async_scoped_session[AsyncSession] | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         config: SQLAlchemyAsyncConfig | None = None,
     ) -> AsyncIterator[Self]:
