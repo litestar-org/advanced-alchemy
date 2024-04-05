@@ -99,14 +99,14 @@ def _find_filter(
 def to_schema(
     data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
     total: int | None = None,
-    dto: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
+    schema_type: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
     *filters: list[FilterTypes | ColumnElement[bool]],
 ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
-    if dto is not None and issubclass(dto, Struct):
-        if not isinstance(data, Sequence | List):
+    if schema_type is not None and issubclass(schema_type, Struct):
+        if not isinstance(data, Sequence):
             return convert(  # type: ignore  # noqa: PGH003
                 obj=data,
-                type=dto,
+                type=schema_type,
                 from_attributes=True,
                 dec_hook=partial(
                     _default_deserializer,
@@ -118,10 +118,10 @@ def to_schema(
         limit_offset = _find_filter(LimitOffset, *filters)
         total = total or len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-        return OffsetPagination[dto](  # type: ignore[valid-type]
+        return OffsetPagination[schema_type](  # type: ignore[valid-type]
             items=convert(
                 obj=data,
-                type=list[dto],  # type: ignore[valid-type]
+                type=List[schema_type],  # type: ignore[valid-type]
                 from_attributes=True,
                 dec_hook=partial(
                     _default_deserializer,
@@ -135,25 +135,25 @@ def to_schema(
             total=total,
         )
 
-    if dto is not None and issubclass(dto, BaseModel):
-        if not isinstance(data, Sequence | List):
-            return TypeAdapter(dto).validate_python(data)  # type: ignore  # noqa: PGH003
+    if schema_type is not None and issubclass(schema_type, BaseModel):
+        if not isinstance(data, Sequence):
+            return TypeAdapter(schema_type).validate_python(data)  # type: ignore  # noqa: PGH003
         limit_offset = _find_filter(LimitOffset, *filters)
         total = total if total else len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-        return OffsetPagination[dto](  # type: ignore[valid-type]
-            items=TypeAdapter(list[dto]).validate_python(data),  # type: ignore[valid-type]
+        return OffsetPagination[schema_type](  # type: ignore[valid-type]
+            items=TypeAdapter(List[schema_type]).validate_python(data),  # type: ignore[valid-type]
             limit=limit_offset.limit,
             offset=limit_offset.offset,
             total=total,
         )
-    if not isinstance(data, Sequence | List):
+    if not issubclass(type(data), Sequence):
         return cast("ModelT", data)
     limit_offset = _find_filter(LimitOffset, *filters)
-    total = total or len(data)
-    limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
+    total = total or len(data)  # type: ignore[arg-type]
+    limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)  # type: ignore[arg-type]
     return OffsetPagination[ModelT](
-        items=cast("list[ModelT]", data),
+        items=cast("List[ModelT]", data),
         limit=limit_offset.limit,
         offset=limit_offset.offset,
         total=total,

@@ -243,8 +243,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
     def to_schema(
         self,
         data: ModelT | RowMapping,
-        total: int | None = None,
-        dto: type[ModelT] | None = None,
+        total: int | None = 1,
+        schema_type: type[ModelT] | None = None,
     ) -> ModelT: ...
 
     @overload
@@ -252,7 +252,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: Sequence[ModelT] | list[RowMapping],
         total: int | None = None,
-        dto: type[ModelT] | None = None,
+        schema_type: type[ModelT] | None = None,
         *filters: list[FilterTypes | ColumnElement[bool]],
     ) -> OffsetPagination[ModelT]: ...
 
@@ -260,16 +260,16 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
     def to_schema(
         self,
         data: ModelT | RowMapping,
-        total: int | None = ...,
-        dto: type[ModelDTOT] = ...,
+        total: int | None = 1,
+        schema_type: type[ModelDTOT] = ...,
     ) -> ModelDTOT: ...
 
     @overload
     def to_schema(
         self,
         data: Sequence[ModelT] | list[RowMapping],
-        total: int | None = ...,
-        dto: type[ModelDTOT] = ...,
+        total: int | None = None,
+        schema_type: type[ModelDTOT] = ...,
         *filters: list[FilterTypes | ColumnElement[bool]],
     ) -> OffsetPagination[ModelDTOT]: ...
 
@@ -277,23 +277,23 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
         total: int | None = None,
-        dto: type[ModelDTOT | ModelT] | None = None,
+        schema_type: type[ModelDTOT | ModelT] | None = None,
         *filters: list[FilterTypes | ColumnElement[bool]],
     ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.
 
         Args:
-            dto: Collection route filters.
             data: The return from one of the service calls.
             total: the total number of rows in the data
+            schema_type: Collection route filters.
             *filters: Collection route filters.
 
         Returns:
             The list of instances retrieved from the repository.
         """
-        if dto is None:
-            dto = self.repository.model_type
-        return to_schema(data, total, dto, *filters)
+        if schema_type is None:
+            schema_type = self.repository.model_type
+        return to_schema(data, total, schema_type, *filters)
 
     # this needs to stay at the end to make the vscode linter happy
     def list(

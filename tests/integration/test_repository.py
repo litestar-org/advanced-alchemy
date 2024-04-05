@@ -2407,8 +2407,8 @@ async def test_service_paginated_to_schema(raw_authors: RawRecordData, author_se
     exp_count = len(raw_authors)
     collection, count = await maybe_async(author_service.list_and_count())
     model_dto = author_service.to_schema(data=collection, total=count)
-    pydantic_dto = author_service.to_schema(dto=AuthorBaseModel, data=collection, total=count)
-    msgspec_dto = author_service.to_schema(dto=AuthorStruct, data=collection, total=count)
+    pydantic_dto = author_service.to_schema(schema_type=AuthorBaseModel, data=collection, total=count)
+    msgspec_dto = author_service.to_schema(schema_type=AuthorStruct, data=collection, total=count)
     assert exp_count == count
     assert isinstance(model_dto, OffsetPagination)
     assert isinstance(model_dto.items[0].name, str)
@@ -2433,8 +2433,8 @@ async def test_service_to_schema(
     """
     obj = await maybe_async(author_service.get(first_author_id))
     model_dto = author_service.to_schema(data=obj)
-    pydantic_dto = author_service.to_schema(dto=AuthorBaseModel, data=obj)
-    msgspec_dto = author_service.to_schema(dto=AuthorStruct, data=obj)
+    pydantic_dto = author_service.to_schema(schema_type=AuthorBaseModel, data=obj)
+    msgspec_dto = author_service.to_schema(schema_type=AuthorStruct, data=obj)
     assert isinstance(model_dto.name, str)
     assert isinstance(pydantic_dto.name, str)
     assert isinstance(msgspec_dto.name, str)
