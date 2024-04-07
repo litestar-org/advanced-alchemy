@@ -1,21 +1,25 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TCH003
-from typing import Annotated
+from typing import TYPE_CHECKING
 from uuid import UUID  # noqa: TCH003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from pydantic import BaseModel as _BaseModel
-from pydantic import TypeAdapter
 from sqlalchemy import ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TCH002
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from typing_extensions import Annotated
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.service import OffsetPagination, SQLAlchemyAsyncRepositoryService
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 # #######################
 # Models
@@ -67,26 +71,16 @@ class AuthorUpdate(BaseModel):
     dob: date | None = None
 
 
-class AuthorPagination(BaseModel):
-    """Container for data returned using limit/offset pagination."""
-
-    items: list[Author]
-    """List of data being sent as part of the response."""
-    limit: int
-    """Maximal number of items to send."""
-    offset: int
-    """Offset from the beginning of the query.
-
-    Identical to an index.
-    """
-    total: int
-    """Total number of items."""
-
-
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
     """Author repository."""
 
     model_type = AuthorModel
+
+
+class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
+    """Author repository."""
+
+    repository_type = AuthorRepository
 
 
 # #######################
@@ -99,21 +93,27 @@ async def provide_db_session(request: Request) -> AsyncSession:
     return alchemy.get_session(request)
 
 
-async def provide_authors_repo(db_session: Annotated[AsyncSession, Depends(provide_db_session)]) -> AuthorRepository:
+async def provide_authors_service(
+    db_session: Annotated[AsyncSession, Depends(provide_db_session)],
+) -> AsyncGenerator[AuthorService, None]:
     """This provides the default Authors repository."""
-    return AuthorRepository(session=db_session)
+    async with AuthorService.new(
+        session=db_session,
+    ) as service:
+        yield service
 
 
 # we can optionally override the default `select` used for the repository to pass in
 # specific SQL options such as join details
-async def provide_author_details_repo(
+async def provide_author_details_service(
     db_session: Annotated[AsyncSession, Depends(provide_db_session)],
-) -> AuthorRepository:
+) -> AsyncGenerator[AuthorService, None]:
     """This provides a simple example demonstrating how to override the join options for the repository."""
-    return AuthorRepository(
+    async with AuthorService.new(
         statement=select(AuthorModel).options(selectinload(AuthorModel.books)),
         session=db_session,
-    )
+    ) as service:
+        yield service
 
 
 def provide_limit_offset_pagination(
@@ -136,8 +136,9 @@ def provide_limit_offset_pagination(
 
 async def on_startup() -> None:
     """Initializes the database."""
-    async with sqlalchemy_config.get_engine().begin() as conn:
-        await conn.run_sync(UUIDBase.metadata.create_all)
+    if sqlalchemy_config.create_all:
+        async with sqlalchemy_config.get_engine().begin() as conn:
+            await conn.run_sync(UUIDBase.metadata.create_all)
 
 
 # #######################
@@ -148,6 +149,7 @@ session_config = AsyncSessionConfig(expire_on_commit=False)
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=session_config,
+    create_all=True,
 )  # Create 'db_session' dependency.
 app = FastAPI(on_startup=[on_startup])
 alchemy = StarletteAdvancedAlchemy(config=sqlalchemy_config, app=app)
@@ -158,44 +160,35 @@ alchemy = StarletteAdvancedAlchemy(config=sqlalchemy_config, app=app)
 author_router = APIRouter()
 
 
-@author_router.get(path="/authors", response_model=AuthorPagination)
+@author_router.get(path="/authors", response_model=OffsetPagination[Author])
 async def list_authors(
-    authors_repo: Annotated[AuthorRepository, Depends(provide_authors_repo)],
+    authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
     limit_offset: Annotated[LimitOffset, Depends(provide_limit_offset_pagination)],
-) -> AuthorPagination:
+) -> OffsetPagination[AuthorModel]:
     """List authors."""
-    results, total = await authors_repo.list_and_count(limit_offset)
-    type_adapter = TypeAdapter(list[Author])
-    return AuthorPagination(
-        items=type_adapter.validate_python(results),
-        total=total,
-        limit=limit_offset.limit,
-        offset=limit_offset.offset,
-    )
+    results, total = await authors_service.list_and_count(limit_offset)
+    return authors_service.to_schema(results, total, filters=[limit_offset])
 
 
 @author_router.post(path="/authors", response_model=Author)
 async def create_author(
-    authors_repo: Annotated[AuthorRepository, Depends(provide_authors_repo)],
+    authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
     data: AuthorCreate,
-) -> Author:
+) -> AuthorModel:
     """Create a new author."""
-    obj = await authors_repo.add(
-        AuthorModel(**data.model_dump(exclude_unset=True, exclude_none=True)),
-    )
-    await authors_repo.session.commit()
-    return Author.model_validate(obj)
+    obj = await authors_service.create(data.model_dump(exclude_unset=True, exclude_none=True), auto_commit=True)
+    return authors_service.to_schema(obj)
 
 
 # we override the authors_repo to use the version that joins the Books in
 @author_router.get(path="/authors/{author_id}", response_model=Author)
 async def get_author(
-    authors_repo: Annotated[AuthorRepository, Depends(provide_authors_repo)],
+    authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
     author_id: UUID,
-) -> Author:
+) -> AuthorModel:
     """Get an existing author."""
-    obj = await authors_repo.get(author_id)
-    return Author.model_validate(obj)
+    obj = await authors_service.get(author_id)
+    return authors_service.to_schema(obj)
 
 
 @author_router.patch(
@@ -203,26 +196,26 @@ async def get_author(
     response_model=Author,
 )
 async def update_author(
-    authors_repo: Annotated[AuthorRepository, Depends(provide_authors_repo)],
+    authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
     data: AuthorUpdate,
     author_id: UUID,
-) -> Author:
+) -> AuthorModel:
     """Update an author."""
-    raw_obj = data.model_dump(exclude_unset=True, exclude_none=True)
-    raw_obj.update({"id": author_id})
-    obj = await authors_repo.update(AuthorModel(**raw_obj))
-    await authors_repo.session.commit()
-    return Author.model_validate(obj)
+    obj = await authors_service.update(
+        data.model_dump(exclude_unset=True, exclude_none=True),
+        item_id=author_id,
+        auto_commit=True,
+    )
+    return authors_service.to_schema(obj)
 
 
 @author_router.delete(path="/authors/{author_id}")
 async def delete_author(
-    authors_repo: Annotated[AuthorRepository, Depends(provide_authors_repo)],
+    authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
     author_id: UUID,
 ) -> None:
     """Delete a author from the system."""
-    _ = await authors_repo.delete(author_id)
-    await authors_repo.session.commit()
+    _ = await authors_service.delete(author_id, auto_commit=True)
 
 
 app.include_router(author_router)

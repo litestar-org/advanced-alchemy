@@ -4,9 +4,8 @@ if TYPE_CHECKING:
     from sqlalchemy import Select
 
     from advanced_alchemy import base
-
-    from ._async import SQLAlchemyAsyncRepository
-    from ._sync import SQLAlchemySyncRepository
+    from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
 
 __all__ = (
     "ModelT",

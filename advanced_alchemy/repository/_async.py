@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import string
 from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, cast
 
 from sqlalchemy import (
@@ -35,6 +37,7 @@ from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import get_instrumented_attr
 from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.utils.deprecation import deprecated
+from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
     from collections import abc
@@ -1450,3 +1453,48 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         else:
             statement += lambda s: s.order_by(field.asc())
         return statement
+
+
+class SQLAlchemyAsyncSlugRepository(
+    SQLAlchemyAsyncRepository[ModelT],
+):
+    """Extends the repository to include slug model features.."""
+
+    async def get_by_slug(
+        self,
+        slug: str,
+        **kwargs: Any,
+    ) -> ModelT | None:
+        """Select record by slug value."""
+        return await self.get_one_or_none(slug=slug)
+
+    async def get_available_slug(
+        self,
+        value_to_slugify: str,
+        **kwargs: Any,
+    ) -> str:
+        """Get a unique slug for the supplied value.
+
+        If the value is found to exist, a random 4 digit character is appended to the end.
+
+        Override this method to change the default behavior
+
+        Args:
+            value_to_slugify (str): A string that should be converted to a unique slug.
+            **kwargs: stuff
+
+        Returns:
+            str: a unique slug for the supplied value.  This is safe for URLs and other unique identifiers.
+        """
+        slug = slugify(value_to_slugify)
+        if await self._is_slug_unique(slug):
+            return slug
+        random_string = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))  # noqa: S311
+        return f"{slug}-{random_string}"
+
+    async def _is_slug_unique(
+        self,
+        slug: str,
+        **kwargs: Any,
+    ) -> bool:
+        return await self.exists(slug=slug) is False

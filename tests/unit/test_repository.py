@@ -13,13 +13,8 @@ from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
 
-from advanced_alchemy import (
-    SQLAlchemyAsyncRepository,
-    SQLAlchemySyncRepository,
-    base,
-    wrap_sqlalchemy_exception,
-)
-from advanced_alchemy.exceptions import IntegrityError, RepositoryError
+from advanced_alchemy import base
+from advanced_alchemy.exceptions import IntegrityError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -27,7 +22,11 @@ from advanced_alchemy.filters import (
     NotInCollectionFilter,
     OnBeforeAfter,
 )
-from tests.helpers import lazy_fixture, maybe_async
+from advanced_alchemy.repository import (
+    SQLAlchemyAsyncRepository,
+    SQLAlchemySyncRepository,
+)
+from tests.helpers import maybe_async
 
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest

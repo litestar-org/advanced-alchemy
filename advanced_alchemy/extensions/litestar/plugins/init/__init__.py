@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from .config import (
+from advanced_alchemy.extensions.litestar.plugins.init.config import (
     EngineConfig,
     SQLAlchemyAsyncConfig,
     SQLAlchemySyncConfig,
 )
-from .plugin import SQLAlchemyInitPlugin
+from advanced_alchemy.extensions.litestar.plugins.init.plugin import SQLAlchemyInitPlugin
 
 __all__ = (
     "EngineConfig",

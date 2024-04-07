@@ -1,9 +1,9 @@
 [project]
 authors = [
-  {name = "Cody Fincher", email = "cody.fincher@gmail.com"},
-  {name = "Peter Schutt", email = "peter.github@proton.me"},
-  {name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de"},
-  {name = "Jacob Coffee", email = "jacob@z7x.org"},
+  { name = "Cody Fincher", email = "cody.fincher@gmail.com" },
+  { name = "Peter Schutt", email = "peter.github@proton.me" },
+  { name = "Janek Nouvertné", email = "j.a.nouvertne@posteo.de" },
+  { name = "Jacob Coffee", email = "jacob@z7x.org" },
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -32,11 +32,11 @@ dependencies = [
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
-license = {text = "MIT"}
+license = { text = "MIT" }
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.8.2"
+version = "0.9.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
@@ -48,15 +48,26 @@ Issue = "https://github.com/jolt-org/advanced-alchemy/issues/"
 Source = "https://github.com/jolt-org/advanced-alchemy"
 
 [project.optional-dependencies]
-uuid = [
-  "uuid-utils>=0.6.1",
-]
+uuid = ["uuid-utils>=0.6.1"]
+
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+
+[tool.hatch.build.targets.wheel]
+packages = ["advanced_alchemy", "advanced_alchemy.extensions.litestar"]
+
 [tool.pdm]
-ignore_package_warnings = ["alabaster","sphinxcontrib-*","sphinx-*","sphinx","pre-commit"]
+ignore_package_warnings = [
+  "alabaster",
+  "sphinxcontrib-*",
+  "sphinx-*",
+  "sphinx",
+  "pre-commit",
+  "pydata-sphinx-*",
+  "slotscheck",
+]
 
 [tool.pdm.dev-dependencies]
 dev = [
@@ -109,23 +120,22 @@ linting = [
   "pyright>=1.1.350",
 ]
 test = [
-    "anyio",
-    "pytest>=7.4.1",
-    "pytest-xdist>=3.3.1",
-    "pytest-asyncio",
-    "pytest-mock>=3.11.1",
-    "time-machine>=2.12.0",
-    "httpx>=0.24.1",
-    "pytz",
-    "coverage",
-    "pytest-click",
-    "pytest-sugar",
-    "pytest-cov",
-    "pytest-databases @ git+https://github.com/jolt-org/pytest-databases.git",
+  "pytest>=7.4.1",
+  "pytest-xdist>=3.3.1",
+  "pytest-lazy-fixture>=0.6.3",
+  "pytest-asyncio>=0.21.1",
+  "pytest-mock>=3.11.1",
+  "time-machine>=2.12.0",
+  "httpx>=0.24.1",
+  "pytz",
+  "coverage",
+  "pytest-cov",
+  "pytest-sugar>=1.0.0",
+  "pytest-databases>=0.2.1",
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--dist", "loadgroup", "-n", "auto","-ra","-q"]
+addopts = ["--dist", "loadgroup", "-n", "auto", "-q", "-ra"]
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
@@ -155,7 +165,6 @@ markers = [
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]
-minversion = "6.0"
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -198,22 +207,22 @@ target-version = "py38"
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 fixable = ["ALL"]
 ignore = [
-  "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
-  "B010", # flake8-bugbear - do not call setattr with a constant attribute value
-  "D100", # pydocstyle - missing docstring in public module
-  "D101", # pydocstyle - missing docstring in public class
-  "D102", # pydocstyle - missing docstring in public method
-  "D103", # pydocstyle - missing docstring in public function
-  "D104", # pydocstyle - missing docstring in public package
-  "D105", # pydocstyle - missing docstring in magic method
-  "D106", # pydocstyle - missing docstring in public nested class
-  "D107", # pydocstyle - missing docstring in __init__
-  "D202", # pydocstyle - no blank lines allowed after function docstring
-  "D205", # pydocstyle - 1 blank line required between summary line and description
-  "D415", # pydocstyle - first line should end with a period, question mark, or exclamation point
-  "E501", # pycodestyle line too long, handled by black
+  "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
+  "D100",    # pydocstyle - missing docstring in public module
+  "D101",    # pydocstyle - missing docstring in public class
+  "D102",    # pydocstyle - missing docstring in public method
+  "D103",    # pydocstyle - missing docstring in public function
+  "D104",    # pydocstyle - missing docstring in public package
+  "D105",    # pydocstyle - missing docstring in magic method
+  "D106",    # pydocstyle - missing docstring in public nested class
+  "D107",    # pydocstyle - missing docstring in __init__
+  "D202",    # pydocstyle - no blank lines allowed after function docstring
+  "D205",    # pydocstyle - 1 blank line required between summary line and description
+  "D415",    # pydocstyle - first line should end with a period, question mark, or exclamation point
+  "E501",    # pycodestyle line too long, handled by black
   "PLW2901", # pylint - for loop variable overwritten by assignment target
-  "RUF012", # Ruff-specific rule - annotated with classvar
+  "RUF012",  # Ruff-specific rule - annotated with classvar
   "ANN401",
   "ANN102",
   "ANN101",
@@ -221,9 +230,9 @@ ignore = [
   "PLR0913", # too many arguments
   "PT",
   "TD",
-  "ARG002", # ignore for now; investigate
+  "ARG002",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
-  "PD011", # pandas
+  "PD011",   # pandas
 ]
 select = ["ALL"]
 
@@ -268,7 +277,9 @@ classmethod-decorators = [
   "UP006",
   "SLF001",
 ]
-
+[tool.ruff.lint.flake8-tidy-imports]
+# Disallow all relative imports.
+ban-relative-imports = "all"
 [tool.ruff.lint.isort]
 known-first-party = ["advanced_alchemy", "tests"]
 
@@ -305,6 +316,10 @@ module = [
   "uuid_utils",
   "uuid_utils.*",
 ]
+
+[[tool.mypy.overrides]]
+module = "advanced_alchemy._serialization"
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
@@ -355,25 +370,32 @@ update_docstrings = true
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+"SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/memory/_async.py"]
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+"SQLAlchemyAsyncMockSlugRepository" = "SQLAlchemySyncMockSlugRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+"SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
+"AsyncIterator" = "Iterator"
+"SQLAlchemyAsyncConfigT" = "SQLAlchemySyncConfigT"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
-"advanced_alchemy.repository.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.SQLAlchemySyncMockRepository"
+"advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig" = "advanced_alchemy.config.sync.SQLAlchemySyncConfig"
 "advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
+"advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository"
 "async_scoped_session" = "scoped_session"
+"collections.abc.AsyncIterator" = "collections.abc.Iterator"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
@@ -422,16 +444,16 @@ trim = true
 
 [tool.git-cliff.git]
 commit_parsers = [
-  {message = "^feat", group = "Features"},
-  {message = "^fix", group = "Bug Fixes"},
-  {message = "^doc", group = "Documentation"},
-  {message = "^perf", group = "Performance"},
-  {message = "^refactor", group = "Refactor"},
-  {message = "^style", group = "Styling"},
-  {message = "^test", group = "Testing"},
-  {message = "^chore\\(release\\): prepare for", skip = true},
-  {message = "^chore", group = "Miscellaneous Tasks"},
-  {body = ".*security", group = "Security"},
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^style", group = "Styling" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore\\(release\\): prepare for", skip = true },
+  { message = "^chore", group = "Miscellaneous Tasks" },
+  { body = ".*security", group = "Security" },
 ]
 conventional_commits = true
 filter_commits = false
