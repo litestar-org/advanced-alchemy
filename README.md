@@ -117,6 +117,7 @@ with session_factory() as db_session:
     remaining_count = repo.count()
     print(f"Found {remaining_count} remaining records after delete.")
 ```
+
 </details>
 
 For a full standalone example, see the sample [here][standalone-example]
@@ -189,6 +190,7 @@ with session_factory() as db_session:
     remaining_count = service.count()
     print(f"Found {remaining_count} remaining records after delete.")
 ```
+
 </details>
 
 ### Web Frameworks
@@ -218,6 +220,7 @@ alchemy = SQLAlchemyPlugin(
 )
 app = Litestar(plugins=[alchemy])
 ```
+
 </details>
 
 For a full Litestar example, check [here][litestar-example]
@@ -238,6 +241,7 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+
 </details>
 
 For a full FastAPI example, see [here][fastapi-example]
@@ -258,6 +262,7 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+
 </details>
 
 #### Sanic
@@ -278,6 +283,7 @@ alchemy = SanicAdvancedAlchemy(
 )
 Extend.register(alchemy)
 ```
+
 </details>
 
 ## Contributing
@@ -307,5 +313,5 @@ or the [project-specific GitHub discussions page][project-discussions].
 [project-docs]: https://docs.advanced-alchemy.jolt.rs
 [install-guide]: https://docs.advanced-alchemy.jolt.rs/latest/#installation
 [fastapi-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/fastapi.py
-[litestar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litestar.py
+[litestar-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/litestar/litestar_service.py
 [standalone-example]: https://github.com/jolt-org/advanced-alchemy/blob/main/examples/standalone.py

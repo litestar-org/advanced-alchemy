@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from litestar.di import Provide
 from litestar.dto import DTOData
-from litestar.pagination import ClassicPagination, CursorPagination, OffsetPagination
 from litestar.params import Dependency, Parameter
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
@@ -22,6 +22,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.service import OffsetPagination
 
 if TYPE_CHECKING:
     from click import Group
@@ -42,12 +43,12 @@ signature_namespace_values = {
     "NotInSearchFilter": NotInSearchFilter,
     "FilterTypes": FilterTypes,
     "OffsetPagination": OffsetPagination,
-    "ClassicPagination": ClassicPagination,
-    "CursorPagination": CursorPagination,
     "Parameter": Parameter,
     "Dependency": Dependency,
     "DTOData": DTOData,
     "UUID": UUID,
+    "date": date,
+    "datetime": datetime,
 }
 
 

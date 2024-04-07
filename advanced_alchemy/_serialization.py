@@ -14,7 +14,7 @@ try:
 except ImportError:
     try:
         from orjson import dumps as _encode_json
-        from orjson import loads as decode_json  # type: ignore[no-redef]
+        from orjson import loads as decode_json  # type: ignore[no-redef,assignment]
 
         def encode_json(data: Any) -> str:
             return _encode_json(data).decode("utf-8")  # type: ignore[no-any-return]

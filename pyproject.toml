@@ -36,7 +36,7 @@ license = { text = "MIT" }
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.8.4"
+version = "0.9.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
@@ -49,9 +49,24 @@ Source = "https://github.com/jolt-org/advanced-alchemy"
 
 [project.optional-dependencies]
 uuid = ["uuid-utils>=0.6.1"]
+
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["advanced_alchemy", "advanced_alchemy.extensions.litestar"]
+
+[tool.pdm]
+ignore_package_warnings = [
+  "alabaster",
+  "sphinxcontrib-*",
+  "sphinx-*",
+  "sphinx",
+  "pre-commit",
+  "pydata-sphinx-*",
+  "slotscheck",
+]
 
 [tool.pdm.dev-dependencies]
 dev = [
@@ -116,11 +131,22 @@ test = [
   "pytz",
   "coverage",
   "pytest-cov",
+  "pytest-sugar>=1.0.0",
+  "pytest-databases>=0.2.1",
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--dist", "loadgroup", "-n", "auto"]
+addopts = ["--dist", "loadgroup", "-n", "auto", "-q", "-ra"]
 asyncio_mode = "auto"
+filterwarnings = [
+  "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore::DeprecationWarning:pkg_resources",
+  "ignore::DeprecationWarning:google.rpc",
+  "ignore::DeprecationWarning:google.gcloud",
+  "ignore::DeprecationWarning:google.iam",
+  "ignore::DeprecationWarning:google",
+  "ignore::DeprecationWarning:websockets.connection",
+]
 markers = [
   "integration: SQLAlchemy integration tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
@@ -140,16 +166,7 @@ markers = [
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]
-
-filterwarnings = [
-  "ignore::DeprecationWarning:pkg_resources.*",
-  "ignore::DeprecationWarning:pkg_resources",
-  "ignore::DeprecationWarning:google.rpc",
-  "ignore::DeprecationWarning:google.gcloud",
-  "ignore::DeprecationWarning:google.iam",
-  "ignore::DeprecationWarning:google",
-  "ignore::DeprecationWarning:websockets.connection",
-]
+testpaths = ["tests"]
 
 [tool.coverage.run]
 concurrency = ["multiprocessing", "thread"]
@@ -259,7 +276,9 @@ classmethod-decorators = [
   "UP006",
   "SLF001",
 ]
-
+[tool.ruff.lint.flake8-tidy-imports]
+# Disallow all relative imports.
+ban-relative-imports = "all"
 [tool.ruff.lint.isort]
 known-first-party = ["advanced_alchemy", "tests"]
 
@@ -296,6 +315,10 @@ module = [
   "uuid_utils",
   "uuid_utils.*",
 ]
+
+[[tool.mypy.overrides]]
+module = "advanced_alchemy._serialization"
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
@@ -346,25 +369,32 @@ update_docstrings = true
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+"SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/memory/_async.py"]
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+"SQLAlchemyAsyncMockSlugRepository" = "SQLAlchemySyncMockSlugRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
+"SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 "async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/service/_async.py"]
+"AsyncIterator" = "Iterator"
+"SQLAlchemyAsyncConfigT" = "SQLAlchemySyncConfigT"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
-"advanced_alchemy.repository.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.SQLAlchemySyncMockRepository"
+"advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig" = "advanced_alchemy.config.sync.SQLAlchemySyncConfig"
 "advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
+"advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository"
 "async_scoped_session" = "scoped_session"
+"collections.abc.AsyncIterator" = "collections.abc.Iterator"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
