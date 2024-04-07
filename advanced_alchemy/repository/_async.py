@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import string
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, cast
 
 from sqlalchemy import (
@@ -18,8 +19,10 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy import func as sql_func
-from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
+from sqlalchemy.orm.strategy_options import _AbstractLoad
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
+from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
@@ -51,6 +54,12 @@ DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 WhereClauseT = ColumnExpressionArgument[bool]
+
+SingleLoad: TypeAlias = (
+    _AbstractLoad | Literal["*"] | InstrumentedAttribute[Any] | RelationshipProperty[Any] | MapperProperty[Any]
+)
+LoadCollection: TypeAlias = Sequence[SingleLoad | Sequence[SingleLoad]]
+LoadSpec: TypeAlias = LoadCollection | SingleLoad
 
 
 class SQLAlchemyAsyncRepository(Generic[ModelT]):
@@ -157,12 +166,41 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             raise NotFoundError(msg)
         return item_or_none
 
+    def _clear_load(self) -> None:
+        self._loaders: list[_AbstractLoad] = []
+        self._loaders_has_wildcards = False
+
+    def _to_abstract_load(self, load: LoadSpec | None) -> list[_AbstractLoad]:
+        loads: list[_AbstractLoad] = []
+        if isinstance(load, _AbstractLoad):
+            return [load]
+        if isinstance(load, InstrumentedAttribute):
+            load = load.property
+        if isinstance(load, RelationshipProperty):
+            class_ = load.class_attribute
+            return [selectinload(class_)] if load.uselist else [joinedload(class_, innerjoin=load.innerjoin)]
+        if isinstance(load, str) and load == "*":
+            self._loaders_has_wildcards = True
+            return [joinedload("*")]
+        if isinstance(load, list | tuple):
+            for attribute in load:
+                if isinstance(attribute, list | tuple):
+                    load_chain = self._to_abstract_load(attribute)
+                    loader = load_chain[-1]
+                    for sub_load in load_chain[-2::-1]:
+                        loader = sub_load.options(loader)
+                    loads.append(loader)
+                else:
+                    loads.extend(self._to_abstract_load(attribute))
+        return loads
+
     async def add(
         self,
         data: ModelT,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -174,12 +212,17 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
 
         Returns:
             The added instance.
         """
         with wrap_sqlalchemy_exception():
+            self._loaders = self._to_abstract_load(load)
             instance = await self._attach_to_session(data)
+            if self._loaders:
+                await self._flush_or_commit(auto_commit=True)
+                return await self._refresh_with_load(instance)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
             self._expunge(instance, auto_expunge=auto_expunge)
@@ -381,6 +424,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute | None = None,
+        load: LoadSpec | None = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -392,6 +436,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            load: Set relationships to be loaded
 
         Returns:
             The retrieved instance.
@@ -400,6 +445,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception():
+            self._loaders = self._to_abstract_load(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
@@ -412,6 +458,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -421,6 +468,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -430,6 +478,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception():
+            self._loaders = self._to_abstract_load(load)
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = (await self._execute(statement)).scalar_one_or_none()
@@ -441,6 +490,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         self,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -450,12 +500,14 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             The retrieved instance or None
         """
         with wrap_sqlalchemy_exception():
+            self._loaders = self._to_abstract_load(load)
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast("Result[tuple[ModelT]]", (await self._execute(statement))).scalar_one_or_none()
@@ -684,6 +736,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute | None = None,
+        load: LoadSpec | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -703,6 +756,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            load: Set relationships to be loaded
 
         Returns:
             The updated instance.
@@ -711,6 +765,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         with wrap_sqlalchemy_exception():
+            self._loaders = self._to_abstract_load(load)
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -836,6 +891,13 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
             if auto_refresh
             else None
         )
+
+    async def _refresh_with_load(self, instance: ModelT) -> ModelT:
+        statement = self._get_base_stmt()
+        statement = self._filter_select_by_kwargs(statement, {self.id_attribute: getattr(instance, self.id_attribute)})
+        result = await self._execute(statement)
+        refreshed_instance = result.scalar_one_or_none()
+        return self.check_not_found(refreshed_instance)
 
     async def _list_and_count_window(
         self,
@@ -1118,6 +1180,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
@@ -1128,6 +1191,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1138,6 +1202,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         statement = self._filter_select_by_kwargs(statement, kwargs)
 
         with wrap_sqlalchemy_exception():
+            self._loaders = self._to_abstract_load(load)
             result = await self._execute(statement)
             instances = list(result.scalars())
             for instance in instances:
@@ -1217,7 +1282,16 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         raise ValueError(msg)
 
     async def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
-        return await self.session.execute(statement)
+        if self._loaders:
+            if isinstance(statement, Select):
+                statement = lambda_stmt(lambda: statement)
+            loaders = self._loaders
+            statement += lambda s: s.options(*loaders)
+        result = await self.session.execute(statement)
+        if self._loaders and self._loaders_has_wildcards:
+            result = result.unique()
+        self._clear_load()
+        return result
 
     def _apply_limit_offset_pagination(
         self,
