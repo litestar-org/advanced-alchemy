@@ -1,13 +1,12 @@
-from ._async import SQLAlchemyAsyncRepository
-from ._sync import SQLAlchemySyncRepository
-from ._util import get_instrumented_attr, model_from_dict
-from .memory import SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository
+from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository, SQLAlchemyAsyncSlugRepository
+from advanced_alchemy.repository._sync import SQLAlchemySyncRepository, SQLAlchemySyncSlugRepository
+from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
 
 __all__ = (
     "SQLAlchemyAsyncRepository",
+    "SQLAlchemyAsyncSlugRepository",
+    "SQLAlchemySyncSlugRepository",
     "SQLAlchemySyncRepository",
-    "SQLAlchemyAsyncMockRepository",
-    "SQLAlchemySyncMockRepository",
     "get_instrumented_attr",
     "model_from_dict",
 )

@@ -14,19 +14,18 @@ from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
 
-from advanced_alchemy import (
-    SQLAlchemyAsyncRepository,
-    SQLAlchemySyncRepository,
-    base,
-    wrap_sqlalchemy_exception,
-)
-from advanced_alchemy.exceptions import IntegrityError, RepositoryError
+from advanced_alchemy import base
+from advanced_alchemy.exceptions import IntegrityError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
     LimitOffset,
     NotInCollectionFilter,
     OnBeforeAfter,
+)
+from advanced_alchemy.repository import (
+    SQLAlchemyAsyncRepository,
+    SQLAlchemySyncRepository,
 )
 from tests.helpers import maybe_async
 

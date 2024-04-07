@@ -1,4 +1,9 @@
-from ._async import SQLAlchemyAsyncMockRepository
-from ._sync import SQLAlchemySyncMockRepository
+from advanced_alchemy.repository.memory._async import SQLAlchemyAsyncMockRepository, SQLAlchemyAsyncMockSlugRepository
+from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository, SQLAlchemySyncMockSlugRepository
 
-__all__ = ["SQLAlchemyAsyncMockRepository", "SQLAlchemySyncMockRepository"]
+__all__ = [
+    "SQLAlchemyAsyncMockRepository",
+    "SQLAlchemyAsyncMockSlugRepository",
+    "SQLAlchemySyncMockRepository",
+    "SQLAlchemySyncMockSlugRepository",
+]

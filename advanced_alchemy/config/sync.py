@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Generator
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
+from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
 
 if TYPE_CHECKING:
     from typing import Callable

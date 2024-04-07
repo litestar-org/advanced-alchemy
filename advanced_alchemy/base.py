@@ -8,11 +8,12 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
 
-from sqlalchemy import Date, MetaData, Sequence, String
+from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
     Mapper,
+    declarative_mixin,
     declared_attr,
     mapped_column,
     orm_insert_sentinel,
@@ -53,6 +54,8 @@ __all__ = (
     "UUIDPrimaryKey",
     "UUIDv7PrimaryKey",
     "UUIDv6PrimaryKey",
+    "SlugKey",
+    "SQLQuery",
     "orm_registry",
 )
 
@@ -175,6 +178,41 @@ class CommonTableAttributes:
         return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
 
 
+@declarative_mixin
+class SlugKey:
+    """Slug unique Field Model Mixin."""
+
+    @declared_attr
+    def slug(cls) -> Mapped[str]:
+        """Slug field."""
+        return mapped_column(
+            String(length=100),
+            nullable=False,
+        )
+
+    @staticmethod
+    def _create_unique_slug_index(*_args: Any, **kwargs: Any) -> bool:
+        return bool(kwargs["dialect"].name.startswith("spanner"))
+
+    @staticmethod
+    def _create_unique_slug_constraint(*_args: Any, **kwargs: Any) -> bool:
+        return not kwargs["dialect"].name.startswith("spanner")
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple:
+        return (
+            UniqueConstraint(
+                cls.slug,
+                name=f"uq_{cls.__tablename__}_slug",  # type: ignore[attr-defined]
+            ).ddl_if(callable_=cls._create_unique_slug_constraint),
+            Index(
+                f"ix_{cls.__tablename__}_slug_unique",  # type: ignore[attr-defined]
+                cls.slug,
+                unique=True,
+            ).ddl_if(callable_=cls._create_unique_slug_index),
+        )
+
+
 def create_registry(
     custom_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
@@ -253,3 +291,19 @@ class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, Dec
     """Base for declarative models with BigInt primary keys and audit columns."""
 
     registry = orm_registry
+
+
+class SQLQuery(DeclarativeBase):
+    """Base for all SQLAlchemy custom mapped objects."""
+
+    __allow_unmapped__ = True
+    registry = orm_registry
+
+    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+        """Convert model to dictionary.
+
+        Returns:
+            dict[str, Any]: A dict representation of the model
+        """
+        exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
+        return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}

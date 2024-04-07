@@ -6,24 +6,32 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, Generic, Iterable, overload
 
-from advanced_alchemy.exceptions import RepositoryError
+from sqlalchemy import Select
+from typing_extensions import Self
+
+from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.service._converters import EMPTY_FILTER, to_schema
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import AsyncIterator, Sequence
 
-    from sqlalchemy import Select, StatementLambdaElement
+    from sqlalchemy import RowMapping, Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm import InstrumentedAttribute
     from sqlalchemy.sql import ColumnElement
 
+    from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.repository import SQLAlchemyAsyncMockRepository, SQLAlchemyAsyncRepository
-    from advanced_alchemy.service.typing import FilterTypeT
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
+    from advanced_alchemy.service.pagination import OffsetPagination
+    from advanced_alchemy.service.typing import ModelDTOT
 
 
 class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
@@ -203,6 +211,92 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
             **kwargs,
         )
 
+    @classmethod
+    @asynccontextmanager
+    async def new(
+        cls,
+        session: AsyncSession | async_scoped_session[AsyncSession] | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        config: SQLAlchemyAsyncConfig | None = None,
+    ) -> AsyncIterator[Self]:
+        """Context manager that returns instance of service object.
+
+        Handles construction of the database session._create_select_for_model
+
+        Returns:
+            The service object instance.
+        """
+        if not config and not session:
+            raise AdvancedAlchemyError(detail="Please supply an optional configuration or session to use.")
+
+        if session:
+            yield cls(statement=statement, session=session)
+        elif config:
+            async with config.get_session() as db_session:
+                yield cls(
+                    statement=statement,
+                    session=db_session,
+                )
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelT | RowMapping,
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelT] | None = None,
+    ) -> ModelT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelT] | Sequence[RowMapping],
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelT] | None = None,
+    ) -> OffsetPagination[ModelT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelT | RowMapping,
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT] = ...,
+    ) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelT] | Sequence[RowMapping],
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT] = ...,
+    ) -> OffsetPagination[ModelDTOT]: ...
+
+    def to_schema(
+        self,
+        data: ModelT | Sequence[ModelT] | Sequence[RowMapping] | RowMapping,
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT | ModelT] | None = None,
+    ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+        """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
+
+        Args:
+            data: The return from one of the service calls.
+            total: the total number of rows in the data
+            schema_type: Collection route filters.
+            filters: Collection route filters.
+
+        Returns:
+            The list of instances retrieved from the repository.
+        """
+        if schema_type is None:
+            schema_type = self.repository.model_type
+        return to_schema(data=data, total=total, filters=filters, schema_type=schema_type)
+
+    # this needs to stay at the end to make the vscode linter happy
     async def list(
         self,
         *filters: FilterTypes | ColumnElement[bool],
@@ -224,25 +318,6 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
             The list of instances retrieved from the repository.
         """
         return await self.repository.list(*filters, statement=statement, auto_expunge=auto_expunge, **kwargs)
-
-    @staticmethod
-    def find_filter(
-        filter_type: type[FilterTypeT],
-        *filters: FilterTypes | ColumnElement[bool],
-    ) -> FilterTypeT | None:
-        """Get the filter specified by filter type from the filters.
-
-        Args:
-            filter_type: The type of filter to find.
-            *filters: filter types to apply to the query
-
-        Returns:
-            The match filter instance or None
-        """
-        return next(
-            (cast("FilterTypeT | None", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
-            None,
-        )
 
 
 class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[ModelT]):
