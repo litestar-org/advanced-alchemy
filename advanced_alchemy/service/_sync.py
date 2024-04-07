@@ -244,16 +244,16 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: ModelT | RowMapping,
         total: int | None = None,
-        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
         schema_type: type[ModelT] | None = None,
     ) -> ModelT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelT] | list[RowMapping],
+        data: Sequence[ModelT] | Sequence[RowMapping],
         total: int | None = None,
-        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
         schema_type: type[ModelT] | None = None,
     ) -> OffsetPagination[ModelT]: ...
 
@@ -262,24 +262,24 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: ModelT | RowMapping,
         total: int | None = None,
-        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
         schema_type: type[ModelDTOT] = ...,
     ) -> ModelDTOT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelT] | list[RowMapping],
+        data: Sequence[ModelT] | Sequence[RowMapping],
         total: int | None = None,
-        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
         schema_type: type[ModelDTOT] = ...,
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
         self,
-        data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
+        data: ModelT | Sequence[ModelT] | Sequence[RowMapping] | RowMapping,
         total: int | None = None,
-        filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = EMPTY_FILTER,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT | ModelT] | None = None,
     ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.

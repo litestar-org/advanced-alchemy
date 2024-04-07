@@ -6,7 +6,9 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from typing import Any, TypeAlias, TypeVar
+from typing import Any, TypeVar
+
+from typing_extensions import TypeAlias
 
 from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from uuid import UUID
 
 from litestar import Litestar
@@ -127,7 +127,7 @@ class AuthorController(Controller):
     ) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_repo.list_and_count(limit_offset)
-        type_adapter = TypeAdapter(list[Author])
+        type_adapter = TypeAdapter(List[Author])
         return OffsetPagination[Author](
             items=type_adapter.validate_python(results),
             total=total,

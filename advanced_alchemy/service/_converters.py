@@ -82,7 +82,7 @@ def _default_deserializer(
 
 def _find_filter(
     filter_type: type[FilterTypeT],
-    *filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes],
+    *filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes],
 ) -> FilterTypeT | None:
     """Get the filter specified by filter type from the filters.
 
@@ -100,9 +100,9 @@ def _find_filter(
 
 
 def to_schema(
-    data: ModelT | Sequence[ModelT] | list[RowMapping] | RowMapping,
+    data: ModelT | Sequence[ModelT] | Sequence[RowMapping] | RowMapping,
     total: int | None = None,
-    filters: list[FilterTypes | ColumnElement[bool]] | list[FilterTypes] = EMPTY_FILTER,
+    filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
     schema_type: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
 ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
     if schema_type is not None and issubclass(schema_type, Struct):
