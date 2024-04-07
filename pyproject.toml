@@ -54,6 +54,9 @@ uuid = ["uuid-utils>=0.6.1"]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["advanced_alchemy", "advanced_alchemy.extensions.litestar"]
+
 [tool.pdm]
 ignore_package_warnings = [
   "alabaster",
