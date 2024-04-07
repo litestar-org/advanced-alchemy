@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import string
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, Union, cast
 
 from sqlalchemy import (
     Result,
@@ -63,11 +63,15 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 WhereClauseT = ColumnExpressionArgument[bool]
 
-SingleLoad: TypeAlias = (
-    _AbstractLoad | Literal["*"] | InstrumentedAttribute[Any] | RelationshipProperty[Any] | MapperProperty[Any]
-)
-LoadCollection: TypeAlias = Sequence[SingleLoad | Sequence[SingleLoad]]
-LoadSpec: TypeAlias = LoadCollection | SingleLoad
+SingleLoad: TypeAlias = Union[
+    _AbstractLoad,
+    Literal["*"],
+    InstrumentedAttribute[Any],
+    RelationshipProperty[Any],
+    MapperProperty[Any],
+]
+LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
+LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad]
 
 
 class SQLAlchemySyncRepository(Generic[ModelT]):
@@ -190,9 +194,9 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         if isinstance(load, str) and load == "*":
             self._loaders_has_wildcards = True
             return [joinedload("*")]
-        if isinstance(load, list | tuple):
+        if isinstance(load, (list, tuple)):
             for attribute in load:
-                if isinstance(attribute, list | tuple):
+                if isinstance(attribute, (list, tuple)):
                     load_chain = self._to_abstract_load(attribute)
                     loader = load_chain[-1]
                     for sub_load in load_chain[-2::-1]:
