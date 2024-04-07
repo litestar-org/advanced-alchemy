@@ -244,7 +244,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: ModelT | RowMapping,
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelT] | None = None,
     ) -> ModelT: ...
 
@@ -253,7 +253,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: Sequence[ModelT] | Sequence[RowMapping],
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelT] | None = None,
     ) -> OffsetPagination[ModelT]: ...
 
@@ -262,7 +262,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: ModelT | RowMapping,
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
     ) -> ModelDTOT: ...
 
@@ -271,7 +271,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         self,
         data: Sequence[ModelT] | Sequence[RowMapping],
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
     ) -> OffsetPagination[ModelDTOT]: ...
 
@@ -282,7 +282,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT]):
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT | ModelT] | None = None,
     ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
-        """Convert the object to a response schema.
+        """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
 
         Args:
             data: The return from one of the service calls.

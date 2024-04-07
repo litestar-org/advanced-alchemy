@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -46,6 +47,8 @@ signature_namespace_values = {
     "Dependency": Dependency,
     "DTOData": DTOData,
     "UUID": UUID,
+    "date": date,
+    "datetime": datetime,
 }
 
 

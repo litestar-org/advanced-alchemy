@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
 from typing import TYPE_CHECKING
-from uuid import UUID
 
 from litestar import Litestar
 from litestar.controller import Controller
@@ -26,6 +24,8 @@ from advanced_alchemy.service import OffsetPagination, SQLAlchemyAsyncRepository
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+    from datetime import date
+    from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -117,8 +117,6 @@ def provide_limit_offset_pagination(
 ) -> FilterTypes:
     """Add offset/limit pagination.
 
-    Return type consumed by `Repository.apply_limit_offset_pagination()`.
-
     Parameters
     ----------
     current_page : int
@@ -142,7 +140,12 @@ class AuthorController(Controller):
     ) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_service.list_and_count(limit_offset)
-        return authors_service.to_schema(results, total, filters=[limit_offset], schema_tpye=Author)
+        return authors_service.to_schema(
+            data=results,
+            total=total,
+            filters=[limit_offset],
+            schema_type=Author,
+        )
 
     @post(path="/authors")
     async def create_author(
@@ -154,7 +157,7 @@ class AuthorController(Controller):
         obj = await authors_service.create(
             data.model_dump(exclude_unset=True, exclude_none=True),
         )
-        return authors_service.to_schema(obj, schema_tpye=Author)
+        return authors_service.to_schema(data=obj, schema_type=Author)
 
     # we override the authors_repo to use the version that joins the Books in
     @get(path="/authors/{author_id:uuid}", dependencies={"authors_service": Provide(provide_author_details_service)})
@@ -168,7 +171,7 @@ class AuthorController(Controller):
     ) -> Author:
         """Get an existing author."""
         obj = await authors_service.get(author_id)
-        return authors_service.to_schema(obj, schema_tpye=Author)
+        return authors_service.to_schema(data=obj, schema_type=Author)
 
     @patch(
         path="/authors/{author_id:uuid}",
@@ -189,7 +192,7 @@ class AuthorController(Controller):
             item_id=author_id,
             auto_commit=True,
         )
-        return authors_service.to_schema(obj, schema_tpye=Author)
+        return authors_service.to_schema(obj, schema_type=Author)
 
     @delete(path="/authors/{author_id:uuid}")
     async def delete_author(
@@ -218,5 +221,4 @@ app = Litestar(
     route_handlers=[AuthorController],
     plugins=[sqlalchemy_plugin],
     dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
-    signature_namespace={"date": date, "datetime": datetime, "UUID": UUID},
 )

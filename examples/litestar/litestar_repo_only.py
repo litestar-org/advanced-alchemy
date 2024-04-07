@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
 from typing import TYPE_CHECKING, List
-from uuid import UUID
 
 from litestar import Litestar
 from litestar.controller import Controller
@@ -22,6 +20,9 @@ from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 if TYPE_CHECKING:
+    from datetime import date
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -215,5 +216,4 @@ app = Litestar(
     on_startup=[on_startup],
     plugins=[sqlalchemy_plugin],
     dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
-    signature_namespace={"date": date, "datetime": datetime, "UUID": UUID},
 )
