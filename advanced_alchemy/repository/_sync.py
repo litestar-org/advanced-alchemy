@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, Sequence, Union, cast
 
 from sqlalchemy import (
     Result,
