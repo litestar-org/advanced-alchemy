@@ -85,7 +85,7 @@ def merge_table_arguments(
 
     When using mixins that include their own tablerags, it is difficult to append info into the model such as a comment.
 
-    This function helps you merge the args together
+    This function helps you merge the args together.
 
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
