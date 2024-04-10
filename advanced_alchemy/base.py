@@ -79,7 +79,7 @@ convention: NamingSchemaParameter = {
 def merge_table_arguments(
     cls: DeclarativeBase,
     *mixins: Any,
-    extra_table_args: dict | tuple | None = None,
+    table_args: dict | tuple | None = None,
 ) -> tuple | dict:
     """Merge Table Arguments
 
@@ -90,7 +90,7 @@ def merge_table_arguments(
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
         *mixins (Any): The mixins to add into the model.
-        extra_table_args: additional information to add to tableargs
+        table_args: additional information to add to tableargs
 
     Returns:
         tuple | dict: The merged __table_args__ property
@@ -98,19 +98,19 @@ def merge_table_arguments(
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
 
-    table_args_theirs = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
+    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
 
-    for table_args in (*table_args_theirs, extra_table_args):
-        if table_args:
-            if isinstance(table_args, tuple):
-                last_positional_arg = table_args[-1]
-                args.extend(table_args[:-1])
+    for arg_to_merge in (*mixin_table_args, table_args):
+        if arg_to_merge:
+            if isinstance(arg_to_merge, tuple):
+                last_positional_arg = arg_to_merge[-1]
+                args.extend(arg_to_merge[:-1])
                 if isinstance(last_positional_arg, dict):
                     kwargs.update(last_positional_arg)
                 else:
                     args.append(last_positional_arg)
-            elif isinstance(table_args, dict):
-                kwargs.update(table_args)
+            elif isinstance(arg_to_merge, dict):
+                kwargs.update(arg_to_merge)
 
     if args:
         if kwargs:

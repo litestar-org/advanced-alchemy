@@ -60,7 +60,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
         return merge_table_arguments(
             cls,
             SlugKey,
-            {"comment": "Slugbook"},
+            table_args={"comment": "Slugbook"},
         )
 
 
