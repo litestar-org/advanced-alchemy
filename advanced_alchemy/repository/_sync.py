@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
 
 from sqlalchemy import (
     Result,
@@ -23,30 +23,18 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 
-from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
-from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
-    FilterTypes,
-    LimitOffset,
-    NotInCollectionFilter,
-    NotInSearchFilter,
-    OnBeforeAfter,
-    OrderBy,
-    SearchFilter,
-)
+from advanced_alchemy.exceptions import NotFoundError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
-from advanced_alchemy.repository._util import get_instrumented_attr
+from advanced_alchemy.repository._util import FilterableRepository, get_instrumented_attr
 from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
-    from collections import abc
-    from datetime import datetime
-
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
     from sqlalchemy.orm.scoping import scoped_session
+
+    from advanced_alchemy.filters import FilterTypes
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
@@ -54,15 +42,11 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 WhereClauseT = ColumnExpressionArgument[bool]
 
 
-class SQLAlchemySyncRepository(Generic[ModelT]):
+class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
     """SQLAlchemy based implementation of the repository interface."""
 
-    model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
-    _prefer_any: bool = False
-    prefer_any_dialects: tuple[str] | None = ("postgresql",)
-    """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
 
     def __init__(
         self,
@@ -1220,241 +1204,8 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
         return self.session.execute(statement)
 
-    def _apply_limit_offset_pagination(
-        self,
-        limit: int,
-        offset: int,
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        statement += lambda s: s.limit(limit).offset(offset)
-        return statement
 
-    def _apply_filters(
-        self,
-        *filters: FilterTypes | ColumnElement[bool],
-        apply_pagination: bool = True,
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        """Apply filters to a select statement.
-
-        Args:
-            *filters: filter types to apply to the query
-            apply_pagination: applies pagination filters if true
-            statement: select statement to apply filters
-
-        Keyword Args:
-            select: select to apply filters against
-
-        Returns:
-            The select with filters applied.
-        """
-        for filter_ in filters:
-            if isinstance(filter_, (LimitOffset,)):
-                if apply_pagination:
-                    statement = self._apply_limit_offset_pagination(filter_.limit, filter_.offset, statement=statement)
-            elif isinstance(filter_, (BeforeAfter,)):
-                statement = self._filter_on_datetime_field(
-                    field_name=filter_.field_name,
-                    before=filter_.before,
-                    after=filter_.after,
-                    statement=statement,
-                )
-            elif isinstance(filter_, (OnBeforeAfter,)):
-                statement = self._filter_on_datetime_field(
-                    field_name=filter_.field_name,
-                    on_or_before=filter_.on_or_before,
-                    on_or_after=filter_.on_or_after,
-                    statement=statement,
-                )
-
-            elif isinstance(filter_, (NotInCollectionFilter,)):
-                if filter_.values is not None:
-                    if self._prefer_any:
-                        statement = self._filter_not_any_collection(
-                            filter_.field_name,
-                            filter_.values,
-                            statement=statement,
-                        )
-                    else:
-                        statement = self._filter_not_in_collection(
-                            filter_.field_name,
-                            filter_.values,
-                            statement=statement,
-                        )
-
-            elif isinstance(filter_, (CollectionFilter,)):
-                if filter_.values is not None:
-                    if self._prefer_any:
-                        statement = self._filter_any_collection(filter_.field_name, filter_.values, statement=statement)
-                    else:
-                        statement = self._filter_in_collection(filter_.field_name, filter_.values, statement=statement)
-            elif isinstance(filter_, (OrderBy,)):
-                statement = self._order_by(statement, filter_.field_name, sort_desc=filter_.sort_order == "desc")
-            elif isinstance(filter_, (SearchFilter,)):
-                statement = self._filter_by_like(
-                    statement,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                )
-            elif isinstance(filter_, (NotInSearchFilter,)):
-                statement = self._filter_by_not_like(
-                    statement,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                )
-            elif isinstance(filter_, ColumnElement):
-                statement = self._filter_by_expression(expression=filter_, statement=statement)
-            else:
-                msg = f"Unexpected filter: {filter_}"  # type: ignore[unreachable]
-                raise RepositoryError(msg)
-        return statement
-
-    def _filter_in_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            statement += lambda s: s.where(text("1=-1"))
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field.in_(values))
-        return statement
-
-    def _filter_not_in_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field.notin_(values))
-        return statement
-
-    def _filter_any_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            statement += lambda s: s.where(text("1=-1"))
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(any_(values) == field)  # type: ignore[arg-type]
-        return statement
-
-    def _filter_not_any_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(any_(values) != field)  # type: ignore[arg-type]
-        return statement
-
-    def _filter_on_datetime_field(
-        self,
-        field_name: str | InstrumentedAttribute,
-        statement: StatementLambdaElement,
-        before: datetime | None = None,
-        after: datetime | None = None,
-        on_or_before: datetime | None = None,
-        on_or_after: datetime | None = None,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        if before is not None:
-            statement += lambda s: s.where(field < before)
-        if after is not None:
-            statement += lambda s: s.where(field > after)
-        if on_or_before is not None:
-            statement += lambda s: s.where(field <= on_or_before)
-        if on_or_after is not None:
-            statement += lambda s: s.where(field >= on_or_after)
-        return statement
-
-    def _filter_select_by_kwargs(
-        self,
-        statement: StatementLambdaElement,
-        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
-    ) -> StatementLambdaElement:
-        for key, val in kwargs.items() if isinstance(kwargs, dict) else kwargs:
-            statement = self._filter_by_where(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
-        return statement
-
-    def _filter_by_expression(
-        self,
-        statement: StatementLambdaElement,
-        expression: ColumnElement[bool],
-    ) -> StatementLambdaElement:
-        statement += lambda s: s.where(expression)
-        return statement
-
-    def _filter_by_where(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        value: Any,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field == value)
-        return statement
-
-    def _filter_by_like(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        value: str,
-        ignore_case: bool,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        search_text = f"%{value}%"
-        if ignore_case:
-            statement += lambda s: s.where(field.ilike(search_text))
-        else:
-            statement += lambda s: s.where(field.like(search_text))
-        return statement
-
-    def _filter_by_not_like(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        value: str,
-        ignore_case: bool,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        search_text = f"%{value}%"
-        if ignore_case:
-            statement += lambda s: s.where(field.not_ilike(search_text))
-        else:
-            statement += lambda s: s.where(field.not_like(search_text))
-        return statement
-
-    def _order_by(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        sort_desc: bool = False,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        if sort_desc:
-            statement += lambda s: s.order_by(field.desc())
-        else:
-            statement += lambda s: s.order_by(field.asc())
-        return statement
-
-
-class SQLAlchemySyncSlugRepository(
-    SQLAlchemySyncRepository[ModelT],
-):
+class SQLAlchemySyncSlugRepository(SQLAlchemySyncRepository[ModelT]):
     """Extends the repository to include slug model features.."""
 
     def get_by_slug(
