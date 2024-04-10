@@ -7,9 +7,9 @@ from typing import Any, List
 from uuid import UUID
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
-from advanced_alchemy.base import SlugKey, UUIDAuditBase, UUIDBase, UUIDv6Base, UUIDv7Base
+from advanced_alchemy.base import SlugKey, UUIDAuditBase, UUIDBase, UUIDv6Base, UUIDv7Base, merge_table_arguments
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemyAsyncSlugRepository,
@@ -54,6 +54,14 @@ class UUIDSlugBook(UUIDBase, SlugKey):
 
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     author_id: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
+
+    @declared_attr.directive
+    def __table_args__(cls) -> dict | tuple:
+        return merge_table_arguments(
+            cls,
+            SlugKey,
+            {"comment": "Slugbook"},
+        )
 
 
 class UUIDEventLog(UUIDAuditBase):

@@ -57,6 +57,7 @@ __all__ = (
     "SlugKey",
     "SQLQuery",
     "orm_registry",
+    "merge_table_arguments",
 )
 
 
@@ -73,6 +74,49 @@ convention: NamingSchemaParameter = {
     "pk": "pk_%(table_name)s",
 }
 """Templates for automated constraint name generation."""
+
+
+def merge_table_arguments(
+    cls: DeclarativeBase,
+    *mixins: Any,
+    extra_table_args: dict | tuple | None = None,
+) -> tuple | dict:
+    """Merge Table Arguments
+
+    When using mixins that include their own tablerags, it is difficult to append info into the model such as a comment.
+
+    This function helps you merge the args together
+
+    Args:
+        cls (DeclarativeBase): This is the model that will get the table args
+        *mixins (Any): The mixins to add into the model.
+        extra_table_args: additional information to add to tableargs
+
+    Returns:
+        tuple | dict: The merged __table_args__ property
+    """
+    args: list[Any] = []
+    kwargs: dict[str, Any] = {}
+
+    table_args_theirs = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
+
+    for table_args in (*table_args_theirs, extra_table_args):
+        if table_args:
+            if isinstance(table_args, tuple):
+                last_positional_arg = table_args[-1]
+                args.extend(table_args[:-1])
+                if isinstance(last_positional_arg, dict):
+                    kwargs.update(last_positional_arg)
+                else:
+                    args.append(last_positional_arg)
+            elif isinstance(table_args, dict):
+                kwargs.update(table_args)
+
+    if args:
+        if kwargs:
+            return (*args, kwargs)
+        return tuple(args)
+    return kwargs
 
 
 @runtime_checkable
@@ -199,7 +243,7 @@ class SlugKey:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
-    def __table_args__(cls) -> tuple:
+    def __table_args__(cls) -> tuple | dict:
         return (
             UniqueConstraint(
                 cls.slug,
