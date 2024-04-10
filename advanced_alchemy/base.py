@@ -89,7 +89,7 @@ def merge_table_arguments(
 
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
-        *mixins (Any): The mixins to add into the model.
+        *mixins (Any): The mixins to add into the model
         table_args: additional information to add to tableargs
 
     Returns:
