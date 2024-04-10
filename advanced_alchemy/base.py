@@ -81,7 +81,7 @@ def merge_table_arguments(
     *mixins: Any,
     table_args: dict | tuple | None = None,
 ) -> tuple | dict:
-    """Merge Table Arguments
+    """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
 
