@@ -83,7 +83,7 @@ def merge_table_arguments(
 ) -> tuple | dict:
     """Merge Table Arguments
 
-    When using mixins that include their own tablerags, it is difficult to append info into the model such as a comment.
+    When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
 
     This function helps you merge the args together.
 
