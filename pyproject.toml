@@ -368,6 +368,7 @@ update_docstrings = true
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+"SQLAlchemyAsyncQueryRepository" = "SQLAlchemySyncQueryRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 "async_scoped_session" = "scoped_session"
