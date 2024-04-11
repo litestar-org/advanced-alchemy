@@ -3,20 +3,30 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, Session
 
-from advanced_alchemy.base import UUIDBase, orm_registry
+from advanced_alchemy.base import CommonTableAttributes, DeclarativeBase, UUIDPrimaryKey, create_registry
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
 if TYPE_CHECKING:
     pass
 
-
+pytestmark = [
+    pytest.mark.integration,
+]
 here = Path(__file__).parent
 fixture_path = here.parent.parent / "examples"
+state_registry = create_registry()
+
+
+class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+    """Base for all SQLAlchemy declarative models with UUID primary keys."""
+
+    registry = state_registry
 
 
 class USState(UUIDBase):
@@ -40,7 +50,7 @@ class USStateAsyncRepository(SQLAlchemyAsyncRepository[USState]):
 def test_sync_fixture_and_query() -> None:
     engine = create_engine("sqlite://")
 
-    orm_registry.metadata.create_all(engine)
+    state_registry.metadata.create_all(engine)
 
     with Session(engine) as session:
         repo = USStateSyncRepository(session=session)
@@ -52,7 +62,7 @@ async def test_async_fixture_and_query() -> None:
     engine = create_async_engine("sqlite+aiosqlite://")
 
     async with engine.begin() as conn:
-        await conn.run_sync(orm_registry.metadata.create_all)
+        await conn.run_sync(state_registry.metadata.create_all)
 
     async with AsyncSession(engine) as session:
         repo = USStateAsyncRepository(session=session)
