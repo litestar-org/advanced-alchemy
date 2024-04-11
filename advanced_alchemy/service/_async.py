@@ -7,20 +7,21 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Generic, Iterable, overload
+from typing import TYPE_CHECKING, Any, Generic, Iterable
 
 from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
+from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
-from advanced_alchemy.service._converters import EMPTY_FILTER, to_schema
+from advanced_alchemy.service._util import ResultConverter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
 
-    from sqlalchemy import RowMapping, Select, StatementLambdaElement
+    from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm import InstrumentedAttribute
@@ -30,11 +31,57 @@ if TYPE_CHECKING:
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
-    from advanced_alchemy.service.pagination import OffsetPagination
-    from advanced_alchemy.service.typing import ModelDTOT
 
 
-class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
+class SQLAlchemyAsyncQueryService(ResultConverter):
+    """Simple service to execute the basic Query repository.."""
+
+    def __init__(
+        self,
+        session: AsyncSession | async_scoped_session[AsyncSession],
+        auto_expunge: bool = True,
+        **repo_kwargs: Any,
+    ) -> None:
+        """Configure the service object.
+
+        Args:
+            session: Session managing the unit-of-work for the operation.
+            auto_expunge: Remove object from session before returning.
+            **repo_kwargs: passed as keyword args to repo instantiation.
+        """
+        self.repository = SQLAlchemyAsyncQueryRepository(
+            session=session,
+            auto_expunge=auto_expunge,
+            **repo_kwargs,
+        )
+
+    @classmethod
+    @asynccontextmanager
+    async def new(
+        cls,
+        session: AsyncSession | async_scoped_session[AsyncSession] | None = None,
+        config: SQLAlchemyAsyncConfig | None = None,
+    ) -> AsyncIterator[Self]:
+        """Context manager that returns instance of service object.
+
+        Handles construction of the database session._create_select_for_model
+
+        Returns:
+            The service object instance.
+        """
+        if not config and not session:
+            raise AdvancedAlchemyError(detail="Please supply an optional configuration or session to use.")
+
+        if session:
+            yield cls(session=session)
+        elif config:
+            async with config.get_session() as db_session:
+                yield cls(
+                    session=db_session,
+                )
+
+
+class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepository[ModelT] | SQLAlchemyAsyncMockRepository[ModelT]]
@@ -237,64 +284,6 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT]):
                     statement=statement,
                     session=db_session,
                 )
-
-    @overload
-    def to_schema(
-        self,
-        data: ModelT | RowMapping,
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelT] | None = None,
-    ) -> ModelT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[ModelT] | Sequence[RowMapping],
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelT] | None = None,
-    ) -> OffsetPagination[ModelT]: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: ModelT | RowMapping,
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] = ...,
-    ) -> ModelDTOT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[ModelT] | Sequence[RowMapping],
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] = ...,
-    ) -> OffsetPagination[ModelDTOT]: ...
-
-    def to_schema(
-        self,
-        data: ModelT | Sequence[ModelT] | Sequence[RowMapping] | RowMapping,
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT | ModelT] | None = None,
-    ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
-        """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
-
-        Args:
-            data: The return from one of the service calls.
-            total: the total number of rows in the data
-            schema_type: Collection route filters.
-            filters: Collection route filters.
-
-        Returns:
-            The list of instances retrieved from the repository.
-        """
-        if schema_type is None:
-            schema_type = self.repository.model_type
-        return to_schema(data=data, total=total, filters=filters, schema_type=schema_type)
 
     # this needs to stay at the end to make the vscode linter happy
     async def list(
