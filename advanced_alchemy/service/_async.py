@@ -13,7 +13,7 @@ from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
-from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
+from advanced_alchemy.repository._async import SQLAlchemyAsyncQueryRepository
 from advanced_alchemy.repository._util import model_from_dict
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service._util import ResultConverter
