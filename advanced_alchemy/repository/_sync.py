@@ -7,7 +7,9 @@ import string
 from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
 
 from sqlalchemy import (
+    MappingResult,
     Result,
+    RowMapping,
     Select,
     StatementLambdaElement,
     TextClause,
@@ -1276,7 +1278,7 @@ class SQLAlchemySyncQueryRepository:
 
     def _get_base_stmt(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[tuple[Any]] | StatementLambdaElement,
         global_track_bound_values: bool = True,
         track_closure_variables: bool = True,
         enable_tracking: bool = True,
@@ -1292,7 +1294,7 @@ class SQLAlchemySyncQueryRepository:
             )
         return statement
 
-    def _expunge(self, instance: ModelT, auto_expunge: bool | None) -> None:
+    def _expunge(self, instance: Any, auto_expunge: bool | None) -> None:
         if auto_expunge is None:
             auto_expunge = self.auto_expunge
 
@@ -1300,10 +1302,10 @@ class SQLAlchemySyncQueryRepository:
 
     def get_one(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[tuple[Any]] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> ModelT:
+    ) -> RowMapping:
         """Get instance identified by ``kwargs``.
 
         Args:
@@ -1329,10 +1331,10 @@ class SQLAlchemySyncQueryRepository:
 
     def get_one_or_none(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> ModelT | None:
+    ) -> MappingResult | None:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
@@ -1347,12 +1349,12 @@ class SQLAlchemySyncQueryRepository:
         with wrap_sqlalchemy_exception():
             statement = self._get_base_stmt(statement)
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = cast("Result[tuple[ModelT]]", (self.execute(statement))).scalar_one_or_none()
+            instance = (self.execute(statement)).mappings()
             if instance:
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
-    def count(self, statement: Select[tuple[ModelT]] | StatementLambdaElement, **kwargs: Any) -> int:
+    def count(self, statement: Select[Any] | StatementLambdaElement, **kwargs: Any) -> int:
         """Get the count of records returned by a query.
 
         Args:
@@ -1374,11 +1376,11 @@ class SQLAlchemySyncQueryRepository:
 
     def list_and_count(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -1398,10 +1400,10 @@ class SQLAlchemySyncQueryRepository:
 
     def _list_and_count_window(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -1425,7 +1427,7 @@ class SQLAlchemySyncQueryRepository:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
             count: int = 0
-            instances: list[ModelT] = []
+            instances: list[RowMapping] = []
             for i, (instance, count_value) in enumerate(result):
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -1442,10 +1444,10 @@ class SQLAlchemySyncQueryRepository:
 
     def _list_and_count_basic(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -1465,13 +1467,13 @@ class SQLAlchemySyncQueryRepository:
             count_result = self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
             result = self.execute(statement)
-            instances: list[ModelT] = []
+            instances: list[RowMapping] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
             return instances, count
 
-    def list(self, statement: Select[tuple[ModelT]] | StatementLambdaElement, **kwargs: Any) -> list[ModelT]:
+    def list(self, statement: Select[Any] | StatementLambdaElement, **kwargs: Any) -> list[RowMapping]:
         """Get a list of instances, optionally filtered.
 
         Args:

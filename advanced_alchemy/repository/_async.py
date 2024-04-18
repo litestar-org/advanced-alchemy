@@ -5,7 +5,9 @@ import string
 from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
 
 from sqlalchemy import (
+    MappingResult,
     Result,
+    RowMapping,
     Select,
     StatementLambdaElement,
     TextClause,
@@ -1275,7 +1277,7 @@ class SQLAlchemyAsyncQueryRepository:
 
     def _get_base_stmt(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[tuple[Any]] | StatementLambdaElement,
         global_track_bound_values: bool = True,
         track_closure_variables: bool = True,
         enable_tracking: bool = True,
@@ -1291,7 +1293,7 @@ class SQLAlchemyAsyncQueryRepository:
             )
         return statement
 
-    def _expunge(self, instance: ModelT, auto_expunge: bool | None) -> None:
+    def _expunge(self, instance: Any, auto_expunge: bool | None) -> None:
         if auto_expunge is None:
             auto_expunge = self.auto_expunge
 
@@ -1299,10 +1301,10 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def get_one(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[tuple[Any]] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> ModelT:
+    ) -> RowMapping:
         """Get instance identified by ``kwargs``.
 
         Args:
@@ -1328,10 +1330,10 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def get_one_or_none(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> ModelT | None:
+    ) -> MappingResult | None:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
@@ -1346,12 +1348,12 @@ class SQLAlchemyAsyncQueryRepository:
         with wrap_sqlalchemy_exception():
             statement = self._get_base_stmt(statement)
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = cast("Result[tuple[ModelT]]", (await self.execute(statement))).scalar_one_or_none()
+            instance = (await self.execute(statement)).mappings()
             if instance:
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
-    async def count(self, statement: Select[tuple[ModelT]] | StatementLambdaElement, **kwargs: Any) -> int:
+    async def count(self, statement: Select[Any] | StatementLambdaElement, **kwargs: Any) -> int:
         """Get the count of records returned by a query.
 
         Args:
@@ -1373,11 +1375,11 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def list_and_count(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -1397,10 +1399,10 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def _list_and_count_window(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -1424,7 +1426,7 @@ class SQLAlchemyAsyncQueryRepository:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
             count: int = 0
-            instances: list[ModelT] = []
+            instances: list[RowMapping] = []
             for i, (instance, count_value) in enumerate(result):
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -1441,10 +1443,10 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def _list_and_count_basic(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Any] | StatementLambdaElement,
         auto_expunge: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -1464,13 +1466,13 @@ class SQLAlchemyAsyncQueryRepository:
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
             result = await self.execute(statement)
-            instances: list[ModelT] = []
+            instances: list[RowMapping] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
             return instances, count
 
-    async def list(self, statement: Select[tuple[ModelT]] | StatementLambdaElement, **kwargs: Any) -> list[ModelT]:
+    async def list(self, statement: Select[Any] | StatementLambdaElement, **kwargs: Any) -> list[RowMapping]:
         """Get a list of instances, optionally filtered.
 
         Args:

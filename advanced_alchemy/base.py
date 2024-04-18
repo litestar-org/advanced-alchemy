@@ -198,19 +198,12 @@ class AuditColumns:
     """Date/time of instance last update."""
 
 
-class CommonTableAttributes:
-    """Common attributes for SQLALchemy tables."""
+class BasicAttributes:
+    """Basic attributes for SQLALchemy tables and queries."""
 
     __name__: ClassVar[str]
     __table__: FromClause
     __mapper__: Mapper
-
-    # noinspection PyMethodParameters
-    @declared_attr.directive
-    def __tablename__(cls) -> str:
-        """Infer table name from class name."""
-        regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
-        return regexp.sub(r"_\1", cls.__name__).lower()
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -220,6 +213,17 @@ class CommonTableAttributes:
         """
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
         return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
+
+
+class CommonTableAttributes(BasicAttributes):
+    """Common attributes for SQLALchemy tables."""
+
+    # noinspection PyMethodParameters
+    @declared_attr.directive
+    def __tablename__(cls) -> str:
+        """Infer table name from class name."""
+        regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
+        return regexp.sub(r"_\1", cls.__name__).lower()
 
 
 @declarative_mixin
@@ -337,17 +341,8 @@ class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, Dec
     registry = orm_registry
 
 
-class SQLQuery(DeclarativeBase):
+class SQLQuery(BasicAttributes, DeclarativeBase):
     """Base for all SQLAlchemy custom mapped objects."""
 
     __allow_unmapped__ = True
     registry = orm_registry
-
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
-        """Convert model to dictionary.
-
-        Returns:
-            dict[str, Any]: A dict representation of the model
-        """
-        exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
-        return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
