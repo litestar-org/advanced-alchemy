@@ -219,7 +219,11 @@ class CommonTableAttributes:
             dict[str, Any]: A dict representation of the model
         """
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
-        return {field: getattr(self, field) for field in self.__mapper__.columns.keys() if field not in exclude}
+        return {
+            field: getattr(self, field)
+            for field in self.__mapper__.columns.keys()  # noqa: SIM118
+            if field not in exclude
+        }
 
 
 @declarative_mixin
