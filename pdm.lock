@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs", "extensions", "linting", "test", "uuid"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:10ef2911f91c412e69c4c396872969734e243f266c0cb50efd5bbcacb4d655b0"
+content_hash = "sha256:047f9b78c5347239dce164c980b59b7e892c33893e96bff976c41a92042682b6"
 
 [[package]]
 name = "aiofiles"
@@ -1594,25 +1594,6 @@ files = [
 ]
 
 [[package]]
-name = "litestar-sphinx-theme"
-version = "0.3.0"
-requires_python = ">=3.8,<4.0"
-git = "https://github.com/litestar-org/litestar-sphinx-theme.git"
-ref = "v3"
-revision = "c6d7ef86a1e49482b36d7bd38155bc7ef5d59f5a"
-summary = "A Sphinx theme for the Litestar organization"
-groups = ["docs"]
-dependencies = [
-    "blacken-docs>=1.16.0",
-    "shibuya>=2024.4.4",
-    "sphinx-autobuild>=2021.3.14",
-    "sphinx-copybutton>=0.5.2",
-    "sphinx-design<1.0.0,>=0.3.0",
-    "sphinx-togglebutton",
-    "sphinx-toolbox>=3.5.0",
-]
-
-[[package]]
 name = "litestar"
 version = "2.8.2"
 extras = ["cli"]
@@ -2665,6 +2646,20 @@ files = [
 ]
 
 [[package]]
+name = "pytest-databases"
+version = "0.5.0"
+requires_python = ">=3.8"
+summary = "Reusable database fixtures for any and all databases."
+groups = ["test"]
+dependencies = [
+    "pytest",
+]
+files = [
+    {file = "pytest_databases-0.5.0-py3-none-any.whl", hash = "sha256:27b6b9ef4114b28b595ad4c4d9a74428611555e5360ebcb7c4a074b4efd09cd9"},
+    {file = "pytest_databases-0.5.0.tar.gz", hash = "sha256:7b9e07133964a07dd7eed1216a8879f252468e8aaa0acee1235501ca6809cd3c"},
+]
+
+[[package]]
 name = "pytest-lazy-fixture"
 version = "0.6.3"
 summary = "It helps to use fixtures in pytest.mark.parametrize"
@@ -2689,6 +2684,21 @@ dependencies = [
 files = [
     {file = "pytest-mock-3.14.0.tar.gz", hash = "sha256:2719255a1efeceadbc056d6bf3df3d1c5015530fb40cf347c0f9afac88410bd0"},
     {file = "pytest_mock-3.14.0-py3-none-any.whl", hash = "sha256:0b72c38033392a5f4621342fe11e9219ac11ec9d375f8e2a0c164539e0d70f6f"},
+]
+
+[[package]]
+name = "pytest-sugar"
+version = "1.0.0"
+summary = "pytest-sugar is a plugin for pytest that changes the default look and feel of pytest (e.g. progressbar, show tests that fail instantly)."
+groups = ["test"]
+dependencies = [
+    "packaging>=21.3",
+    "pytest>=6.2.0",
+    "termcolor>=2.1.0",
+]
+files = [
+    {file = "pytest-sugar-1.0.0.tar.gz", hash = "sha256:6422e83258f5b0c04ce7c632176c7732cab5fdb909cb39cca5c9139f81276c0a"},
+    {file = "pytest_sugar-1.0.0-py3-none-any.whl", hash = "sha256:70ebcd8fc5795dc457ff8b69d266a4e2e8a74ae0c3edc749381c64b5246c8dfd"},
 ]
 
 [[package]]
@@ -3045,7 +3055,7 @@ files = [
 
 [[package]]
 name = "shibuya"
-version = "2024.4.15"
+version = "2023.10.26"
 requires_python = ">=3.7"
 summary = "A clean, responsive, and customizable Sphinx documentation theme with light/dark mode."
 groups = ["docs"]
@@ -3053,8 +3063,8 @@ dependencies = [
     "Sphinx",
 ]
 files = [
-    {file = "shibuya-2024.4.15-py3-none-any.whl", hash = "sha256:31a5eee5b4dfcb318e5c84960eced7ab5091bf95d20c9ac5f77f4c6df1f6c473"},
-    {file = "shibuya-2024.4.15.tar.gz", hash = "sha256:e4e1f083ee3feb6d8ac6db1200ee986f845d8d178bd8999652948652635916a9"},
+    {file = "shibuya-2023.10.26-py3-none-any.whl", hash = "sha256:e8a8647005a410d929fe4fdd3af2b88c156efbca8582ce3803ebd7771d08cebb"},
+    {file = "shibuya-2023.10.26.tar.gz", hash = "sha256:878f866a8720776c878ff1d9e17f7731cf8923859ff6fec77999b469477764a1"},
 ]
 
 [[package]]
@@ -3217,6 +3227,19 @@ dependencies = [
 files = [
     {file = "sphinx_jinja2_compat-0.2.0.post1-py3-none-any.whl", hash = "sha256:f9d329174bdde8db19dc12c62528367196eb2f6b46c91754eca604acd0c0f6ad"},
     {file = "sphinx_jinja2_compat-0.2.0.post1.tar.gz", hash = "sha256:974289a12a9f402108dead621e9c15f7004e945d5cfcaea8d6419e94d3fa95a3"},
+]
+
+[[package]]
+name = "sphinx-paramlinks"
+version = "0.6.0"
+summary = "Allows param links in Sphinx function/method descriptions to be linkable"
+groups = ["docs"]
+dependencies = [
+    "Sphinx>=4.0.0",
+    "docutils",
+]
+files = [
+    {file = "sphinx-paramlinks-0.6.0.tar.gz", hash = "sha256:746a0816860aa3fff5d8d746efcbec4deead421f152687411db1d613d29f915e"},
 ]
 
 [[package]]
@@ -3478,6 +3501,17 @@ groups = ["docs"]
 files = [
     {file = "tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f"},
     {file = "tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c"},
+]
+
+[[package]]
+name = "termcolor"
+version = "2.4.0"
+requires_python = ">=3.8"
+summary = "ANSI color formatting for output in terminal"
+groups = ["test"]
+files = [
+    {file = "termcolor-2.4.0-py3-none-any.whl", hash = "sha256:9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63"},
+    {file = "termcolor-2.4.0.tar.gz", hash = "sha256:aab9e56047c8ac41ed798fa36d892a37aca6b3e9159f3e0c24bc64a9b3ac7b7a"},
 ]
 
 [[package]]

@@ -37,6 +37,7 @@ extensions = [
     "sphinx_toolbox.collapse",
     "sphinx_design",
     "sphinx_togglebutton",
+    "sphinx_paramlinks",
 ]
 
 intersphinx_mapping = {

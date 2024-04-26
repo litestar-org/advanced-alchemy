@@ -100,14 +100,16 @@ dev = [
   "aioodbc>=0.5.0",
 ]
 docs = [
-  "sphinx>=7.1.2",
-  "sphinx-autobuild>=2021.3.14",
-  "sphinx-copybutton>=0.5.2",
-  "shibuya==2023.10.26",
-  "sphinx-click>=5.0.1",
-  "sphinx-toolbox>=3.5.0",
-  "blacken-docs>=1.16.0",
-  "sphinx-design>=0.5.0",
+    "sphinx>=7.1.2",
+    "sphinx-autobuild>=2021.3.14",
+    "sphinx-copybutton>=0.5.2",
+    "shibuya==2023.10.26",
+    "sphinx-click>=5.0.1",
+    "sphinx-toolbox>=3.5.0",
+    "blacken-docs>=1.16.0",
+    "sphinx-design>=0.5.0",
+    "sphinx-paramlinks>=0.6.0",
+    "sphinx-togglebutton>=0.3.2",
 ]
 extensions = [
   "litestar[cli]>=2.0.0",
