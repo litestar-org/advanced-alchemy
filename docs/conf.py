@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
@@ -13,13 +14,11 @@ if TYPE_CHECKING:
 
 # -- Environmental Data ------------------------------------------------------
 
-
 # -- Project information -----------------------------------------------------
+current_year = datetime.now().year  # noqa: DTZ005
 project = __project__
-author = "Litestar Organization"
-release = __version__
+copyright = f"{current_year}, Litestar Organization"
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
-copyright = "2023, Litestar Organization"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
