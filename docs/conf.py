@@ -36,6 +36,7 @@ extensions = [
     "sphinx_click",
     "sphinx_toolbox.collapse",
     "sphinx_design",
+    "sphinx_togglebutton",
 ]
 
 intersphinx_mapping = {
@@ -101,81 +102,115 @@ autodoc_typehints_format = "short"
 autodoc_type_aliases = {"FilterTypes": "FilterTypes"}
 
 autosectionlabel_prefix_document = True
-
-todo_include_todos = True
-
-templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Style configuration -----------------------------------------------------
 html_theme = "litestar_sphinx_theme"
+html_title = "Litestar Framework"
+pygments_style = "lightbulb"
+todo_include_todos = True
+
 html_static_path = ["_static"]
-html_css_files = ["css/style.css"]
-html_show_sourcelink = False
-html_title = "Advanced Alchemy"
+templates_path = ["_templates"]
+html_js_files = ["versioning.js"]
+html_css_files = ["style.css"]
+
+html_show_sourcelink = True
+html_copy_source = True
+
+html_context = {
+    "source_type": "github",
+    "source_user": "litestar-org",
+    "source_repo": "advanced-alchemy",
+    "current_version": "latest",
+    "versions": [
+        ("latest", "/latest"),
+        ("development", "/main"),
+    ],
+    "version": release,
+}
 
 html_theme_options = {
-    "use_page_nav": False,
+    "logo_target": "/",
     "github_repo_name": "advanced-alchemy",
-    "logo": {
-        "link": "https://docs.advanced-alchemy.litestar.dev",
-    },
-    "pygment_light_style": "xcode",
-    "pygment_dark_style": "lightbulb",
     "navigation_with_keys": True,
-    "extra_navbar_items": {
-        "Documentation": "index",
-        "Community": {
-            "Contributing": {
-                "description": "Learn how to contribute to the Advanced Alchemy project",
-                "link": "https://docs.advanced-alchemy.litestar.dev/latest/contribution-guide.html",
-                "icon": "contributing",
-            },
-            "Code of Conduct": {
-                "description": "Review the etiquette for interacting with the Litestar community",
-                "link": "https://github.com/litestar-org/.github?tab=coc-ov-file",
-                "icon": "coc",
-            },
-            "Security": {
-                "description": "Overview of the Litestar Organization's security protocols",
-                "link": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
-                "icon": "coc",
-            },
+    "nav_links": [  # TODO(provinzkraut): I need a guide on extra_navbar_items and its magic :P
+        {"title": "Home", "url": "index"},
+        {
+            "title": "Community",
+            "children": [
+                {
+                    "title": "Contributing",
+                    "summary": "Learn how to contribute to the Advanced Alchemy project",
+                    "url": "contribution-guide",
+                    "icon": "contributing",
+                },
+                {
+                    "title": "Code of Conduct",
+                    "summary": "Review the etiquette for interacting with the Litestar community",
+                    "url": "https://github.com/litestar-org/.github?tab=coc-ov-file",
+                    "icon": "coc",
+                },
+                {
+                    "title": "Security",
+                    "summary": "Overview of Litestar's security protocols",
+                    "url": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
+                    "icon": "coc",
+                },
+            ],
         },
-        "About": {
-            "Litestar Organization": {
-                "description": "Details about the Litestar organization",
-                "link": "https://litestar.dev/about/organization",
-                "icon": "org",
-            },
-            # TODO: Kind've awkward to do for each repo in this way.
-            # "Releases": {
-            #     "description": "Explore the release process, versioning, and deprecation policy for Litestar",
-            #     "link": "https://litestar.dev/about/litestar-releases",
-            #     "icon": "releases",
-            # },
+        {
+            "title": "About",
+            "children": [
+                {
+                    "title": "Litestar Organization",
+                    "summary": "Details about the Litestar organization",
+                    "url": "https://litestar.dev/about/organization",
+                    "icon": "org",
+                },
+                {
+                    "title": "Releases",
+                    "summary": "Explore the release process, versioning, and deprecation policy for Litestar",
+                    "url": "releases",
+                    "icon": "releases",
+                },
+            ],
         },
-        "Release notes": {
-            "Changelog": "https://docs.advanced-alchemy.litestar.dev/latest/changelog.html",
+        {
+            "title": "Release notes",
+            "children": [
+                {
+                    "title": "1.x Changelog",
+                    "url": "changelog",
+                    "summary": "All changes in the 2.x series",
+                },
+            ],
         },
-        "Help": {
-            "Discord Help Forum": {
-                "description": "Dedicated Discord help forum",
-                "link": "https://discord.gg/litestar-919193495116337154",
-                "icon": "coc",
-            },
-            "GitHub Discussions": {
-                "description": "GitHub Discussions ",
-                "link": "https://github.com/orgs/litestar-org/discussions",
-                "icon": "coc",
-            },
-            "Stack Overflow": {
-                "description": "We monitor the <code><b>litestar</b></code> tag on Stack Overflow",
-                "link": "https://stackoverflow.com/questions/tagged/litestar",
-                "icon": "coc",
-            },
+        {
+            "title": "Help",
+            "children": [
+                {
+                    "title": "Discord Help Forum",
+                    "summary": "Dedicated Discord help forum",
+                    "url": "https://discord.gg/litestar",
+                    "icon": "coc",
+                },
+                {
+                    "title": "GitHub Discussions",
+                    "summary": "GitHub Discussions",
+                    "url": "https://github.com/litestar-org/advanced-alchemy/discussions",
+                    "icon": "coc",
+                },
+                {
+                    "title": "Stack Overflow",
+                    "summary": "We monitor the <code><b>litestar</b></code> tag on Stack Overflow",
+                    "url": "https://stackoverflow.com/questions/tagged/litestar",
+                    "icon": "coc",
+                },
+            ],
         },
-    },
+        {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
+    ],
 }
 
 
@@ -189,9 +224,18 @@ def update_html_context(
     context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
 
 
-def setup(app: Sphinx) -> dict[str, bool]:
-    app.setup_extension("litestar_sphinx_theme")
-    app.setup_extension("pydata_sphinx_theme")
-    app.connect("html-page-context", update_html_context)
+def delayed_setup(app: Sphinx) -> None:
+    """When running linkcheck Shibuya causes a build failure, and checking
+    the builder in the initial `setup` function call is not possible, so the check
+    and extension setup has to be delayed until the builder is initialized.
+    """
+    if app.builder.name == "linkcheck":
+        return
 
+    app.setup_extension("shibuya")
+
+
+def setup(app: Sphinx) -> dict[str, bool]:
+    app.connect("builder-inited", delayed_setup, priority=0)
+    app.setup_extension("litestar_sphinx_theme")
     return {"parallel_read_safe": True, "parallel_write_safe": True}
