@@ -61,6 +61,14 @@ clean: 												## Cleanup temporary build artifacts
 destroy: 											## Destroy the virtual environment
 	@rm -rf .venv
 
+.PHONY: refresh-lockfiles
+refresh-lockfiles:                                 ## Sync lockfiles with requirements files.
+	pdm update --update-reuse --group :all
+
+.PHONY: lock
+lock:                                             ## Rebuild lockfiles from scratch, updating all dependencies
+	pdm update --update-eager --group :all
+
 # =============================================================================
 # Tests, Linting, Coverage
 # =============================================================================

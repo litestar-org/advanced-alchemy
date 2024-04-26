@@ -387,7 +387,7 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
                 "TrustServerCertificate": "yes",
                 # NOTE: MARS_Connection is only needed for the concurrent async tests
                 # lack of this causes some tests to fail
-                # https://github.com/jolt-org/advanced-alchemy/actions/runs/6800623970/job/18493034767?pr=94
+                # https://github.com/litestar-org/advanced-alchemy/actions/runs/6800623970/job/18493034767?pr=94
                 "MARS_Connection": "yes",
             },  # type:ignore[arg-type]
         ),
