@@ -44,6 +44,9 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "msgspec": ("https://jcristharif.com/msgspec/", None),
     "sqlalchemy": ("https://docs.sqlalchemy.org/en/20/", None),
+    "alembic": ("https://alembic.sqlalchemy.org/en/latest/", None),
+    "litestar": ("https://docs.litestar.dev/latest/", None),
+    "click": ("https://click.palletsprojects.com/en/8.1.x/", None),
 }
 PY_CLASS = "py:class"
 PY_RE = r"py:.*"
