@@ -4,22 +4,140 @@ Changelog
 
 All commits to this project will be documented in this file.
 
-`Release [v0.7.4] - 2024-03-05 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.7.4>`_
+`Release [v0.9.0] - 2024-04-26 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.9.0>`_
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-* `See All commits in v0.7.4 <https://github.com/litestar-org/advanced-alchemy/commits/v0.7.4>`_
+* `See All commits in v0.9.0 <https://github.com/litestar-org/advanced-alchemy/commits/v0.9.0>`_
 
-`c318394 <https://github.com/litestar-org/advanced-alchemy/commit/c318394c157790016a645eceee9b7a8cc2207096>`_ ... `d8a92cd <https://github.com/litestar-org/advanced-alchemy/commit/d8a92cd9458b530d1e46fd530d59dfa352946649>`_ | `See diff for 0.7.4 <https://github.com/litestar-org/advanced-alchemy/compare/c318394c157790016a645eceee9b7a8cc2207096...d8a92cd9458b530d1e46fd530d59dfa352946649>`_
+`96aad8d <https://github.com/litestar-org/advanced-alchemy/commit/96aad8d1c988b22f1c3fac03fd2fa0cef13e1c59>`_ ... `da409cb <https://github.com/litestar-org/advanced-alchemy/commit/da409cb4ab3650ee46b1c6cf958e95b3e7283b3a>`_ | `See diff for 0.9.0 <https://github.com/litestar-org/advanced-alchemy/compare/96aad8d1c988b22f1c3fac03fd2fa0cef13e1c59...da409cb4ab3650ee46b1c6cf958e95b3e7283b3a>`_
 
-Documentation
+Features
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* (`c95d756 <https://github.com/litestar-org/advanced-alchemy/commit/c95d7568794573cd0b00b30ece2bc7a4148c84af>`_)  - Add missing section (Jacob Coffee)
-* (`d8a92cd <https://github.com/litestar-org/advanced-alchemy/commit/d8a92cd9458b530d1e46fd530d59dfa352946649>`_)  - Pin `shubiya` to `2023.10.26` (Jacob Coffee)
+* (`99c5446 <https://github.com/litestar-org/advanced-alchemy/commit/99c5446f9efea1a6944ec267fc8f40c54699bb2d>`_)  - Merge table argument helper (#158) (Cody Fincher), Co-authored-by:Peter Schutt <peter.github@proton.me>
 
 Miscellaneous Tasks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* (`d319c8a <https://github.com/litestar-org/advanced-alchemy/commit/d319c8a18c853d665d1c2a1f5b4e979502daec13>`_)  - Collapse large sections in readme (Jacob Coffee)
+* (`87dce47 <https://github.com/litestar-org/advanced-alchemy/commit/87dce47eb1f126d89df772970509ea1ec6e625df>`_)  - Migration to the `litestar-org` (#156) (Jacob Coffee)
+
+Ci
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`da409cb <https://github.com/litestar-org/advanced-alchemy/commit/da409cb4ab3650ee46b1c6cf958e95b3e7283b3a>`_)  - Use standard litestar YAML extensions (Jacob Coffee)
+
+`Release [v0.9.0] - 2024-04-07 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.9.0>`_
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+* `See All commits in v0.9.0 <https://github.com/litestar-org/advanced-alchemy/commits/v0.9.0>`_
+
+`3943f4b <https://github.com/litestar-org/advanced-alchemy/commit/3943f4b1be10ff1c56565d294702cfc6529bb845>`_ ... `96aad8d <https://github.com/litestar-org/advanced-alchemy/commit/96aad8d1c988b22f1c3fac03fd2fa0cef13e1c59>`_ | `See diff for 0.9.0 <https://github.com/litestar-org/advanced-alchemy/compare/3943f4b1be10ff1c56565d294702cfc6529bb845...96aad8d1c988b22f1c3fac03fd2fa0cef13e1c59>`_
+
+Documentation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`631d30e <https://github.com/litestar-org/advanced-alchemy/commit/631d30e1e35055f6ca68ecf6090e2ba151b8cb10>`_)  - Example for JSON queries (#155) (Alc-Alc), Co-authored-by:Alc-Alc <alc@localhost>
+
+Features
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`6a079a9 <https://github.com/litestar-org/advanced-alchemy/commit/6a079a9475e2f6698fb4b406f0ba11d3882fe67e>`_)  - Adds a `to_schema` method to the service layer (#154) (Cody Fincher)
+
+Miscellaneous Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`96aad8d <https://github.com/litestar-org/advanced-alchemy/commit/96aad8d1c988b22f1c3fac03fd2fa0cef13e1c59>`_)  - Bump to version `v0.9.0` (Cody Fincher)
+
+`Release [v0.8.4] - 2024-04-02 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.8.4>`_
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+* `See All commits in v0.8.4 <https://github.com/litestar-org/advanced-alchemy/commits/v0.8.4>`_
+
+`38c029e <https://github.com/litestar-org/advanced-alchemy/commit/38c029e5582f6ccf80bb79228e793a859e7d6dbe>`_ ... `3943f4b <https://github.com/litestar-org/advanced-alchemy/commit/3943f4b1be10ff1c56565d294702cfc6529bb845>`_ | `See diff for 0.8.4 <https://github.com/litestar-org/advanced-alchemy/compare/38c029e5582f6ccf80bb79228e793a859e7d6dbe...3943f4b1be10ff1c56565d294702cfc6529bb845>`_
+
+Bug Fixes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`c791bed <https://github.com/litestar-org/advanced-alchemy/commit/c791bed5bc7ada7d27a908e573f21db4e03f8fdd>`_)  - Accept `None` in `model_from_dict` to allow setting model fields… (#141) (Ryan Seeley), Co-authored-by:Cody Fincher <204685+cofin@users.noreply.github.com>, Co-authored-by:Cody Fincher <cody.fincher@gmail.com>
+
+Miscellaneous Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`3943f4b <https://github.com/litestar-org/advanced-alchemy/commit/3943f4b1be10ff1c56565d294702cfc6529bb845>`_)  - Bump version to `v0.8.4` (Cody Fincher)
+
+`Release [v0.8.3] - 2024-04-01 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.8.3>`_
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+* `See All commits in v0.8.3 <https://github.com/litestar-org/advanced-alchemy/commits/v0.8.3>`_
+
+`0c30fb5 <https://github.com/litestar-org/advanced-alchemy/commit/0c30fb5d964e34c23083b0b91400faf3e0d44fa4>`_ ... `38c029e <https://github.com/litestar-org/advanced-alchemy/commit/38c029e5582f6ccf80bb79228e793a859e7d6dbe>`_ | `See diff for 0.8.3 <https://github.com/litestar-org/advanced-alchemy/compare/0c30fb5d964e34c23083b0b91400faf3e0d44fa4...38c029e5582f6ccf80bb79228e793a859e7d6dbe>`_
+
+Features
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`64be0ba <https://github.com/litestar-org/advanced-alchemy/commit/64be0ba03b5aa8bb5222aaa32b919cf748b9ec4c>`_)  - Delay loading alembic commands (#153) (Cody Fincher)
+
+Miscellaneous Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`18b0031 <https://github.com/litestar-org/advanced-alchemy/commit/18b0031d65a8dcbf1969a56bdaf648c4633e56e8>`_)  - Prevent `create_all` failures from stopping application startup (#152) (Cody Fincher)
+
+`Release [v0.8.2] - 2024-03-29 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.8.2>`_
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+* `See All commits in v0.8.2 <https://github.com/litestar-org/advanced-alchemy/commits/v0.8.2>`_
+
+`c3dba02 <https://github.com/litestar-org/advanced-alchemy/commit/c3dba026e5e3d68717a41565e8cb659ee46cd1e9>`_ ... `0c30fb5 <https://github.com/litestar-org/advanced-alchemy/commit/0c30fb5d964e34c23083b0b91400faf3e0d44fa4>`_ | `See diff for 0.8.2 <https://github.com/litestar-org/advanced-alchemy/compare/c3dba026e5e3d68717a41565e8cb659ee46cd1e9...0c30fb5d964e34c23083b0b91400faf3e0d44fa4>`_
+
+Bug Fixes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`97c8108 <https://github.com/litestar-org/advanced-alchemy/commit/97c81083fe0e3fa5820aba760842a2dbf3c4eba8>`_)  - Always use `UUID` type for compatibility (#149) (Cody Fincher)
+
+Miscellaneous Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`0c30fb5 <https://github.com/litestar-org/advanced-alchemy/commit/0c30fb5d964e34c23083b0b91400faf3e0d44fa4>`_)  - Bump version to `v0.8.2` (Cody Fincher)
+
+`Release [v0.8.1] - 2024-03-25 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.8.1>`_
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+* `See All commits in v0.8.1 <https://github.com/litestar-org/advanced-alchemy/commits/v0.8.1>`_
+
+`0843eef <https://github.com/litestar-org/advanced-alchemy/commit/0843eefc975da41a551890abaf3ecd9bea965a7c>`_ ... `c3dba02 <https://github.com/litestar-org/advanced-alchemy/commit/c3dba026e5e3d68717a41565e8cb659ee46cd1e9>`_ | `See diff for 0.8.1 <https://github.com/litestar-org/advanced-alchemy/compare/0843eefc975da41a551890abaf3ecd9bea965a7c...c3dba026e5e3d68717a41565e8cb659ee46cd1e9>`_
+
+Bug Fixes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`bd4cb2c <https://github.com/litestar-org/advanced-alchemy/commit/bd4cb2c6fbe9619756589d6d61353bad9ef535d7>`_)  - Moved function breaks Litestar imports. (#146) (Peter Schutt)
+
+Miscellaneous Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`c3dba02 <https://github.com/litestar-org/advanced-alchemy/commit/c3dba026e5e3d68717a41565e8cb659ee46cd1e9>`_)  - Bump version to `v0.8.1` (Cody Fincher)
+
+`Release [v0.8.0] - 2024-03-20 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.8.0>`_
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+* `See All commits in v0.8.0 <https://github.com/litestar-org/advanced-alchemy/commits/v0.8.0>`_
+
+`c318394 <https://github.com/litestar-org/advanced-alchemy/commit/c318394c157790016a645eceee9b7a8cc2207096>`_ ... `0843eef <https://github.com/litestar-org/advanced-alchemy/commit/0843eefc975da41a551890abaf3ecd9bea965a7c>`_ | `See diff for 0.8.0 <https://github.com/litestar-org/advanced-alchemy/compare/c318394c157790016a645eceee9b7a8cc2207096...0843eefc975da41a551890abaf3ecd9bea965a7c>`_
+
+Bug Fixes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`5aa8e43 <https://github.com/litestar-org/advanced-alchemy/commit/5aa8e4363895312ce589d0e575ed010b47cff677>`_)  - Docstring update to fix outdated `upsert_many` info (#139) (Darin), Co-authored-by:Cody Fincher <cody.fincher@gmail.com>
+
+Documentation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`49b9062 <https://github.com/litestar-org/advanced-alchemy/commit/49b9062e59cb1bdf0eba1caa3468b3dbe106b8cf>`_)  - Adds `GenericAlembicConfig` to `__all__` (#143) (Cody Fincher)
+
+Features
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`3364b6e <https://github.com/litestar-org/advanced-alchemy/commit/3364b6e45fa9f79d7cb5d0194ef4d232e3fdf9dc>`_)  - `UniqueMixin` that instantiates objects ensuring uniqueness on some field(s) (#138) (Alc-Alc), Co-authored-by:Alc-Alc <alc@localhost>, Co-authored-by:Cody Fincher <cody.fincher@gmail.com>
+* (`2a8bf18 <https://github.com/litestar-org/advanced-alchemy/commit/2a8bf1863f0e2bfccf2a5e73eeeea5bcf2de60e7>`_)  - Add additional exports for the `litestar` plugin (#144) (Cody Fincher)
+* (`e3b4652 <https://github.com/litestar-org/advanced-alchemy/commit/e3b4652acbd86ef736d7b41080744fdcbd0f95a0>`_)  - Adds `uuid_utils` type decoder automatically (#145) (Cody Fincher)
+
+Miscellaneous Tasks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* (`44fa4e9 <https://github.com/litestar-org/advanced-alchemy/commit/44fa4e933c76d98984ff93f11a868a4539b1932f>`_)  - Collapse large sections in readme (#137) (Jacob Coffee)
+* (`0843eef <https://github.com/litestar-org/advanced-alchemy/commit/0843eefc975da41a551890abaf3ecd9bea965a7c>`_)  - Version `v0.8.0` (Cody Fincher)
 
 `Release [v0.7.4] - 2024-02-19 <https://github.com/litestar-org/advanced-alchemy/releases/tag/v0.7.4>`_
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
