@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs", "extensions", "linting", "test", "uuid"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:047f9b78c5347239dce164c980b59b7e892c33893e96bff976c41a92042682b6"
+content_hash = "sha256:52ca1ed8faf6f4dae32b9b008629bc34d8bcb16b7182e002cdb6037222970386"
 
 [[package]]
 name = "aiofiles"
@@ -288,6 +288,36 @@ dependencies = [
 files = [
     {file = "asyncpg_stubs-0.29.1-py3-none-any.whl", hash = "sha256:cce994d5a19394249e74ae8d252bde3c77cee0ddfc776cc708b724fdb4adebb6"},
     {file = "asyncpg_stubs-0.29.1.tar.gz", hash = "sha256:686afcc0af3a2f3c8e393cd850e0de430e5a139ce82b2f28ef8f693ecdf918bf"},
+]
+
+[[package]]
+name = "auto-pytabs"
+version = "0.4.0"
+requires_python = ">=3.8,<4.0"
+summary = "Automatically generate code examples for different Python versions in mkdocs or Sphinx based documentations"
+groups = ["docs"]
+dependencies = [
+    "ruff>=0.0.260",
+]
+files = [
+    {file = "auto_pytabs-0.4.0-py3-none-any.whl", hash = "sha256:941ca4f21b218249ee4d026ebaf4a8a7788a066fdb223571f1f7b93d44ac6a74"},
+    {file = "auto_pytabs-0.4.0.tar.gz", hash = "sha256:4c596aa02ea20c6c85809e5f60a22aa60499dcaa637e52d6313d07c58c5bb61e"},
+]
+
+[[package]]
+name = "auto-pytabs"
+version = "0.4.0"
+extras = ["sphinx"]
+requires_python = ">=3.8,<4.0"
+summary = "Automatically generate code examples for different Python versions in mkdocs or Sphinx based documentations"
+groups = ["docs"]
+dependencies = [
+    "auto-pytabs==0.4.0",
+    "sphinx>=4",
+]
+files = [
+    {file = "auto_pytabs-0.4.0-py3-none-any.whl", hash = "sha256:941ca4f21b218249ee4d026ebaf4a8a7788a066fdb223571f1f7b93d44ac6a74"},
+    {file = "auto_pytabs-0.4.0.tar.gz", hash = "sha256:4c596aa02ea20c6c85809e5f60a22aa60499dcaa637e52d6313d07c58c5bb61e"},
 ]
 
 [[package]]
@@ -1591,6 +1621,25 @@ dependencies = [
 files = [
     {file = "litestar-2.8.2-py3-none-any.whl", hash = "sha256:c891baf8a17d66cfed5c40bef7b5bf4c02c2831babf5fca0af404f441610557a"},
     {file = "litestar-2.8.2.tar.gz", hash = "sha256:18353cb7246ba2e7f8d4aac4fe2d8772b503c931cf5ee16efc759cbbc3a2344b"},
+]
+
+[[package]]
+name = "litestar-sphinx-theme"
+version = "0.3.0"
+requires_python = ">=3.8,<4.0"
+git = "https://github.com/litestar-org/litestar-sphinx-theme.git"
+ref = "v3"
+revision = "c6d7ef86a1e49482b36d7bd38155bc7ef5d59f5a"
+summary = "A Sphinx theme for the Litestar organization"
+groups = ["docs"]
+dependencies = [
+    "blacken-docs>=1.16.0",
+    "shibuya>=2024.4.4",
+    "sphinx-autobuild>=2021.3.14",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-design<1.0.0,>=0.3.0",
+    "sphinx-togglebutton",
+    "sphinx-toolbox>=3.5.0",
 ]
 
 [[package]]
@@ -2946,7 +2995,7 @@ name = "ruff"
 version = "0.4.2"
 requires_python = ">=3.7"
 summary = "An extremely fast Python linter and code formatter, written in Rust."
-groups = ["linting"]
+groups = ["docs", "linting"]
 files = [
     {file = "ruff-0.4.2-py3-none-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:8d14dc8953f8af7e003a485ef560bbefa5f8cc1ad994eebb5b12136049bbccc5"},
     {file = "ruff-0.4.2-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:24016ed18db3dc9786af103ff49c03bdf408ea253f3cb9e3638f39ac9cf2d483"},
@@ -3055,7 +3104,7 @@ files = [
 
 [[package]]
 name = "shibuya"
-version = "2023.10.26"
+version = "2024.4.15"
 requires_python = ">=3.7"
 summary = "A clean, responsive, and customizable Sphinx documentation theme with light/dark mode."
 groups = ["docs"]
@@ -3063,8 +3112,8 @@ dependencies = [
     "Sphinx",
 ]
 files = [
-    {file = "shibuya-2023.10.26-py3-none-any.whl", hash = "sha256:e8a8647005a410d929fe4fdd3af2b88c156efbca8582ce3803ebd7771d08cebb"},
-    {file = "shibuya-2023.10.26.tar.gz", hash = "sha256:878f866a8720776c878ff1d9e17f7731cf8923859ff6fec77999b469477764a1"},
+    {file = "shibuya-2024.4.15-py3-none-any.whl", hash = "sha256:31a5eee5b4dfcb318e5c84960eced7ab5091bf95d20c9ac5f77f4c6df1f6c473"},
+    {file = "shibuya-2024.4.15.tar.gz", hash = "sha256:e4e1f083ee3feb6d8ac6db1200ee986f845d8d178bd8999652948652635916a9"},
 ]
 
 [[package]]
