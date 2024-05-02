@@ -968,7 +968,7 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         if not existing:
             return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
-            instance = self._attach_to_session(data, strategy="merge")
+            instance = self._attach_to_session(existing, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(
                 instance,
