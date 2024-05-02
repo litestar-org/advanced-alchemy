@@ -33,7 +33,7 @@ jobs:
         with:
           folder: docs-preview/docs/_build/html
           token: ${{ secrets.DOCS_PREVIEW_DEPLOY_TOKEN }}
-          repository-name: jolt-org/advanced-alchemy-docs-preview
+          repository-name: litestar-org/advanced-alchemy-docs-preview
           clean: false
           target-folder: ${{ env.PR_NUMBER }}
           branch: gh-pages
@@ -44,7 +44,7 @@ jobs:
         with:
           script: |
             const issue_number = process.env.PR_NUMBER
-            const body = "Documentation preview will be available shortly at https://jolt-org.github.io/advanced-alchemy-docs-preview/" + issue_number
+            const body = "Documentation preview will be available shortly at https://litestar-org.github.io/advanced-alchemy-docs-preview/" + issue_number
 
             const opts = github.rest.issues.listComments.endpoint.merge({
               owner: context.repo.owner,
