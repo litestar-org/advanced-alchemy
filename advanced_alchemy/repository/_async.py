@@ -962,7 +962,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         elif getattr(data, self.id_attribute, None) is not None:
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
-            match_filter = data.to_dict()
+            match_filter = data.to_dict(exclude={self.id_attribute})
         existing = await self.get_one_or_none(**match_filter)
         if not existing:
             return await self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
