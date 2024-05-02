@@ -966,6 +966,8 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         existing = await self.get_one_or_none(**match_filter)
         if not existing:
             return await self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
+        # TODO: Draft PR
+        setattr(data, self.id_attribute, getattr(existing, self.id_attribute))
         with wrap_sqlalchemy_exception():
             instance = await self._attach_to_session(existing, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
