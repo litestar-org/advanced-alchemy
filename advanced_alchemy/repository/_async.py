@@ -969,7 +969,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         # TODO: Draft PR
         setattr(data, self.id_attribute, getattr(existing, self.id_attribute))
         with wrap_sqlalchemy_exception():
-            instance = await self._attach_to_session(existing, strategy="merge")
+            instance = await self._attach_to_session(data, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 instance,
