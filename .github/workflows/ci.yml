@@ -77,8 +77,6 @@ jobs:
 
       - name: Initialize CodeQL Without Dependencies
         uses: github/codeql-action/init@v3
-        with:
-          setup-python-dependencies: false
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
