@@ -158,5 +158,3 @@ jobs:
           path: |
             docs/_build/html
             .pr_number
-
-
