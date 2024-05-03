@@ -112,6 +112,7 @@ docs = [
 #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
     "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
     "auto-pytabs[sphinx]>=0.4.0",
+    "git-cliff>=2.2.1",
 ]
 extensions = [
   "litestar[cli]>=2.0.0",
@@ -416,6 +417,7 @@ ignore-words-list = "selectin"
 skip = 'pdm.lock, examples/us_state_lookup.json'
 
 [tool.git-cliff.changelog]
+trim = true
 header = """
 =========
 Changelog
@@ -454,6 +456,9 @@ body = """
           {% if commit.github.pr_number %} in `#{{ commit.github.pr_number }} <https://gihub.com/litestar-org/advanced-alchemy/pull/{{ commit.github.pr_number }}>`_ {%- endif %}\
     {% endfor %}
 {% endfor %}\n
+"""
+footer = """
+Advanced Alchemy Changelog
 """
 
 [tool.git-cliff.git]
