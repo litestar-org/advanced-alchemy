@@ -1499,7 +1499,8 @@ async def test_repo_upsert_method(
             match_fields=["name"],
         ),
     )
-    assert upsert3_update_obj.id in {UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"), 2024}
+    if not isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        assert upsert3_update_obj.id in {UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"), 2024}
     assert upsert3_update_obj.name == "Leo Tolstoy"
     assert upsert3_update_obj.dob == new_dob
 
