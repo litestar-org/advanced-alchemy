@@ -948,12 +948,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         elif getattr(data, self.id_attribute, None) is not None:
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
-            match_filter = data.to_dict()
+            match_filter = data.to_dict(exclude={self.id_attribute})
         existing = await self.get_one_or_none(**match_filter)
         if not existing:
             return await self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
-            instance = await self._attach_to_session(data, strategy="merge")
+            for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
+                field = getattr(existing, field_name, MISSING)
+                if field is not MISSING and field != new_field_value:
+                    setattr(existing, field_name, new_field_value)
+            instance = await self._attach_to_session(existing, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 instance,
