@@ -68,7 +68,6 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         from advanced_alchemy.extensions.litestar.cli import database_group
 
         cli.add_command(database_group)
-        return super().on_cli_init(cli)
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         """Configure application for use with SQLAlchemy.
