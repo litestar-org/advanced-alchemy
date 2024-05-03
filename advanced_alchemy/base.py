@@ -57,6 +57,7 @@ __all__ = (
     "SlugKey",
     "SQLQuery",
     "orm_registry",
+    "merge_table_arguments",
 )
 
 
@@ -73,6 +74,49 @@ convention: NamingSchemaParameter = {
     "pk": "pk_%(table_name)s",
 }
 """Templates for automated constraint name generation."""
+
+
+def merge_table_arguments(
+    cls: DeclarativeBase,
+    *mixins: Any,
+    table_args: dict | tuple | None = None,
+) -> tuple | dict:
+    """Merge Table Arguments.
+
+    When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
+
+    This function helps you merge the args together.
+
+    Args:
+        cls (DeclarativeBase): This is the model that will get the table args
+        *mixins (Any): The mixins to add into the model
+        table_args: additional information to add to tableargs
+
+    Returns:
+        tuple | dict: The merged __table_args__ property
+    """
+    args: list[Any] = []
+    kwargs: dict[str, Any] = {}
+
+    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
+
+    for arg_to_merge in (*mixin_table_args, table_args):
+        if arg_to_merge:
+            if isinstance(arg_to_merge, tuple):
+                last_positional_arg = arg_to_merge[-1]
+                args.extend(arg_to_merge[:-1])
+                if isinstance(last_positional_arg, dict):
+                    kwargs.update(last_positional_arg)
+                else:
+                    args.append(last_positional_arg)
+            elif isinstance(arg_to_merge, dict):
+                kwargs.update(arg_to_merge)
+
+    if args:
+        if kwargs:
+            return (*args, kwargs)
+        return tuple(args)
+    return kwargs
 
 
 @runtime_checkable
@@ -175,7 +219,11 @@ class CommonTableAttributes:
             dict[str, Any]: A dict representation of the model
         """
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
-        return {field.name: getattr(self, field.name) for field in self.__table__.columns if field.name not in exclude}
+        return {
+            field: getattr(self, field)
+            for field in self.__mapper__.columns.keys()  # noqa: SIM118
+            if field not in exclude
+        }
 
 
 @declarative_mixin
@@ -199,7 +247,7 @@ class SlugKey:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
-    def __table_args__(cls) -> tuple:
+    def __table_args__(cls) -> tuple | dict:
         return (
             UniqueConstraint(
                 cls.slug,

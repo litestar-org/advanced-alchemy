@@ -33,19 +33,28 @@ dependencies = [
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = { text = "MIT" }
+maintainers = [
+    { name = "Litestar Developers", email = "hello@litestar.dev" },
+    { name = "Cody Fincher", email = "cody@litestar.dev" },
+    { name = "Jacob Coffee", email = "jacob@litestar.dev" },
+    { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
+    { name = "Peter Schutt", email = "peter@litestar.dev" },
+    { name = "Visakh Unnikrishnan", email = "guacs@litestar.dev" },
+    { name = "Alc", email = "alc@litestar.dev" }
+]
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
 version = "0.9.0"
 
 [project.urls]
-Changelog = "https://docs.advanced-alchemy.jolt.rs/latest/changelog"
-Discord = "https://discord.gg/XpFNTjjtTK"
-Documentation = "https://docs.advanced-alchemy.jolt.rs/latest/"
-Funding = "https://github.com/sponsors/jolt-org"
-Homepage = "https://docs.advanced-alchemy.jolt.rs/latest/"
-Issue = "https://github.com/jolt-org/advanced-alchemy/issues/"
-Source = "https://github.com/jolt-org/advanced-alchemy"
+Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
+Discord = "https://discord.gg/litestar"
+Documentation = "https://docs.advanced-alchemy.litestar.dev/latest/"
+Funding = "https://github.com/sponsors/litestar-org"
+Homepage = "https://docs.advanced-alchemy.litestar.dev/latest/"
+Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
+Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
 uuid = ["uuid-utils>=0.6.1"]
@@ -91,14 +100,18 @@ dev = [
   "aioodbc>=0.5.0",
 ]
 docs = [
-  "sphinx>=7.1.2",
-  "sphinx-autobuild>=2021.3.14",
-  "sphinx-copybutton>=0.5.2",
-  "shibuya==2023.10.26",
-  "sphinx-click>=5.0.1",
-  "sphinx-toolbox>=3.5.0",
-  "blacken-docs>=1.16.0",
-  "sphinx-design>=0.5.0",
+    "sphinx>=7.1.2",
+    "sphinx-autobuild>=2021.3.14",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-click>=5.0.1",
+    "sphinx-toolbox>=3.5.0",
+    "blacken-docs>=1.16.0",
+    "sphinx-design>=0.5.0",
+    "sphinx-paramlinks>=0.6.0",
+    "sphinx-togglebutton>=0.3.2",
+#    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
+    "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+    "auto-pytabs[sphinx]>=0.4.0",
 ]
 extensions = [
   "litestar[cli]>=2.0.0",
@@ -405,25 +418,25 @@ skip = 'pdm.lock, examples/us_state_lookup.json'
 [tool.git-cliff.changelog]
 body = """
 {% if version %}\
-    `Release [v{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }} <https://github.com/jolt-org/advanced-alchemy/releases/tag/v{{ version | trim_start_matches(pat="v") }}>`_
+    `Release [v{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }} <https://github.com/litestar-org/advanced-alchemy/releases/tag/v{{ version | trim_start_matches(pat="v") }}>`_
     ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    * `See All commits in v{{ version | trim_start_matches(pat="v") }} <https://github.com/jolt-org/advanced-alchemy/commits/v{{ version | trim_start_matches(pat="v") }}>`_
+    * `See All commits in v{{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/commits/v{{ version | trim_start_matches(pat="v") }}>`_
 {% else %}\
     [unreleased]
     ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 {% endif %}\
 {% if previous %}\
     {% if previous.commit_id %}
-        `{{ previous.commit_id | truncate(length=7, end="") }} <https://github.com/jolt-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ ... \
-            `{{ commit_id | truncate(length=7, end="") }} <https://github.com/jolt-org/advanced-alchemy/commit/{{ commit_id }}>`_ \
-            | `See diff for {{ version | trim_start_matches(pat="v") }} <https://github.com/jolt-org/advanced-alchemy/compare/{{ previous.commit_id }}...{{ commit_id }}>`_
+        `{{ previous.commit_id | truncate(length=7, end="") }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ ... \
+            `{{ commit_id | truncate(length=7, end="") }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit_id }}>`_ \
+            | `See diff for {{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/compare/{{ previous.commit_id }}...{{ commit_id }}>`_
     {% endif %}\
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
     {{ group | upper_first }}
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     {% for commit in commits %}
-        * (`{{ commit.id | truncate(length=7, end="") }} <https://github.com/jolt-org/advanced-alchemy/commit/{{ commit.id }}>`_) {% if commit.breaking %}[**breaking**] {% endif %} - {{ commit.message | upper_first }} ({{ commit.author.name  }})\
+        * (`{{ commit.id | truncate(length=7, end="") }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit.id }}>`_) {% if commit.breaking %}[**breaking**] {% endif %} - {{ commit.message | upper_first }} ({{ commit.author.name  }})\
           {% for footer in commit.footers -%}
             , {{ footer.token }}{{ footer.separator }}{{ footer.value }}\
           {% endfor %}\
