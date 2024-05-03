@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import os
+import warnings
 from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any
+
+from sqlalchemy.exc import SAWarning
 
 from advanced_alchemy.__metadata__ import __project__, __version__
 
@@ -13,6 +16,7 @@ if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
 # -- Environmental Data ------------------------------------------------------
+warnings.filterwarnings("ignore", category=SAWarning)
 
 # -- Project information -----------------------------------------------------
 current_year = datetime.now().year  # noqa: DTZ005
@@ -183,9 +187,9 @@ html_theme_options = {
             "title": "Release notes",
             "children": [
                 {
-                    "title": "1.x Changelog",
+                    "title": "Changelog",
                     "url": "changelog",
-                    "summary": "All changes in the 2.x series",
+                    "summary": "All changes for Advanced Alchemy",
                 },
             ],
         },
