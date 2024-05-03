@@ -183,9 +183,9 @@ html_theme_options = {
             "title": "Release notes",
             "children": [
                 {
-                    "title": "1.x Changelog",
+                    "title": "Changelog",
                     "url": "changelog",
-                    "summary": "All changes in the 2.x series",
+                    "summary": "All changes for Advanced Alchemy",
                 },
             ],
         },
