@@ -41,7 +41,7 @@ Guidelines for writing code
 - All code should be fully `typed <https://peps.python.org/pep-0484/>`_. This is enforced via
   `mypy <https://mypy.readthedocs.io/en/stable/>`_.
 - All code should be tested. This is enforced via `pytest <https://docs.pytest.org/en/stable/>`_.
-- All code should be properly formatted. This is enforced via `black <https://black.readthedocs.io/en/stable/>`_ and `Ruff <https://beta.ruff.rs/docs/>`_.
+- All code should be properly formatted. This is enforced via `Ruff <https://beta.ruff.rs/docs/>`_.
 
 Writing and running tests
 +++++++++++++++++++++++++

@@ -100,19 +100,18 @@ dev = [
   "aioodbc>=0.5.0",
 ]
 docs = [
-    "sphinx>=7.1.2",
-    "sphinx-autobuild>=2021.3.14",
-    "sphinx-copybutton>=0.5.2",
-    "sphinx-click>=5.0.1",
-    "sphinx-toolbox>=3.5.0",
-    "blacken-docs>=1.16.0",
-    "sphinx-design>=0.5.0",
-    "sphinx-paramlinks>=0.6.0",
-    "sphinx-togglebutton>=0.3.2",
-#    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
-    "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
-    "auto-pytabs[sphinx]>=0.4.0",
-    "git-cliff>=2.2.1",
+  "sphinx>=7.1.2",
+  "sphinx-autobuild>=2021.3.14",
+  "sphinx-copybutton>=0.5.2",
+  "sphinx-click>=5.0.1",
+  "sphinx-toolbox>=3.5.0",
+  "sphinx-design>=0.5.0",
+  "sphinx-paramlinks>=0.6.0",
+  "sphinx-togglebutton>=0.3.2",
+  #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "auto-pytabs[sphinx]>=0.4.0",
+  "git-cliff>=2.2.1",
 ]
 extensions = [
   "litestar[cli]>=2.0.0",
@@ -125,7 +124,6 @@ extensions = [
 ]
 linting = [
   "pre-commit>=3.4.0",
-  "black>=23.7.0",
   "mypy>=1.5.1",
   "ruff>=0.0.287",
   "asyncpg-stubs",
@@ -417,13 +415,13 @@ ignore-words-list = "selectin"
 skip = 'pdm.lock, examples/us_state_lookup.json'
 
 [tool.git-cliff.changelog]
-trim = true
 header = """
 =========
 Changelog
 =========\n
 All commits to this project will be documented in this file.\n
 """
+trim = true
 # TODO: Fix footers for co-authors
 body = """
 {% if version %}\
@@ -474,32 +472,32 @@ commit_parsers = [
   { message = "^chore", group = "Miscellaneous Tasks" },
   { body = ".*security", group = "Security" },
 ]
+commit_preprocessors = [
+  # Matches a single backtick that is not preceded by another backtick (negative lookbehind)
+  # and not followed by another backtick (negative lookahead).. but these aren't supported
+  # in git cliff regexes. So we have to do it in 3 steps:
+  # Step 1: Replace pairs of backticks with a placeholder (e.g., "DOUBLEBACKTICK")
+  { pattern = "``", replace = "DOUBLEBACKTICK" },
+  # Step 2: Replace single backticks with double backticks
+  { pattern = "`", replace = "``" },
+  # Step 3: Replace the placeholder back to double backticks
+  { pattern = "DOUBLEBACKTICK", replace = "``" },
+  # TODO: Fix Co-authored commits
+]
 conventional_commits = true
 filter_commits = false
 filter_unconventional = true
 ignore_tags = ""
+link_parsers = [
+  # TODO: Supposedly matches on #1234 but doesn't work?
+  { pattern = "\\(#(\\d+)\\)", href = "https://github.com/litestar-org/advanced-alchemy/issues/$1" },
+]
 protect_breaking_commits = false
 skip_tags = "v0.1.0-beta.1"
 sort_commits = "oldest"
 split_commits = false
 tag_pattern = "v[0-9]*"
 topo_order = false
-commit_preprocessors = [
-    # Matches a single backtick that is not preceded by another backtick (negative lookbehind)
-    # and not followed by another backtick (negative lookahead).. but these aren't supported
-    # in git cliff regexes. So we have to do it in 3 steps:
-    # Step 1: Replace pairs of backticks with a placeholder (e.g., "DOUBLEBACKTICK")
-    { pattern = "``", replace = "DOUBLEBACKTICK" },
-    # Step 2: Replace single backticks with double backticks
-    { pattern = "`", replace = "``" },
-    # Step 3: Replace the placeholder back to double backticks
-    { pattern = "DOUBLEBACKTICK", replace = "``" },
-    # TODO: Fix Co-authored commits
-]
-link_parsers = [
-    # TODO: Supposedly matches on #1234 but doesn't work?
-    { pattern = "\\(#(\\d+)\\)", href = "https://github.com/litestar-org/advanced-alchemy/issues/$1" },
-]
 
 [tool.git-cliff.remote.github]
 owner = "litestar-org"
