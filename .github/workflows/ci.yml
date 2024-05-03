@@ -39,49 +39,6 @@ jobs:
     with:
       coverage: ${{ matrix.python-version == '3.12' }}
       python-version: ${{ matrix.python-version }}
-  sonar:
-    needs:
-      - test
-      - validate
-    if: github.event.pull_request.head.repo.fork == false && github.repository_owner == 'litestar-org'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-xml
-
-      - name: Fix coverage file for sonarcloud
-        run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
-
-      - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  codeql:
-    needs:
-      - test
-      - validate
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL Without Dependencies
-        uses: github/codeql-action/init@v3
-        with:
-          setup-python-dependencies: false
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
 
   build-docs:
     needs:
@@ -155,3 +112,48 @@ jobs:
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+  sonar:
+    needs:
+      - test
+      - validate
+      - upload-test-coverage
+    if: github.event.pull_request.head.repo.fork == false && github.repository_owner == 'litestar-org'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-xml
+
+      - name: Fix coverage file for sonarcloud
+        run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
+
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  codeql:
+    needs:
+      - test
+      - validate
+      - upload-test-coverage
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL Without Dependencies
+        uses: github/codeql-action/init@v3
+        with:
+          setup-python-dependencies: false
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
