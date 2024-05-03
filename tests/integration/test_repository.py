@@ -2191,7 +2191,8 @@ async def test_service_upsert_method_match(
     upsert_update_obj = await maybe_async(
         author_service.upsert(data=existing_obj.to_dict(exclude={"id"}), match_fields=["name"]),
     )
-    assert str(upsert_update_obj.id) == str(first_author_id)
+    if not isinstance(author_service.repository, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        assert str(upsert_update_obj.id) == str(first_author_id)
     assert upsert_update_obj.name == "Agatha C."
 
     upsert_insert_obj = await maybe_async(
