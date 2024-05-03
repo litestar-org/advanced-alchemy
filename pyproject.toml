@@ -34,13 +34,13 @@ description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = { text = "MIT" }
 maintainers = [
-    { name = "Litestar Developers", email = "hello@litestar.dev" },
-    { name = "Cody Fincher", email = "cody@litestar.dev" },
-    { name = "Jacob Coffee", email = "jacob@litestar.dev" },
-    { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
-    { name = "Peter Schutt", email = "peter@litestar.dev" },
-    { name = "Visakh Unnikrishnan", email = "guacs@litestar.dev" },
-    { name = "Alc", email = "alc@litestar.dev" }
+  { name = "Litestar Developers", email = "hello@litestar.dev" },
+  { name = "Cody Fincher", email = "cody@litestar.dev" },
+  { name = "Jacob Coffee", email = "jacob@litestar.dev" },
+  { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
+  { name = "Peter Schutt", email = "peter@litestar.dev" },
+  { name = "Visakh Unnikrishnan", email = "guacs@litestar.dev" },
+  { name = "Alc", email = "alc@litestar.dev" },
 ]
 name = "advanced_alchemy"
 readme = "README.md"
@@ -183,7 +183,7 @@ markers = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
-concurrency = ["multiprocessing", "thread"]
+concurrency = ["multiprocessing"]
 omit = [
   "*/tests/*",
   "advanced_alchemy/alembic/templates/asyncio/env.py",
