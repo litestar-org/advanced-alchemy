@@ -113,7 +113,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Style configuration -----------------------------------------------------
 html_theme = "litestar_sphinx_theme"
-html_title = "Litestar Framework"
+html_title = "Advanced Alchemy"
 pygments_style = "lightbulb"
 todo_include_todos = True
 
