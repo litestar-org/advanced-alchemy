@@ -140,6 +140,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-xml
+          path: coverage.xml
+          merge-multiple: true
 
       - name: Combine coverage files
         run: |
