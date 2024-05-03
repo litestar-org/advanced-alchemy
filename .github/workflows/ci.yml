@@ -115,6 +115,7 @@ jobs:
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+          slug: litestar-org/advanced-alchemy
 
   build-docs:
     needs:
