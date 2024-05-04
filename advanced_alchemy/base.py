@@ -194,6 +194,7 @@ class AuditColumns:
     updated_at: Mapped[datetime] = mapped_column(
         DateTimeUTC(timezone=True),
         default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
     """Date/time of instance last update."""
 
