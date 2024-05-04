@@ -74,6 +74,8 @@ convention: NamingSchemaParameter = {
     "pk": "pk_%(table_name)s",
 }
 """Templates for automated constraint name generation."""
+table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
+"""Regular expression for table name"""
 
 
 def merge_table_arguments(
@@ -220,15 +222,23 @@ class BasicAttributes:
         }
 
 
-class CommonTableAttributes(BasicAttributes):
-    """Common attributes for SQLALchemy tables."""
+if TYPE_CHECKING:
 
-    # noinspection PyMethodParameters
-    @declared_attr.directive
-    def __tablename__(cls) -> str:
-        """Infer table name from class name."""
-        regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
-        return regexp.sub(r"_\1", cls.__name__).lower()
+    class CommonTableAttributes(BasicAttributes):
+        """Common attributes for SQLALchemy tables."""
+
+        __tablename__: ClassVar[str]
+
+else:
+
+    class CommonTableAttributes(BasicAttributes):
+        """Common attributes for SQLALchemy tables."""
+
+        @declared_attr.directive
+        def __tablename__(cls) -> str:
+            """Infer table name from class name."""
+
+            return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
 
 @declarative_mixin
