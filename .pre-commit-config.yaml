@@ -35,11 +35,6 @@ repos:
         exclude: "pdm.lock|examples/us_state_lookup.json"
         additional_dependencies:
           - tomli
-  - repo: https://github.com/psf/black
-    rev: 24.4.2
-    hooks:
-      - id: black
-        args: [--config=./pyproject.toml]
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: "v1.10.0"
     hooks:
