@@ -62,7 +62,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
     _prefer_any: bool = False
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    uniquify_results: bool = False
+    _uniquify_results: bool = False
     """Optionally apply the ``unique()`` method to results before returning.
 
     This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
@@ -1227,7 +1227,7 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
 
     async def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
         result = await self.session.execute(statement)
-        if self.uniquify_results:
+        if self._uniquify_results:
             return result.unique()
         return result
 
