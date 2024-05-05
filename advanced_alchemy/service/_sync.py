@@ -40,19 +40,16 @@ class SQLAlchemySyncQueryService(ResultConverter):
     def __init__(
         self,
         session: Session | scoped_session[Session],
-        auto_expunge: bool = True,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
 
         Args:
             session: Session managing the unit-of-work for the operation.
-            auto_expunge: Remove object from session before returning.
-            **repo_kwargs: passed as keyword args to repo instantiation.
+            **repo_kwargs: Optional configuration values to pass into the repository
         """
         self.repository = SQLAlchemySyncQueryRepository(
             session=session,
-            auto_expunge=auto_expunge,
             **repo_kwargs,
         )
 

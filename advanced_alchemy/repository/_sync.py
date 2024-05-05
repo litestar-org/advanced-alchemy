@@ -7,7 +7,6 @@ import string
 from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
 
 from sqlalchemy import (
-    MappingResult,
     Result,
     RowMapping,
     Select,
@@ -1264,7 +1263,6 @@ class SQLAlchemySyncQueryRepository:
         self,
         *,
         session: Session | scoped_session[Session],
-        auto_expunge: bool = True,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -1276,45 +1274,17 @@ class SQLAlchemySyncQueryRepository:
 
         """
         super().__init__(**kwargs)
-        self.auto_expunge = auto_expunge
         self.session = session
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
 
-    def _get_base_stmt(
-        self,
-        statement: Select[tuple[Any]] | StatementLambdaElement,
-        global_track_bound_values: bool = True,
-        track_closure_variables: bool = True,
-        enable_tracking: bool = True,
-        track_bound_values: bool = True,
-    ) -> StatementLambdaElement:
-        if isinstance(statement, Select):
-            return lambda_stmt(
-                lambda: statement,
-                track_bound_values=track_bound_values,
-                global_track_bound_values=global_track_bound_values,
-                track_closure_variables=track_closure_variables,
-                enable_tracking=enable_tracking,
-            )
-        return statement
-
-    def _expunge(self, instance: Any, auto_expunge: bool | None) -> None:
-        if auto_expunge is None:
-            auto_expunge = self.auto_expunge
-
-        return self.session.expunge(instance) if auto_expunge else None
-
     def get_one(
         self,
-        statement: Select[tuple[Any]] | StatementLambdaElement,
-        auto_expunge: bool | None = None,
+        statement: Select[tuple[Any]],
         **kwargs: Any,
     ) -> RowMapping:
         """Get instance identified by ``kwargs``.
 
         Args:
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             **kwargs: Instance attribute value filters.
@@ -1326,43 +1296,30 @@ class SQLAlchemySyncQueryRepository:
             NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(
-                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (self.execute(statement)).scalar_one_or_none()
-            instance = self.check_not_found(instance)
-            self._expunge(instance, auto_expunge=auto_expunge)
-            return instance
+            return self.check_not_found(instance)
 
     def get_one_or_none(
         self,
-        statement: Select[Any] | StatementLambdaElement,
-        auto_expunge: bool | None = None,
+        statement: Select[Any],
         **kwargs: Any,
-    ) -> MappingResult | None:
+    ) -> RowMapping | None:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
-            statement: To facilitate customization of the underlying select query.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            statement: To facilitate customization of the underlying select query.\
             **kwargs: Instance attribute value filters.
 
         Returns:
             The retrieved instance or None
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(
-                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = (self.execute(statement)).mappings()
-            if instance:
-                self._expunge(instance, auto_expunge=auto_expunge)
-            return instance
+            instance = (self.execute(statement)).scalar_one_or_none()
+            return instance or None
 
-    def count(self, statement: Select[Any] | StatementLambdaElement, **kwargs: Any) -> int:
+    def count(self, statement: Select[Any], **kwargs: Any) -> int:
         """Get the count of records returned by a query.
 
         Args:
@@ -1372,34 +1329,20 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        statement = self._get_base_stmt(
-            statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-        )
-        statement = statement.add_criteria(
-            lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True),
-            enable_tracking=False,
-            track_bound_values=False,
-            track_closure_variables=False,
-        )
-        statement = statement.add_criteria(
-            lambda s: s.order_by(None), enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-        )
+        statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
         statement = self._filter_statement_by_kwargs(statement, **kwargs)
         results = self.execute(statement)
         return results.scalar_one()  # type: ignore  # noqa: PGH003
 
     def list_and_count(
         self,
-        statement: Select[Any] | StatementLambdaElement,
-        auto_expunge: bool | None = None,
+        statement: Select[Any],
         force_basic_query_mode: bool | None = None,
         **kwargs: Any,
     ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
@@ -1409,21 +1352,18 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query, ignoring pagination.
         """
         if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
-            return self._list_and_count_basic(auto_expunge=auto_expunge, statement=statement, **kwargs)
-        return self._list_and_count_window(auto_expunge=auto_expunge, statement=statement, **kwargs)
+            return self._list_and_count_basic(statement=statement, **kwargs)
+        return self._list_and_count_window(statement=statement, **kwargs)
 
     def _list_and_count_window(
         self,
-        statement: Select[Any] | StatementLambdaElement,
-        auto_expunge: bool | None = None,
+        statement: Select[Any],
         **kwargs: Any,
     ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             **kwargs: Instance attribute value filters.
@@ -1433,48 +1373,28 @@ class SQLAlchemySyncQueryRepository:
         """
 
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(
-                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-            )
-            statement = statement.add_criteria(
-                lambda s: s.add_columns(over(sql_func.count(text("1")))),
-                enable_tracking=False,
-                track_bound_values=False,
-                track_closure_variables=False,
-            )
+            statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
             count: int = 0
             instances: list[RowMapping] = []
             for i, (instance, count_value) in enumerate(result):
-                self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
                 if i == 0:
                     count = count_value
             return instances, count
 
-    def _get_count_stmt(self, statement: StatementLambdaElement) -> StatementLambdaElement:
-        statement = statement.add_criteria(
-            lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True),
-            enable_tracking=False,
-            track_bound_values=False,
-            track_closure_variables=False,
-        )
-        return statement.add_criteria(
-            lambda s: s.order_by(None), enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-        )
+    def _get_count_stmt(self, statement: Select[Any]) -> Select[Any]:
+        return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
 
     def _list_and_count_basic(
         self,
-        statement: Select[Any] | StatementLambdaElement,
-        auto_expunge: bool | None = None,
+        statement: Select[Any],
         **kwargs: Any,
     ) -> tuple[list[RowMapping], int]:
         """List records with total count.
 
         Args:
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>` .
             **kwargs: Instance attribute value filters.
@@ -1484,20 +1404,16 @@ class SQLAlchemySyncQueryRepository:
         """
 
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(
-                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
             result = self.execute(statement)
             instances: list[RowMapping] = []
             for (instance,) in result:
-                self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
             return instances, count
 
-    def list(self, statement: Select[Any] | StatementLambdaElement, **kwargs: Any) -> list[RowMapping]:
+    def list(self, statement: Select[Any], **kwargs: Any) -> list[RowMapping]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -1508,22 +1424,16 @@ class SQLAlchemySyncQueryRepository:
             The list of instances, after filtering applied.
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(
-                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
-            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
-            instances = list(result.scalars())
-            for instance in instances:
-                self.session.expunge(instance)
-            return instances
+            return list(result.scalars())
 
     def _filter_statement_by_kwargs(
         self,
-        statement: StatementLambdaElement,
+        statement: Select[Any],
         /,
         **kwargs: Any,
-    ) -> StatementLambdaElement:
+    ) -> Select[Any]:
         """Filter the collection by kwargs.
 
         Args:
@@ -1531,13 +1441,9 @@ class SQLAlchemySyncQueryRepository:
             **kwargs: key/value pairs such that objects remaining in the statement after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
+
         with wrap_sqlalchemy_exception():
-            return statement.add_criteria(
-                lambda s: s.filter_by(**kwargs),
-                enable_tracking=False,
-                track_bound_values=False,
-                track_closure_variables=False,
-            )
+            return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
 
@@ -1555,39 +1461,6 @@ class SQLAlchemySyncQueryRepository:
             msg = "No item found when one was expected"
             raise NotFoundError(msg)
         return item_or_none
-
-    def _attach_to_session(
-        self,
-        model: ModelT,
-        strategy: Literal["add", "merge"] = "add",
-        load: bool = True,
-    ) -> ModelT:
-        """Attach detached instance to the session.
-
-        Args:
-            model: The instance to be attached to the session.
-            strategy: How the instance should be attached.
-                - "add": New instance added to session
-                - "merge": Instance merged with existing, or new one added.
-            load: Boolean, when False, merge switches into
-                a "high performance" mode which causes it to forego emitting history
-                events as well as all database access.  This flag is used for
-                cases such as transferring graphs of objects into a session
-                from a second level cache, or to transfer just-loaded objects
-                into the session owned by a worker thread or process
-                without re-querying the database.
-
-        Returns:
-            Instance attached to the session - if `"merge"` strategy, may not be same instance
-            that was provided.
-        """
-        if strategy == "add":
-            self.session.add(model)
-            return model
-        if strategy == "merge":
-            return self.session.merge(model, load=load)
-        msg = "Unexpected value for `strategy`, must be `'add'` or `'merge'`"  # type: ignore[unreachable]
-        raise ValueError(msg)
 
     def execute(
         self,

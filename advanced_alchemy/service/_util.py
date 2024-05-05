@@ -28,7 +28,25 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelT | RowMapping,
+        data: RowMapping,
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT] | None = None,
+    ) -> RowMapping: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[RowMapping],
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT] | None = None,
+    ) -> OffsetPagination[RowMapping]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelT] | None = None,
@@ -37,7 +55,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelT] | Sequence[RowMapping],
+        data: Sequence[ModelT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelT] | None = None,
@@ -46,7 +64,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelT | RowMapping,
+        data: ModelT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
@@ -67,7 +85,14 @@ class ResultConverter:
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT | ModelT] | None = None,
-    ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+    ) -> (
+        ModelT
+        | OffsetPagination[ModelT]
+        | ModelDTOT
+        | OffsetPagination[ModelDTOT]
+        | RowMapping
+        | OffsetPagination[RowMapping]
+    ):
         """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
 
         Args:
