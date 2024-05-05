@@ -452,12 +452,14 @@ class ItemSyncService(SQLAlchemySyncRepositoryService[BigIntItem]):
 class SlugBookAsyncRepository(SQLAlchemyAsyncSlugRepository[BigIntSlugBook]):
     """Slug Book repository."""
 
+    _uniquify_results = True
     model_type = BigIntSlugBook
 
 
 class SlugBookSyncRepository(SQLAlchemySyncSlugRepository[BigIntSlugBook]):
     """Slug Book repository."""
 
+    _uniquify_results = True
     model_type = BigIntSlugBook
 
 

@@ -63,6 +63,11 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
     _prefer_any: bool = False
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
+    _uniquify_results: bool = False
+    """Optionally apply the ``unique()`` method to results before returning.
+
+    This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
+    """
 
     def __init__(
         self,
@@ -1222,7 +1227,10 @@ class SQLAlchemySyncRepository(Generic[ModelT]):
         raise ValueError(msg)
 
     def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
-        return self.session.execute(statement)
+        result = self.session.execute(statement)
+        if self._uniquify_results:
+            return result.unique()
+        return result
 
     def _apply_limit_offset_pagination(
         self,
