@@ -48,6 +48,12 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
+    """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
+    _uniquify_results: bool = False
+    """Optionally apply the ``unique()`` method to results before returning.
+
+    This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
+    """
 
     def __init__(
         self,
@@ -1207,7 +1213,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         raise ValueError(msg)
 
     def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
-        return self.session.execute(statement)
+        result = self.session.execute(statement)
+        if self._uniquify_results:
+            return result.unique()
+        return result
 
 
 class SQLAlchemySyncSlugRepository(SQLAlchemySyncRepository[ModelT]):
