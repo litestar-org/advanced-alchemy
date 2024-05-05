@@ -222,17 +222,12 @@ class BasicAttributes:
         }
 
 
-if TYPE_CHECKING:
+class CommonTableAttributes(BasicAttributes):
+    """Common attributes for SQLALchemy tables."""
 
-    class CommonTableAttributes(BasicAttributes):
-        """Common attributes for SQLALchemy tables."""
-
-        __tablename__: ClassVar[str]
-
-else:
-
-    class CommonTableAttributes(BasicAttributes):
-        """Common attributes for SQLALchemy tables."""
+    if TYPE_CHECKING:
+        __tablename__: str
+    else:
 
         @declared_attr.directive
         def __tablename__(cls) -> str:

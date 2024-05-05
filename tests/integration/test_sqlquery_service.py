@@ -74,7 +74,9 @@ def test_sync_fixture_and_query() -> None:
         query_repo = SQLAlchemySyncQueryRepository(session=session)
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _objs = repo.add_many([USStateSyncRepository.model_type(**raw_obj) for raw_obj in fixture])
+        _query_count = query_repo.count(statement=select(StateQuery))
         _query_objs, _query_count = query_repo.list_and_count(statement=select(StateQuery))
+        _query_objs = query_repo.list(statement=select(StateQuery))
 
 
 async def test_async_fixture_and_query() -> None:
@@ -89,5 +91,6 @@ async def test_async_fixture_and_query() -> None:
         query_repo = SQLAlchemyAsyncQueryRepository(session=session)
         fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _objs = await repo.add_many([USStateSyncRepository.model_type(**raw_obj) for raw_obj in fixture])
-
-        _query_objs = await query_repo.list(statement=select(StateQuery))
+        _query_count = await query_repo.count(statement=select(StateQuery))
+        _query_objs, _query_count = await query_repo.list_and_count(statement=select(StateQuery))
+        _all_query_objs = await query_repo.list(statement=select(StateQuery))

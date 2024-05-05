@@ -1510,8 +1510,7 @@ class SQLAlchemySyncQueryRepository:
                 have the property that their attribute named `key` has value equal to `value`.
         """
         with wrap_sqlalchemy_exception():
-            statement += lambda s: s.filter_by(**kwargs)
-            return statement
+            return statement.add_criteria(lambda s: s.filter_by(**kwargs), track_bound_values=False)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
 
