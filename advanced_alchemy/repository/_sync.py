@@ -1326,7 +1326,9 @@ class SQLAlchemySyncQueryRepository:
             NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(
+                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (self.execute(statement)).scalar_one_or_none()
             instance = self.check_not_found(instance)
@@ -1351,7 +1353,9 @@ class SQLAlchemySyncQueryRepository:
             The retrieved instance or None
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(
+                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (self.execute(statement)).mappings()
             if instance:
@@ -1368,12 +1372,18 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        statement = self._get_base_stmt(statement)
+        statement = self._get_base_stmt(
+            statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+        )
         statement = statement.add_criteria(
             lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True),
             enable_tracking=False,
+            track_bound_values=False,
+            track_closure_variables=False,
         )
-        statement = statement.add_criteria(lambda s: s.order_by(None))
+        statement = statement.add_criteria(
+            lambda s: s.order_by(None), enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+        )
         statement = self._filter_statement_by_kwargs(statement, **kwargs)
         results = self.execute(statement)
         return results.scalar_one()  # type: ignore  # noqa: PGH003
@@ -1423,10 +1433,14 @@ class SQLAlchemySyncQueryRepository:
         """
 
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(
+                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+            )
             statement = statement.add_criteria(
                 lambda s: s.add_columns(over(sql_func.count(text("1")))),
                 enable_tracking=False,
+                track_bound_values=False,
+                track_closure_variables=False,
             )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
@@ -1443,8 +1457,12 @@ class SQLAlchemySyncQueryRepository:
         statement = statement.add_criteria(
             lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True),
             enable_tracking=False,
+            track_bound_values=False,
+            track_closure_variables=False,
         )
-        return statement.add_criteria(lambda s: s.order_by(None))
+        return statement.add_criteria(
+            lambda s: s.order_by(None), enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+        )
 
     def _list_and_count_basic(
         self,
@@ -1466,7 +1484,9 @@ class SQLAlchemySyncQueryRepository:
         """
 
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(
+                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
@@ -1488,7 +1508,9 @@ class SQLAlchemySyncQueryRepository:
             The list of instances, after filtering applied.
         """
         with wrap_sqlalchemy_exception():
-            statement = self._get_base_stmt(statement)
+            statement = self._get_base_stmt(
+                statement, enable_tracking=False, track_bound_values=False, track_closure_variables=False,
+            )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
             instances = list(result.scalars())
@@ -1510,7 +1532,12 @@ class SQLAlchemySyncQueryRepository:
                 have the property that their attribute named `key` has value equal to `value`.
         """
         with wrap_sqlalchemy_exception():
-            return statement.add_criteria(lambda s: s.filter_by(**kwargs), track_bound_values=False)
+            return statement.add_criteria(
+                lambda s: s.filter_by(**kwargs),
+                enable_tracking=False,
+                track_bound_values=False,
+                track_closure_variables=False,
+            )
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
 
