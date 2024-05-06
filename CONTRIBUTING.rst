@@ -17,7 +17,7 @@ Code contributions
 Workflow
 ++++++++
 
-1. `Fork <https://github.com/jolt-org/advanced-alchemy/fork>`_ the `Advanced Alchemy repository <https://github.com/jolt-org/advanced-alchemy>`_
+1. `Fork <https://github.com/litestar-org/advanced-alchemy/fork>`_ the `Advanced Alchemy repository <https://github.com/litestar-org/advanced-alchemy>`_
 2. Clone your fork locally with git
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
@@ -41,7 +41,7 @@ Guidelines for writing code
 - All code should be fully `typed <https://peps.python.org/pep-0484/>`_. This is enforced via
   `mypy <https://mypy.readthedocs.io/en/stable/>`_.
 - All code should be tested. This is enforced via `pytest <https://docs.pytest.org/en/stable/>`_.
-- All code should be properly formatted. This is enforced via `black <https://black.readthedocs.io/en/stable/>`_ and `Ruff <https://beta.ruff.rs/docs/>`_.
+- All code should be properly formatted. This is enforced via `Ruff <https://beta.ruff.rs/docs/>`_.
 
 Writing and running tests
 +++++++++++++++++++++++++
@@ -68,13 +68,13 @@ Then you can serve the documentation with ``make docs-serve``, or build them wit
 Creating a new release
 ----------------------
 
-1. Increment the version in `pyproject.toml <https://github.com/jolt-org/advanced-alchemy/blob/main/pyproject.toml>`_.
+1. Increment the version in `pyproject.toml <https://github.com/litestar-org/advanced-alchemy/blob/main/pyproject.toml>`_.
     .. note:: The version should follow `semantic versioning <https://semver.org/>`_ and `PEP 440 <https://www.python.org/dev/peps/pep-0440/>`_.
-2. `Draft a new release <https://github.com/jolt-org/advanced-alchemy/releases/new>`_ on GitHub
+2. `Draft a new release <https://github.com/litestar-org/advanced-alchemy/releases/new>`_ on GitHub
 
    * Use ``vMAJOR.MINOR.PATCH`` (e.g. ``v1.2.3``) as both the tag and release title
    * Fill in the release description. You can use the "Generate release notes" function to get a draft for this
 3. Commit your changes and push to ``main``
 4. Publish the release
-5. Go to `Actions <https://github.com/jolt-org/advanced-alchemy/actions>`_ and approve the release workflow
+5. Go to `Actions <https://github.com/litestar-org/advanced-alchemy/actions>`_ and approve the release workflow
 6. Check that the workflow runs successfully

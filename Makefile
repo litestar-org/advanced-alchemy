@@ -47,6 +47,7 @@ install:											## Install the project and
 
 clean: 												## Cleanup temporary build artifacts
 	@echo "=> Cleaning working directory"
+	@if [ "$(USING_PDM)" ]; then $(PDM) run pre-commit clean; fi
 	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ -rf dist/ .eggs/
 	@find . -name '*.egg-info' -exec rm -rf {} +
 	@find . -name '*.egg' -exec rm -f {} +
@@ -55,17 +56,25 @@ clean: 												## Cleanup temporary build artifacts
 	@find . -name '*~' -exec rm -f {} +
 	@find . -name '__pycache__' -exec rm -rf {} +
 	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
-	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache
+	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache .unasyncd_cache/
 	@$(MAKE) docs-clean
 
 destroy: 											## Destroy the virtual environment
 	@rm -rf .venv
 
+.PHONY: refresh-lockfiles
+refresh-lockfiles:                                 ## Sync lockfiles with requirements files.
+	pdm update --update-reuse --group :all
+
+.PHONY: lock
+lock:                                             ## Rebuild lockfiles from scratch, updating all dependencies
+	pdm update --update-eager --group :all
+
 # =============================================================================
 # Tests, Linting, Coverage
 # =============================================================================
 .PHONY: lint
-lint: 												## Runs pre-commit hooks; includes ruff linting, codespell, black
+lint: 												## Runs pre-commit hooks; includes ruff linting and codespell
 	@echo "=> Running pre-commit process"
 	@$(ENV_PREFIX)pre-commit run --all-files
 	@echo "=> Pre-commit complete"
@@ -82,13 +91,13 @@ coverage:  											## Run the tests and generate coverage report
 .PHONY: test
 test:  												## Run the tests
 	@echo "=> Running test cases"
-	@$(ENV_PREFIX)pytest tests -m 'not asyncmy and not oracledb and not spanner and not mssql and not cockroachdb_async and not cockroachdb_sync' -n auto
+	@$(ENV_PREFIX)pytest tests -m 'not asyncmy and not oracledb and not spanner and not mssql and not cockroachdb_async and not cockroachdb_sync' -n 2
 	@echo "=> Tests complete"
 
 .PHONY: test-all
 test-all:  												## Run the tests
 	@echo "=> Running all test cases"
-	@$(ENV_PREFIX)pytest tests -m '' -n auto
+	@$(ENV_PREFIX)pytest tests -m '' -n 2
 	@echo "=> Tests complete"
 
 .PHONY: test-asyncpg
@@ -167,3 +176,7 @@ docs-serve: docs-clean 								## Serve the docs locally
 docs: docs-clean 									## Dump the existing built docs and rebuild them
 	@echo "=> Building documentation"
 	@$(ENV_PREFIX)sphinx-build -M html docs docs/_build/ -E -a -j auto --keep-going
+
+changelog:
+	@echo "=> Generating changelog"
+	@$(ENV_PREFIX)git-cliff -c pyproject.toml -o docs/changelog.rst --github-repo litestar-org/advanced-alchemy --github-token $(GITHUB_TOKEN)

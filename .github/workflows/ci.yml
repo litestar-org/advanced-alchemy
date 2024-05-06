@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -21,7 +21,7 @@ jobs:
 
       - name: Load cached Pre-Commit Dependencies
         id: cached-pre-commit-dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit/
           key: pre-commit|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
@@ -35,7 +35,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-    uses: ./.github/workflows/test.yaml
+    uses: ./.github/workflows/test.yml
     with:
       coverage: ${{ matrix.python-version == '3.12' }}
       python-version: ${{ matrix.python-version }}
@@ -43,7 +43,7 @@ jobs:
     needs:
       - test
       - validate
-    if: github.event.pull_request.head.repo.fork == false && github.repository_owner == 'jolt-org'
+    if: github.event.pull_request.head.repo.fork == false && github.repository_owner == 'litestar-org'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -51,7 +51,7 @@ jobs:
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: coverage-xml
 
@@ -64,7 +64,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  codeql:
+  codecov:
     needs:
       - test
       - validate
@@ -72,16 +72,33 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL Without Dependencies
-        uses: github/codeql-action/init@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          setup-python-dependencies: false
+          python-version: "3.12"
 
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          merge-multiple: true
+
+      # - name: Combine coverage files
+      #   run: |
+      #     python -Im pip install coverage covdefaults
+      #     python -Im coverage combine
+      #     python -Im coverage xml -i
+
+      # - name: Fix coverage file name
+      #   run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: litestar-org/advanced-alchemy
 
   build-docs:
     needs:
@@ -96,11 +113,11 @@ jobs:
         run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - uses: pdm-project/setup-pdm@v3
+      - uses: pdm-project/setup-pdm@v4
         name: Set up PDM
         with:
           python-version: "3.12"
@@ -119,7 +136,7 @@ jobs:
         run: echo $PR_NUMBER > .pr_number
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs-preview
           path: |

@@ -1,6 +1,4 @@
-import json
 from pathlib import Path
-from typing import Any
 
 from rich import get_console
 from sqlalchemy import create_engine
@@ -9,6 +7,7 @@ from sqlalchemy.orm import Mapped, Session, sessionmaker
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemySyncRepository
+from advanced_alchemy.utils.fixtures import open_fixture
 
 here = Path(__file__).parent
 console = get_console()
@@ -16,7 +15,7 @@ console = get_console()
 
 class USState(UUIDBase):
     # you can optionally override the generated table name by manually setting it.
-    __tablename__ = "us_state_lookup"  # type: ignore[assignment]
+    __tablename__ = "us_state_lookup"
     abbreviation: Mapped[str]
     name: Mapped[str]
 
@@ -34,28 +33,6 @@ engine = create_engine(
 session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
 
-def open_fixture(fixtures_path: Path, fixture_name: str) -> Any:
-    """Loads JSON file with the specified fixture name
-
-    Args:
-        fixtures_path (Path): The path to look for fixtures
-        fixture_name (str): The fixture name to load.
-
-    Raises:
-        FileNotFoundError: Fixtures not found.
-
-    Returns:
-        Any: The parsed JSON data
-    """
-    fixture = Path(fixtures_path / f"{fixture_name}.json")
-    if fixture.exists():
-        with fixture.open(mode="r", encoding="utf-8") as f:
-            f_data = f.read()
-        return json.loads(f_data)
-    msg = f"Could not find the {fixture_name} fixture"
-    raise FileNotFoundError(msg)
-
-
 def run_script() -> None:
     """Load data from a fixture."""
 
@@ -66,7 +43,7 @@ def run_script() -> None:
     with session_factory() as db_session:
         # 1) Load the JSON data into the US States table.
         repo = USStateRepository(session=db_session)
-        fixture = open_fixture(here, USStateRepository.model_type.__tablename__)  # type: ignore[has-type]
+        fixture = open_fixture(here, USStateRepository.model_type.__tablename__)
         objs = repo.add_many([USStateRepository.model_type(**raw_obj) for raw_obj in fixture])
         db_session.commit()
         console.print(f"Created {len(objs)} new objects.")

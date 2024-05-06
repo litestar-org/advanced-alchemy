@@ -180,12 +180,14 @@ class BookSyncMockRepository(SQLAlchemySyncMockRepository[UUIDBook]):
 class SlugBookAsyncRepository(SQLAlchemyAsyncSlugRepository[UUIDSlugBook]):
     """Book repository."""
 
+    _uniquify_results = True
     model_type = UUIDSlugBook
 
 
 class SlugBookSyncRepository(SQLAlchemySyncSlugRepository[UUIDSlugBook]):
     """Slug Book repository."""
 
+    _uniquify_results = True
     model_type = UUIDSlugBook
 
 

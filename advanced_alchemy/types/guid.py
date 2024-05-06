@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 UUID_UTILS_INSTALLED = find_spec("uuid_utils")
 
 
-class GUID(TypeDecorator):
+class GUID(TypeDecorator[UUID]):
     """Platform-independent GUID type.
 
     Uses PostgreSQL's UUID type (Postgres, DuckDB, Cockroach),
