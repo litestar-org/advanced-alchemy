@@ -47,6 +47,7 @@ install:											## Install the project and
 
 clean: 												## Cleanup temporary build artifacts
 	@echo "=> Cleaning working directory"
+	@if [ "$(USING_PDM)" ]; then $(PDM) run pre-commit clean; fi
 	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ -rf dist/ .eggs/
 	@find . -name '*.egg-info' -exec rm -rf {} +
 	@find . -name '*.egg' -exec rm -f {} +
@@ -55,7 +56,7 @@ clean: 												## Cleanup temporary build artifacts
 	@find . -name '*~' -exec rm -f {} +
 	@find . -name '__pycache__' -exec rm -rf {} +
 	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
-	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache
+	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache .unasyncd_cache/
 	@$(MAKE) docs-clean
 
 destroy: 											## Destroy the virtual environment
