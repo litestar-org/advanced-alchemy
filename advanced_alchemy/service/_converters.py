@@ -17,10 +17,9 @@ from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service.pagination import OffsetPagination
 
 if TYPE_CHECKING:
-    from sqlalchemy import ColumnElement, RowMapping
-    from sqlalchemy.orm import DeclarativeBase
+    from sqlalchemy import ColumnElement
 
-    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
+    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT, RowMappingT
 
 try:
     from msgspec import Struct, convert
@@ -100,17 +99,17 @@ def _find_filter(
 
 
 def to_schema(
-    data: ModelT | Sequence[ModelT] | Sequence[RowMapping] | RowMapping,
+    data: ModelT | Sequence[ModelT] | Sequence[RowMappingT] | RowMappingT,
     total: int | None = None,
     filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    schema_type: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
+    schema_type: type[ModelT | ModelDTOT | RowMappingT] | None = None,
 ) -> (
     ModelT
     | OffsetPagination[ModelT]
     | ModelDTOT
     | OffsetPagination[ModelDTOT]
-    | RowMapping
-    | OffsetPagination[RowMapping]
+    | RowMappingT
+    | OffsetPagination[RowMappingT]
 ):
     if schema_type is not None and issubclass(schema_type, Struct):
         if not isinstance(data, Sequence):
