@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sqlalchemy import RowMapping
     from sqlalchemy.sql import ColumnElement
 
+    from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.repository.typing import ModelT
     from advanced_alchemy.service.pagination import OffsetPagination
@@ -44,19 +45,19 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: RowMappingT,
+        data: RowMapping,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] = ...,
+        schema_type: type[ModelDTOT] | None = None,
     ) -> ModelDTOT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[RowMappingT],
+        data: Sequence[RowMapping],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] = ...,
+        schema_type: type[ModelDTOT] | None = None,
     ) -> OffsetPagination[ModelDTOT]: ...
 
     @overload
@@ -96,10 +97,10 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelT,
+        data: ModelProtocol,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] = ...,
+        schema_type: type[ModelDTOT] | None = None,
     ) -> ModelDTOT: ...
 
     @overload
@@ -108,7 +109,7 @@ class ResultConverter:
         data: Sequence[ModelT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] = ...,
+        schema_type: type[ModelDTOT] | None = None,
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
