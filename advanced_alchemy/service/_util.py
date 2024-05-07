@@ -65,7 +65,6 @@ class ResultConverter:
         data: ModelT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelT] | None = None,
     ) -> ModelT: ...
 
     @overload
@@ -74,7 +73,24 @@ class ResultConverter:
         data: Sequence[ModelT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelT] | None = None,
+    ) -> OffsetPagination[ModelT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelT,
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelT] = ...,
+    ) -> ModelT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelT],
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelT] = ...,
     ) -> OffsetPagination[ModelT]: ...
 
     @overload
