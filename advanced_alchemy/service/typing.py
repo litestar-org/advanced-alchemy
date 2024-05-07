@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, TypeVar
 
+from sqlalchemy import RowMapping  # noqa: TCH002
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.filters import FilterTypes
@@ -33,3 +34,4 @@ ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
 ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
 FilterTypeT = TypeVar("FilterTypeT", bound=FilterTypes)
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
+RowMappingT = TypeVar("RowMappingT", bound="RowMapping")
