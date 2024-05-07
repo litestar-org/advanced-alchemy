@@ -31,7 +31,6 @@ class ResultConverter:
         data: RowMappingT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT | ModelT] | None = None,
     ) -> RowMappingT: ...
 
     @overload
@@ -40,8 +39,25 @@ class ResultConverter:
         data: Sequence[RowMappingT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] | None = None,
     ) -> OffsetPagination[RowMappingT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: RowMappingT,
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT] = ...,
+    ) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[RowMappingT],
+        total: int | None = None,
+        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
+        schema_type: type[ModelDTOT] = ...,
+    ) -> OffsetPagination[ModelDTOT]: ...
 
     @overload
     def to_schema(
@@ -64,7 +80,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelT | RowMappingT,
+        data: ModelT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
@@ -73,7 +89,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelT] | Sequence[RowMappingT],
+        data: Sequence[ModelT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
