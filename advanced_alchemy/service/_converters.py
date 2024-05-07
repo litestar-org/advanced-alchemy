@@ -18,7 +18,6 @@ from advanced_alchemy.service.pagination import OffsetPagination
 
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement
-    from sqlalchemy.orm import DeclarativeBase
 
     from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT, RowMappingT
 
@@ -103,7 +102,7 @@ def to_schema(
     data: ModelT | Sequence[ModelT] | Sequence[RowMappingT] | RowMappingT,
     total: int | None = None,
     filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    schema_type: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
+    schema_type: type[ModelT | ModelDTOT | RowMappingT] | None = None,
 ) -> (
     ModelT
     | OffsetPagination[ModelT]

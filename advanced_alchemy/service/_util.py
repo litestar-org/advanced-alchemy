@@ -64,7 +64,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelT | RowMapping,
+        data: ModelT | RowMappingT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
@@ -73,7 +73,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelT] | Sequence[RowMapping],
+        data: Sequence[ModelT] | Sequence[RowMappingT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
         schema_type: type[ModelDTOT] = ...,
