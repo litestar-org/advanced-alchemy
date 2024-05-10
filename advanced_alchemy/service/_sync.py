@@ -395,7 +395,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         data = self.to_model(data, "update")
         if (
             item_id is None
-            and self.repository.get_id_attribute_value(
+            and self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
                 item=data,
                 id_attribute=id_attribute,
             )
@@ -407,7 +407,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             )
             raise RepositoryError(msg)
         if item_id is not None:
-            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
         return self.repository.update(
             data=data,
             attribute_names=attribute_names,
@@ -474,9 +474,9 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             Updated or created representation.
         """
         data = self.to_model(data, "upsert")
-        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)
+        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
         if item_id is not None:
-            self.repository.set_id_attribute_value(item_id, data)
+            self.repository.set_id_attribute_value(item_id, data)  # pyright: ignore[reportUnknownMemberType]
         return self.repository.upsert(
             data=data,
             attribute_names=attribute_names,
