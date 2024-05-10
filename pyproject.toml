@@ -34,18 +34,18 @@ description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = { text = "MIT" }
 maintainers = [
-    { name = "Litestar Developers", email = "hello@litestar.dev" },
-    { name = "Cody Fincher", email = "cody@litestar.dev" },
-    { name = "Jacob Coffee", email = "jacob@litestar.dev" },
-    { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
-    { name = "Peter Schutt", email = "peter@litestar.dev" },
-    { name = "Visakh Unnikrishnan", email = "guacs@litestar.dev" },
-    { name = "Alc", email = "alc@litestar.dev" }
+  { name = "Litestar Developers", email = "hello@litestar.dev" },
+  { name = "Cody Fincher", email = "cody@litestar.dev" },
+  { name = "Jacob Coffee", email = "jacob@litestar.dev" },
+  { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
+  { name = "Peter Schutt", email = "peter@litestar.dev" },
+  { name = "Visakh Unnikrishnan", email = "guacs@litestar.dev" },
+  { name = "Alc", email = "alc@litestar.dev" },
 ]
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.9.0"
+version = "0.9.3"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -100,18 +100,18 @@ dev = [
   "aioodbc>=0.5.0",
 ]
 docs = [
-    "sphinx>=7.1.2",
-    "sphinx-autobuild>=2021.3.14",
-    "sphinx-copybutton>=0.5.2",
-    "sphinx-click>=5.0.1",
-    "sphinx-toolbox>=3.5.0",
-    "blacken-docs>=1.16.0",
-    "sphinx-design>=0.5.0",
-    "sphinx-paramlinks>=0.6.0",
-    "sphinx-togglebutton>=0.3.2",
-#    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
-    "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
-    "auto-pytabs[sphinx]>=0.4.0",
+  "sphinx>=7.1.2",
+  "sphinx-autobuild>=2021.3.14",
+  "sphinx-copybutton>=0.5.2",
+  "sphinx-click>=5.0.1",
+  "sphinx-toolbox>=3.5.0",
+  "sphinx-design>=0.5.0",
+  "sphinx-paramlinks>=0.6.0",
+  "sphinx-togglebutton>=0.3.2",
+  #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "auto-pytabs[sphinx]>=0.4.0",
+  "git-cliff>=2.2.1",
 ]
 extensions = [
   "litestar[cli]>=2.0.0",
@@ -124,7 +124,6 @@ extensions = [
 ]
 linting = [
   "pre-commit>=3.4.0",
-  "black>=23.7.0",
   "mypy>=1.5.1",
   "ruff>=0.0.287",
   "asyncpg-stubs",
@@ -182,7 +181,7 @@ markers = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
-concurrency = ["multiprocessing", "thread"]
+concurrency = ["multiprocessing"]
 omit = [
   "*/tests/*",
   "advanced_alchemy/alembic/templates/asyncio/env.py",
@@ -381,6 +380,7 @@ update_docstrings = true
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+"SQLAlchemyAsyncQueryRepository" = "SQLAlchemySyncQueryRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 "async_scoped_session" = "scoped_session"
@@ -400,11 +400,13 @@ SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 "AsyncIterator" = "Iterator"
 "SQLAlchemyAsyncConfigT" = "SQLAlchemySyncConfigT"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
+SQLAlchemyAsyncQueryService = "SQLAlchemySyncQueryService"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
 "advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig" = "advanced_alchemy.config.sync.SQLAlchemySyncConfig"
 "advanced_alchemy.repository.SQLAlchemyAsyncRepository" = "advanced_alchemy.repository.SQLAlchemySyncRepository"
+"advanced_alchemy.repository._async.SQLAlchemyAsyncQueryRepository" = "advanced_alchemy.repository._sync.SQLAlchemySyncQueryRepository"
 "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository"
 "async_scoped_session" = "scoped_session"
 "collections.abc.AsyncIterator" = "collections.abc.Iterator"
@@ -416,36 +418,6 @@ ignore-words-list = "selectin"
 skip = 'pdm.lock, examples/us_state_lookup.json'
 
 [tool.git-cliff.changelog]
-body = """
-{% if version %}\
-    `Release [v{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }} <https://github.com/litestar-org/advanced-alchemy/releases/tag/v{{ version | trim_start_matches(pat="v") }}>`_
-    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    * `See All commits in v{{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/commits/v{{ version | trim_start_matches(pat="v") }}>`_
-{% else %}\
-    [unreleased]
-    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-{% endif %}\
-{% if previous %}\
-    {% if previous.commit_id %}
-        `{{ previous.commit_id | truncate(length=7, end="") }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ ... \
-            `{{ commit_id | truncate(length=7, end="") }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit_id }}>`_ \
-            | `See diff for {{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/compare/{{ previous.commit_id }}...{{ commit_id }}>`_
-    {% endif %}\
-{% endif %}\
-{% for group, commits in commits | group_by(attribute="group") %}
-    {{ group | upper_first }}
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    {% for commit in commits %}
-        * (`{{ commit.id | truncate(length=7, end="") }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit.id }}>`_) {% if commit.breaking %}[**breaking**] {% endif %} - {{ commit.message | upper_first }} ({{ commit.author.name  }})\
-          {% for footer in commit.footers -%}
-            , {{ footer.token }}{{ footer.separator }}{{ footer.value }}\
-          {% endfor %}\
-    {% endfor %}
-{% endfor %}\n
-"""
-footer = """
-Advanced Alchemy Changelog
-"""
 header = """
 =========
 Changelog
@@ -453,6 +425,42 @@ Changelog
 All commits to this project will be documented in this file.\n
 """
 trim = true
+# TODO: Fix footers for co-authors
+body = """
+{% if version %}\
+    `Release [v{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }} <https://github.com/litestar-org/advanced-alchemy/releases/tag/v{{ version | trim_start_matches(pat="v") }}>`_
+    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    * `See All commits in v{{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/commits/v{{ version | trim_start_matches(pat="v") }}>`_
+{% else %}\
+    [unreleased]
+    ------------
+    {% if previous %}\
+        {% if previous.commit_id %}
+            `{{ previous.commit_id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ is the last commit in the changelog before unreleased changes.
+        {% endif %}\
+    {% else %}
+        `Initial commit`
+    {% endif %}
+{% endif %}\
+{% if previous %}\
+    {% if previous.commit_id and version %}
+        `{{ previous.commit_id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ ... \
+            `{{ commit_id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit_id }}>`_ \
+            | `See diff for {{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/compare/{{ previous.commit_id }}...{{ commit_id }}>`_
+    {% endif %}\
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    {{ group | upper_first }}
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    {% for commit in commits %}
+        * (`{{ commit.id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit.id }}>`_) {% if commit.breaking %}[**breaking**] {% endif %} - {{ commit.message | upper_first }} {% if commit.github.username %} by `@{{ commit.github.username }} <https://github.com/{{ commit.github.username }}>`_ {%- endif %}\
+          {% if commit.github.pr_number %} in `#{{ commit.github.pr_number }} <https://gihub.com/litestar-org/advanced-alchemy/pull/{{ commit.github.pr_number }}>`_ {%- endif %}\
+    {% endfor %}
+{% endfor %}\n
+"""
+footer = """
+Advanced Alchemy Changelog
+"""
 
 [tool.git-cliff.git]
 commit_parsers = [
@@ -467,13 +475,33 @@ commit_parsers = [
   { message = "^chore", group = "Miscellaneous Tasks" },
   { body = ".*security", group = "Security" },
 ]
+commit_preprocessors = [
+  # Matches a single backtick that is not preceded by another backtick (negative lookbehind)
+  # and not followed by another backtick (negative lookahead).. but these aren't supported
+  # in git cliff regexes. So we have to do it in 3 steps:
+  # Step 1: Replace pairs of backticks with a placeholder (e.g., "DOUBLEBACKTICK")
+  { pattern = "``", replace = "DOUBLEBACKTICK" },
+  # Step 2: Replace single backticks with double backticks
+  { pattern = "`", replace = "``" },
+  # Step 3: Replace the placeholder back to double backticks
+  { pattern = "DOUBLEBACKTICK", replace = "``" },
+  # TODO: Fix Co-authored commits
+]
 conventional_commits = true
 filter_commits = false
 filter_unconventional = true
 ignore_tags = ""
+link_parsers = [
+  # TODO: Supposedly matches on #1234 but doesn't work?
+  { pattern = "\\(#(\\d+)\\)", href = "https://github.com/litestar-org/advanced-alchemy/issues/$1" },
+]
 protect_breaking_commits = false
 skip_tags = "v0.1.0-beta.1"
 sort_commits = "oldest"
 split_commits = false
 tag_pattern = "v[0-9]*"
 topo_order = false
+
+[tool.git-cliff.remote.github]
+owner = "litestar-org"
+repo = "advanced-alchemy"

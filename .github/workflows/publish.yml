@@ -7,6 +7,7 @@ on:
 
 jobs:
   publish-release:
+    name: upload release to PyPI
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -15,15 +16,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - uses: pdm-project/setup-pdm@v3
+      - uses: pdm-project/setup-pdm@v4
         name: Set up PDM
         with:
           python-version: "3.12"
-          allow-python-prereleases: true
+          allow-python-prereleases: false
           cache: true
 
       - name: Build package

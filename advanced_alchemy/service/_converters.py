@@ -17,10 +17,9 @@ from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service.pagination import OffsetPagination
 
 if TYPE_CHECKING:
-    from sqlalchemy import ColumnElement, RowMapping
-    from sqlalchemy.orm import DeclarativeBase
+    from sqlalchemy import ColumnElement
 
-    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
+    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT, RowMappingT
 
 try:
     from msgspec import Struct, convert
@@ -100,11 +99,18 @@ def _find_filter(
 
 
 def to_schema(
-    data: ModelT | Sequence[ModelT] | Sequence[RowMapping] | RowMapping,
+    data: ModelT | Sequence[ModelT] | Sequence[RowMappingT] | RowMappingT,
     total: int | None = None,
     filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    schema_type: type[ModelT | ModelDTOT | DeclarativeBase] | None = None,
-) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+    schema_type: type[ModelT | ModelDTOT | RowMappingT] | None = None,
+) -> (
+    ModelT
+    | OffsetPagination[ModelT]
+    | ModelDTOT
+    | OffsetPagination[ModelDTOT]
+    | RowMappingT
+    | OffsetPagination[RowMappingT]
+):
     if schema_type is not None and issubclass(schema_type, Struct):
         if not isinstance(data, Sequence):
             return convert(  # type: ignore  # noqa: PGH003
@@ -140,23 +146,23 @@ def to_schema(
 
     if schema_type is not None and issubclass(schema_type, BaseModel):
         if not isinstance(data, Sequence):
-            return TypeAdapter(schema_type).validate_python(data)  # type: ignore  # noqa: PGH003
+            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # type: ignore  # noqa: PGH003
         limit_offset = _find_filter(LimitOffset, *filters)
         total = total if total else len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
         return OffsetPagination[schema_type](  # type: ignore[valid-type]
-            items=TypeAdapter(List[schema_type]).validate_python(data),  # type: ignore[valid-type]
+            items=TypeAdapter(List[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type]
             limit=limit_offset.limit,
             offset=limit_offset.offset,
             total=total,
         )
     if not issubclass(type(data), Sequence):
-        return cast("ModelT", data)
+        return data  # type: ignore[return-value]
     limit_offset = _find_filter(LimitOffset, *filters)
     total = total or len(data)  # type: ignore[arg-type]
     limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)  # type: ignore[arg-type]
     return OffsetPagination[ModelT](
-        items=cast("List[ModelT]", data),
+        items=data,  # type: ignore[arg-type]
         limit=limit_offset.limit,
         offset=limit_offset.offset,
         total=total,

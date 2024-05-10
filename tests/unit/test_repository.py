@@ -746,7 +746,6 @@ async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository, mock
     mocker.patch.object(mock_repo, "count", return_value=1)
 
     assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)
     mock_repo.session.flush.assert_called_once()
     mock_repo.session.expunge.assert_not_called()
     mock_repo.session.commit.assert_not_called()

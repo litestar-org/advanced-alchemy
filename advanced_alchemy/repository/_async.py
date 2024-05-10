@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
 
 from sqlalchemy import (
     Result,
+    RowMapping,
     Select,
     StatementLambdaElement,
     TextClause,
@@ -21,31 +22,19 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 
-from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
-from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
-    FilterTypes,
-    LimitOffset,
-    NotInCollectionFilter,
-    NotInSearchFilter,
-    OnBeforeAfter,
-    OrderBy,
-    SearchFilter,
-)
+from advanced_alchemy.exceptions import NotFoundError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
-from advanced_alchemy.repository._util import get_instrumented_attr
-from advanced_alchemy.repository.typing import MISSING, ModelT
+from advanced_alchemy.repository._util import FilterableRepository, get_instrumented_attr
+from advanced_alchemy.repository.typing import MISSING, ModelT, T
 from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
-    from collections import abc
-    from datetime import datetime
-
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
+
+    from advanced_alchemy.filters import FilterTypes
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
@@ -53,15 +42,17 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 WhereClauseT = ColumnExpressionArgument[bool]
 
 
-class SQLAlchemyAsyncRepository(Generic[ModelT]):
+class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
     """SQLAlchemy based implementation of the repository interface."""
 
-    model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
-    _prefer_any: bool = False
-    prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
+    _uniquify_results: bool = False
+    """Optionally apply the ``unique()`` method to results before returning.
+
+    This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
+    """
 
     def __init__(
         self,
@@ -962,12 +953,16 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         elif getattr(data, self.id_attribute, None) is not None:
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
-            match_filter = data.to_dict()
+            match_filter = data.to_dict(exclude={self.id_attribute})
         existing = await self.get_one_or_none(**match_filter)
         if not existing:
             return await self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
-            instance = await self._attach_to_session(data, strategy="merge")
+            for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
+                field = getattr(existing, field_name, MISSING)
+                if field is not MISSING and field != new_field_value:
+                    setattr(existing, field_name, new_field_value)
+            instance = await self._attach_to_session(existing, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 instance,
@@ -1217,243 +1212,13 @@ class SQLAlchemyAsyncRepository(Generic[ModelT]):
         raise ValueError(msg)
 
     async def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
-        return await self.session.execute(statement)
-
-    def _apply_limit_offset_pagination(
-        self,
-        limit: int,
-        offset: int,
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        statement += lambda s: s.limit(limit).offset(offset)
-        return statement
-
-    def _apply_filters(
-        self,
-        *filters: FilterTypes | ColumnElement[bool],
-        apply_pagination: bool = True,
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        """Apply filters to a select statement.
-
-        Args:
-            *filters: filter types to apply to the query
-            apply_pagination: applies pagination filters if true
-            statement: select statement to apply filters
-
-        Keyword Args:
-            select: select to apply filters against
-
-        Returns:
-            The select with filters applied.
-        """
-        for filter_ in filters:
-            if isinstance(filter_, (LimitOffset,)):
-                if apply_pagination:
-                    statement = self._apply_limit_offset_pagination(filter_.limit, filter_.offset, statement=statement)
-            elif isinstance(filter_, (BeforeAfter,)):
-                statement = self._filter_on_datetime_field(
-                    field_name=filter_.field_name,
-                    before=filter_.before,
-                    after=filter_.after,
-                    statement=statement,
-                )
-            elif isinstance(filter_, (OnBeforeAfter,)):
-                statement = self._filter_on_datetime_field(
-                    field_name=filter_.field_name,
-                    on_or_before=filter_.on_or_before,
-                    on_or_after=filter_.on_or_after,
-                    statement=statement,
-                )
-
-            elif isinstance(filter_, (NotInCollectionFilter,)):
-                if filter_.values is not None:
-                    if self._prefer_any:
-                        statement = self._filter_not_any_collection(
-                            filter_.field_name,
-                            filter_.values,
-                            statement=statement,
-                        )
-                    else:
-                        statement = self._filter_not_in_collection(
-                            filter_.field_name,
-                            filter_.values,
-                            statement=statement,
-                        )
-
-            elif isinstance(filter_, (CollectionFilter,)):
-                if filter_.values is not None:
-                    if self._prefer_any:
-                        statement = self._filter_any_collection(filter_.field_name, filter_.values, statement=statement)
-                    else:
-                        statement = self._filter_in_collection(filter_.field_name, filter_.values, statement=statement)
-            elif isinstance(filter_, (OrderBy,)):
-                statement = self._order_by(statement, filter_.field_name, sort_desc=filter_.sort_order == "desc")
-            elif isinstance(filter_, (SearchFilter,)):
-                statement = self._filter_by_like(
-                    statement,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                )
-            elif isinstance(filter_, (NotInSearchFilter,)):
-                statement = self._filter_by_not_like(
-                    statement,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                )
-            elif isinstance(filter_, ColumnElement):
-                statement = self._filter_by_expression(expression=filter_, statement=statement)
-            else:
-                msg = f"Unexpected filter: {filter_}"  # type: ignore[unreachable]
-                raise RepositoryError(msg)
-        return statement
-
-    def _filter_in_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            statement += lambda s: s.where(text("1=-1"))
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field.in_(values))
-        return statement
-
-    def _filter_not_in_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field.notin_(values))
-        return statement
-
-    def _filter_any_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            statement += lambda s: s.where(text("1=-1"))
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(any_(values) == field)  # type: ignore[arg-type]
-        return statement
-
-    def _filter_not_any_collection(
-        self,
-        field_name: str | InstrumentedAttribute,
-        values: abc.Collection[Any],
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        if not values:
-            return statement
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(any_(values) != field)  # type: ignore[arg-type]
-        return statement
-
-    def _filter_on_datetime_field(
-        self,
-        field_name: str | InstrumentedAttribute,
-        statement: StatementLambdaElement,
-        before: datetime | None = None,
-        after: datetime | None = None,
-        on_or_before: datetime | None = None,
-        on_or_after: datetime | None = None,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        if before is not None:
-            statement += lambda s: s.where(field < before)
-        if after is not None:
-            statement += lambda s: s.where(field > after)
-        if on_or_before is not None:
-            statement += lambda s: s.where(field <= on_or_before)
-        if on_or_after is not None:
-            statement += lambda s: s.where(field >= on_or_after)
-        return statement
-
-    def _filter_select_by_kwargs(
-        self,
-        statement: StatementLambdaElement,
-        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
-    ) -> StatementLambdaElement:
-        for key, val in kwargs.items() if isinstance(kwargs, dict) else kwargs:
-            statement = self._filter_by_where(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
-        return statement
-
-    def _filter_by_expression(
-        self,
-        statement: StatementLambdaElement,
-        expression: ColumnElement[bool],
-    ) -> StatementLambdaElement:
-        statement += lambda s: s.where(expression)
-        return statement
-
-    def _filter_by_where(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        value: Any,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field == value)
-        return statement
-
-    def _filter_by_like(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        value: str,
-        ignore_case: bool,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        search_text = f"%{value}%"
-        if ignore_case:
-            statement += lambda s: s.where(field.ilike(search_text))
-        else:
-            statement += lambda s: s.where(field.like(search_text))
-        return statement
-
-    def _filter_by_not_like(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        value: str,
-        ignore_case: bool,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        search_text = f"%{value}%"
-        if ignore_case:
-            statement += lambda s: s.where(field.not_ilike(search_text))
-        else:
-            statement += lambda s: s.where(field.not_like(search_text))
-        return statement
-
-    def _order_by(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
-        sort_desc: bool = False,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        if sort_desc:
-            statement += lambda s: s.order_by(field.desc())
-        else:
-            statement += lambda s: s.order_by(field.asc())
-        return statement
+        result = await self.session.execute(statement)
+        if self._uniquify_results:
+            return result.unique()
+        return result
 
 
-class SQLAlchemyAsyncSlugRepository(
-    SQLAlchemyAsyncRepository[ModelT],
-):
+class SQLAlchemyAsyncSlugRepository(SQLAlchemyAsyncRepository[ModelT]):
     """Extends the repository to include slug model features.."""
 
     async def get_by_slug(
@@ -1494,3 +1259,219 @@ class SQLAlchemyAsyncSlugRepository(
         **kwargs: Any,
     ) -> bool:
         return await self.exists(slug=slug) is False
+
+
+class SQLAlchemyAsyncQueryRepository:
+    """SQLAlchemy Query Repository.
+
+    This is a loosely typed helper to query for when you need to select data in ways that don't align to the normal repository pattern.
+    """
+
+    def __init__(
+        self,
+        *,
+        session: AsyncSession | async_scoped_session[AsyncSession],
+        **kwargs: Any,
+    ) -> None:
+        """Repository pattern for SQLAlchemy models.
+
+        Args:
+            session: Session managing the unit-of-work for the operation.
+            auto_expunge: Remove object from session before returning.
+            **kwargs: Additional arguments.
+
+        """
+        super().__init__(**kwargs)
+        self.session = session
+        self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
+
+    async def get_one(
+        self,
+        statement: Select[tuple[Any]],
+        **kwargs: Any,
+    ) -> RowMapping:
+        """Get instance identified by ``kwargs``.
+
+        Args:
+            statement: To facilitate customization of the underlying select query.
+                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            The retrieved instance.
+
+        Raises:
+            NotFoundError: If no instance found identified by `item_id`.
+        """
+        with wrap_sqlalchemy_exception():
+            statement = self._filter_statement_by_kwargs(statement, **kwargs)
+            instance = (await self.execute(statement)).scalar_one_or_none()
+            return self.check_not_found(instance)
+
+    async def get_one_or_none(
+        self,
+        statement: Select[Any],
+        **kwargs: Any,
+    ) -> RowMapping | None:
+        """Get instance identified by ``kwargs`` or None if not found.
+
+        Args:
+            statement: To facilitate customization of the underlying select query.\
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            The retrieved instance or None
+        """
+        with wrap_sqlalchemy_exception():
+            statement = self._filter_statement_by_kwargs(statement, **kwargs)
+            instance = (await self.execute(statement)).scalar_one_or_none()
+            return instance or None
+
+    async def count(self, statement: Select[Any], **kwargs: Any) -> int:
+        """Get the count of records returned by a query.
+
+        Args:
+            statement: To facilitate customization of the underlying select query.
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            Count of records returned by query, ignoring pagination.
+        """
+        statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
+        statement = self._filter_statement_by_kwargs(statement, **kwargs)
+        results = await self.execute(statement)
+        return results.scalar_one()  # type: ignore  # noqa: PGH003
+
+    async def list_and_count(
+        self,
+        statement: Select[Any],
+        force_basic_query_mode: bool | None = None,
+        **kwargs: Any,
+    ) -> tuple[list[RowMapping], int]:
+        """List records with total count.
+
+        Args:
+            statement: To facilitate customization of the underlying select query.
+                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            Count of records returned by query, ignoring pagination.
+        """
+        if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
+            return await self._list_and_count_basic(statement=statement, **kwargs)
+        return await self._list_and_count_window(statement=statement, **kwargs)
+
+    async def _list_and_count_window(
+        self,
+        statement: Select[Any],
+        **kwargs: Any,
+    ) -> tuple[list[RowMapping], int]:
+        """List records with total count.
+
+        Args:
+            *filters: Types for specific filtering operations.
+            statement: To facilitate customization of the underlying select query.
+                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            Count of records returned by query using an analytical window function, ignoring pagination.
+        """
+
+        with wrap_sqlalchemy_exception():
+            statement = statement.add_columns(over(sql_func.count(text("1"))))
+            statement = self._filter_statement_by_kwargs(statement, **kwargs)
+            result = await self.execute(statement)
+            count: int = 0
+            instances: list[RowMapping] = []
+            for i, (instance, count_value) in enumerate(result):
+                instances.append(instance)
+                if i == 0:
+                    count = count_value
+            return instances, count
+
+    def _get_count_stmt(self, statement: Select[Any]) -> Select[Any]:
+        return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
+
+    async def _list_and_count_basic(
+        self,
+        statement: Select[Any],
+        **kwargs: Any,
+    ) -> tuple[list[RowMapping], int]:
+        """List records with total count.
+
+        Args:
+            statement: To facilitate customization of the underlying select query.
+                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>` .
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            Count of records returned by query using 2 queries, ignoring pagination.
+        """
+
+        with wrap_sqlalchemy_exception():
+            statement = self._filter_statement_by_kwargs(statement, **kwargs)
+            count_result = await self.session.execute(self._get_count_stmt(statement))
+            count = count_result.scalar_one()
+            result = await self.execute(statement)
+            instances: list[RowMapping] = []
+            for (instance,) in result:
+                instances.append(instance)
+            return instances, count
+
+    async def list(self, statement: Select[Any], **kwargs: Any) -> list[RowMapping]:
+        """Get a list of instances, optionally filtered.
+
+        Args:
+            statement: To facilitate customization of the underlying select query.
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            The list of instances, after filtering applied.
+        """
+        with wrap_sqlalchemy_exception():
+            statement = self._filter_statement_by_kwargs(statement, **kwargs)
+            result = await self.execute(statement)
+            return list(result.scalars())
+
+    def _filter_statement_by_kwargs(
+        self,
+        statement: Select[Any],
+        /,
+        **kwargs: Any,
+    ) -> Select[Any]:
+        """Filter the collection by kwargs.
+
+        Args:
+            statement: statement to filter
+            **kwargs: key/value pairs such that objects remaining in the statement after filtering
+                have the property that their attribute named `key` has value equal to `value`.
+        """
+
+        with wrap_sqlalchemy_exception():
+            return statement.filter_by(**kwargs)
+
+    # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
+
+    @staticmethod
+    def check_not_found(item_or_none: T | None) -> T:
+        """Raise :class:`RepositoryNotFoundException` if ``item_or_none`` is ``None``.
+
+        Args:
+            item_or_none: Item to be tested for existence.
+
+        Returns:
+            The item, if it exists.
+        """
+        if item_or_none is None:
+            msg = "No item found when one was expected"
+            raise NotFoundError(msg)
+        return item_or_none
+
+    async def execute(
+        self,
+        statement: Select[Any] | StatementLambdaElement,
+    ) -> Result[Any]:
+        return await self.session.execute(statement)

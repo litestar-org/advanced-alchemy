@@ -1490,6 +1490,19 @@ async def test_repo_upsert_method(
     upsert2_insert_obj = await maybe_async(author_repo.upsert(author_model(id=new_pk_id, name="Another Author")))
     assert upsert2_insert_obj.id is not None
     assert upsert2_insert_obj.name == "Another Author"
+    _ = await maybe_async(author_repo.get_one(name="Leo Tolstoy"))
+    # ensures that it still works even if the ID isn't set on an existing key
+    new_dob = datetime.strptime("2028-09-09", "%Y-%m-%d").date()
+    upsert3_update_obj = await maybe_async(
+        author_repo.upsert(
+            author_model(name="Leo Tolstoy", dob=new_dob),
+            match_fields=["name"],
+        ),
+    )
+    if not isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        assert upsert3_update_obj.id in {UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"), 2024}
+    assert upsert3_update_obj.name == "Leo Tolstoy"
+    assert upsert3_update_obj.dob == new_dob
 
 
 async def test_repo_upsert_many_method(
@@ -2178,7 +2191,8 @@ async def test_service_upsert_method_match(
     upsert_update_obj = await maybe_async(
         author_service.upsert(data=existing_obj.to_dict(exclude={"id"}), match_fields=["name"]),
     )
-    assert str(upsert_update_obj.id) != str(first_author_id)
+    if not isinstance(author_service.repository, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        assert str(upsert_update_obj.id) == str(first_author_id)
     assert upsert_update_obj.name == "Agatha C."
 
     upsert_insert_obj = await maybe_async(

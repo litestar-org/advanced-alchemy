@@ -21,7 +21,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 # The `Base` class includes a `UUID` based primary key (`id`)
 class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
-    __tablename__ = "author"  #  type: ignore[assignment]
+    __tablename__ = "author"  #
     name: Mapped[str]
     dob: Mapped[date | None]
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
@@ -31,7 +31,7 @@ class AuthorModel(UUIDBase):
 # additional columns: `created` and `updated`. `created` is a timestamp of when the
 # record created, and `updated` is the last time the record was modified.
 class BookModel(UUIDAuditBase):
-    __tablename__ = "book"  #  type: ignore[assignment]
+    __tablename__ = "book"
     title: Mapped[str]
     author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
     author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
