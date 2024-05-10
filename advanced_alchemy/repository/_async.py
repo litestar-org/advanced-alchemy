@@ -30,7 +30,7 @@ from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams
+    from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 
@@ -94,7 +94,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
     def get_id_attribute_value(
         cls,
         item: ModelT | type[ModelT],
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any:
         """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
 
@@ -115,7 +115,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         cls,
         item_id: Any,
         item: ModelT,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
@@ -206,7 +206,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         item_id: Any,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
 
@@ -237,7 +237,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         item_ids: list[Any],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
     ) -> list[ModelT]:
         """Delete instance identified by `item_id`.
@@ -349,7 +349,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
     def _get_delete_many_statement(
         self,
         model_type: type[ModelT],
-        id_attribute: InstrumentedAttribute,
+        id_attribute: InstrumentedAttribute[Any],
         id_chunk: list[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
@@ -361,9 +361,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         if self._prefer_any:
             statement += lambda s: s.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
         else:
-            statement += lambda s: s.where(id_attribute.in_(id_chunk))
+            statement += lambda s: s.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if supports_returning and statement_type != "select":
-            statement += lambda s: s.returning(model_type)
+            statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     async def get(
@@ -371,7 +371,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         item_id: Any,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -674,7 +674,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -771,7 +771,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
     def _get_update_many_statement(model_type: type[ModelT], supports_returning: bool) -> StatementLambdaElement:
         statement = lambda_stmt(lambda: update(model_type))
         if supports_returning:
-            statement += lambda s: s.returning(model_type)
+            statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     async def list_and_count(
@@ -1051,7 +1051,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             )
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
-                matched_values = [getattr(datum, field_name) for datum in existing_objs if datum is not None]
+                matched_values = [getattr(datum, field_name) for datum in existing_objs if datum]
                 if self._prefer_any:
                     match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
                 else:
@@ -1154,7 +1154,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             collection = lambda_stmt(lambda: collection)
-            collection += lambda s: s.filter_by(**kwargs)
+            collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return collection
 
     @classmethod

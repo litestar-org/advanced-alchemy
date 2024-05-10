@@ -149,7 +149,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         item_id: Any,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
 
@@ -368,7 +368,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Wrap repository update operation.
 
@@ -618,7 +618,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         item_id: Any,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Wrap repository delete operation.
 
@@ -647,7 +647,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         item_ids: list[Any],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
