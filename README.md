@@ -107,10 +107,10 @@ with session_factory() as db_session:
     repo = UserRepository(session=db_session)
     # 1) Create multiple users with `add_many`
     bulk_users = [
-        {"email": 'cody@advanced-alchemy.dev', 'name': 'Cody'},
-        {"email": 'janek@advanced-alchemy.dev', 'name': 'Janek'},
-        {"email": 'peter@advanced-alchemy.dev', 'name': 'Peter'},
-        {"email": 'jacob@advanced-alchemy.dev', 'name': 'Jacob'}
+        {"email": 'cody@litestar.dev', 'name': 'Cody'},
+        {"email": 'janek@litestar.dev', 'name': 'Janek'},
+        {"email": 'peter@litestar.dev', 'name': 'Peter'},
+        {"email": 'jacob@litestar.dev', 'name': 'Jacob'}
     ]
     objs = repo.add_many([User(**raw_user) for raw_user in bulk_users])
     db_session.commit()
@@ -181,10 +181,10 @@ with session_factory() as db_session:
     service = UserService(session=db_session)
     # 1) Create multiple users with `add_many`
     objs = service.create_many([
-        {"email": 'cody@advanced-alchemy.dev', 'name': 'Cody'},
-        {"email": 'janek@advanced-alchemy.dev', 'name': 'Janek'},
-        {"email": 'peter@advanced-alchemy.dev', 'name': 'Peter'},
-        {"email": 'jacob@advanced-alchemy.dev', 'name': 'Jacob'}
+        {"email": 'cody@litestar.dev', 'name': 'Cody'},
+        {"email": 'janek@litestar.dev', 'name': 'Janek'},
+        {"email": 'peter@litestar.dev', 'name': 'Peter'},
+        {"email": 'jacob@litestar.dev', 'name': 'Jacob'}
     ])
     print(objs)
     print(f"Created {len(objs)} new objects.")
