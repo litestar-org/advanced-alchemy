@@ -28,15 +28,14 @@ Check out the [project documentation][project-docs] 📚 for more information.
 ## About
 
 A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy,
-offering features such as:
+offering:
 
 - Sync and async repositories, featuring common CRUD and highly optimized bulk operations
-- Integration with major web frameworks including Litestar, Starlette, FastAPI, Sanic.
+- Integration with major web frameworks including Litestar, Starlette, FastAPI, Sanic
 - Custom-built alembic configuration and CLI with optional framework integration
 - Utility base classes with audit columns, primary keys and utility functions
-- Optimized JSON types including a custom JSON type for Oracle.
+- Optimized JSON types including a custom JSON type for Oracle
 - Integrated support for UUID6 and UUID7 using [`uuid-utils`](https://github.com/aminalaee/uuid-utils) (install with the `uuid` extra)
-
 - Pre-configured base classes with audit columns UUID or Big Integer primary keys and
   a [sentinel column](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns).
 - Synchronous and asynchronous repositories featuring:
@@ -46,7 +45,6 @@ offering features such as:
     for improved query building performance
   - Integrated counts, pagination, sorting, filtering with `LIKE`, `IN`, and dates before and/or after.
 - Tested support for multiple database backends including:
-
   - SQLite via [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/) or [sqlite](https://docs.python.org/3/library/sqlite3.html)
   - Postgres via [asyncpg](https://magicstack.github.io/asyncpg/current/) or [psycopg3 (async or sync)](https://www.psycopg.org/psycopg3/)
   - MySQL via [asyncmy](https://github.com/long2ice/asyncmy)
@@ -55,6 +53,7 @@ offering features such as:
   - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine)
   - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc) or [aioodbc](https://github.com/aio-libs/aioodbc)
   - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
+- ...and much more
 
 ## Usage
 
@@ -129,6 +128,7 @@ with session_factory() as db_session:
     remaining_count = repo.count()
     print(f"Found {remaining_count} remaining records after delete.")
 ```
+
 </details>
 
 For a full standalone example, see the sample [here][standalone-example]
@@ -201,6 +201,7 @@ with session_factory() as db_session:
     remaining_count = service.count()
     print(f"Found {remaining_count} remaining records after delete.")
 ```
+
 </details>
 
 ### Web Frameworks
@@ -230,6 +231,7 @@ alchemy = SQLAlchemyPlugin(
 )
 app = Litestar(plugins=[alchemy])
 ```
+
 </details>
 
 For a full Litestar example, check [here][litestar-example]
@@ -250,6 +252,7 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+
 </details>
 
 For a full FastAPI example, see [here][fastapi-example]
@@ -270,6 +273,7 @@ alchemy = StarletteAdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
+
 </details>
 
 #### Sanic
@@ -290,6 +294,7 @@ alchemy = SanicAdvancedAlchemy(
 )
 Extend.register(alchemy)
 ```
+
 </details>
 
 ## Contributing
