@@ -148,7 +148,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
         item_id: Any,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
 
@@ -367,7 +367,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Wrap repository update operation.
 
@@ -394,7 +394,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         data = await self.to_model(data, "update")
         if (
             item_id is None
-            and self.repository.get_id_attribute_value(
+            and self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
                 item=data,
                 id_attribute=id_attribute,
             )
@@ -406,7 +406,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             )
             raise RepositoryError(msg)
         if item_id is not None:
-            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
         return await self.repository.update(
             data=data,
             attribute_names=attribute_names,
@@ -473,9 +473,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Updated or created representation.
         """
         data = await self.to_model(data, "upsert")
-        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)
+        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
         if item_id is not None:
-            self.repository.set_id_attribute_value(item_id, data)
+            self.repository.set_id_attribute_value(item_id, data)  # pyright: ignore[reportUnknownMemberType]
         return await self.repository.upsert(
             data=data,
             attribute_names=attribute_names,
@@ -617,7 +617,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         item_id: Any,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Wrap repository delete operation.
 
@@ -646,7 +646,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         item_ids: list[Any],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
