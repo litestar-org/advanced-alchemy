@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Generic, List, TypeVar
 from uuid import UUID
 
 T = TypeVar("T")
@@ -16,7 +16,7 @@ class OffsetPagination(Generic[T]):
 
     __slots__ = ("items", "limit", "offset", "total")
 
-    items: list[T]
+    items: List[T]  # noqa: UP006
     """List of data being sent as part of the response."""
     limit: int
     """Maximal number of items to send."""
