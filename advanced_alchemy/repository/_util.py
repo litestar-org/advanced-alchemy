@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Generic, Iterable, Literal, Union, cast
 
 from sqlalchemy import (
     StatementLambdaElement,
     any_,
     text,
 )
-from sqlalchemy.orm import InstrumentedAttribute
-from sqlalchemy.sql import ColumnElement
+from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
+from sqlalchemy.orm.strategy_options import (
+    _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
+)
+from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
+from sqlalchemy.sql.base import ExecutableOption
+from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
@@ -29,9 +35,21 @@ if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
 
-    from sqlalchemy.orm import InstrumentedAttribute
-
     from advanced_alchemy.base import ModelProtocol
+    from advanced_alchemy.filters import FilterTypes
+
+
+WhereClauseT = ColumnExpressionArgument[bool]
+SingleLoad: TypeAlias = Union[
+    _AbstractLoad,
+    Literal["*"],
+    InstrumentedAttribute[Any],
+    RelationshipProperty[Any],
+    MapperProperty[Any],
+]
+LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
+ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
+LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
@@ -54,6 +72,43 @@ def model_from_dict(model: ModelT, **kwargs: Any) -> ModelT:
         if column_name in kwargs
     }
     return cast("ModelT", model(**data))  # type: ignore[operator]
+
+
+def get_abstract_loader_options(
+    loader_options: LoadSpec | None,
+    default_loader_options: list[_AbstractLoad] | None = None,
+) -> tuple[list[_AbstractLoad], bool]:
+    loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
+    options_have_wildcards: bool = False
+    if loader_options is None:
+        return (loads, options_have_wildcards)
+    if isinstance(loader_options, _AbstractLoad):
+        return ([loader_options], options_have_wildcards)
+    if isinstance(loader_options, InstrumentedAttribute):
+        loader_options = loader_options.property
+    if isinstance(loader_options, RelationshipProperty):
+        class_ = loader_options.class_attribute
+        return (
+            [selectinload(class_)]
+            if loader_options.uselist
+            else [joinedload(class_, innerjoin=loader_options.innerjoin)],
+            options_have_wildcards,
+        )
+    if isinstance(loader_options, str) and loader_options == "*":
+        options_have_wildcards = True
+        return ([joinedload("*")], options_have_wildcards)
+    if isinstance(loader_options, (list, tuple)):
+        for attribute in loader_options:
+            if isinstance(attribute, (list, tuple)):
+                load_chain, options_have_wildcards = get_abstract_loader_options(loader_options=attribute)
+                loader = load_chain[-1]
+                for sub_load in load_chain[-2::-1]:
+                    loader = sub_load.options(loader)
+                loads.append(loader)
+            else:
+                load_chain, options_have_wildcards = get_abstract_loader_options(loader_options=attribute)
+                loads.extend(load_chain)
+    return (loads, options_have_wildcards)
 
 
 class FilterableRepository(Generic[ModelT]):
