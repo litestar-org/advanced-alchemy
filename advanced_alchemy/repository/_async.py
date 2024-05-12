@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Generic, Iterable, Literal, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, Sequence, Union, cast
 
 from sqlalchemy import (
     Result,
@@ -417,7 +417,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         item_id: Any,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        id_attribute: str | InstrumentedAttribute[Any] | None = None
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
@@ -1286,7 +1286,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             loaders = self._loaders
             statement += lambda s: s.options(*loaders)
         result = await self.session.execute(statement)
-        if (self._loaders and self._loaders_has_wildcards) or  self._uniquify_results:
+        if (self._loaders and self._loaders_has_wildcards) or self._uniquify_results:
             result = result.unique()
         self._clear_load()
         return result
