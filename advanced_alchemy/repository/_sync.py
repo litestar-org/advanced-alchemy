@@ -29,7 +29,7 @@ from sqlalchemy.orm import (
     joinedload,
     selectinload,
 )
-from sqlalchemy.orm.strategy_options import _AbstractLoad
+from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from typing_extensions import TypeAlias
 
@@ -82,6 +82,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
+        loader_options: LoadSpec | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -92,6 +93,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
+            loader_options: Set default relationships to be loaded
             **kwargs: Additional arguments.
 
         """
@@ -107,6 +109,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             self.statement = lambda_stmt(lambda: statement)
         else:
             self.statement = statement
+        self._loader_options = self._to_abstract_loader_options(loader_options)
+        self._default_loaders = self._to_abstract_loader_options(loader_options)
+        if self._loader_options:
+            self.statement = self.statement.add_criteria(lambda s: s.options(**self._loader_options))
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
@@ -168,32 +174,38 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             raise NotFoundError(msg)
         return item_or_none
 
-    def _clear_load(self) -> None:
-        self._loaders: list[_AbstractLoad] = []
-        self._loaders_has_wildcards = False
+    def _reset_loader_options(self) -> None:
+        self._loader_options = self._default_loaders
+        self._loader_options_have_wildcards = False
 
-    def _to_abstract_load(self, load: LoadSpec | None) -> list[_AbstractLoad]:
+    def _to_abstract_loader_options(self, loader_options: LoadSpec | None) -> list[_AbstractLoad]:
         loads: list[_AbstractLoad] = []
-        if isinstance(load, _AbstractLoad):
-            return [load]
-        if isinstance(load, InstrumentedAttribute):
-            load = load.property
-        if isinstance(load, RelationshipProperty):
-            class_ = load.class_attribute
-            return [selectinload(class_)] if load.uselist else [joinedload(class_, innerjoin=load.innerjoin)]
-        if isinstance(load, str) and load == "*":
-            self._loaders_has_wildcards = True
+        if loader_options is None:
+            return self._loader_options
+        if isinstance(loader_options, _AbstractLoad):
+            return [loader_options]
+        if isinstance(loader_options, InstrumentedAttribute):
+            loader_options = loader_options.property
+        if isinstance(loader_options, RelationshipProperty):
+            class_ = loader_options.class_attribute
+            return (
+                [selectinload(class_)]
+                if loader_options.uselist
+                else [joinedload(class_, innerjoin=loader_options.innerjoin)]
+            )
+        if isinstance(loader_options, str) and loader_options == "*":
+            self._loader_options_have_wildcards = True
             return [joinedload("*")]
-        if isinstance(load, (list, tuple)):
-            for attribute in load:
+        if isinstance(loader_options, (list, tuple)):
+            for attribute in loader_options:
                 if isinstance(attribute, (list, tuple)):
-                    load_chain = self._to_abstract_load(attribute)
+                    load_chain = self._to_abstract_loader_options(attribute)
                     loader = load_chain[-1]
                     for sub_load in load_chain[-2::-1]:
                         loader = sub_load.options(loader)
                     loads.append(loader)
                 else:
-                    loads.extend(self._to_abstract_load(attribute))
+                    loads.extend(self._to_abstract_loader_options(attribute))
         return loads
 
     def add(
@@ -220,11 +232,8 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             The added instance.
         """
         with wrap_sqlalchemy_exception():
-            self._loaders = self._to_abstract_load(load)
+            self._loader_options = self._to_abstract_loader_options(load)
             instance = self._attach_to_session(data)
-            if self._loaders:
-                self._flush_or_commit(auto_commit=True)
-                return self._refresh_with_load(instance)
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(instance, auto_refresh=auto_refresh)
             self._expunge(instance, auto_expunge=auto_expunge)
@@ -391,14 +400,22 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         track_bound_values: bool = True,
     ) -> StatementLambdaElement:
         if isinstance(statement, Select):
-            return lambda_stmt(
+            s = lambda_stmt(
                 lambda: statement,
                 track_bound_values=track_bound_values,
                 global_track_bound_values=global_track_bound_values,
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
             )
-        return self.statement if statement is None else statement
+        s = cast("StatementLambdaElement", self.statement if statement is None else statement)
+        if self._loader_options:
+            s.add_criteria(
+                lambda s: s.options(*self._loader_options),
+                track_bound_values=track_bound_values,
+                track_closure_variables=track_closure_variables,
+                enable_tracking=enable_tracking,
+            )
+        return s
 
     def _get_delete_many_statement(
         self,
@@ -447,7 +464,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception():
-            self._loaders = self._to_abstract_load(load)
+            self._loader_options = self._to_abstract_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
@@ -480,7 +497,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception():
-            self._loaders = self._to_abstract_load(load)
+            self._loader_options = self._to_abstract_loader_options(load)
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = (self._execute(statement)).scalar_one_or_none()
@@ -509,7 +526,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             The retrieved instance or None
         """
         with wrap_sqlalchemy_exception():
-            self._loaders = self._to_abstract_load(load)
+            self._loader_options = self._to_abstract_loader_options(load)
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast("Result[tuple[ModelT]]", (self._execute(statement))).scalar_one_or_none()
@@ -767,7 +784,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         with wrap_sqlalchemy_exception():
-            self._loaders = self._to_abstract_load(load)
+            self._loader_options = self._to_abstract_loader_options(load)
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -1208,7 +1225,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         statement = self._filter_select_by_kwargs(statement, kwargs)
 
         with wrap_sqlalchemy_exception():
-            self._loaders = self._to_abstract_load(load)
+            self._loader_options = self._to_abstract_loader_options(load)
             result = self._execute(statement)
             instances = list(result.scalars())
             for instance in instances:
@@ -1288,15 +1305,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         raise ValueError(msg)
 
     def _execute(self, statement: Select[Any] | StatementLambdaElement) -> Result[Any]:
-        if self._loaders:
-            if isinstance(statement, Select):
-                statement = lambda_stmt(lambda: statement)
-            loaders = self._loaders
-            statement += lambda s: s.options(*loaders)
         result = self.session.execute(statement)
-        if (self._loaders and self._loaders_has_wildcards) or self._uniquify_results:
+        if self._loader_options_have_wildcards or self._uniquify_results:
             result = result.unique()
-        self._clear_load()
+        self._reset_loader_options()
         return result
 
 
