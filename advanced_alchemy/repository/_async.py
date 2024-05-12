@@ -22,6 +22,7 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
+from sqlalchemy.sql.base import ExecutableOption
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import NotFoundError, wrap_sqlalchemy_exception
@@ -51,7 +52,8 @@ SingleLoad: TypeAlias = Union[
     MapperProperty[Any],
 ]
 LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
-LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad]
+ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
+LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
 
 
 class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
@@ -74,7 +76,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        loader_options: LoadSpec | None = None,
+        default_options: LoadSpec | None = None,
+        default_execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -85,7 +88,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
-            loader_options: Set default relationships to be loaded
+            default_options: Set default relationships to be loaded
+            default_execution_options: Set default execution options
             **kwargs: Additional arguments.
 
         """
@@ -101,10 +105,15 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             self.statement = lambda_stmt(lambda: statement)
         else:
             self.statement = statement
-        self._loader_options = self._to_abstract_loader_options(loader_options)
-        self._default_loaders = self._to_abstract_loader_options(loader_options)
-        if self._loader_options:
-            self.statement = self.statement.add_criteria(lambda s: s.options(**self._loader_options))
+        self._loader_options = self._to_abstract_loader_options(default_options)
+        self._default_options = self._to_abstract_loader_options(default_options)
+        self._default_execution_options = default_execution_options or {}
+        if self._default_options:
+            self.statement = self.statement.add_criteria(lambda s: s.options(*self._default_options))
+        if self._default_execution_options:
+            self.statement = self.statement.add_criteria(
+                lambda s: s.execution_options(**self._default_execution_options),
+            )
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
@@ -167,7 +176,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         return item_or_none
 
     def _reset_loader_options(self) -> None:
-        self._loader_options = self._default_loaders
+        self._loader_options = self._default_options
         self._loader_options_have_wildcards = False
 
     def _to_abstract_loader_options(self, loader_options: LoadSpec | None) -> list[_AbstractLoad]:
@@ -902,13 +911,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             if auto_refresh
             else None
         )
-
-    async def _refresh_with_load(self, instance: ModelT) -> ModelT:
-        statement = self._get_base_stmt()
-        statement = self._filter_select_by_kwargs(statement, {self.id_attribute: getattr(instance, self.id_attribute)})
-        result = await self._execute(statement)
-        refreshed_instance = result.scalar_one_or_none()
-        return self.check_not_found(refreshed_instance)
 
     async def _list_and_count_window(
         self,
