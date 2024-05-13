@@ -66,7 +66,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        options: LoadSpec | None = None,
+        load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -78,7 +78,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
-            options: Set default relationships to be loaded
+            load: Set default relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Additional arguments.
 
@@ -96,12 +96,13 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         else:
             self.statement = statement
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            loader_options=options,
+            loader_options=load,
         )
-        self._default_options = self._loader_options
+        self._default_loader_options = self._loader_options
+        self._execution_options = execution_options or {}
         self._default_execution_options = execution_options or {}
-        if self._default_options:
-            self.statement = self.statement.add_criteria(lambda s: s.options(*self._default_options))
+        if self._default_loader_options:
+            self.statement = self.statement.add_criteria(lambda s: s.options(*self._default_loader_options))
         if self._default_execution_options:
             self.statement = self.statement.add_criteria(
                 lambda s: s.execution_options(**self._default_execution_options),
@@ -168,13 +169,22 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         return item_or_none
 
     def _reset_loader_options(self) -> None:
-        self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(self._default_options)
+        self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
+            self._default_loader_options,
+        )
 
     def _set_loader_options(self, loader_options: LoadSpec | None) -> None:
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options,
-            self._default_options,
+            self._default_loader_options,
         )
+
+    def _reset_execution_options(self) -> None:
+        self._execution_options = self._default_execution_options
+
+    def _set_execution_options(self, execution_options: dict[str, Any] | None = None) -> None:
+        if execution_options is not None:
+            self._execution_options = execution_options
 
     async def add(
         self,
@@ -183,6 +193,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -195,12 +206,14 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             load: Set relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             The added instance.
         """
         with wrap_sqlalchemy_exception():
             self._set_loader_options(load)
+            self._set_execution_options(execution_options)
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -383,6 +396,13 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
             )
+        if self._execution_options:
+            s.add_criteria(
+                lambda s: s.execution_options(**self._execution_options),
+                track_bound_values=track_bound_values,
+                track_closure_variables=track_closure_variables,
+                enable_tracking=enable_tracking,
+            )
         return s
 
     def _get_delete_many_statement(
@@ -412,6 +432,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -424,6 +445,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             load: Set relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             The retrieved instance.
@@ -433,6 +455,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             self._set_loader_options(load)
+            self._set_execution_options(execution_options)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
@@ -446,6 +469,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -456,6 +480,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -466,6 +491,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             self._set_loader_options(load)
+            self._set_execution_options(execution_options)
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = (await self._execute(statement)).scalar_one_or_none()
@@ -478,6 +504,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -488,6 +515,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -495,6 +523,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             self._set_loader_options(load)
+            self._set_execution_options(execution_options)
             statement = self._get_base_stmt(statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast("Result[tuple[ModelT]]", (await self._execute(statement))).scalar_one_or_none()
@@ -559,6 +588,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
@@ -579,6 +610,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -594,7 +627,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             }
         else:
             match_filter = kwargs
-        existing = await self.get_one_or_none(**match_filter)
+        existing = await self.get_one_or_none(**match_filter, load=load, execution_options=execution_options)
         if not existing:
             return (
                 await self.add(
@@ -629,6 +662,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
@@ -647,6 +682,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -666,7 +703,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             }
         else:
             match_filter = kwargs
-        existing = await self.get_one(**match_filter)
+        existing = await self.get_one(**match_filter, load=load, execution_options=execution_options)
         updated = False
         for field_name, new_field_value in kwargs.items():
             field = getattr(existing, field_name, MISSING)
@@ -688,6 +725,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         self,
         *filters: FilterTypes | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int:
         """Get the count of records returned by a query.
@@ -696,12 +735,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
         with wrap_sqlalchemy_exception():
+            self._set_loader_options(load)
+            self._set_execution_options(execution_options)
             statement = self._get_base_stmt(statement, enable_tracking=False)
             fragment = self.get_id_attribute_value(self.model_type)
             statement = statement.add_criteria(
@@ -724,6 +767,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -744,6 +788,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             load: Set relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             The updated instance.
@@ -753,6 +798,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             self._set_loader_options(load)
+            self._set_execution_options(execution_options)
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -831,6 +877,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -842,14 +890,30 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
         if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
-            return await self._list_and_count_basic(*filters, auto_expunge=auto_expunge, statement=statement, **kwargs)
-        return await self._list_and_count_window(*filters, auto_expunge=auto_expunge, statement=statement, **kwargs)
+            return await self._list_and_count_basic(
+                *filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                load=load,
+                execution_options=execution_options,
+                **kwargs,
+            )
+        return await self._list_and_count_window(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
+        )
 
     def _expunge(self, instance: ModelT, auto_expunge: bool | None) -> None:
         if auto_expunge is None:
@@ -884,6 +948,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -894,17 +960,25 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
-        statement = self._get_base_stmt(statement)
-        field = self.get_id_attribute_value(self.model_type)
-        statement = statement.add_criteria(lambda s: s.add_columns(over(sql_func.count(field))), enable_tracking=False)
-        statement = self._apply_filters(*filters, statement=statement)
-        statement = self._filter_select_by_kwargs(statement, kwargs)
+
         with wrap_sqlalchemy_exception():
+            self._set_loader_options(load)
+            self._set_execution_options(execution_options)
+            statement = self._get_base_stmt(statement)
+            field = self.get_id_attribute_value(self.model_type)
+            statement = statement.add_criteria(
+                lambda s: s.add_columns(over(sql_func.count(field))),
+                enable_tracking=False,
+            )
+            statement = self._apply_filters(*filters, statement=statement)
+            statement = self._filter_select_by_kwargs(statement, kwargs)
             result = await self._execute(statement)
             count: int = 0
             instances: list[ModelT] = []
@@ -920,6 +994,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -930,16 +1006,20 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
-        statement = self._get_base_stmt(statement)
-        statement = self._apply_filters(*filters, statement=statement)
-        statement = self._filter_select_by_kwargs(statement, kwargs)
 
         with wrap_sqlalchemy_exception():
+            self._set_loader_options(load)
+            self._set_execution_options(execution_options)
+            statement = self._get_base_stmt(statement)
+            statement = self._apply_filters(*filters, statement=statement)
+            statement = self._filter_select_by_kwargs(statement, kwargs)
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
             result = await self._execute(statement)
@@ -966,6 +1046,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Update or create instance.
 
@@ -988,6 +1070,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             The updated or created instance.
@@ -1005,7 +1089,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
             match_filter = data.to_dict(exclude={self.id_attribute})
-        existing = await self.get_one_or_none(**match_filter)
+        existing = await self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
         if not existing:
             return await self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
@@ -1165,6 +1249,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
@@ -1176,17 +1261,19 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances, after filtering applied.
         """
-        statement = self._get_base_stmt(statement)
-        statement = self._apply_filters(*filters, statement=statement)
-        statement = self._filter_select_by_kwargs(statement, kwargs)
 
         with wrap_sqlalchemy_exception():
             self._set_loader_options(load)
+            self._set_execution_options(execution_options)
+            statement = self._get_base_stmt(statement)
+            statement = self._apply_filters(*filters, statement=statement)
+            statement = self._filter_select_by_kwargs(statement, kwargs)
             result = await self._execute(statement)
             instances = list(result.scalars())
             for instance in instances:
