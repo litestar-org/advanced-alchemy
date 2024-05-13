@@ -384,29 +384,29 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         track_bound_values: bool = True,
     ) -> StatementLambdaElement:
         if isinstance(statement, Select):
-            s = lambda_stmt(
+            statement = lambda_stmt(
                 lambda: statement,
                 track_bound_values=track_bound_values,
                 global_track_bound_values=global_track_bound_values,
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
             )
-        s = cast("StatementLambdaElement", self.statement if statement is None else statement)
+        statement = self.statement if statement is None else statement
         if self._loader_options:
-            s.add_criteria(
+            statement.add_criteria(
                 lambda s: s.options(*self._loader_options),
                 track_bound_values=track_bound_values,
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
             )
         if self._execution_options:
-            s.add_criteria(
+            statement.add_criteria(
                 lambda s: s.execution_options(**self._execution_options),
                 track_bound_values=track_bound_values,
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
             )
-        return s
+        return statement
 
     def _get_delete_many_statement(
         self,
