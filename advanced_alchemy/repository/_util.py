@@ -13,7 +13,6 @@ from sqlalchemy.orm.strategy_options import (
     _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
 )
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
-from sqlalchemy.sql.base import ExecutableOption
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import RepositoryError
@@ -48,8 +47,7 @@ SingleLoad: TypeAlias = Union[
     MapperProperty[Any],
 ]
 LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
-ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
-LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
+LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad]
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
