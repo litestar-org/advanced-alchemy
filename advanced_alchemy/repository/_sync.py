@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
 
 from sqlalchemy import (
     Result,
@@ -21,15 +21,16 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy import func as sql_func
-from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, Session
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
-from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
-from sqlalchemy.sql.base import ExecutableOption
-from typing_extensions import TypeAlias
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from advanced_alchemy.exceptions import NotFoundError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
-from advanced_alchemy.repository._util import FilterableRepository, get_abstract_loader_options, get_instrumented_attr
+from advanced_alchemy.repository._util import (
+    FilterableRepository,
+    LoadSpec,
+    get_abstract_loader_options,
+    get_instrumented_attr,
+)
 from advanced_alchemy.repository.typing import MISSING, ModelT, T
 from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
@@ -37,24 +38,12 @@ from advanced_alchemy.utils.text import slugify
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.orm.scoping import scoped_session
+    from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
-
-WhereClauseT = ColumnExpressionArgument[bool]
-
-SingleLoad: TypeAlias = Union[
-    _AbstractLoad,
-    Literal["*"],
-    InstrumentedAttribute[Any],
-    RelationshipProperty[Any],
-    MapperProperty[Any],
-]
-LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
-ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
-LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
 
 
 class SQLAlchemySyncRepository(FilterableRepository[ModelT]):

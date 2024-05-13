@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Generic, Iterable, Literal, Union, cast
+from typing import TYPE_CHECKING, Any, Generic, Iterable, List, Literal, Sequence, Tuple, Union, cast
 
 from sqlalchemy import (
     StatementLambdaElement,
@@ -13,6 +12,7 @@ from sqlalchemy.orm.strategy_options import (
     _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
 )
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
+from sqlalchemy.sql.base import ExecutableOption
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import RepositoryError
@@ -47,7 +47,9 @@ SingleLoad: TypeAlias = Union[
     MapperProperty[Any],
 ]
 LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
-LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad]
+ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
+LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
+
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
@@ -74,9 +76,9 @@ def model_from_dict(model: ModelT, **kwargs: Any) -> ModelT:
 
 def get_abstract_loader_options(
     loader_options: LoadSpec | None,
-    default_loader_options: list[_AbstractLoad] | None = None,
-) -> tuple[list[_AbstractLoad], bool]:
-    loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
+    default_loader_options: List[_AbstractLoad] | None = None,  # noqa: UP006
+) -> Tuple[List[_AbstractLoad], bool]:  # noqa: UP006
+    loads: List[_AbstractLoad] = default_loader_options if default_loader_options is not None else []  # noqa: UP006
     options_have_wildcards: bool = False
     if loader_options is None:
         return (loads, options_have_wildcards)
