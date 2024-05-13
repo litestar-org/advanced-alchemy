@@ -78,8 +78,8 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        default_options: LoadSpec | None = None,
-        default_execution_options: dict[str, Any] | None = None,
+        options: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -90,8 +90,8 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
-            default_options: Set default relationships to be loaded
-            default_execution_options: Set default execution options
+            options: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Additional arguments.
 
         """
@@ -108,10 +108,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         else:
             self.statement = statement
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            loader_options=default_options,
+            loader_options=options,
         )
         self._default_options = self._loader_options
-        self._default_execution_options = default_execution_options or {}
+        self._default_execution_options = execution_options or {}
         if self._default_options:
             self.statement = self.statement.add_criteria(lambda s: s.options(*self._default_options))
         if self._default_execution_options:

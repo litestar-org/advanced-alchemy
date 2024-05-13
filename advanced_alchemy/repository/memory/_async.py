@@ -49,6 +49,8 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
     model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
+    _uniquify_results: bool = False
+    default_options: Any
     _exclude_kwargs: set[str] = {
         "statement",
         "session",
@@ -58,6 +60,8 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         "attribute_names",
         "with_for_update",
         "force_basic_query_mode",
+        "options",
+        "execution_options",
     }
 
     def __init__(self, **kwargs: Any) -> None:
@@ -67,6 +71,10 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
+        self._default_options: Any = []
+        self._default_execution_options: Any = {}
+        self._loader_options: Any = []
+        self._loader_options_have_wildcards = False
 
     def __init_subclass__(cls) -> None:
         cls.__database_registry__[cls] = cls.__database__
