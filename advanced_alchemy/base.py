@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
@@ -33,7 +33,9 @@ else:
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
-    from sqlalchemy.sql.schema import _NamingSchemaParameter as NamingSchemaParameter
+    from sqlalchemy.sql.schema import (
+        _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
+    )
     from sqlalchemy.types import TypeEngine
 
 
@@ -78,11 +80,11 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(
+def merge_table_arguments(  # pyright: ignore[reportUnknownParameterType]
     cls: DeclarativeBase,
     *mixins: Any,
-    table_args: dict | tuple | None = None,
-) -> tuple | dict:
+    table_args: dict | tuple | None = None,  # pyright: ignore[reportMissingTypeArgument,reportUnknownParameterType]
+) -> tuple | dict:  # pyright: ignore[reportMissingTypeArgument]
     """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
@@ -92,7 +94,7 @@ def merge_table_arguments(
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
         *mixins (Any): The mixins to add into the model
-        table_args: additional information to add to tableargs
+        table_args: additional information to add to table_args
 
     Returns:
         tuple | dict: The merged __table_args__ property
@@ -100,19 +102,19 @@ def merge_table_arguments(
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
 
-    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
+    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))  # pyright: ignore[reportArgumentType,reportUnknownArgumentType]
 
-    for arg_to_merge in (*mixin_table_args, table_args):
+    for arg_to_merge in (*mixin_table_args, table_args):  # pyright: ignore[reportUnknownVariableType]
         if arg_to_merge:
             if isinstance(arg_to_merge, tuple):
-                last_positional_arg = arg_to_merge[-1]
-                args.extend(arg_to_merge[:-1])
+                last_positional_arg = arg_to_merge[-1]  # pyright: ignore[reportUnknownVariableType]
+                args.extend(arg_to_merge[:-1])  # pyright: ignore[reportUnknownArgumentType]
                 if isinstance(last_positional_arg, dict):
-                    kwargs.update(last_positional_arg)
+                    kwargs.update(last_positional_arg)  # pyright: ignore[reportUnknownArgumentType]
                 else:
                     args.append(last_positional_arg)
             elif isinstance(arg_to_merge, dict):
-                kwargs.update(arg_to_merge)
+                kwargs.update(arg_to_merge)  # pyright: ignore[reportUnknownArgumentType]
 
     if args:
         if kwargs:
@@ -126,8 +128,8 @@ class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol."""
 
     __table__: FromClause
-    __mapper__: Mapper
-    __name__: ClassVar[str]
+    __mapper__: Mapper  # pyright: ignore[reportMissingTypeArgument]
+    __name__: str
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -204,9 +206,9 @@ class AuditColumns:
 class BasicAttributes:
     """Basic attributes for SQLALchemy tables and queries."""
 
-    __name__: ClassVar[str]
+    __name__: str
     __table__: FromClause
-    __mapper__: Mapper
+    __mapper__: Mapper  # pyright: ignore[reportMissingTypeArgument]
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -217,7 +219,7 @@ class BasicAttributes:
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
         return {
             field: getattr(self, field)
-            for field in self.__mapper__.columns.keys()  # noqa: SIM118
+            for field in self.__mapper__.columns.keys()  # pyright: ignore[reportUnknownMemberType] # noqa: SIM118
             if field not in exclude
         }
 
@@ -257,7 +259,7 @@ class SlugKey:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
-    def __table_args__(cls) -> tuple | dict:
+    def __table_args__(cls) -> tuple | dict:  # pyright: ignore[reportMissingTypeArgument,reportUnknownParameterType]
         return (
             UniqueConstraint(
                 cls.slug,

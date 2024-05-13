@@ -13,16 +13,16 @@ from typing import (
 from uuid import UUID
 
 from advanced_alchemy.filters import FilterTypes, LimitOffset
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import ModelOrRowMappingT
 from advanced_alchemy.service.pagination import OffsetPagination
 
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement
 
-    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT, RowMappingT
+    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
 
 try:
-    from msgspec import Struct, convert
+    from msgspec import Struct, convert  # pyright: ignore[reportAssignmentType]
 except ImportError:  # pragma: nocover
 
     class Struct:  # type: ignore[no-redef]
@@ -34,11 +34,11 @@ except ImportError:  # pragma: nocover
 
 
 try:
-    from pydantic import BaseModel
-    from pydantic.type_adapter import TypeAdapter
+    from pydantic.main import ModelMetaclass  # pyright: ignore[reportAssignmentType]
+    from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportAssignmentType]
 except ImportError:  # pragma: nocover
 
-    class BaseModel:  # type: ignore[no-redef]
+    class ModelMetaclass:  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
     class TypeAdapter:  # type: ignore[no-redef]
@@ -81,13 +81,13 @@ def _default_deserializer(
 
 def _find_filter(
     filter_type: type[FilterTypeT],
-    *filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes],
+    filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes],
 ) -> FilterTypeT | None:
     """Get the filter specified by filter type from the filters.
 
     Args:
         filter_type: The type of filter to find.
-        *filters: filter types to apply to the query
+        filters: filter types to apply to the query
 
     Returns:
         The match filter instance or None
@@ -99,18 +99,11 @@ def _find_filter(
 
 
 def to_schema(
-    data: ModelT | Sequence[ModelT] | Sequence[RowMappingT] | RowMappingT,
+    data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT],
     total: int | None = None,
     filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    schema_type: type[ModelT | ModelDTOT | RowMappingT] | None = None,
-) -> (
-    ModelT
-    | OffsetPagination[ModelT]
-    | ModelDTOT
-    | OffsetPagination[ModelDTOT]
-    | RowMappingT
-    | OffsetPagination[RowMappingT]
-):
+    schema_type: type[ModelDTOT] | None = None,
+) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
     if schema_type is not None and issubclass(schema_type, Struct):
         if not isinstance(data, Sequence):
             return convert(  # type: ignore  # noqa: PGH003
@@ -124,7 +117,7 @@ def to_schema(
                     ],
                 ),
             )
-        limit_offset = _find_filter(LimitOffset, *filters)
+        limit_offset = _find_filter(LimitOffset, filters=filters)
         total = total or len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
         return OffsetPagination[schema_type](  # type: ignore[valid-type]
@@ -144,10 +137,10 @@ def to_schema(
             total=total,
         )
 
-    if schema_type is not None and issubclass(schema_type, BaseModel):
+    if schema_type is not None and issubclass(schema_type, ModelMetaclass):
         if not isinstance(data, Sequence):
-            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # type: ignore  # noqa: PGH003
-        limit_offset = _find_filter(LimitOffset, *filters)
+            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
+        limit_offset = _find_filter(LimitOffset, filters=filters)
         total = total if total else len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
         return OffsetPagination[schema_type](  # type: ignore[valid-type]
@@ -157,12 +150,12 @@ def to_schema(
             total=total,
         )
     if not issubclass(type(data), Sequence):
-        return data  # type: ignore[return-value]
-    limit_offset = _find_filter(LimitOffset, *filters)
+        return cast("ModelOrRowMappingT", data)
+    limit_offset = _find_filter(LimitOffset, filters=filters)
     total = total or len(data)  # type: ignore[arg-type]
     limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)  # type: ignore[arg-type]
-    return OffsetPagination[ModelT](
-        items=data,  # type: ignore[arg-type]
+    return OffsetPagination[ModelOrRowMappingT](
+        items=cast("List[ModelOrRowMappingT]", data),
         limit=limit_offset.limit,
         offset=limit_offset.offset,
         total=total,

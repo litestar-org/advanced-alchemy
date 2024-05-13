@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, cast
 
 from sqlalchemy import (
     Result,
@@ -1282,7 +1282,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return instances
+            return cast("List[ModelT]", instances)
 
     def filter_collection_by_kwargs(
         self,
