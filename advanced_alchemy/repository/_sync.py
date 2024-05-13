@@ -97,6 +97,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         else:
             self.statement = statement
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
+            model=self.model_type,  # type: ignore[arg-type]
             loader_options=load,
         )
         self._default_loader_options = self._loader_options
@@ -171,13 +172,15 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def _reset_loader_options(self) -> None:
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            self._default_loader_options,
+            model=self.model_type,  # type: ignore[arg-type]
+            loader_options=self._default_loader_options,
         )
 
     def _set_loader_options(self, loader_options: LoadSpec | None) -> None:
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            loader_options,
-            self._default_loader_options,
+            model=self.model_type,  # type: ignore[arg-type]
+            loader_options=loader_options,
+            default_loader_options=self._default_loader_options,
         )
 
     def _reset_execution_options(self) -> None:
