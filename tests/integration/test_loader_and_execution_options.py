@@ -7,42 +7,42 @@ from sqlalchemy import ForeignKey, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, selectinload, sessionmaker
 
-from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.base import BigIntBase, UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 
 
 def test_loader() -> None:
-    class Country(UUIDBase):
+    class UUIDCountry(UUIDBase):
         name: Mapped[str]
-        states: Mapped[List[State]] = relationship(back_populates="country", uselist=True)
+        states: Mapped[List[UUIDState]] = relationship(back_populates="country", uselist=True)
 
-    class State(UUIDBase):
+    class UUIDState(UUIDBase):
         name: Mapped[str]
-        country_id: Mapped[UUID] = mapped_column(ForeignKey(Country.id))
+        country_id: Mapped[UUID] = mapped_column(ForeignKey(UUIDCountry.id))
 
-        country: Mapped[Country] = relationship(uselist=False, back_populates="states", lazy="raise")
+        country: Mapped[UUIDCountry] = relationship(uselist=False, back_populates="states", lazy="raise")
 
-    class USStateRepository(SQLAlchemySyncRepository[State]):
-        model_type = State
+    class USStateRepository(SQLAlchemySyncRepository[UUIDState]):
+        model_type = UUIDState
 
-    class CountryRepository(SQLAlchemySyncRepository[Country]):
-        model_type = Country
+    class CountryRepository(SQLAlchemySyncRepository[UUIDCountry]):
+        model_type = UUIDCountry
 
     engine = create_engine("sqlite:///:memory:", future=True, echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
-        State.metadata.create_all(conn)
+        UUIDState.metadata.create_all(conn)
 
     with session_factory() as db_session:
-        usa = Country(name="United States of America")
-        france = Country(name="France")
+        usa = UUIDCountry(name="United States of America")
+        france = UUIDCountry(name="France")
         db_session.add(usa)
         db_session.add(france)
 
-        california = State(name="California", country=usa)
-        oregon = State(name="Oregon", country=usa)
-        ile_de_france = State(name="Île-de-France", country=france)
+        california = UUIDState(name="California", country=usa)
+        oregon = UUIDState(name="Oregon", country=usa)
+        ile_de_france = UUIDState(name="Île-de-France", country=france)
 
         repo = USStateRepository(session=db_session)
         repo.add(california)
@@ -54,23 +54,23 @@ def test_loader() -> None:
         si0_country_repo = CountryRepository(session=db_session)
         usa_country = si0_country_repo.get_one(
             name="United States of America",
-            load=Country.states,
+            load=UUIDCountry.states,
             execution_options={"populate_existing": True},
         )
         assert len(usa_country.states) == 2
         del si0_country_repo
 
         si1_country_repo = CountryRepository(session=db_session)
-        usa_country = si1_country_repo.get_one(name="United States of America", load=[selectinload(Country.states)])
+        usa_country = si1_country_repo.get_one(name="United States of America", load=[selectinload(UUIDCountry.states)])
         assert len(usa_country.states) == 2
         del si1_country_repo
 
-        si2_country_repo = CountryRepository(session=db_session, load=[selectinload(Country.states)])
+        si2_country_repo = CountryRepository(session=db_session, load=[selectinload(UUIDCountry.states)])
         usa_country = si2_country_repo.get_one(name="United States of America")
         assert len(usa_country.states) == 2
         del si2_country_repo
 
-        repo = USStateRepository(session=db_session, load=State.country)
+        repo = USStateRepository(session=db_session, load=UUIDState.country)
         string_california = repo.get_one(name="California")
         assert string_california.id == california.id
         del repo
@@ -87,41 +87,41 @@ def test_loader() -> None:
         del usa_country
 
     with engine.begin() as conn:
-        State.metadata.drop_all(conn)
+        UUIDState.metadata.drop_all(conn)
 
 
 async def test_async_loader() -> None:
-    class Country(UUIDBase):
+    class BigIntCountry(BigIntBase):
         name: Mapped[str]
-        states: Mapped[List[State]] = relationship(back_populates="country", uselist=True)
+        states: Mapped[List[BigIntState]] = relationship(back_populates="country", uselist=True)
 
-    class State(UUIDBase):
+    class BigIntState(BigIntBase):
         name: Mapped[str]
-        country_id: Mapped[UUID] = mapped_column(ForeignKey(Country.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountry.id))
 
-        country: Mapped[Country] = relationship(uselist=False, back_populates="states", lazy="raise")
+        country: Mapped[BigIntCountry] = relationship(uselist=False, back_populates="states", lazy="raise")
 
-    class USStateRepository(SQLAlchemyAsyncRepository[State]):
-        model_type = State
+    class USStateRepository(SQLAlchemyAsyncRepository[BigIntState]):
+        model_type = BigIntState
 
-    class CountryRepository(SQLAlchemyAsyncRepository[Country]):
-        model_type = Country
+    class CountryRepository(SQLAlchemyAsyncRepository[BigIntCountry]):
+        model_type = BigIntCountry
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True, echo=True)
     session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
-        await conn.run_sync(State.metadata.create_all)
+        await conn.run_sync(BigIntState.metadata.create_all)
 
     async with session_factory() as db_session:
-        usa = Country(name="United States of America")
-        france = Country(name="France")
+        usa = BigIntCountry(name="United States of America")
+        france = BigIntCountry(name="France")
         db_session.add(usa)
         db_session.add(france)
 
-        california = State(name="California", country=usa)
-        oregon = State(name="Oregon", country=usa)
-        ile_de_france = State(name="Île-de-France", country=france)
+        california = BigIntState(name="California", country=usa)
+        oregon = BigIntState(name="Oregon", country=usa)
+        ile_de_france = BigIntState(name="Île-de-France", country=france)
 
         repo = USStateRepository(session=db_session)
         await repo.add(california)
@@ -133,23 +133,25 @@ async def test_async_loader() -> None:
         si0_country_repo = CountryRepository(session=db_session)
         usa_country = await si0_country_repo.get_one(
             name="United States of America",
-            load=Country.states,
+            load=BigIntCountry.states,
             execution_options={"populate_existing": True},
         )
         assert len(usa_country.states) == 2
         del si0_country_repo
 
         country_repo = CountryRepository(session=db_session)
-        usa_country = await country_repo.get_one(name="United States of America", load=[selectinload(Country.states)])
+        usa_country = await country_repo.get_one(
+            name="United States of America", load=[selectinload(BigIntCountry.states)],
+        )
         assert len(usa_country.states) == 2
         del country_repo
 
-        country_repo = CountryRepository(session=db_session, load=[selectinload(Country.states)])
+        country_repo = CountryRepository(session=db_session, load=[selectinload(BigIntCountry.states)])
         usa_country = await country_repo.get_one(name="United States of America")
         assert len(usa_country.states) == 2
         del country_repo
 
-        repo = USStateRepository(session=db_session, load=State.country)
+        repo = USStateRepository(session=db_session, load=BigIntState.country)
         string_california = await repo.get_one(name="California")
         assert string_california.id == california.id
         del repo
@@ -166,4 +168,4 @@ async def test_async_loader() -> None:
         del usa_country
 
     async with engine.begin() as conn:
-        await conn.run_sync(State.metadata.drop_all)
+        await conn.run_sync(BigIntState.metadata.drop_all)
