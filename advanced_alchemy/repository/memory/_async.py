@@ -60,7 +60,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         "attribute_names",
         "with_for_update",
         "force_basic_query_mode",
-        "options",
+        "load",
         "execution_options",
     }
 
