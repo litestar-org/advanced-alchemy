@@ -51,6 +51,15 @@ def test_loader() -> None:
         db_session.commit()
         del repo
 
+        si0_country_repo = CountryRepository(session=db_session)
+        usa_country = si0_country_repo.get_one(
+            name="United States of America",
+            load=Country.states,
+            execution_options={"populate_existing": True},
+        )
+        assert len(usa_country.states) == 2
+        del si0_country_repo
+
         si1_country_repo = CountryRepository(session=db_session)
         usa_country = si1_country_repo.get_one(name="United States of America", load=[selectinload(Country.states)])
         assert len(usa_country.states) == 2
@@ -120,6 +129,15 @@ async def test_async_loader() -> None:
         await repo.add(ile_de_france)
         await db_session.commit()
         del repo
+
+        si0_country_repo = CountryRepository(session=db_session)
+        usa_country = await si0_country_repo.get_one(
+            name="United States of America",
+            load=Country.states,
+            execution_options={"populate_existing": True},
+        )
+        assert len(usa_country.states) == 2
+        del si0_country_repo
 
         country_repo = CountryRepository(session=db_session)
         usa_country = await country_repo.get_one(name="United States of America", load=[selectinload(Country.states)])
