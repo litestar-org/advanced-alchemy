@@ -74,3 +74,6 @@ def test_loader() -> None:
         usa_country = country_repo.get_one(name="United States of America")
         assert len(usa_country.states) == 2
         del country_repo
+
+    with engine.begin() as conn:
+        State.metadata.drop_all(conn)
