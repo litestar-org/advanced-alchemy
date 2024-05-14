@@ -101,7 +101,7 @@ async def test_async_loader() -> None:
     session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
-        State.metadata.create_all(conn.sync_engine)
+        await conn.run_sync(State.metadata.create_all)
 
     async with session_factory() as db_session:
         usa = Country(name="United States of America")
@@ -146,4 +146,4 @@ async def test_async_loader() -> None:
         del country_repo
 
     async with engine.begin() as conn:
-        State.metadata.drop_all(conn.sync_engine)
+        await conn.run_sync(State.metadata.drop_all)
