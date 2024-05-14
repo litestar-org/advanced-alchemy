@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Iterable, List, Sequence, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Generic, Iterable, List, Literal, Sequence, Tuple, Union, cast
 
 from sqlalchemy import (
     StatementLambdaElement,
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
     _AbstractLoad,
-    str,
+    Literal["*"],
     InstrumentedAttribute[Any],
     RelationshipProperty[Any],
     MapperProperty[Any],
@@ -75,12 +75,12 @@ def model_from_dict(model: ModelT, **kwargs: Any) -> ModelT:
 
 
 def get_abstract_loader_options(
-    model: ModelProtocol,
     loader_options: LoadSpec | None,
     default_loader_options: List[_AbstractLoad] | None = None,  # noqa: UP006
+    default_options_have_wildcards: bool = False,
 ) -> Tuple[List[_AbstractLoad], bool]:  # noqa: UP006
     loads: List[_AbstractLoad] = default_loader_options if default_loader_options is not None else []  # noqa: UP006
-    options_have_wildcards: bool = False
+    options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
     if isinstance(loader_options, _AbstractLoad):
@@ -93,12 +93,7 @@ def get_abstract_loader_options(
             [selectinload(class_)]
             if loader_options.uselist
             else [joinedload(class_, innerjoin=loader_options.innerjoin)],
-            options_have_wildcards,
-        )
-    if isinstance(loader_options, str) and loader_options != "*":
-        return get_abstract_loader_options(
-            model=model,
-            loader_options=get_instrumented_attr(model=type(model), key=loader_options),
+            options_have_wildcards if loader_options.uselist else True,
         )
     if isinstance(loader_options, str) and loader_options == "*":
         options_have_wildcards = True
@@ -106,13 +101,19 @@ def get_abstract_loader_options(
     if isinstance(loader_options, (list, tuple)):
         for attribute in loader_options:
             if isinstance(attribute, (list, tuple)):
-                load_chain, options_have_wildcards = get_abstract_loader_options(model=model, loader_options=attribute)
+                load_chain, options_have_wildcards = get_abstract_loader_options(
+                    loader_options=attribute,
+                    default_options_have_wildcards=options_have_wildcards,
+                )
                 loader = load_chain[-1]
                 for sub_load in load_chain[-2::-1]:
                     loader = sub_load.options(loader)
                 loads.append(loader)
             else:
-                load_chain, options_have_wildcards = get_abstract_loader_options(model=model, loader_options=attribute)
+                load_chain, options_have_wildcards = get_abstract_loader_options(
+                    loader_options=attribute,
+                    default_options_have_wildcards=options_have_wildcards,
+                )
                 loads.extend(load_chain)
     return (loads, options_have_wildcards)
 

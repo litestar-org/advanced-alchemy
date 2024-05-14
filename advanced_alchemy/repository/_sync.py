@@ -97,17 +97,20 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         else:
             self.statement = statement
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            model=self.model_type,  # type: ignore[arg-type]
             loader_options=load,
         )
         self._default_loader_options = self._loader_options
         self._execution_options = execution_options or {}
         self._default_execution_options = execution_options or {}
         if self._default_loader_options:
-            self.statement = self.statement.add_criteria(lambda s: s.options(*self._default_loader_options))
+            self.statement = self.statement.add_criteria(
+                lambda s: s.options(*self._default_loader_options),
+                track_closure_variables=False,
+            )
         if self._default_execution_options:
             self.statement = self.statement.add_criteria(
                 lambda s: s.execution_options(**self._default_execution_options),
+                track_closure_variables=False,
             )
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
@@ -172,15 +175,15 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def _reset_loader_options(self) -> None:
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            model=self.model_type,  # type: ignore[arg-type]
             loader_options=self._default_loader_options,
+            default_options_have_wildcards=self._loader_options_have_wildcards,
         )
 
     def _set_loader_options(self, loader_options: LoadSpec | None) -> None:
         self._loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            model=self.model_type,  # type: ignore[arg-type]
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
+            default_options_have_wildcards=self._loader_options_have_wildcards,
         )
 
     def _reset_execution_options(self) -> None:
@@ -396,16 +399,16 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         if self._loader_options:
             statement.add_criteria(
                 lambda s: s.options(*self._loader_options),
-                track_bound_values=track_bound_values,
-                track_closure_variables=track_closure_variables,
-                enable_tracking=enable_tracking,
+                track_bound_values=False,
+                track_closure_variables=False,
+                enable_tracking=False,
             )
         if self._execution_options:
             statement.add_criteria(
                 lambda s: s.execution_options(**self._execution_options),
-                track_bound_values=track_bound_values,
-                track_closure_variables=track_closure_variables,
-                enable_tracking=enable_tracking,
+                track_bound_values=False,
+                track_closure_variables=False,
+                enable_tracking=False,
             )
         return statement
 
