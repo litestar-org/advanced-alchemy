@@ -32,6 +32,7 @@ else:
     uuid7 = uuid4  # type: ignore[assignment]
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import FromClause
     from sqlalchemy.sql.schema import (
         _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
@@ -80,11 +81,11 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(  # pyright: ignore[reportUnknownParameterType]
+def merge_table_arguments(
     cls: DeclarativeBase,
     *mixins: Any,
-    table_args: dict | tuple | None = None,  # pyright: ignore[reportMissingTypeArgument,reportUnknownParameterType]
-) -> tuple | dict:  # pyright: ignore[reportMissingTypeArgument]
+    table_args: TableArgsType | None = None,
+) -> TableArgsType:
     """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
