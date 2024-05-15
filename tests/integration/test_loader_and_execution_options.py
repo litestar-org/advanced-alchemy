@@ -107,7 +107,7 @@ async def test_async_loader() -> None:
     class CountryRepository(SQLAlchemyAsyncRepository[BigIntCountry]):
         model_type = BigIntCountry
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True, echo=True)
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=True)
     session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
