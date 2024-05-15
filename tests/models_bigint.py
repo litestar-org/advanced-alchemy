@@ -59,8 +59,8 @@ class BigIntSlugBook(BigIntBase, SlugKey):
     title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     author_id: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
 
-    @classmethod
     @declared_attr.directive
+    @classmethod
     def __table_args__(cls) -> dict | tuple:
         return merge_table_arguments(
             cls,
