@@ -95,7 +95,7 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: dict | tuple |
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
 
-    mixin_table_args = (getattr(base_cls, "__table_args__", None) for base_cls in reversed(cls.mro()[1:]))
+    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in cls.__bases__)
 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
