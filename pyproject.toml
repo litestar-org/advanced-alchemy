@@ -364,6 +364,7 @@ exclude = [
   "tests/docker_service_fixtures.py",
 ]
 include = ["advanced_alchemy", "tests"]
+strict = ["advanced_alchemy/**/*"]
 pythonVersion = "3.8"
 reportUnnecessaryTypeIgnoreComments = true
 
