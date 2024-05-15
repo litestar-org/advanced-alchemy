@@ -49,42 +49,37 @@ def test_loader() -> None:
         repo.add(oregon)
         repo.add(ile_de_france)
         db_session.commit()
-        del repo
 
         si0_country_repo = CountryRepository(session=db_session)
-        usa_country = si0_country_repo.get_one(
+        usa_country_0 = si0_country_repo.get_one(
             name="United States of America",
             load=UUIDCountry.states,
             execution_options={"populate_existing": True},
         )
-        assert len(usa_country.states) == 2
-        del si0_country_repo
+        assert len(usa_country_0.states) == 2
 
         si1_country_repo = CountryRepository(session=db_session)
-        usa_country = si1_country_repo.get_one(name="United States of America", load=[selectinload(UUIDCountry.states)])
-        assert len(usa_country.states) == 2
-        del si1_country_repo
+        usa_country_1 = si1_country_repo.get_one(
+            name="United States of America",
+            load=[selectinload(UUIDCountry.states)],
+        )
+        assert len(usa_country_1.states) == 2
 
         si2_country_repo = CountryRepository(session=db_session, load=[selectinload(UUIDCountry.states)])
-        usa_country = si2_country_repo.get_one(name="United States of America")
-        assert len(usa_country.states) == 2
-        del si2_country_repo
+        usa_country_2 = si2_country_repo.get_one(name="United States of America")
+        assert len(usa_country_2.states) == 2
 
-        repo = USStateRepository(session=db_session, load=UUIDState.country)
-        string_california = repo.get_one(name="California")
+        ia_repo = USStateRepository(session=db_session, load=UUIDState.country)
+        string_california = ia_repo.get_one(name="California")
         assert string_california.id == california.id
-        del repo
 
-        repo = USStateRepository(session=db_session, load="*")
-        star_california = repo.get_one(name="California")
+        star_repo = USStateRepository(session=db_session, load="*")
+        star_california = star_repo.get_one(name="California")
         assert star_california.country.name == "United States of America"
-        del repo
 
         star_country_repo = CountryRepository(session=db_session, load="*")
-        usa_country = star_country_repo.get_one(name="United States of America")
-        assert len(usa_country.states) == 2
-        del star_country_repo
-        del usa_country
+        usa_country_3 = star_country_repo.get_one(name="United States of America")
+        assert len(usa_country_3.states) == 2
 
     with engine.begin() as conn:
         UUIDState.metadata.drop_all(conn)
@@ -128,44 +123,37 @@ async def test_async_loader() -> None:
         await repo.add(oregon)
         await repo.add(ile_de_france)
         await db_session.commit()
-        del repo
 
         si0_country_repo = CountryRepository(session=db_session)
-        usa_country = await si0_country_repo.get_one(
+        usa_country_0 = await si0_country_repo.get_one(
             name="United States of America",
             load=BigIntCountry.states,
             execution_options={"populate_existing": True},
         )
-        assert len(usa_country.states) == 2
-        del si0_country_repo
+        assert len(usa_country_0.states) == 2
 
         country_repo = CountryRepository(session=db_session)
-        usa_country = await country_repo.get_one(
-            name="United States of America", load=[selectinload(BigIntCountry.states)],
+        usa_country_1 = await country_repo.get_one(
+            name="United States of America",
+            load=[selectinload(BigIntCountry.states)],
         )
-        assert len(usa_country.states) == 2
-        del country_repo
+        assert len(usa_country_1.states) == 2
 
-        country_repo = CountryRepository(session=db_session, load=[selectinload(BigIntCountry.states)])
-        usa_country = await country_repo.get_one(name="United States of America")
-        assert len(usa_country.states) == 2
-        del country_repo
+        si_country_repo = CountryRepository(session=db_session, load=[selectinload(BigIntCountry.states)])
+        usa_country_02 = await si_country_repo.get_one(name="United States of America")
+        assert len(usa_country_02.states) == 2
 
-        repo = USStateRepository(session=db_session, load=BigIntState.country)
-        string_california = await repo.get_one(name="California")
+        ia_repo = USStateRepository(session=db_session, load=BigIntState.country)
+        string_california = await ia_repo.get_one(name="California")
         assert string_california.id == california.id
-        del repo
 
-        repo = USStateRepository(session=db_session, load="*")
-        star_california = await repo.get_one(name="California")
+        star_repo = USStateRepository(session=db_session, load="*")
+        star_california = await star_repo.get_one(name="California")
         assert star_california.country.name == "United States of America"
-        del repo
 
-        country_repo = CountryRepository(session=db_session, load="*")
-        usa_country = await country_repo.get_one(name="United States of America")
-        assert len(usa_country.states) == 2
-        del country_repo
-        del usa_country
+        star_country_repo = CountryRepository(session=db_session, load="*")
+        usa_country_3 = await star_country_repo.get_one(name="United States of America")
+        assert len(usa_country_3.states) == 2
 
     async with engine.begin() as conn:
         await conn.run_sync(BigIntState.metadata.drop_all)
