@@ -78,11 +78,7 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(
-    cls: DeclarativeBase,
-    *mixins: Any,
-    table_args: dict | tuple | None = None,
-) -> tuple | dict:
+def merge_table_arguments(cls: type[DeclarativeBase], table_args: dict | tuple | None = None) -> tuple | dict:
     """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
@@ -91,7 +87,6 @@ def merge_table_arguments(
 
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
-        *mixins (Any): The mixins to add into the model
         table_args: additional information to add to tableargs
 
     Returns:
@@ -100,7 +95,7 @@ def merge_table_arguments(
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
 
-    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
+    mixin_table_args = (getattr(base_cls, "__table_args__", None) for base_cls in reversed(cls.mro()[1:]))
 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
