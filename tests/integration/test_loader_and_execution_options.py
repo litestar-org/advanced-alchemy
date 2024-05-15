@@ -28,7 +28,7 @@ def test_loader() -> None:
     class CountryRepository(SQLAlchemySyncRepository[UUIDCountry]):
         model_type = UUIDCountry
 
-    engine = create_engine("sqlite:///:memory:", future=True, echo=True)
+    engine = create_engine("sqlite:///:memory:", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
