@@ -82,8 +82,8 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 
 
 def merge_table_arguments(
-    cls: DeclarativeBase,
-    *mixins: Any,
+    cls: type[DeclarativeBase],
+    *mixins: type[Any],
     table_args: TableArgsType | None = None,
 ) -> TableArgsType:
     """Merge Table Arguments.
@@ -105,17 +105,17 @@ def merge_table_arguments(
 
     mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))  # pyright: ignore[reportArgumentType,reportUnknownArgumentType]
 
-    for arg_to_merge in (*mixin_table_args, table_args):  # pyright: ignore[reportUnknownVariableType]
+    for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
             if isinstance(arg_to_merge, tuple):
-                last_positional_arg = arg_to_merge[-1]  # pyright: ignore[reportUnknownVariableType]
-                args.extend(arg_to_merge[:-1])  # pyright: ignore[reportUnknownArgumentType]
+                last_positional_arg = arg_to_merge[-1]
+                args.extend(arg_to_merge[:-1])
                 if isinstance(last_positional_arg, dict):
                     kwargs.update(last_positional_arg)  # pyright: ignore[reportUnknownArgumentType]
                 else:
                     args.append(last_positional_arg)
-            elif isinstance(arg_to_merge, dict):
-                kwargs.update(arg_to_merge)  # pyright: ignore[reportUnknownArgumentType]
+            else:
+                kwargs.update(arg_to_merge)
 
     if args:
         if kwargs:
