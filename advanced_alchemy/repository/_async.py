@@ -99,7 +99,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
         )
-        self._execution_options = execution_options or {}
         self._default_execution_options = execution_options or {}
         if self._default_loader_options:
             self.statement = self.statement.add_criteria(
@@ -179,20 +178,13 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             default_options_have_wildcards=self._loader_options_have_wildcards,
         )
 
-    def _reset_execution_options(self) -> None:
-        self._execution_options = self._default_execution_options
-
-    def _set_execution_options(self, execution_options: dict[str, Any] | None = None) -> None:
-        if execution_options is not None:
-            self._execution_options = execution_options
-
     async def add(
         self,
         data: ModelT,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
+        load: LoadSpec | None = None,  # TODO: Remove
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
@@ -212,7 +204,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             The added instance.
         """
         with wrap_sqlalchemy_exception():
-            self._set_execution_options(execution_options)
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -224,7 +215,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         data: list[ModelT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        load: LoadSpec | None = None,
+        load: LoadSpec | None = None,  # TODO: Remove
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
         """Add many `data` to the collection.
@@ -241,8 +232,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             The added instances.
         """
         with wrap_sqlalchemy_exception():
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
             self.session.add_all(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -321,7 +310,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
             id_attribute = get_instrumented_attr(
                 self.model_type,
                 id_attribute if id_attribute is not None else self.id_attribute,
@@ -342,6 +330,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                                 id_chunk=chunk,
                                 supports_returning=self._dialect.delete_executemany_returning,
                                 loader_options=loader_options,
+                                execution_options=execution_options,
                             ),
                         ),
                     )
@@ -355,6 +344,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                                 id_chunk=chunk,
                                 supports_returning=self._dialect.delete_executemany_returning,
                                 loader_options=loader_options,
+                                execution_options=execution_options,
                             ),
                         ),
                     )
@@ -366,6 +356,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                             id_chunk=chunk,
                             supports_returning=self._dialect.delete_executemany_returning,
                             loader_options=loader_options,
+                            execution_options=execution_options,
                         ),
                     )
             await self._flush_or_commit(auto_commit=auto_commit)
@@ -409,6 +400,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         enable_tracking: bool = True,
         track_bound_values: bool = True,
         loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
         if isinstance(statement, Select):
             statement = lambda_stmt(
@@ -426,9 +418,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 track_closure_variables=False,
                 enable_tracking=False,
             )
-        if self._execution_options:
+        if execution_options:
             statement.add_criteria(
-                lambda s: s.execution_options(**self._execution_options),
+                lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
@@ -444,6 +436,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
         loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
         if statement_type == "delete":
             statement = lambda_stmt(lambda: delete(model_type))
@@ -462,9 +455,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 track_closure_variables=False,
                 enable_tracking=False,
             )
-        if self._execution_options:
+        if execution_options:
             statement.add_criteria(
-                lambda s: s.execution_options(**self._execution_options),
+                lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
@@ -501,9 +494,12 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
-            statement = self._get_base_stmt(statement=statement, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
             instance = (
                 await self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
@@ -539,8 +535,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
-            statement = self._get_base_stmt(statement=statement, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = (
                 await self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
@@ -573,8 +572,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
-            statement = self._get_base_stmt(statement=statement, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
                 "Result[tuple[ModelT]]",
@@ -678,7 +680,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        self._set_execution_options(execution_options)
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
                 field_name: kwargs.get(field_name, None)
@@ -757,7 +758,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        self._set_execution_options(execution_options)
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
                 field_name: kwargs.get(field_name, None)
@@ -807,8 +807,12 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         """
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
-            statement = self._get_base_stmt(statement=statement, enable_tracking=False, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                enable_tracking=False,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             fragment = self.get_id_attribute_value(self.model_type)
             statement = statement.add_criteria(
                 lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
@@ -829,7 +833,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,
+        load: LoadSpec | None = None,  # TODO: Remove
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
@@ -860,7 +864,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         with wrap_sqlalchemy_exception():
-            self._set_execution_options(execution_options)
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -909,12 +912,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        self._set_execution_options(execution_options)
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
         with wrap_sqlalchemy_exception():
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
-            statement = self._get_update_many_statement(self.model_type, supports_returning, loader_options=loader_options)
+            statement = self._get_update_many_statement(
+                self.model_type,
+                supports_returning,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             if supports_returning:
                 instances = list(
                     await self.session.scalars(
@@ -933,7 +940,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             return data
 
     def _get_update_many_statement(
-        self, model_type: type[ModelT], supports_returning: bool, loader_options: list[_AbstractLoad] | None,
+        self,
+        model_type: type[ModelT],
+        supports_returning: bool,
+        loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
         statement = lambda_stmt(lambda: update(model_type))
         if supports_returning:
@@ -945,9 +956,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 track_closure_variables=False,
                 enable_tracking=False,
             )
-        if self._execution_options:
+        if execution_options:
             statement.add_criteria(
-                lambda s: s.execution_options(**self._execution_options),
+                lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
@@ -1053,8 +1064,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
-            statement = self._get_base_stmt(statement=statement, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             field = self.get_id_attribute_value(self.model_type)
             statement = statement.add_criteria(
                 lambda s: s.add_columns(over(sql_func.count(field))),
@@ -1099,11 +1113,20 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
-            statement = self._get_base_stmt(statement=statement, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            count_result = await self.session.execute(self._get_count_stmt(statement, loader_options=loader_options))
+            count_result = await self.session.execute(
+                self._get_count_stmt(
+                    statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                ),
+            )
             count = count_result.scalar_one()
             result = await self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
             instances: list[ModelT] = []
@@ -1113,7 +1136,10 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             return instances, count
 
     def _get_count_stmt(
-        self, statement: StatementLambdaElement, loader_options: list[_AbstractLoad] | None,
+        self,
+        statement: StatementLambdaElement,
+        loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
         fragment = self.get_id_attribute_value(self.model_type)
         statement = statement.add_criteria(
@@ -1127,9 +1153,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 track_closure_variables=False,
                 enable_tracking=False,
             )
-        if self._execution_options:
+        if execution_options:
             statement.add_criteria(
-                lambda s: s.execution_options(**self._execution_options),
+                lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
@@ -1178,7 +1204,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        self._set_execution_options(execution_options)
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
                 field_name: getattr(data, field_name, None)
@@ -1272,7 +1297,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
-        self._set_execution_options(execution_options)
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
@@ -1396,8 +1420,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
         with wrap_sqlalchemy_exception():
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            self._set_execution_options(execution_options)
-            statement = self._get_base_stmt(statement=statement, loader_options=loader_options)
+            statement = self._get_base_stmt(
+                statement=statement,
+                loader_options=loader_options,
+                execution_options=execution_options,
+            )
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             result = await self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
