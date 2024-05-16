@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, Generator
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
@@ -95,7 +95,7 @@ class MultipleResultsFoundError(AdvancedAlchemyError):
 
 
 @contextmanager
-def wrap_sqlalchemy_exception() -> Any:
+def wrap_sqlalchemy_exception() -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
 
