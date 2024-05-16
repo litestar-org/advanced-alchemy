@@ -172,7 +172,9 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             raise NotFoundError(msg)
         return item_or_none
 
-    def _get_loader_options(self, loader_options: LoadSpec | None) -> tuple[list[_AbstractLoad], bool] | tuple[None, bool]:
+    def _get_loader_options(
+        self, loader_options: LoadSpec | None,
+    ) -> tuple[list[_AbstractLoad], bool] | tuple[None, bool]:
         if loader_options is None:
             # no need to return them here; We are using the default_options, which have
             # already been added to the base stmt
@@ -189,8 +191,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,  # TODO: Remove
-        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -202,8 +202,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            load: Set relationships to be loaded
-            execution_options: Set default execution options
 
         Returns:
             The added instance.
@@ -220,8 +218,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         data: list[ModelT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        load: LoadSpec | None = None,  # TODO: Remove
-        execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
         """Add many `data` to the collection.
 
@@ -231,8 +227,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            load: Set default relationships to be loaded
-            execution_options: Set default execution options
         Returns:
             The added instances.
         """
@@ -699,10 +693,8 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 self.add(
                     self.model_type(**kwargs),
                     auto_commit=auto_commit,
-                    auto_refresh=auto_refresh,
                     auto_expunge=auto_expunge,
-                    load=load,
-                    execution_options=execution_options,
+                    auto_refresh=auto_refresh,
                 ),
                 True,
             )
@@ -838,8 +830,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,  # TODO: Remove
-        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -859,8 +849,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
-            load: Set relationships to be loaded
-            execution_options: Set default execution options
 
         Returns:
             The updated instance.
@@ -1221,14 +1209,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             match_filter = data.to_dict(exclude={self.id_attribute})
         existing = self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
         if not existing:
-            return self.add(
-                data,
-                auto_commit=auto_commit,
-                auto_expunge=auto_expunge,
-                auto_refresh=auto_refresh,
-                load=load,
-                execution_options=execution_options,
-            )
+            return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
         with wrap_sqlalchemy_exception():
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
@@ -1343,13 +1324,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                     data_to_insert.append(datum)
             if data_to_insert:
                 instances.extend(
-                    self.add_many(
-                        data_to_insert,
-                        auto_commit=False,
-                        auto_expunge=False,
-                        load=load,
-                        execution_options=execution_options,
-                    ),
+                    self.add_many(data_to_insert, auto_commit=False, auto_expunge=False),
                 )
             if data_to_update:
                 instances.extend(

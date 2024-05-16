@@ -414,8 +414,6 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
-            load=load,
-            execution_options=execution_options,
         )
 
     def create_many(
@@ -441,13 +439,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             Representation of created instances.
         """
         data = [(self.to_model(datum, "create")) for datum in data]
-        return self.repository.add_many(
-            data=data,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            load=load,
-            execution_options=execution_options,
-        )
+        return self.repository.add_many(data=data, auto_commit=auto_commit, auto_expunge=auto_expunge)
 
     def update(
         self,
@@ -506,12 +498,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             data=data,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
-            auto_expunge=auto_expunge,
             auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
             id_attribute=id_attribute,
-            load=load,
-            execution_options=execution_options,
         )
 
     def update_many(
