@@ -171,7 +171,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             raise NotFoundError(msg)
         return item_or_none
 
-    def _get_loader_options(self, loader_options: LoadSpec | None) -> tuple[list[_AbstractLoad], bool]:
+    def _get_loader_options(self, loader_options: LoadSpec | None) -> tuple[list[_AbstractLoad], bool] | tuple[None, bool]:
+        if loader_options is None:
+            # no need to return them here; We are using the default_options, which have
+            # already been added to the base stmt
+            return None, self._loader_options_have_wildcards
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
