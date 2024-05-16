@@ -129,7 +129,7 @@ class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol."""
 
     __table__: FromClause
-    __mapper__: Mapper  # pyright: ignore[reportMissingTypeArgument]
+    __mapper__: Mapper[Any]
     __name__: str
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
@@ -209,7 +209,7 @@ class BasicAttributes:
 
     __name__: str
     __table__: FromClause
-    __mapper__: Mapper  # pyright: ignore[reportMissingTypeArgument]
+    __mapper__: Mapper[Any]
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -220,7 +220,7 @@ class BasicAttributes:
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
         return {
             field: getattr(self, field)
-            for field in self.__mapper__.columns.keys()  # pyright: ignore[reportUnknownMemberType] # noqa: SIM118
+            for field in self.__mapper__.columns.keys()  # noqa: SIM118
             if field not in exclude
         }
 
@@ -260,7 +260,8 @@ class SlugKey:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
-    def __table_args__(cls) -> tuple | dict:  # pyright: ignore[reportMissingTypeArgument,reportUnknownParameterType]
+    @classmethod
+    def __table_args__(cls) -> TableArgsType:
         return (
             UniqueConstraint(
                 cls.slug,
@@ -275,13 +276,13 @@ class SlugKey:
 
 
 def create_registry(
-    custom_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
     """Create a new SQLAlchemy registry."""
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] = {
+    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
         datetime: DateTimeUTC,
@@ -291,9 +292,7 @@ def create_registry(
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, Json
 
-        type_annotation_map.update(  # pyright: ignore[reportCallIssue]
-            {EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB},  # pyright: ignore[reportArgumentType]
-        )
+        type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB})
     with contextlib.suppress(ImportError):
         from msgspec import Struct
 
