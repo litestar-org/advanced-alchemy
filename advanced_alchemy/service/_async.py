@@ -413,8 +413,6 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
-            load=load,
-            execution_options=execution_options,
         )
 
     async def create_many(
@@ -440,13 +438,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Representation of created instances.
         """
         data = [(await self.to_model(datum, "create")) for datum in data]
-        return await self.repository.add_many(
-            data=data,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            load=load,
-            execution_options=execution_options,
-        )
+        return await self.repository.add_many(data=data, auto_commit=auto_commit, auto_expunge=auto_expunge)
 
     async def update(
         self,
@@ -505,12 +497,10 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             data=data,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
-            auto_expunge=auto_expunge,
             auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
             id_attribute=id_attribute,
-            load=load,
-            execution_options=execution_options,
         )
 
     async def update_many(
