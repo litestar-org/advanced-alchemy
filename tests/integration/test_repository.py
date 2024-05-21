@@ -109,7 +109,7 @@ mock_engines = {"mock_async_engine", "mock_sync_engine"}
 
 
 @pytest.fixture(autouse=True)
-def _clear_in_memory_db() -> Generator[None, None, None]:
+def _clear_in_memory_db() -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
     try:
         yield
     finally:
@@ -1173,7 +1173,7 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 @pytest.fixture()
 def frozen_datetime() -> Generator[Coordinates, None, None]:
-    with travel(datetime.utcnow, tick=False) as frozen:
+    with travel(datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated]
         yield frozen
 
 
@@ -1188,7 +1188,7 @@ async def test_repo_created_updated(
 
     if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
         pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not update created/updated columns")
-    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):  # pyright: ignore[reportUnnecessaryIsInstance]
         config = SQLAlchemyAsyncConfig(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
@@ -1237,7 +1237,7 @@ async def test_repo_created_updated_no_listener(
     with contextlib.suppress(InvalidRequestError):
         event.remove(Session, "before_flush", touch_updated_timestamp)
 
-    if isinstance(author_repo, SQLAlchemyAsyncRepository):
+    if isinstance(author_repo, SQLAlchemyAsyncRepository):  # pyright: ignore[reportUnnecessaryIsInstance]
         config = SQLAlchemyAsyncConfig(
             enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
@@ -1333,7 +1333,7 @@ async def test_repo_add_many_method(
 
 
 async def test_repo_update_many_method(author_repo: AnyAuthorRepository) -> None:
-    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip("Skipped on emulator")
 
     objs = await maybe_async(author_repo.list())
@@ -2030,7 +2030,7 @@ async def test_service_create_many_method(
 
 
 async def test_service_update_many_method(author_service: AuthorService) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip("Skipped on emulator")
 
     objs = await maybe_async(author_service.list())

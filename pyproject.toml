@@ -307,7 +307,7 @@ warn_unused_configs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-disable_error_code = "attr-defined"
+disable_error_code = "attr-defined,type-var"
 disallow_untyped_decorators = false
 module = "tests.*"
 warn_unused_ignores = false
@@ -364,6 +364,7 @@ exclude = [
   "tests/docker_service_fixtures.py",
 ]
 include = ["advanced_alchemy", "tests"]
+strict = ["advanced_alchemy/**/*"]
 pythonVersion = "3.8"
 reportUnnecessaryTypeIgnoreComments = true
 

@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.repository.typing import ModelT
+    from advanced_alchemy.repository.typing import ModelOrRowMappingT
     from advanced_alchemy.service.pagination import OffsetPagination
-    from advanced_alchemy.service.typing import ModelDTOT, RowMappingT
+    from advanced_alchemy.service.typing import ModelDTOT
 
 
 class ResultConverter:
@@ -29,110 +29,51 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: RowMappingT,
+        data: ModelOrRowMappingT,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    ) -> RowMappingT: ...
+    ) -> ModelOrRowMappingT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[RowMappingT],
+        data: Sequence[ModelOrRowMappingT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    ) -> OffsetPagination[RowMappingT]: ...
+    ) -> OffsetPagination[ModelOrRowMappingT]: ...
 
     @overload
     def to_schema(
         self,
-        data: RowMapping,
+        data: ModelProtocol | RowMapping,
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] | None = None,
+        schema_type: type[ModelDTOT] = ...,
     ) -> ModelDTOT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[RowMapping],
+        data: Sequence[ModelOrRowMappingT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] | None = None,
-    ) -> OffsetPagination[ModelDTOT]: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: ModelT,
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    ) -> ModelT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[ModelT],
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-    ) -> OffsetPagination[ModelT]: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: ModelT,
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelT] = ...,
-    ) -> ModelT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[ModelT],
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelT] = ...,
-    ) -> OffsetPagination[ModelT]: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: ModelProtocol,
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] | None = None,
-    ) -> ModelDTOT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[ModelT],
-        total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT] | None = None,
+        schema_type: type[ModelDTOT] = ...,
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
         self,
-        data: ModelT | Sequence[ModelT] | Sequence[RowMappingT] | RowMappingT,
+        data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT],
         total: int | None = None,
         filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = EMPTY_FILTER,
-        schema_type: type[ModelDTOT | ModelT] | None = None,
-    ) -> (
-        ModelT
-        | OffsetPagination[ModelT]
-        | ModelDTOT
-        | OffsetPagination[ModelDTOT]
-        | RowMapping
-        | OffsetPagination[RowMappingT]
-    ):
+        schema_type: type[ModelDTOT] | None = None,
+    ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
 
         Args:
             data: The return from one of the service calls.
             total: the total number of rows in the data
-            schema_type: Collection route filters.
             filters: Collection route filters.
+            schema_type: Collection route filters.
 
         Returns:
             The list of instances retrieved from the repository.
