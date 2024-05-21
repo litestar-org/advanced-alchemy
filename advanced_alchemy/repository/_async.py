@@ -57,7 +57,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
     This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
     """
-    default_options: LoadSpec
 
     def __init__(
         self,
@@ -172,7 +171,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         return item_or_none
 
     def _get_loader_options(
-        self, loader_options: LoadSpec | None,
+        self,
+        loader_options: LoadSpec | None,
     ) -> tuple[list[_AbstractLoad], bool] | tuple[None, bool]:
         if loader_options is None:
             # no need to return them here; We are using the default_options, which have

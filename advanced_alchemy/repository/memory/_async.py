@@ -50,7 +50,6 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
     _uniquify_results: bool = False
-    default_options: Any
     _exclude_kwargs: set[str] = {
         "statement",
         "session",
