@@ -308,7 +308,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         """
 
         with wrap_sqlalchemy_exception():
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
                 id_attribute if id_attribute is not None else self.id_attribute,
