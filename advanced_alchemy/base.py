@@ -19,6 +19,7 @@ from sqlalchemy.orm import (
     orm_insert_sentinel,
     registry,
 )
+from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
 from advanced_alchemy.types import GUID, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
 
@@ -32,7 +33,6 @@ else:
     uuid7 = uuid4  # type: ignore[assignment]
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import FromClause
     from sqlalchemy.sql.schema import (
         _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
@@ -61,6 +61,7 @@ __all__ = (
     "SQLQuery",
     "orm_registry",
     "merge_table_arguments",
+    "TableArgsType",
 )
 
 
@@ -81,7 +82,6 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-
 def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
     """Merge Table Arguments.
 
@@ -91,7 +91,7 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
 
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
-        table_args: additional information to add to tableargs
+        table_args: additional information to add to table_args
 
     Returns:
         tuple | dict: The merged __table_args__ property
@@ -99,7 +99,7 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
 
-    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in cls.__bases__)
+    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in cls.__bases__)  # pyright: ignore[reportUnknownParameter,reportUnknownArgumentType,reportArgumentType]
 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
