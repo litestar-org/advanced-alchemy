@@ -167,7 +167,7 @@ async def list_authors(
 ) -> OffsetPagination[AuthorModel]:
     """List authors."""
     results, total = await authors_service.list_and_count(limit_offset)
-    return authors_service.to_schema(results, total=total, filters=[limit_offset])
+    return authors_service.to_schema(results, total, filters=[limit_offset])
 
 
 @author_router.post(path="/authors", response_model=Author)
