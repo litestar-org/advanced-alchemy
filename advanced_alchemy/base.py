@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
@@ -32,8 +32,11 @@ else:
     uuid7 = uuid4  # type: ignore[assignment]
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import FromClause
-    from sqlalchemy.sql.schema import _NamingSchemaParameter as NamingSchemaParameter
+    from sqlalchemy.sql.schema import (
+        _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
+    )
     from sqlalchemy.types import TypeEngine
 
 
@@ -78,11 +81,8 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(
-    cls: DeclarativeBase,
-    *mixins: Any,
-    table_args: dict | tuple | None = None,
-) -> tuple | dict:
+
+def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
     """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
@@ -91,7 +91,6 @@ def merge_table_arguments(
 
     Args:
         cls (DeclarativeBase): This is the model that will get the table args
-        *mixins (Any): The mixins to add into the model
         table_args: additional information to add to tableargs
 
     Returns:
@@ -100,7 +99,7 @@ def merge_table_arguments(
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
 
-    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in (cls, *mixins))
+    mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in cls.__bases__)
 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
@@ -108,10 +107,10 @@ def merge_table_arguments(
                 last_positional_arg = arg_to_merge[-1]
                 args.extend(arg_to_merge[:-1])
                 if isinstance(last_positional_arg, dict):
-                    kwargs.update(last_positional_arg)
+                    kwargs.update(last_positional_arg)  # pyright: ignore[reportUnknownArgumentType]
                 else:
                     args.append(last_positional_arg)
-            elif isinstance(arg_to_merge, dict):
+            else:
                 kwargs.update(arg_to_merge)
 
     if args:
@@ -126,8 +125,8 @@ class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol."""
 
     __table__: FromClause
-    __mapper__: Mapper
-    __name__: ClassVar[str]
+    __mapper__: Mapper[Any]
+    __name__: str
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -204,9 +203,9 @@ class AuditColumns:
 class BasicAttributes:
     """Basic attributes for SQLALchemy tables and queries."""
 
-    __name__: ClassVar[str]
+    __name__: str
     __table__: FromClause
-    __mapper__: Mapper
+    __mapper__: Mapper[Any]
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -257,7 +256,8 @@ class SlugKey:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
-    def __table_args__(cls) -> tuple | dict:
+    @classmethod
+    def __table_args__(cls) -> TableArgsType:
         return (
             UniqueConstraint(
                 cls.slug,
@@ -272,13 +272,13 @@ class SlugKey:
 
 
 def create_registry(
-    custom_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
     """Create a new SQLAlchemy registry."""
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: dict[type, type[TypeEngine[Any]] | TypeEngine[Any]] = {
+    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
         datetime: DateTimeUTC,
@@ -288,9 +288,7 @@ def create_registry(
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, Json
 
-        type_annotation_map.update(  # pyright: ignore[reportCallIssue]
-            {EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB},  # pyright: ignore[reportArgumentType]
-        )
+        type_annotation_map.update({EmailStr: String, AnyUrl: String, AnyHttpUrl: String, Json: JsonB})
     with contextlib.suppress(ImportError):
         from msgspec import Struct
 

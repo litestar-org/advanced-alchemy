@@ -140,6 +140,7 @@ html_context = {
 html_theme_options = {
     "logo_target": "/",
     "github_repo_name": "advanced-alchemy",
+    "github_url": "https://github.com/litestar-org/advanced-alchemy",
     "navigation_with_keys": True,
     "nav_links": [  # TODO(provinzkraut): I need a guide on extra_navbar_items and its magic :P
         {"title": "Home", "url": "index"},

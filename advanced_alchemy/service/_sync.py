@@ -16,7 +16,10 @@ from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.repository._sync import SQLAlchemySyncQueryRepository
-from advanced_alchemy.repository._util import model_from_dict
+from advanced_alchemy.repository._util import (
+    LoadSpec,
+    model_from_dict,
+)
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service._util import ResultConverter
 
@@ -92,6 +95,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -102,6 +107,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         self.repository = self.repository_type(
@@ -110,6 +117,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
             auto_commit=auto_commit,
+            load=load,
+            execution_options=execution_options,
             **repo_kwargs,
         )
 
@@ -117,6 +126,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         self,
         *filters: FilterTypes | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int:
         """Count of records returned by query.
@@ -125,31 +136,49 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             *filters: arguments for filtering.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: key value pairs of filter types.
 
         Returns:
            A count of the collection, filtered, but ignoring pagination.
         """
-        return self.repository.count(*filters, statement=statement, **kwargs)
+        return self.repository.count(
+            *filters,
+            statement=statement,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
+        )
 
-    def exists(self, *filters: FilterTypes | ColumnElement[bool], **kwargs: Any) -> bool:
+    def exists(
+        self,
+        *filters: FilterTypes | ColumnElement[bool],
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> bool:
         """Wrap repository exists operation.
 
         Args:
             *filters: Types for specific filtering operations.
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Keyword arguments for attribute based filtering.
 
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return self.repository.exists(*filters, **kwargs)
+        return self.repository.exists(*filters, load=load, execution_options=execution_options, **kwargs)
 
     def get(
         self,
         item_id: Any,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
 
@@ -161,6 +190,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
 
 
         Returns:
@@ -171,12 +202,16 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             auto_expunge=auto_expunge,
             statement=statement,
             id_attribute=id_attribute,
+            load=load,
+            execution_options=execution_options,
         )
 
     def get_one(
         self,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT:
         """Wrap repository scalar operation.
@@ -186,17 +221,27 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return self.repository.get_one(auto_expunge=auto_expunge, statement=statement, **kwargs)
+        return self.repository.get_one(
+            auto_expunge=auto_expunge,
+            statement=statement,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
+        )
 
     def get_one_or_none(
         self,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Wrap repository scalar operation.
@@ -206,12 +251,20 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return self.repository.get_one_or_none(auto_expunge=auto_expunge, statement=statement, **kwargs)
+        return self.repository.get_one_or_none(
+            auto_expunge=auto_expunge,
+            statement=statement,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
+        )
 
     def to_model(self, data: ModelT | dict[str, Any], operation: str | None = None) -> ModelT:
         """Parse and Convert input into a model.
@@ -232,6 +285,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
         """List of records and total count returned by query.
@@ -243,6 +298,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -253,6 +310,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             statement=statement,
             auto_expunge=auto_expunge,
             force_basic_query_mode=force_basic_query_mode,
+            load=load,
+            execution_options=execution_options,
             **kwargs,
         )
 
@@ -263,6 +322,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         session: Session | scoped_session[Session] | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         config: SQLAlchemySyncConfig | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Iterator[Self]:
         """Context manager that returns instance of service object.
 
@@ -275,12 +336,14 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             raise AdvancedAlchemyError(detail="Please supply an optional configuration or session to use.")
 
         if session:
-            yield cls(statement=statement, session=session)
+            yield cls(statement=statement, session=session, load=load, execution_options=execution_options)
         elif config:
             with config.get_session() as db_session:
                 yield cls(
                     statement=statement,
                     session=db_session,
+                    load=load,
+                    execution_options=execution_options,
                 )
 
     # this needs to stay at the end to make the vscode linter happy
@@ -289,6 +352,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         *filters: FilterTypes | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -299,12 +364,21 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances retrieved from the repository.
         """
-        return self.repository.list(*filters, statement=statement, auto_expunge=auto_expunge, **kwargs)
+        return self.repository.list(
+            *filters,
+            statement=statement,
+            auto_expunge=auto_expunge,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
+        )
 
 
 class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT]):
@@ -316,6 +390,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository instance creation.
 
@@ -327,6 +403,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
         Returns:
             Representation of created instance.
         """
@@ -343,6 +421,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         data: list[ModelT | dict[str, Any]] | list[dict[str, Any]] | list[ModelT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance creation.
 
@@ -352,6 +432,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             Representation of created instances.
@@ -368,7 +450,9 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository update operation.
 
@@ -388,6 +472,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             Updated representation.
@@ -395,7 +481,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         data = self.to_model(data, "update")
         if (
             item_id is None
-            and self.repository.get_id_attribute_value(
+            and self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
                 item=data,
                 id_attribute=id_attribute,
             )
@@ -407,13 +493,13 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             )
             raise RepositoryError(msg)
         if item_id is not None:
-            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)
+            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
         return self.repository.update(
             data=data,
             attribute_names=attribute_names,
             with_for_update=with_for_update,
-            auto_expunge=auto_expunge,
             auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
             id_attribute=id_attribute,
         )
@@ -423,6 +509,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         data: list[ModelT | dict[str, Any]] | list[dict[str, Any]] | list[ModelT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance update.
 
@@ -432,12 +520,20 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             Representation of updated instances.
         """
         data = [(self.to_model(datum, "update")) for datum in data]
-        return self.repository.update_many(data, auto_commit=auto_commit, auto_expunge=auto_expunge)
+        return self.repository.update_many(
+            data,
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+            load=load,
+            execution_options=execution_options,
+        )
 
     def upsert(
         self,
@@ -449,6 +545,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -469,14 +567,16 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             Updated or created representation.
         """
         data = self.to_model(data, "upsert")
-        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)
+        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
         if item_id is not None:
-            self.repository.set_id_attribute_value(item_id, data)
+            self.repository.set_id_attribute_value(item_id, data)  # pyright: ignore[reportUnknownMemberType]
         return self.repository.upsert(
             data=data,
             attribute_names=attribute_names,
@@ -485,6 +585,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_commit=auto_commit,
             auto_refresh=auto_refresh,
             match_fields=match_fields,
+            load=load,
+            execution_options=execution_options,
         )
 
     def upsert_many(
@@ -494,6 +596,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
         """Wrap repository upsert operation.
 
@@ -509,6 +613,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             Updated or created representation.
@@ -520,6 +626,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_commit=auto_commit,
             no_merge=no_merge,
             match_fields=match_fields,
+            load=load,
+            execution_options=execution_options,
         )
 
     def get_or_upsert(
@@ -531,6 +639,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -552,6 +662,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -567,6 +679,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
+            load=load,
+            execution_options=execution_options,
             **validated_model.to_dict(),
         )
 
@@ -578,6 +692,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -596,6 +712,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -610,6 +728,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
+            load=load,
+            execution_options=execution_options,
             **validated_model.to_dict(),
         )
 
@@ -618,7 +738,9 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         item_id: Any,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository delete operation.
 
@@ -630,6 +752,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
 
         Returns:
@@ -640,6 +764,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             id_attribute=id_attribute,
+            load=load,
+            execution_options=execution_options,
         )
 
     def delete_many(
@@ -647,8 +773,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         item_ids: list[Any],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
 
@@ -662,6 +790,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
                 Defaults to `950` if left unset.
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
 
 
         Returns:
@@ -673,4 +803,6 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_expunge=auto_expunge,
             id_attribute=id_attribute,
             chunk_size=chunk_size,
+            load=load,
+            execution_options=execution_options,
         )

@@ -51,6 +51,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
     model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
+    _uniquify_results: bool = False
     _exclude_kwargs: set[str] = {
         "statement",
         "session",
@@ -60,6 +61,8 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         "attribute_names",
         "with_for_update",
         "force_basic_query_mode",
+        "load",
+        "execution_options",
     }
 
     def __init__(self, **kwargs: Any) -> None:
@@ -69,17 +72,21 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
+        self._default_options: Any = []
+        self._default_execution_options: Any = {}
+        self._loader_options: Any = []
+        self._loader_options_have_wildcards = False
 
     def __init_subclass__(cls) -> None:
-        cls.__database_registry__[cls] = cls.__database__
+        cls.__database_registry__[cls] = cls.__database__  # pyright: ignore[reportGeneralTypeIssues]
 
     @classmethod
     def __database_add__(cls, identity: Any, data: ModelT) -> ModelT:
-        return cast(ModelT, cls.__database__.add(identity, data))
+        return cast("ModelT", cls.__database__.add(identity, data))  # pyright: ignore[reportUnnecessaryCast,reportGeneralTypeIssues]
 
     @classmethod
     def __database_clear__(cls) -> None:
-        for database in cls.__database_registry__.values():
+        for database in cls.__database_registry__.values():  # pyright: ignore[reportGeneralTypeIssues]
             database.remove_all()
 
     @overload
@@ -107,7 +114,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
     def get_id_attribute_value(
         cls,
         item: ModelT | type[ModelT],
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any:
         """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
 
@@ -128,7 +135,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         cls,
         item_id: Any,
         item: ModelT,
-        id_attribute: str | InstrumentedAttribute | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
@@ -270,7 +277,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                 )
-            elif not isinstance(filter_, ColumnElement):
+            elif not isinstance(filter_, ColumnElement):  # pyright: ignore[reportUnnecessaryIsInstance]
                 msg = f"Unexpected filter: {filter_}"  # type: ignore[unreachable]
                 raise RepositoryError(msg)
         return result

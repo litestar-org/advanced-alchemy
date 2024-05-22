@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
+from typing import TYPE_CHECKING, Any, Generic, Iterable, List, Literal, Sequence, Tuple, Union, cast
 
 from sqlalchemy import (
     StatementLambdaElement,
     any_,
     text,
 )
-from sqlalchemy.orm import InstrumentedAttribute
-from sqlalchemy.sql import ColumnElement
+from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
+from sqlalchemy.orm.strategy_options import (
+    _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
+)
+from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
+from sqlalchemy.sql.base import ExecutableOption
+from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import RepositoryError
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
@@ -29,17 +34,33 @@ if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
 
-    from sqlalchemy.orm import InstrumentedAttribute
-
     from advanced_alchemy.base import ModelProtocol
+    from advanced_alchemy.filters import FilterTypes
+
+
+WhereClauseT = ColumnExpressionArgument[bool]
+SingleLoad: TypeAlias = Union[
+    _AbstractLoad,
+    Literal["*"],
+    InstrumentedAttribute[Any],
+    RelationshipProperty[Any],
+    MapperProperty[Any],
+]
+LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
+ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
+LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
+
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
 
 
-def get_instrumented_attr(model: type[ModelProtocol], key: str | InstrumentedAttribute) -> InstrumentedAttribute:
+def get_instrumented_attr(
+    model: type[ModelProtocol],
+    key: str | InstrumentedAttribute[Any],
+) -> InstrumentedAttribute[Any]:
     if isinstance(key, str):
-        return cast("InstrumentedAttribute", getattr(model, key))
+        return cast("InstrumentedAttribute[Any]", getattr(model, key))
     return key
 
 
@@ -47,10 +68,54 @@ def model_from_dict(model: ModelT, **kwargs: Any) -> ModelT:
     """Return ORM Object from Dictionary."""
     data = {
         column_name: kwargs[column_name]
-        for column_name in model.__mapper__.columns.keys()  # noqa: SIM118
+        for column_name in model.__mapper__.columns.keys()  # noqa: SIM118  # pyright: ignore[reportUnknownMemberType]
         if column_name in kwargs
     }
-    return model(**data)  # type: ignore  # noqa: PGH003
+    return cast("ModelT", model(**data))  # type: ignore[operator]
+
+
+def get_abstract_loader_options(
+    loader_options: LoadSpec | None,
+    default_loader_options: List[_AbstractLoad] | None = None,  # noqa: UP006
+    default_options_have_wildcards: bool = False,
+) -> Tuple[List[_AbstractLoad], bool]:  # noqa: UP006
+    loads: List[_AbstractLoad] = default_loader_options if default_loader_options is not None else []  # noqa: UP006
+    options_have_wildcards = default_options_have_wildcards
+    if loader_options is None:
+        return (loads, options_have_wildcards)
+    if isinstance(loader_options, _AbstractLoad):
+        return ([loader_options], options_have_wildcards)
+    if isinstance(loader_options, InstrumentedAttribute):
+        loader_options = loader_options.property
+    if isinstance(loader_options, RelationshipProperty):
+        class_ = loader_options.class_attribute
+        return (
+            [selectinload(class_)]
+            if loader_options.uselist
+            else [joinedload(class_, innerjoin=loader_options.innerjoin)],
+            options_have_wildcards if loader_options.uselist else True,
+        )
+    if isinstance(loader_options, str) and loader_options == "*":
+        options_have_wildcards = True
+        return ([joinedload("*")], options_have_wildcards)
+    if isinstance(loader_options, (list, tuple)):
+        for attribute in loader_options:
+            if isinstance(attribute, (list, tuple)):
+                load_chain, options_have_wildcards = get_abstract_loader_options(
+                    loader_options=attribute,
+                    default_options_have_wildcards=options_have_wildcards,
+                )
+                loader = load_chain[-1]
+                for sub_load in load_chain[-2::-1]:
+                    loader = sub_load.options(loader)
+                loads.append(loader)
+            else:
+                load_chain, options_have_wildcards = get_abstract_loader_options(
+                    loader_options=attribute,
+                    default_options_have_wildcards=options_have_wildcards,
+                )
+                loads.extend(load_chain)
+    return (loads, options_have_wildcards)
 
 
 class FilterableRepository(Generic[ModelT]):
@@ -65,7 +130,7 @@ class FilterableRepository(Generic[ModelT]):
         offset: int,
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
-        statement += lambda s: s.limit(limit).offset(offset)
+        statement += lambda s: s.limit(limit).offset(offset)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _apply_filters(
@@ -143,7 +208,7 @@ class FilterableRepository(Generic[ModelT]):
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                 )
-            elif isinstance(filter_, ColumnElement):
+            elif isinstance(filter_, ColumnElement):  # pyright: ignore[reportUnnecessaryIsInstance]
                 statement = self._filter_by_expression(expression=filter_, statement=statement)
             else:
                 msg = f"Unexpected filter: {filter_}"  # type: ignore[unreachable]
@@ -152,37 +217,37 @@ class FilterableRepository(Generic[ModelT]):
 
     def _filter_in_collection(
         self,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         values: abc.Collection[Any],
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
         if not values:
-            statement += lambda s: s.where(text("1=-1"))
+            statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field.in_(values))
+        statement += lambda s: s.where(field.in_(values))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _filter_not_in_collection(
         self,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         values: abc.Collection[Any],
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
         if not values:
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field.notin_(values))
+        statement += lambda s: s.where(field.notin_(values))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _filter_any_collection(
         self,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         values: abc.Collection[Any],
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
         if not values:
-            statement += lambda s: s.where(text("1=-1"))
+            statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         field = get_instrumented_attr(self.model_type, field_name)
         statement += lambda s: s.where(any_(values) == field)  # type: ignore[arg-type]
@@ -190,7 +255,7 @@ class FilterableRepository(Generic[ModelT]):
 
     def _filter_not_any_collection(
         self,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         values: abc.Collection[Any],
         statement: StatementLambdaElement,
     ) -> StatementLambdaElement:
@@ -202,7 +267,7 @@ class FilterableRepository(Generic[ModelT]):
 
     def _filter_on_datetime_field(
         self,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         statement: StatementLambdaElement,
         before: datetime | None = None,
         after: datetime | None = None,
@@ -211,13 +276,13 @@ class FilterableRepository(Generic[ModelT]):
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
         if before is not None:
-            statement += lambda s: s.where(field < before)
+            statement += lambda s: s.where(field < before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if after is not None:
-            statement += lambda s: s.where(field > after)
+            statement += lambda s: s.where(field > after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if on_or_before is not None:
-            statement += lambda s: s.where(field <= on_or_before)
+            statement += lambda s: s.where(field <= on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if on_or_after is not None:
-            statement += lambda s: s.where(field >= on_or_after)
+            statement += lambda s: s.where(field >= on_or_after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _filter_select_by_kwargs(
@@ -225,8 +290,8 @@ class FilterableRepository(Generic[ModelT]):
         statement: StatementLambdaElement,
         kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
     ) -> StatementLambdaElement:
-        for key, val in kwargs.items() if isinstance(kwargs, dict) else kwargs:
-            statement = self._filter_by_where(statement, key, val)  # pyright: ignore[reportGeneralTypeIssues]
+        for key, val in dict(kwargs).items():
+            statement = self._filter_by_where(statement=statement, field_name=key, value=val)
         return statement
 
     def _filter_by_expression(
@@ -234,58 +299,58 @@ class FilterableRepository(Generic[ModelT]):
         statement: StatementLambdaElement,
         expression: ColumnElement[bool],
     ) -> StatementLambdaElement:
-        statement += lambda s: s.where(expression)
+        statement += lambda s: s.where(expression)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _filter_by_where(
         self,
         statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         value: Any,
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field == value)
+        statement += lambda s: s.where(field == value)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _filter_by_like(
         self,
         statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         value: str,
         ignore_case: bool,
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
         search_text = f"%{value}%"
         if ignore_case:
-            statement += lambda s: s.where(field.ilike(search_text))
+            statement += lambda s: s.where(field.ilike(search_text))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         else:
-            statement += lambda s: s.where(field.like(search_text))
+            statement += lambda s: s.where(field.like(search_text))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _filter_by_not_like(
         self,
         statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         value: str,
         ignore_case: bool,
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
         search_text = f"%{value}%"
         if ignore_case:
-            statement += lambda s: s.where(field.not_ilike(search_text))
+            statement += lambda s: s.where(field.not_ilike(search_text))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         else:
-            statement += lambda s: s.where(field.not_like(search_text))
+            statement += lambda s: s.where(field.not_like(search_text))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
     def _order_by(
         self,
         statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute,
+        field_name: str | InstrumentedAttribute[Any],
         sort_desc: bool = False,
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
         if sort_desc:
-            statement += lambda s: s.order_by(field.desc())
+            statement += lambda s: s.order_by(field.desc())  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         else:
-            statement += lambda s: s.order_by(field.asc())
+            statement += lambda s: s.order_by(field.asc())  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
