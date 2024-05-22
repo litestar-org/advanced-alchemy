@@ -60,7 +60,6 @@ class UUIDSlugBook(UUIDBase, SlugKey):
     def __table_args__(cls) -> dict | tuple:
         return merge_table_arguments(
             cls,
-            SlugKey,
             table_args={"comment": "Slugbook"},
         )
 
