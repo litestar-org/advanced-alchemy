@@ -34,11 +34,11 @@ except ImportError:  # pragma: nocover
 
 
 try:
-    from pydantic.main import ModelMetaclass  # pyright: ignore[reportAssignmentType]
+    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportAssignmentType]
 except ImportError:  # pragma: nocover
 
-    class ModelMetaclass:  # type: ignore[no-redef]
+    class BaseModel:  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
     class TypeAdapter:  # type: ignore[no-redef]
@@ -137,9 +137,9 @@ def to_schema(
             total=total,
         )
 
-    if schema_type is not None and issubclass(schema_type, ModelMetaclass):
+    if schema_type is not None and issubclass(schema_type, BaseModel):
         if not isinstance(data, Sequence):
-            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
+            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # type: ignore[return-value] # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
         limit_offset = _find_filter(LimitOffset, filters=filters)
         total = total if total else len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
