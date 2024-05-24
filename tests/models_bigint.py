@@ -7,6 +7,7 @@ from typing import Any, List
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
+from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase, SlugKey, merge_table_arguments
 from advanced_alchemy.repository import (
@@ -61,7 +62,7 @@ class BigIntSlugBook(BigIntBase, SlugKey):
 
     @declared_attr.directive
     @classmethod
-    def __table_args__(cls) -> dict | tuple:
+    def __table_args__(cls) -> TableArgsType:
         return merge_table_arguments(
             cls,
             table_args={"comment": "Slugbook"},
@@ -89,8 +90,8 @@ class BigIntModelWithFetchedValue(BigIntBase):
 bigint_item_tag = Table(
     "bigint_item_tag",
     BigIntBase.metadata,
-    Column("item_id", ForeignKey("big_int_item.id"), primary_key=True),
-    Column("tag_id", ForeignKey("big_int_tag.id"), primary_key=True),
+    Column("item_id", ForeignKey("big_int_item.id"), primary_key=True),  # pyright: ignore
+    Column("tag_id", ForeignKey("big_int_tag.id"), primary_key=True),  # pyright: ignore
 )
 
 
@@ -482,7 +483,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -499,7 +500,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -516,7 +517,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -533,7 +534,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":

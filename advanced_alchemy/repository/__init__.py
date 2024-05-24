@@ -8,7 +8,7 @@ from advanced_alchemy.repository._sync import (
     SQLAlchemySyncRepository,
     SQLAlchemySyncSlugRepository,
 )
-from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
+from advanced_alchemy.repository._util import LoadSpec, get_instrumented_attr, model_from_dict
 
 __all__ = (
     "SQLAlchemyAsyncRepository",
@@ -19,4 +19,5 @@ __all__ = (
     "SQLAlchemySyncQueryRepository",
     "get_instrumented_attr",
     "model_from_dict",
+    "LoadSpec",
 )

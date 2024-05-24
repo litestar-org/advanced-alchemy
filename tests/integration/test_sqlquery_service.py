@@ -142,7 +142,12 @@ async def test_async_fixture_and_query() -> None:
         repo = USStateAsyncRepository(session=session)
         query_service = SQLAlchemyAsyncQueryService(session=session)
         fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
-        _add_objs = await repo.add_many([USStateSyncRepository.model_type(**raw_obj) for raw_obj in fixture])
+        _add_objs = await repo.add_many(
+            [
+                USStateSyncRepository.model_type(**raw_obj)  # pyright: ignore[reportGeneralTypeIssues]
+                for raw_obj in fixture
+            ],
+        )
         query_count = await query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = await query_service.repository.list_and_count(
