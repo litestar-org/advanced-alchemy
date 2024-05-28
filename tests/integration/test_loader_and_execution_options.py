@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import ForeignKey, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, selectinload, sessionmaker
+from sqlalchemy.orm import Mapped, Session, mapped_column, noload, relationship, selectinload, sessionmaker
 
 from advanced_alchemy.base import BigIntBase, UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
@@ -14,7 +14,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyn
 def test_loader() -> None:
     class UUIDCountry(UUIDBase):
         name: Mapped[str]
-        states: Mapped[List[UUIDState]] = relationship(back_populates="country", uselist=True)
+        states: Mapped[List[UUIDState]] = relationship(back_populates="country", uselist=True, lazy="noload")
 
     class UUIDState(UUIDBase):
         name: Mapped[str]
@@ -58,13 +58,6 @@ def test_loader() -> None:
         )
         assert len(usa_country_0.states) == 2
 
-        si1_country_repo = CountryRepository(session=db_session)
-        usa_country_1 = si1_country_repo.get_one(
-            name="United States of America",
-            load=[selectinload(UUIDCountry.states)],
-        )
-        assert len(usa_country_1.states) == 2
-
         si2_country_repo = CountryRepository(session=db_session, load=[selectinload(UUIDCountry.states)])
         usa_country_2 = si2_country_repo.get_one(name="United States of America")
         assert len(usa_country_2.states) == 2
@@ -81,6 +74,12 @@ def test_loader() -> None:
         usa_country_3 = star_country_repo.get_one(name="United States of America")
         assert len(usa_country_3.states) == 2
 
+        si1_country_repo = CountryRepository(session=db_session)
+        usa_country_1 = si1_country_repo.get_one(
+            name="United States of America",
+            load=[noload(UUIDCountry.states)],
+        )
+        assert len(usa_country_1.states) == 0
     with engine.begin() as conn:
         UUIDState.metadata.drop_all(conn)
 
