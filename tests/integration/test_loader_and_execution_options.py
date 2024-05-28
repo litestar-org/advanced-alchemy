@@ -16,13 +16,8 @@ if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
 
-@pytest.fixture(autouse=True)
-def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
-    """Ensure new registry state for every test.
-
-    This prevents errors such as "Table '...' is already defined for
-    this MetaData instance...
-    """
+@pytest.mark.xdist_group("loader")
+def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     from sqlalchemy.orm import DeclarativeBase
 
     from advanced_alchemy import base
@@ -39,8 +34,6 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
 
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
-
-def test_loader(_patch_bases: None, tmp_path: Path) -> None:
     class UUIDCountry(UUIDBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[List[UUIDState]] = relationship(back_populates="country", uselist=True, lazy="noload")
@@ -129,7 +122,24 @@ def test_loader(_patch_bases: None, tmp_path: Path) -> None:
         UUIDState.metadata.drop_all(conn)
 
 
-async def test_async_loader(_patch_bases: None, tmp_path: Path) -> None:
+@pytest.mark.xdist_group("loader")
+async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    from sqlalchemy.orm import DeclarativeBase
+
+    from advanced_alchemy import base
+
+    orm_registry = base.create_registry()
+
+    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+        registry = orm_registry
+
+    class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+        registry = orm_registry
+
+    monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
+
+    monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
+
     class BigIntCountry(BigIntBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[List[BigIntState]] = relationship(back_populates="country", uselist=True)
