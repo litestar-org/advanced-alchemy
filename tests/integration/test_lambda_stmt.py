@@ -1,4 +1,6 @@
-from sqlalchemy import ForeignKey, create_engine, func, select
+from __future__ import annotations
+
+from sqlalchemy import ForeignKey, String, create_engine, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, sessionmaker
 
 from advanced_alchemy.base import UUIDBase
@@ -6,12 +8,11 @@ from advanced_alchemy.repository import SQLAlchemySyncRepository
 
 
 def test_lambda_statement_quirks() -> None:
-
     class Country(UUIDBase):
-        name: Mapped[str]
+        name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
 
     class State(UUIDBase):
-        name: Mapped[str]
+        name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         country_id: Mapped[str] = mapped_column(ForeignKey(Country.id))
 
         country = relationship(Country)
@@ -85,3 +86,6 @@ def test_lambda_statement_quirks() -> None:
         assert count == 2, f"Expected 2, got {count}"
         _states, count = repo.list_and_count(statement=stmt2, force_basic_query_mode=True)
         assert count == 2, f"Expected 2, got {count}"
+
+    with engine.begin() as conn:
+        Country.metadata.drop_all(conn)
