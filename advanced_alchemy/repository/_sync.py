@@ -89,27 +89,19 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
         self.session = session
-        if isinstance(statement, Select):
-            self.statement = lambda_stmt(lambda: statement)
-        elif statement is None:
-            statement = select(self.model_type)
-            self.statement = lambda_stmt(lambda: statement)
-        else:
-            self.statement = statement
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
         )
         self._default_execution_options = execution_options or {}
+        _statement = select(self.model_type) if statement is None else statement
         if self._default_loader_options:
-            self.statement = self.statement.add_criteria(
-                lambda s: s.options(*self._default_loader_options),
-                track_closure_variables=False,
-            )
+            _statement = _statement.options(*self._default_loader_options)
         if self._default_execution_options:
-            self.statement = self.statement.add_criteria(
-                lambda s: s.execution_options(**self._default_execution_options),
-                track_closure_variables=False,
-            )
+            _statement = _statement.execution_options(**self._default_execution_options)
+        if isinstance(_statement, Select):
+            self.statement = lambda_stmt(lambda: _statement)
+        else:
+            self.statement = _statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
@@ -401,6 +393,11 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
+        statement = self.statement if statement is None else statement
+        if loader_options:
+            statement = statement.options(*loader_options)
+        if execution_options:
+            statement = statement.execution_options(**execution_options)
         if isinstance(statement, Select):
             statement = lambda_stmt(
                 lambda: statement,
@@ -408,21 +405,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 global_track_bound_values=global_track_bound_values,
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
-            )
-        statement = self.statement if statement is None else statement
-        if loader_options:
-            statement = statement.add_criteria(
-                lambda s: s.options(*loader_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
-        if execution_options:
-            statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
             )
         return statement
 
@@ -448,19 +430,9 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         if supports_returning and statement_type != "select":
             statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if loader_options:
-            statement = statement.add_criteria(
-                lambda s: s.options(*loader_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
+            statement = statement.options(*loader_options)
         if execution_options:
-            statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
+            statement = statement.execution_options(**execution_options)
         return statement
 
     def get(
@@ -1675,7 +1647,7 @@ class SQLAlchemySyncQueryRepository:
             return instances, count
 
     def _get_count_stmt(self, statement: Select[Any]) -> Select[Any]:
-        return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
+        return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)  # pyright: ignore[reportUnknownVariable]
 
     def _list_and_count_basic(
         self,

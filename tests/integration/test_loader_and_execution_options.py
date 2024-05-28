@@ -49,8 +49,14 @@ def test_loader() -> None:
         repo.add(oregon)
         repo.add(ile_de_france)
         db_session.commit()
-
+        db_session.expire_all()
+        si1_country_repo = CountryRepository(session=db_session, load=[noload(UUIDCountry.states)])
+        usa_country_1 = si1_country_repo.get_one(
+            name="United States of America",
+        )
+        assert len(usa_country_1.states) == 0
         si0_country_repo = CountryRepository(session=db_session)
+
         usa_country_0 = si0_country_repo.get_one(
             name="United States of America",
             load=UUIDCountry.states,
@@ -73,13 +79,15 @@ def test_loader() -> None:
         star_country_repo = CountryRepository(session=db_session, load="*")
         usa_country_3 = star_country_repo.get_one(name="United States of America")
         assert len(usa_country_3.states) == 2
-
+        db_session.expire_all()
         si1_country_repo = CountryRepository(session=db_session)
         usa_country_1 = si1_country_repo.get_one(
             name="United States of America",
             load=[noload(UUIDCountry.states)],
         )
         assert len(usa_country_1.states) == 0
+        si0_country_repo = CountryRepository(session=db_session)
+
     with engine.begin() as conn:
         UUIDState.metadata.drop_all(conn)
 
@@ -123,6 +131,12 @@ async def test_async_loader() -> None:
         await repo.add(ile_de_france)
         await db_session.commit()
 
+        db_session.expire_all()
+        si1_country_repo = CountryRepository(session=db_session, load=[noload(BigIntCountry.states)])
+        usa_country_21 = await si1_country_repo.get_one(
+            name="United States of America",
+        )
+        assert len(usa_country_21.states) == 0
         si0_country_repo = CountryRepository(session=db_session)
         usa_country_0 = await si0_country_repo.get_one(
             name="United States of America",
