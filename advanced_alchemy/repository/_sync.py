@@ -38,7 +38,7 @@ from advanced_alchemy.utils.text import slugify
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.orm.scoping import scoped_session
-    from sqlalchemy.orm.strategy_options import _AbstractLoad
+    from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import FilterTypes
@@ -411,14 +411,14 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             )
         statement = self.statement if statement is None else statement
         if loader_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.options(*loader_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
             )
         if execution_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
@@ -448,14 +448,14 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         if supports_returning and statement_type != "select":
             statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if loader_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.options(*loader_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
             )
         if execution_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
@@ -943,14 +943,14 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         if supports_returning:
             statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if loader_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.options(*loader_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
             )
         if execution_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
@@ -1140,14 +1140,14 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             enable_tracking=False,
         )
         if loader_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.options(*loader_options),
                 track_bound_values=False,
                 track_closure_variables=False,
                 enable_tracking=False,
             )
         if execution_options:
-            statement.add_criteria(
+            statement = statement.add_criteria(
                 lambda s: s.execution_options(**execution_options),
                 track_bound_values=False,
                 track_closure_variables=False,
