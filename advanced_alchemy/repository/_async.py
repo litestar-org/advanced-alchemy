@@ -194,7 +194,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Returns:
             The added instance.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -218,7 +218,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Returns:
             The added instances.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             self.session.add_all(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -253,7 +253,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             instance = await self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -295,7 +295,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
@@ -475,7 +475,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
@@ -517,7 +517,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -555,7 +555,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -666,7 +666,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -743,7 +743,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -791,7 +791,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             fragment = self.get_id_attribute_value(self.model_type)
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -847,7 +847,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -897,7 +897,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
@@ -906,6 +906,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
+            execution_options = execution_options if execution_options is not None else {}
             if supports_returning:
                 instances = list(
                     await self.session.scalars(
@@ -913,13 +914,14 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                         cast("_CoreSingleExecuteParams", data_to_update),  # this is not correct but the only way
                         # currently to deal with an SQLAlchemy typing issue. See
                         # https://github.com/sqlalchemy/sqlalchemy/discussions/9925
+                        execution_options=execution_options,
                     ),
                 )
                 await self._flush_or_commit(auto_commit=auto_commit)
                 for instance in instances:
                     self._expunge(instance, auto_expunge=auto_expunge)
                 return instances
-            await self.session.execute(statement, data_to_update)
+            await self.session.execute(statement, data_to_update, execution_options=execution_options)
             await self._flush_or_commit(auto_commit=auto_commit)
             return data
 
@@ -930,7 +932,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        statement = lambda_stmt(lambda: update(model_type))
+        statement = lambda_stmt(lambda: update(model_type), enable_tracking=False, global_track_bound_values=False)
         if supports_returning:
             statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if loader_options:
@@ -1046,7 +1048,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1056,6 +1058,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             )
             statement = statement.add_criteria(
                 lambda s: s.add_columns(over(sql_func.count())),
+                enable_tracking=False,
             )
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1094,7 +1097,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1177,40 +1180,39 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
-            if match_fields := self._get_match_fields(match_fields=match_fields):
-                match_filter = {
-                    field_name: getattr(data, field_name, None)
-                    for field_name in match_fields
-                    if getattr(data, field_name, None) is not None
-                }
-            elif getattr(data, self.id_attribute, None) is not None:
-                match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
-            else:
-                match_filter = data.to_dict(exclude={self.id_attribute})
-            existing = await self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
-            if not existing:
-                return await self.add(
-                    data,
-                    auto_commit=auto_commit,
-                    auto_expunge=auto_expunge,
-                    auto_refresh=auto_refresh,
-                )
-            with wrap_sqlalchemy_exception(), self.session.no_autoflush:
-                for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
-                    field = getattr(existing, field_name, MISSING)
-                    if field is not MISSING and field != new_field_value:
-                        setattr(existing, field_name, new_field_value)
-                instance = await self._attach_to_session(existing, strategy="merge")
-                await self._flush_or_commit(auto_commit=auto_commit)
-                await self._refresh(
-                    instance,
-                    attribute_names=attribute_names,
-                    with_for_update=with_for_update,
-                    auto_refresh=auto_refresh,
-                )
-                self._expunge(instance, auto_expunge=auto_expunge)
-                return instance
+        if match_fields := self._get_match_fields(match_fields=match_fields):
+            match_filter = {
+                field_name: getattr(data, field_name, None)
+                for field_name in match_fields
+                if getattr(data, field_name, None) is not None
+            }
+        elif getattr(data, self.id_attribute, None) is not None:
+            match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
+        else:
+            match_filter = data.to_dict(exclude={self.id_attribute})
+        existing = await self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
+        if not existing:
+            return await self.add(
+                data,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+            )
+        with wrap_sqlalchemy_exception():
+            for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
+                field = getattr(existing, field_name, MISSING)
+                if field is not MISSING and field != new_field_value:
+                    setattr(existing, field_name, new_field_value)
+            instance = await self._attach_to_session(existing, strategy="merge")
+            await self._flush_or_commit(auto_commit=auto_commit)
+            await self._refresh(
+                instance,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+                auto_refresh=auto_refresh,
+            )
+            self._expunge(instance, auto_expunge=auto_expunge)
+            return instance
 
     def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
         return (
@@ -1287,7 +1289,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 else:
                     match_filter.append(field.in_(matched_values))
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             existing_objs = await self.list(
                 *match_filter,
                 load=load,
@@ -1384,7 +1386,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             The list of instances, after filtering applied.
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1413,7 +1415,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             collection = self._to_lambda_stmt(statement=collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return collection
@@ -1572,7 +1574,7 @@ class SQLAlchemyAsyncQueryRepository:
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return self.check_not_found(instance)
@@ -1591,7 +1593,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return instance or None
@@ -1606,7 +1608,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
                 None,
             )
@@ -1652,7 +1654,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
@@ -1683,7 +1685,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
@@ -1703,7 +1705,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
             return list(result.scalars())
@@ -1722,7 +1724,7 @@ class SQLAlchemyAsyncQueryRepository:
                 have the property that their attribute named `key` has value equal to `value`.
         """
 
-        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
