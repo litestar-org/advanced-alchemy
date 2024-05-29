@@ -768,7 +768,8 @@ async def test_execute(mock_repo: SQLAlchemyAsyncRepository) -> None:
 
 def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository) -> None:
     """Ensures we don't filter on an empty collection."""
-    mock_repo._filter_in_collection("id", [], statement=mock_repo.statement)
+    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
+    mock_repo._filter_in_collection("id", [], statement=statement)
     mock_repo.statement.where.assert_not_called()
 
 
@@ -784,18 +785,18 @@ def test_filter_on_datetime_field(before: datetime, after: datetime, mock_repo: 
     """Test through branches of _filter_on_datetime_field()"""
     field_mock = MagicMock()
     field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True
-
+    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
     mock_repo.model_type.updated_at = field_mock
-    mock_repo._filter_on_datetime_field("updated_at", before=before, after=after, statement=mock_repo.statement)
+    mock_repo._filter_on_datetime_field("updated_at", before=before, after=after, statement=statement)
 
 
 def test_filter_collection_by_kwargs(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
     """Test `filter_by()` called with kwargs."""
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
-    mocker.patch.object(mock_repo, "filter_collection_by_kwargs", return_value=mock_repo.statement)
-    _ = mock_repo.filter_collection_by_kwargs(mock_repo.statement, a=1, b=2)
-    mock_repo.filter_collection_by_kwargs.assert_called_once_with(mock_repo.statement, a=1, b=2)
+    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
+    mocker.patch.object(mock_repo, "filter_collection_by_kwargs", return_value=statement)
+    _ = mock_repo.filter_collection_by_kwargs(statement, a=1, b=2)
+    mock_repo.filter_collection_by_kwargs.assert_called_once_with(statement, a=1, b=2)
 
 
 def test_filter_collection_by_kwargs_raises_repository_exception_for_attribute_error(
@@ -805,8 +806,9 @@ def test_filter_collection_by_kwargs_raises_repository_exception_for_attribute_e
     """Test that we raise a repository exception if an attribute name is
     incorrect.
     """
-    mock_repo.statement.filter_by = MagicMock(  # pyright: ignore[reportGeneralTypeIssues]
+    mock_repo.statement.filter_by = MagicMock(  # type: ignore # pyright: ignore[reportGeneralTypeIssues]
         side_effect=InvalidRequestError,
     )
     with pytest.raises(RepositoryError):
-        _ = mock_repo.filter_collection_by_kwargs(mock_repo.statement, a=1)
+        statement = mock_repo._to_lambda_stmt(mock_repo.statement)
+        _ = mock_repo.filter_collection_by_kwargs(statement, a=1)
