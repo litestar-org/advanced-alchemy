@@ -1416,7 +1416,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 have the property that their attribute named `key` has value equal to `value`.
         """
         with wrap_sqlalchemy_exception():
-            collection = self._to_lambda_stmt(statement=collection)
+            collection = lambda_stmt(lambda: collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return collection
 
