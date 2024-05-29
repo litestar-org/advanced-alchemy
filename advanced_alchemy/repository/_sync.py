@@ -98,10 +98,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             _statement = _statement.options(*self._default_loader_options)
         if self._default_execution_options:
             _statement = _statement.execution_options(**self._default_execution_options)
-        if isinstance(_statement, Select):
-            self.statement = lambda_stmt(lambda: _statement)
-        else:
-            self.statement = _statement
+        self.statement = _statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
@@ -198,7 +195,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Returns:
             The added instance.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             instance = self._attach_to_session(data)
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(instance, auto_refresh=auto_refresh)
@@ -222,7 +219,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Returns:
             The added instances.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             self.session.add_all(data)
             self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -257,7 +254,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             instance = self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -299,7 +296,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
@@ -382,15 +379,15 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         existing = self.count(*filters, load=load, execution_options=execution_options, **kwargs)
         return existing > 0
 
-    @staticmethod
     def _to_lambda_stmt(
+        self,
         statement: Select[tuple[ModelT]] | StatementLambdaElement,
         global_track_bound_values: bool = True,
         track_closure_variables: bool = True,
         enable_tracking: bool = True,
         track_bound_values: bool = True,
     ) -> StatementLambdaElement:
-        if isinstance(statement, (Select,)):
+        if isinstance(statement, Select):
             statement = lambda_stmt(
                 lambda: statement,
                 track_bound_values=track_bound_values,
@@ -479,7 +476,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
@@ -521,7 +518,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -559,7 +556,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -670,40 +667,41 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        if match_fields := self._get_match_fields(match_fields=match_fields):
-            match_filter = {
-                field_name: kwargs.get(field_name, None)
-                for field_name in match_fields
-                if kwargs.get(field_name, None) is not None
-            }
-        else:
-            match_filter = kwargs
-        existing = self.get_one_or_none(**match_filter, load=load, execution_options=execution_options)
-        if not existing:
-            return (
-                self.add(
-                    self.model_type(**kwargs),
-                    auto_commit=auto_commit,
-                    auto_expunge=auto_expunge,
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+            if match_fields := self._get_match_fields(match_fields=match_fields):
+                match_filter = {
+                    field_name: kwargs.get(field_name, None)
+                    for field_name in match_fields
+                    if kwargs.get(field_name, None) is not None
+                }
+            else:
+                match_filter = kwargs
+            existing = self.get_one_or_none(**match_filter, load=load, execution_options=execution_options)
+            if not existing:
+                return (
+                    self.add(
+                        self.model_type(**kwargs),
+                        auto_commit=auto_commit,
+                        auto_expunge=auto_expunge,
+                        auto_refresh=auto_refresh,
+                    ),
+                    True,
+                )
+            if upsert:
+                for field_name, new_field_value in kwargs.items():
+                    field = getattr(existing, field_name, MISSING)
+                    if field is not MISSING and field != new_field_value:
+                        setattr(existing, field_name, new_field_value)
+                existing = self._attach_to_session(existing, strategy="merge")
+                self._flush_or_commit(auto_commit=auto_commit)
+                self._refresh(
+                    existing,
+                    attribute_names=attribute_names,
+                    with_for_update=with_for_update,
                     auto_refresh=auto_refresh,
-                ),
-                True,
-            )
-        if upsert:
-            for field_name, new_field_value in kwargs.items():
-                field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and field != new_field_value:
-                    setattr(existing, field_name, new_field_value)
-            existing = self._attach_to_session(existing, strategy="merge")
-            self._flush_or_commit(auto_commit=auto_commit)
-            self._refresh(
-                existing,
-                attribute_names=attribute_names,
-                with_for_update=with_for_update,
-                auto_refresh=auto_refresh,
-            )
-            self._expunge(existing, auto_expunge=auto_expunge)
-        return existing, False
+                )
+                self._expunge(existing, auto_expunge=auto_expunge)
+            return existing, False
 
     def get_and_update(
         self,
@@ -746,31 +744,32 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        if match_fields := self._get_match_fields(match_fields=match_fields):
-            match_filter = {
-                field_name: kwargs.get(field_name, None)
-                for field_name in match_fields
-                if kwargs.get(field_name, None) is not None
-            }
-        else:
-            match_filter = kwargs
-        existing = self.get_one(**match_filter, load=load, execution_options=execution_options)
-        updated = False
-        for field_name, new_field_value in kwargs.items():
-            field = getattr(existing, field_name, MISSING)
-            if field is not MISSING and field != new_field_value:
-                updated = True
-                setattr(existing, field_name, new_field_value)
-        existing = self._attach_to_session(existing, strategy="merge")
-        self._flush_or_commit(auto_commit=auto_commit)
-        self._refresh(
-            existing,
-            attribute_names=attribute_names,
-            with_for_update=with_for_update,
-            auto_refresh=auto_refresh,
-        )
-        self._expunge(existing, auto_expunge=auto_expunge)
-        return existing, updated
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+            if match_fields := self._get_match_fields(match_fields=match_fields):
+                match_filter = {
+                    field_name: kwargs.get(field_name, None)
+                    for field_name in match_fields
+                    if kwargs.get(field_name, None) is not None
+                }
+            else:
+                match_filter = kwargs
+            existing = self.get_one(**match_filter, load=load, execution_options=execution_options)
+            updated = False
+            for field_name, new_field_value in kwargs.items():
+                field = getattr(existing, field_name, MISSING)
+                if field is not MISSING and field != new_field_value:
+                    updated = True
+                    setattr(existing, field_name, new_field_value)
+            existing = self._attach_to_session(existing, strategy="merge")
+            self._flush_or_commit(auto_commit=auto_commit)
+            self._refresh(
+                existing,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+                auto_refresh=auto_refresh,
+            )
+            self._expunge(existing, auto_expunge=auto_expunge)
+            return existing, updated
 
     def count(
         self,
@@ -793,7 +792,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
             fragment = self.get_id_attribute_value(self.model_type)
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -806,7 +805,9 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
                 track_on=[self],
             )
-            statement = statement.add_criteria(lambda s: s.order_by(None))
+            statement = statement.add_criteria(
+                lambda s: s.order_by(None), enable_tracking=False, track_closure_variables=False,
+            )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             results = self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
@@ -847,7 +848,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -897,7 +898,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             NotFoundError: If no instance found with same identifier as `data`.
         """
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
@@ -1046,9 +1047,8 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
-            field = self.get_id_attribute_value(self.model_type)
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
                 statement=statement,
@@ -1056,7 +1056,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 execution_options=execution_options,
             )
             statement = statement.add_criteria(
-                lambda s: s.add_columns(over(sql_func.count(field))),
+                lambda s: s.add_columns(over(sql_func.count())),
                 enable_tracking=False,
             )
             statement = self._apply_filters(*filters, statement=statement)
@@ -1096,7 +1096,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1127,16 +1127,16 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        fragment = self.get_id_attribute_value(self.model_type)
         if loader_options:
             statement = statement.options(*loader_options)
         if execution_options:
             statement = statement.execution_options(**execution_options)
         statement = statement.add_criteria(
-            lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True),
+            lambda s: s.with_only_columns(sql_func.count(), maintain_column_froms=True),
             enable_tracking=False,
+            track_closure_variables=False,
         )
-        return statement.add_criteria(lambda s: s.order_by(None))
+        return statement.add_criteria(lambda s: s.order_by(None), enable_tracking=False, track_closure_variables=False)
 
     def upsert(
         self,
@@ -1180,34 +1180,40 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        if match_fields := self._get_match_fields(match_fields=match_fields):
-            match_filter = {
-                field_name: getattr(data, field_name, None)
-                for field_name in match_fields
-                if getattr(data, field_name, None) is not None
-            }
-        elif getattr(data, self.id_attribute, None) is not None:
-            match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
-        else:
-            match_filter = data.to_dict(exclude={self.id_attribute})
-        existing = self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
-        if not existing:
-            return self.add(data, auto_commit=auto_commit, auto_expunge=auto_expunge, auto_refresh=auto_refresh)
-        with wrap_sqlalchemy_exception():
-            for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
-                field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and field != new_field_value:
-                    setattr(existing, field_name, new_field_value)
-            instance = self._attach_to_session(existing, strategy="merge")
-            self._flush_or_commit(auto_commit=auto_commit)
-            self._refresh(
-                instance,
-                attribute_names=attribute_names,
-                with_for_update=with_for_update,
-                auto_refresh=auto_refresh,
-            )
-            self._expunge(instance, auto_expunge=auto_expunge)
-            return instance
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+            if match_fields := self._get_match_fields(match_fields=match_fields):
+                match_filter = {
+                    field_name: getattr(data, field_name, None)
+                    for field_name in match_fields
+                    if getattr(data, field_name, None) is not None
+                }
+            elif getattr(data, self.id_attribute, None) is not None:
+                match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
+            else:
+                match_filter = data.to_dict(exclude={self.id_attribute})
+            existing = self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
+            if not existing:
+                return self.add(
+                    data,
+                    auto_commit=auto_commit,
+                    auto_expunge=auto_expunge,
+                    auto_refresh=auto_refresh,
+                )
+            with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+                for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
+                    field = getattr(existing, field_name, MISSING)
+                    if field is not MISSING and field != new_field_value:
+                        setattr(existing, field_name, new_field_value)
+                instance = self._attach_to_session(existing, strategy="merge")
+                self._flush_or_commit(auto_commit=auto_commit)
+                self._refresh(
+                    instance,
+                    attribute_names=attribute_names,
+                    with_for_update=with_for_update,
+                    auto_refresh=auto_refresh,
+                )
+                self._expunge(instance, auto_expunge=auto_expunge)
+                return instance
 
     def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
         return (
@@ -1284,7 +1290,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 else:
                     match_filter.append(field.in_(matched_values))
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             existing_objs = self.list(
                 *match_filter,
                 load=load,
@@ -1381,7 +1387,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             The list of instances, after filtering applied.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1410,7 +1416,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             collection = self._to_lambda_stmt(statement=collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return collection
@@ -1425,10 +1431,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         Returns:
             ``True`` if healthy.
         """
-
-        return (  # type: ignore[no-any-return]
-            session.execute(cls._get_health_check_statement(session))
-        ).scalar_one() == 1
+        with wrap_sqlalchemy_exception(), session.no_autoflush:
+            return (  # type: ignore[no-any-return]
+                session.execute(cls._get_health_check_statement(session))
+            ).scalar_one() == 1
 
     @staticmethod
     def _get_health_check_statement(session: Session | scoped_session[Session]) -> TextClause:
@@ -1569,7 +1575,7 @@ class SQLAlchemySyncQueryRepository:
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (self.execute(statement)).scalar_one_or_none()
             return self.check_not_found(instance)
@@ -1588,7 +1594,7 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (self.execute(statement)).scalar_one_or_none()
             return instance or None
@@ -1603,10 +1609,13 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
-        statement = self._filter_statement_by_kwargs(statement, **kwargs)
-        results = self.execute(statement)
-        return results.scalar_one()  # type: ignore  # noqa: PGH003
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
+            statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
+                None,
+            )
+            statement = self._filter_statement_by_kwargs(statement, **kwargs)
+            results = self.execute(statement)
+            return results.scalar_one()  # type: ignore  # noqa: PGH003
 
     def list_and_count(
         self,
@@ -1646,7 +1655,7 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
@@ -1677,7 +1686,7 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
@@ -1697,7 +1706,7 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
             return list(result.scalars())
@@ -1716,7 +1725,7 @@ class SQLAlchemySyncQueryRepository:
                 have the property that their attribute named `key` has value equal to `value`.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(), self.session.no_autoflush:
             return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
