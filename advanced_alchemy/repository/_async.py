@@ -1430,7 +1430,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         Returns:
             ``True`` if healthy.
         """
-        with wrap_sqlalchemy_exception(), session.no_autoflush:
+        with wrap_sqlalchemy_exception():
             return (  # type: ignore[no-any-return]
                 await session.execute(cls._get_health_check_statement(session))
             ).scalar_one() == 1
