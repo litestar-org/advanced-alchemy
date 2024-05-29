@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import pytest
 from sqlalchemy import ForeignKey, String, create_engine, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, sessionmaker
 
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
 
-@pytest.mark.xdist_group("lambda")
 def test_lambda_statement_quirks(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     from sqlalchemy.orm import DeclarativeBase
 
@@ -44,7 +42,7 @@ def test_lambda_statement_quirks(monkeypatch: MonkeyPatch, tmp_path: Path) -> No
     class USStateRepository(SQLAlchemySyncRepository[State]):
         model_type = State
 
-    engine = create_engine(f"sqlite:///{tmp_path}/test.sqlite3.db", echo=True)
+    engine = create_engine("sqlite:///:memory:", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
