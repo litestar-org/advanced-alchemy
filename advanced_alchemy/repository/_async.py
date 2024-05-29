@@ -932,7 +932,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        statement = lambda_stmt(lambda: update(model_type), enable_tracking=False, global_track_bound_values=False)
+        statement = lambda_stmt(lambda: update(model_type))
         if supports_returning:
             statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if loader_options:
