@@ -148,7 +148,7 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--dist", "loadgroup", "-n", "auto", "-q", "-ra"]
+addopts = ["-q", "-ra"]
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",

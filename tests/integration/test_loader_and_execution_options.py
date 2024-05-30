@@ -118,9 +118,6 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         si0_country_repo = CountryRepository(session=db_session)
         db_session.expire_all()
 
-    with engine.begin() as conn:
-        UUIDState.metadata.drop_all(conn)
-
 
 @pytest.mark.xdist_group("loader")
 async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
@@ -222,6 +219,3 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         usa_country_3 = await star_country_repo.get_one(name="United States of America")
         assert len(usa_country_3.states) == 2
         db_session.expire_all()
-
-    async with engine.begin() as conn:
-        await conn.run_sync(BigIntState.metadata.drop_all)

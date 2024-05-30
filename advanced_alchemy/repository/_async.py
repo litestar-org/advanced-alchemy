@@ -799,15 +799,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                global_track_bound_values=False,
-                enable_tracking=False,
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = statement.add_criteria(
                 lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True).order_by(None),
-                enable_tracking=False,
-                track_closure_variables=False,
             )
             results = await self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
             return cast(int, results.scalar_one())
