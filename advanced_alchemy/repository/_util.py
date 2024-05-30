@@ -86,7 +86,7 @@ def get_abstract_loader_options(
     if isinstance(loader_options, _AbstractLoad):
         return ([loader_options], options_have_wildcards)
     if isinstance(loader_options, InstrumentedAttribute):
-        loader_options = loader_options.property
+        loader_options = [loader_options.property]
     if isinstance(loader_options, RelationshipProperty):
         class_ = loader_options.class_attribute
         return (
