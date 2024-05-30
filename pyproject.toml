@@ -45,7 +45,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.11.0"
+version = "0.11.1"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -148,7 +148,7 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--dist", "loadgroup", "-n", "auto", "-q", "-ra"]
+addopts = ["-q", "-ra"]
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
@@ -307,7 +307,7 @@ warn_unused_configs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-disable_error_code = "attr-defined,type-var"
+disable_error_code = "attr-defined,type-var,union-attr"
 disallow_untyped_decorators = false
 module = "tests.*"
 warn_unused_ignores = false
@@ -363,10 +363,10 @@ exclude = [
   "tests/helpers.py",
   "tests/docker_service_fixtures.py",
 ]
-include = ["advanced_alchemy", "tests"]
-strict = ["advanced_alchemy/**/*"]
+include = ["advanced_alchemy"]
 pythonVersion = "3.8"
 reportUnnecessaryTypeIgnoreComments = true
+strict = ["advanced_alchemy/**/*"]
 
 [tool.unasyncd]
 add_editors_note = true

@@ -560,22 +560,22 @@ def _seed_db_sync(
 
     if isinstance(engine, NonCallableMagicMock):
         for raw_author in raw_authors:
-            SQLAlchemySyncMockRepository.__database_add__(
+            SQLAlchemySyncMockRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 author_model,
                 model_from_dict(author_model, **raw_author),  # type: ignore[type-var]
             )
         for raw_rule in raw_rules:
-            SQLAlchemySyncMockRepository.__database_add__(
+            SQLAlchemySyncMockRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 author_model,
                 model_from_dict(rule_model, **raw_rule),  # type: ignore[type-var]
             )
         for raw_secret in raw_secrets:
-            SQLAlchemySyncMockRepository.__database_add__(
+            SQLAlchemySyncMockRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 secret_model,
                 model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
             )
         for raw_book in raw_slug_books:
-            SQLAlchemySyncMockSlugRepository.__database_add__(
+            SQLAlchemySyncMockSlugRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 slug_book_model,
                 model_from_dict(slug_book_model, **raw_book),  # type: ignore[type-var]
             )
@@ -794,17 +794,17 @@ async def seed_db_async(
 
     if isinstance(async_engine, NonCallableMagicMock):
         for raw_author in raw_authors:
-            SQLAlchemyAsyncMockRepository.__database_add__(
+            SQLAlchemyAsyncMockRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 author_model,
                 model_from_dict(author_model, **raw_author),  # type: ignore[type-var]
             )
         for raw_rule in raw_rules:
-            SQLAlchemyAsyncMockRepository.__database_add__(
+            SQLAlchemyAsyncMockRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 author_model,
                 model_from_dict(rule_model, **raw_rule),  # type: ignore[type-var]
             )
         for raw_secret in raw_secrets:
-            SQLAlchemyAsyncMockRepository.__database_add__(
+            SQLAlchemyAsyncMockRepository.__database_add__(  # pyright: ignore[reportUnknownMemberType]
                 secret_model,
                 model_from_dict(secret_model, **raw_secret),  # type: ignore[type-var]
             )
@@ -1509,7 +1509,7 @@ async def test_repo_upsert_many_method(
     author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
-    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -1537,7 +1537,7 @@ async def test_repo_upsert_many_method_match(
     author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
-    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -1560,7 +1560,7 @@ async def test_repo_upsert_many_method_match_non_id(
     author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
-    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -1586,7 +1586,7 @@ async def test_repo_upsert_many_method_match_not_on_input(
     author_repo: AnyAuthorRepository,
     author_model: AuthorModel,
 ) -> None:
-    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -1747,7 +1747,7 @@ async def test_repo_json_methods(
     rule_service: RuleService,
     rule_model: RuleModel,
 ) -> None:
-    if rule_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if rule_repo._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip("Skipped on emulator")
 
     exp_count = len(raw_rules_uuid) + 1
@@ -2182,7 +2182,7 @@ async def test_service_upsert_method_match(
     author_model: AuthorModel,
     new_pk_id: Any,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2213,7 +2213,7 @@ async def test_service_upsert_many_method(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2241,7 +2241,7 @@ async def test_service_upsert_many_method_match_fields_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2270,7 +2270,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )

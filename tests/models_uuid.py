@@ -9,7 +9,15 @@ from uuid import UUID
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
-from advanced_alchemy.base import SlugKey, UUIDAuditBase, UUIDBase, UUIDv6Base, UUIDv7Base, merge_table_arguments
+from advanced_alchemy.base import (
+    SlugKey,
+    TableArgsType,  # pyright: ignore[reportPrivateUsage]
+    UUIDAuditBase,
+    UUIDBase,
+    UUIDv6Base,
+    UUIDv7Base,
+    merge_table_arguments,
+)
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemyAsyncSlugRepository,
@@ -57,7 +65,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
 
     @declared_attr.directive
     @classmethod
-    def __table_args__(cls) -> dict | tuple:
+    def __table_args__(cls) -> TableArgsType:
         return merge_table_arguments(
             cls,
             table_args={"comment": "Slugbook"},
