@@ -151,7 +151,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
-        if not self.values:
+        if self.values is None:
             return statement.where(text("1=1"))
         if prefer_any:
             return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
@@ -164,7 +164,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
-        if not self.values:
+        if self.values is None:
             statement += lambda s: s.where(text("1=1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         if prefer_any:
@@ -194,7 +194,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
-        if not self.values:
+        if self.values is None:
             return statement.where(text("1=-1"))
         if prefer_any:
             return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
@@ -207,7 +207,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
-        if not self.values:
+        if self.values is None:
             statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         if prefer_any:
