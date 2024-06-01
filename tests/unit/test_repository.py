@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import String
-from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
 
@@ -76,7 +76,7 @@ def sync_mock_repo() -> SQLAlchemySyncRepository[MagicMock]:
 
 @pytest.fixture(params=[lazy_fixture("sync_mock_repo"), lazy_fixture("async_mock_repo")])
 def mock_repo(request: FixtureRequest) -> SQLAlchemyAsyncRepository[MagicMock]:
-    return cast(SQLAlchemyAsyncRepository, request.param)
+    return cast(SQLAlchemyAsyncRepository[Any], request.param)
 
 
 @pytest.fixture()
@@ -187,7 +187,7 @@ def test_wrap_sqlalchemy_generic_error() -> None:
         raise SQLAlchemyError
 
 
-async def test_sqlalchemy_repo_add(mock_repo: SQLAlchemyAsyncRepository) -> None:
+async def test_sqlalchemy_repo_add(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test expected method calls for add operation."""
     mock_instance = MagicMock()
 
@@ -202,7 +202,7 @@ async def test_sqlalchemy_repo_add(mock_repo: SQLAlchemyAsyncRepository) -> None
 
 
 async def test_sqlalchemy_repo_add_many(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mocker: MockerFixture,
     request: FixtureRequest,
@@ -223,7 +223,7 @@ async def test_sqlalchemy_repo_add_many(
 
 
 async def test_sqlalchemy_repo_update_many(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mocker: MockerFixture,
 ) -> None:
@@ -244,7 +244,7 @@ async def test_sqlalchemy_repo_update_many(
 
 
 async def test_sqlalchemy_repo_upsert_many(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mocker: MockerFixture,
 ) -> None:
@@ -267,7 +267,7 @@ async def test_sqlalchemy_repo_upsert_many(
     mock_repo.session.commit.assert_not_called()
 
 
-async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
+async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
     """Test expected method calls for delete operation."""
     mock_instance = MagicMock()
     mocker.patch.object(mock_repo, "get", return_value=mock_instance)
@@ -282,7 +282,7 @@ async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository, mock
 
 
 async def test_sqlalchemy_repo_delete_many_uuid(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_session_scalars: AnyMock,
     mock_session_execute: AnyMock,
@@ -306,7 +306,7 @@ async def test_sqlalchemy_repo_delete_many_uuid(
 
 
 async def test_sqlalchemy_repo_delete_many_bigint(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_session_scalars: AnyMock,
     mock_session_execute: AnyMock,
@@ -331,7 +331,7 @@ async def test_sqlalchemy_repo_delete_many_bigint(
 
 
 async def test_sqlalchemy_repo_get_member(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -347,7 +347,7 @@ async def test_sqlalchemy_repo_get_member(
 
 
 async def test_sqlalchemy_repo_get_one_member(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -363,7 +363,7 @@ async def test_sqlalchemy_repo_get_one_member(
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mock_repo_attach_to_session: AnyMock,
@@ -383,7 +383,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing(
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing_upsert(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mock_repo_attach_to_session: AnyMock,
@@ -406,7 +406,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_upsert(
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing_no_upsert(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -426,7 +426,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_no_upsert(
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_created(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -443,7 +443,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_created(
 
 
 async def test_sqlalchemy_repo_get_one_or_none_member(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -459,7 +459,7 @@ async def test_sqlalchemy_repo_get_one_or_none_member(
 
 
 async def test_sqlalchemy_repo_get_one_or_none_not_found(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -475,7 +475,7 @@ async def test_sqlalchemy_repo_get_one_or_none_not_found(
 
 
 async def test_sqlalchemy_repo_list(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
 ) -> None:
@@ -490,7 +490,7 @@ async def test_sqlalchemy_repo_list(
     mock_repo.session.commit.assert_not_called()
 
 
-async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
+async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
     """Test expected method calls for list operation."""
     mock_instances = [MagicMock(), MagicMock()]
     mock_count = len(mock_instances)
@@ -506,7 +506,7 @@ async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncReposito
 
 
 async def test_sqlalchemy_repo_list_and_count_basic(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     mocker: MockerFixture,
 ) -> None:
     """Test expected method calls for list operation."""
@@ -524,7 +524,7 @@ async def test_sqlalchemy_repo_list_and_count_basic(
 
 
 async def test_sqlalchemy_repo_exists(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mock_repo_count: AnyMock,
@@ -539,7 +539,7 @@ async def test_sqlalchemy_repo_exists(
 
 
 async def test_sqlalchemy_repo_exists_with_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mock_repo_count: AnyMock,
@@ -555,7 +555,7 @@ async def test_sqlalchemy_repo_exists_with_filter(
 
 
 async def test_sqlalchemy_repo_count(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mock_repo_count: AnyMock,
@@ -570,65 +570,54 @@ async def test_sqlalchemy_repo_count(
 
 
 async def test_sqlalchemy_repo_list_with_pagination(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
     """Test list operation with pagination."""
-    mocker.patch.object(mock_repo, "_apply_limit_offset_pagination", return_value=mock_repo.statement)
+    statement = MagicMock()
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
+    mocker.patch.object(LimitOffset, "append_to_lambda_statement", return_value=statement)
+    mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(LimitOffset(2, 3)))
-    assert mock_repo._apply_limit_offset_pagination.call_count == 1
-    mock_repo._apply_limit_offset_pagination.assert_called_with(2, 3, statement=mock_repo.statement)
+    mock_repo._execute.assert_called_with(statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_list_with_before_after_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
     """Test list operation with BeforeAfter filter."""
+    statement = MagicMock()
     mocker.patch.object(mock_repo.model_type.updated_at, "__lt__", return_value="lt")
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
-    mocker.patch.object(mock_repo, "_filter_on_datetime_field", return_value=mock_repo.statement)
+    mocker.patch.object(BeforeAfter, "append_to_lambda_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
     await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.max, datetime.min)))
-    assert mock_repo._filter_on_datetime_field.call_count == 1
-    mock_repo._filter_on_datetime_field.assert_called_with(
-        field_name="updated_at",
-        before=datetime.max,
-        after=datetime.min,
-        statement=mock_repo.statement,
-    )
+    mock_repo._execute.assert_called_with(statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_list_with_on_before_after_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
     """Test list operation with BeforeAfter filter."""
+    statement = MagicMock()
     mocker.patch.object(mock_repo.model_type.updated_at, "__le__", return_value="le")
     mocker.patch.object(mock_repo.model_type.updated_at, "__ge__", return_value="ge")
-    mocker.patch.object(mock_repo, "_filter_on_datetime_field", return_value=mock_repo.statement)
+    mocker.patch.object(OnBeforeAfter, "append_to_lambda_statement", return_value=statement)
+
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
     await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.max, datetime.min)))
-    assert mock_repo._filter_on_datetime_field.call_count == 1
-    mock_repo._filter_on_datetime_field.assert_called_with(
-        field_name="updated_at",
-        on_or_before=datetime.max,
-        on_or_after=datetime.min,
-        statement=mock_repo.statement,
-    )
+    mock_repo._execute.assert_called_with(statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_list_with_collection_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
@@ -637,15 +626,14 @@ async def test_sqlalchemy_repo_list_with_collection_filter(
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement
-    mocker.patch.object(mock_repo, "_filter_in_collection", return_value=mock_repo.statement)
+    mocker.patch.object(CollectionFilter, "append_to_lambda_statement", return_value=mock_repo.statement)
     values = [1, 2, 3]
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
-    assert mock_repo._filter_in_collection.call_count == 1
-    mock_repo._filter_in_collection.assert_called_with(field_name, values, statement=mock_repo.statement)
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_list_with_null_collection_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
@@ -654,13 +642,17 @@ async def test_sqlalchemy_repo_list_with_null_collection_filter(
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement
-    mocker.patch.object(mock_repo, "_filter_in_collection", return_value=mock_repo.statement)
+    monkeypatch.setattr(
+        CollectionFilter,
+        "append_to_lambda_statement",
+        MagicMock(return_value=mock_repo.statement),
+    )
     await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))
-    mock_repo._filter_in_collection.assert_not_called()
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_empty_list_with_collection_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
@@ -669,15 +661,19 @@ async def test_sqlalchemy_repo_empty_list_with_collection_filter(
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement
-    mocker.patch.object(mock_repo, "_filter_in_collection", return_value=mock_repo.statement)
     values: Collection[Any] = []
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
-    assert mock_repo._filter_in_collection.call_count == 1
-    mock_repo._filter_in_collection.assert_called_with(field_name, values, statement=mock_repo.statement)
+    monkeypatch.setattr(
+        CollectionFilter,
+        "append_to_lambda_statement",
+        MagicMock(return_value=mock_repo.statement),
+    )
+    await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
@@ -686,15 +682,18 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement
-    mocker.patch.object(mock_repo, "_filter_not_in_collection", return_value=mock_repo.statement)
+    monkeypatch.setattr(
+        NotInCollectionFilter,
+        "append_to_lambda_statement",
+        MagicMock(return_value=mock_repo.statement),
+    )
     values = [1, 2, 3]
     await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, values)))
-    assert mock_repo._filter_not_in_collection.call_count == 1
-    mock_repo._filter_not_in_collection.assert_called_with(field_name, values, statement=mock_repo.statement)
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
 
 
 async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
@@ -703,19 +702,23 @@ async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement
-    mocker.patch.object(mock_repo, "_filter_not_in_collection", return_value=mock_repo.statement)
+    monkeypatch.setattr(
+        NotInCollectionFilter,
+        "append_to_lambda_statement",
+        MagicMock(return_value=mock_repo.statement),
+    )
     await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, None)))
-    mock_repo._filter_not_in_collection.assert_not_called()
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
 
 
-async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository) -> None:
+async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test that repo raises exception if list receives unknown filter type."""
     with pytest.raises(RepositoryError):
         await maybe_async(mock_repo.list("not a filter"))  # type: ignore
 
 
 async def test_sqlalchemy_repo_update(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mocker: MockerFixture,
 ) -> None:
@@ -736,7 +739,7 @@ async def test_sqlalchemy_repo_update(
     mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
 
 
-async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
+async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
     """Test the sequence of repo calls for upsert operation."""
     mock_instance = MagicMock()
     mock_repo.session.merge.return_value = mock_instance
@@ -753,23 +756,24 @@ async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository, mock
 
 
 async def test_attach_to_session_unexpected_strategy_raises_valueerror(
-    mock_repo: SQLAlchemyAsyncRepository,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
 ) -> None:
     """Test to hit the error condition in SQLAlchemy._attach_to_session()."""
     with pytest.raises(ValueError):
         await maybe_async(mock_repo._attach_to_session(MagicMock(), strategy="t-rex"))  # type:ignore[arg-type]
 
 
-async def test_execute(mock_repo: SQLAlchemyAsyncRepository) -> None:
+async def test_execute(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Simple test of the abstraction over `AsyncSession.execute()`"""
     _ = await maybe_async(mock_repo._execute(mock_repo.statement))
     mock_repo.session.execute.assert_called_once_with(mock_repo.statement)
 
 
-def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository) -> None:
+def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Ensures we don't filter on an empty collection."""
-    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
-    mock_repo._filter_in_collection("id", [], statement=statement)
+    statement = MagicMock()
+    filter = CollectionFilter(field_name="id", values=[])
+    statement = filter.append_to_lambda_statement(statement, MagicMock())
     mock_repo.statement.where.assert_not_called()
 
 
@@ -781,34 +785,21 @@ def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyn
         (datetime.max, None),
     ],
 )
-def test_filter_on_datetime_field(before: datetime, after: datetime, mock_repo: SQLAlchemyAsyncRepository) -> None:
+def test_filter_on_datetime_field(before: datetime, after: datetime, mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test through branches of _filter_on_datetime_field()"""
     field_mock = MagicMock()
+    statement = MagicMock()
     field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True
-    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
+    filter = BeforeAfter(field_name="updated_at", before=before, after=after)
+    statement = filter.append_to_lambda_statement(statement, MagicMock())
     mock_repo.model_type.updated_at = field_mock
-    mock_repo._filter_on_datetime_field("updated_at", before=before, after=after, statement=statement)
+    mock_repo.statement.where.assert_not_called()
 
 
-def test_filter_collection_by_kwargs(mock_repo: SQLAlchemyAsyncRepository, mocker: MockerFixture) -> None:
+def test_filter_collection_by_kwargs(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
     """Test `filter_by()` called with kwargs."""
     mock_repo_execute.return_value = MagicMock()
     statement = mock_repo._to_lambda_stmt(mock_repo.statement)
     mocker.patch.object(mock_repo, "filter_collection_by_kwargs", return_value=statement)
     _ = mock_repo.filter_collection_by_kwargs(statement, a=1, b=2)
     mock_repo.filter_collection_by_kwargs.assert_called_once_with(statement, a=1, b=2)
-
-
-def test_filter_collection_by_kwargs_raises_repository_exception_for_attribute_error(
-    mock_repo: SQLAlchemyAsyncRepository,
-    mocker: MockerFixture,
-) -> None:
-    """Test that we raise a repository exception if an attribute name is
-    incorrect.
-    """
-    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
-    statement.filter_by = MagicMock(  # type: ignore # pyright: ignore[reportGeneralTypeIssues]
-        side_effect=InvalidRequestError,
-    )
-    with pytest.raises(RepositoryError):
-        _ = mock_repo.filter_collection_by_kwargs(statement, a=1)
