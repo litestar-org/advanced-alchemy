@@ -112,15 +112,6 @@ class FilterableRepository(Generic[ModelT]):
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
 
-    def _apply_limit_offset_pagination(
-        self,
-        limit: int,
-        offset: int,
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
-        statement += lambda s: s.limit(limit).offset(offset)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
-
     def _apply_filters(
         self,
         *filters: StatementFilter | ColumnElement[bool],

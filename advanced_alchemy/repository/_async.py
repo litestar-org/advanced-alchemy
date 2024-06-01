@@ -1407,9 +1407,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        collection = lambda_stmt(lambda: collection)
-        collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return collection
+        with wrap_sqlalchemy_exception():
+            if isinstance(collection, Select):
+                collection = lambda_stmt(lambda: collection)
+            collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            return collection
 
     @classmethod
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool:

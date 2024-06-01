@@ -87,9 +87,11 @@ class BeforeAfter(StatementFilter):
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
-            statement += lambda s: s.where(field < self.before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            before = self.before
+            statement += lambda s: s.where(field < before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if self.after is not None:
-            statement += lambda s: s.where(field > self.after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            after = self.after
+            statement += lambda s: s.where(field > after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
 
@@ -119,9 +121,11 @@ class OnBeforeAfter(StatementFilter):
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
-            statement += lambda s: s.where(field <= self.on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            on_or_before = self.on_or_before
+            statement += lambda s: s.where(field <= on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if self.on_or_after is not None:
-            statement += lambda s: s.where(field >= self.on_or_after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            on_or_after = self.on_or_after
+            statement += lambda s: s.where(field >= on_or_after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
 
@@ -164,9 +168,11 @@ class CollectionFilter(InAnyFilter, Generic[T]):
             statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         if prefer_any:
-            statement += lambda s: s.where(any_(self.values) == field)  # type: ignore[arg-type]
+            values = self.values
+            statement += lambda s: s.where(any_(values) == field)  # type: ignore[arg-type]
             return statement
-        statement += lambda s: s.where(field.in_(self.values))  # type: ignore[arg-type] # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
+        values = self.values
+        statement += lambda s: s.where(field.in_(values))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
         return statement
 
 
@@ -205,9 +211,11 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
             statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         if prefer_any:
-            statement += lambda s: s.where(any_(self.values) != field)  # type: ignore[arg-type]
+            values = self.values
+            statement += lambda s: s.where(any_(values) != field)  # type: ignore[arg-type]
             return statement
-        statement += lambda s: s.where(field.notin_(self.values))  # type: ignore[arg-type] # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
+        values = self.values
+        statement += lambda s: s.where(field.notin_(values))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
         return statement
 
 
@@ -232,7 +240,9 @@ class LimitOffset(PaginationFilter):
         statement: StatementLambdaElement,
         model: type[ModelT],
     ) -> StatementLambdaElement:
-        statement += lambda s: s.limit(self.limit).offset(self.offset)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+        limit = self.limit
+        offset = self.offset
+        statement += lambda s: s.limit(limit).offset(offset)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
 
