@@ -399,6 +399,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             else:
                 instances.extend(
                     self.list(
+                        *filters,
                         load=load,
                         execution_options=execution_options,
                         auto_expunge=auto_expunge,

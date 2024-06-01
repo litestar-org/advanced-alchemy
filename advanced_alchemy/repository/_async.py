@@ -398,6 +398,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             else:
                 instances.extend(
                     await self.list(
+                        *filters,
                         load=load,
                         execution_options=execution_options,
                         auto_expunge=auto_expunge,

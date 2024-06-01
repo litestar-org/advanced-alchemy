@@ -2111,14 +2111,35 @@ async def test_service_delete_many_method(author_service: AuthorService, author_
     assert count == 0
 
 
-async def test_service_delete_where_method(author_service: AuthorService, author_model: AuthorModel) -> None:
+async def test_service_delete_where_method_empty(author_service: AuthorService, author_model: AuthorModel) -> None:
     data_to_insert = [author_model(name="author name %d" % chunk) for chunk in range(2000)]
     _ = await maybe_async(author_service.create_many(data_to_insert))
+    total_count = await maybe_async(author_service.count())
     all_objs = await maybe_async(author_service.delete_where())
-    assert len(all_objs) == len(data_to_insert)
+    assert len(all_objs) == total_count
     data, count = await maybe_async(author_service.list_and_count())
     assert data == []
     assert count == 0
+
+
+async def test_service_delete_where_method_filter(author_service: AuthorService, author_model: AuthorModel) -> None:
+    data_to_insert = [author_model(name="delete me") for _ in range(2000)]
+    _ = await maybe_async(author_service.create_many(data_to_insert))
+    all_objs = await maybe_async(author_service.delete_where(name="delete me"))
+    assert len(all_objs) == len(data_to_insert)
+    count = await maybe_async(author_service.count())
+    assert count == 2
+
+
+async def test_service_delete_where_method_search_filter(
+    author_service: AuthorService, author_model: AuthorModel,
+) -> None:
+    data_to_insert = [author_model(name="delete me") for _ in range(2000)]
+    _ = await maybe_async(author_service.create_many(data_to_insert))
+    all_objs = await maybe_async(author_service.delete_where(NotInSearchFilter(field_name="name", value="delete me")))
+    assert len(all_objs) == 2
+    count = await maybe_async(author_service.count())
+    assert count == len(data_to_insert)
 
 
 async def test_service_get_method(author_service: AuthorService, first_author_id: Any) -> None:
