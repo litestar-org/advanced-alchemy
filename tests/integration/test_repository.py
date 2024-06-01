@@ -1701,14 +1701,14 @@ async def test_repo_filter_collection(
 async def test_repo_filter_no_obj_collection(
     author_repo: AnyAuthorRepository,
 ) -> None:
-    no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=[])))
+    no_obj = await maybe_async(author_repo.list(CollectionFilter[str](field_name="id", values=[])))
     assert no_obj == []
 
 
 async def test_repo_filter_null_collection(
     author_repo: AnyAuthorRepository,
 ) -> None:
-    no_obj = await maybe_async(author_repo.list(CollectionFilter(field_name="id", values=None)))
+    no_obj = await maybe_async(author_repo.list(CollectionFilter[str](field_name="id", values=None)))
     assert len(no_obj) > 0
 
 
@@ -1730,14 +1730,14 @@ async def test_repo_filter_not_in_collection(
 async def test_repo_filter_not_in_no_obj_collection(
     author_repo: AnyAuthorRepository,
 ) -> None:
-    existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=[])))
+    existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter[str](field_name="id", values=[])))
     assert len(existing_obj) > 0
 
 
 async def test_repo_filter_not_in_null_collection(
     author_repo: AnyAuthorRepository,
 ) -> None:
-    existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter(field_name="id", values=None)))
+    existing_obj = await maybe_async(author_repo.list(NotInCollectionFilter[str](field_name="id", values=None)))
     assert len(existing_obj) > 0
 
 
@@ -2106,6 +2106,16 @@ async def test_service_delete_many_method(author_service: AuthorService, author_
     objs = await maybe_async(author_service.delete_many(ids_to_delete))
     await maybe_async(author_service.repository.session.commit())
     assert len(objs) > 0
+    data, count = await maybe_async(author_service.list_and_count())
+    assert data == []
+    assert count == 0
+
+
+async def test_service_delete_where_method(author_service: AuthorService, author_model: AuthorModel) -> None:
+    data_to_insert = [author_model(name="author name %d" % chunk) for chunk in range(2000)]
+    _ = await maybe_async(author_service.create_many(data_to_insert))
+    all_objs = await maybe_async(author_service.delete_where())
+    assert len(all_objs) == len(data_to_insert)
     data, count = await maybe_async(author_service.list_and_count())
     assert data == []
     assert count == 0

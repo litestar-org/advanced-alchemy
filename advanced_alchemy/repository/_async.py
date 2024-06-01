@@ -383,7 +383,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
         with wrap_sqlalchemy_exception():
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
-            statement = lambda_stmt(lambda: delete(self.model_type))
+            model_type = self.model_type
+            statement = lambda_stmt(lambda: delete(model_type))
             if loader_options:
                 statement = statement.options(*loader_options)
             if execution_options:
@@ -392,7 +393,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
             statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
             instances: list[ModelT] = []
             if self._dialect.delete_executemany_returning:
-                model_type = self.model_type
                 statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
                 instances.extend(await self.session.scalars(statement))
             else:
