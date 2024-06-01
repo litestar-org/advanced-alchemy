@@ -16,13 +16,13 @@ from advanced_alchemy.exceptions import IntegrityError, NotFoundError, Repositor
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
-    FilterTypes,
     LimitOffset,
     NotInCollectionFilter,
     NotInSearchFilter,
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
+    StatementFilter,
 )
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
@@ -229,7 +229,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
     def _apply_filters(
         self,
         result: list[ModelT],
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
     ) -> list[ModelT]:
         for filter_ in filters:
@@ -252,11 +252,11 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
                 )
 
             elif isinstance(filter_, NotInCollectionFilter):
-                if filter_.values is not None:
-                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)
+                if filter_.values is not None:  # pyright: ignore  # noqa: PGH003
+                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore  # noqa: PGH003
             elif isinstance(filter_, CollectionFilter):
-                if filter_.values is not None:
-                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)
+                if filter_.values is not None:  # pyright: ignore  # noqa: PGH003
+                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore  # noqa: PGH003
             elif isinstance(filter_, OrderBy):
                 result = self._order_by(
                     result,
@@ -277,8 +277,8 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                 )
-            elif not isinstance(filter_, ColumnElement):  # pyright: ignore[reportUnnecessaryIsInstance]
-                msg = f"Unexpected filter: {filter_}"  # type: ignore[unreachable]
+            elif not isinstance(filter_, ColumnElement):
+                msg = f"Unexpected filter: {filter_}"
                 raise RepositoryError(msg)
         return result
 
@@ -295,7 +295,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
 
     def _list_and_count_basic(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         result = self.list(*filters, **kwargs)
@@ -303,7 +303,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
 
     def _list_and_count_window(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
@@ -394,11 +394,11 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
         existing = self.update(existing)
         return existing, updated
 
-    def exists(self, *filters: FilterTypes | ColumnElement[bool], **kwargs: Any) -> bool:
+    def exists(self, *filters: StatementFilter | ColumnElement[bool], **kwargs: Any) -> bool:
         existing = self.count(*filters, **kwargs)
         return existing > 0
 
-    def count(self, *filters: FilterTypes | ColumnElement[bool], **kwargs: Any) -> int:
+    def count(self, *filters: StatementFilter | ColumnElement[bool], **kwargs: Any) -> int:
         result = self._apply_filters(self.__collection__().list(), *filters)
         return len(self._filter_result_by_kwargs(result, kwargs))
 
@@ -447,7 +447,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
 
     def list_and_count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
@@ -457,7 +457,7 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
             self.__filtered_store__.add(value)
         return collection
 
-    def list(self, *filters: FilterTypes | ColumnElement[bool], **kwargs: Any) -> list[ModelT]:
+    def list(self, *filters: StatementFilter | ColumnElement[bool], **kwargs: Any) -> list[ModelT]:
         result = self.__collection__().list()
         result = self._apply_filters(result, *filters)
         return self._filter_result_by_kwargs(result, kwargs)

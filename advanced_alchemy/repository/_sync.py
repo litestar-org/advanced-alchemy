@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import ColumnElement
 
-    from advanced_alchemy.filters import FilterTypes
+    from advanced_alchemy.filters import StatementFilter
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
@@ -357,7 +357,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def exists(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -486,9 +486,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 execution_options=execution_options,
             )
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
-            instance = (
-                self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
-            ).scalar_one_or_none()
+            instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
             return instance
@@ -527,9 +525,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 execution_options=execution_options,
             )
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            instance = (
-                self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
-            ).scalar_one_or_none()
+            instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
             return instance
@@ -567,7 +563,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
                 "Result[tuple[ModelT]]",
-                (self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)),
+                (self._execute(statement, uniquify=loader_options_have_wildcard)),
             ).scalar_one_or_none()
             if instance:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -773,7 +769,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -806,7 +802,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             statement = statement.add_criteria(
                 lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True).order_by(None),
             )
-            results = self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
+            results = self._execute(statement, uniquify=loader_options_have_wildcard)
             return cast(int, results.scalar_one())
 
     def update(
@@ -950,7 +946,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def list_and_count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
@@ -1022,7 +1018,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def _list_and_count_window(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -1059,7 +1055,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             )
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            result = self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
+            result = self._execute(statement, uniquify=loader_options_have_wildcard)
             count: int = 0
             instances: list[ModelT] = []
             for i, (instance, count_value) in enumerate(result):
@@ -1071,7 +1067,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def _list_and_count_basic(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -1112,7 +1108,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 ),
             )
             count = count_result.scalar_one()
-            result = self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
+            result = self._execute(statement, uniquify=loader_options_have_wildcard)
             instances: list[ModelT] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -1274,7 +1270,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
-        match_filter: list[FilterTypes | ColumnElement[bool]] = []
+        match_filter: list[StatementFilter | ColumnElement[bool]] = []
         if match_fields:
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
@@ -1360,7 +1356,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
 
     def list(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -1393,7 +1389,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             )
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            result = self._execute(statement, loader_options_have_wildcards=loader_options_have_wildcard)
+            result = self._execute(statement, uniquify=loader_options_have_wildcard)
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -1412,10 +1408,9 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        with wrap_sqlalchemy_exception():
-            collection = lambda_stmt(lambda: collection)
-            collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-            return collection
+        collection = lambda_stmt(lambda: collection)
+        collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+        return collection
 
     @classmethod
     def check_health(cls, session: Session | scoped_session[Session]) -> bool:
@@ -1474,10 +1469,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
     def _execute(
         self,
         statement: Select[Any] | StatementLambdaElement,
-        loader_options_have_wildcards: bool = False,
+        uniquify: bool = False,
     ) -> Result[Any]:
         result = self.session.execute(statement)
-        if loader_options_have_wildcards or self._uniquify_results:
+        if uniquify or self._uniquify_results:
             result = result.unique()
         return result
 

@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from litestar.types import BeforeMessageSendHookHandler, Message, Scope
 
     # noinspection PyUnresolvedReferences
-    from litestar.types.asgi_types import HTTPResponseStartEvent
 
 
 __all__ = (
@@ -95,10 +94,9 @@ def autocommit_handler_maker(
         session = cast("AsyncSession | None", get_aa_scope_state(scope, SESSION_SCOPE_KEY))
         try:
             if session is not None and message["type"] == HTTP_RESPONSE_START:
-                if (
-                    cast("HTTPResponseStartEvent", message)["status"] in commit_range
-                    or message["status"] in extra_commit_statuses
-                ) and message["status"] not in extra_rollback_statuses:
+                if (message["status"] in commit_range or message["status"] in extra_commit_statuses) and message[
+                    "status"
+                ] not in extra_rollback_statuses:
                     await session.commit()
                 else:
                     await session.rollback()
@@ -135,7 +133,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application
     :class:`State <.datastructures.State>` instance.
     """
-    engine_config: EngineConfig = field(default_factory=EngineConfig)
+    engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration for the SQLAlchemy engine.
 
     The configuration options are documented in the SQLAlchemy documentation.
@@ -153,7 +151,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         session_kws = self.session_config_dict
         if session_kws.get("bind") is None:
             session_kws["bind"] = self.get_engine()
-        return self.session_maker_class(**session_kws)
+        return self.session_maker_class(**session_kws)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
     @asynccontextmanager
     async def lifespan(
