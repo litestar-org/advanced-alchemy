@@ -198,10 +198,8 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
-        if self.values is None:
-            return statement
         if not self.values:
-            return statement.where(text("1=-1"))
+            return statement
         if prefer_any:
             return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
         return statement.where(field.in_(self.values))
@@ -213,10 +211,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
-        if self.values is None:
-            return statement
         if not self.values:
-            statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return statement
         if prefer_any:
             values = self.values
