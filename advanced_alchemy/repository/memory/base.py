@@ -12,7 +12,7 @@ from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
-from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT
+from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT  # pyright: ignore[reportPrivateUsage]
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -86,7 +86,7 @@ class InMemoryStore(Generic[T]):
         try:
             key = self._resolve_key(key)
         except KeyError as error:
-            if isclass(default) and not issubclass(default, _NotSet):
+            if isclass(default) and not issubclass(default, _NotSet):  # pyright: ignore[reportUnnecessaryIsInstance]
                 return cast(AnyObject, default)
             raise KeyError from error
         return self._store[key]
@@ -216,7 +216,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                 if default.is_scalar:
                     default_value: Any = default.arg
                 elif default.is_callable:
-                    default_callable = default.arg.__func__ if isinstance(default.arg, staticmethod) else default.arg
+                    default_callable = default.arg.__func__ if isinstance(default.arg, staticmethod) else default.arg  # pyright: ignore[reportUnknownMemberType]
                     if (
                         # Eager test because inspect.signature() does not
                         # recognize builtins
@@ -227,7 +227,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         # include a default_factory in that case.
                         or "context" not in signature(default_callable).parameters
                     ):
-                        default_value = default.arg({})
+                        default_value = default.arg({})  # pyright: ignore[reportUnknownMemberType, reportCallIssue]
                     else:
                         continue
                 else:
@@ -310,7 +310,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
         for column in obj_mapper.columns:
             if column.key not in new_attrs or not column.foreign_keys:
                 continue
-            remote_mapper = mappers[next(iter(column.foreign_keys))._table_key()]  # noqa: SLF001
+            remote_mapper = mappers[next(iter(column.foreign_keys))._table_key()]  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
             try:
                 obj = self.store(remote_mapper.class_).get(new_attrs.get(column.key, None))
             except KeyError:
