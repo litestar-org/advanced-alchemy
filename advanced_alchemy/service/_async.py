@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
-    from advanced_alchemy.filters import FilterTypes
+    from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
 
@@ -123,7 +123,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
     async def count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -152,7 +152,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
     async def exists(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -280,7 +280,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
     async def list_and_count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
@@ -348,7 +348,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     # this needs to stay at the end to make the vscode linter happy
     async def list(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -597,7 +597,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]:
+    ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
         Args:
@@ -804,4 +804,37 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             chunk_size=chunk_size,
             load=load,
             execution_options=execution_options,
+        )
+
+    async def delete_where(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Sequence[ModelT]:
+        """Wrap repository scalars operation.
+
+        Args:
+            *filters: Types for specific filtering operations.
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_commit: Commit objects before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            The list of instances deleted from the repository.
+        """
+        return await self.repository.delete_where(
+            *filters,
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
         )
