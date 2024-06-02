@@ -157,7 +157,12 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
     def _apply_limit_offset_pagination(self, result: list[ModelT], limit: int, offset: int) -> list[ModelT]:
         return result[offset:limit]
 
-    def _filter_in_collection(self, result: list[ModelT], field_name: str, values: abc.Collection[Any]) -> list[ModelT]:
+    def _filter_in_collection(
+        self,
+        result: list[ModelT],
+        field_name: str,
+        values: abc.Collection[Any],
+    ) -> list[ModelT]:
         return [item for item in result if getattr(item, field_name) in values]
 
     def _filter_not_in_collection(
@@ -192,7 +197,13 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
                 result_.append(item)
         return result_
 
-    def _filter_by_like(self, result: list[ModelT], field_name: str, value: str, ignore_case: bool) -> list[ModelT]:
+    def _filter_by_like(
+        self,
+        result: list[ModelT],
+        field_name: str,
+        value: str,
+        ignore_case: bool,
+    ) -> list[ModelT]:
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         return [
             item
@@ -200,7 +211,13 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             if isinstance(getattr(item, field_name), str) and pattern.match(getattr(item, field_name))
         ]
 
-    def _filter_by_not_like(self, result: list[ModelT], field_name: str, value: str, ignore_case: bool) -> list[ModelT]:
+    def _filter_by_not_like(
+        self,
+        result: list[ModelT],
+        field_name: str,
+        value: str,
+        ignore_case: bool,
+    ) -> list[ModelT]:
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         return [
             item
@@ -434,6 +451,13 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
                 self.__collection__().remove(id_)
         return deleted
 
+    async def delete_where(self, *filters: StatementFilter | ColumnElement[bool], **kwargs: Any) -> list[ModelT]:
+        result = self.__collection__().list()
+        result = self._apply_filters(result, *filters)
+        models = self._filter_result_by_kwargs(result, kwargs)
+        item_ids = [getattr(model, self.id_attribute) for model in models]
+        return await self.delete_many(item_ids=item_ids)
+
     async def upsert(self, data: ModelT, **_: Any) -> ModelT:
         # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
@@ -451,7 +475,7 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         return await self._list_and_count_basic(*filters, **kwargs)
 
     def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:
-        for value in self._filter_result_by_kwargs(cast(List[ModelT], collection), kwargs):
+        for value in self._filter_result_by_kwargs(cast("List[ModelT]", collection), kwargs):
             self.__filtered_store__.add(value)
         return collection
 

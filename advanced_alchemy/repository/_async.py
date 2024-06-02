@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Sequence, cast
 
 from sqlalchemy import (
     Result,
@@ -21,7 +21,7 @@ from sqlalchemy import (
 from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
 
-from advanced_alchemy.exceptions import NotFoundError, wrap_sqlalchemy_exception
+from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import (
     FilterableRepository,
@@ -206,7 +206,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         data: list[ModelT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-    ) -> list[ModelT]:
+    ) -> Sequence[ModelT]:
         """Add many `data` to the collection.
 
         Args:
@@ -274,7 +274,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
         chunk_size: int | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]:
+    ) -> Sequence[ModelT]:
         """Delete instance identified by `item_id`.
 
         Args:
@@ -353,6 +353,70 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT]):
 
     def _get_insertmanyvalues_max_parameters(self, chunk_size: int | None = None) -> int:
         return chunk_size if chunk_size is not None else DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
+
+    async def delete_where(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        sanity_check: bool = True,
+        **kwargs: Any,
+    ) -> Sequence[ModelT]:
+        """Delete instances specified by referenced kwargs and filters.
+
+        Args:
+            *filters: Types for specific filtering operations.
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
+            auto_commit: Commit objects before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
+            sanity_check: When true, the length of selected instances is compared to the deleted row count
+            **kwargs: Arguments to apply to a delete
+        Returns:
+            The deleted instances.
+
+        """
+
+        with wrap_sqlalchemy_exception():
+            loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
+            model_type = self.model_type
+            statement = lambda_stmt(lambda: delete(model_type))
+            if loader_options:
+                statement = statement.options(*loader_options)
+            if execution_options:
+                statement = statement.execution_options(**execution_options)
+            statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
+            statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
+            instances: list[ModelT] = []
+            if self._dialect.delete_executemany_returning:
+                statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+                instances.extend(await self.session.scalars(statement))
+            else:
+                instances.extend(
+                    await self.list(
+                        *filters,
+                        load=load,
+                        execution_options=execution_options,
+                        auto_expunge=auto_expunge,
+                        **kwargs,
+                    ),
+                )
+                result = await self.session.execute(statement)
+                row_count = getattr(result, "rowcount", -2)
+                if sanity_check and row_count >= 0 and len(instances) != row_count:  # pyright: ignore  # noqa: PGH003
+                    # backends will return a -1 if they can't determine impacted rowcount
+                    # only compare length of selected instances to results if it's >= 0
+                    await self.session.rollback()
+                    raise RepositoryError(detail="Deleted count does not match fetched count.  Rollback issued.")
+
+            await self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+            return instances
 
     async def exists(
         self,

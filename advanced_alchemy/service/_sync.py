@@ -598,7 +598,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]:
+    ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
         Args:
@@ -805,4 +805,37 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             chunk_size=chunk_size,
             load=load,
             execution_options=execution_options,
+        )
+
+    def delete_where(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Sequence[ModelT]:
+        """Wrap repository scalars operation.
+
+        Args:
+            *filters: Types for specific filtering operations.
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_commit: Commit objects before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            load: Set default relationships to be loaded
+            execution_options: Set default execution options
+            **kwargs: Instance attribute value filters.
+
+        Returns:
+            The list of instances deleted from the repository.
+        """
+        return self.repository.delete_where(
+            *filters,
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+            load=load,
+            execution_options=execution_options,
+            **kwargs,
         )
