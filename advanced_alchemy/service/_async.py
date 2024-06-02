@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
-    from advanced_alchemy.filters import FilterTypes
+    from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
 
@@ -123,7 +123,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
     async def count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -152,7 +152,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
     async def exists(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -280,7 +280,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
     async def list_and_count(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
@@ -348,7 +348,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     # this needs to stay at the end to make the vscode linter happy
     async def list(
         self,
-        *filters: FilterTypes | ColumnElement[bool],
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
