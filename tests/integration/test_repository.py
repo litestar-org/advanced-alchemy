@@ -1662,18 +1662,18 @@ async def test_repo_filter_search(author_repo: AnyAuthorRepository) -> None:
 
 async def test_repo_filter_search_multi_field(author_repo: AnyAuthorRepository) -> None:
     existing_obj = await maybe_async(
-        author_repo.list(SearchFilter(field_name={"name", "dob"}, value="gath", ignore_case=False)),
+        author_repo.list(SearchFilter(field_name={"name", "string_field"}, value="gath", ignore_case=False)),
     )
     assert existing_obj[0].name == "Agatha Christie"
     existing_obj = await maybe_async(
-        author_repo.list(SearchFilter(field_name={"name", "dob"}, value="GATH", ignore_case=False)),
+        author_repo.list(SearchFilter(field_name={"name", "string_field"}, value="GATH", ignore_case=False)),
     )
     # sqlite & mysql are case insensitive by default with a `LIKE`
     dialect = author_repo.session.bind.dialect.name if author_repo.session.bind else "default"
     expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 0
     assert len(existing_obj) == expected_objs
     existing_obj = await maybe_async(
-        author_repo.list(SearchFilter(field_name={"name", "dob"}, value="GATH", ignore_case=True)),
+        author_repo.list(SearchFilter(field_name={"name", "string_field"}, value="GATH", ignore_case=True)),
     )
     assert existing_obj[0].name == "Agatha Christie"
 
@@ -1691,25 +1691,25 @@ async def test_repo_filter_not_in_search(author_repo: AnyAuthorRepository) -> No
     expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 2
     assert len(existing_obj) == expected_objs
     existing_obj = await maybe_async(
-        author_repo.list(NotInSearchFilter(field_name={"name", "dob"}, value="GATH", ignore_case=True)),
+        author_repo.list(NotInSearchFilter(field_name={"name", "string_field"}, value="GATH", ignore_case=True)),
     )
     assert existing_obj[0].name == "Leo Tolstoy"
 
 
 async def test_repo_filter_not_in_search_multi_field(author_repo: AnyAuthorRepository) -> None:
     existing_obj = await maybe_async(
-        author_repo.list(NotInSearchFilter(field_name={"name", "dob"}, value="gath", ignore_case=False)),
+        author_repo.list(NotInSearchFilter(field_name={"name", "string_field"}, value="gath", ignore_case=False)),
     )
     assert existing_obj[0].name == "Leo Tolstoy"
     existing_obj = await maybe_async(
-        author_repo.list(NotInSearchFilter(field_name={"name", "dob"}, value="GATH", ignore_case=False)),
+        author_repo.list(NotInSearchFilter(field_name={"name", "string_field"}, value="GATH", ignore_case=False)),
     )
     # sqlite & mysql are case insensitive by default with a `LIKE`
     dialect = author_repo.session.bind.dialect.name if author_repo.session.bind else "default"
     expected_objs = 1 if dialect in {"sqlite", "mysql", "mssql"} else 2
     assert len(existing_obj) == expected_objs
     existing_obj = await maybe_async(
-        author_repo.list(NotInSearchFilter(field_name={"name", "dob"}, value="GATH", ignore_case=True)),
+        author_repo.list(NotInSearchFilter(field_name={"name", "string_field"}, value="GATH", ignore_case=True)),
     )
     assert existing_obj[0].name == "Leo Tolstoy"
 

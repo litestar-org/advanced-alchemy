@@ -234,10 +234,10 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
                 [
                     item
                     for item in result
-                    if isinstance(getattr(item, field), str) and not pattern.match(getattr(item, field))
+                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
                 ],
             )
-        return list(set(items))
+        return list(set(result).difference(set(items)))
 
     def _filter_result_by_kwargs(
         self,

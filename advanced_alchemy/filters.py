@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime  # noqa: TCH003
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
 
-from sqlalchemy import BinaryExpression, any_, or_, text
+from sqlalchemy import BinaryExpression, and_, any_, or_, text
 
 if TYPE_CHECKING:
     from sqlalchemy import Select, StatementLambdaElement
@@ -347,7 +347,7 @@ class NotInSearchFilter(StatementFilter):
                 search_clause.append(field.not_ilike(search_text))
             else:
                 search_clause.append(field.not_like(search_text))
-        return statement.where(or_(*search_clause))
+        return statement.where(and_(*search_clause))
 
     def append_to_lambda_statement(
         self,
@@ -363,5 +363,5 @@ class NotInSearchFilter(StatementFilter):
                 search_clause.append(field.not_ilike(search_text))
             else:
                 search_clause.append(field.not_like(search_text))
-        statement += lambda s: s.where(or_(*search_clause))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
+        statement += lambda s: s.where(and_(*search_clause))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
         return statement
