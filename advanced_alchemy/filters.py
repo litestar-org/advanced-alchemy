@@ -277,23 +277,28 @@ class OrderBy(StatementFilter):
         return statement
 
 
-@dataclass
-class SearchFilter(StatementFilter):
-    """Data required to construct a ``WHERE field_name LIKE '%' || :value || '%'`` clause."""
-
+class TextSearchFilter(StatementFilter):
     field_name: str | set[str]
     """Name of the model attribute to search on."""
     value: str
-    """Values for ``LIKE`` clause."""
+    """Values for ``NOT LIKE`` clause."""
     ignore_case: bool | None = False
     """Should the search be case insensitive."""
+
+    def normalized_field_names(self) -> set[str]:
+        return {self.field_name} if isinstance(self.field_name, str) else self.field_name
+
+
+@dataclass
+class SearchFilter(TextSearchFilter):
+    """Data required to construct a ``WHERE field_name LIKE '%' || :value || '%'`` clause."""
 
     def append_to_statement(
         self,
         statement: Select[tuple[ModelT]],
         model: type[ModelT],
     ) -> Select[tuple[ModelT]]:
-        fields = {self.field_name} if isinstance(self.field_name, str) else self.field_name
+        fields = self.normalized_field_names()
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
@@ -309,7 +314,7 @@ class SearchFilter(StatementFilter):
         statement: StatementLambdaElement,
         model: type[ModelT],
     ) -> StatementLambdaElement:
-        fields = {self.field_name} if isinstance(self.field_name, str) else self.field_name
+        fields = self.normalized_field_names()
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
@@ -323,22 +328,15 @@ class SearchFilter(StatementFilter):
 
 
 @dataclass
-class NotInSearchFilter(StatementFilter):
+class NotInSearchFilter(TextSearchFilter):
     """Data required to construct a ``WHERE field_name NOT LIKE '%' || :value || '%'`` clause."""
-
-    field_name: str | set[str]
-    """Name of the model attribute to search on."""
-    value: str
-    """Values for ``NOT LIKE`` clause."""
-    ignore_case: bool | None = False
-    """Should the search be case insensitive."""
 
     def append_to_statement(
         self,
         statement: Select[tuple[ModelT]],
         model: type[ModelT],
     ) -> Select[tuple[ModelT]]:
-        fields = {self.field_name} if isinstance(self.field_name, str) else self.field_name
+        fields = self.normalized_field_names()
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
@@ -354,7 +352,7 @@ class NotInSearchFilter(StatementFilter):
         statement: StatementLambdaElement,
         model: type[ModelT],
     ) -> StatementLambdaElement:
-        fields = {self.field_name} if isinstance(self.field_name, str) else self.field_name
+        fields = self.normalized_field_names()
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
