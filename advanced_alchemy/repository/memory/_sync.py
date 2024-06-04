@@ -202,30 +202,42 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
     def _filter_by_like(
         self,
         result: list[ModelT],
-        field_name: str,
+        field_name: str | set[str],
         value: str,
         ignore_case: bool,
     ) -> list[ModelT]:
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
-        return [
-            item
-            for item in result
-            if isinstance(getattr(item, field_name), str) and pattern.match(getattr(item, field_name))
-        ]
+        fields = {field_name} if isinstance(field_name, str) else field_name
+        items: list[ModelT] = []
+        for field in fields:
+            items.extend(
+                [
+                    item
+                    for item in result
+                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
+                ],
+            )
+        return list(set(items))
 
     def _filter_by_not_like(
         self,
         result: list[ModelT],
-        field_name: str,
+        field_name: str | set[str],
         value: str,
         ignore_case: bool,
     ) -> list[ModelT]:
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
-        return [
-            item
-            for item in result
-            if isinstance(getattr(item, field_name), str) and not pattern.match(getattr(item, field_name))
-        ]
+        fields = {field_name} if isinstance(field_name, str) else field_name
+        items: list[ModelT] = []
+        for field in fields:
+            items.extend(
+                [
+                    item
+                    for item in result
+                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
+                ],
+            )
+        return list(set(result).difference(set(items)))
 
     def _filter_result_by_kwargs(
         self,
