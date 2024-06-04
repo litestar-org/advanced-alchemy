@@ -277,6 +277,7 @@ class OrderBy(StatementFilter):
         return statement
 
 
+@dataclass
 class TextSearchFilter(StatementFilter):
     field_name: str | set[str]
     """Name of the model attribute to search on."""
@@ -285,6 +286,7 @@ class TextSearchFilter(StatementFilter):
     ignore_case: bool | None = False
     """Should the search be case insensitive."""
 
+    @property
     def normalized_field_names(self) -> set[str]:
         return {self.field_name} if isinstance(self.field_name, str) else self.field_name
 
@@ -298,7 +300,7 @@ class SearchFilter(TextSearchFilter):
         statement: Select[tuple[ModelT]],
         model: type[ModelT],
     ) -> Select[tuple[ModelT]]:
-        fields = self.normalized_field_names()
+        fields = self.normalized_field_names
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
@@ -314,7 +316,7 @@ class SearchFilter(TextSearchFilter):
         statement: StatementLambdaElement,
         model: type[ModelT],
     ) -> StatementLambdaElement:
-        fields = self.normalized_field_names()
+        fields = self.normalized_field_names
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
@@ -336,7 +338,7 @@ class NotInSearchFilter(TextSearchFilter):
         statement: Select[tuple[ModelT]],
         model: type[ModelT],
     ) -> Select[tuple[ModelT]]:
-        fields = self.normalized_field_names()
+        fields = self.normalized_field_names
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
@@ -352,7 +354,7 @@ class NotInSearchFilter(TextSearchFilter):
         statement: StatementLambdaElement,
         model: type[ModelT],
     ) -> StatementLambdaElement:
-        fields = self.normalized_field_names()
+        fields = self.normalized_field_names
         search_clause: list[BinaryExpression[bool]] = []
         for field_name in fields:
             field = self._get_instrumented_attr(model, field_name)
