@@ -30,6 +30,9 @@ __all__ = (
     "NotInSearchFilter",
     "PaginationFilter",
     "InAnyFilter",
+    "StatementFilter",
+    "StatementFilterT",
+    "TextSearchFilter",
 )
 
 T = TypeVar("T")
