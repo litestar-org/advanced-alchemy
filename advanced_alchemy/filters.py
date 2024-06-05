@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import abc  # noqa: TCH003
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime  # noqa: TCH003
 from operator import attrgetter
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal, TypeVar, cast
 
 from sqlalchemy import BinaryExpression, and_, any_, or_, text
 
@@ -293,7 +293,7 @@ class SearchFilter(StatementFilter):
     ignore_case: bool | None = False
     """Should the search be case insensitive."""
 
-    _operator: Callable[..., ColumnElement[bool]] = field(default=or_, init=False)
+    _operator: ClassVar[Callable[..., ColumnElement[bool]]] = or_
 
     @property
     def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
@@ -333,7 +333,7 @@ class SearchFilter(StatementFilter):
 class NotInSearchFilter(SearchFilter):
     """Data required to construct a ``WHERE field_name NOT LIKE '%' || :value || '%'`` clause."""
 
-    _operator: Callable[..., ColumnElement[bool]] = field(default=and_, init=False)
+    _operator: ClassVar[Callable[..., ColumnElement[bool]]] = and_
 
     @property
     def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
