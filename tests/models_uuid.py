@@ -41,6 +41,7 @@ class UUIDAuthor(UUIDAuditBase):
     """The UUIDAuthor domain object."""
 
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
+    string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)  # pyright: ignore
     dob: Mapped[date] = mapped_column(nullable=True)  # pyright: ignore
     books: Mapped[List[UUIDBook]] = relationship(
         lazy="selectin",

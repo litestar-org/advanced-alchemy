@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime  # noqa: TCH003
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
 
-from sqlalchemy import any_, text
+from sqlalchemy import BinaryExpression, and_, any_, or_, text
 
 if TYPE_CHECKING:
     from sqlalchemy import Select, StatementLambdaElement
@@ -30,6 +30,9 @@ __all__ = (
     "NotInSearchFilter",
     "PaginationFilter",
     "InAnyFilter",
+    "StatementFilter",
+    "StatementFilterT",
+    "TextSearchFilter",
 )
 
 T = TypeVar("T")
@@ -278,72 +281,90 @@ class OrderBy(StatementFilter):
 
 
 @dataclass
-class SearchFilter(StatementFilter):
-    """Data required to construct a ``WHERE field_name LIKE '%' || :value || '%'`` clause."""
-
-    field_name: str
-    """Name of the model attribute to sort on."""
-    value: str
-    """Values for ``LIKE`` clause."""
-    ignore_case: bool | None = False
-    """Should the search be case insensitive."""
-
-    def append_to_statement(
-        self,
-        statement: Select[tuple[ModelT]],
-        model: type[ModelT],
-    ) -> Select[tuple[ModelT]]:
-        field = self._get_instrumented_attr(model, self.field_name)
-        search_text = f"%{self.value}%"
-        if self.ignore_case:
-            return statement.where(field.ilike(search_text))
-        return statement.where(field.like(search_text))
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-    ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        search_text = f"%{self.value}%"
-        if self.ignore_case:
-            statement += lambda s: s.where(field.ilike(search_text))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
-            return statement
-        statement += lambda s: s.where(field.like(search_text))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
-        return statement
-
-
-@dataclass
-class NotInSearchFilter(StatementFilter):
-    """Data required to construct a ``WHERE field_name NOT LIKE '%' || :value || '%'`` clause."""
-
-    field_name: str
+class TextSearchFilter(StatementFilter):
+    field_name: str | set[str]
     """Name of the model attribute to search on."""
     value: str
     """Values for ``NOT LIKE`` clause."""
     ignore_case: bool | None = False
     """Should the search be case insensitive."""
 
+    @property
+    def normalized_field_names(self) -> set[str]:
+        return {self.field_name} if isinstance(self.field_name, str) else self.field_name
+
+
+@dataclass
+class SearchFilter(TextSearchFilter):
+    """Data required to construct a ``WHERE field_name LIKE '%' || :value || '%'`` clause."""
+
     def append_to_statement(
         self,
         statement: Select[tuple[ModelT]],
         model: type[ModelT],
     ) -> Select[tuple[ModelT]]:
-        field = self._get_instrumented_attr(model, self.field_name)
-        search_text = f"%{self.value}%"
-        if self.ignore_case:
-            return statement.where(field.not_ilike(search_text))
-        return statement.where(field.not_like(search_text))
+        fields = self.normalized_field_names
+        search_clause: list[BinaryExpression[bool]] = []
+        for field_name in fields:
+            field = self._get_instrumented_attr(model, field_name)
+            search_text = f"%{self.value}%"
+            if self.ignore_case:
+                search_clause.append(field.ilike(search_text))
+            else:
+                search_clause.append(field.like(search_text))
+        return statement.where(or_(*search_clause))
 
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
         model: type[ModelT],
     ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        search_text = f"%{self.value}%"
-        if self.ignore_case:
-            statement += lambda s: s.where(field.not_ilike(search_text))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-            return statement
-        statement += lambda s: s.where(field.not_like(search_text))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
+        fields = self.normalized_field_names
+        search_clause: list[BinaryExpression[bool]] = []
+        for field_name in fields:
+            field = self._get_instrumented_attr(model, field_name)
+            search_text = f"%{self.value}%"
+            if self.ignore_case:
+                search_clause.append(field.ilike(search_text))
+            else:
+                search_clause.append(field.like(search_text))
+        statement += lambda s: s.where(or_(*search_clause))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
+        return statement
+
+
+@dataclass
+class NotInSearchFilter(TextSearchFilter):
+    """Data required to construct a ``WHERE field_name NOT LIKE '%' || :value || '%'`` clause."""
+
+    def append_to_statement(
+        self,
+        statement: Select[tuple[ModelT]],
+        model: type[ModelT],
+    ) -> Select[tuple[ModelT]]:
+        fields = self.normalized_field_names
+        search_clause: list[BinaryExpression[bool]] = []
+        for field_name in fields:
+            field = self._get_instrumented_attr(model, field_name)
+            search_text = f"%{self.value}%"
+            if self.ignore_case:
+                search_clause.append(field.not_ilike(search_text))
+            else:
+                search_clause.append(field.not_like(search_text))
+        return statement.where(and_(*search_clause))
+
+    def append_to_lambda_statement(
+        self,
+        statement: StatementLambdaElement,
+        model: type[ModelT],
+    ) -> StatementLambdaElement:
+        fields = self.normalized_field_names
+        search_clause: list[BinaryExpression[bool]] = []
+        for field_name in fields:
+            field = self._get_instrumented_attr(model, field_name)
+            search_text = f"%{self.value}%"
+            if self.ignore_case:
+                search_clause.append(field.not_ilike(search_text))
+            else:
+                search_clause.append(field.not_like(search_text))
+        statement += lambda s: s.where(and_(*search_clause))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
         return statement
