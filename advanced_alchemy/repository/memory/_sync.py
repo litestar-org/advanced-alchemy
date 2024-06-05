@@ -292,15 +292,15 @@ class SQLAlchemySyncMockRepository(Generic[ModelT]):
                     filter_.field_name,
                     sort_desc=filter_.sort_order == "desc",
                 )
-            elif isinstance(filter_, SearchFilter):
-                result = self._filter_by_like(
+            elif isinstance(filter_, NotInSearchFilter):
+                result = self._filter_by_not_like(
                     result,
                     filter_.field_name,
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                 )
-            elif isinstance(filter_, NotInSearchFilter):
-                result = self._filter_by_not_like(
+            elif isinstance(filter_, SearchFilter):
+                result = self._filter_by_like(
                     result,
                     filter_.field_name,
                     value=filter_.value,
