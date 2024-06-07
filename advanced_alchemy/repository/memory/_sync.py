@@ -638,8 +638,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
 
 class SQLAlchemySyncMockSlugRepository(
-    SQLAlchemySyncMockRepository[ModelT],
     SQLAlchemySyncSlugRepositoryProtocol[ModelT],
+    SQLAlchemySyncMockRepository[ModelT],
 ):
     def get_by_slug(
         self,
