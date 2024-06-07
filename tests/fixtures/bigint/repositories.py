@@ -14,7 +14,7 @@ from advanced_alchemy.repository.memory import (
     SQLAlchemySyncMockRepository,
     SQLAlchemySyncMockSlugRepository,
 )
-from tests.unit.fixtures.bigint.models import (
+from tests.fixtures.bigint.models import (
     BigIntAuthor,
     BigIntBook,
     BigIntEventLog,

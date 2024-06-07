@@ -268,7 +268,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def check_health(cls, session: Session | scoped_session[Session]) -> bool: ...
 
 
-class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[ModelT]):
+class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[ModelT], Protocol):
     def get_by_slug(
         self,
         slug: str,
@@ -276,6 +276,12 @@ class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[Mode
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None: ...  # pragma: no cover
+
+    def get_available_slug(
+        self,
+        value_to_slugify: str,
+        **kwargs: Any,
+    ) -> str: ...  # pragma: no cover
 
 
 class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):

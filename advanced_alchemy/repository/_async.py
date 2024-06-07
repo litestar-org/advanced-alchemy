@@ -267,7 +267,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool: ...
 
 
-class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
+class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[ModelT], Protocol):
     async def get_by_slug(
         self,
         slug: str,
@@ -275,6 +275,12 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None: ...  # pragma: no cover
+
+    async def get_available_slug(
+        self,
+        value_to_slugify: str,
+        **kwargs: Any,
+    ) -> str: ...  # pragma: no cover
 
 
 class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):

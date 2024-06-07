@@ -42,7 +42,9 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.utils.text import slugify
-from tests import models_bigint, models_uuid
+from tests.fixtures.bigint import models as models_bigint
+from tests.fixtures.uuid import models as models_uuid
+from tests.fixtures.uuid import repositories as repositories_uuid
 from tests.helpers import maybe_async
 from tests.integration.helpers import update_raw_records
 
@@ -658,14 +660,14 @@ def session(
 
     if engine.dialect.name.startswith("spanner"):
         try:
-            author_repo = models_uuid.AuthorSyncRepository(session=session)
+            author_repo = repositories_uuid.AuthorSyncRepository(session=session)
             for author in raw_authors:
                 _ = author_repo.get_or_upsert(match_fields="name", **author)
-            secret_repo = models_uuid.SecretSyncRepository(session=session)
+            secret_repo = repositories_uuid.SecretSyncRepository(session=session)
             for secret in raw_secrets:
                 _ = secret_repo.get_or_upsert(match_fields="id", **secret)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
-                rule_repo = models_uuid.RuleSyncRepository(session=session)
+                rule_repo = repositories_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
                     _ = rule_repo.add(models_uuid.UUIDRule(**rule))
             yield session
@@ -1793,25 +1795,25 @@ async def test_repo_json_methods(
     assert exp_count == count
     assert isinstance(obj, rule_model)
     assert new_rule.name == obj.name
-    assert new_rule.config == obj.config
+    assert new_rule.config == obj.config  # pyright: ignore
     assert obj.id is not None
     obj.config = {"the": "update"}
     updated = await maybe_async(rule_repo.update(obj))
-    assert obj.config == updated.config
+    assert obj.config == updated.config  # pyright: ignore
 
     get_obj, get_created = await maybe_async(
         rule_repo.get_or_upsert(match_fields=["name"], name="Secondary loading rule.", config={"another": "object"}),
     )
     assert get_created is False
     assert get_obj.id is not None
-    assert get_obj.config == {"another": "object"}
+    assert get_obj.config == {"another": "object"}  # pyright: ignore
 
     new_obj, new_created = await maybe_async(
         rule_repo.get_or_upsert(match_fields=["name"], name="New rule.", config={"new": "object"}),
     )
     assert new_created is True
     assert new_obj.id is not None
-    assert new_obj.config == {"new": "object"}
+    assert new_obj.config == {"new": "object"}  # pyright: ignore
 
 
 async def test_repo_fetched_value(
@@ -1858,8 +1860,8 @@ async def test_lazy_load(
         "id": first_item_id,
     }
     tags_to_add = await maybe_async(tag_repo.list(CollectionFilter("name", update_data.pop("tag_names", []))))  # type: ignore
-    assert len(tags_to_add) > 0
-    assert tags_to_add[0].id is not None
+    assert len(tags_to_add) > 0  # pyright: ignore
+    assert tags_to_add[0].id is not None  # pyright: ignore
     update_data["tags"] = tags_to_add  # type: ignore[assignment]
     updated_obj = await maybe_async(item_repo.update(item_model(**update_data), auto_refresh=False))
     await maybe_async(item_repo.session.commit())
