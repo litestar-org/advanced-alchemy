@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 
 from typing_extensions import TypeAlias
 
-from advanced_alchemy.filters import FilterTypes
+from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001
 
 try:
@@ -33,7 +33,7 @@ except ImportError:  # pragma: nocover
 
 ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
 ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
-FilterTypeT = TypeVar("FilterTypeT", bound=FilterTypes)
+FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticModelDTOT = TypeVar("PydanticModelDTOT", bound="BaseModel")
 StructModelDTOT = TypeVar("StructModelDTOT", bound="Struct")

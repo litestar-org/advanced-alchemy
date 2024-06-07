@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Sequence, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast
 
 from sqlalchemy import (
     Result,
@@ -27,6 +27,7 @@ from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sql
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import (
     FilterableRepository,
+    FilterableRepositoryProtocol,
     LoadSpec,
     get_abstract_loader_options,
     get_instrumented_attr,
@@ -47,7 +48,237 @@ DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
-class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
+class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):  # pragma: no cover
+    """Base Protocol"""
+
+    id_attribute: Any
+    match_fields: list[str] | str | None = None
+
+    @classmethod
+    def get_id_attribute_value(
+        cls,
+        item: ModelT | type[ModelT],
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> Any: ...  # pragma: no cover
+
+    @classmethod
+    def set_id_attribute_value(
+        cls,
+        item_id: Any,
+        item: ModelT,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> ModelT: ...  # pragma: no cover
+
+    @staticmethod
+    def check_not_found(item_or_none: ModelT | None) -> ModelT: ...
+
+    def add(
+        self,
+        data: ModelT,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+    ) -> ModelT: ...  # pragma: no cover
+
+    def add_many(
+        self,
+        data: list[ModelT],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+    ) -> Sequence[ModelT]: ...  # pragma: no cover
+
+    def delete(
+        self,
+        item_id: Any,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT: ...  # pragma: no cover
+
+    def delete_many(
+        self,
+        item_ids: list[Any],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        chunk_size: int | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> Sequence[ModelT]: ...  # pragma: no cover
+
+    def delete_where(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        sanity_check: bool = True,
+        **kwargs: Any,
+    ) -> Sequence[ModelT]: ...  # pragma: no cover
+
+    def exists(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> bool: ...  # pragma: no cover
+
+    def get(
+        self,
+        item_id: Any,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT: ...  # pragma: no cover
+
+    def get_one(
+        self,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT: ...  # pragma: no cover
+
+    def get_one_or_none(
+        self,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT | None: ...  # pragma: no cover
+
+    def get_or_upsert(
+        self,
+        match_fields: list[str] | str | None = None,
+        upsert: bool = True,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]: ...  # pragma: no cover
+
+    def get_and_update(
+        self,
+        match_fields: list[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]: ...  # pragma: no cover
+
+    def count(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> int: ...  # pragma: no cover
+
+    def update(
+        self,
+        data: ModelT,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> ModelT: ...  # pragma: no cover
+
+    def update_many(
+        self,
+        data: list[ModelT],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]: ...  # pragma: no cover
+
+    def _get_update_many_statement(
+        self,
+        model_type: type[ModelT],
+        supports_returning: bool,
+        loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
+    ) -> StatementLambdaElement: ...  # pragma: no cover
+
+    def upsert(
+        self,
+        data: ModelT,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_refresh: bool | None = None,
+        match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT: ...  # pragma: no cover
+
+    def upsert_many(
+        self,
+        data: list[ModelT],
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        no_merge: bool = False,
+        match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]: ...  # pragma: no cover
+
+    def list_and_count(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        force_basic_query_mode: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]: ...  # pragma: no cover
+
+    def list(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> list[ModelT]: ...  # pragma: no cover
+
+    @classmethod
+    def check_health(cls, session: Session | scoped_session[Session]) -> bool: ...
+
+
+class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[ModelT]):
+    def get_by_slug(
+        self,
+        slug: str,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT | None: ...  # pragma: no cover
+
+
+class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):
     """SQLAlchemy based implementation of the repository interface."""
 
     id_attribute: Any = "id"
@@ -84,7 +315,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             **kwargs: Additional arguments.
 
         """
-        super().__init__(**kwargs)
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
@@ -1543,7 +1773,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         return result
 
 
-class SQLAlchemySyncSlugRepository(SQLAlchemySyncRepository[ModelT]):
+class SQLAlchemySyncSlugRepository(SQLAlchemySyncRepository[ModelT], SQLAlchemySyncSlugRepositoryProtocol[ModelT]):
     """Extends the repository to include slug model features.."""
 
     def get_by_slug(

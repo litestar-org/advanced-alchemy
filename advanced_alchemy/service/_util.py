@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.base import ModelProtocol
-    from advanced_alchemy.filters import FilterTypes
+    from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository.typing import ModelOrRowMappingT
     from advanced_alchemy.service.pagination import OffsetPagination
     from advanced_alchemy.service.typing import ModelDTOT
@@ -31,7 +31,7 @@ class ResultConverter:
         self,
         data: ModelOrRowMappingT,
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] = ...,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] = ...,
     ) -> ModelOrRowMappingT: ...
 
     @overload
@@ -39,7 +39,7 @@ class ResultConverter:
         self,
         data: Sequence[ModelOrRowMappingT],
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
     ) -> OffsetPagination[ModelOrRowMappingT]: ...
 
     @overload
@@ -47,7 +47,7 @@ class ResultConverter:
         self,
         data: ModelProtocol | RowMapping,
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: type[ModelDTOT],
     ) -> ModelDTOT: ...
@@ -57,7 +57,7 @@ class ResultConverter:
         self,
         data: Sequence[ModelOrRowMappingT],
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: type[ModelDTOT],
     ) -> OffsetPagination[ModelDTOT]: ...
@@ -66,7 +66,7 @@ class ResultConverter:
         self,
         data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT],
         total: int | None = None,
-        filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: type[ModelDTOT] | None = None,
     ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:

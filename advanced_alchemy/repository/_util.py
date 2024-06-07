@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generic, Iterable, List, Literal, Sequence, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, List, Literal, Protocol, Sequence, Tuple, Union, cast
 
 from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import (
@@ -106,7 +106,11 @@ def get_abstract_loader_options(
     return (loads, options_have_wildcards)
 
 
-class FilterableRepository(Generic[ModelT]):
+class FilterableRepositoryProtocol(Protocol[ModelT]):
+    model_type: type[ModelT]
+
+
+class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     model_type: type[ModelT]
     _prefer_any: bool = False
     prefer_any_dialects: tuple[str] | None = ("postgresql",)

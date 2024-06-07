@@ -13,7 +13,7 @@ from typing import (
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
-from advanced_alchemy.filters import FilterTypes, LimitOffset
+from advanced_alchemy.filters import LimitOffset, StatementFilter
 from advanced_alchemy.repository.typing import ModelOrRowMappingT
 from advanced_alchemy.service.pagination import OffsetPagination
 
@@ -79,7 +79,7 @@ def _default_deserializer(
 
 def _find_filter(
     filter_type: type[FilterTypeT],
-    filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes],
+    filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter],
 ) -> FilterTypeT | None:
     """Get the filter specified by filter type from the filters.
 
@@ -99,7 +99,7 @@ def _find_filter(
 def to_schema(
     data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT],
     total: int | None = None,
-    filters: Sequence[FilterTypes | ColumnElement[bool]] | Sequence[FilterTypes] | None = None,
+    filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
     schema_type: type[ModelDTOT] | None = None,
 ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
     if filters is None:
