@@ -43,6 +43,7 @@ from advanced_alchemy.service import (
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.utils.text import slugify
 from tests.fixtures.bigint import models as models_bigint
+from tests.fixtures.bigint import repositories as repositories_bigint
 from tests.fixtures.uuid import models as models_uuid
 from tests.fixtures.uuid import repositories as repositories_uuid
 from tests.helpers import maybe_async
@@ -841,7 +842,7 @@ async def any_engine(
 def repository_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
     if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
         pytest.skip("Skipping additional bigint mock repository tests")
-    return models_uuid if repository_pk_type == "uuid" else models_bigint
+    return repositories_uuid if repository_pk_type == "uuid" else repositories_bigint
 
 
 @pytest.fixture()
