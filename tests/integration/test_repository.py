@@ -893,18 +893,18 @@ def secret_repo(
 @pytest.fixture()
 def author_service(
     any_session: AsyncSession | Session,
-    repository_module: Any,
+    service_module: Any,
     request: FixtureRequest,
 ) -> AuthorService:
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.AuthorAsyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.AuthorAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.AuthorSyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.AuthorSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.AuthorAsyncService(session=any_session)
+        repo = service_module.AuthorAsyncService(session=any_session)
     else:
-        repo = repository_module.AuthorSyncService(session=any_session)
+        repo = service_module.AuthorSyncService(session=any_session)
     return cast(AuthorService, repo)
 
 
