@@ -848,7 +848,7 @@ def repository_module(repository_pk_type: RepositoryPKType, request: FixtureRequ
 
 
 @pytest.fixture()
-def service_modules(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
+def service_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
     if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
         pytest.skip("Skipping additional bigint mock repository tests")
     return services_uuid if repository_pk_type == "uuid" else services_bigint
