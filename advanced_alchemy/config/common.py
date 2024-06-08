@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Callable, Generic, TypeVar, cast
 
 from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config.engine import EngineConfig
@@ -27,6 +27,7 @@ __all__ = (
 )
 
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
+
 """Path to the Alembic templates."""
 ConnectionT = TypeVar("ConnectionT", bound="Connection | AsyncConnection")
 """Type variable for a SQLAlchemy connection."""
@@ -34,7 +35,7 @@ EngineT = TypeVar("EngineT", bound="Engine | AsyncEngine")
 """Type variable for a SQLAlchemy engine."""
 SessionT = TypeVar("SessionT", bound="Session | AsyncSession")
 """Type variable for a SQLAlchemy session."""
-SessionMakerT = TypeVar("SessionMakerT", bound="sessionmaker | async_sessionmaker")
+SessionMakerT = TypeVar("SessionMakerT", bound="sessionmaker[Session] | async_sessionmaker[AsyncSession]")
 """Type variable for a SQLAlchemy sessionmaker."""
 
 
@@ -50,7 +51,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     bind: EngineT | ConnectionT | None | EmptyType = Empty
     """The :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection <sqlalchemy.engine.Connection>` that new
     :class:`Session <sqlalchemy.orm.Session>` objects will be bound to."""
-    binds: dict[type[Any] | Mapper | TableClause | str, EngineT | ConnectionT] | None | EmptyType = Empty
+    binds: dict[type[Any] | Mapper | TableClause | str, EngineT | ConnectionT] | None | EmptyType = Empty  # pyright: ignore[reportMissingTypeArgument]
     """A dictionary which may specify any number of :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection
     <sqlalchemy.engine.Connection>` objects as the source of connectivity for SQL operations on a per-entity basis. The
     keys of the dictionary consist of any series of mapped classes, arbitrary Python classes that are bases for mapped
@@ -68,7 +69,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     """Describes the transactional behavior to take when a given bind is a Connection that has already begun a
     transaction outside the scope of this Session; in other words the
     :attr:`Connection.in_transaction() <sqlalchemy.Connection.in_transaction>` method returns True."""
-    query_cls: type[Query] | None | EmptyType = Empty
+    query_cls: type[Query] | None | EmptyType = Empty  # pyright: ignore[reportMissingTypeArgument]
     """Class which should be used to create new Query objects, as returned by the
     :attr:`Session.query() <sqlalchemy.orm.Session.query>` method."""
     twophase: bool | EmptyType = Empty
@@ -92,7 +93,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Configuration options for either the :class:`async_sessionmaker <sqlalchemy.ext.asyncio.async_sessionmaker>`
     or :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`.
     """
-    session_maker_class: type[sessionmaker | async_sessionmaker]
+    session_maker_class: type[sessionmaker[Session] | async_sessionmaker[AsyncSession]]
     """Sessionmaker class to use."""
     connection_string: str | None = field(default=None)
     """Database connection string in one of the formats supported by SQLAlchemy.
@@ -196,7 +197,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         session_kws = self.session_config_dict
         if session_kws.get("bind") is None:
             session_kws["bind"] = self.get_engine()
-        return self.session_maker_class(**session_kws)
+        return cast("Callable[[], SessionT]", self.session_maker_class(**session_kws))
 
 
 @dataclass

@@ -33,16 +33,16 @@ class AlembicSyncConfig(GenericAlembicConfig):
 
 
 @dataclass
-class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker]):
+class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker[Session]]):
     """Sync SQLAlchemy Configuration."""
 
     create_engine_callable: Callable[[str], Engine] = create_engine
     """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
     subclass.
     """
-    session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright:ignore  # noqa: PGH003
+    session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
-    session_maker_class: type[sessionmaker] = sessionmaker
+    session_maker_class: type[sessionmaker[Session]] = sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
     """Sessionmaker class to use."""
     alembic_config: AlembicSyncConfig = field(default_factory=AlembicSyncConfig)
     """Configuration for the SQLAlchemy Alembic migrations.

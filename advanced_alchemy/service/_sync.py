@@ -23,7 +23,7 @@ from advanced_alchemy.repository._util import (
     model_from_dict,
 )
 from advanced_alchemy.repository.typing import ModelT
-from advanced_alchemy.service._util import ResultConverter
+from advanced_alchemy.service._util import ModelResultConverter, RowMappingResultConverter
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
 
-class SQLAlchemySyncQueryService(ResultConverter):
+class SQLAlchemySyncQueryService(RowMappingResultConverter):
     """Simple service to execute the basic Query repository.."""
 
     def __init__(
@@ -86,7 +86,7 @@ class SQLAlchemySyncQueryService(ResultConverter):
                 )
 
 
-class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
+class SQLAlchemySyncRepositoryReadService(ModelResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemySyncRepository[ModelT] | SQLAlchemySyncMockRepository[ModelT]]

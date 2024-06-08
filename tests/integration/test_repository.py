@@ -34,6 +34,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemyAsy
 from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
 from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
+    SQLAlchemyAsyncMockSlugRepository,
     SQLAlchemySyncMockRepository,
     SQLAlchemySyncMockSlugRepository,
 )
@@ -2444,9 +2445,9 @@ async def test_service_create_method_slug_existing(
         slug_book_service.repository_type,
         (
             SQLAlchemySyncMockSlugRepository,
+            SQLAlchemyAsyncMockSlugRepository,
             SQLAlchemyAsyncMockRepository,
-            SQLAlchemyAsyncMockRepository,
-            SQLAlchemyAsyncMockRepository,
+            SQLAlchemySyncMockRepository,
         ),
     ):
         pytest.skip("Skipping additional bigint mock repository tests")
@@ -2508,10 +2509,10 @@ async def test_service_paginated_to_schema(raw_authors: RawRecordData, author_se
     assert isinstance(model_dto.items[0].name, str)
     assert model_dto.total == exp_count
     assert isinstance(pydantic_dto, OffsetPagination)
-    assert isinstance(pydantic_dto.items[0].name, str)
+    assert isinstance(pydantic_dto.items[0].name, str)  # pyright: ignore
     assert pydantic_dto.total == exp_count
     assert isinstance(msgspec_dto, OffsetPagination)
-    assert isinstance(msgspec_dto.items[0].name, str)
+    assert isinstance(msgspec_dto.items[0].name, str)  # pyright: ignore
     assert msgspec_dto.total == exp_count
 
 
@@ -2529,6 +2530,10 @@ async def test_service_to_schema(
     model_dto = author_service.to_schema(data=obj)
     pydantic_dto = author_service.to_schema(data=obj, schema_type=AuthorBaseModel)
     msgspec_dto = author_service.to_schema(data=obj, schema_type=AuthorStruct)
+    assert issubclass(AuthorStruct, Struct)
+    assert issubclass(AuthorBaseModel, BaseModel)
     assert isinstance(model_dto.name, str)
-    assert isinstance(pydantic_dto.name, str)
-    assert isinstance(msgspec_dto.name, str)
+    assert isinstance(pydantic_dto, BaseModel)
+    assert isinstance(msgspec_dto, Struct)
+    assert isinstance(pydantic_dto.name, str)  # pyright: ignore
+    assert isinstance(msgspec_dto.name, str)  # pyright: ignore
