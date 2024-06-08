@@ -6,8 +6,9 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    List,
+    Generic,
     Sequence,
+    TypeVar,
     cast,
 )
 from uuid import UUID
@@ -16,20 +17,22 @@ from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
 from advanced_alchemy.repository.typing import ModelOrRowMappingT
 from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.service.typing import PydanticModelDTOT, StructModelDTOT
 
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement
 
-    from advanced_alchemy.service.typing import FilterTypeT, ModelDTOT
+    from advanced_alchemy.base import ModelProtocol
+    from advanced_alchemy.service.typing import FilterTypeT
 
 try:
     from msgspec import Struct, convert  # pyright: ignore[reportAssignmentType]
 except ImportError:  # pragma: nocover
 
-    class Struct:  # type: ignore[no-redef]
+    class Struct:  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
-    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001 # pragma: nocover
         """Placeholder implementation"""
         return {}
 
@@ -39,11 +42,20 @@ try:
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportAssignmentType]
 except ImportError:  # pragma: nocover
 
-    class BaseModel:  # type: ignore[no-redef]
+    class BaseModel:  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
-    class TypeAdapter:  # type: ignore[no-redef]
+    T = TypeVar("T")  # pragma: nocover
+
+    class TypeAdapter(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
+            super().__init__()
+
+        def validate_python(self, data: Any, *args: Any, **kwargs: Any) -> T:  # pragma: nocover
+            """Stub"""
+            return cast("T", data)
 
 
 def _default_deserializer(
@@ -97,11 +109,18 @@ def _find_filter(
 
 
 def to_schema(
-    data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT],
+    data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT] | ModelProtocol | Sequence[ModelProtocol],
     total: int | None = None,
     filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    schema_type: type[ModelDTOT] | None = None,
-) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+    schema_type: type[PydanticModelDTOT | StructModelDTOT] | None = None,
+) -> (
+    ModelOrRowMappingT
+    | OffsetPagination[ModelOrRowMappingT]
+    | StructModelDTOT
+    | OffsetPagination[StructModelDTOT]
+    | PydanticModelDTOT
+    | OffsetPagination[PydanticModelDTOT]
+):
     if filters is None:
         filters = []
     if schema_type is None:
@@ -111,37 +130,43 @@ def to_schema(
         total = total or len(data)  # type: ignore[arg-type]
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)  # type: ignore[arg-type]
         return OffsetPagination[ModelOrRowMappingT](
-            items=cast("List[ModelOrRowMappingT]", data),
+            items=cast("Sequence[ModelOrRowMappingT]", data),
             limit=limit_offset.limit,
             offset=limit_offset.offset,
             total=total,
         )
     if issubclass(schema_type, Struct):
         if not isinstance(data, Sequence):
-            return convert(  # type: ignore  # noqa: PGH003
-                obj=data,
-                type=schema_type,
-                from_attributes=True,
-                dec_hook=partial(
-                    _default_deserializer,
-                    type_decoders=[
-                        (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                    ],
+            return cast(
+                "StructModelDTOT",
+                convert(
+                    obj=data,
+                    type=schema_type,
+                    from_attributes=True,
+                    dec_hook=partial(
+                        _default_deserializer,
+                        type_decoders=[
+                            (lambda x: x is UUID, lambda t, v: t(v.hex)),
+                        ],
+                    ),
                 ),
             )
         limit_offset = _find_filter(LimitOffset, filters=filters)
         total = total or len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-        return OffsetPagination[schema_type](  # type: ignore[valid-type]
-            items=convert(
-                obj=data,
-                type=List[schema_type],  # type: ignore[valid-type]
-                from_attributes=True,
-                dec_hook=partial(
-                    _default_deserializer,
-                    type_decoders=[
-                        (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                    ],
+        return OffsetPagination[StructModelDTOT](
+            items=cast(
+                "Sequence[StructModelDTOT]",
+                convert(
+                    obj=data,
+                    type=Sequence[StructModelDTOT],
+                    from_attributes=True,
+                    dec_hook=partial(
+                        _default_deserializer,
+                        type_decoders=[
+                            (lambda x: x is UUID, lambda t, v: t(v.hex)),
+                        ],
+                    ),
                 ),
             ),
             limit=limit_offset.limit,
@@ -151,15 +176,15 @@ def to_schema(
 
     if issubclass(schema_type, BaseModel):
         if not isinstance(data, Sequence):
-            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # type: ignore[return-value] # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
+            return TypeAdapter(schema_type).validate_python(data, from_attributes=True)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
         limit_offset = _find_filter(LimitOffset, filters=filters)
         total = total if total else len(data)
         limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-        return OffsetPagination[schema_type](  # type: ignore[valid-type]
-            items=TypeAdapter(List[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type]
+        return OffsetPagination[PydanticModelDTOT](
+            items=TypeAdapter(Sequence[PydanticModelDTOT]).validate_python(data, from_attributes=True),  # pyright: ignore[reportUnknownArgumentType]
             limit=limit_offset.limit,
             offset=limit_offset.offset,
             total=total,
         )
-    msg = "`schema_type` should be a valid Pydantic or Msgspec schema"
+    msg = "`schema_type` should be a valid Pydantic or Msgspec schema"  # type: ignore[unreachable]
     raise AdvancedAlchemyError(msg)

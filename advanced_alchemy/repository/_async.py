@@ -1778,7 +1778,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         return result
 
 
-class SQLAlchemyAsyncSlugRepository(SQLAlchemyAsyncRepository[ModelT], SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]):
+class SQLAlchemyAsyncSlugRepository(
+    SQLAlchemyAsyncRepository[ModelT],
+    SQLAlchemyAsyncSlugRepositoryProtocol[ModelT],
+):
     """Extends the repository to include slug model features.."""
 
     async def get_by_slug(

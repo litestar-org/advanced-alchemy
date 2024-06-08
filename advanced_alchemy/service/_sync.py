@@ -15,7 +15,9 @@ from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
-from advanced_alchemy.repository._sync import SQLAlchemySyncQueryRepository
+from advanced_alchemy.repository import (
+    SQLAlchemySyncQueryRepository,
+)
 from advanced_alchemy.repository._util import (
     LoadSpec,
     model_from_dict,
@@ -33,7 +35,9 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.filters import StatementFilter
-    from advanced_alchemy.repository import SQLAlchemySyncRepository
+    from advanced_alchemy.repository import (
+        SQLAlchemySyncRepository,
+    )
     from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
 
@@ -82,7 +86,7 @@ class SQLAlchemySyncQueryService(ResultConverter):
                 )
 
 
-class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
+class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemySyncRepository[ModelT] | SQLAlchemySyncMockRepository[ModelT]]

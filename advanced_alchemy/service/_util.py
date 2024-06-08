@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository.typing import ModelOrRowMappingT
     from advanced_alchemy.service.pagination import OffsetPagination
-    from advanced_alchemy.service.typing import ModelDTOT
+    from advanced_alchemy.service.typing import PydanticModelDTOT, StructModelDTOT
 
 
 class ResultConverter:
@@ -31,7 +31,9 @@ class ResultConverter:
         self,
         data: ModelOrRowMappingT,
         total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] = ...,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+        *,
+        schema_type: None = None,
     ) -> ModelOrRowMappingT: ...
 
     @overload
@@ -40,6 +42,8 @@ class ResultConverter:
         data: Sequence[ModelOrRowMappingT],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+        *,
+        schema_type: None = None,
     ) -> OffsetPagination[ModelOrRowMappingT]: ...
 
     @overload
@@ -49,27 +53,56 @@ class ResultConverter:
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
-        schema_type: type[ModelDTOT],
-    ) -> ModelDTOT: ...
+        schema_type: type[StructModelDTOT],
+    ) -> StructModelDTOT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelOrRowMappingT],
+        data: Sequence[ModelProtocol] | Sequence[RowMapping],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
-        schema_type: type[ModelDTOT],
-    ) -> OffsetPagination[ModelDTOT]: ...
+        schema_type: type[StructModelDTOT],
+    ) -> OffsetPagination[StructModelDTOT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelProtocol | RowMapping,
+        total: int | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+        *,
+        schema_type: type[PydanticModelDTOT],
+    ) -> PydanticModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelProtocol] | Sequence[RowMapping],
+        total: int | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+        *,
+        schema_type: type[PydanticModelDTOT],
+    ) -> OffsetPagination[PydanticModelDTOT]: ...
 
     def to_schema(
         self,
-        data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT],
+        data: ModelOrRowMappingT | Sequence[ModelOrRowMappingT] | ModelProtocol | Sequence[ModelProtocol],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
-        schema_type: type[ModelDTOT] | None = None,
-    ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+        schema_type: type[PydanticModelDTOT | StructModelDTOT] | None = None,
+    ) -> (
+        ModelOrRowMappingT
+        | OffsetPagination[ModelOrRowMappingT]
+        | ModelProtocol
+        | OffsetPagination[ModelProtocol]
+        | StructModelDTOT
+        | OffsetPagination[StructModelDTOT]
+        | PydanticModelDTOT
+        | OffsetPagination[PydanticModelDTOT]
+    ):
         """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
 
         Args:

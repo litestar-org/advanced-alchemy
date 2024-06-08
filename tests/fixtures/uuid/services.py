@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from advanced_alchemy.repository.memory import (
-    SQLAlchemySyncMockSlugRepository,
-)
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -45,7 +42,6 @@ from tests.fixtures.uuid.repositories import (
     RuleSyncRepository,
     SecretAsyncRepository,
     SecretSyncRepository,
-    SlugBookAsyncMockRepository,
     SlugBookAsyncRepository,
     SlugBookSyncMockRepository,
     SlugBookSyncRepository,
@@ -248,7 +244,6 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
     """Book repository."""
 
-    repository_type = SlugBookAsyncMockRepository
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
@@ -262,7 +257,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         return await super().to_model(data, operation)
 
 
-class SlugBookSyncMockService(SQLAlchemySyncMockSlugRepository[UUIDSlugBook]):
+class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
     """Book repository."""
 
     repository_type = SlugBookSyncMockRepository

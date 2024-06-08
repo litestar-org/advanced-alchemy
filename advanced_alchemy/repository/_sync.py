@@ -1779,7 +1779,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         return result
 
 
-class SQLAlchemySyncSlugRepository(SQLAlchemySyncRepository[ModelT], SQLAlchemySyncSlugRepositoryProtocol[ModelT]):
+class SQLAlchemySyncSlugRepository(
+    SQLAlchemySyncRepository[ModelT],
+    SQLAlchemySyncSlugRepositoryProtocol[ModelT],
+):
     """Extends the repository to include slug model features.."""
 
     def get_by_slug(

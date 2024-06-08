@@ -13,7 +13,7 @@ from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
-from advanced_alchemy.repository._async import SQLAlchemyAsyncQueryRepository
+from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
 from advanced_alchemy.repository._util import (
     LoadSpec,
     model_from_dict,
@@ -81,7 +81,7 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
                 )
 
 
-class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
+class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepository[ModelT] | SQLAlchemyAsyncMockRepository[ModelT]]
