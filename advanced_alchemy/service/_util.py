@@ -20,7 +20,6 @@ from uuid import UUID
 
 from sqlalchemy import RowMapping
 
-from advanced_alchemy.base import ModelProtocol
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.service.pagination import OffsetPagination
@@ -36,6 +35,7 @@ from advanced_alchemy.service.typing import (  # type: ignore[attr-defined]
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement
 
+    from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository.typing import ModelOrRowMappingT
     from advanced_alchemy.service.typing import FilterTypeT
@@ -189,7 +189,7 @@ class ModelResultConverter:
             return OffsetPagination[ModelDTOT](
                 items=convert(
                     obj=data,
-                    type=Sequence[schema_type],
+                    type=Sequence[schema_type],  # type: ignore[valid-type]
                     from_attributes=True,
                     dec_hook=partial(
                         _default_msgspec_deserializer,
@@ -210,7 +210,7 @@ class ModelResultConverter:
             total = total if total else len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
             return OffsetPagination[ModelDTOT](
-                items=TypeAdapter(Sequence[schema_type]).validate_python(data, from_attributes=True),  # pyright: ignore[reportUnknownArgumentType]
+                items=TypeAdapter(Sequence[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
                 limit=limit_offset.limit,
                 offset=limit_offset.offset,
                 total=total,
