@@ -100,6 +100,22 @@ class ModelResultConverter:
         data: ModelOrRowMappingT,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+    ) -> ModelOrRowMappingT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelOrRowMappingT],
+        total: int | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+    ) -> OffsetPagination[ModelOrRowMappingT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelOrRowMappingT,
+        total: int | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: None = None,
     ) -> ModelOrRowMappingT: ...
