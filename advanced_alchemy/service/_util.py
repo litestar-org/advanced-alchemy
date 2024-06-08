@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import StatementFilter
-    from advanced_alchemy.repository.typing import ModelOrRowMappingT
     from advanced_alchemy.service.typing import FilterTypeT
 
 
@@ -97,38 +96,38 @@ class ModelResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelOrRowMappingT,
+        data: ModelT,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    ) -> ModelOrRowMappingT: ...
+    ) -> ModelT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelOrRowMappingT],
+        data: Sequence[ModelT],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    ) -> OffsetPagination[ModelOrRowMappingT]: ...
+    ) -> OffsetPagination[ModelT]: ...
 
     @overload
     def to_schema(
         self,
-        data: ModelOrRowMappingT,
+        data: ModelT,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: None = None,
-    ) -> ModelOrRowMappingT: ...
+    ) -> ModelT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelOrRowMappingT],
+        data: Sequence[ModelT],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: None = None,
-    ) -> OffsetPagination[ModelOrRowMappingT]: ...
+    ) -> OffsetPagination[ModelT]: ...
 
     @overload
     def to_schema(
