@@ -1186,7 +1186,7 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 @pytest.fixture()
 def frozen_datetime() -> Generator[Coordinates, None, None]:
-    with travel(datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated]
+    with travel(datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated,reportCallIssue]
         yield frozen
 
 
