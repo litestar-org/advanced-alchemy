@@ -13,7 +13,7 @@ from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
-from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
+from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository, SQLAlchemyAsyncRepositoryProtocol
 from advanced_alchemy.repository._util import (
     LoadSpec,
     model_from_dict,
@@ -32,8 +32,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.filters import StatementFilter
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
 
 
 class SQLAlchemyAsyncQueryService(RowMappingResultConverter):
@@ -84,7 +82,7 @@ class SQLAlchemyAsyncQueryService(RowMappingResultConverter):
 class SQLAlchemyAsyncRepositoryReadService(ModelResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemyAsyncRepository[ModelT] | SQLAlchemyAsyncMockRepository[ModelT]]
+    repository_type: type[SQLAlchemyAsyncRepositoryProtocol[ModelT]]
     match_fields: list[str] | str | None = None
 
     def __init__(

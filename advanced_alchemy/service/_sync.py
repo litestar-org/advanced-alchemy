@@ -17,6 +17,7 @@ from typing_extensions import Self
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.repository import (
     SQLAlchemySyncQueryRepository,
+    SQLAlchemySyncRepositoryProtocol,
 )
 from advanced_alchemy.repository._util import (
     LoadSpec,
@@ -35,10 +36,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.filters import StatementFilter
-    from advanced_alchemy.repository import (
-        SQLAlchemySyncRepository,
-    )
-    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
 
 class SQLAlchemySyncQueryService(RowMappingResultConverter):
@@ -89,7 +86,7 @@ class SQLAlchemySyncQueryService(RowMappingResultConverter):
 class SQLAlchemySyncRepositoryReadService(ModelResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemySyncRepository[ModelT] | SQLAlchemySyncMockRepository[ModelT]]
+    repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT]]
     match_fields: list[str] | str | None = None
 
     def __init__(

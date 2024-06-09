@@ -53,6 +53,19 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     id_attribute: Any
     match_fields: list[str] | str | None = None
 
+    def __init__(
+        self,
+        *,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        session: AsyncSession | async_scoped_session[AsyncSession],
+        auto_expunge: bool = False,
+        auto_refresh: bool = True,
+        auto_commit: bool = False,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+
     @classmethod
     def get_id_attribute_value(
         cls,
