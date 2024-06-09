@@ -7,7 +7,7 @@ import contextlib
 import os
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
-from unittest.mock import NonCallableMagicMock
+from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID, uuid4
 
 import pytest
@@ -899,9 +899,9 @@ def author_service(
 ) -> AuthorService:
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = service_module.AuthorAsyncMockService(session=any_session)
+        repo = service_module.AuthorAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.AuthorSyncMockService(session=any_session)
+        repo = service_module.AuthorSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
         repo = service_module.AuthorAsyncService(session=any_session)
     else:
@@ -927,9 +927,9 @@ def rule_repo(any_session: AsyncSession | Session, repository_module: Any, reque
 def rule_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> RuleService:
     """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = service_module.RuleAsyncMockService(session=any_session)
+        repo = service_module.RuleAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.RuleSyncMockService(session=any_session)
+        repo = service_module.RuleSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
         repo = service_module.RuleAsyncService(session=any_session)
     else:
@@ -955,9 +955,9 @@ def book_repo(any_session: AsyncSession | Session, repository_module: Any, reque
 def book_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> BookService:
     """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = service_module.BookAsyncMockService(session=any_session)
+        repo = service_module.BookAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.BookSyncMockService(session=any_session)
+        repo = service_module.BookSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
         repo = service_module.BookAsyncService(session=any_session)
     else:
@@ -991,9 +991,9 @@ def slug_book_service(
 ) -> SlugBookService:
     """Return an SlugBookAsyncService or SlugBookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = service_module.SlugBookAsyncMockService(session=any_session)
+        repo = service_module.SlugBookAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.SlugBookSyncMockService(session=any_session)
+        repo = service_module.SlugBookSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
         repo = service_module.SlugBookAsyncService(session=any_session)
     else:
@@ -1020,9 +1020,9 @@ def tag_repo(any_session: AsyncSession | Session, repository_module: Any, reques
 def tag_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> TagService:
     """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = service_module.TagAsyncMockService(session=any_session)
+        repo = service_module.TagAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.TagSyncMockService(session=any_session)
+        repo = service_module.TagSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
         repo = service_module.TagAsyncService(session=any_session)
     else:
@@ -1049,9 +1049,9 @@ def item_repo(any_session: AsyncSession | Session, repository_module: Any, reque
 def item_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> ItemService:
     """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = service_module.ItemAsyncMockService(session=any_session)
+        repo = service_module.ItemAsyncMockService(session=create_autospec(any_session, instance=True))
     elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.ItemSyncMockService(session=any_session)
+        repo = service_module.ItemSyncMockService(session=create_autospec(any_session, instance=True))
     elif isinstance(any_session, AsyncSession):
         repo = service_module.ItemAsyncService(session=any_session)
     else:

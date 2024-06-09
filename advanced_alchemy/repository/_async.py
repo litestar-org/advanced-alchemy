@@ -20,6 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
+from typing_extensions import runtime_checkable
 
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
@@ -47,6 +48,7 @@ DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
+@runtime_checkable
 class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):  # pragma: no cover
     """Base Protocol"""
 

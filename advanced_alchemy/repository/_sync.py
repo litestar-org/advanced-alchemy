@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast, runtime_checkable
 
 from sqlalchemy import (
     Result,
@@ -48,6 +48,7 @@ DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
+@runtime_checkable
 class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):  # pragma: no cover
     """Base Protocol"""
 
