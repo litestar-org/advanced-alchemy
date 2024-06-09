@@ -3,7 +3,19 @@ from __future__ import annotations
 import inspect
 from contextlib import AbstractContextManager
 from functools import partial
-from typing import TYPE_CHECKING, AsyncContextManager, Awaitable, Callable, ContextManager, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncContextManager,
+    Awaitable,
+    Callable,
+    ContextManager,
+    Dict,
+    List,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import anyio
 from typing_extensions import ParamSpec
@@ -13,6 +25,8 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 P = ParamSpec("P")
+
+RawRecordData = List[Dict[str, Any]]
 
 
 class _ContextManagerWrapper:
