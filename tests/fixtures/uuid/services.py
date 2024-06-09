@@ -231,7 +231,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
     repository_type = SlugBookSyncRepository
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(self, data: UUIDSlugBook | dict[str, Any], operation: str | None = None) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -244,10 +244,11 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
     """Book repository."""
 
+    repository_type = SlugBookAsyncRepository
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(self, data: UUIDSlugBook | dict[str, Any], operation: str | None = None) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
