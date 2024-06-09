@@ -49,7 +49,7 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
 @runtime_checkable
-class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):  # pragma: no cover
+class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):
     """Base Protocol"""
 
     id_attribute: Any
@@ -78,7 +78,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         cls,
         item: ModelT | type[ModelT],
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-    ) -> Any: ...  # pragma: no cover
+    ) -> Any: ...
 
     @classmethod
     def set_id_attribute_value(
@@ -86,7 +86,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         item_id: Any,
         item: ModelT,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     @staticmethod
     def check_not_found(item_or_none: ModelT | None) -> ModelT: ...
@@ -97,14 +97,14 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     async def add_many(
         self,
         data: list[ModelT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-    ) -> Sequence[ModelT]: ...  # pragma: no cover
+    ) -> Sequence[ModelT]: ...
 
     async def delete(
         self,
@@ -114,7 +114,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     async def delete_many(
         self,
@@ -125,7 +125,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         chunk_size: int | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> Sequence[ModelT]: ...  # pragma: no cover
+    ) -> Sequence[ModelT]: ...
 
     async def delete_where(
         self,
@@ -136,7 +136,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         execution_options: dict[str, Any] | None = None,
         sanity_check: bool = True,
         **kwargs: Any,
-    ) -> Sequence[ModelT]: ...  # pragma: no cover
+    ) -> Sequence[ModelT]: ...
 
     async def exists(
         self,
@@ -144,7 +144,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> bool: ...  # pragma: no cover
+    ) -> bool: ...
 
     async def get(
         self,
@@ -154,7 +154,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     async def get_one(
         self,
@@ -163,7 +163,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     async def get_one_or_none(
         self,
@@ -172,7 +172,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> ModelT | None: ...  # pragma: no cover
+    ) -> ModelT | None: ...
 
     async def get_or_upsert(
         self,
@@ -186,7 +186,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[ModelT, bool]: ...  # pragma: no cover
+    ) -> tuple[ModelT, bool]: ...
 
     async def get_and_update(
         self,
@@ -199,7 +199,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[ModelT, bool]: ...  # pragma: no cover
+    ) -> tuple[ModelT, bool]: ...
 
     async def count(
         self,
@@ -208,7 +208,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> int: ...  # pragma: no cover
+    ) -> int: ...
 
     async def update(
         self,
@@ -219,7 +219,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     async def update_many(
         self,
@@ -228,7 +228,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]: ...  # pragma: no cover
+    ) -> list[ModelT]: ...
 
     def _get_update_many_statement(
         self,
@@ -236,7 +236,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         supports_returning: bool,
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
-    ) -> StatementLambdaElement: ...  # pragma: no cover
+    ) -> StatementLambdaElement: ...
 
     async def upsert(
         self,
@@ -249,7 +249,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> ModelT: ...  # pragma: no cover
+    ) -> ModelT: ...
 
     async def upsert_many(
         self,
@@ -260,7 +260,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]: ...  # pragma: no cover
+    ) -> list[ModelT]: ...
 
     async def list_and_count(
         self,
@@ -271,7 +271,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]: ...  # pragma: no cover
+    ) -> tuple[list[ModelT], int]: ...
 
     async def list(
         self,
@@ -281,7 +281,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> list[ModelT]: ...  # pragma: no cover
+    ) -> list[ModelT]: ...
 
     @classmethod
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool: ...
@@ -294,13 +294,13 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> ModelT | None: ...  # pragma: no cover
+    ) -> ModelT | None: ...
 
     async def get_available_slug(
         self,
         value_to_slugify: str,
         **kwargs: Any,
-    ) -> str: ...  # pragma: no cover
+    ) -> str: ...
 
 
 class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):

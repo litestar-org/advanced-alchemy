@@ -18,22 +18,20 @@ from typing import (
 )
 from uuid import UUID
 
-from sqlalchemy import RowMapping
-
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.repository.typing import ModelOrRowMappingT
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (  # type: ignore[attr-defined]
     BaseModel,
     ModelDTOT,
-    ModelT,
     Struct,
     TypeAdapter,
     convert,
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy import ColumnElement
+    from sqlalchemy import ColumnElement, RowMapping
 
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import StatementFilter
@@ -90,49 +88,49 @@ def find_filter(
     )
 
 
-class ModelResultConverter:
+class ResultConverter:
     """Simple mixin to help convert to a paginated response model the results set is a list."""
 
     @overload
     def to_schema(
         self,
-        data: ModelT,
+        data: ModelOrRowMappingT,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    ) -> ModelT: ...
+    ) -> ModelOrRowMappingT: ...
 
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelT],
+        data: Sequence[ModelOrRowMappingT],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    ) -> OffsetPagination[ModelT]: ...
+    ) -> OffsetPagination[ModelOrRowMappingT]: ...
 
     @overload
     def to_schema(
         self,
-        data: ModelT,
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-        *,
-        schema_type: None = None,
-    ) -> ModelT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[ModelT],
+        data: ModelOrRowMappingT,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: None = None,
-    ) -> OffsetPagination[ModelT]: ...
+    ) -> ModelOrRowMappingT: ...
 
     @overload
     def to_schema(
         self,
-        data: ModelProtocol,
+        data: Sequence[ModelOrRowMappingT],
+        total: int | None = None,
+        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
+        *,
+        schema_type: None = None,
+    ) -> OffsetPagination[ModelOrRowMappingT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelProtocol | RowMapping,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
@@ -142,7 +140,7 @@ class ModelResultConverter:
     @overload
     def to_schema(
         self,
-        data: Sequence[ModelProtocol],
+        data: Sequence[ModelProtocol] | Sequence[RowMapping],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
@@ -151,12 +149,17 @@ class ModelResultConverter:
 
     def to_schema(
         self,
-        data: ModelT | Sequence[ModelT] | ModelProtocol | Sequence[ModelProtocol],
+        data: ModelOrRowMappingT
+        | Sequence[ModelOrRowMappingT]
+        | ModelProtocol
+        | Sequence[ModelProtocol]
+        | RowMapping
+        | Sequence[RowMapping],
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: type[ModelDTOT] | None = None,
-    ) -> ModelT | OffsetPagination[ModelT] | ModelDTOT | OffsetPagination[ModelDTOT]:
+    ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
 
         Args:
@@ -172,12 +175,12 @@ class ModelResultConverter:
             filters = []
         if schema_type is None:
             if not isinstance(data, Sequence):
-                return cast("ModelT", data)
+                return cast("ModelOrRowMappingT", data)
             limit_offset = find_filter(LimitOffset, filters=filters)
             total = total or len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-            return OffsetPagination[ModelT](
-                items=cast("Sequence[ModelT]", data),
+            return OffsetPagination[ModelOrRowMappingT](
+                items=cast("Sequence[ModelOrRowMappingT]", data),
                 limit=limit_offset.limit,
                 offset=limit_offset.offset,
                 total=total,
@@ -226,149 +229,6 @@ class ModelResultConverter:
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
             return OffsetPagination[ModelDTOT](
                 items=TypeAdapter(Sequence[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
-                limit=limit_offset.limit,
-                offset=limit_offset.offset,
-                total=total,
-            )
-        msg = "`schema_type` should be a valid Pydantic or Msgspec schema"
-        raise AdvancedAlchemyError(msg)
-
-
-class RowMappingResultConverter:  # pragma: nocover
-    """Simple mixin to help convert to a paginated response model the results set is a list."""
-
-    @overload
-    def to_schema(
-        self,
-        data: RowMapping,
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    ) -> RowMapping: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[RowMapping],
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-    ) -> OffsetPagination[RowMapping]: ...
-    @overload
-    def to_schema(
-        self,
-        data: RowMapping,
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-        *,
-        schema_type: None = None,
-    ) -> RowMapping: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[RowMapping],
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-        *,
-        schema_type: None = None,
-    ) -> OffsetPagination[RowMapping]: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: RowMapping,
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-        *,
-        schema_type: type[ModelDTOT],
-    ) -> ModelDTOT: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: Sequence[RowMapping],
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-        *,
-        schema_type: type[ModelDTOT],
-    ) -> OffsetPagination[ModelDTOT]: ...
-
-    def to_schema(
-        self,
-        data: RowMapping | Sequence[RowMapping],
-        total: int | None = None,
-        filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
-        *,
-        schema_type: type[ModelDTOT] | None = None,
-    ) -> RowMapping | OffsetPagination[RowMapping] | ModelDTOT | OffsetPagination[ModelDTOT]:
-        """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
-
-        Args:
-            data: The return from one of the service calls.
-            total: the total number of rows in the data
-            filters: Collection route filters.
-            schema_type: Collection route filters.
-
-        Returns:
-            The list of instances retrieved from the repository.
-        """
-        if filters is None:
-            filters = []
-        if schema_type is None:
-            if isinstance(data, RowMapping):
-                return data
-            limit_offset = find_filter(LimitOffset, filters=filters)
-            total = total or len(data)
-            limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-            return OffsetPagination[RowMapping](
-                items=data,
-                limit=limit_offset.limit,
-                offset=limit_offset.offset,
-                total=total,
-            )
-        if issubclass(schema_type, Struct):
-            if isinstance(data, RowMapping):
-                return cast(
-                    "ModelDTOT",
-                    convert(
-                        obj=data,
-                        type=schema_type,
-                        from_attributes=True,
-                        dec_hook=partial(
-                            _default_msgspec_deserializer,
-                            type_decoders=[
-                                (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                            ],
-                        ),
-                    ),
-                )
-            limit_offset = find_filter(LimitOffset, filters=filters)
-            total = total or len(data)
-            limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-            return OffsetPagination[ModelDTOT](
-                items=convert(
-                    obj=data,
-                    type=Sequence[ModelDTOT],
-                    from_attributes=True,
-                    dec_hook=partial(
-                        _default_msgspec_deserializer,
-                        type_decoders=[
-                            (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                        ],
-                    ),
-                ),
-                limit=limit_offset.limit,
-                offset=limit_offset.offset,
-                total=total,
-            )
-
-        if issubclass(schema_type, BaseModel):
-            if isinstance(data, RowMapping):
-                return cast("ModelDTOT", TypeAdapter(schema_type).validate_python(data, from_attributes=True))  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
-            limit_offset = find_filter(LimitOffset, filters=filters)
-            total = total if total else len(data)
-            limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
-            return OffsetPagination[ModelDTOT](
-                items=TypeAdapter(Sequence[ModelDTOT]).validate_python(data, from_attributes=True),  # pyright: ignore[reportUnknownArgumentType]
                 limit=limit_offset.limit,
                 offset=limit_offset.offset,
                 total=total,

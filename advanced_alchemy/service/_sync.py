@@ -24,7 +24,7 @@ from advanced_alchemy.repository._util import (
     model_from_dict,
 )
 from advanced_alchemy.repository.typing import ModelT
-from advanced_alchemy.service._util import ModelResultConverter, RowMappingResultConverter
+from advanced_alchemy.service._util import ResultConverter
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.filters import StatementFilter
 
 
-class SQLAlchemySyncQueryService(RowMappingResultConverter):
+class SQLAlchemySyncQueryService(ResultConverter):
     """Simple service to execute the basic Query repository.."""
 
     def __init__(
@@ -83,7 +83,7 @@ class SQLAlchemySyncQueryService(RowMappingResultConverter):
                 )
 
 
-class SQLAlchemySyncRepositoryReadService(ModelResultConverter, Generic[ModelT]):
+class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT]]
@@ -277,7 +277,7 @@ class SQLAlchemySyncRepositoryReadService(ModelResultConverter, Generic[ModelT])
             Representation of created instances.
         """
         if isinstance(data, dict):
-            return model_from_dict(model=self.repository.model_type, **data)  # type: ignore  # noqa: PGH003
+            return model_from_dict(model=self.repository.model_type, **data)
         return data
 
     def list_and_count(

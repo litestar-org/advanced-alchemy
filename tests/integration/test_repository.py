@@ -1885,6 +1885,51 @@ async def test_repo_health_check(author_repo: AnyAuthorRepository) -> None:
     assert healthy
 
 
+async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_service: AuthorService) -> None:
+    """Test Repo with custom statement
+
+    Args:
+        author_repo: The author mock repository
+    """
+    service_type = type(author_service)
+    new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
+    assert await maybe_async(new_service.count()) == 2
+
+
+async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
+    with pytest.deprecated_call():
+        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+        assert str(existing_obj.id) == str(first_author_id)
+        assert existing_created is False
+
+
+async def test_repo_encrypted_methods(
+    raw_secrets_uuid: RawRecordData,
+    secret_repo: SecretRepository,
+    raw_secrets: RawRecordData,
+    first_secret_id: Any,
+    secret_model: SecretModel,
+) -> None:
+    existing_obj = await maybe_async(secret_repo.get(first_secret_id))
+    assert existing_obj.secret == raw_secrets[0]["secret"]
+    assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
+
+    exp_count = len(raw_secrets_uuid) + 1
+    new_secret = secret_model(secret="hidden data", long_secret="another longer secret")
+    obj = await maybe_async(secret_repo.add(new_secret))
+    count = await maybe_async(secret_repo.count())
+    assert exp_count == count
+    assert isinstance(obj, secret_model)
+    assert new_secret.secret == obj.secret
+    assert new_secret.long_secret == obj.long_secret
+    assert obj.id is not None
+    obj.secret = "new secret value"
+    obj.long_secret = "new long secret value"
+    updated = await maybe_async(secret_repo.update(obj))
+    assert obj.secret == updated.secret
+    assert obj.long_secret == updated.long_secret
+
+
 # service tests
 async def test_service_filter_search(author_service: AuthorService) -> None:
     existing_obj = await maybe_async(
@@ -2373,54 +2418,9 @@ async def test_service_upsert_many_method_match_fields_non_id(
     assert existing_count_now > existing_count
 
 
-async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_service: AuthorService) -> None:
-    """Test Repo with custom statement
-
-    Args:
-        author_repo: The author mock repository
-    """
-    service_type = type(author_service)
-    new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
-    assert await maybe_async(new_service.count()) == 2
-
-
-async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    with pytest.deprecated_call():
-        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
-        assert str(existing_obj.id) == str(first_author_id)
-        assert existing_created is False
-
-
 async def test_service_update_no_pk(author_service: AuthorService) -> None:
     with pytest.raises(RepositoryError):
         _existing_obj = await maybe_async(author_service.update(data={"name": "Agatha Christie"}))
-
-
-async def test_repo_encrypted_methods(
-    raw_secrets_uuid: RawRecordData,
-    secret_repo: SecretRepository,
-    raw_secrets: RawRecordData,
-    first_secret_id: Any,
-    secret_model: SecretModel,
-) -> None:
-    existing_obj = await maybe_async(secret_repo.get(first_secret_id))
-    assert existing_obj.secret == raw_secrets[0]["secret"]
-    assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
-
-    exp_count = len(raw_secrets_uuid) + 1
-    new_secret = secret_model(secret="hidden data", long_secret="another longer secret")
-    obj = await maybe_async(secret_repo.add(new_secret))
-    count = await maybe_async(secret_repo.count())
-    assert exp_count == count
-    assert isinstance(obj, secret_model)
-    assert new_secret.secret == obj.secret
-    assert new_secret.long_secret == obj.long_secret
-    assert obj.id is not None
-    obj.secret = "new secret value"
-    obj.long_secret = "new long secret value"
-    updated = await maybe_async(secret_repo.update(obj))
-    assert obj.secret == updated.secret
-    assert obj.long_secret == updated.long_secret
 
 
 async def test_service_create_method_slug(

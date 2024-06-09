@@ -8,7 +8,7 @@ from sqlalchemy.orm.strategy_options import (
 )
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
-from typing_extensions import TypeAlias
+from typing_extensions import TypeAlias, runtime_checkable
 
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
@@ -52,14 +52,14 @@ def get_instrumented_attr(
     return key
 
 
-def model_from_dict(model: ModelT, **kwargs: Any) -> ModelT:
+def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
     """Return ORM Object from Dictionary."""
     data = {
         column_name: kwargs[column_name]
         for column_name in model.__mapper__.columns.keys()  # noqa: SIM118  # pyright: ignore[reportUnknownMemberType]
         if column_name in kwargs
     }
-    return cast("ModelT", model(**data))  # type: ignore[operator]
+    return model(**data)
 
 
 def get_abstract_loader_options(
@@ -106,6 +106,7 @@ def get_abstract_loader_options(
     return (loads, options_have_wildcards)
 
 
+@runtime_checkable
 class FilterableRepositoryProtocol(Protocol[ModelT]):
     model_type: type[ModelT]
 
