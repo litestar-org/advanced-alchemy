@@ -2294,7 +2294,7 @@ async def test_service_upsert_many_method(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2322,7 +2322,7 @@ async def test_service_upsert_many_method_match_fields_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2351,7 +2351,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
