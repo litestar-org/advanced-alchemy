@@ -400,6 +400,7 @@ SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
 "advanced_alchemy.repository._async.SQLAlchemyAsyncRepositoryProtocol" = "advanced_alchemy.repository._sync.SQLAlchemySyncRepositoryProtocol"
 "advanced_alchemy.repository._async.SQLAlchemyAsyncSlugRepositoryProtocol" = "advanced_alchemy.repository._sync.SQLAlchemySyncSlugRepositoryProtocol"
 "async_scoped_session" = "scoped_session"
+"sqlalchemy.ext.asyncio.AsyncEngine" = "sqlalchemy.Engine"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _patch_bases(monkeypatch: MonkeyPatch) -> None:
+def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     """Ensure new registry state for every test.
 
     This prevents errors such as "Table '...' is already defined for
@@ -287,13 +287,18 @@ def engine(request: FixtureRequest) -> Engine:
 
 
 @pytest.fixture()
-def session(engine: Engine) -> Generator[Session, None, None]:
-    session = sessionmaker(bind=engine, expire_on_commit=False)()
-    try:
+def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None, None]:
+    if "mock_sync_engine" in request.fixturenames:
+        session = create_autospec(Session, instance=True)
+        session.bind = engine
         yield session
-    finally:
-        session.rollback()
-        session.close()
+    else:
+        session = sessionmaker(bind=engine, expire_on_commit=False)()
+        try:
+            yield session
+        finally:
+            session.rollback()
+            session.close()
 
 
 @pytest.fixture()
@@ -448,7 +453,10 @@ async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> Asy
 @pytest.fixture()
 async def mock_async_engine() -> NonCallableMagicMock:
     """Return a mocked AsyncEngine instance."""
-    return cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
+    mock = cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
+    mock.dialect = create_autospec(Dialect, instance=True)
+    mock.dialect.name = "mock"
+    return mock
 
 
 @pytest.fixture(
@@ -535,13 +543,19 @@ def async_engine(request: FixtureRequest) -> AsyncEngine:
 @pytest.fixture()
 async def async_session(
     async_engine: AsyncEngine,
+    request: FixtureRequest,
 ) -> AsyncGenerator[AsyncSession, None]:
-    session = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
-    try:
+    if "mock_async_engine" in request.fixturenames:
+        session = create_autospec(AsyncSession, instance=True)
+        session.bind = async_engine
         yield session
-    finally:
-        await session.rollback()
-        await session.close()
+    else:
+        session = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
+        try:
+            yield session
+        finally:
+            await session.rollback()
+            await session.close()
 
 
 # @pytest.fixture()

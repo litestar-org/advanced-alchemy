@@ -12,7 +12,6 @@ from sqlalchemy import (
     Select,
     StatementLambdaElement,
 )
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
@@ -43,6 +42,7 @@ if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
 
+    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 
@@ -86,8 +86,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        self.session = create_autospec(AsyncSession, instance=True)
-        self.session.bind = create_autospec(AsyncEngine, instance=True)
+        self.session = session
         self.statement = create_autospec("Select[tuple[ModelT]]", instance=True)
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh

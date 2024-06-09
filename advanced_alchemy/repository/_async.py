@@ -1728,7 +1728,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 have the property that their attribute named `key` has value equal to `value`.
         """
         with wrap_sqlalchemy_exception():
-            if isinstance(collection, Select):
+            if not isinstance(collection, StatementLambdaElement):
                 collection = lambda_stmt(lambda: collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return collection

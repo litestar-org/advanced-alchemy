@@ -14,7 +14,6 @@ from sqlalchemy import (
     Select,
     StatementLambdaElement,
 )
-from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
@@ -88,8 +87,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        self.session = create_autospec(Session, instance=True)
-        self.session.bind = create_autospec(AsyncEngine, instance=True)
+        self.session = session
         self.statement = create_autospec("Select[tuple[ModelT]]", instance=True)
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh

@@ -42,6 +42,7 @@ from tests.fixtures.uuid.repositories import (
     RuleSyncRepository,
     SecretAsyncRepository,
     SecretSyncRepository,
+    SlugBookAsyncMockRepository,
     SlugBookAsyncRepository,
     SlugBookSyncMockRepository,
     SlugBookSyncRepository,
@@ -215,7 +216,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(self, data: UUIDSlugBook | dict[str, Any], operation: str | None = None) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -244,11 +245,11 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
     """Book repository."""
 
-    repository_type = SlugBookAsyncRepository
+    repository_type = SlugBookAsyncMockRepository
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
+        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(self, data: UUIDSlugBook | dict[str, Any], operation: str | None = None) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -265,7 +266,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository = self.repository_type(**repo_kwargs)
+        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(self, data: UUIDSlugBook | dict[str, Any], operation: str | None = None) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
