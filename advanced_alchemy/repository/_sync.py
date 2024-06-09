@@ -53,6 +53,11 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     id_attribute: Any
     match_fields: list[str] | str | None = None
+    statement: Select[tuple[ModelT]] | StatementLambdaElement
+    session: Session | scoped_session[Session]
+    auto_expunge: bool
+    auto_refresh: bool
+    auto_commit: bool
 
     def __init__(
         self,

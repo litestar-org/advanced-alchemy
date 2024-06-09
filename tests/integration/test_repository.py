@@ -2079,7 +2079,7 @@ async def test_service_create_many_method(
 
 
 async def test_service_update_many_method(author_service: AuthorService) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip("Skipped on emulator")
 
     objs = await maybe_async(author_service.list())
@@ -2153,7 +2153,7 @@ async def test_service_delete_many_method(author_service: AuthorService, author_
     all_objs = await maybe_async(author_service.list())
     ids_to_delete = [existing_obj.id for existing_obj in all_objs]
     objs = await maybe_async(author_service.delete_many(ids_to_delete))
-    await maybe_async(author_service.repository.session.commit())
+    await maybe_async(author_service.repository.session.commit())  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
     assert len(objs) > 0
     data, count = await maybe_async(author_service.list_and_count())
     assert data == []
@@ -2263,7 +2263,7 @@ async def test_service_upsert_method_match(
     author_model: AuthorModel,
     new_pk_id: Any,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2441,7 +2441,7 @@ async def test_service_create_method_slug_existing(
     slug_book_service: SlugBookService,
     slug_book_model: SlugBookModel,
 ) -> None:
-    if issubclass(
+    if isinstance(
         slug_book_service.repository_type,
         (
             SQLAlchemySyncMockSlugRepository,

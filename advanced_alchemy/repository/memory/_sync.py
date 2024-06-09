@@ -76,10 +76,24 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         "execution_options",
     }
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        session: Session | scoped_session[Session],
+        auto_expunge: bool = False,
+        auto_refresh: bool = True,
+        auto_commit: bool = False,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
         self.session = create_autospec(Session, instance=True)
         self.session.bind = create_autospec(AsyncEngine, instance=True)
-        self.statement: Select[Any] = create_autospec(Select, instance=True)
+        self.statement = create_autospec("Select[tuple[ModelT]]", instance=True)
+        self.auto_expunge = auto_expunge
+        self.auto_refresh = auto_refresh
+        self.auto_commit = auto_commit
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
