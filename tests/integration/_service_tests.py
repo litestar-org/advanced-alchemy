@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime
-from typing import Any, Dict, Generator, List, Literal, Type, Union, cast
+from typing import Any, Union, cast
 from uuid import uuid4
 
 import pytest
@@ -17,7 +17,6 @@ from advanced_alchemy.filters import (
     NotInSearchFilter,
     SearchFilter,
 )
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemyAsyncSlugRepository
 from advanced_alchemy.repository._util import get_instrumented_attr
 from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
@@ -25,76 +24,16 @@ from advanced_alchemy.repository.memory import (
     SQLAlchemySyncMockRepository,
     SQLAlchemySyncMockSlugRepository,
 )
-from advanced_alchemy.service import (
-    SQLAlchemyAsyncRepositoryService,
-)
 from advanced_alchemy.service.pagination import OffsetPagination
-from tests.fixtures.bigint import models as models_bigint
-from tests.fixtures.uuid import models as models_uuid
+from tests.fixtures.types import (
+    AuthorModel,
+    AuthorService,
+    BookService,
+    RawRecordData,
+    SlugBookModel,
+    SlugBookService,
+)
 from tests.helpers import maybe_async
-
-xfail = pytest.mark.xfail
-
-
-RepositoryPKType = Literal["uuid", "bigint"]
-SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
-AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
-RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
-ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
-ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
-TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
-SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
-
-
-AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
-SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
-SecretService = SQLAlchemyAsyncRepositoryService[AnySecret]
-SecretMockRepository = SQLAlchemyAsyncMockRepository[AnySecret]
-AnySecretRepository = Union[SecretRepository, SecretMockRepository]
-
-AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
-AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
-AuthorMockRepository = SQLAlchemyAsyncMockRepository[AnyAuthor]
-AnyAuthorRepository = Union[AuthorRepository, AuthorMockRepository]
-AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor]
-
-AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
-RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
-RuleService = SQLAlchemyAsyncRepositoryService[AnyRule]
-
-AnySlugBook = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
-SlugBookRepository = SQLAlchemyAsyncSlugRepository[AnySlugBook]
-SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook]
-
-
-AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
-BookRepository = SQLAlchemyAsyncRepository[AnyBook]
-BookService = SQLAlchemyAsyncRepositoryService[AnyBook]
-
-AnyTag = Union[models_uuid.UUIDTag, models_bigint.BigIntTag]
-TagRepository = SQLAlchemyAsyncRepository[AnyTag]
-TagService = SQLAlchemyAsyncRepositoryService[AnyTag]
-
-AnyItem = Union[models_uuid.UUIDItem, models_bigint.BigIntItem]
-ItemRepository = SQLAlchemyAsyncRepository[AnyItem]
-ItemService = SQLAlchemyAsyncRepositoryService[AnyItem]
-
-AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]
-ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
-ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
-
-RawRecordData = List[Dict[str, Any]]
-
-mock_engines = {"mock_async_engine", "mock_sync_engine"}
-
-
-@pytest.fixture(autouse=True)
-def _clear_in_memory_db() -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
-    try:
-        yield
-    finally:
-        SQLAlchemyAsyncMockRepository.__database_clear__()
-        SQLAlchemySyncMockRepository.__database_clear__()
 
 
 # service tests
@@ -291,7 +230,7 @@ async def test_service_create_many_method(
 
 
 async def test_service_update_many_method(author_service: AuthorService) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip("Skipped on emulator")
 
     objs = await maybe_async(author_service.list())
@@ -365,7 +304,7 @@ async def test_service_delete_many_method(author_service: AuthorService, author_
     all_objs = await maybe_async(author_service.list())
     ids_to_delete = [existing_obj.id for existing_obj in all_objs]
     objs = await maybe_async(author_service.delete_many(ids_to_delete))
-    await maybe_async(author_service.repository.session.commit())
+    await maybe_async(author_service.repository.session.commit())  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
     assert len(objs) > 0
     data, count = await maybe_async(author_service.list_and_count())
     assert data == []
@@ -475,7 +414,7 @@ async def test_service_upsert_method_match(
     author_model: AuthorModel,
     new_pk_id: Any,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -506,7 +445,7 @@ async def test_service_upsert_many_method(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -534,7 +473,7 @@ async def test_service_upsert_many_method_match_fields_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -563,7 +502,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -608,7 +547,7 @@ async def test_service_create_method_slug_existing(
     slug_book_service: SlugBookService,
     slug_book_model: SlugBookModel,
 ) -> None:
-    if issubclass(
+    if isinstance(
         slug_book_service.repository_type,
         (
             SQLAlchemySyncMockSlugRepository,

@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 
+from advanced_alchemy.utils.text import slugify
 from tests.helpers import RawRecordData
 
 
