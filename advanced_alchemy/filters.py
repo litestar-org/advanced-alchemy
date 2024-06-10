@@ -327,7 +327,7 @@ class SearchFilter(StatementFilter):
         model: type[ModelT],
     ) -> StatementLambdaElement:
         where_clause = self._operator(*self.get_search_clauses(model))
-        statement += lambda s: s.where(where_clause)
+        statement += lambda s: s.where(where_clause)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
 

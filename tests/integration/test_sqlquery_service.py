@@ -82,7 +82,7 @@ def test_sync_fixture_and_query() -> None:
         repo = USStateSyncRepository(session=session)
         query_service = SQLAlchemySyncQueryService(session=session)
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
-        _add_objs = repo.add_many([USStateSyncRepository.model_type(**raw_obj) for raw_obj in fixture])
+        _add_objs = repo.add_many([USState(**raw_obj) for raw_obj in fixture])
         query_count = query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = query_service.repository.list_and_count(

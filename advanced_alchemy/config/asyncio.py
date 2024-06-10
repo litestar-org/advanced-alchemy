@@ -48,16 +48,16 @@ class AlembicAsyncConfig(GenericAlembicConfig):
 
 
 @dataclass
-class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, async_sessionmaker]):
+class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]):
     """Async SQLAlchemy Configuration."""
 
     create_engine_callable: Callable[[str], AsyncEngine] = create_async_engine
     """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
     subclass.
     """
-    session_config: AsyncSessionConfig = field(default_factory=AsyncSessionConfig)
+    session_config: AsyncSessionConfig = field(default_factory=AsyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`async_sessionmaker<sqlalchemy.ext.asyncio.async_sessionmaker>`."""
-    session_maker_class: type[async_sessionmaker] = async_sessionmaker
+    session_maker_class: type[async_sessionmaker[AsyncSession]] = async_sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
     """Sessionmaker class to use."""
     alembic_config: AlembicAsyncConfig = field(default_factory=AlembicAsyncConfig)
     """Configuration for the SQLAlchemy Alembic migrations.

@@ -15,7 +15,11 @@ from sqlalchemy import Select
 from typing_extensions import Self
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
-from advanced_alchemy.repository._sync import SQLAlchemySyncQueryRepository
+from advanced_alchemy.repository import (
+    SQLAlchemySyncQueryRepository,
+    SQLAlchemySyncRepositoryProtocol,
+    SQLAlchemySyncSlugRepositoryProtocol,
+)
 from advanced_alchemy.repository._util import (
     LoadSpec,
     model_from_dict,
@@ -33,8 +37,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.filters import StatementFilter
-    from advanced_alchemy.repository import SQLAlchemySyncRepository
-    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
 
 class SQLAlchemySyncQueryService(ResultConverter):
@@ -82,10 +84,10 @@ class SQLAlchemySyncQueryService(ResultConverter):
                 )
 
 
-class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
+class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemySyncRepository[ModelT] | SQLAlchemySyncMockRepository[ModelT]]
+    repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT] | SQLAlchemySyncSlugRepositoryProtocol[ModelT]]
     match_fields: list[str] | str | None = None
 
     def __init__(
@@ -276,7 +278,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             Representation of created instances.
         """
         if isinstance(data, dict):
-            return model_from_dict(model=self.repository.model_type, **data)  # type: ignore  # noqa: PGH003
+            return model_from_dict(model=self.repository.model_type, **data)
         return data
 
     def list_and_count(

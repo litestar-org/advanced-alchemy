@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Sequence, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast, runtime_checkable
 
 from sqlalchemy import (
     Result,
@@ -27,6 +27,7 @@ from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sql
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import (
     FilterableRepository,
+    FilterableRepositoryProtocol,
     LoadSpec,
     get_abstract_loader_options,
     get_instrumented_attr,
@@ -47,7 +48,263 @@ DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
-class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
+@runtime_checkable
+class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
+    """Base Protocol"""
+
+    id_attribute: Any
+    match_fields: list[str] | str | None = None
+    statement: Select[tuple[ModelT]] | StatementLambdaElement
+    session: Session | scoped_session[Session]
+    auto_expunge: bool
+    auto_refresh: bool
+    auto_commit: bool
+
+    def __init__(
+        self,
+        *,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        session: Session | scoped_session[Session],
+        auto_expunge: bool = False,
+        auto_refresh: bool = True,
+        auto_commit: bool = False,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+
+    @classmethod
+    def get_id_attribute_value(
+        cls,
+        item: ModelT | type[ModelT],
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> Any: ...
+
+    @classmethod
+    def set_id_attribute_value(
+        cls,
+        item_id: Any,
+        item: ModelT,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> ModelT: ...
+
+    @staticmethod
+    def check_not_found(item_or_none: ModelT | None) -> ModelT: ...
+
+    def add(
+        self,
+        data: ModelT,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+    ) -> ModelT: ...
+
+    def add_many(
+        self,
+        data: list[ModelT],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+    ) -> Sequence[ModelT]: ...
+
+    def delete(
+        self,
+        item_id: Any,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT: ...
+
+    def delete_many(
+        self,
+        item_ids: list[Any],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        chunk_size: int | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> Sequence[ModelT]: ...
+
+    def delete_where(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        sanity_check: bool = True,
+        **kwargs: Any,
+    ) -> Sequence[ModelT]: ...
+
+    def exists(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> bool: ...
+
+    def get(
+        self,
+        item_id: Any,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT: ...
+
+    def get_one(
+        self,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT: ...
+
+    def get_one_or_none(
+        self,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT | None: ...
+
+    def get_or_upsert(
+        self,
+        match_fields: list[str] | str | None = None,
+        upsert: bool = True,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]: ...
+
+    def get_and_update(
+        self,
+        match_fields: list[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]: ...
+
+    def count(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> int: ...
+
+    def update(
+        self,
+        data: ModelT,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> ModelT: ...
+
+    def update_many(
+        self,
+        data: list[ModelT],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]: ...
+
+    def _get_update_many_statement(
+        self,
+        model_type: type[ModelT],
+        supports_returning: bool,
+        loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
+    ) -> StatementLambdaElement: ...
+
+    def upsert(
+        self,
+        data: ModelT,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_refresh: bool | None = None,
+        match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT: ...
+
+    def upsert_many(
+        self,
+        data: list[ModelT],
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        no_merge: bool = False,
+        match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]: ...
+
+    def list_and_count(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        force_basic_query_mode: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[list[ModelT], int]: ...
+
+    def list(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> list[ModelT]: ...
+
+    @classmethod
+    def check_health(cls, session: Session | scoped_session[Session]) -> bool: ...
+
+
+@runtime_checkable
+class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[ModelT], Protocol[ModelT]):
+    def get_by_slug(
+        self,
+        slug: str,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT | None: ...
+
+    def get_available_slug(
+        self,
+        value_to_slugify: str,
+        **kwargs: Any,
+    ) -> str: ...
+
+
+class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):
     """SQLAlchemy based implementation of the repository interface."""
 
     id_attribute: Any = "id"
@@ -84,7 +341,6 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
             **kwargs: Additional arguments.
 
         """
-        super().__init__(**kwargs)
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
@@ -385,7 +641,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         with wrap_sqlalchemy_exception():
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
-            statement = lambda_stmt(lambda: delete(model_type))
+            statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
             if loader_options:
                 statement = statement.options(*loader_options)
             if execution_options:
@@ -1473,7 +1729,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
                 have the property that their attribute named `key` has value equal to `value`.
         """
         with wrap_sqlalchemy_exception():
-            if isinstance(collection, Select):
+            if not isinstance(collection, StatementLambdaElement):
                 collection = lambda_stmt(lambda: collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
             return collection
@@ -1543,7 +1799,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT]):
         return result
 
 
-class SQLAlchemySyncSlugRepository(SQLAlchemySyncRepository[ModelT]):
+class SQLAlchemySyncSlugRepository(
+    SQLAlchemySyncRepository[ModelT],
+    SQLAlchemySyncSlugRepositoryProtocol[ModelT],
+):
     """Extends the repository to include slug model features.."""
 
     def get_by_slug(

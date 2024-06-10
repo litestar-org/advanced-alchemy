@@ -114,7 +114,7 @@ def simple_asdict(
     Returns:
         A dictionary of key/value pairs.
     """
-    ret = {}
+    ret: dict[str, Any] = {}
     for field in extract_dataclass_fields(obj, exclude_none, exclude_empty, exclude=exclude):
         value = getattr(obj, field.name)
         if is_dataclass_instance(value) and convert_nested:
@@ -133,7 +133,7 @@ def is_dataclass_instance(obj: Any) -> TypeGuard[DataclassProtocol]:
     Returns:
         True if the object is a dataclass instance.
     """
-    return hasattr(type(obj), "__dataclass_fields__")
+    return hasattr(type(obj), "__dataclass_fields__")  # pyright: ignore[reportUnknownArgumentType]
 
 
 def is_dataclass_class(annotation: Any) -> TypeGuard[type[DataclassProtocol]]:

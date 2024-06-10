@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from advanced_alchemy.alembic import commands
 from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from alembic.util.exc import CommandError
-from tests import models_uuid
+from tests.fixtures.uuid import models as models_uuid
 
 AuthorModel = Type[models_uuid.UUIDAuthor]
 RuleModel = Type[models_uuid.UUIDRule]

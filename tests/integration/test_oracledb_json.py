@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy.dialects import oracle
 from sqlalchemy.schema import CreateTable
 
-from tests.models_uuid import UUIDEventLog
+from tests.fixtures.uuid.models import UUIDEventLog
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
