@@ -3,11 +3,15 @@ from __future__ import annotations
 import random
 import re
 import string
-from typing import TYPE_CHECKING, Any, Generic, Iterable, List, cast, overload
+from typing import TYPE_CHECKING, Any, Iterable, List, cast, overload
 from unittest.mock import create_autospec
 
-from sqlalchemy import ColumnElement, Dialect, Select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy import (
+    ColumnElement,
+    Dialect,
+    Select,
+    StatementLambdaElement,
+)
 from sqlalchemy.orm import InstrumentedAttribute
 
 from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
@@ -22,6 +26,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
     StatementFilter,
 )
+from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol, SQLAlchemyAsyncSlugRepositoryProtocol
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
     CollectionT,
@@ -37,10 +42,16 @@ if TYPE_CHECKING:
     from collections import abc
     from datetime import datetime
 
+    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
+    from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
+
+    from advanced_alchemy.repository._util import (
+        LoadSpec,
+    )
 
 
-class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
+class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     """In memory repository."""
 
     __database__: SQLAlchemyMultiStore[ModelT] = SQLAlchemyMultiStore(SQLAlchemyInMemoryStore)
@@ -63,10 +74,23 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         "execution_options",
     }
 
-    def __init__(self, **kwargs: Any) -> None:
-        self.session = create_autospec(AsyncSession, instance=True)
-        self.session.bind = create_autospec(AsyncEngine, instance=True)
-        self.statement: Select[Any] = create_autospec(Select, instance=True)
+    def __init__(
+        self,
+        *,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        session: AsyncSession | async_scoped_session[AsyncSession],
+        auto_expunge: bool = False,
+        auto_refresh: bool = True,
+        auto_commit: bool = False,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.session = session
+        self.statement = create_autospec("Select[tuple[ModelT]]", instance=True)
+        self.auto_expunge = auto_expunge
+        self.auto_refresh = auto_refresh
+        self.auto_commit = auto_commit
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
@@ -347,17 +371,48 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             raise IntegrityError(msg)
         return result[0]
 
+    def _get_update_many_statement(
+        self,
+        model_type: type[ModelT],
+        supports_returning: bool,
+        loader_options: list[_AbstractLoad] | None,
+        execution_options: dict[str, Any] | None,
+    ) -> StatementLambdaElement:
+        return cast("StatementLambdaElement", self.statement)
+
     @classmethod
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool:  # noqa: ARG003
         return True
 
-    async def get(self, item_id: Any, **_: Any) -> ModelT:
+    async def get(
+        self,
+        item_id: Any,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT:
         return self._find_or_raise_not_found(item_id)
 
-    async def get_one(self, **kwargs: Any) -> ModelT:
+    async def get_one(
+        self,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT:
         return self.check_not_found(await self.get_one_or_none(**kwargs))
 
-    async def get_one_or_none(self, **kwargs: Any) -> ModelT | None:
+    async def get_one_or_none(
+        self,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ModelT | None:
         result = self._filter_result_by_kwargs(self.__collection__().list(), kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
@@ -377,6 +432,13 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         self,
         match_fields: list[str] | str | None = None,
         upsert: bool = True,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         kwargs_ = self._exclude_unused_kwargs(kwargs)
@@ -400,7 +462,18 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             existing = await self.update(existing)
         return existing, False
 
-    async def get_and_update(self, match_fields: list[str] | str | None = None, **kwargs: Any) -> tuple[ModelT, bool]:
+    async def get_and_update(
+        self,
+        match_fields: list[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> tuple[ModelT, bool]:
         kwargs_ = self._exclude_unused_kwargs(kwargs)
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
@@ -429,7 +502,13 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         result = self._apply_filters(self.__collection__().list(), *filters)
         return len(self._filter_result_by_kwargs(result, kwargs))
 
-    async def add(self, data: ModelT, **_: Any) -> ModelT:
+    async def add(
+        self,
+        data: ModelT,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+    ) -> ModelT:
         try:
             self.__database__.add(self.model_type, data)
         except KeyError as exc:
@@ -437,25 +516,63 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
             raise IntegrityError(msg) from exc
         return data
 
-    async def add_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
+    async def add_many(
+        self,
+        data: list[ModelT],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+    ) -> list[ModelT]:
         for obj in data:
             await self.add(obj)
         return data
 
-    async def update(self, data: ModelT, **_: Any) -> ModelT:
+    async def update(
+        self,
+        data: ModelT,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+    ) -> ModelT:
         self._find_or_raise_not_found(self.__collection__().key(data))
         return self.__collection__().update(data)
 
-    async def update_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
+    async def update_many(
+        self,
+        data: list[ModelT],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]:
         return [self.__collection__().update(obj) for obj in data if obj in self.__collection__()]
 
-    async def delete(self, item_id: Any, **_: Any) -> ModelT:
+    async def delete(
+        self,
+        item_id: Any,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT:
         try:
             return self._find_or_raise_not_found(item_id)
         finally:
             self.__collection__().remove(item_id)
 
-    async def delete_many(self, item_ids: list[Any], **_: Any) -> list[ModelT]:
+    async def delete_many(
+        self,
+        item_ids: list[Any],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        chunk_size: int | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]:
         deleted: list[ModelT] = []
         for id_ in item_ids:
             if obj := self.__collection__().get_or_none(id_):
@@ -463,25 +580,59 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
                 self.__collection__().remove(id_)
         return deleted
 
-    async def delete_where(self, *filters: StatementFilter | ColumnElement[bool], **kwargs: Any) -> list[ModelT]:
+    async def delete_where(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        sanity_check: bool = True,
+        **kwargs: Any,
+    ) -> list[ModelT]:
         result = self.__collection__().list()
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
         item_ids = [getattr(model, self.id_attribute) for model in models]
         return await self.delete_many(item_ids=item_ids)
 
-    async def upsert(self, data: ModelT, **_: Any) -> ModelT:
+    async def upsert(
+        self,
+        data: ModelT,
+        attribute_names: Iterable[str] | None = None,
+        with_for_update: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_refresh: bool | None = None,
+        match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> ModelT:
         # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
             return await self.update(data)
         return await self.add(data)
 
-    async def upsert_many(self, data: list[ModelT], **_: Any) -> list[ModelT]:
+    async def upsert_many(
+        self,
+        data: list[ModelT],
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        no_merge: bool = False,
+        match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]:
         return [await self.upsert(item) for item in data]
 
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        force_basic_query_mode: bool | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         return await self._list_and_count_basic(*filters, **kwargs)
@@ -497,10 +648,15 @@ class SQLAlchemyAsyncMockRepository(Generic[ModelT]):
         return self._filter_result_by_kwargs(result, kwargs)
 
 
-class SQLAlchemyAsyncMockSlugRepository(SQLAlchemyAsyncMockRepository[ModelT]):
+class SQLAlchemyAsyncMockSlugRepository(
+    SQLAlchemyAsyncMockRepository[ModelT],
+    SQLAlchemyAsyncSlugRepositoryProtocol[ModelT],
+):
     async def get_by_slug(
         self,
         slug: str,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Select record by slug value."""

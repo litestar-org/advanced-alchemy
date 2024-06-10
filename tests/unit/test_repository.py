@@ -57,7 +57,7 @@ def async_mock_repo() -> SQLAlchemyAsyncRepository[MagicMock]:
     class Repo(SQLAlchemyAsyncRepository[MagicMock]):
         """Repo with mocked out stuff."""
 
-        model_type = MagicMock()  # pyright:ignore[reportGeneralTypeIssues]
+        model_type = MagicMock()  # pyright:ignore[reportGeneralTypeIssues,reportAssignmentType]
 
     return Repo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()), statement=MagicMock())
 
@@ -69,7 +69,7 @@ def sync_mock_repo() -> SQLAlchemySyncRepository[MagicMock]:
     class Repo(SQLAlchemySyncRepository[MagicMock]):
         """Repo with mocked out stuff."""
 
-        model_type = MagicMock()  # pyright:ignore[reportGeneralTypeIssues]
+        model_type = MagicMock()  # pyright:ignore[reportGeneralTypeIssues,reportAssignmentType]
 
     return Repo(session=MagicMock(spec=Session, bind=MagicMock()), statement=MagicMock())
 
@@ -194,11 +194,11 @@ async def test_sqlalchemy_repo_add(mock_repo: SQLAlchemyAsyncRepository[Any]) ->
     instance = await maybe_async(mock_repo.add(mock_instance))
 
     assert instance is mock_instance
-    mock_repo.session.add.assert_called_once_with(mock_instance)
-    mock_repo.session.flush.assert_called_once()
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.add.assert_called_once_with(mock_instance)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_add_many(
@@ -218,8 +218,8 @@ async def test_sqlalchemy_repo_add_many(
     assert len(instances) == 3
     for row in instances:
         assert row.id is not None
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_update_many(
@@ -239,8 +239,8 @@ async def test_sqlalchemy_repo_update_many(
     for row in instances:
         assert row.id is not None
 
-    mock_repo.session.flush.assert_called_once()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_upsert_many(
@@ -264,7 +264,7 @@ async def test_sqlalchemy_repo_upsert_many(
     for row in instances:
         assert row.id is not None
 
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
@@ -275,10 +275,10 @@ async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository[Any],
 
     assert instance is mock_instance
 
-    mock_repo.session.delete.assert_called_once_with(mock_instance)
-    mock_repo.session.flush.assert_called_once()
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.delete.assert_called_once_with(mock_instance)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_delete_many_uuid(
@@ -301,8 +301,8 @@ async def test_sqlalchemy_repo_delete_many_uuid(
     instances = await maybe_async(mock_repo.delete_many([obj.id for obj in added_instances]))
 
     assert len(instances) == len(mock_instances)
-    mock_repo.session.flush.assert_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.flush.assert_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_delete_many_bigint(
@@ -326,8 +326,8 @@ async def test_sqlalchemy_repo_delete_many_bigint(
     instances = await maybe_async(mock_repo.delete_many([obj.id for obj in added_instances]))
 
     assert len(instances) == len(mock_instances)
-    mock_repo.session.flush.assert_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.flush.assert_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_member(
@@ -342,8 +342,8 @@ async def test_sqlalchemy_repo_get_member(
     instance = await maybe_async(mock_repo.get("instance-id"))
 
     assert instance is mock_instance
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_one_member(
@@ -358,8 +358,8 @@ async def test_sqlalchemy_repo_get_one_member(
     instance = await maybe_async(mock_repo.get_one(id="instance-id"))
 
     assert instance is mock_instance
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing(
@@ -377,9 +377,9 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing(
 
     assert instance is mock_instance
     assert created is False
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.merge.assert_not_called()
-    mock_repo.session.refresh.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.merge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing_upsert(
@@ -399,10 +399,10 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_upsert(
 
     assert instance is mock_instance
     assert created is False
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo._attach_to_session.assert_called_once()
-    mock_repo.session.flush.assert_called_once()
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo._attach_to_session.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
+    mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing_no_upsert(
@@ -420,9 +420,9 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_no_upsert(
 
     assert instance is mock_instance
     assert created is False
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.add.assert_not_called()
-    mock_repo.session.refresh.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.add.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_created(
@@ -437,9 +437,9 @@ async def test_sqlalchemy_repo_get_or_upsert_member_created(
 
     assert instance is not None
     assert created is True
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.add.assert_called_once_with(instance)
-    mock_repo.session.refresh.assert_called_once_with(instance, attribute_names=None, with_for_update=None)
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.add.assert_called_once_with(instance)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_one_or_none_member(
@@ -454,8 +454,8 @@ async def test_sqlalchemy_repo_get_one_or_none_member(
     instance = await maybe_async(mock_repo.get_one_or_none(id="instance-id"))
 
     assert instance is mock_instance
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_one_or_none_not_found(
@@ -470,8 +470,8 @@ async def test_sqlalchemy_repo_get_one_or_none_not_found(
     instance = await maybe_async(mock_repo.get_one_or_none(id="instance-id"))
 
     assert instance is None
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_list(
@@ -486,8 +486,8 @@ async def test_sqlalchemy_repo_list(
     instances = await maybe_async(mock_repo.list())
 
     assert instances == mock_instances
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
@@ -501,8 +501,8 @@ async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncReposito
 
     assert instances == mock_instances
     assert instance_count == mock_count
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_list_and_count_basic(
@@ -519,8 +519,8 @@ async def test_sqlalchemy_repo_list_and_count_basic(
 
     assert instances == mock_instances
     assert instance_count == mock_count
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_exists(
@@ -535,7 +535,7 @@ async def test_sqlalchemy_repo_exists(
     exists = await maybe_async(mock_repo.exists(id="my-id"))
 
     assert exists
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_exists_with_filter(
@@ -551,7 +551,7 @@ async def test_sqlalchemy_repo_exists_with_filter(
     exists = await maybe_async(mock_repo.exists(limit_filter, id="my-id"))
 
     assert exists
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_count(
@@ -566,7 +566,7 @@ async def test_sqlalchemy_repo_count(
     count = await maybe_async(mock_repo.count())
 
     assert count == 1
-    mock_repo.session.commit.assert_not_called()
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_list_with_pagination(
@@ -581,7 +581,7 @@ async def test_sqlalchemy_repo_list_with_pagination(
     mocker.patch.object(LimitOffset, "append_to_lambda_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(LimitOffset(2, 3)))
-    mock_repo._execute.assert_called_with(statement, uniquify=False)
+    mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_list_with_before_after_filter(
@@ -596,7 +596,7 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     mocker.patch.object(BeforeAfter, "append_to_lambda_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.max, datetime.min)))
-    mock_repo._execute.assert_called_with(statement, uniquify=False)
+    mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_list_with_on_before_after_filter(
@@ -613,7 +613,7 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
 
     mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.max, datetime.min)))
-    mock_repo._execute.assert_called_with(statement, uniquify=False)
+    mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_list_with_collection_filter(
@@ -625,11 +625,11 @@ async def test_sqlalchemy_repo_list_with_collection_filter(
     """Test behavior of list operation given CollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
+    mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     mocker.patch.object(CollectionFilter, "append_to_lambda_statement", return_value=mock_repo.statement)
     values = [1, 2, 3]
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
-    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_list_with_null_collection_filter(
@@ -641,14 +641,14 @@ async def test_sqlalchemy_repo_list_with_null_collection_filter(
     """Test behavior of list operation given CollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
+    mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
         CollectionFilter,
         "append_to_lambda_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))
-    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
+    await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))  # pyright: ignore[reportFunctionMemberAccess,reportUnknownArgumentType]
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_empty_list_with_collection_filter(
@@ -660,7 +660,7 @@ async def test_sqlalchemy_repo_empty_list_with_collection_filter(
     """Test behavior of list operation given CollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
+    mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     values: Collection[Any] = []
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
     monkeypatch.setattr(
@@ -669,7 +669,7 @@ async def test_sqlalchemy_repo_empty_list_with_collection_filter(
         MagicMock(return_value=mock_repo.statement),
     )
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
-    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
@@ -681,7 +681,7 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
     """Test behavior of list operation given CollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
+    mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
         NotInCollectionFilter,
         "append_to_lambda_statement",
@@ -689,7 +689,7 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
     )
     values = [1, 2, 3]
     await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, values)))
-    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
@@ -701,14 +701,14 @@ async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
     """Test behavior of list operation given CollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
-    mock_repo.statement.where.return_value = mock_repo.statement
+    mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
         NotInCollectionFilter,
         "append_to_lambda_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, None)))
-    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
+    await maybe_async(mock_repo.list(NotInCollectionFilter[str](field_name, None)))  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
@@ -727,32 +727,32 @@ async def test_sqlalchemy_repo_update(
     mock_instance = MagicMock()
     mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
     mocker.patch.object(mock_repo, "get")
-    mock_repo.session.merge.return_value = mock_instance
+    mock_repo.session.merge.return_value = mock_instance  # pyright: ignore[reportFunctionMemberAccess]
 
     instance = await maybe_async(mock_repo.update(mock_instance))
 
     assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)
-    mock_repo.session.flush.assert_called_once()
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
+    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
     """Test the sequence of repo calls for upsert operation."""
     mock_instance = MagicMock()
-    mock_repo.session.merge.return_value = mock_instance
+    mock_repo.session.merge.return_value = mock_instance  # pyright: ignore[reportFunctionMemberAccess]
 
     instance = await maybe_async(mock_repo.upsert(mock_instance))
     mocker.patch.object(mock_repo, "exists", return_value=True)
     mocker.patch.object(mock_repo, "count", return_value=1)
 
     assert instance is mock_instance
-    mock_repo.session.flush.assert_called_once()
-    mock_repo.session.expunge.assert_not_called()
-    mock_repo.session.commit.assert_not_called()
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)
+    mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_attach_to_session_unexpected_strategy_raises_valueerror(
@@ -765,8 +765,8 @@ async def test_attach_to_session_unexpected_strategy_raises_valueerror(
 
 async def test_execute(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Simple test of the abstraction over `AsyncSession.execute()`"""
-    _ = await maybe_async(mock_repo._execute(mock_repo.statement))
-    mock_repo.session.execute.assert_called_once_with(mock_repo.statement)
+    _ = await maybe_async(mock_repo._execute(mock_repo.statement))  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
+    mock_repo.session.execute.assert_called_once_with(mock_repo.statement)  # pyright: ignore[reportFunctionMemberAccess]
 
 
 def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
@@ -774,7 +774,7 @@ def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyn
     statement = MagicMock()
     filter = CollectionFilter(field_name="id", values=[])  # type:ignore[var-annotated]
     statement = filter.append_to_lambda_statement(statement, MagicMock())  # type:ignore[assignment]
-    mock_repo.statement.where.assert_not_called()
+    mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 @pytest.mark.parametrize(
@@ -789,17 +789,17 @@ def test_filter_on_datetime_field(before: datetime, after: datetime, mock_repo: 
     """Test through branches of _filter_on_datetime_field()"""
     field_mock = MagicMock()
     statement = MagicMock()
-    field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True
+    field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True  # pyright: ignore[reportFunctionMemberAccess,reportUnknownLambdaType]
     filter = BeforeAfter(field_name="updated_at", before=before, after=after)
     statement = filter.append_to_lambda_statement(statement, MagicMock())  # type:ignore[assignment]
     mock_repo.model_type.updated_at = field_mock
-    mock_repo.statement.where.assert_not_called()
+    mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
 def test_filter_collection_by_kwargs(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
     """Test `filter_by()` called with kwargs."""
-    mock_repo_execute.return_value = MagicMock()
-    statement = mock_repo._to_lambda_stmt(mock_repo.statement)
+    mock_repo_execute.return_value = MagicMock()  # pyright: ignore[reportFunctionMemberAccess]
+    statement = mock_repo._to_lambda_stmt(mock_repo.statement)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
     mocker.patch.object(mock_repo, "filter_collection_by_kwargs", return_value=statement)
     _ = mock_repo.filter_collection_by_kwargs(statement, a=1, b=2)
-    mock_repo.filter_collection_by_kwargs.assert_called_once_with(statement, a=1, b=2)
+    mock_repo.filter_collection_by_kwargs.assert_called_once_with(statement, a=1, b=2)  # pyright: ignore[reportFunctionMemberAccess]

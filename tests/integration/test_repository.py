@@ -7,7 +7,7 @@ import contextlib
 import os
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
-from unittest.mock import NonCallableMagicMock, create_autospec
+from unittest.mock import NonCallableMagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -34,6 +34,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemyAsy
 from advanced_alchemy.repository._util import get_instrumented_attr, model_from_dict
 from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
+    SQLAlchemyAsyncMockSlugRepository,
     SQLAlchemySyncMockRepository,
     SQLAlchemySyncMockSlugRepository,
 )
@@ -42,7 +43,12 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.utils.text import slugify
-from tests import models_bigint, models_uuid
+from tests.fixtures.bigint import models as models_bigint
+from tests.fixtures.bigint import repositories as repositories_bigint
+from tests.fixtures.bigint import services as services_bigint
+from tests.fixtures.uuid import models as models_uuid
+from tests.fixtures.uuid import repositories as repositories_uuid
+from tests.fixtures.uuid import services as services_uuid
 from tests.helpers import maybe_async
 from tests.integration.helpers import update_raw_records
 
@@ -658,14 +664,14 @@ def session(
 
     if engine.dialect.name.startswith("spanner"):
         try:
-            author_repo = models_uuid.AuthorSyncRepository(session=session)
+            author_repo = repositories_uuid.AuthorSyncRepository(session=session)
             for author in raw_authors:
                 _ = author_repo.get_or_upsert(match_fields="name", **author)
-            secret_repo = models_uuid.SecretSyncRepository(session=session)
+            secret_repo = repositories_uuid.SecretSyncRepository(session=session)
             for secret in raw_secrets:
                 _ = secret_repo.get_or_upsert(match_fields="id", **secret)
             if not bool(os.environ.get("SPANNER_EMULATOR_HOST")):
-                rule_repo = models_uuid.RuleSyncRepository(session=session)
+                rule_repo = repositories_uuid.RuleSyncRepository(session=session)
                 for rule in raw_rules:
                     _ = rule_repo.add(models_uuid.UUIDRule(**rule))
             yield session
@@ -839,7 +845,14 @@ async def any_engine(
 def repository_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
     if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
         pytest.skip("Skipping additional bigint mock repository tests")
-    return models_uuid if repository_pk_type == "uuid" else models_bigint
+    return repositories_uuid if repository_pk_type == "uuid" else repositories_bigint
+
+
+@pytest.fixture()
+def service_module(repository_pk_type: RepositoryPKType, request: FixtureRequest) -> Any:
+    if repository_pk_type == "bigint" and mock_engines.intersection(set(request.fixturenames)):
+        pytest.skip("Skipping additional bigint mock repository tests")
+    return services_uuid if repository_pk_type == "uuid" else services_bigint
 
 
 @pytest.fixture()
@@ -850,9 +863,9 @@ def author_repo(
 ) -> AuthorRepository:
     """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.AuthorAsyncMockRepository()
+        repo = repository_module.AuthorAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.AuthorSyncMockRepository()
+        repo = repository_module.AuthorSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.AuthorAsyncRepository(session=any_session)
     else:
@@ -868,9 +881,9 @@ def secret_repo(
 ) -> SecretRepository:
     """Return an SecretAsyncRepository or SecretSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.SecretAsyncMockRepository()
+        repo = repository_module.SecretAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.SecretSyncMockRepository()
+        repo = repository_module.SecretSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.SecretAsyncRepository(session=any_session)
     else:
@@ -881,18 +894,18 @@ def secret_repo(
 @pytest.fixture()
 def author_service(
     any_session: AsyncSession | Session,
-    repository_module: Any,
+    service_module: Any,
     request: FixtureRequest,
 ) -> AuthorService:
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.AuthorAsyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.AuthorAsyncMockService(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.AuthorSyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.AuthorSyncMockService(session=any_session)
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.AuthorAsyncService(session=any_session)
+        repo = service_module.AuthorAsyncService(session=any_session)
     else:
-        repo = repository_module.AuthorSyncService(session=any_session)
+        repo = service_module.AuthorSyncService(session=any_session)
     return cast(AuthorService, repo)
 
 
@@ -900,9 +913,9 @@ def author_service(
 def rule_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> RuleRepository:
     """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.RuleAsyncMockRepository()
+        repo = repository_module.RuleAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.RuleSyncMockRepository()
+        repo = repository_module.RuleSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.RuleAsyncRepository(session=any_session)
     else:
@@ -911,16 +924,16 @@ def rule_repo(any_session: AsyncSession | Session, repository_module: Any, reque
 
 
 @pytest.fixture()
-def rule_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> RuleService:
+def rule_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> RuleService:
     """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.RuleAsyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.RuleAsyncMockService(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.RuleSyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.RuleSyncMockService(session=any_session)
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.RuleAsyncService(session=any_session)
+        repo = service_module.RuleAsyncService(session=any_session)
     else:
-        repo = repository_module.RuleSyncService(session=any_session)
+        repo = service_module.RuleSyncService(session=any_session)
     return cast(RuleService, repo)
 
 
@@ -928,9 +941,9 @@ def rule_service(any_session: AsyncSession | Session, repository_module: Any, re
 def book_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> BookRepository:
     """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.BookAsyncMockRepository()
+        repo = repository_module.BookAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.BookSyncMockRepository()
+        repo = repository_module.BookSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.BookAsyncRepository(session=any_session)
     else:
@@ -939,16 +952,16 @@ def book_repo(any_session: AsyncSession | Session, repository_module: Any, reque
 
 
 @pytest.fixture()
-def book_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> BookService:
+def book_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> BookService:
     """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.BookAsyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.BookAsyncMockService(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.BookSyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.BookSyncMockService(session=any_session)
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.BookAsyncService(session=any_session)
+        repo = service_module.BookAsyncService(session=any_session)
     else:
-        repo = repository_module.BookSyncService(session=any_session)
+        repo = service_module.BookSyncService(session=any_session)
     return cast(BookService, repo)
 
 
@@ -960,41 +973,41 @@ def slug_book_repo(
 ) -> SlugBookRepository:
     """Return an SlugBookAsyncRepository or SlugBookSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.SlugBookAsyncMockRepository()
+        repo = repository_module.SlugBookAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.SlugBookSyncMockRepository()
+        repo = repository_module.SlugBookSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.SlugBookAsyncRepository(session=any_session)
     else:
         repo = repository_module.SlugBookSyncRepository(session=any_session)
-    return cast(SlugBookRepository, repo)
+    return cast("SlugBookRepository", repo)
 
 
 @pytest.fixture()
 def slug_book_service(
     any_session: AsyncSession | Session,
-    repository_module: Any,
+    service_module: Any,
     request: FixtureRequest,
 ) -> SlugBookService:
     """Return an SlugBookAsyncService or SlugBookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.SlugBookAsyncMockService(session=create_autospec(any_session, instance=True))
+        svc = service_module.SlugBookAsyncMockService(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.SlugBookSyncMockService(session=create_autospec(any_session, instance=True))
+        svc = service_module.SlugBookSyncMockService(session=any_session)
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.SlugBookAsyncService(session=any_session)
+        svc = service_module.SlugBookAsyncService(session=any_session)
     else:
-        repo = repository_module.SlugBookSyncService(session=any_session)
-    return cast(SlugBookService, repo)
+        svc = service_module.SlugBookSyncService(session=any_session)
+    return cast("SlugBookService", svc)
 
 
 @pytest.fixture()
 def tag_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> ItemRepository:
     """Return an TagAsyncRepository or TagSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.TagAsyncMockRepository()
+        repo = repository_module.TagAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.TagSyncMockRepository()
+        repo = repository_module.TagSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.TagAsyncRepository(session=any_session)
     else:
@@ -1004,16 +1017,16 @@ def tag_repo(any_session: AsyncSession | Session, repository_module: Any, reques
 
 
 @pytest.fixture()
-def tag_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> TagService:
+def tag_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> TagService:
     """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.TagAsyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.TagAsyncMockService(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.TagSyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.TagSyncMockService(session=any_session)
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.TagAsyncService(session=any_session)
+        repo = service_module.TagAsyncService(session=any_session)
     else:
-        repo = repository_module.TagSyncService(session=any_session)
+        repo = service_module.TagSyncService(session=any_session)
     return cast(TagService, repo)
 
 
@@ -1021,9 +1034,9 @@ def tag_service(any_session: AsyncSession | Session, repository_module: Any, req
 def item_repo(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> ItemRepository:
     """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.ItemAsyncMockRepository()
+        repo = repository_module.ItemAsyncMockRepository(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.ItemSyncMockRepository()
+        repo = repository_module.ItemSyncMockRepository(session=any_session)
     elif isinstance(any_session, AsyncSession):
         repo = repository_module.ItemAsyncRepository(session=any_session)
     else:
@@ -1033,16 +1046,16 @@ def item_repo(any_session: AsyncSession | Session, repository_module: Any, reque
 
 
 @pytest.fixture()
-def item_service(any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest) -> ItemService:
+def item_service(any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest) -> ItemService:
     """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.ItemAsyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.ItemAsyncMockService(session=any_session)
     elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.ItemSyncMockService(session=create_autospec(any_session, instance=True))
+        repo = service_module.ItemSyncMockService(session=any_session)
     elif isinstance(any_session, AsyncSession):
-        repo = repository_module.ItemAsyncService(session=any_session)
+        repo = service_module.ItemAsyncService(session=any_session)
     else:
-        repo = repository_module.ItemSyncService(session=any_session)
+        repo = service_module.ItemSyncService(session=any_session)
     return cast(ItemService, repo)
 
 
@@ -1173,7 +1186,7 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 @pytest.fixture()
 def frozen_datetime() -> Generator[Coordinates, None, None]:
-    with travel(datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated]
+    with travel(datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated,reportCallIssue]
         yield frozen
 
 
@@ -1793,25 +1806,25 @@ async def test_repo_json_methods(
     assert exp_count == count
     assert isinstance(obj, rule_model)
     assert new_rule.name == obj.name
-    assert new_rule.config == obj.config
+    assert new_rule.config == obj.config  # pyright: ignore
     assert obj.id is not None
     obj.config = {"the": "update"}
     updated = await maybe_async(rule_repo.update(obj))
-    assert obj.config == updated.config
+    assert obj.config == updated.config  # pyright: ignore
 
     get_obj, get_created = await maybe_async(
         rule_repo.get_or_upsert(match_fields=["name"], name="Secondary loading rule.", config={"another": "object"}),
     )
     assert get_created is False
     assert get_obj.id is not None
-    assert get_obj.config == {"another": "object"}
+    assert get_obj.config == {"another": "object"}  # pyright: ignore
 
     new_obj, new_created = await maybe_async(
         rule_repo.get_or_upsert(match_fields=["name"], name="New rule.", config={"new": "object"}),
     )
     assert new_created is True
     assert new_obj.id is not None
-    assert new_obj.config == {"new": "object"}
+    assert new_obj.config == {"new": "object"}  # pyright: ignore
 
 
 async def test_repo_fetched_value(
@@ -1858,8 +1871,8 @@ async def test_lazy_load(
         "id": first_item_id,
     }
     tags_to_add = await maybe_async(tag_repo.list(CollectionFilter("name", update_data.pop("tag_names", []))))  # type: ignore
-    assert len(tags_to_add) > 0
-    assert tags_to_add[0].id is not None
+    assert len(tags_to_add) > 0  # pyright: ignore
+    assert tags_to_add[0].id is not None  # pyright: ignore
     update_data["tags"] = tags_to_add  # type: ignore[assignment]
     updated_obj = await maybe_async(item_repo.update(item_model(**update_data), auto_refresh=False))
     await maybe_async(item_repo.session.commit())
@@ -1870,6 +1883,51 @@ async def test_lazy_load(
 async def test_repo_health_check(author_repo: AnyAuthorRepository) -> None:
     healthy = await maybe_async(author_repo.check_health(author_repo.session))
     assert healthy
+
+
+async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_service: AuthorService) -> None:
+    """Test Repo with custom statement
+
+    Args:
+        author_repo: The author mock repository
+    """
+    service_type = type(author_service)
+    new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
+    assert await maybe_async(new_service.count()) == 2
+
+
+async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
+    with pytest.deprecated_call():
+        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
+        assert str(existing_obj.id) == str(first_author_id)
+        assert existing_created is False
+
+
+async def test_repo_encrypted_methods(
+    raw_secrets_uuid: RawRecordData,
+    secret_repo: SecretRepository,
+    raw_secrets: RawRecordData,
+    first_secret_id: Any,
+    secret_model: SecretModel,
+) -> None:
+    existing_obj = await maybe_async(secret_repo.get(first_secret_id))
+    assert existing_obj.secret == raw_secrets[0]["secret"]
+    assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
+
+    exp_count = len(raw_secrets_uuid) + 1
+    new_secret = secret_model(secret="hidden data", long_secret="another longer secret")
+    obj = await maybe_async(secret_repo.add(new_secret))
+    count = await maybe_async(secret_repo.count())
+    assert exp_count == count
+    assert isinstance(obj, secret_model)
+    assert new_secret.secret == obj.secret
+    assert new_secret.long_secret == obj.long_secret
+    assert obj.id is not None
+    obj.secret = "new secret value"
+    obj.long_secret = "new long secret value"
+    updated = await maybe_async(secret_repo.update(obj))
+    assert obj.secret == updated.secret
+    assert obj.long_secret == updated.long_secret
 
 
 # service tests
@@ -2066,7 +2124,7 @@ async def test_service_create_many_method(
 
 
 async def test_service_update_many_method(author_service: AuthorService) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip("Skipped on emulator")
 
     objs = await maybe_async(author_service.list())
@@ -2140,7 +2198,7 @@ async def test_service_delete_many_method(author_service: AuthorService, author_
     all_objs = await maybe_async(author_service.list())
     ids_to_delete = [existing_obj.id for existing_obj in all_objs]
     objs = await maybe_async(author_service.delete_many(ids_to_delete))
-    await maybe_async(author_service.repository.session.commit())
+    await maybe_async(author_service.repository.session.commit())  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
     assert len(objs) > 0
     data, count = await maybe_async(author_service.list_and_count())
     assert data == []
@@ -2250,7 +2308,7 @@ async def test_service_upsert_method_match(
     author_model: AuthorModel,
     new_pk_id: Any,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2281,7 +2339,7 @@ async def test_service_upsert_many_method(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2309,7 +2367,7 @@ async def test_service_upsert_many_method_match_fields_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2338,7 +2396,7 @@ async def test_service_upsert_many_method_match_fields_non_id(
     author_service: AuthorService,
     author_model: AuthorModel,
 ) -> None:
-    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage]
+    if author_service.repository._dialect.name.startswith("spanner") and os.environ.get("SPANNER_EMULATOR_HOST"):  # pyright: ignore[reportPrivateUsage,reportUnknownMemberType,reportAttributeAccessIssue]
         pytest.skip(
             "Skipped on emulator. See the following:  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator/issues/73",
         )
@@ -2360,54 +2418,9 @@ async def test_service_upsert_many_method_match_fields_non_id(
     assert existing_count_now > existing_count
 
 
-async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_service: AuthorService) -> None:
-    """Test Repo with custom statement
-
-    Args:
-        author_repo: The author mock repository
-    """
-    service_type = type(author_service)
-    new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
-    assert await maybe_async(new_service.count()) == 2
-
-
-async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    with pytest.deprecated_call():
-        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
-        assert str(existing_obj.id) == str(first_author_id)
-        assert existing_created is False
-
-
 async def test_service_update_no_pk(author_service: AuthorService) -> None:
     with pytest.raises(RepositoryError):
         _existing_obj = await maybe_async(author_service.update(data={"name": "Agatha Christie"}))
-
-
-async def test_repo_encrypted_methods(
-    raw_secrets_uuid: RawRecordData,
-    secret_repo: SecretRepository,
-    raw_secrets: RawRecordData,
-    first_secret_id: Any,
-    secret_model: SecretModel,
-) -> None:
-    existing_obj = await maybe_async(secret_repo.get(first_secret_id))
-    assert existing_obj.secret == raw_secrets[0]["secret"]
-    assert existing_obj.long_secret == raw_secrets[0]["long_secret"]
-
-    exp_count = len(raw_secrets_uuid) + 1
-    new_secret = secret_model(secret="hidden data", long_secret="another longer secret")
-    obj = await maybe_async(secret_repo.add(new_secret))
-    count = await maybe_async(secret_repo.count())
-    assert exp_count == count
-    assert isinstance(obj, secret_model)
-    assert new_secret.secret == obj.secret
-    assert new_secret.long_secret == obj.long_secret
-    assert obj.id is not None
-    obj.secret = "new secret value"
-    obj.long_secret = "new long secret value"
-    updated = await maybe_async(secret_repo.update(obj))
-    assert obj.secret == updated.secret
-    assert obj.long_secret == updated.long_secret
 
 
 async def test_service_create_method_slug(
@@ -2428,13 +2441,13 @@ async def test_service_create_method_slug_existing(
     slug_book_service: SlugBookService,
     slug_book_model: SlugBookModel,
 ) -> None:
-    if issubclass(
+    if isinstance(
         slug_book_service.repository_type,
         (
             SQLAlchemySyncMockSlugRepository,
+            SQLAlchemyAsyncMockSlugRepository,
             SQLAlchemyAsyncMockRepository,
-            SQLAlchemyAsyncMockRepository,
-            SQLAlchemyAsyncMockRepository,
+            SQLAlchemySyncMockRepository,
         ),
     ):
         pytest.skip("Skipping additional bigint mock repository tests")
@@ -2496,10 +2509,10 @@ async def test_service_paginated_to_schema(raw_authors: RawRecordData, author_se
     assert isinstance(model_dto.items[0].name, str)
     assert model_dto.total == exp_count
     assert isinstance(pydantic_dto, OffsetPagination)
-    assert isinstance(pydantic_dto.items[0].name, str)
+    assert isinstance(pydantic_dto.items[0].name, str)  # pyright: ignore
     assert pydantic_dto.total == exp_count
     assert isinstance(msgspec_dto, OffsetPagination)
-    assert isinstance(msgspec_dto.items[0].name, str)
+    assert isinstance(msgspec_dto.items[0].name, str)  # pyright: ignore
     assert msgspec_dto.total == exp_count
 
 
@@ -2517,6 +2530,10 @@ async def test_service_to_schema(
     model_dto = author_service.to_schema(data=obj)
     pydantic_dto = author_service.to_schema(data=obj, schema_type=AuthorBaseModel)
     msgspec_dto = author_service.to_schema(data=obj, schema_type=AuthorStruct)
+    assert issubclass(AuthorStruct, Struct)
+    assert issubclass(AuthorBaseModel, BaseModel)
     assert isinstance(model_dto.name, str)
-    assert isinstance(pydantic_dto.name, str)
-    assert isinstance(msgspec_dto.name, str)
+    assert isinstance(pydantic_dto, BaseModel)
+    assert isinstance(msgspec_dto, Struct)
+    assert isinstance(pydantic_dto.name, str)  # pyright: ignore
+    assert isinstance(msgspec_dto.name, str)  # pyright: ignore

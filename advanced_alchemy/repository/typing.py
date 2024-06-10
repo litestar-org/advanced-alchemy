@@ -23,7 +23,10 @@ RowT = TypeVar("RowT", bound=Tuple[Any, ...])
 RowMappingT = TypeVar("RowMappingT", bound="RowMapping")
 ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtocol, RowMapping]")
 SQLAlchemySyncRepositoryT = TypeVar("SQLAlchemySyncRepositoryT", bound="SQLAlchemySyncRepository[Any]")
-SQLAlchemyAsyncRepositoryT = TypeVar("SQLAlchemyAsyncRepositoryT", bound="SQLAlchemyAsyncRepository[Any]")
+SQLAlchemyAsyncRepositoryT = TypeVar(
+    "SQLAlchemyAsyncRepositoryT",
+    bound="SQLAlchemyAsyncRepository[Any]",
+)
 
 
 class _MISSING:
