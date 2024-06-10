@@ -649,8 +649,8 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
 
 
 class SQLAlchemyAsyncMockSlugRepository(
-    SQLAlchemyAsyncSlugRepositoryProtocol[ModelT],
     SQLAlchemyAsyncMockRepository[ModelT],
+    SQLAlchemyAsyncSlugRepositoryProtocol[ModelT],
 ):
     async def get_by_slug(
         self,

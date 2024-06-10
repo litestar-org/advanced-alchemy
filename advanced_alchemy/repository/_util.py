@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterable, List, Literal, Protocol, Sequence, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    List,
+    Literal,
+    Protocol,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import (
@@ -8,7 +19,7 @@ from sqlalchemy.orm.strategy_options import (
 )
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
-from typing_extensions import TypeAlias, runtime_checkable
+from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
@@ -106,7 +117,6 @@ def get_abstract_loader_options(
     return (loads, options_have_wildcards)
 
 
-@runtime_checkable
 class FilterableRepositoryProtocol(Protocol[ModelT]):
     model_type: type[ModelT]
 

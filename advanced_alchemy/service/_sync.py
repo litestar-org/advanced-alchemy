@@ -18,6 +18,7 @@ from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
 from advanced_alchemy.repository import (
     SQLAlchemySyncQueryRepository,
     SQLAlchemySyncRepositoryProtocol,
+    SQLAlchemySyncSlugRepositoryProtocol,
 )
 from advanced_alchemy.repository._util import (
     LoadSpec,
@@ -86,7 +87,7 @@ class SQLAlchemySyncQueryService(ResultConverter):
 class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT]]
+    repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT] | SQLAlchemySyncSlugRepositoryProtocol[ModelT]]
     match_fields: list[str] | str | None = None
 
     def __init__(

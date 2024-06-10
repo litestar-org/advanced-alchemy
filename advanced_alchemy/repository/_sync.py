@@ -49,7 +49,7 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
 @runtime_checkable
-class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):
+class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
     """Base Protocol"""
 
     id_attribute: Any
@@ -287,7 +287,8 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def check_health(cls, session: Session | scoped_session[Session]) -> bool: ...
 
 
-class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[ModelT], Protocol):
+@runtime_checkable
+class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[ModelT], Protocol[ModelT]):
     def get_by_slug(
         self,
         slug: str,
@@ -640,7 +641,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception():
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
-            statement = lambda_stmt(lambda: delete(model_type))
+            statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
             if loader_options:
                 statement = statement.options(*loader_options)
             if execution_options:

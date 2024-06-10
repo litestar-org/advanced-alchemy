@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast
+from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast, runtime_checkable
 
 from sqlalchemy import (
     Result,
@@ -20,7 +20,6 @@ from sqlalchemy import (
 )
 from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
-from typing_extensions import runtime_checkable
 
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
@@ -49,7 +48,7 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
 @runtime_checkable
-class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol):
+class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
     """Base Protocol"""
 
     id_attribute: Any
@@ -287,7 +286,8 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool: ...
 
 
-class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[ModelT], Protocol):
+@runtime_checkable
+class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[ModelT], Protocol[ModelT]):
     async def get_by_slug(
         self,
         slug: str,
@@ -640,7 +640,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception():
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
-            statement = lambda_stmt(lambda: delete(model_type))
+            statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
             if loader_options:
                 statement = statement.options(*loader_options)
             if execution_options:
