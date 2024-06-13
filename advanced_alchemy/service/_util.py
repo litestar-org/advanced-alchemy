@@ -22,7 +22,9 @@ from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository.typing import ModelOrRowMappingT
 from advanced_alchemy.service.pagination import OffsetPagination
-from advanced_alchemy.service.typing import (  # type: ignore[attr-defined]
+from advanced_alchemy.service.typing import (
+    MSGSPEC_INSTALLED,
+    PYDANTIC_INSTALLED,
     BaseModel,
     ModelDTOT,
     Struct,
@@ -185,7 +187,7 @@ class ResultConverter:
                 offset=limit_offset.offset,
                 total=total,
             )
-        if issubclass(schema_type, Struct):
+        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
@@ -221,7 +223,7 @@ class ResultConverter:
                 total=total,
             )
 
-        if issubclass(schema_type, BaseModel):
+        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):
             if not isinstance(data, Sequence):
                 return cast("ModelDTOT", TypeAdapter(schema_type).validate_python(data, from_attributes=True))  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
             limit_offset = find_filter(LimitOffset, filters=filters)

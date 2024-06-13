@@ -504,6 +504,8 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
             id_attribute=id_attribute,
+            load=load,
+            execution_options=execution_options,
         )
 
     def update_many(
