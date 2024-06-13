@@ -82,7 +82,7 @@ def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture()
-def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
+def oracle18c_engine(oracle18c_docker_ip: str, oracle18c_service: None) -> Engine:
     """Oracle 18c instance for end-to-end testing.
 
     Args:
@@ -98,7 +98,7 @@ def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
         connect_args={
             "user": "app",
             "password": "super-secret",
-            "host": docker_ip,
+            "host": oracle18c_docker_ip,
             "port": 1512,
             "service_name": "xepdb1",
         },

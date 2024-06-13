@@ -3,8 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Generator
 
 import pytest
-from sqlalchemy import Engine, NullPool, create_engine
+from sqlalchemy import Engine, NullPool, create_engine, insert
 from sqlalchemy.orm import Session, sessionmaker
+
+from advanced_alchemy import base
+from tests.fixtures import types
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -64,7 +67,7 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
     monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 
 
-@pytest.fixture(name="engine")
+@pytest.fixture(name="engine", scope="session")
 def duckdb_engine(tmp_path: Path, _patch_bases: Any) -> Generator[Engine, None, None]:
     """SQLite engine for end-to-end testing.
 
@@ -78,7 +81,33 @@ def duckdb_engine(tmp_path: Path, _patch_bases: Any) -> Generator[Engine, None, 
         engine.dispose()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
+def seed_db(
+    engine: Engine,
+    raw_authors: types.RawRecordData,
+    raw_slug_books: types.RawRecordData,
+    raw_rules: types.RawRecordData,
+    raw_secrets: types.RawRecordData,
+    author_model: types.AuthorModel,
+    rule_model: types.RuleModel,
+    secret_model: types.SecretModel,
+    slug_book_model: types.SlugBookModel,
+) -> None:
+    with engine.begin() as conn:
+        base.orm_registry.metadata.drop_all(conn)
+        base.orm_registry.metadata.create_all(conn)
+    with engine.begin() as conn:
+        for author in raw_authors:
+            conn.execute(insert(author_model).values(author))
+        for rule in raw_rules:
+            conn.execute(insert(rule_model).values(rule))
+        for secret in raw_secrets:
+            conn.execute(insert(secret_model).values(secret))
+        for book in raw_slug_books:
+            conn.execute(insert(slug_book_model).values(book))
+
+
+@pytest.fixture(scope="session")
 def session(engine: Engine) -> Generator[Session, None, None]:
     session = sessionmaker(bind=engine, expire_on_commit=False)()
     try:
