@@ -13,7 +13,6 @@ from typing import (
     Protocol,
     TypeVar,
     cast,
-    runtime_checkable,
 )
 
 from typing_extensions import TypeAlias
@@ -28,7 +27,6 @@ try:
 
 except ImportError:  # pragma: nocover
 
-    @runtime_checkable
     class Struct(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
@@ -46,7 +44,6 @@ try:
     PYDANTIC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
 
-    @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
@@ -62,6 +59,7 @@ except ImportError:  # pragma: nocover
             """Stub"""
             return cast("T", data)
 
+    PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
 ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
