@@ -1121,7 +1121,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = statement.add_criteria(
-                lambda s: s.with_only_columns(sql_func.count(), maintain_column_froms=True).order_by(None),
+                lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
             )
             results = self._execute(statement, uniquify=loader_options_have_wildcard)
             return cast(int, results.scalar_one())
