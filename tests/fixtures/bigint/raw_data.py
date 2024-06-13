@@ -6,7 +6,7 @@ from advanced_alchemy.utils.text import slugify
 from tests.helpers import RawRecordData
 
 
-@pytest.fixture(name="raw_authors_bigint")
+@pytest.fixture(scope="session", name="raw_authors_bigint")
 def fx_raw_authors_bigint() -> RawRecordData:
     """Unstructured author representations."""
     return [
@@ -27,7 +27,7 @@ def fx_raw_authors_bigint() -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_books_bigint")
+@pytest.fixture(scope="session", name="raw_books_bigint")
 def fx_raw_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData:
     """Unstructured book representations."""
     return [
@@ -39,7 +39,7 @@ def fx_raw_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_slug_books_bigint")
+@pytest.fixture(scope="session", name="raw_slug_books_bigint")
 def fx_raw_slug_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData:
     """Unstructured slug book representations."""
     return [
@@ -51,7 +51,7 @@ def fx_raw_slug_books_bigint(raw_authors_bigint: RawRecordData) -> RawRecordData
     ]
 
 
-@pytest.fixture(name="raw_log_events_bigint")
+@pytest.fixture(scope="session", name="raw_log_events_bigint")
 def fx_raw_log_events_bigint() -> RawRecordData:
     """Unstructured log events representations."""
     return [
@@ -65,7 +65,7 @@ def fx_raw_log_events_bigint() -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_rules_bigint")
+@pytest.fixture(scope="session", name="raw_rules_bigint")
 def fx_raw_rules_bigint() -> RawRecordData:
     """Unstructured rules representations."""
     return [
@@ -86,7 +86,7 @@ def fx_raw_rules_bigint() -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_secrets_bigint")
+@pytest.fixture(scope="session", name="raw_secrets_bigint")
 def fx_raw_secrets_bigint() -> RawRecordData:
     """secret representations."""
     return [

@@ -1,22 +1,34 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncGenerator, Generator, cast
-from unittest.mock import NonCallableMagicMock, create_autospec
+from typing import TYPE_CHECKING, Any, Iterator, cast
+from uuid import UUID
 
 import pytest
-from pytest import FixtureRequest
-from sqlalchemy import URL, Dialect, Engine, NullPool, create_engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
+
+from tests.fixtures.bigint import models as models_bigint
+from tests.fixtures.bigint import repositories as repositories_bigint
+from tests.fixtures.bigint import services as services_bigint
+from tests.fixtures.types import (
+    AuthorModel,
+    ItemModel,
+    ModelWithFetchedValue,
+    RawRecordData,
+    RepositoryPKType,
+    RuleModel,
+    SecretModel,
+    SlugBookModel,
+    TagModel,
+)
+from tests.fixtures.uuid import models as models_uuid
+from tests.fixtures.uuid import repositories as repositories_uuid
+from tests.fixtures.uuid import services as services_uuid
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from pytest import MonkeyPatch
 
 
-@pytest.fixture(autouse=True)
-def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
+@pytest.fixture(scope="session")
+def _patch_bases(monkeysession: MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     """Ensure new registry state for every test.
 
     This prevents errors such as "Table '...' is already defined for
@@ -57,511 +69,175 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
 
     class NewBigIntAuditBase(base.BigIntPrimaryKey, base.CommonTableAttributes, base.AuditColumns, DeclarativeBase): ...
 
-    monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
-    monkeypatch.setattr(base, "UUIDAuditBase", NewUUIDAuditBase)
-    monkeypatch.setattr(base, "UUIDv6Base", NewUUIDv6Base)
-    monkeypatch.setattr(base, "UUIDv6AuditBase", NewUUIDv6AuditBase)
-    monkeypatch.setattr(base, "UUIDv7Base", NewUUIDv7Base)
-    monkeypatch.setattr(base, "UUIDv7AuditBase", NewUUIDv7AuditBase)
-    monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
-    monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
+    monkeysession.setattr(base, "UUIDBase", NewUUIDBase)
+    monkeysession.setattr(base, "UUIDAuditBase", NewUUIDAuditBase)
+    monkeysession.setattr(base, "UUIDv6Base", NewUUIDv6Base)
+    monkeysession.setattr(base, "UUIDv6AuditBase", NewUUIDv6AuditBase)
+    monkeysession.setattr(base, "UUIDv7Base", NewUUIDv7Base)
+    monkeysession.setattr(base, "UUIDv7AuditBase", NewUUIDv7AuditBase)
+    monkeysession.setattr(base, "BigIntBase", NewBigIntBase)
+    monkeysession.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
+
+
+@pytest.fixture(params=["uuid", "bigint"], scope="session")
+def repository_pk_type(request: pytest.FixtureRequest) -> RepositoryPKType:
+    """Return the primary key type of the repository"""
+    return cast(RepositoryPKType, request.param)
 
 
 @pytest.fixture()
-def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
-    """SQLite engine for end-to-end testing.
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    engine = create_engine(f"duckdb:///{tmp_path}/test.duck.db", poolclass=NullPool)
-    try:
-        yield engine
-    finally:
-        engine.dispose()
+def repository_module(repository_pk_type: RepositoryPKType, request: pytest.FixtureRequest) -> Any:
+    return repositories_uuid if repository_pk_type == "uuid" else repositories_bigint
 
 
 @pytest.fixture()
-def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
-    """Oracle 18c instance for end-to-end testing.
-
-    Args:
-        docker_ip: IP address for TCP connection to Docker containers.
-        oracle18c_service: ...
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    return create_engine(
-        "oracle+oracledb://:@",
-        thick_mode=False,
-        connect_args={
-            "user": "app",
-            "password": "super-secret",
-            "host": docker_ip,
-            "port": 1512,
-            "service_name": "xepdb1",
-        },
-        poolclass=NullPool,
-    )
+def service_module(repository_pk_type: RepositoryPKType, request: pytest.FixtureRequest) -> Any:
+    return services_uuid if repository_pk_type == "uuid" else services_bigint
 
 
-@pytest.fixture()
-def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
-    """Oracle 23c instance for end-to-end testing.
-
-    Args:
-        docker_ip: IP address for TCP connection to Docker containers.
-        oracle23c_service: ...
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    return create_engine(
-        "oracle+oracledb://:@",
-        thick_mode=False,
-        connect_args={
-            "user": "app",
-            "password": "super-secret",
-            "host": docker_ip,
-            "port": 1513,
-            "service_name": "FREEPDB1",
-        },
-        poolclass=NullPool,
-    )
+@pytest.fixture(scope="session")
+def raw_authors(request: pytest.FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Author`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        authors = request.getfixturevalue("raw_authors_bigint")
+    else:
+        authors = request.getfixturevalue("raw_authors_uuid")
+    return cast("RawRecordData", authors)
 
 
-@pytest.fixture()
-def psycopg_engine(docker_ip: str, postgres_service: None) -> Engine:
-    """Postgresql instance for end-to-end testing."""
-    return create_engine(
-        URL(
-            drivername="postgresql+psycopg",
-            username="postgres",
-            password="super-secret",
-            host=docker_ip,
-            port=5423,
-            database="postgres",
-            query={},  # type:ignore[arg-type]
-        ),
-        poolclass=NullPool,
-    )
+@pytest.fixture(scope="session")
+def raw_slug_books(request: pytest.FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Author`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        books = request.getfixturevalue("raw_slug_books_bigint")
+    else:
+        books = request.getfixturevalue("raw_slug_books_uuid")
+    return cast("RawRecordData", books)
 
 
-@pytest.fixture()
-def mssql_engine(docker_ip: str, mssql_service: None) -> Engine:
-    """MS SQL instance for end-to-end testing."""
-    return create_engine(
-        URL(
-            drivername="mssql+pyodbc",
-            username="sa",
-            password="Super-secret1",
-            host=docker_ip,
-            port=1344,
-            database="master",
-            query={
-                "driver": "ODBC Driver 18 for SQL Server",
-                "encrypt": "no",
-                "TrustServerCertificate": "yes",
-            },  # type:ignore[arg-type]
-        ),
-        poolclass=NullPool,
-    )
+@pytest.fixture(scope="session")
+def raw_rules(request: pytest.FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Rule`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        rules = request.getfixturevalue("raw_rules_bigint")
+    else:
+        rules = request.getfixturevalue("raw_rules_uuid")
+    return cast("RawRecordData", rules)
+
+
+@pytest.fixture(scope="session")
+def raw_secrets(request: pytest.FixtureRequest, repository_pk_type: RepositoryPKType) -> RawRecordData:
+    """Return raw ``Secret`` data matching the current PK type"""
+    if repository_pk_type == "bigint":
+        secrets = request.getfixturevalue("raw_secrets_bigint")
+    else:
+        secrets = request.getfixturevalue("raw_secrets_uuid")
+    return cast("RawRecordData", secrets)
+
+
+@pytest.fixture(scope="session")
+def author_model(repository_pk_type: RepositoryPKType) -> AuthorModel:
+    """Return the ``Author`` model matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDAuthor
+    return models_bigint.BigIntAuthor
+
+
+@pytest.fixture(scope="session")
+def rule_model(repository_pk_type: RepositoryPKType) -> RuleModel:
+    """Return the ``Rule`` model matching the current repository PK type"""
+    if repository_pk_type == "bigint":
+        return models_bigint.BigIntRule
+    return models_uuid.UUIDRule
+
+
+@pytest.fixture(scope="session")
+def model_with_fetched_value(repository_pk_type: RepositoryPKType) -> ModelWithFetchedValue:
+    """Return the ``ModelWithFetchedValue`` model matching the current repository PK type"""
+    if repository_pk_type == "bigint":
+        return models_bigint.BigIntModelWithFetchedValue
+    return models_uuid.UUIDModelWithFetchedValue
+
+
+@pytest.fixture(scope="session")
+def item_model(repository_pk_type: RepositoryPKType) -> ItemModel:
+    """Return the ``Item`` model matching the current repository PK type"""
+    if repository_pk_type == "bigint":
+        return models_bigint.BigIntItem
+    return models_uuid.UUIDItem
+
+
+@pytest.fixture(scope="session")
+def tag_model(repository_pk_type: RepositoryPKType) -> TagModel:
+    """Return the ``Tag`` model matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDTag
+    return models_bigint.BigIntTag
 
 
 @pytest.fixture()
-def sqlite_engine(tmp_path: Path) -> Generator[Engine, None, None]:
-    """SQLite engine for end-to-end testing.
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    engine = create_engine(f"sqlite:///{tmp_path}/test.db", poolclass=NullPool)
-    try:
-        yield engine
-    finally:
-        engine.dispose()
+def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
+    """Return the ``Book`` model matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDBook
+    return models_bigint.BigIntBook
 
 
 @pytest.fixture()
-def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPatch) -> Engine:
-    """Postgresql instance for end-to-end testing."""
-    monkeypatch.setenv("SPANNER_EMULATOR_HOST", "localhost:9010")
-    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "emulator-test-project")
-
-    return create_engine(
-        "spanner+spanner:///projects/emulator-test-project/instances/test-instance/databases/test-database",
-        poolclass=NullPool,
-    )
+def slug_book_model(
+    repository_pk_type: RepositoryPKType,
+) -> SlugBookModel:
+    """Return the ``SlugBook`` model matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDSlugBook
+    return models_bigint.BigIntSlugBook
 
 
 @pytest.fixture()
-def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
-    """CockroachDB instance for end-to-end testing."""
-    return create_engine(
-        url="cockroachdb://root@localhost:26257/defaultdb?sslmode=disable",
-        poolclass=NullPool,
-    )
+def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
+    """Return the ``Secret`` model matching the current repository PK type"""
+    return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret
 
 
 @pytest.fixture()
-async def mock_sync_engine() -> NonCallableMagicMock:
-    """Return a mocked Engine instance."""
-    mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
-    mock.dialect = create_autospec(Dialect, instance=True)
-    mock.dialect.name = "mock"
-    return mock
-
-
-@pytest.fixture(
-    name="engine",
-    params=[
-        pytest.param(
-            "sqlite_engine",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("sqlite"),
-            ],
-        ),
-        pytest.param(
-            "duckdb_engine",
-            marks=[
-                pytest.mark.duckdb,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("duckdb"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23c_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_engine",
-            marks=[
-                pytest.mark.psycopg_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_engine",
-            marks=[
-                pytest.mark.cockroachdb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mssql_engine",
-            marks=[
-                pytest.mark.mssql_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "mock_sync_engine",
-            marks=[
-                pytest.mark.mock_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def engine(request: FixtureRequest) -> Engine:
-    return cast(Engine, request.getfixturevalue(request.param))
+def new_pk_id(repository_pk_type: RepositoryPKType) -> Any:
+    """Return an unused primary key, matching the current repository PK type"""
+    if repository_pk_type == "uuid":
+        return UUID("baa0a5c7-5404-4821-bc76-6cf5e73c8219")
+    return 10
 
 
 @pytest.fixture()
-def session(engine: Engine) -> Generator[Session, None, None]:
-    session = sessionmaker(bind=engine, expire_on_commit=False)()
-    try:
-        yield session
-    finally:
-        session.rollback()
-        session.close()
+def existing_slug_book_ids(raw_slug_books: RawRecordData) -> Iterator[Any]:
+    """Return the existing primary keys based on the raw data provided"""
+    return (book["id"] for book in raw_slug_books)
 
 
 @pytest.fixture()
-async def aiosqlite_engine(tmp_path: Path) -> AsyncGenerator[AsyncEngine, None]:
-    """SQLite engine for end-to-end testing.
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test.db", poolclass=NullPool)
-    try:
-        yield engine
-    finally:
-        await engine.dispose()
+def first_slug_book_id(raw_slug_books: RawRecordData) -> Any:
+    """Return the primary key of the first ``Book`` record of the current repository PK type"""
+    return raw_slug_books[0]["id"]
 
 
 @pytest.fixture()
-async def asyncmy_engine(docker_ip: str, mysql_service: None) -> AsyncEngine:
-    """Postgresql instance for end-to-end testing."""
-    return create_async_engine(
-        URL(
-            drivername="mysql+asyncmy",
-            username="app",
-            password="super-secret",
-            host=docker_ip,
-            port=3360,
-            database="db",
-            query={},  # type:ignore[arg-type]
-        ),
-        poolclass=NullPool,
-    )
+def existing_author_ids(raw_authors: RawRecordData) -> Iterator[Any]:
+    """Return the existing primary keys based on the raw data provided"""
+    return (author["id"] for author in raw_authors)
 
 
 @pytest.fixture()
-async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
-    """Postgresql instance for end-to-end testing."""
-    return create_async_engine(
-        URL(
-            drivername="postgresql+asyncpg",
-            username="postgres",
-            password="super-secret",
-            host=docker_ip,
-            port=5423,
-            database="postgres",
-            query={},  # type:ignore[arg-type]
-        ),
-        poolclass=NullPool,
-    )
+def first_author_id(raw_authors: RawRecordData) -> Any:
+    """Return the primary key of the first ``Author`` record of the current repository PK type"""
+    return raw_authors[0]["id"]
 
 
 @pytest.fixture()
-async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
-    """Postgresql instance for end-to-end testing."""
-    return create_async_engine(
-        URL(
-            drivername="postgresql+psycopg",
-            username="postgres",
-            password="super-secret",
-            host=docker_ip,
-            port=5423,
-            database="postgres",
-            query={},  # type:ignore[arg-type]
-        ),
-        poolclass=NullPool,
-    )
+def existing_secret_ids(raw_secrets: RawRecordData) -> Iterator[Any]:
+    """Return the existing primary keys based on the raw data provided"""
+    return (secret["id"] for secret in raw_secrets)
 
 
 @pytest.fixture()
-async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) -> AsyncEngine:
-    """Cockroach DB async engine instance for end-to-end testing."""
-    return create_async_engine(
-        url="cockroachdb+asyncpg://root@localhost:26257/defaultdb",
-        poolclass=NullPool,
-    )
-
-
-@pytest.fixture()
-async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine:
-    """MS SQL instance for end-to-end testing."""
-    return create_async_engine(
-        URL(
-            drivername="mssql+aioodbc",
-            username="sa",
-            password="Super-secret1",
-            host=docker_ip,
-            port=1344,
-            database="master",
-            query={
-                "driver": "ODBC Driver 18 for SQL Server",
-                "encrypt": "no",
-                "TrustServerCertificate": "yes",
-                # NOTE: MARS_Connection is only needed for the concurrent async tests
-                # lack of this causes some tests to fail
-                # https://github.com/litestar-org/advanced-alchemy/actions/runs/6800623970/job/18493034767?pr=94
-                "MARS_Connection": "yes",
-            },  # type:ignore[arg-type]
-        ),
-        poolclass=NullPool,
-    )
-
-
-@pytest.fixture()
-async def oracle18c_async_engine(docker_ip: str, oracle18c_service: None) -> AsyncEngine:
-    """Oracle 18c instance for end-to-end testing.
-
-    Args:
-        docker_ip: IP address for TCP connection to Docker containers.
-        oracle18c_service: ...
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    return create_async_engine(
-        "oracle+oracledb://:@",
-        thick_mode=False,
-        connect_args={
-            "user": "app",
-            "password": "super-secret",
-            "host": docker_ip,
-            "port": 1512,
-            "service_name": "xepdb1",
-        },
-        poolclass=NullPool,
-    )
-
-
-@pytest.fixture()
-async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> AsyncEngine:
-    """Oracle 23c instance for end-to-end testing.
-
-    Args:
-        docker_ip: IP address for TCP connection to Docker containers.
-        oracle23c_service: ...
-
-    Returns:
-        Async SQLAlchemy engine instance.
-    """
-    return create_async_engine(
-        "oracle+oracledb://:@",
-        thick_mode=False,
-        connect_args={
-            "user": "app",
-            "password": "super-secret",
-            "host": docker_ip,
-            "port": 1513,
-            "service_name": "FREEPDB1",
-        },
-        poolclass=NullPool,
-    )
-
-
-@pytest.fixture()
-async def mock_async_engine() -> NonCallableMagicMock:
-    """Return a mocked AsyncEngine instance."""
-    return cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
-
-
-@pytest.fixture(
-    name="async_engine",
-    params=[
-        pytest.param(
-            "aiosqlite_engine",
-            marks=[
-                pytest.mark.aiosqlite,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("sqlite"),
-            ],
-        ),
-        pytest.param(
-            "asyncmy_engine",
-            marks=[
-                pytest.mark.asyncmy,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mysql"),
-            ],
-        ),
-        pytest.param(
-            "asyncpg_engine",
-            marks=[
-                pytest.mark.asyncpg,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_async_engine",
-            marks=[
-                pytest.mark.psycopg_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_async_engine",
-            marks=[
-                pytest.mark.cockroachdb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mssql_async_engine",
-            marks=[
-                pytest.mark.mssql_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23c_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "mock_async_engine",
-            marks=[
-                pytest.mark.mock_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def async_engine(request: FixtureRequest) -> AsyncEngine:
-    return cast(AsyncEngine, request.getfixturevalue(request.param))
-
-
-@pytest.fixture()
-async def async_session(
-    async_engine: AsyncEngine,
-) -> AsyncGenerator[AsyncSession, None]:
-    session = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
-    try:
-        yield session
-    finally:
-        await session.rollback()
-        await session.close()
-
-
-# @pytest.fixture()
-# async def sync_sqlalchemy_config(engine: Engine, session_maker: sessionmaker[Session]) -> SQLAlchemySyncConfig:
-#
-#
-# @pytest.fixture()
-# async def async_sqlalchemy_config(
-#     async_engine: AsyncEngine,
-#     async_session_maker: async_sessionmaker[AsyncSession],
-# ) -> SQLAlchemyAsyncConfig:
-#
-#
-# @pytest.fixture()
-# async def sync_alembic_commands(sync_sqlalchemy_config: SQLAlchemySyncConfig) -> commands.AlembicCommands:
-#
-#
-# @pytest.fixture()
-# async def async_alembic_commands(async_sqlalchemy_config: SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
-#
-#
-# @pytest.fixture(params=["sync_alembic_commands", "async_alembic_commands"], autouse=True)
-# def alembic_commands(request: FixtureRequest) -> commands.AlembicCommands:
+def first_secret_id(raw_secrets: RawRecordData) -> Any:
+    """Return the primary key of the first ``Secret`` record of the current repository PK type"""
+    return raw_secrets[0]["id"]

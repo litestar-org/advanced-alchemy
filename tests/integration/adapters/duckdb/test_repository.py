@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Generator
 
 import pytest
+from time_machine import Coordinates
 
 from tests.fixtures.types import (
     AnyAuthorRepository,
@@ -66,15 +69,15 @@ class TestSQLAlchemyRepository:
         await repo_tests.test_repo_list_and_count_method_empty(book_repo)
 
     @pytest.fixture()
-    def frozen_datetime(self) -> Generator:
+    def frozen_datetime(self) -> Generator[Coordinates, None, None]:
         from time_machine import travel
 
-        with travel(datetime.utcnow, tick=False) as frozen:
+        with travel(datetime.utcnow, tick=False) as frozen:  # type: ignore
             yield frozen
 
     async def test_repo_created_updated(
         self,
-        frozen_datetime,
+        frozen_datetime: Coordinates,
         author_repo: AnyAuthorRepository,
         book_model: type[AnyBook],
         repository_pk_type: RepositoryPKType,
@@ -83,7 +86,7 @@ class TestSQLAlchemyRepository:
 
     async def test_repo_created_updated_no_listener(
         self,
-        frozen_datetime,
+        frozen_datetime: Coordinates,
         author_repo: AuthorRepository,
         book_model: type[AnyBook],
         repository_pk_type: RepositoryPKType,

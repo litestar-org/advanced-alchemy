@@ -7,7 +7,7 @@ from advanced_alchemy.utils.text import slugify
 from tests.helpers import RawRecordData
 
 
-@pytest.fixture(name="raw_authors_uuid")
+@pytest.fixture(scope="session", name="raw_authors_uuid")
 def fx_raw_authors_uuid() -> RawRecordData:
     """Unstructured author representations."""
     return [
@@ -28,7 +28,7 @@ def fx_raw_authors_uuid() -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_books_uuid")
+@pytest.fixture(scope="session", name="raw_books_uuid")
 def fx_raw_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
     """Unstructured book representations."""
     return [
@@ -41,7 +41,7 @@ def fx_raw_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_slug_books_uuid")
+@pytest.fixture(scope="session", name="raw_slug_books_uuid")
 def fx_raw_slug_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
     """Unstructured slug book representations."""
     return [
@@ -54,7 +54,7 @@ def fx_raw_slug_books_uuid(raw_authors_uuid: RawRecordData) -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_log_events_uuid")
+@pytest.fixture(scope="session", name="raw_log_events_uuid")
 def fx_raw_log_events_uuid() -> RawRecordData:
     """Unstructured log events representations."""
     return [
@@ -68,7 +68,7 @@ def fx_raw_log_events_uuid() -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_rules_uuid")
+@pytest.fixture(scope="session", name="raw_rules_uuid")
 def fx_raw_rules_uuid() -> RawRecordData:
     """Unstructured rules representations."""
     return [
@@ -89,7 +89,7 @@ def fx_raw_rules_uuid() -> RawRecordData:
     ]
 
 
-@pytest.fixture(name="raw_secrets_uuid")
+@pytest.fixture(scope="session", name="raw_secrets_uuid")
 def fx_raw_secrets_uuid() -> RawRecordData:
     """secret representations."""
     return [
