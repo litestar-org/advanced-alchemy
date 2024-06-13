@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import (
     Any,
+    Final,
     Generic,
     Protocol,
     TypeVar,
@@ -21,6 +22,9 @@ from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001
 
 try:
     from msgspec import Struct, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
+
+    MSGSPEC_INSTALLED: Final[bool] = True
+
 except ImportError:  # pragma: nocover
 
     class Struct(Protocol):  # type: ignore[no-redef] # pragma: nocover
@@ -30,10 +34,14 @@ except ImportError:  # pragma: nocover
         """Placeholder implementation"""
         return {}
 
+    MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
+
 
 try:
     from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
+
+    PYDANTIC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
 
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
@@ -51,6 +59,7 @@ except ImportError:  # pragma: nocover
             """Stub"""
             return cast("T", data)
 
+    PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
 ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
@@ -58,3 +67,18 @@ FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticModelDTOT = TypeVar("PydanticModelDTOT", bound="BaseModel")
 StructModelDTOT = TypeVar("StructModelDTOT", bound="Struct")
+
+__all__ = (
+    "ModelDictT",
+    "ModelDictListT",
+    "FilterTypeT",
+    "ModelDTOT",
+    "PydanticModelDTOT",
+    "StructModelDTOT",
+    "PYDANTIC_INSTALLED",
+    "MSGSPEC_INSTALLED",
+    "BaseModel",
+    "TypeAdapter",
+    "Struct",
+    "convert",
+)

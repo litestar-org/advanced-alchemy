@@ -536,6 +536,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         self._find_or_raise_not_found(self.__collection__().key(data))
         return self.__collection__().update(data)

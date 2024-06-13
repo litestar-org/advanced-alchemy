@@ -237,7 +237,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository = SlugBookSyncRepository(**repo_kwargs)
+        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -254,7 +254,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
     match_fields = ["title"]
 
     def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository = SlugBookAsyncMockRepository(**repo_kwargs)
+        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
