@@ -5,13 +5,10 @@ from contextlib import AbstractContextManager
 from functools import partial
 from typing import (
     TYPE_CHECKING,
-    Any,
     AsyncContextManager,
     Awaitable,
     Callable,
     ContextManager,
-    Dict,
-    List,
     TypeVar,
     cast,
     overload,
@@ -25,8 +22,6 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 P = ParamSpec("P")
-
-RawRecordData = List[Dict[str, Any]]
 
 
 class _ContextManagerWrapper:

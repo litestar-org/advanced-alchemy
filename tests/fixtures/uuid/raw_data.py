@@ -1,10 +1,12 @@
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
 
 from advanced_alchemy.utils.text import slugify
-from tests.helpers import RawRecordData
+from tests.fixtures.types import RawRecordData
 
 
 @pytest.fixture(scope="session", name="raw_authors_uuid")
@@ -14,16 +16,24 @@ def fx_raw_authors_uuid() -> RawRecordData:
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": "1890-09-15",
-            "created_at": "2023-05-01T00:00:00",
-            "updated_at": "2023-05-11T00:00:00",
+            "dob": datetime.strptime("1890-09-15", "%Y-%m-%d").date(),
+            "created_at": datetime.strptime("2023-05-02T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
+            "updated_at": datetime.strptime("2023-05-12T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
         },
         {
             "id": UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"),
             "name": "Leo Tolstoy",
-            "dob": "1828-09-09",
-            "created_at": "2023-03-01T00:00:00",
-            "updated_at": "2023-05-15T00:00:00",
+            "dob": datetime.strptime("1828-09-09", "%Y-%m-%d").date(),
+            "created_at": datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
+            "updated_at": datetime.strptime("2023-05-11T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
         },
     ]
 
@@ -62,8 +72,12 @@ def fx_raw_log_events_uuid() -> RawRecordData:
             "id": "f34545b9-663c-4fce-915d-dd1ae9cea42a",
             "logged_at": "0001-01-01T00:00:00",
             "payload": {"foo": "bar", "baz": datetime.now()},
-            "created_at": "0001-01-01T00:00:00",
-            "updated_at": "0001-01-01T00:00:00",
+            "created_at": datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
+            "updated_at": datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
         },
     ]
 
@@ -76,15 +90,23 @@ def fx_raw_rules_uuid() -> RawRecordData:
             "id": "f34545b9-663c-4fce-915d-dd1ae9cea42a",
             "name": "Initial loading rule.",
             "config": {"url": "https://example.org", "setting_123": 1},
-            "created_at": "2023-01-01T00:00:00",
-            "updated_at": "2023-02-01T00:00:00",
+            "created_at": datetime.strptime("2023-02-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
+            "updated_at": datetime.strptime("2023-03-11T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
         },
         {
             "id": "f34545b9-663c-4fce-915d-dd1ae9cea34b",
             "name": "Secondary loading rule.",
             "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-            "created_at": "2023-02-01T00:00:00",
-            "updated_at": "2023-02-01T00:00:00",
+            "created_at": datetime.strptime("2023-02-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
+            "updated_at": datetime.strptime("2023-02-11T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                timezone.utc,
+            ),
         },
     ]
 

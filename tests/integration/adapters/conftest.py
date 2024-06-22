@@ -79,7 +79,7 @@ def _patch_bases(monkeysession: MonkeyPatch) -> None:  # pyright: ignore[reportU
     monkeysession.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 
 
-@pytest.fixture(params=["uuid", "bigint"], scope="session")
+@pytest.fixture(params=["uuid", "bigint"], scope="session", ids=["UUID PK", "BigInt PK"])
 def repository_pk_type(request: pytest.FixtureRequest) -> RepositoryPKType:
     """Return the primary key type of the repository"""
     return cast(RepositoryPKType, request.param)
@@ -175,7 +175,7 @@ def tag_model(repository_pk_type: RepositoryPKType) -> TagModel:
     return models_bigint.BigIntTag
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
     """Return the ``Book`` model matching the current repository PK type"""
     if repository_pk_type == "uuid":
@@ -183,7 +183,7 @@ def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBoo
     return models_bigint.BigIntBook
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def slug_book_model(
     repository_pk_type: RepositoryPKType,
 ) -> SlugBookModel:
@@ -193,7 +193,7 @@ def slug_book_model(
     return models_bigint.BigIntSlugBook
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
     """Return the ``Secret`` model matching the current repository PK type"""
     return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret

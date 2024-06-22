@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal, Type, Union
+from typing import Any, Dict, List, Literal, Type, Union
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemyAsyncSlugRepository
 from advanced_alchemy.repository.memory import (
@@ -11,8 +14,8 @@ from advanced_alchemy.service import (
 )
 from tests.fixtures.bigint import models as models_bigint
 from tests.fixtures.uuid import models as models_uuid
-from tests.helpers import RawRecordData
 
+AnySession = Type[Union[AsyncSession, Session]]
 RepositoryPKType = Literal["uuid", "bigint"]
 SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
@@ -21,6 +24,7 @@ ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models
 ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
 TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
 SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
+BookModel = Type[Union[models_uuid.UUIDBook, models_bigint.BigIntBook]]
 
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
@@ -59,4 +63,4 @@ ItemService = SQLAlchemyAsyncRepositoryService[AnyItem]
 AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]
 ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
 ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
-RawRecordData = RawRecordData
+RawRecordData = List[Dict[str, Any]]

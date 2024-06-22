@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Generator, cast
 
 import pytest
-from sqlalchemy import Engine, NullPool, create_engine, insert
+from sqlalchemy import Engine, NullPool, create_engine, insert, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy import base
 from tests.fixtures import types
-from tests.helpers import RawRecordData
 
 if TYPE_CHECKING:
     pass
@@ -33,45 +32,66 @@ def duckdb_engine(
         engine.dispose()
 
 
+@pytest.fixture(name="sessionmaker", scope="session")
+def session_maker_factory(engine: Engine) -> Generator[sessionmaker[Session], None, None]:
+    yield sessionmaker(bind=engine, expire_on_commit=False)
+
+
 @pytest.fixture(scope="session")
-def seed_db(
+def initialize_database(
     engine: Engine,
-    raw_authors: RawRecordData,
-    raw_slug_books: RawRecordData,
-    raw_rules: RawRecordData,
-    raw_secrets: RawRecordData,
-    author_model: types.AuthorModel,
-    rule_model: types.RuleModel,
-    secret_model: types.SecretModel,
-    slug_book_model: types.SlugBookModel,
-) -> None:
+) -> Generator[None, None, None]:
     with engine.begin() as conn:
         base.orm_registry.metadata.drop_all(conn)
         base.orm_registry.metadata.create_all(conn)
-    with engine.begin() as conn:
-        for author in raw_authors:
-            conn.execute(insert(author_model).values(author))
-        for rule in raw_rules:
-            conn.execute(insert(rule_model).values(rule))
-        for secret in raw_secrets:
-            conn.execute(insert(secret_model).values(secret))
-        for book in raw_slug_books:
-            conn.execute(insert(slug_book_model).values(book))
+    yield
 
 
-@pytest.fixture()
-def session(engine: Engine, seed_db: None) -> Generator[Session, None, None]:
-    session = sessionmaker(bind=engine, expire_on_commit=False)()
-    try:
-        yield session
-    finally:
-        session.rollback()
-        session.close()
+@pytest.fixture(name="session")
+def session(
+    sessionmaker: sessionmaker[Session],
+    initialize_database: None,
+    raw_authors: types.RawRecordData,
+    raw_slug_books: types.RawRecordData,
+    raw_rules: types.RawRecordData,
+    raw_secrets: types.RawRecordData,
+    author_model: types.AuthorModel,
+    model_with_fetched_value: types.ModelWithFetchedValue,
+    item_model: types.ItemModel,
+    tag_model: types.TagModel,
+    book_model: types.BookModel,
+    rule_model: types.RuleModel,
+    secret_model: types.SecretModel,
+    slug_book_model: types.SlugBookModel,
+) -> Generator[Session, None, None]:
+    models_and_data = (
+        (rule_model, raw_rules),
+        (book_model, None),
+        (tag_model, None),
+        (item_model, None),
+        (model_with_fetched_value, None),
+        (secret_model, raw_secrets),
+        (slug_book_model, raw_slug_books),
+        (author_model, raw_authors),
+    )
+
+    with sessionmaker() as session:
+        try:
+            for model, raw_models in models_and_data:
+                if raw_models is not None:
+                    session.execute(text(f"truncate table {model.__tablename__} cascade;"))
+                    session.execute(insert(model).values(raw_models))
+            session.commit()
+            session.begin()
+            yield session
+
+        finally:
+            session.rollback()
 
 
-@pytest.fixture()
-def any_session(session: Session, request: pytest.FixtureRequest) -> Generator[Session, None, None]:
-    yield session
+@pytest.fixture(name="any_session", params=["session"], ids=["Sync Session"])
+def any_session(request: pytest.FixtureRequest) -> Generator[Session, None, None]:
+    yield request.getfixturevalue(request.param)
 
 
 @pytest.fixture()
