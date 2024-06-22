@@ -16,8 +16,6 @@ def monkeysession() -> Generator[pytest.MonkeyPatch, None, None]:
 
 pytest_plugins = [
     "tests.docker_service_fixtures",
-    "tests.fixtures.bigint.raw_data",
-    "tests.fixtures.uuid.raw_data",
     "pytest_databases.docker",
     "pytest_databases.docker.postgres",
     "pytest_databases.docker.mysql",

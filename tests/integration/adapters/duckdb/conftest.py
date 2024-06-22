@@ -1,20 +1,69 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Generator, cast
+from typing import Any, Generator, cast
 
 import pytest
-from sqlalchemy import Engine, NullPool, create_engine, insert, text
+from sqlalchemy import Engine, create_engine, insert, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy import base
 from tests.fixtures import types
 
-if TYPE_CHECKING:
-    pass
+
+@pytest.fixture(scope="module")
+def _patch_bases(monkeysession: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
+    """Ensure new registry state for every test.
+
+    This prevents errors such as "Table '...' is already defined for
+    this MetaData instance...
+    """
+    from sqlalchemy.orm import DeclarativeBase
+
+    from advanced_alchemy import base
+
+    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+
+    class NewUUIDAuditBase(
+        base.UUIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+    ): ...
+
+    class NewUUIDv6Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+
+    class NewUUIDv6AuditBase(
+        base.UUIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+    ): ...
+
+    class NewUUIDv7Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+
+    class NewUUIDv7AuditBase(
+        base.UUIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+    ): ...
+
+    class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+
+    class NewBigIntAuditBase(base.BigIntPrimaryKey, base.CommonTableAttributes, base.AuditColumns, DeclarativeBase): ...
+
+    monkeysession.setattr(base, "UUIDBase", NewUUIDBase)
+    monkeysession.setattr(base, "UUIDAuditBase", NewUUIDAuditBase)
+    monkeysession.setattr(base, "UUIDv6Base", NewUUIDv6Base)
+    monkeysession.setattr(base, "UUIDv6AuditBase", NewUUIDv6AuditBase)
+    monkeysession.setattr(base, "UUIDv7Base", NewUUIDv7Base)
+    monkeysession.setattr(base, "UUIDv7AuditBase", NewUUIDv7AuditBase)
+    monkeysession.setattr(base, "BigIntBase", NewBigIntBase)
+    monkeysession.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 
 
-@pytest.fixture(name="engine", scope="session")
+@pytest.fixture(name="engine", scope="module")
 def duckdb_engine(
     _patch_bases: Any,
     tmpdir_factory: pytest.TempdirFactory,
@@ -25,16 +74,11 @@ def duckdb_engine(
         Async SQLAlchemy engine instance.
     """
     tmp_path = tmpdir_factory.mktemp("data")  # pyright: ignore[reportAssignmentType]
-    engine = create_engine(f"duckdb:///{tmp_path}/test.duck.db", poolclass=NullPool)
+    engine = create_engine(f"duckdb:///{tmp_path}/test.duck.db")
     try:
         yield engine
     finally:
         engine.dispose()
-
-
-@pytest.fixture(name="sessionmaker", scope="session")
-def session_maker_factory(engine: Engine) -> Generator[sessionmaker[Session], None, None]:
-    yield sessionmaker(bind=engine, expire_on_commit=False)
 
 
 @pytest.fixture(scope="session")
@@ -45,6 +89,11 @@ def initialize_database(
         base.orm_registry.metadata.drop_all(conn)
         base.orm_registry.metadata.create_all(conn)
     yield
+
+
+@pytest.fixture(name="sessionmaker", scope="module")
+def session_maker_factory(engine: Engine) -> Generator[sessionmaker[Session], None, None]:
+    yield sessionmaker(bind=engine, expire_on_commit=False)
 
 
 @pytest.fixture(name="session")
@@ -89,23 +138,18 @@ def session(
             session.rollback()
 
 
-@pytest.fixture(name="any_session", params=["session"], ids=["Sync Session"])
+@pytest.fixture(name="any_session", params=["session"], ids=["Sync"])
 def any_session(request: pytest.FixtureRequest) -> Generator[Session, None, None]:
     yield request.getfixturevalue(request.param)
 
 
 @pytest.fixture()
 def author_repo(
-    request: pytest.FixtureRequest,
     any_session: AsyncSession | Session,
     repository_module: Any,
 ) -> types.AuthorRepository:
     """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.AuthorAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.AuthorSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.AuthorAsyncRepository(session=any_session)
     else:
         repo = repository_module.AuthorSyncRepository(session=any_session)
@@ -119,11 +163,7 @@ def secret_repo(
     repository_module: Any,
 ) -> types.SecretRepository:
     """Return an SecretAsyncRepository or SecretSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.SecretAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.SecretSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.SecretAsyncRepository(session=any_session)
     else:
         repo = repository_module.SecretSyncRepository(session=any_session)
@@ -134,14 +174,9 @@ def secret_repo(
 def author_service(
     any_session: AsyncSession | Session,
     service_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.AuthorService:
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = service_module.AuthorAsyncMockService(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.AuthorSyncMockService(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = service_module.AuthorAsyncService(session=any_session)
     else:
         repo = service_module.AuthorSyncService(session=any_session)
@@ -152,14 +187,9 @@ def author_service(
 def rule_repo(
     any_session: AsyncSession | Session,
     repository_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.RuleRepository:
     """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.RuleAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.RuleSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.RuleAsyncRepository(session=any_session)
     else:
         repo = repository_module.RuleSyncRepository(session=any_session)
@@ -170,14 +200,9 @@ def rule_repo(
 def rule_service(
     any_session: AsyncSession | Session,
     service_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.RuleService:
     """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = service_module.RuleAsyncMockService(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.RuleSyncMockService(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = service_module.RuleAsyncService(session=any_session)
     else:
         repo = service_module.RuleSyncService(session=any_session)
@@ -188,14 +213,9 @@ def rule_service(
 def book_repo(
     any_session: AsyncSession | Session,
     repository_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.BookRepository:
     """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.BookAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.BookSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.BookAsyncRepository(session=any_session)
     else:
         repo = repository_module.BookSyncRepository(session=any_session)
@@ -206,14 +226,9 @@ def book_repo(
 def book_service(
     any_session: AsyncSession | Session,
     service_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.BookService:
     """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = service_module.BookAsyncMockService(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.BookSyncMockService(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = service_module.BookAsyncService(session=any_session)
     else:
         repo = service_module.BookSyncService(session=any_session)
@@ -224,14 +239,9 @@ def book_service(
 def slug_book_repo(
     any_session: AsyncSession | Session,
     repository_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.SlugBookRepository:
     """Return an SlugBookAsyncRepository or SlugBookSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.SlugBookAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.SlugBookSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.SlugBookAsyncRepository(session=any_session)
     else:
         repo = repository_module.SlugBookSyncRepository(session=any_session)
@@ -242,14 +252,9 @@ def slug_book_repo(
 def slug_book_service(
     any_session: AsyncSession | Session,
     service_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.SlugBookService:
     """Return an SlugBookAsyncService or SlugBookSyncService based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        svc = service_module.SlugBookAsyncMockService(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        svc = service_module.SlugBookSyncMockService(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         svc = service_module.SlugBookAsyncService(session=any_session)
     else:
         svc = service_module.SlugBookSyncService(session=any_session)
@@ -260,14 +265,9 @@ def slug_book_service(
 def tag_repo(
     any_session: AsyncSession | Session,
     repository_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.ItemRepository:
     """Return an TagAsyncRepository or TagSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.TagAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.TagSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.TagAsyncRepository(session=any_session)
     else:
         repo = repository_module.TagSyncRepository(session=any_session)
@@ -279,14 +279,9 @@ def tag_repo(
 def tag_service(
     any_session: AsyncSession | Session,
     service_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.TagService:
     """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = service_module.TagAsyncMockService(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.TagSyncMockService(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = service_module.TagAsyncService(session=any_session)
     else:
         repo = service_module.TagSyncService(session=any_session)
@@ -297,14 +292,9 @@ def tag_service(
 def item_repo(
     any_session: AsyncSession | Session,
     repository_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.ItemRepository:
     """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = repository_module.ItemAsyncMockRepository(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = repository_module.ItemSyncMockRepository(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = repository_module.ItemAsyncRepository(session=any_session)
     else:
         repo = repository_module.ItemSyncRepository(session=any_session)
@@ -316,14 +306,9 @@ def item_repo(
 def item_service(
     any_session: AsyncSession | Session,
     service_module: Any,
-    request: pytest.FixtureRequest,
 ) -> types.ItemService:
     """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
-    if "mock_async_engine" in request.fixturenames:
-        repo = service_module.ItemAsyncMockService(session=any_session)
-    elif "mock_sync_engine" in request.fixturenames:
-        repo = service_module.ItemSyncMockService(session=any_session)
-    elif isinstance(any_session, AsyncSession):
+    if isinstance(any_session, AsyncSession):
         repo = service_module.ItemAsyncService(session=any_session)
     else:
         repo = service_module.ItemSyncService(session=any_session)

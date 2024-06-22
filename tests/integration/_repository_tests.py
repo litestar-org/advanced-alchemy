@@ -609,6 +609,7 @@ async def test_repo_filter_before_after(author_repo: AnyAuthorRepository) -> Non
         after=None,
     )
     existing_obj = await maybe_async(author_repo.list(before_filter))
+    assert existing_obj is not None
     assert existing_obj[0].name == "Leo Tolstoy"
 
     after_filter = BeforeAfter(
