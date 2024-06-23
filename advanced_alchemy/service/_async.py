@@ -439,11 +439,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def create_many(
         self,
-        data: list[ModelT | dict[str, Any] | Struct | BaseModel]
-        | list[dict[str, Any]]
-        | list[ModelT]
-        | list[Struct]
-        | list[BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -464,7 +460,11 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Representation of created instances.
         """
         data = [(await self.to_model(datum, "create")) for datum in data]
-        return await self.repository.add_many(data=data, auto_commit=auto_commit, auto_expunge=auto_expunge)
+        return await self.repository.add_many(
+            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+            auto_commit=auto_commit,
+            auto_expunge=auto_expunge,
+        )
 
     async def update(
         self,
@@ -533,11 +533,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def update_many(
         self,
-        data: list[ModelT | dict[str, Any] | Struct | BaseModel]
-        | list[dict[str, Any]]
-        | list[ModelT]
-        | list[Struct]
-        | list[BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -559,7 +555,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """
         data = [(await self.to_model(datum, "update")) for datum in data]
         return await self.repository.update_many(
-            data,
+            cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             load=load,
@@ -622,11 +618,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def upsert_many(
         self,
-        data: list[ModelT | dict[str, Any] | Struct | BaseModel]
-        | list[dict[str, Any]]
-        | list[ModelT]
-        | list[Struct]
-        | list[BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
@@ -656,7 +648,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """
         data = [(await self.to_model(datum, "upsert")) for datum in data]
         return await self.repository.upsert_many(
-            data=data,
+            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             no_merge=no_merge,
