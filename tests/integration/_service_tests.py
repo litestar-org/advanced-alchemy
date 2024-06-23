@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from abc import ABC
 from datetime import date, datetime
 from typing import Any, Union, cast
 from uuid import uuid4
@@ -11,6 +12,8 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from sqlalchemy import and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
@@ -25,15 +28,24 @@ from advanced_alchemy.repository.memory import (
     SQLAlchemySyncMockSlugRepository,
 )
 from advanced_alchemy.service.pagination import OffsetPagination
+from tests.fixtures.bigint import repositories as repositories_bigint
+from tests.fixtures.bigint import services as services_bigint
 from tests.fixtures.types import (
     AuthorModel,
     AuthorService,
     BookService,
     RawRecordData,
+    RepositoryPKType,
+    RuleModel,
+    RuleRepository,
+    RuleService,
     SlugBookModel,
     SlugBookService,
 )
+from tests.fixtures.uuid import repositories as repositories_uuid
+from tests.fixtures.uuid import services as services_uuid
 from tests.helpers import maybe_async
+from tests.integration._repository_tests import TestModelsMixin, test_repo_json_methods
 
 
 # service tests
@@ -643,3 +655,284 @@ async def test_service_to_schema(
     assert isinstance(msgspec_dto, Struct)
     assert isinstance(pydantic_dto.name, str)  # pyright: ignore
     assert isinstance(msgspec_dto.name, str)  # pyright: ignore
+
+
+# class that can be extended
+class AbstractServiceTests(ABC, TestModelsMixin):
+    @pytest.fixture(scope="class")
+    def repository_module(self, pk_type: RepositoryPKType) -> Any:
+        return repositories_uuid if pk_type == "uuid" else repositories_bigint
+
+    @pytest.fixture(scope="class")
+    def service_module(self, pk_type: RepositoryPKType) -> Any:
+        return services_uuid if pk_type == "uuid" else services_bigint
+
+    @pytest.fixture()
+    def author_service(
+        self,
+        any_session: Session | AsyncSession,
+        service_module: Any,
+    ) -> AuthorService:
+        """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("AuthorService", service_module.AuthorAsyncService(session=any_session))
+        return cast("AuthorService", service_module.AuthorSyncService(session=any_session))
+
+    @pytest.fixture()
+    def rule_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> RuleRepository:
+        """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("RuleRepository", repository_module.RuleAsyncRepository(session=any_session))
+        return cast("RuleRepository", repository_module.RuleSyncRepository(session=any_session))
+
+    @pytest.fixture()
+    def rule_service(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> RuleService:
+        """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("RuleService", repository_module.RuleAsyncService(session=any_session))
+        return cast("RuleService", repository_module.RuleSyncService(session=any_session))
+
+    @pytest.fixture()
+    def book_service(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> BookService:
+        """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("BookService", repository_module.BookAsyncService(session=any_session))
+        return cast("BookService", repository_module.BookSyncService(session=any_session))
+
+    @pytest.fixture()
+    def slug_book_service(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> SlugBookService:
+        """Return an SlugBookAsyncRepository or SlugBookSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("SlugBookService", repository_module.SlugBookAsyncService(session=any_session))
+        return cast("SlugBookService", repository_module.SlugBookSyncService(session=any_session))
+
+    async def test_service_filter_search(self, author_service: AuthorService) -> None:
+        await test_service_filter_search(author_service)
+
+    async def test_service_count_method(self, author_service: AuthorService) -> None:
+        await test_service_count_method(author_service)
+
+    async def test_service_count_method_with_filters(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+    ) -> None:
+        await test_service_count_method_with_filters(raw_authors, author_service)
+
+    async def test_service_list_and_count_method(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+    ) -> None:
+        await test_service_list_and_count_method(raw_authors, author_service)
+
+    async def test_service_list_and_count_method_with_filters(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+    ) -> None:
+        await test_service_list_and_count_method_with_filters(raw_authors, author_service)
+
+    async def test_service_list_and_count_basic_method(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+    ) -> None:
+        await test_service_list_and_count_basic_method(raw_authors, author_service)
+
+    async def test_service_list_and_count_method_empty(self, book_service: BookService) -> None:
+        await test_service_list_and_count_method_empty(book_service)
+
+    async def test_service_list_method(self, raw_authors_uuid: RawRecordData, author_service: AuthorService) -> None:
+        await test_service_list_method(raw_authors_uuid, author_service)
+
+    async def test_service_list_method_with_filters(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+    ) -> None:
+        await test_service_list_method_with_filters(raw_authors, author_service)
+
+    async def test_service_create_method(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_create_method(raw_authors, author_service, author_model)
+
+    async def test_service_create_many_method(
+        self,
+        raw_authors: RawRecordData,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_create_many_method(raw_authors, author_service, author_model)
+
+    async def test_service_update_many_method(self, author_service: AuthorService) -> None:
+        await test_service_update_many_method(author_service)
+
+    async def test_service_exists_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_exists_method(author_service, first_author_id)
+
+    async def test_service_update_method_item_id(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_update_method_item_id(author_service, first_author_id)
+
+    async def test_service_update_method_no_item_id(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_update_method_no_item_id(author_service, first_author_id)
+
+    async def test_service_update_method_data_is_dict(
+        self,
+        author_service: AuthorService,
+        first_author_id: Any,
+    ) -> None:
+        await test_service_update_method_data_is_dict(author_service, first_author_id)
+
+    async def test_service_update_method_data_is_dict_with_none_value(
+        self,
+        author_service: AuthorService,
+        first_author_id: Any,
+    ) -> None:
+        await test_service_update_method_data_is_dict_with_none_value(author_service, first_author_id)
+
+    async def test_service_update_method_instrumented_attribute(
+        self,
+        author_service: AuthorService,
+        first_author_id: Any,
+    ) -> None:
+        await test_service_update_method_instrumented_attribute(author_service, first_author_id)
+
+    async def test_service_delete_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_delete_method(author_service, first_author_id)
+
+    async def test_service_delete_many_method(self, author_service: AuthorService, author_model: AuthorModel) -> None:
+        await test_service_delete_many_method(author_service, author_model)
+
+    async def test_service_delete_where_method_empty(
+        self,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_delete_where_method_empty(author_service, author_model)
+
+    async def test_service_delete_where_method_filter(
+        self,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_delete_where_method_filter(author_service, author_model)
+
+    async def test_service_delete_where_method_search_filter(
+        self,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_delete_where_method_search_filter(author_service, author_model)
+
+    async def test_service_get_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_get_method(author_service, first_author_id)
+
+    async def test_service_get_one_or_none_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_get_one_or_none_method(author_service, first_author_id)
+
+    async def test_service_get_one_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_get_one_method(author_service, first_author_id)
+
+    async def test_service_get_or_upsert_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_get_or_upsert_method(author_service, first_author_id)
+
+    async def test_service_get_and_update_method(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_get_and_update_method(author_service, first_author_id)
+
+    async def test_service_upsert_method(
+        self,
+        author_service: AuthorService,
+        first_author_id: Any,
+        author_model: AuthorModel,
+        new_pk_id: Any,
+    ) -> None:
+        await test_service_upsert_method(author_service, first_author_id, author_model, new_pk_id)
+
+    async def test_service_upsert_method_match(
+        self,
+        author_service: AuthorService,
+        first_author_id: Any,
+        author_model: AuthorModel,
+        new_pk_id: Any,
+    ) -> None:
+        await test_service_upsert_method_match(author_service, first_author_id, author_model, new_pk_id)
+
+    async def test_service_upsert_many_method(self, author_service: AuthorService, author_model: AuthorModel) -> None:
+        await test_service_upsert_many_method(author_service, author_model)
+
+    async def test_service_upsert_many_method_match_fields_id(
+        self,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_upsert_many_method_match_fields_id(author_service, author_model)
+
+    async def test_service_upsert_many_method_match_fields_non_id(
+        self,
+        author_service: AuthorService,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_service_upsert_many_method_match_fields_non_id(author_service, author_model)
+
+    async def test_service_update_no_pk(self, author_service: AuthorService) -> None:
+        await test_service_update_no_pk(author_service)
+
+    async def test_service_create_method_slug(
+        self,
+        raw_slug_books: RawRecordData,
+        slug_book_service: SlugBookService,
+        slug_book_model: SlugBookModel,
+    ) -> None:
+        await test_service_create_method_slug(raw_slug_books, slug_book_service, slug_book_model)
+
+    async def test_service_create_method_slug_existing(
+        self,
+        raw_slug_books: RawRecordData,
+        slug_book_service: SlugBookService,
+        slug_book_model: SlugBookModel,
+    ) -> None:
+        await test_service_create_method_slug_existing(raw_slug_books, slug_book_service, slug_book_model)
+
+    async def test_service_create_many_method_slug(
+        self,
+        raw_slug_books: RawRecordData,
+        slug_book_service: SlugBookService,
+        slug_book_model: SlugBookModel,
+    ) -> None:
+        await test_service_create_many_method_slug(raw_slug_books, slug_book_service, slug_book_model)
+
+    async def test_service_paginated_to_schema(self, raw_authors: RawRecordData, author_service: AuthorService) -> None:
+        await test_service_paginated_to_schema(raw_authors, author_service)
+
+    async def test_service_to_schema(self, author_service: AuthorService, first_author_id: Any) -> None:
+        await test_service_to_schema(author_service, first_author_id)
+
+    async def test_repo_json_methods(
+        self,
+        raw_rules_uuid: RawRecordData,
+        rule_repo: RuleRepository,
+        rule_service: RuleService,
+        rule_model: RuleModel,
+    ) -> None:
+        await test_repo_json_methods(raw_rules_uuid, rule_repo, rule_service, rule_model)

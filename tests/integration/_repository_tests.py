@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from abc import ABC
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Generator, cast
+from typing import TYPE_CHECKING, Any, Generator, Iterator, cast
 from uuid import UUID
 
 import pytest
 from sqlalchemy import and_
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from time_machine import travel
 
@@ -29,7 +31,9 @@ from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
     SQLAlchemySyncMockRepository,
 )
+from advanced_alchemy.utils.text import slugify
 from tests.fixtures.bigint import models as models_bigint
+from tests.fixtures.bigint import repositories as repositories_bigint
 from tests.fixtures.types import (
     AnyAuthorRepository,
     AnyBook,
@@ -47,10 +51,13 @@ from tests.fixtures.types import (
     RuleService,
     SecretModel,
     SecretRepository,
+    SlugBookModel,
+    SlugBookRepository,
     TagModel,
     TagRepository,
 )
 from tests.fixtures.uuid import models as models_uuid
+from tests.fixtures.uuid import repositories as repositories_uuid
 from tests.helpers import maybe_async
 
 if TYPE_CHECKING:
@@ -178,7 +185,7 @@ async def test_repo_created_updated(
     frozen_datetime: Coordinates,
     author_repo: AnyAuthorRepository,
     book_model: type[AnyBook],
-    repository_pk_type: RepositoryPKType,
+    pk_type: RepositoryPKType,
 ) -> None:
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
@@ -200,7 +207,7 @@ async def test_repo_created_updated(
     assert author.updated_at is not None
     frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
-    if repository_pk_type == "uuid":
+    if pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
         book_model = cast("type[models_uuid.UUIDBook]", book_model)
     else:
@@ -219,7 +226,7 @@ async def test_repo_created_updated_no_listener(
     frozen_datetime: Coordinates,
     author_repo: AuthorRepository,
     book_model: type[AnyBook],
-    repository_pk_type: RepositoryPKType,
+    pk_type: RepositoryPKType,
 ) -> None:
     from sqlalchemy import event
     from sqlalchemy.exc import InvalidRequestError
@@ -248,7 +255,7 @@ async def test_repo_created_updated_no_listener(
     assert author.updated_at is not None
     frozen_datetime.shift(delta=timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
-    if repository_pk_type == "uuid":
+    if pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
         book_model = cast("type[models_uuid.UUIDBook]", book_model)
     else:
@@ -609,7 +616,7 @@ async def test_repo_filter_before_after(author_repo: AnyAuthorRepository) -> Non
         after=None,
     )
     existing_obj = await maybe_async(author_repo.list(before_filter))
-    assert existing_obj is not None
+    assert len(existing_obj) > 0
     assert existing_obj[0].name == "Leo Tolstoy"
 
     after_filter = BeforeAfter(
@@ -892,3 +899,667 @@ async def test_repo_encrypted_methods(
     updated = await maybe_async(secret_repo.update(obj))
     assert obj.secret == updated.secret
     assert obj.long_secret == updated.long_secret
+
+
+class TestModelsMixin:
+    def raw_authors(self, pk_type: RepositoryPKType) -> RawRecordData:
+        """Unstructured author representations."""
+        return [
+            {
+                "id": 2023 if pk_type == "bigint" else UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
+                "name": "Agatha Christie",
+                "dob": datetime.strptime("1890-09-15", "%Y-%m-%d").date(),
+                "created_at": datetime.strptime("2023-05-02T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+                "updated_at": datetime.strptime("2023-05-12T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+            },
+            {
+                "id": 2024 if pk_type == "bigint" else UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"),
+                "name": "Leo Tolstoy",
+                "dob": datetime.strptime("1828-09-09", "%Y-%m-%d").date(),
+                "created_at": datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+                "updated_at": datetime.strptime("2023-05-11T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+            },
+        ]
+
+    def raw_books(self, pk_type: RepositoryPKType) -> RawRecordData:
+        """Unstructured book representations."""
+        return [
+            {
+                "title": "Murder on the Orient Express",
+                "author_id": self.raw_authors(pk_type)[0]["id"],
+                "author": self.raw_authors(pk_type)[0],
+            },
+        ]
+
+    def raw_slug_books(self, pk_type: RepositoryPKType) -> RawRecordData:
+        """Unstructured slug book representations."""
+        return [
+            {
+                "title": "Murder on the Orient Express",
+                "slug": slugify("Murder on the Orient Express"),
+                "author_id": str(self.raw_authors(pk_type)[0]["id"]),
+            },
+        ]
+
+    def raw_log_events(self, pk_type: RepositoryPKType) -> RawRecordData:
+        """Unstructured log events representations."""
+        return [
+            {
+                "id": 2025 if pk_type == "bigint" else "f34545b9-663c-4fce-915d-dd1ae9cea42a",
+                "logged_at": "0001-01-01T00:00:00",
+                "payload": {"foo": "bar", "baz": datetime.now()},
+                "created_at": datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+                "updated_at": datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+            },
+        ]
+
+    def raw_rules(self, pk_type: RepositoryPKType) -> RawRecordData:
+        """Unstructured rules representations."""
+        return [
+            {
+                "id": 2025 if pk_type == "bigint" else "f34545b9-663c-4fce-915d-dd1ae9cea42a",
+                "name": "Initial loading rule.",
+                "config": {"url": "https://example.org", "setting_123": 1},
+                "created_at": datetime.strptime("2023-02-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+                "updated_at": datetime.strptime("2023-03-11T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+            },
+            {
+                "id": 2024 if pk_type == "bigint" else "f34545b9-663c-4fce-915d-dd1ae9cea34b",
+                "name": "Secondary loading rule.",
+                "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
+                "created_at": datetime.strptime("2023-02-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+                "updated_at": datetime.strptime("2023-02-11T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+                    timezone.utc,
+                ),
+            },
+        ]
+
+    def raw_secrets(self, pk_type: RepositoryPKType) -> RawRecordData:
+        """secret representations."""
+        return [
+            {
+                "id": 2025 if pk_type == "bigint" else "f34545b9-663c-4fce-915d-dd1ae9cea42a",
+                "secret": "I'm a secret!",
+                "long_secret": "It's clobbering time.",
+            },
+        ]
+
+    @pytest.fixture(scope="class")
+    def author_model(self, pk_type: RepositoryPKType) -> AuthorModel:
+        """Return the ``Author`` model matching the current repository PK type"""
+        if pk_type == "uuid":
+            return models_uuid.UUIDAuthor
+        return models_bigint.BigIntAuthor
+
+    @pytest.fixture(scope="class")
+    def rule_model(self, pk_type: RepositoryPKType) -> RuleModel:
+        """Return the ``Rule`` model matching the current repository PK type"""
+        if pk_type == "bigint":
+            return models_bigint.BigIntRule
+        return models_uuid.UUIDRule
+
+    @pytest.fixture(scope="class")
+    def model_with_fetched_value(self, pk_type: RepositoryPKType) -> ModelWithFetchedValue:
+        """Return the ``ModelWithFetchedValue`` model matching the current repository PK type"""
+        if pk_type == "bigint":
+            return models_bigint.BigIntModelWithFetchedValue
+        return models_uuid.UUIDModelWithFetchedValue
+
+    @pytest.fixture(scope="class")
+    def item_model(self, pk_type: RepositoryPKType) -> ItemModel:
+        """Return the ``Item`` model matching the current repository PK type"""
+        if pk_type == "bigint":
+            return models_bigint.BigIntItem
+        return models_uuid.UUIDItem
+
+    @pytest.fixture(scope="class")
+    def tag_model(self, pk_type: RepositoryPKType) -> TagModel:
+        """Return the ``Tag`` model matching the current repository PK type"""
+        if pk_type == "uuid":
+            return models_uuid.UUIDTag
+        return models_bigint.BigIntTag
+
+    @pytest.fixture(scope="class")
+    def book_model(self, pk_type: RepositoryPKType) -> type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
+        """Return the ``Book`` model matching the current repository PK type"""
+        if pk_type == "uuid":
+            return models_uuid.UUIDBook
+        return models_bigint.BigIntBook
+
+    @pytest.fixture(scope="class")
+    def slug_book_model(
+        self,
+        pk_type: RepositoryPKType,
+    ) -> SlugBookModel:
+        """Return the ``SlugBook`` model matching the current repository PK type"""
+        if pk_type == "uuid":
+            return models_uuid.UUIDSlugBook
+        return models_bigint.BigIntSlugBook
+
+    @pytest.fixture(scope="class")
+    def secret_model(self, pk_type: RepositoryPKType) -> SecretModel:
+        """Return the ``Secret`` model matching the current repository PK type"""
+        return models_uuid.UUIDSecret if pk_type == "uuid" else models_bigint.BigIntSecret
+
+    def new_pk_id(self, pk_type: RepositoryPKType) -> UUID | int:
+        """Return an unused primary key, matching the current repository PK type"""
+        if pk_type == "uuid":
+            return UUID("baa0a5c7-5404-4821-bc76-6cf5e73c8219")
+        return 10
+
+    def existing_slug_book_ids(self, pk_type: RepositoryPKType) -> Iterator[Any]:
+        """Return the existing primary keys based on the raw data provided"""
+        yield (book["id"] for book in self.raw_slug_books(pk_type))
+
+    def first_slug_book_id(self, pk_type: RepositoryPKType) -> Any:
+        """Return the primary key of the first ``Book`` record of the current repository PK type"""
+        return self.raw_slug_books(pk_type)[0]["id"]
+
+    def existing_author_ids(self, pk_type: RepositoryPKType) -> Iterator[Any]:
+        """Return the existing primary keys based on the raw data provided"""
+        yield (author["id"] for author in self.raw_authors(pk_type))
+
+    def first_author_id(self, pk_type: RepositoryPKType) -> Any:
+        """Return the primary key of the first ``Author`` record of the current repository PK type"""
+        return self.raw_authors(pk_type)[0]["id"]
+
+    def existing_secret_ids(self, pk_type: RepositoryPKType) -> Iterator[Any]:
+        """Return the existing primary keys based on the raw data provided"""
+        yield (secret["id"] for secret in self.raw_secrets(pk_type))
+
+    def first_secret_id(self, pk_type: RepositoryPKType) -> Any:
+        """Return the primary key of the first ``Secret`` record of the current repository PK type"""
+        return self.raw_secrets(pk_type)[0]["id"]
+
+
+# class that can be extended
+class AbstractRepositoryTests(ABC, TestModelsMixin):
+    @pytest.fixture(scope="class")
+    def repository_module(self, pk_type: RepositoryPKType) -> Any:
+        return repositories_uuid if pk_type == "uuid" else repositories_bigint
+
+    @pytest.fixture(scope="class")
+    def author_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> AuthorRepository:
+        """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("AuthorRepository", repository_module.AuthorAsyncRepository(session=any_session))
+        return cast("AuthorRepository", repository_module.AuthorSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def secret_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> SecretRepository:
+        """Return an SecretAsyncRepository or SecretSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("SecretRepository", repository_module.SecretAsyncRepository(session=any_session))
+        return cast("SecretRepository", repository_module.SecretSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def rule_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> RuleRepository:
+        """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("RuleRepository", repository_module.RuleAsyncRepository(session=any_session))
+        return cast("RuleRepository", repository_module.RuleSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def book_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> BookRepository:
+        """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("BookRepository", repository_module.BookAsyncRepository(session=any_session))
+        return cast("BookRepository", repository_module.BookSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def slug_book_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> SlugBookRepository:
+        """Return an SlugBookAsyncRepository or SlugBookSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("SlugBookRepository", repository_module.SlugBookAsyncRepository(session=any_session))
+        return cast("SlugBookRepository", repository_module.SlugBookSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def tag_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> TagRepository:
+        """Return an TagAsyncRepository or TagSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("TagRepository", repository_module.TagAsyncRepository(session=any_session))
+        return cast("TagRepository", repository_module.TagSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def item_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> ItemRepository:
+        """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast("ItemRepository", repository_module.ItemAsyncRepository(session=any_session))
+        return cast("ItemRepository", repository_module.ItemSyncRepository(session=any_session))
+
+    @pytest.fixture(scope="class")
+    def model_with_fetched_value_repo(
+        self,
+        any_session: Session | AsyncSession,
+        repository_module: Any,
+    ) -> ModelWithFetchedValueRepository:
+        """Return an ModelWithFetchedValueAsyncRepository or ModelWithFetchedValueSyncRepository based on the current PK and session type"""
+        if isinstance(any_session, AsyncSession):
+            return cast(
+                "ModelWithFetchedValueRepository",
+                repository_module.ModelWithFetchedValueAsyncRepository(session=any_session),
+            )
+        return cast(
+            "ModelWithFetchedValueRepository",
+            repository_module.ModelWithFetchedValueSyncRepository(session=any_session),
+        )
+
+    def test_filter_by_kwargs_with_incorrect_attribute_name(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        test_filter_by_kwargs_with_incorrect_attribute_name(author_repo)
+
+    async def test_repo_count_method(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_count_method(author_repo)
+
+    async def test_repo_count_method_with_filters(
+        self,
+        raw_authors: RawRecordData,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_count_method_with_filters(raw_authors, author_repo)
+
+    async def test_repo_list_and_count_method(
+        self,
+        raw_authors: RawRecordData,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_list_and_count_method(raw_authors, author_repo)
+
+    async def test_repo_list_and_count_method_with_filters(
+        self,
+        raw_authors: RawRecordData,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_list_and_count_method_with_filters(raw_authors, author_repo)
+
+    async def test_repo_list_and_count_basic_method(
+        self,
+        raw_authors: RawRecordData,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_list_and_count_basic_method(raw_authors, author_repo)
+
+    async def test_repo_list_and_count_method_empty(
+        self,
+        book_repo: BookRepository,
+    ) -> None:
+        await test_repo_list_and_count_method_empty(book_repo)
+
+    @pytest.fixture()
+    def frozen_datetime(self) -> Generator[Coordinates, None, None]:
+        from time_machine import travel
+
+        with travel(datetime.utcnow, tick=False) as frozen:  # type: ignore
+            yield frozen
+
+    async def test_repo_created_updated(
+        self,
+        frozen_datetime: Coordinates,
+        author_repo: AnyAuthorRepository,
+        book_model: type[AnyBook],
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_created_updated(frozen_datetime, author_repo, book_model, pk_type)
+
+    async def test_repo_created_updated_no_listener(
+        self,
+        frozen_datetime: Coordinates,
+        author_repo: AuthorRepository,
+        book_model: type[AnyBook],
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_created_updated_no_listener(
+            frozen_datetime,
+            author_repo,
+            book_model,
+            pk_type,
+        )
+
+    async def test_repo_list_method(
+        self,
+        raw_authors_uuid: RawRecordData,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_list_method(raw_authors_uuid, author_repo)
+
+    async def test_repo_list_method_with_filters(
+        self,
+        pk_type: RepositoryPKType,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_list_method_with_filters(self.raw_authors(pk_type), author_repo)
+
+    async def test_repo_add_method(
+        self,
+        pk_type: RepositoryPKType,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_add_method(self.raw_authors(pk_type), author_repo, author_model)
+
+    async def test_repo_add_many_method(
+        self,
+        pk_type: RepositoryPKType,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_add_many_method(self.raw_authors(pk_type), author_repo, author_model)
+
+    async def test_repo_update_many_method(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_update_many_method(author_repo)
+
+    async def test_repo_exists_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_exists_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_exists_method_with_filters(
+        self,
+        pk_type: RepositoryPKType,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_exists_method_with_filters(
+            self.raw_authors(pk_type),
+            author_repo,
+            self.first_author_id(pk_type),
+        )
+
+    async def test_repo_update_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_update_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_delete_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_delete_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_delete_many_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_delete_many_method(author_repo, author_model)
+
+    async def test_repo_get_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_one_or_none_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_one_or_none_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_one_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_one_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_or_upsert_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_or_upsert_method(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_or_upsert_match_filter(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_or_upsert_match_filter(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_or_upsert_match_filter_no_upsert(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_or_upsert_match_filter_no_upsert(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_and_update(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_and_update(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_get_and_upsert_match_filter(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+    ) -> None:
+        await test_repo_get_and_upsert_match_filter(author_repo, self.first_author_id(pk_type))
+
+    async def test_repo_upsert_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        pk_type: RepositoryPKType,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_upsert_method(
+            author_repo,
+            self.first_author_id(pk_type),
+            author_model,
+            self.new_pk_id(pk_type),
+        )
+
+    async def test_repo_upsert_many_method(
+        self,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_upsert_many_method(author_repo, author_model)
+
+    async def test_repo_upsert_many_method_match(
+        self,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_upsert_many_method_match(author_repo, author_model)
+
+    async def test_repo_upsert_many_method_match_non_id(
+        self,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_upsert_many_method_match_non_id(author_repo, author_model)
+
+    async def test_repo_upsert_many_method_match_not_on_input(
+        self,
+        author_repo: AnyAuthorRepository,
+        author_model: AuthorModel,
+    ) -> None:
+        await test_repo_upsert_many_method_match_not_on_input(author_repo, author_model)
+
+    async def test_repo_filter_before_after(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_before_after(author_repo)
+
+    async def test_repo_filter_on_before_after(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_on_before_after(author_repo)
+
+    async def test_repo_filter_search(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_search(author_repo)
+
+    async def test_repo_filter_search_multi_field(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_search_multi_field(author_repo)
+
+    async def test_repo_filter_not_in_search(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_not_in_search(author_repo)
+
+    async def test_repo_filter_not_in_search_multi_field(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_not_in_search_multi_field(author_repo)
+
+    async def test_repo_filter_order_by(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_order_by(author_repo)
+
+    async def test_repo_filter_collection(
+        self,
+        author_repo: AnyAuthorRepository,
+        existing_author_ids: Generator[Any, None, None],
+    ) -> None:
+        await test_repo_filter_collection(author_repo, existing_author_ids)
+
+    async def test_repo_filter_no_obj_collection(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_no_obj_collection(author_repo)
+
+    async def test_repo_filter_null_collection(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_null_collection(author_repo)
+
+    async def test_repo_filter_not_in_collection(
+        self,
+        author_repo: AnyAuthorRepository,
+        existing_author_ids: Generator[Any, None, None],
+    ) -> None:
+        await test_repo_filter_not_in_collection(author_repo, existing_author_ids)
+
+    async def test_repo_filter_not_in_no_obj_collection(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_not_in_no_obj_collection(author_repo)
+
+    async def test_repo_filter_not_in_null_collection(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_filter_not_in_null_collection(author_repo)
+
+    async def test_repo_json_methods(
+        self,
+        pk_type: RepositoryPKType,
+        rule_repo: RuleRepository,
+        rule_service: RuleService,
+        rule_model: RuleModel,
+    ) -> None:
+        await test_repo_json_methods(self.raw_rules(pk_type), rule_repo, rule_service, rule_model)
+
+    async def test_repo_fetched_value(
+        self,
+        model_with_fetched_value_repo: ModelWithFetchedValueRepository,
+        model_with_fetched_value: ModelWithFetchedValue,
+        request: Any,
+    ) -> None:
+        await test_repo_fetched_value(model_with_fetched_value_repo, model_with_fetched_value, request)
+
+    async def test_lazy_load(
+        self,
+        item_repo: ItemRepository,
+        tag_repo: TagRepository,
+        item_model: ItemModel,
+        tag_model: TagModel,
+    ) -> None:
+        await test_lazy_load(item_repo, tag_repo, item_model, tag_model)
+
+    async def test_repo_health_check(
+        self,
+        author_repo: AnyAuthorRepository,
+    ) -> None:
+        await test_repo_health_check(author_repo)
+
+    async def test_repo_encrypted_methods(
+        self,
+        pk_type: RepositoryPKType,
+        secret_repo: SecretRepository,
+        secret_model: SecretModel,
+    ) -> None:
+        await test_repo_encrypted_methods(
+            self.raw_secrets(pk_type),
+            secret_repo,
+            self.raw_secrets(pk_type),
+            self.first_secret_id(pk_type),
+            secret_model,
+        )

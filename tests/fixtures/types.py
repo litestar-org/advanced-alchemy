@@ -17,6 +17,7 @@ from tests.fixtures.uuid import models as models_uuid
 
 AnySession = Type[Union[AsyncSession, Session]]
 RepositoryPKType = Literal["uuid", "bigint"]
+SessionType = Literal["sync", "async"]
 SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
 AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
 RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
