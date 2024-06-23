@@ -30,7 +30,7 @@ from advanced_alchemy.repository._util import (
     get_abstract_loader_options,
     get_instrumented_attr,
 )
-from advanced_alchemy.repository.typing import MISSING, ModelT, T
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, T
 from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
 
@@ -58,6 +58,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     auto_expunge: bool
     auto_refresh: bool
     auto_commit: bool
+    order_by: list[OrderingPair] | OrderingPair | None = None
 
     def __init__(
         self,
@@ -69,6 +70,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool = False,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
     ) -> None: ...
 
@@ -271,6 +273,9 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         force_basic_query_mode: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        order_by: list[tuple[str | InstrumentedAttribute[Any], bool]]
+        | tuple[str | InstrumentedAttribute[Any], bool]
+        | None = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]: ...
 
@@ -281,6 +286,9 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        order_by: list[tuple[str | InstrumentedAttribute[Any], bool]]
+        | tuple[str | InstrumentedAttribute[Any], bool]
+        | None = None,
         **kwargs: Any,
     ) -> list[ModelT]: ...
 
@@ -327,6 +335,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool = False,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -339,12 +348,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             auto_commit: Commit objects before returning.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            order_by: Set default order options for queries.
             **kwargs: Additional arguments.
 
         """
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
+        self.order_by = order_by
         self.session = session
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
