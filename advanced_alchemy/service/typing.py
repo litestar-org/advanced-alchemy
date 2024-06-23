@@ -21,19 +21,26 @@ from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001
 
 try:
-    from msgspec import Struct, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
+    from msgspec import UNSET, Struct, UnsetType, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
 
     MSGSPEC_INSTALLED: Final[bool] = True
 
 except ImportError:  # pragma: nocover
+    import enum
 
     class Struct(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
+
+        __struct_fields__: tuple[str, ...]
 
     def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001 # pragma: nocover
         """Placeholder implementation"""
         return {}
 
+    class UnsetType(enum.Enum):  # type: ignore[no-redef] # pragma: nocover
+        UNSET = "UNSET"
+
+    UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]
     MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 
@@ -81,4 +88,5 @@ __all__ = (
     "TypeAdapter",
     "Struct",
     "convert",
+    "UNSET",
 )
