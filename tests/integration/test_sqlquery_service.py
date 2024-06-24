@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import msgspec
 import pytest
-from pydantic import BaseModel
 from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, MappedAsDataclass, Session
@@ -17,6 +15,7 @@ from advanced_alchemy.repository import (
 from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
+from advanced_alchemy.service.typing import BaseModel, Struct
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
 pytestmark = [
@@ -39,7 +38,7 @@ class USState(UUIDBase):
     name: Mapped[str]
 
 
-class USStateStruct(msgspec.Struct):
+class USStateStruct(Struct):
     abbreviation: str
     name: str
 
@@ -89,7 +88,7 @@ class StateQuery(MappedAsDataclass, SQLQuery):
     state_name: str
 
 
-class StateQueryStruct(msgspec.Struct):
+class StateQueryStruct(Struct):
     state_abbreviation: str
     state_name: str
 

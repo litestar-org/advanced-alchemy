@@ -30,6 +30,7 @@ from advanced_alchemy.service.typing import (
     UNSET,
     BaseModel,
     ModelDTOT,
+    PydanticOrMsgspecT,
     Struct,
 )
 
@@ -368,7 +369,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     async def to_model(
         self,
-        data: ModelT | dict[str, Any] | BaseModel | Struct,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> ModelT:
         """Parse and Convert input into a model.
@@ -560,7 +561,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def create(
         self,
-        data: ModelT | dict[str, Any] | BaseModel | Struct,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -573,7 +574,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def create(
         self,
-        data: ModelT | dict[str, Any] | BaseModel | Struct,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -585,7 +586,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def create(
         self,
-        data: ModelT | dict[str, Any] | BaseModel | Struct,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -624,7 +625,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def create_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -636,7 +637,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def create_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -647,7 +648,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def create_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -682,7 +683,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def update(
         self,
-        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -699,7 +700,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def update(
         self,
-        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -714,7 +715,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     ) -> ModelDTOT: ...
     async def update(
         self,
-        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -786,7 +787,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def update_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -798,7 +799,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def update_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -809,7 +810,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def update_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -847,7 +848,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def upsert(
         self,
-        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -864,7 +865,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def upsert(
         self,
-        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -880,7 +881,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def upsert(
         self,
-        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
         item_id: Any | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -941,7 +942,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def upsert_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
@@ -954,7 +955,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def upsert_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
@@ -967,7 +968,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def upsert_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,

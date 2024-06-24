@@ -222,7 +222,9 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(
-        self, data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct, operation: str | None = None,
+        self,
+        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
