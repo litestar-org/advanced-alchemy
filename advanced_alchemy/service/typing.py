@@ -6,10 +6,9 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from abc import ABC
-from importlib.util import find_spec
 from typing import (
     Any,
+    Final,
     Generic,
     TypeVar,
     cast,
@@ -20,13 +19,12 @@ from typing_extensions import TypeAlias
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001
 
-PYDANTIC_INSTALLED = find_spec("pydantic") is not None
-MSGSPEC_INSTALLED = find_spec("msgspec") is not None
-
-if PYDANTIC_INSTALLED:
+try:
     from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
-else:
+
+    PYDANTIC_INSTALLED: Final[bool] = True
+except ImportError:  # pragma: nocover
 
     class BaseModel:  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
@@ -47,14 +45,17 @@ else:
             """Stub"""
             return cast("T", data)
 
+    PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
-if MSGSPEC_INSTALLED:
+
+try:
     from msgspec import UNSET, Struct, UnsetType, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
 
-else:  # pragma: nocover
+    MSGSPEC_INSTALLED: Final[bool] = True
+except ImportError:  # pragma: nocover
     import enum
 
-    class Struct(ABC):  # type: ignore[no-redef]
+    class Struct:  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
         __struct_fields__: tuple[str, ...]
@@ -67,6 +68,7 @@ else:  # pragma: nocover
         UNSET = "UNSET"
 
     UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]
+    MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 
 ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
