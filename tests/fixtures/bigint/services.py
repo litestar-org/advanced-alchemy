@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from msgspec import Struct
+from pydantic import BaseModel
+
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -222,7 +225,11 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
-    async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+    async def to_model(
+        self,
+        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        operation: str | None = None,
+    ) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
@@ -239,7 +246,11 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
-    def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+    def to_model(
+        self,
+        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        operation: str | None = None,
+    ) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
@@ -256,7 +267,11 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
-    async def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+    async def to_model(
+        self,
+        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        operation: str | None = None,
+    ) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
@@ -273,7 +288,11 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
     def __init__(self, **repo_kwargs: Any) -> None:
         self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
-    def to_model(self, data: BigIntSlugBook | dict[str, Any], operation: str | None = None) -> BigIntSlugBook:
+    def to_model(
+        self,
+        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        operation: str | None = None,
+    ) -> BigIntSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
