@@ -113,11 +113,45 @@ class ResultConverter:
     def to_schema(
         self,
         data: ModelOrRowMappingT,
+        *,
+        schema_type: None = None,
+    ) -> ModelOrRowMappingT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelOrRowMappingT,
+        total: int | None = None,
+        *,
+        schema_type: None = None,
+    ) -> ModelOrRowMappingT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelOrRowMappingT,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: None = None,
     ) -> ModelOrRowMappingT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelOrRowMappingT],
+        *,
+        schema_type: None = None,
+    ) -> OffsetPagination[ModelOrRowMappingT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelOrRowMappingT],
+        total: int | None = None,
+        *,
+        schema_type: None = None,
+    ) -> OffsetPagination[ModelOrRowMappingT]: ...
 
     @overload
     def to_schema(
@@ -133,11 +167,45 @@ class ResultConverter:
     def to_schema(
         self,
         data: ModelProtocol | RowMapping,
+        *,
+        schema_type: type[ModelDTOT],
+    ) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelProtocol | RowMapping,
+        total: int | None = None,
+        *,
+        schema_type: type[ModelDTOT],
+    ) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: ModelProtocol | RowMapping,
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
         schema_type: type[ModelDTOT],
     ) -> ModelDTOT: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelProtocol] | Sequence[RowMapping],
+        *,
+        schema_type: type[ModelDTOT],
+    ) -> OffsetPagination[ModelDTOT]: ...
+
+    @overload
+    def to_schema(
+        self,
+        data: Sequence[ModelProtocol] | Sequence[RowMapping],
+        total: int | None = None,
+        *,
+        schema_type: type[ModelDTOT],
+    ) -> OffsetPagination[ModelDTOT]: ...
 
     @overload
     def to_schema(

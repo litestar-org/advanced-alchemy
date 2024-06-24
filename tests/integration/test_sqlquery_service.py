@@ -108,7 +108,10 @@ def test_sync_fixture_and_query() -> None:
         state_service = USStateSyncService(session=session)
         query_service = SQLAlchemySyncQueryService(session=session)
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
-        _add_objs = state_service.create_many([USStateStruct(**raw_obj) for raw_obj in fixture])
+        _add_objs = state_service.create_many(
+            [USStateStruct(**raw_obj) for raw_obj in fixture],
+            to_schema=USStateStruct,
+        )
         query_count = query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = query_service.repository.list_and_count(
@@ -171,6 +174,7 @@ async def test_async_fixture_and_query() -> None:
         fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = await state_service.create_many(
             [USStateBaseModel(**raw_obj) for raw_obj in fixture],
+            to_schema=USStateBaseModel,
         )
         query_count = await query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
