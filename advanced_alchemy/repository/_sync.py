@@ -219,6 +219,8 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
 
     def update_many(
@@ -1110,7 +1112,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """
         with wrap_sqlalchemy_exception():
             statement = self.statement if statement is None else statement
-            fragment = self.get_id_attribute_value(self.model_type)
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
                 statement=statement,
@@ -1120,7 +1121,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = statement.add_criteria(
-                lambda s: s.with_only_columns(sql_func.count(fragment), maintain_column_froms=True).order_by(None),
+                lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
             )
             results = self._execute(statement, uniquify=loader_options_have_wildcard)
             return cast(int, results.scalar_one())
@@ -1134,6 +1135,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -1153,6 +1156,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            load: Set relationships to be loaded
+            execution_options: Set default execution options
 
         Returns:
             The updated instance.
@@ -1166,7 +1171,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 id_attribute=id_attribute,
             )
             # this will raise for not found, and will put the item in the session
-            self.get(item_id, id_attribute=id_attribute)
+            self.get(item_id, id_attribute=id_attribute, load=load, execution_options=execution_options)
             # this will merge the inbound data to the instance we just put in the session
             instance = self._attach_to_session(data, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
