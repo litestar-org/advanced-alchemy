@@ -112,6 +112,7 @@ def test_sync_fixture_and_query() -> None:
             [USStateStruct(**raw_obj) for raw_obj in fixture],
             to_schema=USStateStruct,
         )
+        assert isinstance(_add_objs.items[0], USStateStruct)
         query_count = query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = query_service.repository.list_and_count(
@@ -176,6 +177,7 @@ async def test_async_fixture_and_query() -> None:
             [USStateBaseModel(**raw_obj) for raw_obj in fixture],
             to_schema=USStateBaseModel,
         )
+        assert isinstance(_add_objs.items[0], USStateBaseModel)
         query_count = await query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = await query_service.repository.list_and_count(
