@@ -183,7 +183,7 @@ async def test_async_fixture_and_query() -> None:
         )
         assert list_query_count >= 50
         _paginated_objs = query_service.to_schema(
-            data=list_query_objs,
+            list_query_objs,
             total=list_query_count,
         )
         _pydantic_paginated_objs = query_service.to_schema(
