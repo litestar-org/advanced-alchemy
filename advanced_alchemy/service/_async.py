@@ -7,7 +7,7 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
+from typing import TYPE_CHECKING, Any, Generic, Iterable, cast, overload
 
 from sqlalchemy import Select
 from typing_extensions import Self
