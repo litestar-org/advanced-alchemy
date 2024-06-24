@@ -2013,8 +2013,8 @@ async def test_service_list_and_count_method_with_filters(
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
     if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
-        collection, count = await maybe_async(
-            author_service.list_and_count(**{author_service.repository.model_type.name.key: exp_name}),
+        collection, count = await maybe_async(  # pyright: ignore
+            author_service.list_and_count(**{author_service.repository.model_type.name.key: exp_name}),  # pyright: ignore
         )
     else:
         collection, count = await maybe_async(
@@ -2062,7 +2062,7 @@ async def test_service_list_method_with_filters(raw_authors: RawRecordData, auth
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
     if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
-        collection = await maybe_async(
+        collection = await maybe_async(  # pyright: ignore
             author_service.list(
                 **{
                     author_service.repository.model_type.id.key: exp_id,  # type: ignore[union-attr]
