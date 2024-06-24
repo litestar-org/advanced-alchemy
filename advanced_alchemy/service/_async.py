@@ -295,7 +295,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         if MSGSPEC_INSTALLED and isinstance(data, Struct):
             return model_from_dict(
                 model=self.repository.model_type,
-                **{f: getattr(data, f) for f in data.__struct_fields__ if getattr(data, f, None) != UNSET},
+                **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
             )
 
         return cast("ModelT", data)
