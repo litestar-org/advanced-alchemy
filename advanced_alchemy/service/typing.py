@@ -74,18 +74,8 @@ except ImportError:  # pragma: nocover
 ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
 ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
-if PYDANTIC_INSTALLED and MSGSPEC_INSTALLED:
-    ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
-    PydanticOrMsgspecT: TypeAlias = "Struct | BaseModel"  # pyright: ignore[reportRedeclaration]
-if PYDANTIC_INSTALLED and not MSGSPEC_INSTALLED:
-    ModelDTOT = TypeVar("ModelDTOT", bound="BaseModel")  # type: ignore  # noqa: PGH003
-    PydanticOrMsgspecT: TypeAlias = "BaseModel"  # type: ignore  # noqa: PGH003 # pyright: ignore[reportRedeclaration]
-elif MSGSPEC_INSTALLED and not PYDANTIC_INSTALLED:
-    ModelDTOT = TypeVar("ModelDTOT", bound="Struct")  # type: ignore  # noqa: PGH003
-    PydanticOrMsgspecT: TypeAlias = "Struct"  # type: ignore # pyright: ignore[reportRedeclaration]  # noqa: PGH003
-else:
-    ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")  # type: ignore  # noqa: PGH003
-    PydanticOrMsgspecT: TypeAlias = Any  # type: ignore  # pyright: ignore[reportRedeclaration]  # noqa: PGH003
+ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
+PydanticOrMsgspecT: TypeAlias = "Struct | BaseModel"  # pyright: ignore[reportRedeclaration]
 
 __all__ = (
     "ModelDictT",
