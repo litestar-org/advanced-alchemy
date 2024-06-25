@@ -109,7 +109,7 @@ def test_sync_fixture_and_query() -> None:
         query_service = SQLAlchemySyncQueryService(session=session)
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = state_service.create_many(
-            [USStateStruct(**raw_obj) for raw_obj in fixture],
+            data=[USStateStruct(**raw_obj) for raw_obj in fixture],
             to_schema=USStateStruct,
         )
         assert isinstance(_add_objs.items[0], USStateStruct)
@@ -174,7 +174,7 @@ async def test_async_fixture_and_query() -> None:
         query_service = SQLAlchemyAsyncQueryService(session=session)
         fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = await state_service.create_many(
-            [USStateBaseModel(**raw_obj) for raw_obj in fixture],
+            data=[USStateBaseModel(**raw_obj) for raw_obj in fixture],
             to_schema=USStateBaseModel,
         )
         assert isinstance(_add_objs.items[0], USStateBaseModel)
