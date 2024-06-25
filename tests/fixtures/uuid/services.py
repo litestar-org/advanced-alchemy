@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from msgspec import Struct
-from pydantic import BaseModel
+from typing import Any, cast
 
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
+from advanced_alchemy.service.typing import PydanticOrMsgspecT
 from tests.fixtures.uuid.models import (
     UUIDAuthor,
     UUIDBook,
@@ -223,13 +221,13 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
 
     async def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
-            data["slug"] = await self.repository.get_available_slug(data["title"])
+            data["slug"] = await self.repository.get_available_slug(cast("str", data["title"]))
         if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
-            data["slug"] = await self.repository.get_available_slug(data["title"])
+            data["slug"] = await self.repository.get_available_slug(cast("str", data["title"]))
         return await super().to_model(data, operation)
 
 
@@ -243,7 +241,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -264,7 +262,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
 
     async def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -285,7 +283,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
