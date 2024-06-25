@@ -29,7 +29,6 @@ from advanced_alchemy.service.typing import (
     ModelDictListT,
     ModelDictT,
     ModelDTOT,
-    PydanticOrMsgspecT,
     is_dict,
     is_msgspec_model,
     is_pydantic_model,
@@ -94,12 +93,11 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
                 )
 
 
-class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
+class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]]
     match_fields: list[str] | str | None = None
-    _default_to_schema: type[PydanticOrMsgspecT] | None = None
 
     def __init__(
         self,
@@ -110,7 +108,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         auto_commit: bool = False,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        to_schema: type[ModelDTOT] | None = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -126,7 +123,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             to_schema: a default schema model to use when ``to_schema`` is true
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
-        self._default_to_schema = cast("type[PydanticOrMsgspecT] | None", to_schema)
         self.repository = self.repository_type(
             session=session,
             statement=statement,
@@ -257,7 +253,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     @overload
     async def get_one(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -269,7 +265,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     @overload
     async def get_one(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -280,7 +276,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     async def get_one(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         auto_expunge: bool | None = None,
@@ -291,6 +287,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         """Wrap repository scalar operation.
 
         Args:
+            *filters: Types for specific filtering operations.
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
@@ -304,6 +301,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             Representation of instance with identifier `item_id`.
         """
         result = await self.repository.get_one(
+            *filters,
             auto_expunge=auto_expunge,
             statement=statement,
             load=load,
@@ -317,7 +315,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     @overload
     async def get_one_or_none(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -329,7 +327,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     @overload
     async def get_one_or_none(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -340,7 +338,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     async def get_one_or_none(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -351,6 +349,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         """Wrap repository scalar operation.
 
         Args:
+            *filters: Types for specific filtering operations.
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
@@ -364,6 +363,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             Representation of instance with identifier `item_id`.
         """
         result = await self.repository.get_one_or_none(
+            *filters,
             auto_expunge=auto_expunge,
             statement=statement,
             load=load,
@@ -1021,7 +1021,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def get_or_upsert(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -1038,7 +1038,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def get_or_upsert(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -1054,7 +1054,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def get_or_upsert(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -1070,6 +1070,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """Wrap repository instance creation.
 
         Args:
+            *filters: Types for specific filtering operations.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             upsert: When using match_fields and actual model values differ from
@@ -1097,6 +1098,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         match_fields = match_fields or self.match_fields
         validated_model = await self.to_model(kwargs, "create")
         result = await self.repository.get_or_upsert(
+            *filters,
             match_fields=match_fields,
             upsert=upsert,
             attribute_names=attribute_names,
@@ -1115,7 +1117,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     @overload
     async def get_and_update(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -1127,10 +1129,11 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         to_schema: None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
+
     @overload
     async def get_and_update(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -1145,7 +1148,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def get_and_update(
         self,
-        *,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -1160,6 +1163,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """Wrap repository instance creation.
 
         Args:
+            *filters: Types for specific filtering operations.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             attribute_names: an iterable of attribute names to pass into the ``update``
@@ -1184,6 +1188,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         match_fields = match_fields or self.match_fields
         validated_model = await self.to_model(kwargs, "update")
         result = await self.repository.get_and_update(
+            *filters,
             match_fields=match_fields,
             attribute_names=attribute_names,
             with_for_update=with_for_update,

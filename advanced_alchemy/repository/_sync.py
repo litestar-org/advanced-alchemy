@@ -843,6 +843,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Get instance identified by ``kwargs``.
 
         Args:
+            *filters: Types for specific filtering operations.
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
@@ -865,6 +866,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
+            statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
@@ -883,6 +885,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
+            *filters: Types for specific filtering operations.
             auto_expunge: Remove object from session before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
@@ -902,6 +905,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
+            statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
                 "Result[tuple[ModelT]]",
@@ -928,6 +932,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
 
         Args:
+            *filters: Types for specific filtering operations.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             upsert: When using match_fields and actual model values differ from
@@ -961,7 +966,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 }
             else:
                 match_filter = kwargs
-            existing = self.get_one_or_none(**match_filter, load=load, execution_options=execution_options)
+            existing = self.get_one_or_none(
+                *filters,
+                **match_filter,
+                load=load,
+                execution_options=execution_options,
+            )
             if not existing:
                 return (
                     self.add(
@@ -1004,6 +1014,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
 
         Args:
+            *filters: Types for specific filtering operations.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             attribute_names: an iterable of attribute names to pass into the ``update``
@@ -1039,7 +1050,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 }
             else:
                 match_filter = kwargs
-            existing = self.get_one(**match_filter, load=load, execution_options=execution_options)
+            existing = self.get_one(*filters, **match_filter, load=load, execution_options=execution_options)
             updated = False
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, MISSING)
@@ -1097,6 +1108,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def update(
         self,
         data: ModelT,
+        *,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -1155,6 +1167,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def update_many(
         self,
         data: list[ModelT],
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -1427,6 +1440,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def upsert(
         self,
         data: ModelT,
+        *,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
@@ -1521,6 +1535,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def upsert_many(
         self,
         data: list[ModelT],
+        *,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
