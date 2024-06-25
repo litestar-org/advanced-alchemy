@@ -18,7 +18,7 @@ from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
 from advanced_alchemy.service.typing import BaseModel, Struct
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
-pytestmark = [
+pytestmark = [  # type: ignore
     pytest.mark.integration,
 ]
 here = Path(__file__).parent
