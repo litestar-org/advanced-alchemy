@@ -673,9 +673,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Returns:
             Representation of created instances.
         """
-        objs = [(await self.to_model(datum, "create")) for datum in data]
+        data = [(await self.to_model(datum, "create")) for datum in data]
         result = await self.repository.add_many(
-            data=objs,
+            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
         )

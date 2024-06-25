@@ -674,9 +674,9 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         Returns:
             Representation of created instances.
         """
-        objs = [(self.to_model(datum, "create")) for datum in data]
+        data = [(self.to_model(datum, "create")) for datum in data]
         result = self.repository.add_many(
-            data=objs,
+            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
         )
