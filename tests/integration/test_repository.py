@@ -1896,13 +1896,6 @@ async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_se
     assert await maybe_async(new_service.count()) == 2
 
 
-async def test_repo_get_or_create_deprecation(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    with pytest.deprecated_call():
-        existing_obj, existing_created = await maybe_async(author_repo.get_or_create(name="Agatha Christie"))
-        assert str(existing_obj.id) == str(first_author_id)
-        assert existing_created is False
-
-
 async def test_repo_encrypted_methods(
     raw_secrets_uuid: RawRecordData,
     secret_repo: SecretRepository,
