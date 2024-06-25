@@ -8,7 +8,9 @@ from advanced_alchemy.service._sync import (
     SQLAlchemySyncRepositoryReadService,
     SQLAlchemySyncRepositoryService,
 )
+from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.service.typing import ModelDTOT
 
 __all__ = (
     "SQLAlchemyAsyncRepositoryService",
@@ -18,4 +20,6 @@ __all__ = (
     "SQLAlchemySyncRepositoryService",
     "SQLAlchemyAsyncRepositoryReadService",
     "OffsetPagination",
+    "ModelDTOT",
+    "ResultConverter",
 )

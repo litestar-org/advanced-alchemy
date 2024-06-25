@@ -223,7 +223,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
 
     async def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | Struct | BaseModel,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -243,7 +243,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | Struct | BaseModel,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -264,7 +264,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
 
     async def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | Struct | BaseModel,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":
@@ -285,7 +285,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: UUIDSlugBook | dict[str, Any] | Struct | BaseModel,
         operation: str | None = None,
     ) -> UUIDSlugBook:
         if isinstance(data, dict) and "slug" not in data and operation == "create":

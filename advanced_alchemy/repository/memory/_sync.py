@@ -37,7 +37,6 @@ from advanced_alchemy.repository.memory.base import (
     SQLAlchemyMultiStore,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT
-from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -419,15 +418,6 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
             msg = "Multiple objects when one was expected"
             raise IntegrityError(msg)
         return result[0] if result else None
-
-    @deprecated(version="0.3.5", alternative="SQLAlchemyAsyncRepository.get_or_upsert", kind="method")
-    def get_or_create(
-        self,
-        match_fields: list[str] | str | None = None,
-        upsert: bool = True,
-        **kwargs: Any,
-    ) -> tuple[ModelT, bool]:
-        return self.get_or_upsert(match_fields, upsert, **kwargs)
 
     def get_or_upsert(
         self,

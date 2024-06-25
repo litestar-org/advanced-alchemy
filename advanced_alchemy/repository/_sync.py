@@ -33,7 +33,6 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, T
-from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -94,6 +93,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def add(
         self,
         data: ModelT,
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -102,6 +102,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def add_many(
         self,
         data: list[ModelT],
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
     ) -> Sequence[ModelT]: ...
@@ -109,6 +110,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def delete(
         self,
         item_id: Any,
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
@@ -119,6 +121,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def delete_many(
         self,
         item_ids: list[Any],
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
@@ -149,6 +152,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def get(
         self,
         item_id: Any,
+        *,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
@@ -158,6 +162,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def get_one(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -167,6 +172,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def get_one_or_none(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -176,6 +182,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def get_or_upsert(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
@@ -190,6 +197,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def get_and_update(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -213,6 +221,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def update(
         self,
         data: ModelT,
+        *,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -226,6 +235,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def update_many(
         self,
         data: list[ModelT],
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
@@ -243,6 +253,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def upsert(
         self,
         data: ModelT,
+        *,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
@@ -256,6 +267,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def upsert_many(
         self,
         data: list[ModelT],
+        *,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
@@ -294,6 +306,7 @@ class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[Mode
     def get_by_slug(
         self,
         slug: str,
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -435,6 +448,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def add(
         self,
         data: ModelT,
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -463,6 +477,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def add_many(
         self,
         data: list[ModelT],
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
     ) -> Sequence[ModelT]:
@@ -487,6 +502,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def delete(
         self,
         item_id: Any,
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
@@ -527,6 +543,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def delete_many(
         self,
         item_ids: list[Any],
+        *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
@@ -773,6 +790,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def get(
         self,
         item_id: Any,
+        *,
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
@@ -815,6 +833,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def get_one(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -854,6 +873,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def get_one_or_none(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
@@ -891,62 +911,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
-    @deprecated(version="0.3.5", alternative="SQLAlchemyAsyncRepository.get_or_upsert", kind="method")
-    def get_or_create(
-        self,
-        match_fields: list[str] | str | None = None,
-        upsert: bool = True,
-        attribute_names: Iterable[str] | None = None,
-        with_for_update: bool | None = None,
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
-        auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> tuple[ModelT, bool]:
-        """Get instance identified by ``kwargs`` or create if it doesn't exist.
-
-        Args:
-            match_fields: a list of keys to use to match the existing model.  When
-                empty, all fields are matched.
-            upsert: When using match_fields and actual model values differ from
-                `kwargs`, perform an update operation on the model.
-            attribute_names: an iterable of attribute names to pass into the ``update``
-                method.
-            with_for_update: indicating FOR UPDATE should be used, or may be a
-                dictionary containing flags to indicate a more specific set of
-                FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            load: Set default relationships to be loaded
-            execution_options: Set default execution options
-            **kwargs: Identifier of the instance to be retrieved.
-
-        Returns:
-            a tuple that includes the instance and whether it needed to be created.
-            When using match_fields and actual model values differ from ``kwargs``, the
-            model value will be updated.
-        """
-        return self.get_or_upsert(
-            match_fields=match_fields,
-            upsert=upsert,
-            attribute_names=attribute_names,
-            with_for_update=with_for_update,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            auto_refresh=auto_refresh,
-            load=load,
-            execution_options=execution_options,
-            **kwargs,
-        )
-
     def get_or_upsert(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
@@ -1023,6 +990,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def get_and_update(
         self,
+        *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,

@@ -32,7 +32,6 @@ from advanced_alchemy.service.typing import (
     UNSET,
     BaseModel,
     ModelDTOT,
-    PydanticOrMsgspecT,
     Struct,
 )
 
@@ -99,6 +98,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT] | SQLAlchemySyncSlugRepositoryProtocol[ModelT]]
     match_fields: list[str] | str | None = None
+    _default_to_schema: type[BaseModel | Struct] | None = None
 
     def __init__(
         self,
@@ -109,6 +109,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         auto_commit: bool = False,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        to_schema: type[ModelDTOT] | None = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -121,8 +122,10 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             auto_commit: Commit objects before returning.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            to_schema: a default schema model to use when ``to_schema`` is true
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
+        self._default_to_schema = cast("type[BaseModel | Struct] | None", to_schema)
         self.repository = self.repository_type(
             session=session,
             statement=statement,
@@ -187,12 +190,12 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def get(
         self,
         item_id: Any,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
     ) -> ModelT: ...
 
@@ -200,23 +203,24 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def get(
         self,
         item_id: Any,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
     ) -> ModelDTOT: ...
 
     def get(
         self,
         item_id: Any,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
     ) -> ModelT | ModelDTOT:
         """Wrap repository scalar operation.
@@ -252,34 +256,34 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     @overload
     def get_one(
         self,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: None = None,
+        auto_expunge: bool | None = None,
         **kwargs: Any,
     ) -> ModelT: ...
 
     @overload
     def get_one(
         self,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> ModelDTOT: ...
 
     def get_one(
         self,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
+        auto_expunge: bool | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> ModelT | ModelDTOT:
@@ -312,33 +316,34 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     @overload
     def get_one_or_none(
         self,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
         **kwargs: Any,
     ) -> ModelT | None: ...
+
     @overload
     def get_one_or_none(
         self,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> ModelDTOT | None: ...
 
     def get_one_or_none(
         self,
-        auto_expunge: bool | None = None,
+        *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> ModelT | ModelDTOT | None:
@@ -370,7 +375,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     def to_model(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | BaseModel | Struct,
         operation: str | None = None,
     ) -> ModelT:
         """Parse and Convert input into a model.
@@ -398,11 +403,11 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        force_basic_query_mode: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        force_basic_query_mode: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]: ...
@@ -411,11 +416,11 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        force_basic_query_mode: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        force_basic_query_mode: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> OffsetPagination[ModelDTOT]: ...
@@ -423,11 +428,11 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        force_basic_query_mode: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        force_basic_query_mode: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int] | OffsetPagination[ModelDTOT]:
@@ -497,10 +502,10 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def list(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]: ...
@@ -509,10 +514,10 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def list(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> OffsetPagination[ModelDTOT]: ...
@@ -520,10 +525,10 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     def list(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT] | OffsetPagination[ModelDTOT]:
@@ -562,38 +567,38 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def create(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
-        to_schema: None = None,
-    ) -> ModelT: ...
+        to_schema: type[ModelDTOT],
+    ) -> ModelDTOT: ...
 
     @overload
     def create(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
-        to_schema: type[ModelDTOT],
-    ) -> ModelDTOT: ...
+        to_schema: None = None,
+    ) -> ModelT: ...
 
     def create(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
     ) -> ModelT | ModelDTOT:
         """Wrap repository instance creation.
@@ -626,35 +631,35 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def create_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        data: Sequence[ModelT | dict[str, Any]] | Sequence[Struct] | Sequence[BaseModel],
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
     ) -> Sequence[ModelT]: ...
 
     @overload
     def create_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        data: Sequence[ModelT | dict[str, Any]] | Sequence[Struct] | Sequence[BaseModel],
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def create_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        data: Sequence[ModelT | dict[str, Any]] | Sequence[Struct] | Sequence[BaseModel],
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
     ) -> Sequence[ModelT] | OffsetPagination[ModelDTOT]:
         """Wrap repository bulk instance creation.
@@ -684,49 +689,50 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def update(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
         item_id: Any | None = None,
+        *,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: None = None,
     ) -> ModelT: ...
 
     @overload
     def update(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
         item_id: Any | None = None,
+        *,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT],
     ) -> ModelDTOT: ...
+
     def update(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
         item_id: Any | None = None,
+        *,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
     ) -> ModelT | ModelDTOT:
         """Wrap repository update operation.
@@ -788,35 +794,35 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def update_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
     ) -> Sequence[ModelT]: ...
 
     @overload
     def update_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def update_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
     ) -> Sequence[ModelT] | OffsetPagination[ModelDTOT]:
         """Wrap repository bulk instance update.
@@ -849,50 +855,50 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def upsert(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
         item_id: Any | None = None,
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: None = None,
     ) -> ModelT: ...
 
     @overload
     def upsert(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
         item_id: Any | None = None,
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT],
     ) -> ModelDTOT: ...
 
     def upsert(
         self,
-        data: ModelT | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelT | dict[str, Any] | Struct | BaseModel,
         item_id: Any | None = None,
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
     ) -> ModelT | ModelDTOT:
         """Wrap repository upsert operation.
@@ -943,40 +949,40 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def upsert_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: None = None,
     ) -> Sequence[ModelT]: ...
     @overload
     def upsert_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def upsert_many(
         self,
-        data: Sequence[ModelT | dict[str, Any] | PydanticOrMsgspecT],
+        data: Sequence[ModelT | dict[str, Any] | Struct | BaseModel],
+        *,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
     ) -> Sequence[ModelT] | OffsetPagination[ModelDTOT]:
         """Wrap repository upsert operation.
@@ -1017,48 +1023,49 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def get_or_upsert(
         self,
+        *,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
+
     @overload
     def get_or_upsert(
         self,
+        *,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> tuple[ModelDTOT, bool]: ...
 
     def get_or_upsert(
         self,
+        *,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT | ModelDTOT, bool]:
@@ -1110,45 +1117,45 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     @overload
     def get_and_update(
         self,
+        *,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
     @overload
     def get_and_update(
         self,
+        *,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> tuple[ModelDTOT, bool]: ...
 
     def get_and_update(
         self,
+        *,
         match_fields: list[str] | str | None = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        *,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT | ModelDTOT, bool]:
@@ -1197,12 +1204,12 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete(
         self,
         item_id: Any,
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        *,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
     ) -> ModelT: ...
 
@@ -1210,24 +1217,24 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete(
         self,
         item_id: Any,
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        *,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
     ) -> ModelDTOT: ...
 
     def delete(
         self,
         item_id: Any,
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        *,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
     ) -> ModelT | ModelDTOT:
         """Wrap repository delete operation.
@@ -1263,13 +1270,13 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete_many(
         self,
         item_ids: list[Any],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        *,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        chunk_size: int | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        chunk_size: int | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
     ) -> Sequence[ModelT]: ...
 
@@ -1277,26 +1284,26 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete_many(
         self,
         item_ids: list[Any],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        *,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        chunk_size: int | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        chunk_size: int | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def delete_many(
         self,
         item_ids: list[Any],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
+        *,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        chunk_size: int | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        *,
+        chunk_size: int | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
     ) -> Sequence[ModelT] | OffsetPagination[ModelDTOT]:
         """Wrap repository bulk instance deletion.
@@ -1335,10 +1342,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete_where(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]: ...
@@ -1347,10 +1354,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete_where(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT],
         **kwargs: Any,
     ) -> OffsetPagination[ModelDTOT]: ...
@@ -1358,10 +1365,10 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
     def delete_where(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         to_schema: type[ModelDTOT] | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT] | OffsetPagination[ModelDTOT]:
