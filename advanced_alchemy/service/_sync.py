@@ -382,7 +382,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             Representation of created instances.
         """
         if is_dict(data):
-            return model_from_dict(model=self.repository.model_type, **data)  # pyright: ignore[reportUnnecessaryCast]
+            return model_from_dict(model=self.repository.model_type, **data)
         if is_pydantic_model(data):
             model_from_dict(
                 model=self.repository.model_type,
