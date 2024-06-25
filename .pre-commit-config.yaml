@@ -66,6 +66,10 @@ repos:
             rich,
             "litestar[cli]",
           ]
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.368
+  #   hooks:
+  #     - id: pyright
   - repo: https://github.com/sphinx-contrib/sphinx-lint
     rev: "v0.9.1"
     hooks:
