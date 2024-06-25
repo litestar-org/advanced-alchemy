@@ -384,13 +384,13 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         if is_dict(data):
             return model_from_dict(model=self.repository.model_type, **data)
         if is_pydantic_model(data):
-            model_from_dict(
+            return model_from_dict(
                 model=self.repository.model_type,
                 **data.model_dump(exclude_unset=True),
             )
 
         if is_msgspec_model(data):
-            model_from_dict(
+            return model_from_dict(
                 model=self.repository.model_type,
                 **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
             )
@@ -674,9 +674,9 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         Returns:
             Representation of created instances.
         """
-        data = [(self.to_model(datum, "create")) for datum in data]
+        objs = [(self.to_model(datum, "create")) for datum in data]
         result = self.repository.add_many(
-            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+            data=objs,
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
         )
