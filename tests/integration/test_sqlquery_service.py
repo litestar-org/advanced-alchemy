@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from msgspec import Struct
+from pydantic import BaseModel
 from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, MappedAsDataclass, Session
@@ -15,10 +17,9 @@ from advanced_alchemy.repository import (
 from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
-from advanced_alchemy.service.typing import BaseModel, Struct
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
-pytestmark = [
+pytestmark = [  # type: ignore
     pytest.mark.integration,
 ]
 here = Path(__file__).parent

@@ -1,3 +1,4 @@
+from advanced_alchemy.repository import LoadSpec, ModelOrRowMappingT, ModelT, model_from_dict
 from advanced_alchemy.service._async import (
     SQLAlchemyAsyncQueryService,
     SQLAlchemyAsyncRepositoryReadService,
@@ -8,9 +9,16 @@ from advanced_alchemy.service._sync import (
     SQLAlchemySyncRepositoryReadService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.service._util import ResultConverter
+from advanced_alchemy.service._util import ResultConverter, find_filter
 from advanced_alchemy.service.pagination import OffsetPagination
-from advanced_alchemy.service.typing import ModelDTOT
+from advanced_alchemy.service.typing import (
+    ModelDictListT,
+    ModelDictT,
+    ModelDTOT,
+    is_dict,
+    is_msgspec_model,
+    is_pydantic_model,
+)
 
 __all__ = (
     "SQLAlchemyAsyncRepositoryService",
@@ -20,6 +28,16 @@ __all__ = (
     "SQLAlchemySyncRepositoryService",
     "SQLAlchemyAsyncRepositoryReadService",
     "OffsetPagination",
+    "ModelDictListT",
+    "ModelDictT",
     "ModelDTOT",
+    "find_filter",
     "ResultConverter",
+    "is_dict",
+    "is_msgspec_model",
+    "is_pydantic_model",
+    "LoadSpec",
+    "model_from_dict",
+    "ModelT",
+    "ModelOrRowMappingT",
 )
