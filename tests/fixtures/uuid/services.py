@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.service.typing import PydanticOrMsgspecT
+from advanced_alchemy.service.typing import (
+    PydanticOrMsgspecT,
+    is_dict_with_field,
+    is_dict_without_field,
+    schema_to_dict,
+)
 from tests.fixtures.uuid.models import (
     UUIDAuthor,
     UUIDBook,
@@ -224,10 +229,11 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
-            data["slug"] = await self.repository.get_available_slug(cast("str", data["title"]))
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
-            data["slug"] = await self.repository.get_available_slug(cast("str", data["title"]))
+        data = schema_to_dict(data)
+        if is_dict_with_field(data, "slug") and operation == "create":
+            data["slug"] = await self.repository.get_available_slug(data["title"])
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
+            data["slug"] = await self.repository.get_available_slug(data["title"])
         return await super().to_model(data, operation)
 
 
@@ -244,9 +250,10 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_with_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
         return super().to_model(data, operation)
 
@@ -265,9 +272,10 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_with_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         return await super().to_model(data, operation)
 
@@ -286,8 +294,9 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_with_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
         return super().to_model(data, operation)

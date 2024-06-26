@@ -17,6 +17,12 @@ from advanced_alchemy.repository import (
 from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
+from advanced_alchemy.service.typing import (
+    is_msgspec_model,
+    is_msgspec_model_with_field,
+    is_pydantic_model,
+    is_pydantic_model_with_field,
+)
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
 pytestmark = [  # type: ignore
@@ -153,12 +159,16 @@ def test_sync_fixture_and_query() -> None:
             schema_type=StateQueryBaseModel,
         )
         assert isinstance(_pydantic_obj, StateQueryBaseModel)
+        assert is_pydantic_model(_pydantic_obj)
+        assert is_pydantic_model_with_field(_pydantic_obj, "state_abbreviation")
 
-        _msgspec_objs = query_service.to_schema(
+        _msgspec_obj = query_service.to_schema(
             data=_get_one_or_none_1,
             schema_type=StateQueryStruct,
         )
-        assert isinstance(_msgspec_objs, StateQueryStruct)
+        assert isinstance(_msgspec_obj, StateQueryStruct)
+        assert is_msgspec_model(_msgspec_obj)
+        assert is_msgspec_model_with_field(_msgspec_obj, "state_abbreviation")
 
         _get_one_or_none = query_service.repository.get_one_or_none(
             statement=select(StateQuery).filter_by(state_name="Nope"),
@@ -222,13 +232,15 @@ async def test_async_fixture_and_query() -> None:
             schema_type=StateQueryBaseModel,
         )
         assert isinstance(_pydantic_obj, StateQueryBaseModel)
-
-        _msgspec_objs = query_service.to_schema(
+        assert is_pydantic_model(_pydantic_obj)
+        assert is_pydantic_model_with_field(_pydantic_obj, "state_abbreviation")
+        _msgspec_obj = query_service.to_schema(
             data=_get_one_or_none_1,
             schema_type=StateQueryStruct,
         )
-        assert isinstance(_msgspec_objs, StateQueryStruct)
-
+        assert isinstance(_msgspec_obj, StateQueryStruct)
+        assert is_msgspec_model(_msgspec_obj)
+        assert is_msgspec_model_with_field(_msgspec_obj, "state_abbreviation")
         _get_one_or_none = await query_service.repository.get_one_or_none(
             select(StateQuery).filter_by(state_name="Nope"),
         )

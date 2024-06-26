@@ -120,10 +120,8 @@ def schema_to_dict(v: Any, exclude_unset: bool = True) -> dict[str, Any]:
         return v
     if is_pydantic_model(v):
         return v.model_dump(exclude_unset=exclude_unset)
-
     if is_msgspec_model(v) and exclude_unset:
         return {f: val for f in v.__struct_fields__ if (val := getattr(v, f, None)) != UNSET}
-
     if is_msgspec_model(v) and not exclude_unset:
         return {f: getattr(v, f, None) for f in v.__struct_fields__}
     msg = f"Unable to convert model to dictionary for '{type(v)}' types"
