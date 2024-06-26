@@ -63,7 +63,7 @@ class FernetBackend(EncryptionBackend):
     def mount_vault(self, key: str | bytes) -> None:
         if isinstance(key, str):
             key = key.encode()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())  # pyright: ignore[reportPossiblyUnboundVariable]
         digest.update(key)
         engine_key = digest.finalize()
         self.init_engine(engine_key)
@@ -72,7 +72,7 @@ class FernetBackend(EncryptionBackend):
         if isinstance(key, str):
             key = key.encode()
         self.key = base64.urlsafe_b64encode(key)
-        self.fernet = Fernet(self.key)
+        self.fernet = Fernet(self.key)  # pyright: ignore[reportPossiblyUnboundVariable]
 
     def encrypt(self, value: Any) -> str:
         if not isinstance(value, str):
@@ -90,7 +90,7 @@ class FernetBackend(EncryptionBackend):
         return decrypted
 
 
-class EncryptedString(TypeDecorator):
+class EncryptedString(TypeDecorator[str]):
     """Used to store encrypted values in a database"""
 
     impl = String
