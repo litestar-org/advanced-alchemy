@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import msgspec
 import pytest
+from msgspec import Struct
 from pydantic import BaseModel
 from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -19,7 +19,7 @@ from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
-pytestmark = [
+pytestmark = [  # type: ignore
     pytest.mark.integration,
 ]
 here = Path(__file__).parent
@@ -39,7 +39,7 @@ class USState(UUIDBase):
     name: Mapped[str]
 
 
-class USStateStruct(msgspec.Struct):
+class USStateStruct(Struct):
     abbreviation: str
     name: str
 
@@ -89,7 +89,7 @@ class StateQuery(MappedAsDataclass, SQLQuery):
     state_name: str
 
 
-class StateQueryStruct(msgspec.Struct):
+class StateQueryStruct(Struct):
     state_abbreviation: str
     state_name: str
 
@@ -109,7 +109,7 @@ def test_sync_fixture_and_query() -> None:
         query_service = SQLAlchemySyncQueryService(session=session)
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = state_service.create_many(
-            [USStateStruct(**raw_obj) for raw_obj in fixture],
+            data=[USStateStruct(**raw_obj) for raw_obj in fixture],
             to_schema=USStateStruct,
         )
         assert isinstance(_add_objs.items[0], USStateStruct)
@@ -174,7 +174,7 @@ async def test_async_fixture_and_query() -> None:
         query_service = SQLAlchemyAsyncQueryService(session=session)
         fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = await state_service.create_many(
-            [USStateBaseModel(**raw_obj) for raw_obj in fixture],
+            data=[USStateBaseModel(**raw_obj) for raw_obj in fixture],
             to_schema=USStateBaseModel,
         )
         assert isinstance(_add_objs.items[0], USStateBaseModel)
