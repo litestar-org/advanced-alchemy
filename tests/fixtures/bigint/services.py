@@ -229,7 +229,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
         operation: str | None = None,
     ) -> BigIntSlugBook:
         data = schema_to_dict(data)
-        if is_dict_with_field(data, "slug") and operation == "create":
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
@@ -251,7 +251,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
         operation: str | None = None,
     ) -> BigIntSlugBook:
         data = schema_to_dict(data)
-        if is_dict_with_field(data, "slug") and operation == "create":
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
@@ -273,7 +273,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
         operation: str | None = None,
     ) -> BigIntSlugBook:
         data = schema_to_dict(data)
-        if is_dict_with_field(data, "slug") and operation == "create":
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
@@ -295,7 +295,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
         operation: str | None = None,
     ) -> BigIntSlugBook:
         data = schema_to_dict(data)
-        if is_dict_with_field(data, "slug") and operation == "create":
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
