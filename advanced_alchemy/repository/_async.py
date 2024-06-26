@@ -1595,10 +1595,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 matched_values = [
                     field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
                 ]
-                if self._prefer_any:
-                    match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
-                else:
-                    match_filter.append(field.in_(matched_values))
+                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
 
         with wrap_sqlalchemy_exception():
             existing_objs = await self.list(
@@ -1609,11 +1606,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
-                matched_values = [getattr(datum, field_name) for datum in existing_objs if datum]
-                if self._prefer_any:
-                    match_filter.append(any_(matched_values) == field)  # type: ignore[arg-type]
-                else:
-                    match_filter.append(field.in_(matched_values))
+                matched_values = list(
+                    {getattr(datum, field_name) for datum in existing_objs if datum},  # ensure the list is unique
+                )
+                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
             existing_ids = self._get_object_ids(existing_objs=existing_objs)
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:

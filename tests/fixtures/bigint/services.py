@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from msgspec import Struct
-from pydantic import BaseModel
-
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
+from advanced_alchemy.service.typing import ModelDictT, is_dict_with_field, is_dict_without_field, schema_to_dict
 from tests.fixtures.bigint.models import (
     BigIntAuthor,
     BigIntBook,
@@ -227,12 +225,13 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
 
     async def to_model(
         self,
-        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         return await super().to_model(data, operation)
 
@@ -248,12 +247,13 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
 
     def to_model(
         self,
-        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
         return super().to_model(data, operation)
 
@@ -269,12 +269,13 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
 
     async def to_model(
         self,
-        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         return await super().to_model(data, operation)
 
@@ -290,11 +291,12 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
 
     def to_model(
         self,
-        data: BigIntSlugBook | dict[str, Any] | BaseModel | Struct,
+        data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        if isinstance(data, dict) and "slug" not in data and operation == "create":
+        data = schema_to_dict(data)
+        if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
-        if isinstance(data, dict) and "slug" not in data and "title" in data and operation == "update":
+        if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
         return super().to_model(data, operation)
