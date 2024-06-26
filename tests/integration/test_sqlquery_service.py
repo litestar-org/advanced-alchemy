@@ -110,9 +110,7 @@ def test_sync_fixture_and_query() -> None:
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = state_service.create_many(
             data=[USStateStruct(**raw_obj) for raw_obj in fixture],
-            to_schema=USStateStruct,
         )
-        assert isinstance(_add_objs.items[0], USStateStruct)
         query_count = query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = query_service.repository.list_and_count(
@@ -123,16 +121,19 @@ def test_sync_fixture_and_query() -> None:
             data=list_query_objs,
             total=list_query_count,
         )
+
         _pydantic_paginated_objs = query_service.to_schema(
             data=list_query_objs,
             total=list_query_count,
             schema_type=StateQueryBaseModel,
         )
+        assert isinstance(_pydantic_paginated_objs.items[0], StateQueryBaseModel)
         _msgspec_paginated_objs = query_service.to_schema(
             data=list_query_objs,
             total=list_query_count,
             schema_type=StateQueryStruct,
         )
+        assert isinstance(_msgspec_paginated_objs.items[0], StateQueryStruct)
         _list_service_objs = query_service.repository.list(statement=select(StateQuery))
         assert len(_list_service_objs) >= 50
         _get_ones = query_service.repository.list(statement=select(StateQuery), state_name="Alabama")
@@ -151,10 +152,13 @@ def test_sync_fixture_and_query() -> None:
             data=_get_one_or_none_1,
             schema_type=StateQueryBaseModel,
         )
+        assert isinstance(_pydantic_obj, StateQueryBaseModel)
+
         _msgspec_objs = query_service.to_schema(
             data=_get_one_or_none_1,
             schema_type=StateQueryStruct,
         )
+        assert isinstance(_msgspec_objs, StateQueryStruct)
 
         _get_one_or_none = query_service.repository.get_one_or_none(
             statement=select(StateQuery).filter_by(state_name="Nope"),
@@ -175,9 +179,7 @@ async def test_async_fixture_and_query() -> None:
         fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = await state_service.create_many(
             data=[USStateBaseModel(**raw_obj) for raw_obj in fixture],
-            to_schema=USStateBaseModel,
         )
-        assert isinstance(_add_objs.items[0], USStateBaseModel)
         query_count = await query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = await query_service.repository.list_and_count(
@@ -188,16 +190,19 @@ async def test_async_fixture_and_query() -> None:
             list_query_objs,
             total=list_query_count,
         )
+
         _pydantic_paginated_objs = query_service.to_schema(
             data=list_query_objs,
             total=list_query_count,
             schema_type=StateQueryBaseModel,
         )
+        assert isinstance(_pydantic_paginated_objs.items[0], StateQueryBaseModel)
         _msgspec_paginated_objs = query_service.to_schema(
             data=list_query_objs,
             total=list_query_count,
             schema_type=StateQueryStruct,
         )
+        assert isinstance(_msgspec_paginated_objs.items[0], StateQueryStruct)
         _list_service_objs = await query_service.repository.list(statement=select(StateQuery))
         assert len(_list_service_objs) >= 50
         _get_ones = await query_service.repository.list(statement=select(StateQuery), state_name="Alabama")
@@ -216,12 +221,15 @@ async def test_async_fixture_and_query() -> None:
             data=_get_one_or_none_1,
             schema_type=StateQueryBaseModel,
         )
+        assert isinstance(_pydantic_obj, StateQueryBaseModel)
+
         _msgspec_objs = query_service.to_schema(
             data=_get_one_or_none_1,
             schema_type=StateQueryStruct,
         )
+        assert isinstance(_msgspec_objs, StateQueryStruct)
 
         _get_one_or_none = await query_service.repository.get_one_or_none(
-            statement=select(StateQuery).filter_by(state_name="Nope"),
+            select(StateQuery).filter_by(state_name="Nope"),
         )
         assert _get_one_or_none is None

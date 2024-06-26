@@ -22,6 +22,7 @@ from typing import (
 
 from typing_extensions import TypeAlias, TypeGuard
 
+from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
 
@@ -98,6 +99,37 @@ def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
     return isinstance(v, dict)
 
 
+def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
+    return is_dict(v) and field_name in v
+
+
+def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
+    return is_dict(v) and field_name not in v
+
+
+def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
+    return PYDANTIC_INSTALLED and isinstance(v, BaseModel) and field_name in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+
+
+def is_msgspec_model_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
+    return MSGSPEC_INSTALLED and isinstance(v, Struct) and field_name in v.__struct_fields__
+
+
+def schema_to_dict(v: Any, exclude_unset: bool = True) -> dict[str, Any]:
+    if is_dict(v):
+        return v
+    if is_pydantic_model(v):
+        return v.model_dump(exclude_unset=exclude_unset)
+
+    if is_msgspec_model(v) and exclude_unset:
+        return {f: val for f in v.__struct_fields__ if (val := getattr(v, f, None)) != UNSET}
+
+    if is_msgspec_model(v) and not exclude_unset:
+        return {f: getattr(v, f, None) for f in v.__struct_fields__}
+    msg = f"Unable to convert model to dictionary for '{type(v)}' types"
+    raise AdvancedAlchemyError(msg)
+
+
 __all__ = (
     "ModelDictT",
     "ModelDictListT",
@@ -112,6 +144,10 @@ __all__ = (
     "convert",
     "UNSET",
     "is_dict",
+    "is_dict_with_field",
     "is_msgspec_model",
+    "is_pydantic_model_with_field",
     "is_pydantic_model",
+    "is_msgspec_model_with_field",
+    "schema_to_dict",
 )
