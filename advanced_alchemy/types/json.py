@@ -50,7 +50,7 @@ class ORA_JSONB(TypeDecorator, SchemaType):  # type: ignore[misc] # noqa: N801
     def _should_create_constraint(self, compiler: Any, **kw: Any) -> bool:
         return cast("bool", compiler.dialect.name == "oracle")
 
-    def _variant_mapping_for_set_table(self, column: Any) -> dict | None:
+    def _variant_mapping_for_set_table(self, column: Any) -> dict[str, Any] | None:
         if column.type._variant_mapping:  # noqa: SLF001
             variant_mapping = dict(column.type._variant_mapping)  # noqa: SLF001
             variant_mapping["_default"] = column.type
