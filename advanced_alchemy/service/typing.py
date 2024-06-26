@@ -8,32 +8,67 @@ from __future__ import annotations
 
 from typing import (
     Any,
+    ClassVar,
+    Dict,
     Final,
     Generic,
     Protocol,
+    Sequence,
     TypeVar,
+    Union,
     cast,
+    runtime_checkable,
 )
 
-from typing_extensions import TypeAlias
+from typing_extensions import TypeAlias, TypeGuard
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
-from advanced_alchemy.repository.typing import ModelT  # noqa: TCH001
+from advanced_alchemy.repository.typing import ModelT
+
+try:
+    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
+    from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
+
+    PYDANTIC_INSTALLED: Final[bool] = True
+except ImportError:  # pragma: nocover
+
+    @runtime_checkable
+    class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
+        """Placeholder Implementation"""
+
+        def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            """Placeholder"""
+            return {}
+
+    T = TypeVar("T")  # pragma: nocover
+
+    class TypeAdapter(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
+        """Placeholder Implementation"""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
+            """Init"""
+
+        def validate_python(self, data: Any, *args: Any, **kwargs: Any) -> T:  # pragma: nocover
+            """Stub"""
+            return cast("T", data)
+
+    PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
+
 
 try:
     from msgspec import UNSET, Struct, UnsetType, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
 
     MSGSPEC_INSTALLED: Final[bool] = True
-
 except ImportError:  # pragma: nocover
     import enum
 
-    class Struct(Protocol):  # type: ignore[no-redef] # pragma: nocover
+    @runtime_checkable
+    class Struct(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
-        __struct_fields__: tuple[str, ...]
+        __struct_fields__: ClassVar[tuple[str, ...]]
 
-    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001 # pragma: nocover
+    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
         """Placeholder implementation"""
         return {}
 
@@ -44,44 +79,31 @@ except ImportError:  # pragma: nocover
     MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 
-try:
-    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
-    from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
-
-    PYDANTIC_INSTALLED: Final[bool] = True
-except ImportError:  # pragma: nocover
-
-    class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder Implementation"""
-
-    T = TypeVar("T")  # pragma: nocover
-
-    class TypeAdapter(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder Implementation"""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
-            super().__init__()
-
-        def validate_python(self, data: Any, *args: Any, **kwargs: Any) -> T:  # pragma: nocover
-            """Stub"""
-            return cast("T", data)
-
-    PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
-
-ModelDictT: TypeAlias = "dict[str, Any] | ModelT"
-ModelDictListT: TypeAlias = "list[ModelT | dict[str, Any]] | list[dict[str, Any]]"
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
-PydanticModelDTOT = TypeVar("PydanticModelDTOT", bound="BaseModel")
-StructModelDTOT = TypeVar("StructModelDTOT", bound="Struct")
+PydanticOrMsgspecT = Union[Struct, BaseModel]
+ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel]
+ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
+
+
+def is_pydantic_model(v: Any) -> TypeGuard[BaseModel]:
+    return PYDANTIC_INSTALLED and isinstance(v, BaseModel)
+
+
+def is_msgspec_model(v: Any) -> TypeGuard[Struct]:
+    return MSGSPEC_INSTALLED and isinstance(v, Struct)
+
+
+def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
+    return isinstance(v, dict)
+
 
 __all__ = (
     "ModelDictT",
     "ModelDictListT",
     "FilterTypeT",
     "ModelDTOT",
-    "PydanticModelDTOT",
-    "StructModelDTOT",
+    "PydanticOrMsgspecT",
     "PYDANTIC_INSTALLED",
     "MSGSPEC_INSTALLED",
     "BaseModel",
@@ -89,4 +111,7 @@ __all__ = (
     "Struct",
     "convert",
     "UNSET",
+    "is_dict",
+    "is_msgspec_model",
+    "is_pydantic_model",
 )

@@ -36,7 +36,7 @@ repos:
         additional_dependencies:
           - tomli
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.10.0"
+    rev: "v1.10.1"
     hooks:
       - id: mypy
         exclude: "docs"
@@ -66,6 +66,10 @@ repos:
             rich,
             "litestar[cli]",
           ]
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.368
+  #   hooks:
+  #     - id: pyright
   - repo: https://github.com/sphinx-contrib/sphinx-lint
     rev: "v0.9.1"
     hooks:

@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: test-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
