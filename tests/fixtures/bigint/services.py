@@ -8,7 +8,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.service.typing import ModelDictT, is_dict_with_field, is_dict_without_field, schema_to_dict
+from advanced_alchemy.service.typing import ModelDictT, is_dict_with_field, is_dict_without_field, schema_dump
 from tests.fixtures.bigint.models import (
     BigIntAuthor,
     BigIntBook,
@@ -228,7 +228,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
         data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
@@ -250,7 +250,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
         data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
@@ -272,7 +272,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook])
         data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
@@ -294,7 +294,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
         data: ModelDictT[BigIntSlugBook],
         operation: str | None = None,
     ) -> BigIntSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
