@@ -109,19 +109,19 @@ def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
 
 
 def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
-    return PYDANTIC_INSTALLED and isinstance(v, BaseModel) and field_name in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+    return is_pydantic_model(v) and field_name in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
 
 def is_pydantic_model_without_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
-    return PYDANTIC_INSTALLED and isinstance(v, BaseModel) and field_name not in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+    return is_pydantic_model(v) and field_name not in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
 
 def is_msgspec_model_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
-    return MSGSPEC_INSTALLED and isinstance(v, Struct) and field_name in v.__struct_fields__
+    return is_msgspec_model(v) and field_name in v.__struct_fields__
 
 
 def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]:
-    return MSGSPEC_INSTALLED and isinstance(v, Struct) and field_name not in v.__struct_fields__
+    return is_msgspec_model(v) and field_name not in v.__struct_fields__
 
 
 def schema_dump(
