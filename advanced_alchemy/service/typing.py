@@ -22,7 +22,6 @@ from typing import (
 
 from typing_extensions import TypeAlias, TypeGuard
 
-from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
 
@@ -36,6 +35,8 @@ except ImportError:  # pragma: nocover
     @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
+
+        model_fields: ClassVar[dict[str, Any]]
 
         def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
             """Placeholder"""
@@ -111,21 +112,31 @@ def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModel
     return PYDANTIC_INSTALLED and isinstance(v, BaseModel) and field_name in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
 
+def is_pydantic_model_without_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
+    return PYDANTIC_INSTALLED and isinstance(v, BaseModel) and field_name not in v.model_fields  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+
+
 def is_msgspec_model_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
     return MSGSPEC_INSTALLED and isinstance(v, Struct) and field_name in v.__struct_fields__
 
 
-def schema_to_dict(v: Any, exclude_unset: bool = True) -> dict[str, Any]:
-    if is_dict(v):
-        return v
-    if is_pydantic_model(v):
-        return v.model_dump(exclude_unset=exclude_unset)
-    if is_msgspec_model(v) and exclude_unset:
-        return {f: val for f in v.__struct_fields__ if (val := getattr(v, f, None)) != UNSET}
-    if is_msgspec_model(v) and not exclude_unset:
-        return {f: getattr(v, f, None) for f in v.__struct_fields__}
-    msg = f"Unable to convert model to dictionary for '{type(v)}' types"
-    raise AdvancedAlchemyError(msg)
+def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]:
+    return MSGSPEC_INSTALLED and isinstance(v, Struct) and field_name not in v.__struct_fields__
+
+
+def schema_dump(
+    data: dict[str, Any] | ModelT | Struct | BaseModel,
+    exclude_unset: bool = True,
+) -> dict[str, Any] | ModelT:
+    if is_dict(data):
+        return data
+    if is_pydantic_model(data):
+        return data.model_dump(exclude_unset=exclude_unset)
+    if is_msgspec_model(data) and exclude_unset:
+        return {f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET}
+    if is_msgspec_model(data) and not exclude_unset:
+        return {f: getattr(data, f, None) for f in data.__struct_fields__}
+    return cast("ModelT", data)
 
 
 __all__ = (
@@ -143,9 +154,12 @@ __all__ = (
     "UNSET",
     "is_dict",
     "is_dict_with_field",
+    "is_dict_without_field",
     "is_msgspec_model",
     "is_pydantic_model_with_field",
+    "is_msgspec_model_without_field",
     "is_pydantic_model",
     "is_msgspec_model_with_field",
-    "schema_to_dict",
+    "is_pydantic_model_without_field",
+    "schema_dump",
 )

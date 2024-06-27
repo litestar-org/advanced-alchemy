@@ -12,7 +12,7 @@ from advanced_alchemy.service.typing import (
     PydanticOrMsgspecT,
     is_dict_with_field,
     is_dict_without_field,
-    schema_to_dict,
+    schema_dump,
 )
 from tests.fixtures.uuid.models import (
     UUIDAuthor,
@@ -229,7 +229,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
@@ -250,7 +250,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
@@ -272,7 +272,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
@@ -294,7 +294,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
         data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
         operation: str | None = None,
     ) -> UUIDSlugBook:
-        data = schema_to_dict(data)
+        data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
