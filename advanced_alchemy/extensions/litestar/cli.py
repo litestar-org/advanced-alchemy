@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 from click import argument, group, option
 from litestar.cli._utils import LitestarGroup, console
@@ -140,19 +140,22 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
 
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = get_database_migration_plugin(app)
-    if directory is None:
-        if isinstance(plugin._config, list):  # noqa: SLF001
-            directory = plugin._config[0].alembic_config.script_location  # noqa: SLF001
-        else:
-            directory = plugin._config.alembic_config.script_location  # noqa: SLF001
+    configs = plugin.config if isinstance(plugin.config, Sequence) else [plugin.config]
+
     input_confirmed = (
         True
         if no_prompt
         else Confirm.ask(f"[bold]Are you sure you you want initialize the project in `{directory}`?[/]")
     )
     if input_confirmed:
-        alembic_commands = AlembicCommands(app)
-        alembic_commands.init(directory=directory, multidb=multidb, package=package)
+        for config in configs:
+            if directory is None:
+                if isinstance(plugin.config, Sequence):
+                    directory = config.alembic_config.script_location
+                else:
+                    directory = config.alembic_config.script_location
+            alembic_commands = AlembicCommands(app)
+            alembic_commands.init(directory=directory, multidb=multidb, package=package)
 
 
 @database_group.command(

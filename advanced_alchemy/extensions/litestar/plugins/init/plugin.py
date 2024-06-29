@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence, cast
 from uuid import UUID
 
 from litestar.di import Provide
@@ -27,6 +27,7 @@ from advanced_alchemy.service import OffsetPagination
 if TYPE_CHECKING:
     from click import Group
     from litestar.config.app import AppConfig
+    from litestar.types import BeforeMessageSendHookHandler
 
     from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
@@ -57,7 +58,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
 
     def __init__(
         self,
-        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | list[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
     ) -> None:
         """Initialize ``SQLAlchemyPlugin``.
 
@@ -65,6 +66,12 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             config: configure DB connection and hook handlers and dependencies.
         """
         self._config = config
+
+    @property
+    def config(
+        self,
+    ) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
+        return self.config
 
     def on_cli_init(self, cli: Group) -> None:
         from advanced_alchemy.extensions.litestar.cli import database_group
@@ -92,28 +99,28 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
                 (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
                 *(app_config.type_decoders or []),
             ]
-        if isinstance(self._config, list):
-            for _config in self._config:
-                signature_namespace_values.update(_config.signature_namespace)
-                app_config.lifespan.append(_config.lifespan)
+        if isinstance(self._config, Sequence):
+            for config in self._config:
+                signature_namespace_values.update(config.signature_namespace)
+                app_config.lifespan.append(config.lifespan)  # pyright: ignore[reportUnknownMemberType]
 
                 app_config.dependencies.update(
                     {
-                        _config.engine_dependency_key: Provide(_config.provide_engine, sync_to_thread=False),
-                        _config.session_dependency_key: Provide(_config.provide_session, sync_to_thread=False),
+                        config.engine_dependency_key: Provide(config.provide_engine, sync_to_thread=False),
+                        config.session_dependency_key: Provide(config.provide_session, sync_to_thread=False),
                     },
                 )
-                app_config.before_send.append(_config.before_send_handler)
+                app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))
         else:
             signature_namespace_values.update(self._config.signature_namespace)
-            app_config.lifespan.append(self._config.lifespan)
+            app_config.lifespan.append(self._config.lifespan)  # pyright: ignore[reportUnknownMemberType]
             app_config.dependencies.update(
                 {
                     self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
                     self._config.session_dependency_key: Provide(self._config.provide_session, sync_to_thread=False),
                 },
             )
-            app_config.before_send.append(self._config.before_send_handler)
+            app_config.before_send.append(cast("BeforeMessageSendHookHandler", self._config.before_send_handler))
         app_config.signature_namespace.update(signature_namespace_values)
 
         return app_config
