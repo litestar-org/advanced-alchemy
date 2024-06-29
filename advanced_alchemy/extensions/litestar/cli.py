@@ -347,7 +347,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     sqlalchemy_config = get_database_migration_plugin(app)._config  # noqa: SLF001
     engine = sqlalchemy_config.get_engine()
 
-    def _sync_or_async(*, engine: Engine | AsyncEngine) -> TypeIs[Engine]:
+    def _sync_or_async(engine: Engine | AsyncEngine) -> TypeIs[Engine]:
         return isinstance(engine, Engine)
 
     def _drop_tables_sync(engine: Engine) -> None:
@@ -368,7 +368,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
             await db.run_sync(Table(sqlalchemy_config.alembic_config.version_table_name, orm_registry.metadata).drop, checkfirst=True)
         console.rule("[bold yellow]Successfully dropped all objects", align="left")
 
-    if _sync_or_async(engine=engine):
+    if _sync_or_async(engine):
         return _drop_tables_sync(engine)
 
     return run(_drop_tables_async, engine)
