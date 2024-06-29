@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+from anyio import run
 from click import argument, group, option
 from litestar.cli._utils import LitestarGroup, console
+from sqlalchemy import Engine, Table
+
+from advanced_alchemy.base import orm_registry
 
 if TYPE_CHECKING:
     from litestar import Litestar
+    from sqlalchemy.ext.asyncio import AsyncEngine
+    from typing_extensions import TypeIs
 
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
@@ -67,7 +73,7 @@ def downgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None,
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask(f"Are you sure you you want to downgrade the database to the `{revision}` revision?")
+        else Confirm.ask(f"Are you sure you want to downgrade the database to the `{revision}` revision?")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
@@ -109,7 +115,7 @@ def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, n
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask(f"[bold]Are you sure you you want migrate the database to the `{revision}` revision?[/]")
+        else Confirm.ask(f"[bold]Are you sure you want migrate the database to the `{revision}` revision?[/]")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
@@ -145,7 +151,7 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask(f"[bold]Are you sure you you want initialize the project in `{directory}`?[/]")
+        else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app)
@@ -312,7 +318,57 @@ def stamp_revision(app: Litestar, revision: str, sql: bool, tag: str | None, pur
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Stamping database revision as current[/]", align="left")
-    input_confirmed = True if no_prompt else Confirm.ask("Are you sure you you want to stamp revision as current?")
+    input_confirmed = True if no_prompt else Confirm.ask("Are you sure you want to stamp revision as current?")
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
         alembic_commands.stamp(sql=sql, revision=revision, tag=tag, purge=purge)
+
+
+@database_group.command(name="drop-all", help="Drop all tables from the database.")
+@option(
+    "--no-prompt",
+    help="Do not prompt for confirmation before upgrading.",
+    type=bool,
+    default=False,
+    required=False,
+    show_default=True,
+    is_flag=True,
+)
+def drop_all(app: Litestar, no_prompt: bool) -> None:
+    from rich.prompt import Confirm
+
+    from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
+    console.rule("[yellow]Dropping all tables from the database[/]", align="left")
+    input_confirmed = no_prompt or Confirm.ask("[bold red]Are you sure you want to drop all tables from the database?")
+
+    if not input_confirmed:
+        return None
+
+    sqlalchemy_config = get_database_migration_plugin(app)._config  # noqa: SLF001
+    engine = sqlalchemy_config.get_engine()
+
+    def _sync_or_async(*, engine: Engine | AsyncEngine) -> TypeIs[Engine]:
+        return isinstance(engine, Engine)
+
+    def _drop_tables_sync(engine: Engine) -> None:
+        console.rule("[bold red]Connecting to database backend.")
+        with engine.begin() as db:
+            console.rule("[bold red]Dropping the db", align="left")
+            orm_registry.metadata.drop_all(db)
+            console.rule("[bold red]Dropping the version table", align="left")
+            Table(sqlalchemy_config.alembic_config.version_table_name, orm_registry.metadata).drop(db, checkfirst=True)
+        console.rule("[bold yellow]Successfully dropped all objects", align="left")
+
+    async def _drop_tables_async(engine: AsyncEngine) -> None:
+        console.rule("[bold red]Connecting to database backend.", align="left")
+        async with engine.begin() as db:
+            console.rule("[bold red]Dropping the db", align="left")
+            await db.run_sync(orm_registry.metadata.drop_all)
+            console.rule("[bold red]Dropping the version table", align="left")
+            await db.run_sync(Table(sqlalchemy_config.alembic_config.version_table_name, orm_registry.metadata).drop, checkfirst=True)
+        console.rule("[bold yellow]Successfully dropped all objects", align="left")
+
+    if _sync_or_async(engine=engine):
+        return _drop_tables_sync(engine)
+
+    return run(_drop_tables_async, engine)
