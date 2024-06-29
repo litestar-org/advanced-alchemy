@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from click.testing import CliRunner
 from litestar.cli.main import litestar_group as cli_command
 from litestar.testing import TestClient
