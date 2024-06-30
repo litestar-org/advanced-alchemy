@@ -79,10 +79,10 @@ def autocommit_handler_maker(
 ) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
     """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
+        session_scope_key: The key to use within the application state
         commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
         extra_commit_statuses: A set of additional status codes that trigger a commit
         extra_rollback_statuses: A set of additional status codes that trigger a rollback
-        session_scope_key: The key to use within the application state
 
     Returns:
         The handler callable
