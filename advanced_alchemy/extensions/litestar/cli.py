@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Sequence, cast
 
+from anyio import run
 from click import argument, group, option
 from litestar.cli._utils import LitestarGroup, console
 
@@ -67,7 +68,7 @@ def downgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None,
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask(f"Are you sure you you want to downgrade the database to the `{revision}` revision?")
+        else Confirm.ask(f"Are you sure you want to downgrade the database to the `{revision}` revision?")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
@@ -109,7 +110,7 @@ def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, n
     input_confirmed = (
         True
         if no_prompt
-        else Confirm.ask(f"[bold]Are you sure you you want migrate the database to the `{revision}` revision?[/]")
+        else Confirm.ask(f"[bold]Are you sure you want migrate the database to the `{revision}` revision?[/]")
     )
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
@@ -141,11 +142,8 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = get_database_migration_plugin(app)
     configs = plugin.config if isinstance(plugin.config, Sequence) else [plugin.config]
-
     input_confirmed = (
-        True
-        if no_prompt
-        else Confirm.ask(f"[bold]Are you sure you you want initialize the project in `{directory}`?[/]")
+        True if no_prompt else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
     )
     if input_confirmed:
         for config in configs:
@@ -318,7 +316,37 @@ def stamp_revision(app: Litestar, revision: str, sql: bool, tag: str | None, pur
     from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
     console.rule("[yellow]Stamping database revision as current[/]", align="left")
-    input_confirmed = True if no_prompt else Confirm.ask("Are you sure you you want to stamp revision as current?")
+    input_confirmed = True if no_prompt else Confirm.ask("Are you sure you want to stamp revision as current?")
     if input_confirmed:
         alembic_commands = AlembicCommands(app=app)
         alembic_commands.stamp(sql=sql, revision=revision, tag=tag, purge=purge)
+
+
+@database_group.command(name="drop-all", help="Drop all tables from the database.")
+@option(
+    "--no-prompt",
+    help="Do not prompt for confirmation before upgrading.",
+    type=bool,
+    default=False,
+    required=False,
+    show_default=True,
+    is_flag=True,
+)
+def drop_all(app: Litestar, no_prompt: bool) -> None:
+    from rich.prompt import Confirm
+
+    from advanced_alchemy.alembic.utils import drop_all
+    from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
+
+    console.rule("[yellow]Dropping all tables from the database[/]", align="left")
+    input_confirmed = no_prompt or Confirm.ask("[bold red]Are you sure you want to drop all tables from the database?")
+
+    sqlalchemy_config = get_database_migration_plugin(app)._config  # pyright: ignore[reportPrivateUsage] # noqa: SLF001
+    engine = sqlalchemy_config.get_engine()
+    if input_confirmed:
+        run(
+            drop_all,
+            engine,
+            sqlalchemy_config.alembic_config.version_table_name,
+            sqlalchemy_config.alembic_config.target_metadata,
+        )
