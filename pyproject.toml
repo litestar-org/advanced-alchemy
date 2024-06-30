@@ -375,7 +375,7 @@ venvPath = "."
 
 [tool.unasyncd]
 add_editors_note = true
-cache = false
+cache = true
 ruff_fix = true
 update_docstrings = true
 

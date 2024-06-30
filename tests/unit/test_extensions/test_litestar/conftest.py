@@ -31,10 +31,15 @@ from sqlalchemy import Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
-from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+
+
+@pytest.fixture(autouse=True)
+def reload_package() -> Generator[None, None, None]:
+    yield
+    GenericSQLAlchemyConfig._KEY_REGISTRY = set()
 
 
 @pytest.fixture(autouse=True)

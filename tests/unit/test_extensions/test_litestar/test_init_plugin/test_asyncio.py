@@ -77,7 +77,7 @@ async def test_create_all_default(monkeypatch: MonkeyPatch) -> None:
         config,
         "create_all_metadata",
     ) as create_all_metadata_mock:
-        async with LifespanManager(app):  # pyright: ignore[reportArgumentType]
+        async with LifespanManager(app):  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
             create_all_metadata_mock.assert_not_called()
 
 
@@ -90,7 +90,7 @@ async def test_create_all(monkeypatch: MonkeyPatch) -> None:
         config,
         "create_all_metadata",
     ) as create_all_metadata_mock:
-        async with LifespanManager(app):  # pyright: ignore[reportArgumentType]
+        async with LifespanManager(app):  # type: ignore[arg-type]   # pyright: ignore[reportArgumentType]
             create_all_metadata_mock.assert_called_once()
 
 
