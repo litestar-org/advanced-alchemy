@@ -55,19 +55,19 @@ class BookModel(UUIDAuditBase):
 
 
 class Author(BaseModel):
-    id: UUID | None
+    id: Optional[UUID]
     name: str
-    dob: date | None = None
+    dob: Optional[date] = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: date | None = None
+    dob: Optional[date] = None
 
 
 class AuthorUpdate(BaseModel):
-    name: str | None = None
-    dob: date | None = None
+    name: Optional[str] = None
+    dob: Optional[date] = None
 
 
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
