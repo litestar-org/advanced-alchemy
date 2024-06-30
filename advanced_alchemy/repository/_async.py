@@ -1660,7 +1660,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if match_fields is None:
             match_fields = [self.id_attribute]
         for existing_datum in existing_data:
-            for row_id, datum in enumerate(data):
+            for _row_id, datum in enumerate(data):
                 match = all(
                     getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
                 )

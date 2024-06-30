@@ -5,16 +5,19 @@ from typing import Type, cast
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
-from pytest import FixtureRequest
+from pytest import CaptureFixture, FixtureRequest
 from pytest_lazyfixture import lazy_fixture
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 
+from advanced_alchemy import base
 from advanced_alchemy.alembic import commands
-from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.alembic.utils import drop_all
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from alembic.util.exc import CommandError
 from tests.fixtures.uuid import models as models_uuid
+from tests.helpers import maybe_async
 
 AuthorModel = Type[models_uuid.UUIDAuthor]
 RuleModel = Type[models_uuid.UUIDRule]
@@ -96,8 +99,12 @@ pytestmark = [
 )
 def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
     engine = cast(Engine, request.getfixturevalue(request.param))
-
-    return SQLAlchemySyncConfig(engine_instance=engine, session_maker=sessionmaker(bind=engine, expire_on_commit=False))
+    orm_registry = base.create_registry()
+    return SQLAlchemySyncConfig(
+        engine_instance=engine,
+        session_maker=sessionmaker(bind=engine, expire_on_commit=False),
+        metadata=orm_registry.metadata,
+    )
 
 
 @pytest.fixture(
@@ -171,9 +178,11 @@ def async_sqlalchemy_config(
     request: FixtureRequest,
 ) -> SQLAlchemyAsyncConfig:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
+    orm_registry = base.create_registry()
     return SQLAlchemyAsyncConfig(
         engine_instance=async_engine,
         session_maker=async_sessionmaker(bind=async_engine, expire_on_commit=False),
+        metadata=orm_registry.metadata,
     )
 
 
@@ -225,6 +234,24 @@ async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, 
         assert Path(file).is_file()
     with pytest.raises(CommandError):
         alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
+
+
+async def test_drop_all(
+    alembic_commands: commands.AlembicCommands,
+    any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
+    capsys: CaptureFixture[str],
+) -> None:
+    from examples.litestar.litestar_repo_only import app
+
+    await maybe_async(any_config.create_all_metadata(app))
+
+    await drop_all(
+        alembic_commands.config.engine,
+        alembic_commands.sqlalchemy_config.alembic_config.version_table_name,
+        alembic_commands.sqlalchemy_config.alembic_config.target_metadata,
+    )
+    result = capsys.readouterr()
+    assert "Successfully dropped all objects" in result.out
 
 
 """

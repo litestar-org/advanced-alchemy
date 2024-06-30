@@ -29,6 +29,7 @@ dependencies = [
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet; sys_platform == \"darwin\"",
+  "eval_type_backport; python_version <= \"3.9\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
@@ -244,6 +245,7 @@ ignore = [
   "ARG002",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
   "PD011",   # pandas
+  "PLR0912",
 ]
 select = ["ALL"]
 
@@ -251,7 +253,7 @@ select = ["ALL"]
 convention = "google"
 
 [tool.ruff.lint.mccabe]
-max-complexity = 12
+max-complexity = 14
 
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = [
@@ -261,7 +263,7 @@ classmethod-decorators = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"advanced_alchemy/repository/*.py" = ['PLR0912', 'C901']
+"advanced_alchemy/repository/*.py" = ['C901']
 "tests/**/*.*" = [
   "A",
   "ARG",

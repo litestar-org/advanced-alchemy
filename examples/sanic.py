@@ -21,7 +21,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 # The `Base` class includes a `UUID` based primary key (`id`)
 class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
-    __tablename__ = "author"  #
+    __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[date | None]
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
