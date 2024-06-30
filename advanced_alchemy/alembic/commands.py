@@ -124,7 +124,7 @@ class AlembicCommands:
     def heads(self, verbose: bool = False, resolve_dependencies: bool = False) -> None:
         """Show current available heads in the script directory."""
 
-        return migration_command.heads(config=self.config, verbose=verbose, resolve_dependencies=resolve_dependencies)  # type: ignore  # noqa: PGH003
+        return migration_command.heads(config=self.config, verbose=verbose, resolve_dependencies=resolve_dependencies)
 
     def history(
         self,
@@ -193,7 +193,7 @@ class AlembicCommands:
     ) -> None:
         """Show the revision(s) denoted by the given symbol."""
 
-        return migration_command.show(config=self.config, rev=rev)  # type: ignore  # noqa: PGH003
+        return migration_command.show(config=self.config, rev=rev)
 
     def init(
         self,

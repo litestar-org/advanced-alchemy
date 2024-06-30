@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from datetime import date  # noqa: TCH003
+from typing import TYPE_CHECKING, List, Optional
+from uuid import UUID  # noqa: TCH003
 
 from litestar import Litestar
 from litestar.controller import Controller
@@ -20,9 +22,6 @@ from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 if TYPE_CHECKING:
-    from datetime import date
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -38,8 +37,8 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[date | None]
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    dob: Mapped[Optional[date]]  # noqa: UP007
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -56,7 +55,7 @@ class BookModel(UUIDAuditBase):
 
 
 class Author(BaseModel):
-    id: UUID | None
+    id: Optional[UUID]  # noqa: UP007
     name: str
     dob: date | None = None
 
@@ -201,19 +200,13 @@ session_config = AsyncSessionConfig(expire_on_commit=False)
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=session_config,
+    create_all=True,
 )  # Create 'db_session' dependency.
 sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
-async def on_startup() -> None:
-    """Initializes the database."""
-    async with sqlalchemy_config.get_engine().begin() as conn:
-        await conn.run_sync(UUIDBase.metadata.create_all)
-
-
 app = Litestar(
     route_handlers=[AuthorController],
-    on_startup=[on_startup],
     plugins=[sqlalchemy_plugin],
     dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
 )
