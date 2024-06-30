@@ -55,7 +55,7 @@ class BookModel(UUIDAuditBase):
 
 
 class Author(BaseModel):
-    id: UUID | None
+    id: Optional[UUID]  # noqa: UP007
     name: str
     dob: date | None = None
 
