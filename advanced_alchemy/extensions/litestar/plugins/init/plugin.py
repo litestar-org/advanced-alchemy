@@ -99,28 +99,17 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
                 (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
                 *(app_config.type_decoders or []),
             ]
-        if isinstance(self._config, Sequence):
-            for config in self._config:
-                signature_namespace_values.update(config.signature_namespace)
-                app_config.lifespan.append(config.lifespan)  # pyright: ignore[reportUnknownMemberType]
+        for config in self._config if isinstance(self._config, Sequence) else [self._config]:
+            signature_namespace_values.update(config.signature_namespace)
+            app_config.lifespan.append(config.lifespan)  # pyright: ignore[reportUnknownMemberType]
 
-                app_config.dependencies.update(
-                    {
-                        config.engine_dependency_key: Provide(config.provide_engine, sync_to_thread=False),
-                        config.session_dependency_key: Provide(config.provide_session, sync_to_thread=False),
-                    },
-                )
-                app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))
-        else:
-            signature_namespace_values.update(self._config.signature_namespace)
-            app_config.lifespan.append(self._config.lifespan)  # pyright: ignore[reportUnknownMemberType]
             app_config.dependencies.update(
                 {
-                    self._config.engine_dependency_key: Provide(self._config.provide_engine, sync_to_thread=False),
-                    self._config.session_dependency_key: Provide(self._config.provide_session, sync_to_thread=False),
+                    config.engine_dependency_key: Provide(config.provide_engine, sync_to_thread=False),
+                    config.session_dependency_key: Provide(config.provide_session, sync_to_thread=False),
                 },
             )
-            app_config.before_send.append(cast("BeforeMessageSendHookHandler", self._config.before_send_handler))
+            app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))
         app_config.signature_namespace.update(signature_namespace_values)
 
         return app_config
