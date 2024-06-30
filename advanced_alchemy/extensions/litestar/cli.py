@@ -144,7 +144,6 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = get_database_migration_plugin(app)
     configs = plugin.config if isinstance(plugin.config, Sequence) else [plugin.config]
-
     input_confirmed = (
         True if no_prompt else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
     )
