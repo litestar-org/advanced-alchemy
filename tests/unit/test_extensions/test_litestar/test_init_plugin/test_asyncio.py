@@ -219,10 +219,10 @@ async def test_autocommit_handler_maker_rollback_statuses_multi(create_scope: Ca
         extra_rollback_statuses={307, 308},
     )
     config1 = SQLAlchemyAsyncConfig(
-        connection_string="sqlite://",
+        connection_string="sqlite+aiosqlite://",
     )
     config2 = SQLAlchemyAsyncConfig(
-        connection_string="sqlite://",
+        connection_string="sqlite+aiosqlite://",
         before_send_handler=custom_autocommit_handler,
         session_dependency_key="other_session",
         session_scope_key="_sqlalchemy_state_2",
@@ -240,5 +240,33 @@ async def test_autocommit_handler_maker_rollback_statuses_multi(create_scope: Ca
     }
     await custom_autocommit_handler(http_response_start, http_scope)
 
+    mock_session2.rollback.assert_called_once()
+    mock_session1.rollback.assert_not_called()
+
+
+async def test_autocommit_handler_maker_multi(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker rolls back on explicit statuses"""
+
+    config1 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler="autocommit",
+    )
+    config2 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler="autocommit",
+        session_dependency_key="other_session",
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
+    mock_session1 = MagicMock(spec=AsyncSession)
+    mock_session2 = MagicMock(spec=AsyncSession)
+    http_scope = create_scope(app=app)
+    set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
+    set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.randint(307, 308),
+        "headers": {},
+    }
+    await config2.before_send_handler(http_response_start, http_scope)  # type: ignore
     mock_session2.rollback.assert_called_once()
     mock_session1.rollback.assert_not_called()

@@ -69,17 +69,17 @@ default_before_send_handler = default_handler_maker()
 
 
 def autocommit_handler_maker(
-    session_scope_key: str = SESSION_SCOPE_KEY,
     commit_on_redirect: bool = False,
     extra_commit_statuses: set[int] | None = None,
     extra_rollback_statuses: set[int] | None = None,
+    session_scope_key: str = SESSION_SCOPE_KEY,
 ) -> Callable[[Message, Scope], None]:
     """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
-        session_scope_key: The key to use within the application state
         commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
         extra_commit_statuses: A set of additional status codes that trigger a commit
         extra_rollback_statuses: A set of additional status codes that trigger a rollback
+        session_scope_key: The key to use within the application state
 
     Returns:
         The handler callable
@@ -156,11 +156,19 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     The configuration options are documented in the SQLAlchemy documentation.
     """
 
+    def _ensure_unique_session_scope_key(self, key: str, _iter: int = 0) -> str:
+        if key in self.__class__._KEY_REGISTRY:  # noqa: SLF001
+            _iter += 1
+            key = self._ensure_unique_session_scope_key(f"{key}_{_iter}", _iter)
+        return key
+
     def __post_init__(self) -> None:
+        self.session_scope_key = self._ensure_unique_session_scope_key(self.session_scope_key)
+        self.__class__._KEY_REGISTRY.add(self.session_scope_key)  # noqa: SLF001
         if self.before_send_handler is None:
-            self.before_send_handler = default_handler_maker(self.session_scope_key)
+            self.before_send_handler = default_handler_maker(session_scope_key=self.session_scope_key)
         if self.before_send_handler == "autocommit":
-            self.before_send_handler = autocommit_handler_maker(self.session_scope_key)
+            self.before_send_handler = autocommit_handler_maker(session_scope_key=self.session_scope_key)
         super().__post_init__()
 
     def create_session_maker(self) -> Callable[[], Session]:

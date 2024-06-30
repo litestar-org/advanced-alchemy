@@ -9,10 +9,12 @@ from litestar import Litestar, get
 from litestar.testing import create_test_client  # type: ignore
 from litestar.types.asgi_types import HTTPResponseStartEvent
 from pytest import MonkeyPatch
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from advanced_alchemy.extensions.litestar._utils import set_aa_scope_state
 from advanced_alchemy.extensions.litestar.plugins import (
+    SQLAlchemyAsyncConfig,
     SQLAlchemyInitPlugin,
     SQLAlchemySyncConfig,
 )
@@ -236,3 +238,74 @@ def test_autocommit_handler_maker_rollback_statuses_multi(create_scope: Callable
     custom_autocommit_handler(http_response_start, http_scope)
     mock_session2.rollback.assert_called_once()
     mock_session1.rollback.assert_not_called()
+
+
+def test_autocommit_handler_maker_multi(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker rolls back on explicit statuses"""
+
+    config1 = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler="autocommit",
+    )
+    config2 = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler="autocommit",
+        session_dependency_key="other_session",
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
+    mock_session1 = MagicMock(spec=Session)
+    mock_session2 = MagicMock(spec=Session)
+    http_scope = create_scope(app=app)
+    set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
+    set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.randint(307, 308),
+        "headers": {},
+    }
+    config2.before_send_handler(http_response_start, http_scope)  # type: ignore
+    mock_session2.rollback.assert_called_once()
+    mock_session1.rollback.assert_not_called()
+
+
+def test_autocommit_handler_maker_multi_async_and_sync(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker rolls back on explicit statuses"""
+
+    config1 = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler="autocommit",
+    )
+    config2 = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        before_send_handler="autocommit",
+        session_dependency_key="other_session",
+    )
+    config3 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler="autocommit",
+    )
+    config4 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler="autocommit",
+        session_dependency_key="other_session",
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2, config3, config4])])
+    mock_session1 = MagicMock(spec=Session)
+    mock_session2 = MagicMock(spec=Session)
+    mock_session3 = MagicMock(spec=AsyncSession)
+    mock_session4 = MagicMock(spec=AsyncSession)
+    http_scope = create_scope(app=app)
+    set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
+    set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+    set_aa_scope_state(http_scope, config3.session_scope_key, mock_session3)
+    set_aa_scope_state(http_scope, config4.session_scope_key, mock_session4)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": random.randint(307, 308),
+        "headers": {},
+    }
+    config2.before_send_handler(http_response_start, http_scope)  # type: ignore
+    mock_session2.rollback.assert_called_once()
+    mock_session1.rollback.assert_not_called()
+    mock_session3.rollback.assert_not_called()
+    mock_session4.rollback.assert_not_called()
