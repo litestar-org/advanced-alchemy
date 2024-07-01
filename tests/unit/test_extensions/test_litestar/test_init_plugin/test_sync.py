@@ -288,6 +288,7 @@ def test_autocommit_handler_maker_multi(create_scope: Callable[..., Scope]) -> N
         connection_string="sqlite://",
         before_send_handler="autocommit",
         session_dependency_key="other_session",
+        engine_dependency_key="other_engine",
     )
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
     mock_session1 = MagicMock(spec=Session)
