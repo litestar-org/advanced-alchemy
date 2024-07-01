@@ -197,7 +197,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 self.create_all_metadata(app)
             yield
         finally:
-            cast("Engine", deps[self.engine_dependency_key]).dispose()
+            if self.engine_dependency_key in deps:
+                cast("Engine", deps[self.engine_dependency_key]).dispose()
 
     def provide_engine(self, state: State) -> Engine:
         """Create an engine instance.

@@ -200,7 +200,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await self.create_all_metadata(app)
             yield
         finally:
-            await cast("AsyncEngine", deps[self.engine_dependency_key]).dispose()
+            if self.engine_dependency_key in deps:
+                await cast("AsyncEngine", deps[self.engine_dependency_key]).dispose()
 
     def provide_engine(self, state: State) -> AsyncEngine:
         """Create an engine instance.

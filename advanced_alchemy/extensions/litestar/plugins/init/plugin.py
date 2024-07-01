@@ -72,7 +72,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
     def config(
         self,
     ) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
-        return self.config
+        return self._config
 
     def on_cli_init(self, cli: Group) -> None:
         from advanced_alchemy.extensions.litestar.cli import database_group
