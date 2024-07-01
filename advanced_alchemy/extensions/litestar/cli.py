@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 from anyio import run
 from click import argument, group, option
@@ -9,6 +9,8 @@ from litestar.cli._utils import LitestarGroup, console
 if TYPE_CHECKING:
     from litestar import Litestar
 
+    from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
 
@@ -141,14 +143,15 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
 
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = get_database_migration_plugin(app)
-    if directory is None:
-        directory = plugin._alembic_config.script_location  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    configs = plugin.config if isinstance(plugin.config, Sequence) else [plugin.config]
     input_confirmed = (
         True if no_prompt else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
     )
     if input_confirmed:
-        alembic_commands = AlembicCommands(app)
-        alembic_commands.init(directory=directory, multidb=multidb, package=package)
+        for config in configs:
+            directory = config.alembic_config.script_location if directory is None else directory
+            alembic_commands = AlembicCommands(app)
+            alembic_commands.init(directory=directory, multidb=multidb, package=package)
 
 
 @database_group.command(
@@ -336,12 +339,20 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     console.rule("[yellow]Dropping all tables from the database[/]", align="left")
     input_confirmed = no_prompt or Confirm.ask("[bold red]Are you sure you want to drop all tables from the database?")
 
-    sqlalchemy_config = get_database_migration_plugin(app)._config  # pyright: ignore[reportPrivateUsage] # noqa: SLF001
-    engine = sqlalchemy_config.get_engine()
+    config = get_database_migration_plugin(app).config  # pyright: ignore[reportPrivateUsage]
+    if not isinstance(config, Sequence):
+        config = [config]
+
+    async def _drop_all(
+        configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+    ) -> None:
+        for config in configs:
+            engine = config.get_engine()
+
+            await drop_all(engine, config.alembic_config.version_table_name, config.alembic_config.target_metadata)
+
     if input_confirmed:
         run(
-            drop_all,
-            engine,
-            sqlalchemy_config.alembic_config.version_table_name,
-            sqlalchemy_config.alembic_config.target_metadata,
+            _drop_all,
+            config,
         )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, ClassVar, Generic, TypeVar, cast
 
 from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config.engine import EngineConfig
@@ -130,6 +130,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     This is a listener that will update ``created_at`` and ``updated_at`` columns on record modification.
     Disable if you plan to bring your own update mechanism for these columns"""
+    _KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
+    """Internal counter for ensuring unique identification of the class."""
 
     def __post_init__(self) -> None:
         if self.connection_string is not None and self.engine_instance is not None:

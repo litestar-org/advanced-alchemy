@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import os
 import random
 import string
@@ -22,7 +22,7 @@ from litestar.types import (
     ASGIVersion,
     RouteHandlerType,
     Scope,
-    ScopeSession,
+    ScopeSession,  # type: ignore
 )
 from litestar.types.empty import Empty
 from litestar.typing import FieldDefinition
@@ -31,19 +31,24 @@ from sqlalchemy import Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
-from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+
+
+@pytest.fixture(autouse=True)
+def reload_package() -> Generator[None, None, None]:
+    yield
+    GenericSQLAlchemyConfig._KEY_REGISTRY = set()  # type: ignore
 
 
 @pytest.fixture(autouse=True)
 def reset_cached_dto_backends() -> Generator[None, None, None]:
-    DTOBackend._seen_model_names = set()
-    AbstractDTO._dto_backends = {}
+    DTOBackend._seen_model_names = set()  # pyright: ignore[reportPrivateUsage]
+    AbstractDTO._dto_backends = {}  # pyright: ignore[reportPrivateUsage]
     yield
-    DTOBackend._seen_model_names = set()
-    AbstractDTO._dto_backends = {}
+    DTOBackend._seen_model_names = set()  # pyright: ignore[reportPrivateUsage]
+    AbstractDTO._dto_backends = {}  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.fixture(autouse=True)
@@ -186,12 +191,12 @@ def create_scope() -> Callable[..., Scope]:
         route_handler: RouteHandlerType | None = None,
         scheme: str = "http",
         server: tuple[str, int | None] | None = ("testserver", 80),
-        session: ScopeSession | None = None,
+        session: ScopeSession | None = None,  # pyright: ignore[reportUnknownParameterType]
         state: dict[str, Any] | None = None,
         user: Any = None,
         **kwargs: dict[str, Any],
     ) -> Scope:
-        scope = {
+        scope: dict[str, Any] = {
             "app": app,
             "asgi": asgi or {"spec_version": "2.0", "version": "3.0"},
             "auth": auth,
@@ -215,7 +220,7 @@ def create_scope() -> Callable[..., Scope]:
         }
         return cast("Scope", scope)
 
-    return inner
+    return inner  # pyright: ignore[reportUnknownVariableType]
 
 
 @pytest.fixture
