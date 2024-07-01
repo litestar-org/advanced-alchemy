@@ -1,4 +1,4 @@
-from advanced_alchemy.repository import LoadSpec, ModelOrRowMappingT, ModelT, model_from_dict
+from advanced_alchemy.repository import LoadSpec, ModelOrRowMappingT, ModelT, OrderingPair, model_from_dict
 from advanced_alchemy.service._async import (
     SQLAlchemyAsyncQueryService,
     SQLAlchemyAsyncRepositoryReadService,
@@ -54,4 +54,5 @@ __all__ = (
     "model_from_dict",
     "ModelT",
     "ModelOrRowMappingT",
+    "OrderingPair",
 )

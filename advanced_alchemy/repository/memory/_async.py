@@ -34,7 +34,7 @@ from advanced_alchemy.repository.memory.base import (
     SQLAlchemyInMemoryStore,
     SQLAlchemyMultiStore,
 )
-from advanced_alchemy.repository.typing import MISSING, ModelT
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -69,6 +69,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         "attribute_names",
         "with_for_update",
         "force_basic_query_mode",
+        "order_by",
         "load",
         "execution_options",
     }
@@ -81,6 +82,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -90,6 +92,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
+        self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
@@ -633,9 +636,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,

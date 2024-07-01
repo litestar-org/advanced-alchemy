@@ -27,7 +27,7 @@ from advanced_alchemy.filters import (
     PaginationFilter,
     StatementFilter,
 )
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import ModelT, OrderingPair
 
 if TYPE_CHECKING:
     from sqlalchemy import (
@@ -49,6 +49,11 @@ LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
 ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
 LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
 
+OrderByT: TypeAlias = Union[
+    str,
+    InstrumentedAttribute[Any],
+    RelationshipProperty[Any],
+]
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
@@ -126,6 +131,8 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     _prefer_any: bool = False
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
+    order_by: list[OrderingPair] | OrderingPair | None = None
+    """List of ordering pairs to use for sorting."""
 
     def _apply_filters(
         self,
@@ -183,4 +190,26 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
         statement += lambda s: s.where(field == value)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+        return statement
+
+    def _apply_order_by(
+        self,
+        statement: StatementLambdaElement,
+        order_by: list[tuple[str | InstrumentedAttribute[Any], bool]] | tuple[str | InstrumentedAttribute[Any], bool],
+    ) -> StatementLambdaElement:
+        if not isinstance(order_by, list):
+            order_by = [order_by]
+        for order_field, is_desc in order_by:
+            field = get_instrumented_attr(self.model_type, order_field)
+            statement = self._order_by_attribute(statement, field, is_desc)
+        return statement
+
+    def _order_by_attribute(
+        self,
+        statement: StatementLambdaElement,
+        field: InstrumentedAttribute[Any],
+        is_desc: bool,
+    ) -> StatementLambdaElement:
+        fragment = field.desc() if is_desc else field.asc()
+        statement += lambda s: s.order_by(fragment)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement

@@ -18,7 +18,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
     model_from_dict,
 )
-from advanced_alchemy.repository.typing import ModelOrRowMappingT, ModelT
+from advanced_alchemy.repository.typing import ModelOrRowMappingT, ModelT, OrderingPair
 
 __all__ = (
     "SQLAlchemyAsyncRepository",
@@ -37,4 +37,5 @@ __all__ = (
     "LoadSpec",
     "ModelT",
     "ModelOrRowMappingT",
+    "OrderingPair",
 )

@@ -119,6 +119,10 @@ def test_sync_fixture_and_query() -> None:
         _add_objs = state_service.create_many(
             data=[USStateStruct(**raw_obj) for raw_obj in fixture],
         )
+        _ordered_objs = state_service.list(order_by=(USState.name, True))
+        assert _ordered_objs[0].name == "Wyoming"
+        _ordered_objs_2 = state_service.list_and_count(order_by=[(USState.name, True)])
+        assert _ordered_objs_2[0][0].name == "Wyoming"
         query_count = query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = query_service.repository.list_and_count(
@@ -194,6 +198,10 @@ async def test_async_fixture_and_query() -> None:
         _add_objs = await state_service.create_many(
             data=[USStateBaseModel(**raw_obj) for raw_obj in fixture],
         )
+        _ordered_objs = await state_service.list(order_by=(USState.name, True))
+        assert _ordered_objs[0].name == "Wyoming"
+        _ordered_objs_2 = await state_service.list_and_count(order_by=(USState.name, True))
+        assert _ordered_objs_2[0][0].name == "Wyoming"
         query_count = await query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
         list_query_objs, list_query_count = await query_service.repository.list_and_count(
