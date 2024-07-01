@@ -149,11 +149,7 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     )
     if input_confirmed:
         for config in configs:
-            if directory is None:
-                if isinstance(plugin.config, Sequence):
-                    directory = config.alembic_config.script_location
-                else:
-                    directory = config.alembic_config.script_location
+            directory = config.alembic_config.script_location if directory is None else directory
             alembic_commands = AlembicCommands(app)
             alembic_commands.init(directory=directory, multidb=multidb, package=package)
 
