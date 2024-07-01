@@ -35,7 +35,7 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
     def config(
         self,
     ) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
-        return self.config
+        return self._config
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         """Configure application for use with SQLAlchemy.
