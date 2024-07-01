@@ -54,6 +54,7 @@ def test_default_before_send_handle_multi() -> None:
         connection_string="sqlite+aiosqlite://",
         session_dependency_key="other_session",
         session_scope_key="_sqlalchemy_state_2",
+        engine_dependency_key="other_engine",
     )
     plugin = SQLAlchemyInitPlugin(config=[config1, config2])
 
