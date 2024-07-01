@@ -84,9 +84,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         scope_keys = {config.session_scope_key for config in configs}
         engine_keys = {config.engine_dependency_key for config in configs}
         session_keys = {config.session_dependency_key for config in configs}
-        if len(configs) > 1 and any(
-            [len(scope_keys) != len(configs), len(engine_keys) != len(configs), len(session_keys) != len(configs)],
-        ):
+        if len(configs) > 1 and any(len(i) != len(configs) for i in (scope_keys, engine_keys, session_keys)):
             raise ImproperConfigurationError(
                 detail="When using multiple configurations, please ensure the `session_dependency_key` and `engine_dependency_key` settings are unique across all configs.  Additionally, iF you are using a custom `before_send` handler, ensure `session_scope_key` is unique.",
             )
