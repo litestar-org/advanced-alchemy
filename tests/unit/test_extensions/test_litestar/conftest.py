@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import os
 import random
 import string
@@ -22,7 +22,7 @@ from litestar.types import (
     ASGIVersion,
     RouteHandlerType,
     Scope,
-    ScopeSession,
+    ScopeSession,  # type: ignore
 )
 from litestar.types.empty import Empty
 from litestar.typing import FieldDefinition
@@ -44,11 +44,11 @@ def reload_package() -> Generator[None, None, None]:
 
 @pytest.fixture(autouse=True)
 def reset_cached_dto_backends() -> Generator[None, None, None]:
-    DTOBackend._seen_model_names = set()
-    AbstractDTO._dto_backends = {}
+    DTOBackend._seen_model_names = set()  # pyright: ignore[reportPrivateUsage]
+    AbstractDTO._dto_backends = {}  # pyright: ignore[reportPrivateUsage]
     yield
-    DTOBackend._seen_model_names = set()
-    AbstractDTO._dto_backends = {}
+    DTOBackend._seen_model_names = set()  # pyright: ignore[reportPrivateUsage]
+    AbstractDTO._dto_backends = {}  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.fixture(autouse=True)
@@ -191,12 +191,12 @@ def create_scope() -> Callable[..., Scope]:
         route_handler: RouteHandlerType | None = None,
         scheme: str = "http",
         server: tuple[str, int | None] | None = ("testserver", 80),
-        session: ScopeSession | None = None,
+        session: ScopeSession | None = None,  # pyright: ignore[reportUnknownParameterType]
         state: dict[str, Any] | None = None,
         user: Any = None,
         **kwargs: dict[str, Any],
     ) -> Scope:
-        scope = {
+        scope: dict[str, Any] = {
             "app": app,
             "asgi": asgi or {"spec_version": "2.0", "version": "3.0"},
             "auth": auth,
@@ -220,7 +220,7 @@ def create_scope() -> Callable[..., Scope]:
         }
         return cast("Scope", scope)
 
-    return inner
+    return inner  # pyright: ignore[reportUnknownVariableType]
 
 
 @pytest.fixture

@@ -4,6 +4,7 @@ import random
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
 from asgi_lifespan import LifespanManager
 from litestar import Litestar, get
 from litestar.testing import create_test_client  # type: ignore
@@ -12,6 +13,7 @@ from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar._utils import set_aa_scope_state
 from advanced_alchemy.extensions.litestar.plugins import (
     SQLAlchemyAsyncConfig,
@@ -82,7 +84,7 @@ async def test_create_all_default(monkeypatch: MonkeyPatch) -> None:
         config,
         "create_all_metadata",
     ) as create_all_metadata_mock:
-        async with LifespanManager(app) as _client:  # pyright: ignore[reportArgumentType]
+        async with LifespanManager(app) as _client:  # type: ignore[arg-type] # pyright: ignore[reportArgumentType]
             create_all_metadata_mock.assert_not_called()
 
 
@@ -96,7 +98,7 @@ async def test_create_all(monkeypatch: MonkeyPatch) -> None:
         config,
         "create_all_metadata",
     ) as create_all_metadata_mock:
-        async with LifespanManager(app) as _client:  # pyright: ignore[reportArgumentType]
+        async with LifespanManager(app) as _client:  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
             create_all_metadata_mock.assert_called_once()
 
 
@@ -222,6 +224,7 @@ def test_autocommit_handler_maker_rollback_statuses_multi(create_scope: Callable
         connection_string="sqlite://",
         before_send_handler=custom_autocommit_handler,
         session_dependency_key="other_session",
+        engine_dependency_key="other_engine",
         session_scope_key="_sqlalchemy_state_2",
     )
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
@@ -238,6 +241,39 @@ def test_autocommit_handler_maker_rollback_statuses_multi(create_scope: Callable
     custom_autocommit_handler(http_response_start, http_scope)
     mock_session2.rollback.assert_called_once()
     mock_session1.rollback.assert_not_called()
+
+
+def test_autocommit_handler_maker_rollback_statuses_multi_bad_config(create_scope: Callable[..., Scope]) -> None:
+    """Test that the handler created by the handler maker rolls back on explicit statuses"""
+    with pytest.raises(ImproperConfigurationError):
+        custom_autocommit_handler = autocommit_handler_maker(
+            session_scope_key="_sqlalchemy_state_2",
+            commit_on_redirect=True,
+            extra_rollback_statuses={307, 308},
+        )
+        config1 = SQLAlchemySyncConfig(
+            connection_string="sqlite://",
+        )
+        config2 = SQLAlchemySyncConfig(
+            connection_string="sqlite://",
+            before_send_handler=custom_autocommit_handler,
+            session_dependency_key="other_session",
+            session_scope_key="_sqlalchemy_state_2",
+        )
+        app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
+        mock_session1 = MagicMock(spec=Session)
+        mock_session2 = MagicMock(spec=Session)
+        http_scope = create_scope(app=app)
+        set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
+        set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+        http_response_start: HTTPResponseStartEvent = {
+            "type": "http.response.start",
+            "status": random.randint(307, 308),
+            "headers": {},
+        }
+        custom_autocommit_handler(http_response_start, http_scope)
+        mock_session2.rollback.assert_called_once()
+        mock_session1.rollback.assert_not_called()
 
 
 def test_autocommit_handler_maker_multi(create_scope: Callable[..., Scope]) -> None:

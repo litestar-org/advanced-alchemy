@@ -10,6 +10,7 @@ from litestar.dto import DTOData
 from litestar.params import Dependency, Parameter
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -78,12 +79,25 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
 
         cli.add_command(database_group)
 
+    def _validate_config(self) -> None:
+        configs = self._config if isinstance(self._config, Sequence) else [self._config]
+        scope_keys = {config.session_scope_key for config in configs}
+        engine_keys = {config.engine_dependency_key for config in configs}
+        session_keys = {config.session_dependency_key for config in configs}
+        if len(configs) > 1 and any(
+            [len(scope_keys) != len(configs), len(engine_keys) != len(configs), len(session_keys) != len(configs)],
+        ):
+            raise ImproperConfigurationError(
+                detail="When using multiple configurations, please ensure the `session_dependency_key` and `engine_dependency_key` settings are unique across all configs.  Additionally, iF you are using a custom `before_send` handler, ensure `session_scope_key` is unique.",
+            )
+
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         """Configure application for use with SQLAlchemy.
 
         Args:
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
+        self._validate_config()
         signature_namespace_values: dict[str, Any] = {}
         with contextlib.suppress(ImportError):
             from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
