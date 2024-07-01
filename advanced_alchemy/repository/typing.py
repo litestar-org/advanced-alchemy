@@ -15,6 +15,9 @@ __all__ = (
     "SelectT",
     "RowT",
     "MISSING",
+    "OrderingPair",
+    "RowMappingT",
+    "ModelOrRowMappingT",
     "SQLAlchemySyncRepositoryT",
     "SQLAlchemyAsyncRepositoryT",
 )

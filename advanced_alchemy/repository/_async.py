@@ -285,9 +285,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         force_basic_query_mode: bool | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        order_by: list[tuple[str | InstrumentedAttribute[Any], bool]]
-        | tuple[str | InstrumentedAttribute[Any], bool]
-        | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]: ...
 
@@ -298,9 +296,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        order_by: list[tuple[str | InstrumentedAttribute[Any], bool]]
-        | tuple[str | InstrumentedAttribute[Any], bool]
-        | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
     ) -> list[ModelT]: ...
 
@@ -346,9 +342,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -359,9 +355,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
+            order_by: Set default order options for queries.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
-            order_by: Set default order options for queries.
             **kwargs: Additional arguments.
 
         """
@@ -1263,9 +1259,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1274,11 +1271,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            order_by: Set default order options for queries.
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1293,6 +1291,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 load=load,
                 execution_options=execution_options,
+                order_by=order_by,
                 **kwargs,
             )
         return await self._list_and_count_window(
@@ -1301,6 +1300,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement=statement,
             load=load,
             execution_options=execution_options,
+            order_by=order_by,
             **kwargs,
         )
 
@@ -1337,6 +1337,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1349,6 +1350,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            order_by: list[OrderingPair] | OrderingPair | None = None,
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1365,6 +1367,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
+            if order_by is None:
+                order_by = self.order_by or []
+            statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = statement.add_criteria(
                 lambda s: s.add_columns(over(sql_func.count())),
                 enable_tracking=False,
@@ -1386,6 +1391,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1398,6 +1404,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            order_by: Set default order options for queries.
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1414,6 +1421,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
+            if order_by is None:
+                order_by = self.order_by or []
+            statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             count_result = await self.session.execute(
@@ -1673,6 +1683,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1685,6 +1696,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            order_by: Set default order options for queries.
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1701,6 +1713,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
+            if order_by is None:
+                order_by = self.order_by or []
+            statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             result = await self._execute(statement, uniquify=loader_options_have_wildcard)

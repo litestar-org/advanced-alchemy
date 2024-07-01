@@ -24,7 +24,7 @@ from advanced_alchemy.repository._util import (
     LoadSpec,
     model_from_dict,
 )
-from advanced_alchemy.repository.typing import ModelT
+from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     UNSET,
@@ -105,6 +105,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **repo_kwargs: Any,
@@ -117,9 +118,9 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
+            order_by: Set default order options for queries.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
-            to_schema: a default schema model to use when ``to_schema`` is true
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         self.repository = self.repository_type(
@@ -318,22 +319,24 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         self,
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        auto_expunge: bool | None = None,
+        force_basic_query_mode: bool | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        force_basic_query_mode: bool | None = None,
-        auto_expunge: bool | None = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
         """List of records and total count returned by query.
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning. Defaults to
+                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
-            load: Set default relationships to be loaded
+            order_by: Set default order options for queries.
+            load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
 
@@ -345,6 +348,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             statement=statement,
             auto_expunge=auto_expunge,
             force_basic_query_mode=force_basic_query_mode,
+            order_by=order_by,
             load=load,
             execution_options=execution_options,
             **kwargs,
@@ -385,9 +389,10 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         self,
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        auto_expunge: bool | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        auto_expunge: bool | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -398,6 +403,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            order_by: Set default order options for queries.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -409,6 +415,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             *filters,
             statement=statement,
             auto_expunge=auto_expunge,
+            order_by=order_by,
             load=load,
             execution_options=execution_options,
             **kwargs,
