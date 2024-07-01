@@ -315,15 +315,19 @@ def test_autocommit_handler_maker_multi_async_and_sync(create_scope: Callable[..
         connection_string="sqlite://",
         before_send_handler="autocommit",
         session_dependency_key="other_session",
+        engine_dependency_key="other_engine",
     )
     config3 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
         before_send_handler="autocommit",
+        session_dependency_key="the_session",
+        engine_dependency_key="the_engine",
     )
     config4 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
         before_send_handler="autocommit",
-        session_dependency_key="other_session",
+        session_dependency_key="other_other_session",
+        engine_dependency_key="other_other_engine",
     )
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2, config3, config4])])
     mock_session1 = MagicMock(spec=Session)
