@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 __all__ = ("SQLAlchemyInitPlugin",)
 
-signature_namespace_values = {
+signature_namespace_values: dict[str, Any] = {
     "BeforeAfter": BeforeAfter,
     "OnBeforeAfter": OnBeforeAfter,
     "CollectionFilter": CollectionFilter,
@@ -96,7 +96,6 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
         self._validate_config()
-        signature_namespace_values: dict[str, Any] = {}
         with contextlib.suppress(ImportError):
             from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
 
