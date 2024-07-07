@@ -32,6 +32,12 @@ try:
     PYDANTIC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
 
+    class FailFast:  # pragma: nocover
+        """Placeholder Implementation for FailFast"""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
     @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
@@ -149,6 +155,7 @@ __all__ = (
     "MSGSPEC_INSTALLED",
     "BaseModel",
     "TypeAdapter",
+    "FailFast",
     "Struct",
     "convert",
     "UNSET",
