@@ -344,6 +344,10 @@ disallow_untyped_decorators = false
 module = "advanced_alchemy.types.json"
 
 [[tool.mypy.overrides]]
+module = "advanced_alchemy.service.typing"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
 warn_unreachable = false
 

@@ -29,8 +29,8 @@ from advanced_alchemy.service.typing import (
     BaseModel,
     ModelDTOT,
     Struct,
-    TypeAdapter,
     convert,
+    get_type_adapter,
 )
 
 if TYPE_CHECKING:
@@ -212,13 +212,13 @@ class ResultConverter:
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
-                    TypeAdapter(schema_type).validate_python(data, from_attributes=True),
+                    get_type_adapter(schema_type).validate_python(data, from_attributes=True),
                 )  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
             limit_offset = find_filter(LimitOffset, filters=filters)
             total = total if total else len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
             return OffsetPagination[ModelDTOT](
-                items=TypeAdapter(List[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
+                items=get_type_adapter(List[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
                 limit=limit_offset.limit,
                 offset=limit_offset.offset,
                 total=total,

@@ -6,6 +6,7 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import (
     Any,
     ClassVar,
@@ -20,23 +21,28 @@ from typing import (
     runtime_checkable,
 )
 
-from typing_extensions import TypeAlias, TypeGuard
+from typing_extensions import Annotated, TypeAlias, TypeGuard
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
 
+T = TypeVar("T")  # pragma: nocover
 try:
     from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
+    from pydantic.config import ConfigDict  # pyright: ignore[reportAssignmentType]
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
 
     PYDANTIC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
 
-    class FailFast:  # pragma: nocover
-        """Placeholder Implementation for FailFast"""
+    class ConfigDict:  # type: ignore[no-redef] # pragma: nocover
+        """Placeholder Implementation for ConfigDict"""
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
+            """Init"""
+
+        def __call__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
+            """Placeholder"""
 
     @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
@@ -47,8 +53,6 @@ except ImportError:  # pragma: nocover
         def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
             """Placeholder"""
             return {}
-
-    T = TypeVar("T")  # pragma: nocover
 
     class TypeAdapter(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
@@ -61,6 +65,34 @@ except ImportError:  # pragma: nocover
             return cast("T", data)
 
     PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
+
+try:
+    # this is from pydantic 2.8.  We should check for it before using it.
+    from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
+
+    PYDANTIC_USE_FAILFAST: Final[bool] = True
+except ImportError:
+
+    class FailFast:  # type: ignore[no-redef] # pragma: nocover
+        """Placeholder Implementation for FailFast"""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
+            """Init"""
+
+        def __call__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
+            """Placeholder"""
+
+    PYDANTIC_USE_FAILFAST: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
+
+
+@lru_cache(typed=True)
+def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
+    """Caches and returns a pydantic type adapter"""
+    if PYDANTIC_USE_FAILFAST:
+        return TypeAdapter(
+            Annotated[f, FailFast()],  # type: ignore[operator]
+        )
+    return TypeAdapter(f)
 
 
 try:
@@ -153,8 +185,11 @@ __all__ = (
     "PydanticOrMsgspecT",
     "PYDANTIC_INSTALLED",
     "MSGSPEC_INSTALLED",
+    "PYDANTIC_USE_FAILFAST",
     "BaseModel",
     "TypeAdapter",
+    "ConfigDict",
+    "get_type_adapter",
     "FailFast",
     "Struct",
     "convert",
