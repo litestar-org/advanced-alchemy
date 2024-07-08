@@ -163,22 +163,22 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         new_key = new_key if new_key else key
         if new_key in self.__class__._SESSION_SCOPE_KEY_REGISTRY:  # noqa: SLF001
             _iter += 1
-            key = self._ensure_unique_session_scope_key(key, f"{key}_{_iter}", _iter)
-        return key
+            new_key = self._ensure_unique_session_scope_key(key, f"{key}_{_iter}", _iter)
+        return new_key
 
     def _ensure_unique_engine_app_state_key(self, key: str, new_key: str | None = None, _iter: int = 0) -> str:
         new_key = new_key if new_key else key
         if new_key in self.__class__._ENGINE_APP_STATE_KEY_REGISTRY:  # noqa: SLF001
             _iter += 1
-            key = self._ensure_unique_engine_app_state_key(key, f"{key}_{_iter}", _iter)
-        return key
+            new_key = self._ensure_unique_engine_app_state_key(key, f"{key}_{_iter}", _iter)
+        return new_key
 
     def _ensure_unique_sessionmaker_app_state_key(self, key: str, new_key: str | None = None, _iter: int = 0) -> str:
         new_key = new_key if new_key else key
         if new_key in self.__class__._SESSIONMAKER_APP_STATE_KEY_REGISTRY:  # noqa: SLF001
             _iter += 1
-            key = self._ensure_unique_sessionmaker_app_state_key(key, f"{key}_{_iter}", _iter)
-        return key
+            new_key = self._ensure_unique_sessionmaker_app_state_key(key, f"{key}_{_iter}", _iter)
+        return new_key
 
     def __post_init__(self) -> None:
         self.session_scope_key = self._ensure_unique_session_scope_key(self.session_scope_key)
