@@ -39,7 +39,9 @@ from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 @pytest.fixture(autouse=True)
 def reload_package() -> Generator[None, None, None]:
     yield
-    GenericSQLAlchemyConfig._KEY_REGISTRY = set()  # type: ignore
+    GenericSQLAlchemyConfig._SESSION_SCOPE_KEY_REGISTRY = set()  # type: ignore
+    GenericSQLAlchemyConfig._ENGINE_APP_STATE_KEY_REGISTRY = set()  # type: ignore
+    GenericSQLAlchemyConfig._SESSIONMAKER_APP_STATE_KEY_REGISTRY = set()  # type: ignore
 
 
 @pytest.fixture(autouse=True)

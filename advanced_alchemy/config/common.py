@@ -130,8 +130,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     This is a listener that will update ``created_at`` and ``updated_at`` columns on record modification.
     Disable if you plan to bring your own update mechanism for these columns"""
-    _KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
-    """Internal counter for ensuring unique identification of the class."""
+    _SESSION_SCOPE_KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
+    """Internal counter for ensuring unique identification of session scope keys in the class."""
+    _ENGINE_APP_STATE_KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
+    """Internal counter for ensuring unique identification of engine app state keys in the class."""
+    _SESSIONMAKER_APP_STATE_KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
+    """Internal counter for ensuring unique identification of sessionmaker state keys in the class."""
 
     def __post_init__(self) -> None:
         if self.connection_string is not None and self.engine_instance is not None:

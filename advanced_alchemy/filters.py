@@ -275,10 +275,9 @@ class OrderBy(StatementFilter):
         model: type[ModelT],
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
-        if self.sort_order == "desc":
-            statement += lambda s: s.order_by(field.desc())  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-            return statement
-        statement += lambda s: s.order_by(field.asc())  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+        fragment = field.desc() if self.sort_order == "desc" else field.asc()
+        statement += lambda s: s.order_by(fragment)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+
         return statement
 
 
