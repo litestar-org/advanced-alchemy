@@ -156,15 +156,36 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     The configuration options are documented in the SQLAlchemy documentation.
     """
 
-    def _ensure_unique_session_scope_key(self, key: str, _iter: int = 0) -> str:
-        if key in self.__class__._KEY_REGISTRY:  # noqa: SLF001
+    def _ensure_unique_session_scope_key(self, key: str, new_key: str | None = None, _iter: int = 0) -> str:
+        new_key = new_key if new_key else key
+        if new_key in self.__class__._SESSION_SCOPE_KEY_REGISTRY:  # noqa: SLF001
             _iter += 1
-            key = self._ensure_unique_session_scope_key(f"{key}_{_iter}", _iter)
+            key = self._ensure_unique_session_scope_key(key, f"{key}_{_iter}", _iter)
+        return key
+
+    def _ensure_unique_engine_app_state_key(self, key: str, new_key: str | None = None, _iter: int = 0) -> str:
+        new_key = new_key if new_key else key
+        if new_key in self.__class__._ENGINE_APP_STATE_KEY_REGISTRY:  # noqa: SLF001
+            _iter += 1
+            key = self._ensure_unique_engine_app_state_key(key, f"{key}_{_iter}", _iter)
+        return key
+
+    def _ensure_unique_sessionmaker_app_state_key(self, key: str, new_key: str | None = None, _iter: int = 0) -> str:
+        new_key = new_key if new_key else key
+        if new_key in self.__class__._SESSIONMAKER_APP_STATE_KEY_REGISTRY:  # noqa: SLF001
+            _iter += 1
+            key = self._ensure_unique_sessionmaker_app_state_key(key, f"{key}_{_iter}", _iter)
         return key
 
     def __post_init__(self) -> None:
         self.session_scope_key = self._ensure_unique_session_scope_key(self.session_scope_key)
-        self.__class__._KEY_REGISTRY.add(self.session_scope_key)  # noqa: SLF001
+        self.engine_app_state_key = self._ensure_unique_engine_app_state_key(self.engine_app_state_key)
+        self.session_maker_app_state_key = self._ensure_unique_sessionmaker_app_state_key(
+            self.session_maker_app_state_key,
+        )
+        self.__class__._SESSION_SCOPE_KEY_REGISTRY.add(self.session_scope_key)  # noqa: SLF001
+        self.__class__._ENGINE_APP_STATE_KEY_REGISTRY.add(self.engine_app_state_key)  # noqa: SLF001
+        self.__class__._SESSIONMAKER_APP_STATE_KEY_REGISTRY.add(self.session_maker_app_state_key)  # noqa: SLF001
         if self.before_send_handler is None:
             self.before_send_handler = default_handler_maker(session_scope_key=self.session_scope_key)
         if self.before_send_handler == "autocommit":
