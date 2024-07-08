@@ -29,20 +29,10 @@ from advanced_alchemy.repository.typing import ModelT
 T = TypeVar("T")  # pragma: nocover
 try:
     from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
-    from pydantic.config import ConfigDict  # pyright: ignore[reportAssignmentType]
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
 
     PYDANTIC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
-
-    class ConfigDict:  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder Implementation for ConfigDict"""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
-            """Init"""
-
-        def __call__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
-            """Placeholder"""
 
     @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
@@ -188,7 +178,6 @@ __all__ = (
     "PYDANTIC_USE_FAILFAST",
     "BaseModel",
     "TypeAdapter",
-    "ConfigDict",
     "get_type_adapter",
     "FailFast",
     "Struct",
