@@ -23,7 +23,7 @@ __all__ = (
 )
 
 T = TypeVar("T")
-ModelT = TypeVar("ModelT", bound="base.ModelProtocol")
+ModelT = TypeVar("ModelT")
 SelectT = TypeVar("SelectT", bound="Select[Any]")
 RowT = TypeVar("RowT", bound=Tuple[Any, ...])
 RowMappingT = TypeVar("RowMappingT", bound="RowMapping")
