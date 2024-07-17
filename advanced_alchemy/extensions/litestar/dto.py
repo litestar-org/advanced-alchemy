@@ -39,7 +39,7 @@ __all__ = ("SQLAlchemyDTO",)
 
 T = TypeVar("T", bound="DeclarativeBase | Collection[DeclarativeBase]")
 
-ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"
+ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"  # type: ignore[reportMissingTypeArgument]
 SQLA_NS = {**vars(orm), **vars(sql)}
 
 
@@ -72,7 +72,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if hasattr(cls, "config"):
-            cls.config = cls._ensure_sqla_dto_config(cls.config)
+            cls.config = cls._ensure_sqla_dto_config(cls.config)  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @singledispatchmethod
     @classmethod
@@ -102,15 +102,15 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             raise NotImplementedError(msg)
 
         elem: ElementType
-        if isinstance(orm_descriptor.property, ColumnProperty):
-            if not isinstance(orm_descriptor.property.expression, (Column, ColumnClause, Label)):
-                msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}, {type(orm_descriptor.property.expression)}'"
+        if isinstance(orm_descriptor.property, ColumnProperty):  # pyright: ignore[reportUnknownMemberType]
+            if not isinstance(orm_descriptor.property.expression, (Column, ColumnClause, Label)):  # pyright: ignore[reportUnknownMemberType]
+                msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}, {type(orm_descriptor.property.expression)}'"  # pyright: ignore[reportUnknownMemberType]
                 raise NotImplementedError(msg)
-            elem = orm_descriptor.property.expression
-        elif isinstance(orm_descriptor.property, (RelationshipProperty, CompositeProperty)):
-            elem = orm_descriptor.property
+            elem = orm_descriptor.property.expression  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        elif isinstance(orm_descriptor.property, (RelationshipProperty, CompositeProperty)):  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            elem = orm_descriptor.property  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         else:
-            msg = f"Unhandled property type: '{orm_descriptor.property}'"
+            msg = f"Unhandled property type: '{orm_descriptor.property}'"  # pyright: ignore[reportUnknownMemberType]
             raise NotImplementedError(msg)
 
         default, default_factory = _detect_defaults(elem)
@@ -124,7 +124,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         except KeyError:
             field_definition = parse_type_from_element(elem)
 
-        dto_field = elem.info.get(DTO_FIELD_META_KEY, DTOField()) if hasattr(elem, "info") else DTOField()
+        dto_field = elem.info.get(DTO_FIELD_META_KEY, DTOField()) if hasattr(elem, "info") else DTOField()  # pyright: ignore[reportArgumentMemberType]
         return [
             DTOFieldDefinition.from_field_definition(
                 field_definition=replace(

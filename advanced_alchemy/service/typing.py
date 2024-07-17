@@ -114,27 +114,31 @@ try:
     LITESTAR_INSTALLED: Final[bool] = True
 except ImportError:
 
-    class DTOData(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
+    class DTOData(Generic[ModelT]):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder implementation"""
 
-        def create_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
+        def create_instance(*args: Any, **kwargs: Any) -> ModelT:  # type: ignore[no-redef]
             """Placeholder implementation"""
-            return cast("T", kwargs)
+            return cast("ModelT", kwargs)
 
-        def update_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
+        def update_instance(*args: Any, **kwargs: Any) -> ModelT:  # type: ignore[no-redef]
             """Placeholder implementation"""
-            return cast("T", kwargs)
+            return cast("ModelT", kwargs)
+
+        def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
+            """Placeholder implementation"""
+            return {}
 
     LITESTAR_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticOrMsgspecT = Union[Struct, BaseModel]
-ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel]
+ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
 ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
 
 
-def is_dto_data(v: Any) -> TypeGuard[DTOData[object]]:
+def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
     return LITESTAR_INSTALLED and isinstance(v, DTOData)
 
 
@@ -175,7 +179,7 @@ def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]
 
 
 def schema_dump(
-    data: dict[str, Any] | ModelT | Struct | BaseModel,
+    data: dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
     exclude_unset: bool = True,
 ) -> dict[str, Any] | ModelT:
     if is_dict(data):
@@ -186,6 +190,8 @@ def schema_dump(
         return {f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET}
     if is_msgspec_model(data) and not exclude_unset:
         return {f: getattr(data, f, None) for f in data.__struct_fields__}
+    if is_dto_data(data):
+        return cast("ModelT", data.as_builtins())  # pyright: ignore[reportUnknownVariableType]
     return cast("ModelT", data)
 
 

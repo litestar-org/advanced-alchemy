@@ -31,6 +31,7 @@ from advanced_alchemy.service.typing import (
     ModelDictListT,
     ModelDictT,
     is_dict,
+    is_dto_data,
     is_msgspec_model,
     is_pydantic_model,
 )
@@ -129,6 +130,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             auto_expunge=auto_expunge,
             auto_refresh=auto_refresh,
             auto_commit=auto_commit,
+            order_by=order_by,
             load=load,
             execution_options=execution_options,
             **repo_kwargs,
@@ -313,6 +315,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
             )
 
+        if is_dto_data(data):
+            return cast("ModelT", data.create_instance())
         return cast("ModelT", data)
 
     def list_and_count(

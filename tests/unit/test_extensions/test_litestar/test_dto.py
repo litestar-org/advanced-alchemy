@@ -137,7 +137,7 @@ async def test_model_list_dto(author_model: type[DeclarativeBase], asgi_connecti
     dto_data = await get_model_from_dto(dto_type, List[author_model], asgi_connection, raw)  # type: ignore
     assert isinstance(dto_data, list)
     assert_model_values(
-        dto_data[0],
+        dto_data[0],  # type: ignore
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
