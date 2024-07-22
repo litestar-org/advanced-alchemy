@@ -13,6 +13,7 @@ from typing import (
     Dict,
     Final,
     Generic,
+    List,
     Protocol,
     Sequence,
     TypeVar,
@@ -114,16 +115,16 @@ try:
     LITESTAR_INSTALLED: Final[bool] = True
 except ImportError:
 
-    class DTOData(Generic[ModelT]):  # type: ignore[no-redef] # pragma: nocover
+    class DTOData(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder implementation"""
 
-        def create_instance(*args: Any, **kwargs: Any) -> ModelT:  # type: ignore[no-redef]
+        def create_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
             """Placeholder implementation"""
-            return cast("ModelT", kwargs)
+            return cast("T", kwargs)
 
-        def update_instance(*args: Any, **kwargs: Any) -> ModelT:  # type: ignore[no-redef]
+        def update_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
             """Placeholder implementation"""
-            return cast("ModelT", kwargs)
+            return cast("T", kwargs)
 
         def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
             """Placeholder implementation"""
@@ -136,6 +137,7 @@ ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticOrMsgspecT = Union[Struct, BaseModel]
 ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
 ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
+BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
 
 
 def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
@@ -200,6 +202,7 @@ __all__ = (
     "ModelDictListT",
     "FilterTypeT",
     "ModelDTOT",
+    "BulkModelDictT",
     "PydanticOrMsgspecT",
     "PYDANTIC_INSTALLED",
     "MSGSPEC_INSTALLED",

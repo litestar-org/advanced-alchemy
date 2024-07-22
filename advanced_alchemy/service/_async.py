@@ -26,6 +26,7 @@ from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     UNSET,
+    BulkModelDictT,
     ModelDictListT,
     ModelDictT,
     is_dict,
@@ -87,9 +88,7 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
             yield cls(session=session)
         elif config:
             async with config.get_session() as db_session:
-                yield cls(
-                    session=db_session,
-                )
+                yield cls(session=db_session)
 
 
 class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
@@ -432,8 +431,6 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         self,
         data: ModelDictT[ModelT],
         *,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
@@ -448,8 +445,6 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            load: Set default relationships to be loaded
-            execution_options: Set default execution options
 
         Returns:
             Representation of created instance.
@@ -464,10 +459,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def create_many(
         self,
-        data: ModelDictListT[ModelT],
+        data: BulkModelDictT[ModelT],
         *,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
     ) -> Sequence[ModelT]:
@@ -479,13 +472,13 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            load: Set default relationships to be loaded
-            execution_options: Set default execution options
 
         Returns:
             Representation of created instances.
         """
-        data = [(await self.to_model(datum, "create")) for datum in data]
+        if is_dto_data(data):
+            data = data.create_instance()
+        data = [(await self.to_model(datum, "create")) for datum in cast("ModelDictListT[ModelT]", data)]
         return await self.repository.add_many(
             data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
@@ -560,7 +553,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def update_many(
         self,
-        data: ModelDictListT[ModelT],
+        data: BulkModelDictT[ModelT],
         *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -581,7 +574,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Returns:
             Representation of updated instances.
         """
-        data = [(await self.to_model(datum, "update")) for datum in data]
+        if is_dto_data(data):
+            data = data.create_instance()
+        data = [(await self.to_model(datum, "update")) for datum in cast("ModelDictListT[ModelT]", data)]
         return await self.repository.update_many(
             cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
@@ -647,7 +642,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def upsert_many(
         self,
-        data: ModelDictListT[ModelT],
+        data: BulkModelDictT[ModelT],
         *,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -676,7 +671,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Returns:
             Updated or created representation.
         """
-        data = [(await self.to_model(datum, "upsert")) for datum in data]
+        if is_dto_data(data):
+            data = data.create_instance()
+        data = [(await self.to_model(datum, "upsert")) for datum in cast("ModelDictListT[ModelT]", data)]
         return await self.repository.upsert_many(
             data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_expunge=auto_expunge,
