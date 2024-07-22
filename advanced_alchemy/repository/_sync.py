@@ -1328,7 +1328,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             auto_refresh = self.auto_refresh
 
         return (
-            self.session.refresh(instance, attribute_names=attribute_names, with_for_update=with_for_update)
+            self.session.refresh(
+                instance=instance,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+            )
             if auto_refresh
             else None
         )

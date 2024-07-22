@@ -1327,7 +1327,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             auto_refresh = self.auto_refresh
 
         return (
-            await self.session.refresh(instance, attribute_names=attribute_names, with_for_update=with_for_update)
+            await self.session.refresh(
+                instance=instance,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+            )
             if auto_refresh
             else None
         )
