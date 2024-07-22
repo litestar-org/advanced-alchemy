@@ -39,7 +39,7 @@ __all__ = ("SQLAlchemyDTO",)
 
 T = TypeVar("T", bound="DeclarativeBase | Collection[DeclarativeBase]")
 
-ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"  # type: ignore[reportMissingTypeArgument]
+ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"  # pyright: ignore[reportMissingTypeArgument]
 SQLA_NS = {**vars(orm), **vars(sql)}
 
 

@@ -3,16 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from uuid import UUID
 
 import pytest
 from litestar import get, post
 from litestar.di import Provide
 from litestar.dto import DTOField, Mark
-from litestar.dto._backend import _camelize
+from litestar.dto._backend import _camelize  # type: ignore
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.dto.types import RenameStrategy
-from litestar.testing import create_test_client
+from litestar.testing import create_test_client  # type: ignore
 from sqlalchemy import Column, ForeignKey, Integer, String, Table, func, select
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -29,7 +31,7 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDT
 
 
 class Base(DeclarativeBase):
-    id: Mapped[str] = mapped_column(primary_key=True)  # pyright: ignore
+    id: Mapped[str] = mapped_column(primary_key=True, default=UUID)  # pyright: ignore
 
     # noinspection PyMethodParameters
     @declared_attr.directive
@@ -38,12 +40,47 @@ class Base(DeclarativeBase):
         return cls.__name__.lower()
 
 
-class Author(Base):
+class Tag(Base):
+    name: Mapped[str] = mapped_column(default="best seller")  # pyright: ignore
+
+
+class TaggableMixin:
+    @declared_attr.directive
+    @classmethod
+    def tag_association_table(cls) -> Table:
+        return Table(
+            f"{cls.__tablename__}_tag_association",  # type: ignore
+            cls.metadata,  # type: ignore
+            Column("base_id", ForeignKey(f"{cls.__tablename__}.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
+            Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
+        )
+
+    @declared_attr
+    def assigned_tags(cls) -> Mapped[List[Tag]]:
+        return relationship(
+            "Tag",
+            secondary=lambda: cls.tag_association_table,
+            lazy="immediate",
+            cascade="all, delete",
+            passive_deletes=True,
+        )
+
+    @declared_attr
+    def tags(cls) -> AssociationProxy[List[str]]:
+        return association_proxy(
+            "tags",
+            "name",
+            creator=lambda name: Tag(name=name),  # pyright: ignore
+            info={"__dto__": DTOField()},
+        )
+
+
+class Author(Base, TaggableMixin):
     name: Mapped[str] = mapped_column(default="Arthur")  # pyright: ignore
     date_of_birth: Mapped[str] = mapped_column(nullable=True)  # pyright: ignore
 
 
-class BookReview(Base):
+class BookReview(Base, TaggableMixin):
     review: Mapped[str]  # pyright: ignore
     book_id: Mapped[str] = mapped_column(ForeignKey("book.id"), default="000")  # pyright: ignore
 
@@ -57,7 +94,7 @@ class Book(Base):
     SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
     number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
-        select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),
+        select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
 
