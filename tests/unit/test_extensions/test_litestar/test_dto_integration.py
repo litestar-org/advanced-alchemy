@@ -776,3 +776,101 @@ async def test_associative_array_returning_simple_type() -> None:
         assert json.get("field2") is not None
         assert json.get("field3") is not None
         assert json.get("field4") is None
+
+
+def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None:
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Generator
+
+from litestar import post
+from litestar.di import Provide
+from litestar.dto import DTOData
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Mapped, sessionmaker
+
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig, base, repository, service
+
+engine = create_engine("sqlite:///:memory:", echo=True, connect_args={"check_same_thread": False})
+Session = sessionmaker(bind=engine, expire_on_commit=False)
+
+class Model(base.BigIntBase):
+    val: Mapped[str]
+
+class ModelCreateDTO(SQLAlchemyDTO[Model]):
+    config = SQLAlchemyDTOConfig(exclude={"id"})
+
+ModelReturnDTO = SQLAlchemyDTO[Model]
+
+class ModelRepository(repository.SQLAlchemySyncRepository[Model]):
+    model_type=Model
+
+class ModelService(service.SQLAlchemySyncRepositoryService[Model]):
+    repository_type = ModelRepository
+
+def provide_service( ) -> Generator[ModelService, None, None]:
+    Model.metadata.create_all(engine)
+    with Session() as db_session, ModelService.new(session=db_session) as service:
+        yield service
+
+
+@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+    return service.create(data, auto_commit=True)
+
+    """,
+    )
+    with create_test_client(route_handlers=[module.post_handler]) as client:
+        response = client.post("/", json={"id": 1, "val": "value"})
+        assert response.json() == {"id": 1, "val": "value"}
+
+
+async def test_dto_to_async_service(create_module: Callable[[str], ModuleType]) -> None:
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import AsyncGenerator
+
+from litestar import post
+from litestar.di import Provide
+from litestar.dto import DTOData  # noqa: TCH002
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Mapped  # noqa: TCH002
+
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig, base, repository, service
+
+engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=True, connect_args={"check_same_thread": False})
+Session = async_sessionmaker(bind=engine, expire_on_commit=False)
+
+class Model(base.BigIntBase):
+    val: Mapped[str]
+
+class ModelCreateDTO(SQLAlchemyDTO[Model]):
+    config = SQLAlchemyDTOConfig(exclude={"id"})
+
+ModelReturnDTO = SQLAlchemyDTO[Model]
+
+class ModelRepository(repository.SQLAlchemyAsyncRepository[Model]):
+    model_type=Model
+
+class ModelService(service.SQLAlchemyAsyncRepositoryService[Model]):
+    repository_type = ModelRepository
+
+async def provide_service( ) -> AsyncGenerator[ModelService, None]:
+    async with engine.begin() as conn:
+        await conn.run_sync(Model.metadata.create_all)
+    async with Session() as db_session, ModelService.new(session=db_session) as service:
+        yield service
+
+@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+async def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+    return await service.create(data, auto_commit=True)
+
+    """,
+    )
+    with create_test_client(route_handlers=[module.post_handler]) as client:
+        response = client.post("/", json={"id": 1, "val": "value"})
+        assert response.json() == {"id": 1, "val": "value"}
