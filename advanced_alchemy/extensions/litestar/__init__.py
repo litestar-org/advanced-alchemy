@@ -14,13 +14,25 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
     autocommit_before_send_handler as async_autocommit_before_send_handler,
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
+    autocommit_handler_maker as async_autocommit_handler_maker,
+)
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
     default_before_send_handler as async_default_before_send_handler,
+)
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
+    default_handler_maker as async_default_handler_maker,
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
     autocommit_before_send_handler as sync_autocommit_before_send_handler,
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
+    autocommit_handler_maker as sync_autocommit_handler_maker,
+)
+from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
     default_before_send_handler as sync_default_before_send_handler,
+)
+from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
+    default_handler_maker as sync_default_handler_maker,
 )
 
 __all__ = (
@@ -33,6 +45,10 @@ __all__ = (
     "service",
     "mixins",
     "exceptions",
+    "async_autocommit_handler_maker",
+    "sync_autocommit_handler_maker",
+    "async_default_handler_maker",
+    "sync_default_handler_maker",
     "sync_autocommit_before_send_handler",
     "async_autocommit_before_send_handler",
     "sync_default_before_send_handler",

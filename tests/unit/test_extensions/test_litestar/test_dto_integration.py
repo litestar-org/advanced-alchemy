@@ -45,8 +45,8 @@ class Tag(Base):
 
 
 class TaggableMixin:
-    @declared_attr.directive
     @classmethod
+    @declared_attr.directive
     def tag_association_table(cls) -> Table:
         return Table(
             f"{cls.__tablename__}_tag_association",  # type: ignore
@@ -68,19 +68,19 @@ class TaggableMixin:
     @declared_attr
     def tags(cls) -> AssociationProxy[List[str]]:
         return association_proxy(
-            "tags",
+            "assigned_tags",
             "name",
             creator=lambda name: Tag(name=name),  # pyright: ignore
             info={"__dto__": DTOField()},
         )
 
 
-class Author(Base, TaggableMixin):
+class Author(Base):
     name: Mapped[str] = mapped_column(default="Arthur")  # pyright: ignore
     date_of_birth: Mapped[str] = mapped_column(nullable=True)  # pyright: ignore
 
 
-class BookReview(Base, TaggableMixin):
+class BookReview(Base):
     review: Mapped[str]  # pyright: ignore
     book_id: Mapped[str] = mapped_column(ForeignKey("book.id"), default="000")  # pyright: ignore
 
@@ -661,6 +661,65 @@ async def test_disable_implicitly_mapped_columns_special() -> None:
 
 
 async def test_disable_implicitly_mapped_columns_with_hybrid_properties_and_Mark_overrides() -> None:
+    class Base(DeclarativeBase):
+        id: Mapped[int] = mapped_column(default=int, primary_key=True)
+
+    table = Table(
+        "vertices2",
+        Base.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("field", String, nullable=True),
+        Column("field2", String),
+        Column("field3", String),
+        Column("field4", String),
+    )
+
+    class Model(Base):
+        __table__ = table
+        id: Mapped[int]
+        field2 = column_property(table.c.field2, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)})  # type: ignore
+        field3 = column_property(table.c.field3, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.WRITE_ONLY)})  # type: ignore
+        field4 = column_property(table.c.field4, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.PRIVATE)})  # type: ignore
+
+        @hybrid_property
+        def id_multiplied(self) -> int:
+            return self.id * 10
+
+    dto_type = SQLAlchemyDTO[
+        Annotated[
+            Model,
+            SQLAlchemyDTOConfig(include_implicit_fields="hybrid-only"),
+        ]
+    ]
+
+    @get(
+        dto=None,
+        return_dto=dto_type,
+        signature_namespace={"Model": Model},
+        dependencies={
+            "model": Provide(
+                lambda: Model(id=12, field="hi", field2="bye2", field3="bye3", field4="bye4"),
+                sync_to_thread=False,
+            ),
+        },
+    )
+    def post_handler(model: Model) -> Model:
+        return model
+
+    with create_test_client(route_handlers=[post_handler]) as client:
+        response = client.get(
+            "/",
+        )
+
+        json = response.json()
+        assert json.get("id_multiplied") == 120
+        assert json.get("field") is None
+        assert json.get("field2") is not None
+        assert json.get("field3") is not None
+        assert json.get("field4") is None
+
+
+async def test_associative_array_returning_simple_type() -> None:
     class Base(DeclarativeBase):
         id: Mapped[int] = mapped_column(default=int, primary_key=True)
 
