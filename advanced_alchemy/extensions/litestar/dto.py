@@ -39,7 +39,9 @@ __all__ = ("SQLAlchemyDTO",)
 
 T = TypeVar("T", bound="DeclarativeBase | Collection[DeclarativeBase]")
 
-ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"  # pyright: ignore[reportMissingTypeArgument]
+ElementType: TypeAlias = (
+    "Column[Any] | RelationshipProperty[Any] | CompositeProperty[Any] | ColumnClause[Any] | Label[Any]"
+)
 SQLA_NS = {**vars(orm), **vars(sql)}
 
 
@@ -356,7 +358,7 @@ def parse_type_from_element(elem: ElementType) -> FieldDefinition:
     )
 
 
-def detect_nullable_relationship(elem: RelationshipProperty) -> bool:
+def detect_nullable_relationship(elem: RelationshipProperty[Any]) -> bool:
     """Detects if a relationship is nullable.
 
     This attempts to decide if we should allow a ``None`` default value for a relationship by looking at the
