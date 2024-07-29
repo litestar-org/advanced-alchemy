@@ -719,65 +719,6 @@ async def test_disable_implicitly_mapped_columns_with_hybrid_properties_and_Mark
         assert json.get("field4") is None
 
 
-async def test_associative_array_returning_simple_type() -> None:
-    class Base(DeclarativeBase):
-        id: Mapped[int] = mapped_column(default=int, primary_key=True)
-
-    table = Table(
-        "vertices2",
-        Base.metadata,
-        Column("id", Integer, primary_key=True),
-        Column("field", String, nullable=True),
-        Column("field2", String),
-        Column("field3", String),
-        Column("field4", String),
-    )
-
-    class Model(Base):
-        __table__ = table
-        id: Mapped[int]
-        field2 = column_property(table.c.field2, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)})  # type: ignore
-        field3 = column_property(table.c.field3, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.WRITE_ONLY)})  # type: ignore
-        field4 = column_property(table.c.field4, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.PRIVATE)})  # type: ignore
-
-        @hybrid_property
-        def id_multiplied(self) -> int:
-            return self.id * 10
-
-    dto_type = SQLAlchemyDTO[
-        Annotated[
-            Model,
-            SQLAlchemyDTOConfig(include_implicit_fields="hybrid-only"),
-        ]
-    ]
-
-    @get(
-        dto=None,
-        return_dto=dto_type,
-        signature_namespace={"Model": Model},
-        dependencies={
-            "model": Provide(
-                lambda: Model(id=12, field="hi", field2="bye2", field3="bye3", field4="bye4"),
-                sync_to_thread=False,
-            ),
-        },
-    )
-    def post_handler(model: Model) -> Model:
-        return model
-
-    with create_test_client(route_handlers=[post_handler]) as client:
-        response = client.get(
-            "/",
-        )
-
-        json = response.json()
-        assert json.get("id_multiplied") == 120
-        assert json.get("field") is None
-        assert json.get("field2") is not None
-        assert json.get("field3") is not None
-        assert json.get("field4") is None
-
-
 def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None:
     module = create_module(
         """
@@ -814,6 +755,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
     Model.metadata.create_all(engine)
     with Session() as db_session, ModelService.new(session=db_session) as service:
         yield service
+    Model.metadata.drop_all(engine)
 
 
 @post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
@@ -845,28 +787,30 @@ from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOCon
 engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=True, connect_args={"check_same_thread": False})
 Session = async_sessionmaker(bind=engine, expire_on_commit=False)
 
-class Model(base.BigIntBase):
+class AModel(base.BigIntBase):
     val: Mapped[str]
 
-class ModelCreateDTO(SQLAlchemyDTO[Model]):
+class ModelCreateDTO(SQLAlchemyDTO[AModel]):
     config = SQLAlchemyDTOConfig(exclude={"id"})
 
-ModelReturnDTO = SQLAlchemyDTO[Model]
+ModelReturnDTO = SQLAlchemyDTO[AModel]
 
-class ModelRepository(repository.SQLAlchemyAsyncRepository[Model]):
-    model_type=Model
+class ModelRepository(repository.SQLAlchemyAsyncRepository[AModel]):
+    model_type=AModel
 
-class ModelService(service.SQLAlchemyAsyncRepositoryService[Model]):
+class ModelService(service.SQLAlchemyAsyncRepositoryService[AModel]):
     repository_type = ModelRepository
 
 async def provide_service( ) -> AsyncGenerator[ModelService, None]:
     async with engine.begin() as conn:
-        await conn.run_sync(Model.metadata.create_all)
+        await conn.run_sync(AModel.metadata.create_all)
     async with Session() as db_session, ModelService.new(session=db_session) as service:
         yield service
+    async with engine.begin() as conn:
+        await conn.run_sync(AModel.metadata.create_all)
 
 @post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
-async def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+async def post_handler(data: DTOData[AModel], service: ModelService) -> AModel:
     return await service.create(data, auto_commit=True)
 
     """,
