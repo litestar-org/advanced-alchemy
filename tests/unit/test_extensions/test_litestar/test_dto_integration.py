@@ -3,16 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from uuid import UUID
 
 import pytest
 from litestar import get, post
 from litestar.di import Provide
 from litestar.dto import DTOField, Mark
-from litestar.dto._backend import _camelize
+from litestar.dto._backend import _camelize  # type: ignore
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.dto.types import RenameStrategy
-from litestar.testing import create_test_client
+from litestar.testing import create_test_client  # type: ignore
 from sqlalchemy import Column, ForeignKey, Integer, String, Table, func, select
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -29,13 +31,48 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDT
 
 
 class Base(DeclarativeBase):
-    id: Mapped[str] = mapped_column(primary_key=True)  # pyright: ignore
+    id: Mapped[str] = mapped_column(primary_key=True, default=UUID)  # pyright: ignore
 
     # noinspection PyMethodParameters
     @declared_attr.directive
     def __tablename__(cls) -> str:
         """Infer table name from class name."""
         return cls.__name__.lower()
+
+
+class Tag(Base):
+    name: Mapped[str] = mapped_column(default="best seller")  # pyright: ignore
+
+
+class TaggableMixin:
+    @classmethod
+    @declared_attr.directive
+    def tag_association_table(cls) -> Table:
+        return Table(
+            f"{cls.__tablename__}_tag_association",  # type: ignore
+            cls.metadata,  # type: ignore
+            Column("base_id", ForeignKey(f"{cls.__tablename__}.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
+            Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
+        )
+
+    @declared_attr
+    def assigned_tags(cls) -> Mapped[List[Tag]]:
+        return relationship(
+            "Tag",
+            secondary=lambda: cls.tag_association_table,
+            lazy="immediate",
+            cascade="all, delete",
+            passive_deletes=True,
+        )
+
+    @declared_attr
+    def tags(cls) -> AssociationProxy[List[str]]:
+        return association_proxy(
+            "assigned_tags",
+            "name",
+            creator=lambda name: Tag(name=name),  # pyright: ignore
+            info={"__dto__": DTOField()},
+        )
 
 
 class Author(Base):
@@ -57,7 +94,7 @@ class Book(Base):
     SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
     number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
-        select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),
+        select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
 
@@ -680,3 +717,104 @@ async def test_disable_implicitly_mapped_columns_with_hybrid_properties_and_Mark
         assert json.get("field2") is not None
         assert json.get("field3") is not None
         assert json.get("field4") is None
+
+
+def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None:
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Generator
+
+from litestar import post
+from litestar.di import Provide
+from litestar.dto import DTOData
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Mapped, sessionmaker
+
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig, base, repository, service
+
+engine = create_engine("sqlite:///:memory:", echo=True, connect_args={"check_same_thread": False})
+Session = sessionmaker(bind=engine, expire_on_commit=False)
+
+class Model(base.BigIntBase):
+    val: Mapped[str]
+
+class ModelCreateDTO(SQLAlchemyDTO[Model]):
+    config = SQLAlchemyDTOConfig(exclude={"id"})
+
+ModelReturnDTO = SQLAlchemyDTO[Model]
+
+class ModelRepository(repository.SQLAlchemySyncRepository[Model]):
+    model_type=Model
+
+class ModelService(service.SQLAlchemySyncRepositoryService[Model]):
+    repository_type = ModelRepository
+
+def provide_service( ) -> Generator[ModelService, None, None]:
+    Model.metadata.create_all(engine)
+    with Session() as db_session, ModelService.new(session=db_session) as service:
+        yield service
+    Model.metadata.drop_all(engine)
+
+
+@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+    return service.create(data, auto_commit=True)
+
+    """,
+    )
+    with create_test_client(route_handlers=[module.post_handler]) as client:
+        response = client.post("/", json={"id": 1, "val": "value"})
+        assert response.json() == {"id": 1, "val": "value"}
+
+
+async def test_dto_to_async_service(create_module: Callable[[str], ModuleType]) -> None:
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import AsyncGenerator
+
+from litestar import post
+from litestar.di import Provide
+from litestar.dto import DTOData  # noqa: TCH002
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Mapped  # noqa: TCH002
+
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig, base, repository, service
+
+engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=True, connect_args={"check_same_thread": False})
+Session = async_sessionmaker(bind=engine, expire_on_commit=False)
+
+class AModel(base.BigIntBase):
+    val: Mapped[str]
+
+class ModelCreateDTO(SQLAlchemyDTO[AModel]):
+    config = SQLAlchemyDTOConfig(exclude={"id"})
+
+ModelReturnDTO = SQLAlchemyDTO[AModel]
+
+class ModelRepository(repository.SQLAlchemyAsyncRepository[AModel]):
+    model_type=AModel
+
+class ModelService(service.SQLAlchemyAsyncRepositoryService[AModel]):
+    repository_type = ModelRepository
+
+async def provide_service( ) -> AsyncGenerator[ModelService, None]:
+    async with engine.begin() as conn:
+        await conn.run_sync(AModel.metadata.create_all)
+    async with Session() as db_session, ModelService.new(session=db_session) as service:
+        yield service
+    async with engine.begin() as conn:
+        await conn.run_sync(AModel.metadata.create_all)
+
+@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+async def post_handler(data: DTOData[AModel], service: ModelService) -> AModel:
+    return await service.create(data, auto_commit=True)
+
+    """,
+    )
+    with create_test_client(route_handlers=[module.post_handler]) as client:
+        response = client.post("/", json={"id": 1, "val": "value"})
+        assert response.json() == {"id": 1, "val": "value"}

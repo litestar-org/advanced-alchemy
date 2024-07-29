@@ -34,7 +34,7 @@ def get_aa_scope_state(scope: Scope, key: str, default: Any = None, pop: bool = 
         Value mapped to ``key`` in internal connection scope namespace.
     """
     namespace = scope.setdefault(_SCOPE_NAMESPACE, {})  # type: ignore[misc]
-    return namespace.pop(key, default) if pop else namespace.get(key, default)
+    return namespace.pop(key, default) if pop else namespace.get(key, default)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
 
 def set_aa_scope_state(scope: Scope, key: str, value: Any) -> None:

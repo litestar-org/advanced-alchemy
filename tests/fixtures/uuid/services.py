@@ -9,7 +9,7 @@ from advanced_alchemy.service import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.service.typing import (
-    PydanticOrMsgspecT,
+    ModelDictT,
     is_dict_with_field,
     is_dict_without_field,
     schema_dump,
@@ -226,7 +226,7 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
 
     async def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
     ) -> UUIDSlugBook:
         data = schema_dump(data)
@@ -247,7 +247,7 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
     ) -> UUIDSlugBook:
         data = schema_dump(data)
@@ -269,7 +269,7 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
 
     async def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
     ) -> UUIDSlugBook:
         data = schema_dump(data)
@@ -291,7 +291,7 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     def to_model(
         self,
-        data: UUIDSlugBook | dict[str, Any] | PydanticOrMsgspecT,
+        data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
     ) -> UUIDSlugBook:
         data = schema_dump(data)

@@ -13,6 +13,7 @@ from typing import (
     Dict,
     Final,
     Generic,
+    List,
     Protocol,
     Sequence,
     TypeVar,
@@ -108,12 +109,39 @@ except ImportError:  # pragma: nocover
     UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]
     MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
+try:
+    from litestar.dto.data_structures import DTOData  # pyright: ignore[reportAssignmentType,reportUnusedImport]
+
+    LITESTAR_INSTALLED: Final[bool] = True
+except ImportError:
+
+    class DTOData(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
+        """Placeholder implementation"""
+
+        def create_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
+            """Placeholder implementation"""
+            return cast("T", kwargs)
+
+        def update_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
+            """Placeholder implementation"""
+            return cast("T", kwargs)
+
+        def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
+            """Placeholder implementation"""
+            return {}
+
+    LITESTAR_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticOrMsgspecT = Union[Struct, BaseModel]
-ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel]
+ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
 ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
+BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
+
+
+def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
+    return LITESTAR_INSTALLED and isinstance(v, DTOData)
 
 
 def is_pydantic_model(v: Any) -> TypeGuard[BaseModel]:
@@ -153,7 +181,7 @@ def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]
 
 
 def schema_dump(
-    data: dict[str, Any] | ModelT | Struct | BaseModel,
+    data: dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
     exclude_unset: bool = True,
 ) -> dict[str, Any] | ModelT:
     if is_dict(data):
@@ -164,6 +192,8 @@ def schema_dump(
         return {f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET}
     if is_msgspec_model(data) and not exclude_unset:
         return {f: getattr(data, f, None) for f in data.__struct_fields__}
+    if is_dto_data(data):
+        return cast("ModelT", data.as_builtins())  # pyright: ignore[reportUnknownVariableType]
     return cast("ModelT", data)
 
 
@@ -172,10 +202,13 @@ __all__ = (
     "ModelDictListT",
     "FilterTypeT",
     "ModelDTOT",
+    "BulkModelDictT",
     "PydanticOrMsgspecT",
     "PYDANTIC_INSTALLED",
     "MSGSPEC_INSTALLED",
+    "LITESTAR_INSTALLED",
     "PYDANTIC_USE_FAILFAST",
+    "DTOData",
     "BaseModel",
     "TypeAdapter",
     "get_type_adapter",
@@ -183,6 +216,7 @@ __all__ = (
     "Struct",
     "convert",
     "UNSET",
+    "is_dto_data",
     "is_dict",
     "is_dict_with_field",
     "is_dict_without_field",
