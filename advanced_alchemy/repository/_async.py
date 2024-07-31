@@ -21,7 +21,7 @@ from sqlalchemy import (
 from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
 
-from advanced_alchemy.exceptions import NotFoundError, RepositoryError, wrap_sqlalchemy_exception
+from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import (
     FilterableRepository,
@@ -42,6 +42,13 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.filters import StatementFilter
 
+DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
+    "field_required": "A required field is missing",
+    "foreign_key": "A foreign key is missing or invalid",
+    "multiple_rows": "Multiple matching rows found",
+    "unique_constraint": "A record matching the supplied data already exists.",
+    "other": "There was an error during data processing",
+}
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
@@ -58,6 +65,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     auto_refresh: bool
     auto_commit: bool
     order_by: list[OrderingPair] | OrderingPair | None = None
+    error_messages: ErrorMessages | None = None
 
     def __init__(
         self,
@@ -70,6 +78,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None = None,
         **kwargs: Any,
     ) -> None: ...
 
@@ -345,6 +354,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         order_by: list[OrderingPair] | OrderingPair | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -358,6 +368,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             order_by: Set default order options for queries.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            error_messages: A set of custom error messages to use for operations
             **kwargs: Additional arguments.
 
         """
@@ -366,6 +377,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.auto_commit = auto_commit
         self.order_by = order_by
         self.session = session
+        self.error_messages = error_messages or DEFAULT_ERROR_MESSAGE_TEMPLATES
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
         )
@@ -473,7 +485,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The added instance.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -498,7 +510,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The added instances.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             self.session.add_all(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -534,7 +546,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             instance = await self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -577,7 +589,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
@@ -663,7 +675,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
             statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
@@ -822,7 +834,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
@@ -864,7 +876,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -903,7 +915,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -963,7 +975,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -1047,7 +1059,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -1095,7 +1107,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1151,7 +1163,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -1202,7 +1214,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             NotFoundError: If no instance found with same identifier as `data`.
         """
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
@@ -1363,7 +1375,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1417,7 +1429,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1522,7 +1534,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
             )
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and field != new_field_value:
@@ -1611,7 +1623,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 ]
                 match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             existing_objs = await self.list(
                 *match_filter,
                 load=load,
@@ -1709,7 +1721,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The list of instances, after filtering applied.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1741,7 +1753,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             if not isinstance(collection, StatementLambdaElement):
                 collection = lambda_stmt(lambda: collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
@@ -1868,17 +1880,20 @@ class SQLAlchemyAsyncQueryRepository:
     This is a loosely typed helper to query for when you need to select data in ways that don't align to the normal repository pattern.
     """
 
+    error_messages: ErrorMessages | None = None
+
     def __init__(
         self,
         *,
         session: AsyncSession | async_scoped_session[AsyncSession],
+        error_messages: ErrorMessages | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
 
         Args:
             session: Session managing the unit-of-work for the operation.
-            auto_expunge: Remove object from session before returning.
+            error_messages: A set of error messages to use for operations.
             **kwargs: Additional arguments.
 
         """
@@ -1904,7 +1919,7 @@ class SQLAlchemyAsyncQueryRepository:
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return self.check_not_found(instance)
@@ -1923,7 +1938,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return instance or None
@@ -1938,7 +1953,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
                 None,
             )
@@ -1984,7 +1999,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
@@ -2015,7 +2030,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
@@ -2035,7 +2050,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
             return list(result.scalars())
@@ -2054,7 +2069,7 @@ class SQLAlchemyAsyncQueryRepository:
                 have the property that their attribute named `key` has value equal to `value`.
         """
 
-        with wrap_sqlalchemy_exception():
+        with wrap_sqlalchemy_exception(self.error_messages):
             return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed

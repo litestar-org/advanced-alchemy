@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any, Callable, Generator, TypedDict, Union
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
@@ -94,8 +94,16 @@ class MultipleResultsFoundError(AdvancedAlchemyError):
     """A single database result was required but more than one were found."""
 
 
+class ErrorMessages(TypedDict):
+    field_required: Union[str, Callable[[], str]]  # noqa: UP007
+    unique_constraint: Union[str, Callable[[], str]]  # noqa: UP007
+    foreign_key: Union[str, Callable[[], str]]  # noqa: UP007
+    multiple_rows: Union[str, Callable[[], str]]  # noqa: UP007
+    other: Union[str, Callable[[], str]]  # noqa: UP007
+
+
 @contextmanager
-def wrap_sqlalchemy_exception() -> Generator[None, None, None]:
+def wrap_sqlalchemy_exception(error_messages: ErrorMessages | None = None) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
 
@@ -110,12 +118,31 @@ def wrap_sqlalchemy_exception() -> Generator[None, None, None]:
     try:
         yield
     except MultipleResultsFound as e:
-        msg = "Multiple rows matched the specified key"
-        raise MultipleResultsFoundError(msg) from e
+        if error_messages is not None:
+            _template = error_messages["multiple_rows"]
+            msg = "Multiple rows matched the specified key"
+        else:
+            msg = "Multiple rows matched the specified key"
+        raise MultipleResultsFoundError(detail=msg) from e
     except SQLAlchemyIntegrityError as exc:
-        raise IntegrityError from exc
+        if error_messages is not None:
+            _template = error_messages["other"]
+            msg = "Integrity error"
+        else:
+            msg = "Integrity error"
+        raise IntegrityError(detail=msg) from exc
     except SQLAlchemyError as exc:
+        if error_messages is not None:
+            _template = error_messages["other"]
+            msg = "SQLAlchemy Exception"
+        else:
+            msg = "SQLAlchemy Exception"
         msg = f"An exception occurred: {exc}"
-        raise RepositoryError(msg) from exc
+        raise RepositoryError(detail=msg) from exc
     except AttributeError as exc:
-        raise RepositoryError from exc
+        if error_messages is not None:
+            _template = error_messages["other"]
+            msg = "Attribute error"
+        else:
+            msg = "Attribute error"
+        raise RepositoryError(detail=msg) from exc
