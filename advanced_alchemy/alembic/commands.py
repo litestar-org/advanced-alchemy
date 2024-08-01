@@ -244,5 +244,6 @@ class AlembicCommands:
             },
         )
         self.config = AlembicCommandConfig(**kwargs)
-        self.config.set_main_option("script_location", self.sqlalchemy_config.alembic_config.script_location)
+        if not self.config.get_main_option("script_location"):
+            self.config.set_main_option("script_location", self.sqlalchemy_config.alembic_config.script_location)
         return self.config
