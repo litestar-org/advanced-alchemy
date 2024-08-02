@@ -135,7 +135,9 @@ autocommit_before_send_handler = autocommit_handler_maker()
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """Async SQLAlchemy Configuration."""
 
-    before_send_handler: BeforeMessageSendHookHandler | None | Literal["autocommit"] = None
+    before_send_handler: BeforeMessageSendHookHandler | None | Literal["autocommit", "autocommit_include_redirects"] = (
+        None
+    )
     """Handler to call before the ASGI message is sent.
 
     The handler should handle closing the session stored in the ASGI scope, if it's still open, and committing and
@@ -182,6 +184,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.before_send_handler = default_handler_maker(session_scope_key=self.session_scope_key)
         if self.before_send_handler == "autocommit":
             self.before_send_handler = autocommit_handler_maker(session_scope_key=self.session_scope_key)
+        if self.before_send_handler == "autocommit_include_redirects":
+            self.before_send_handler = autocommit_handler_maker(
+                session_scope_key=self.session_scope_key,
+                commit_on_redirect=True,
+            )
         super().__post_init__()
 
     def create_session_maker(self) -> Callable[[], AsyncSession]:
