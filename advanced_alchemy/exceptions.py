@@ -108,7 +108,7 @@ class ErrorMessages(TypedDict):
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
-    template: Union[str, Callable[[Exception], str]] = error_messages[key]  # type: ignore[literal-required] # noqa: UP007
+    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[literal-required,assignment] # noqa: UP007
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]
