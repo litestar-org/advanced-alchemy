@@ -43,9 +43,10 @@ if TYPE_CHECKING:
     from advanced_alchemy.filters import StatementFilter
 
 DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
-    "field_required": "A required field is missing",
+    "integrity": "There was a data validation error during processing",
     "foreign_key": "A foreign key is missing or invalid",
     "multiple_rows": "Multiple matching rows found",
+    "check_constraint": "The data violates a required constraint",
     "unique_constraint": "A record matching the supplied data already exists.",
     "other": "There was an error during data processing",
 }

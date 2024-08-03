@@ -164,5 +164,5 @@ def wrap_sqlalchemy_exception(
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
         else:
-            msg = f"An attribute error ocurred during processing: {exc}"
+            msg = f"An attribute error occurred during processing: {exc}"
         raise RepositoryError(detail=msg) from exc
