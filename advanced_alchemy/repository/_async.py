@@ -108,6 +108,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None = None,
     ) -> ModelT: ...
 
     async def add_many(
@@ -116,6 +117,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None = None,
     ) -> Sequence[ModelT]: ...
 
     async def delete(
@@ -125,6 +127,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -137,6 +140,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]: ...
@@ -147,6 +151,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
+        error_messages: ErrorMessages | None = None,
         execution_options: dict[str, Any] | None = None,
         sanity_check: bool = True,
         **kwargs: Any,
@@ -156,6 +161,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: StatementFilter | ColumnElement[bool],
         load: LoadSpec | None = None,
+        error_messages: ErrorMessages | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> bool: ...
@@ -167,6 +173,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -176,6 +183,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -186,6 +194,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -201,6 +210,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -215,6 +225,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -225,6 +236,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
+        error_messages: ErrorMessages | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int: ...
@@ -239,6 +251,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -271,6 +284,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -283,6 +297,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]: ...
@@ -293,6 +308,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
@@ -304,6 +320,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
@@ -320,6 +337,7 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
         self,
         slug: str,
         *,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -353,9 +371,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_refresh: bool = True,
         auto_commit: bool = False,
         order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        error_messages: ErrorMessages | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -378,7 +396,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.auto_commit = auto_commit
         self.order_by = order_by
         self.session = session
-        self.error_messages = error_messages or DEFAULT_ERROR_MESSAGE_TEMPLATES
+        self.error_messages = error_messages if error_messages is not None else DEFAULT_ERROR_MESSAGE_TEMPLATES
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
         )
@@ -471,6 +489,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -482,11 +501,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
         Returns:
             The added instance.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -499,6 +520,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None = None,
     ) -> Sequence[ModelT]:
         """Add many `data` to the collection.
 
@@ -508,10 +530,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
         Returns:
             The added instances.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             self.session.add_all(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -525,6 +550,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -538,6 +564,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
 
@@ -547,7 +575,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             instance = await self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -567,6 +596,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
@@ -582,6 +612,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
                 Defaults to `950` if left unset.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
 
@@ -589,8 +621,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The deleted instances.
 
         """
-
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
@@ -654,9 +686,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None = None,
+        sanity_check: bool = True,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        sanity_check: bool = True,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Delete instances specified by referenced kwargs and filters.
@@ -667,16 +700,18 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
+            sanity_check: When true, the length of selected instances is compared to the deleted row count
             load: Set default relationships to be loaded
             execution_options: Set default execution options
-            sanity_check: When true, the length of selected instances is compared to the deleted row count
             **kwargs: Arguments to apply to a delete
         Returns:
             The deleted instances.
 
         """
-
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
             statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
@@ -716,6 +751,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     async def exists(
         self,
         *filters: StatementFilter | ColumnElement[bool],
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -724,8 +760,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Args:
             *filters: Types for specific filtering operations.
-            load: Set relationships to be loaded
-            execution_options: Set default execution options
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
@@ -734,7 +770,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             True if the instance was found.  False if not found..
 
         """
-        existing = await self.count(*filters, load=load, execution_options=execution_options, **kwargs)
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        existing = await self.count(
+            *filters,
+            load=load,
+            execution_options=execution_options,
+            error_messages=error_messages,
+            **kwargs,
+        )
         return existing > 0
 
     def _to_lambda_stmt(
@@ -813,6 +856,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -826,6 +870,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
 
@@ -835,7 +881,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
@@ -855,6 +902,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -867,6 +915,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
@@ -877,7 +927,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -897,6 +948,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -909,6 +961,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
@@ -916,7 +970,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -944,6 +999,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -967,6 +1023,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
@@ -976,7 +1034,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -1026,6 +1085,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1047,6 +1107,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Identifier of the instance to be retrieved.
@@ -1060,7 +1122,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -1091,6 +1154,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self,
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1101,6 +1165,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1108,7 +1174,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1134,6 +1201,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -1155,6 +1223,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
 
@@ -1164,7 +1234,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -1189,6 +1260,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -1205,6 +1277,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
 
@@ -1214,8 +1288,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        error_messages = error_messages if error_messages is not None else self.error_messages
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
@@ -1276,6 +1351,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1290,6 +1366,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
             order_by: Set default order options for queries.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1297,6 +1375,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
+        error_messages = error_messages if error_messages is not None else self.error_messages
         if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
             return await self._list_and_count_basic(
                 *filters,
@@ -1305,6 +1384,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 load=load,
                 execution_options=execution_options,
                 order_by=order_by,
+                error_messages=error_messages,
                 **kwargs,
             )
         return await self._list_and_count_window(
@@ -1313,6 +1393,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement=statement,
             load=load,
             execution_options=execution_options,
+            error_messages=error_messages,
             order_by=order_by,
             **kwargs,
         )
@@ -1355,6 +1436,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1368,6 +1450,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: list[OrderingPair] | OrderingPair | None = None,
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1375,8 +1459,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
-
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1409,6 +1493,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1422,6 +1507,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1429,8 +1516,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
-
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1484,6 +1571,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -1508,6 +1596,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
 
@@ -1517,6 +1607,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        error_messages = error_messages if error_messages is not None else self.error_messages
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
                 field_name: getattr(data, field_name, None)
@@ -1535,7 +1626,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
             )
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and field != new_field_value:
@@ -1577,6 +1668,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -1600,6 +1692,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, automatically uses ``self.id_attribute`` (`id` by default) to match .
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
 
@@ -1609,6 +1703,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
+        error_messages = error_messages if error_messages is not None else self.error_messages
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
@@ -1624,7 +1719,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 ]
                 match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
 
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             existing_objs = await self.list(
                 *match_filter,
                 load=load,
@@ -1701,6 +1796,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1714,6 +1810,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
+            error_messages: A optional dictionary of templates to use
+                for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
             **kwargs: Instance attribute value filters.
@@ -1721,8 +1819,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The list of instances, after filtering applied.
         """
-
-        with wrap_sqlalchemy_exception(self.error_messages):
+        error_messages = error_messages if error_messages is not None else self.error_messages
+        with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1754,7 +1852,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             **kwargs: key/value pairs such that objects remaining in the collection after filtering
                 have the property that their attribute named `key` has value equal to `value`.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             if not isinstance(collection, StatementLambdaElement):
                 collection = lambda_stmt(lambda: collection)
             collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
@@ -1834,12 +1932,18 @@ class SQLAlchemyAsyncSlugRepository(
     async def get_by_slug(
         self,
         slug: str,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Select record by slug value."""
-        return await self.get_one_or_none(slug=slug, load=load, execution_options=execution_options)
+        return await self.get_one_or_none(
+            slug=slug,
+            load=load,
+            execution_options=execution_options,
+            error_messages=error_messages,
+        )
 
     async def get_available_slug(
         self,
@@ -1900,6 +2004,7 @@ class SQLAlchemyAsyncQueryRepository:
         """
         super().__init__(**kwargs)
         self.session = session
+        self.error_messages = error_messages
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
 
     async def get_one(
@@ -1920,7 +2025,7 @@ class SQLAlchemyAsyncQueryRepository:
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return self.check_not_found(instance)
@@ -1939,7 +2044,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return instance or None
@@ -1954,7 +2059,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
                 None,
             )
@@ -2000,7 +2105,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
@@ -2031,7 +2136,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
@@ -2051,7 +2156,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
             return list(result.scalars())
@@ -2070,7 +2175,7 @@ class SQLAlchemyAsyncQueryRepository:
                 have the property that their attribute named `key` has value equal to `value`.
         """
 
-        with wrap_sqlalchemy_exception(self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
