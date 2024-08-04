@@ -24,6 +24,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import (
+    DEFAULT_ERROR_MESSAGE_TEMPLATES,
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
@@ -42,14 +43,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.filters import StatementFilter
 
-DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
-    "integrity": "There was a data validation error during processing",
-    "foreign_key": "A foreign key is missing or invalid",
-    "multiple_rows": "Multiple matching rows found",
-    "check_constraint": "The data violates a required constraint",
-    "unique_constraint": "A record matching the supplied data already exists.",
-    "other": "There was an error during data processing",
-}
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 

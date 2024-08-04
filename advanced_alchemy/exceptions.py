@@ -136,8 +136,7 @@ class MultipleResultsFoundError(RepositoryError):
 
 
 class ErrorMessages(TypedDict):
-    unique_constraint: Union[str, Callable[[Exception], str]]  # noqa: UP007
-    check_constraint: Union[str, Callable[[Exception], str]]  # noqa: UP007
+    duplicate_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
     integrity: Union[str, Callable[[Exception], str]]  # noqa: UP007
     foreign_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
     multiple_rows: Union[str, Callable[[Exception], str]]  # noqa: UP007
@@ -180,7 +179,7 @@ def wrap_sqlalchemy_exception(
             for regex in DUPLICATE_KEY_REGEXES:
                 if (match := regex.findall(detail)) and match[0]:
                     raise DuplicateKeyError(
-                        detail=_get_error_message(error_messages=error_messages, key="unique_constraint", exc=exc),
+                        detail=_get_error_message(error_messages=error_messages, key="duplicate_key", exc=exc),
                     ) from exc
             for regex in FOREIGN_KEY_REGEXES:
                 if (match := regex.findall(detail)) and match[0]:

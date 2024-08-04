@@ -21,6 +21,7 @@ from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
 from typing_extensions import TypeAlias
 
+from advanced_alchemy.exceptions import ErrorMessages
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     InAnyFilter,
@@ -57,6 +58,14 @@ OrderByT: TypeAlias = Union[
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
+
+DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
+    "integrity": "There was a data validation error during processing",
+    "foreign_key": "A foreign key is missing or invalid",
+    "multiple_rows": "Multiple matching rows found",
+    "duplicate_key": "A record matching the supplied data already exists.",
+    "other": "There was an error during data processing",
+}
 
 
 def get_instrumented_attr(
