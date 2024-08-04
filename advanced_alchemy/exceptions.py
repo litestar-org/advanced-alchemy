@@ -12,34 +12,34 @@ from advanced_alchemy.utils.deprecation import deprecated
 DUPLICATE_KEY_PATTERNS = [
     # postgres
     r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*' r"Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",  # noqa: ISC001
-    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"
+    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$",
     # sqlite
     r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$",
     r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$",
-    r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$"
+    r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$",
     # mysql
-    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)'"
-    r" for key '(?P<columns>[^']+)'.*$"
-    r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\'"
+    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)'",
+    r" for key '(?P<columns>[^']+)'.*$",
+    r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\'",
     r" for key \\'(?P<columns>.+)\\'.*$",
 ]
 FOREIGN_KEY_PATTERNS = [
     # postgres
-    r".*on table \"(?P<table>[^\"]+)\" violates "
-    r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
-    r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
-    r"is (not present in|still referenced from) table "
-    r"\"(?P<key_table>[^\"]+)\"."
+    r".*on table \"(?P<table>[^\"]+)\" violates ",
+    r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n",
+    r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) ",
+    r"is (not present in|still referenced from) table ",
+    r"\"(?P<key_table>[^\"]+)\".",
     # sqlite
-    r"(?i).*foreign key constraint failed"
+    r"(?i).*foreign key constraint failed",
     # mysql
-    r".*Cannot (add|delete) or update a (child|parent) row: "
-    r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
-    r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
+    r".*Cannot (add|delete) or update a (child|parent) row: ",
+    r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], ',
+    r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY ',
     r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
 ]
-FOREIGN_KEY_REGEXES = [re.compile(pattern) for pattern in FOREIGN_KEY_PATTERNS]
-DUPLICATE_KEY_REGEXES = [re.compile(pattern) for pattern in DUPLICATE_KEY_PATTERNS]
+FOREIGN_KEY_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in FOREIGN_KEY_PATTERNS]
+DUPLICATE_KEY_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in DUPLICATE_KEY_PATTERNS]
 
 
 class AdvancedAlchemyError(Exception):
