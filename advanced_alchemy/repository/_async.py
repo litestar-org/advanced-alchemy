@@ -262,6 +262,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None = None,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]: ...
