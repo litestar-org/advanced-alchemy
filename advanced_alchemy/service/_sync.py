@@ -36,6 +36,7 @@ from advanced_alchemy.service.typing import (
     is_msgspec_model,
     is_pydantic_model,
 )
+from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -106,7 +107,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         auto_refresh: bool = True,
         auto_commit: bool = False,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **repo_kwargs: Any,
@@ -142,7 +143,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         self,
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -174,7 +175,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
     def exists(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -207,7 +208,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -247,7 +248,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT:
@@ -283,7 +284,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -353,7 +354,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -396,7 +397,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         session: Session | scoped_session[Session] | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         config: SQLAlchemySyncConfig | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Iterator[Self]:
@@ -434,7 +435,7 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -479,7 +480,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> ModelT:
         """Wrap repository instance creation.
 
@@ -512,7 +513,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance creation.
 
@@ -549,7 +550,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -614,7 +615,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
@@ -657,7 +658,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -713,7 +714,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
@@ -763,7 +764,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -823,7 +824,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -877,7 +878,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -917,7 +918,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
@@ -957,7 +958,7 @@ class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT
         *filters: StatementFilter | ColumnElement[bool],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         sanity_check: bool = True,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
