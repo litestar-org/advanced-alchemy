@@ -4,7 +4,19 @@ from __future__ import annotations
 
 import random
 import string
-from typing import TYPE_CHECKING, Any, Final, Iterable, List, Literal, Protocol, Sequence, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Final,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Sequence,
+    cast,
+    runtime_checkable,
+)
 
 from sqlalchemy import (
     Result,
@@ -34,6 +46,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, T
+from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -73,7 +86,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         **kwargs: Any,
     ) -> None: ...
 
@@ -102,7 +115,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> ModelT: ...
 
     def add_many(
@@ -111,7 +124,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> Sequence[ModelT]: ...
 
     def delete(
@@ -121,7 +134,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -134,7 +147,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]: ...
@@ -145,7 +158,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         execution_options: dict[str, Any] | None = None,
         sanity_check: bool = True,
         **kwargs: Any,
@@ -155,7 +168,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         self,
         *filters: StatementFilter | ColumnElement[bool],
         load: LoadSpec | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> bool: ...
@@ -167,7 +180,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -177,7 +190,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -188,7 +201,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -204,7 +217,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -219,7 +232,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -230,7 +243,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int: ...
@@ -245,7 +258,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -256,7 +269,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]: ...
@@ -279,7 +292,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT: ...
@@ -292,7 +305,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]: ...
@@ -303,7 +316,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
@@ -315,7 +328,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
@@ -332,7 +345,7 @@ class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[Mode
         self,
         slug: str,
         *,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -366,7 +379,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_refresh: bool = True,
         auto_commit: bool = False,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -407,12 +420,17 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     @staticmethod
     def _get_error_messages(
-        error_messages: ErrorMessages | None = None,
-        default_messages: ErrorMessages | None = None,
-    ) -> ErrorMessages:
-        default_messages = default_messages if default_messages is not None else DEFAULT_ERROR_MESSAGE_TEMPLATES
-        if error_messages is not None:
-            default_messages.update(error_messages)
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        default_messages: ErrorMessages | None | EmptyType = Empty,
+    ) -> ErrorMessages | None:
+        if error_messages == Empty:
+            error_messages = None
+        default_messages = cast(
+            "Optional[ErrorMessages]",
+            default_messages if default_messages != Empty else DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
+        if error_messages is not None and default_messages is not None:
+            default_messages.update(cast("ErrorMessages", error_messages))
         return default_messages
 
     @classmethod
@@ -494,7 +512,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -528,7 +546,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> Sequence[ModelT]:
         """Add many `data` to the collection.
 
@@ -561,7 +579,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -610,7 +628,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
@@ -703,7 +721,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: StatementFilter | ColumnElement[bool],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         sanity_check: bool = True,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -771,7 +789,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def exists(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -879,7 +897,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -928,7 +946,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -977,7 +995,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1031,7 +1049,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1120,7 +1138,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1192,7 +1210,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self,
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1242,7 +1260,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -1304,7 +1322,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -1398,7 +1416,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1486,7 +1504,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1546,7 +1564,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1627,7 +1645,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -1727,7 +1745,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -1858,7 +1876,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -1997,7 +2015,7 @@ class SQLAlchemySyncSlugRepository(
     def get_by_slug(
         self,
         slug: str,
-        error_messages: ErrorMessages | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
