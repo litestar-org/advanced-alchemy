@@ -397,7 +397,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.auto_commit = auto_commit
         self.order_by = order_by
         self.session = session
-        self.error_messages = error_messages if error_messages is not None else DEFAULT_ERROR_MESSAGE_TEMPLATES
+        self.error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
         )
@@ -410,6 +413,15 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.statement = _statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+
+    def _get_error_messages(
+        self,
+        error_messages: ErrorMessages | None = None,
+        default_messages: ErrorMessages = DEFAULT_ERROR_MESSAGE_TEMPLATES,
+    ) -> ErrorMessages:
+        if error_messages is not None:
+            default_messages.update(error_messages)
+        return default_messages
 
     @classmethod
     def get_id_attribute_value(
@@ -507,7 +519,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The added instance.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             instance = self._attach_to_session(data)
             self._flush_or_commit(auto_commit=auto_commit)
@@ -536,7 +551,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The added instances.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             self.session.add_all(data)
             self._flush_or_commit(auto_commit=auto_commit)
@@ -576,7 +594,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             instance = self.get(
                 item_id,
@@ -622,7 +643,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             The deleted instances.
 
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
@@ -711,7 +735,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             The deleted instances.
 
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
@@ -771,7 +798,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             True if the instance was found.  False if not found..
 
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         existing = self.count(
             *filters,
             load=load,
@@ -882,7 +912,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -928,7 +961,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -971,7 +1007,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The retrieved instance or None
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1035,7 +1074,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
@@ -1123,7 +1165,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
@@ -1175,7 +1220,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1235,7 +1283,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             item_id = self.get_id_attribute_value(
                 data,
@@ -1289,7 +1340,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             loader_options = self._get_loader_options(load)[0]
@@ -1376,7 +1430,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
             return self._list_and_count_basic(
                 *filters,
@@ -1460,7 +1517,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1517,7 +1577,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1608,7 +1671,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
                 field_name: getattr(data, field_name, None)
@@ -1704,7 +1770,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         instances: list[ModelT] = []
         data_to_update: list[ModelT] = []
         data_to_insert: list[ModelT] = []
@@ -1820,7 +1889,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The list of instances, after filtering applied.
         """
-        error_messages = error_messages if error_messages is not None else self.error_messages
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
         with wrap_sqlalchemy_exception(error_messages=error_messages):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)

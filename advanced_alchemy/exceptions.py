@@ -10,7 +10,11 @@ from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
 from advanced_alchemy.utils.deprecation import deprecated
 
 KEY_PATTERN = r"(?P<type_key>uq|ck|fk|pk)_(?P<table>[a-z][a-z0-9]+)_[a-z_]+"
-regex = re.compile(KEY_PATTERN)
+UNIQUE_CONSTRAINT_PATTERN = r"Key \(?(?P<column>\w+)\)?=\(?(?P<value>.*?)\)? already exists\."
+FOREIGN_KEY_PATTERN = r"Key \(?(?P<column>\w+)\)?=\(?(?P<value>.*?)\)? is not present in table\."
+
+unique_constraint_regex = re.compile(UNIQUE_CONSTRAINT_PATTERN)
+foreign_key_regex = re.compile(FOREIGN_KEY_PATTERN)
 
 
 class AdvancedAlchemyError(Exception):
@@ -141,16 +145,18 @@ def wrap_sqlalchemy_exception(
         raise MultipleResultsFoundError(detail=msg) from exc
     except SQLAlchemyIntegrityError as exc:
         if error_messages is not None:
-            m = regex.search(str(exc.orig))
-            constraint_type = "integrity" if m is None else m.groupdict()["type_key"]
-            if constraint_type == "uk":
-                msg = _get_error_message(error_messages=error_messages, key="unique_constraint", exc=exc)
-            if constraint_type == "ck":
-                msg = _get_error_message(error_messages=error_messages, key="check_constraint", exc=exc)
-            if constraint_type == "fk":
-                msg = _get_error_message(error_messages=error_messages, key="foreign_key", exc=exc)
+            detail = exc.orig.args[0] if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
+
+            if (match := unique_constraint_regex.findall(detail)) and match[0]:
+                error_key = "unique_constraint"
+            # need a new way to do this
+            # elif> constraint_type == "ck":
+            #   error_key = "check_constraint
+            elif (match := foreign_key_regex.findall(detail)) and match[0]:
+                error_key = "foreign_key"
             else:
-                msg = _get_error_message(error_messages=error_messages, key="integrity", exc=exc)
+                error_key = "integrity"
+            msg = _get_error_message(error_messages=error_messages, key=error_key, exc=exc)
         else:
             msg = f"An integrity error occurred: {exc}"
         raise IntegrityError(detail=msg) from exc
