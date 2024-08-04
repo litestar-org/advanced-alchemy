@@ -124,9 +124,10 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
 class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol."""
 
-    __table__: FromClause
-    __mapper__: Mapper[Any]
-    __name__: str
+    if TYPE_CHECKING:
+        __table__: FromClause
+        __mapper__: Mapper[Any]
+        __name__: str
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
@@ -203,9 +204,10 @@ class AuditColumns:
 class BasicAttributes:
     """Basic attributes for SQLALchemy tables and queries."""
 
-    __name__: str
-    __table__: FromClause
-    __mapper__: Mapper[Any]
+    if TYPE_CHECKING:
+        __name__: str
+        __table__: FromClause
+        __mapper__: Mapper[Any]
 
     def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
