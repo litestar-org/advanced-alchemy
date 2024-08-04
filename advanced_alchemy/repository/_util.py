@@ -65,6 +65,7 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
     "multiple_rows": "Multiple matching rows found",
     "duplicate_key": "A record matching the supplied data already exists.",
     "other": "There was an error during data processing",
+    "check_constraint": "The data failed a check constraint during processing",
 }
 
 

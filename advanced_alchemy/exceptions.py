@@ -11,7 +11,8 @@ from advanced_alchemy.utils.deprecation import deprecated
 
 DUPLICATE_KEY_PATTERNS = [
     # postgres
-    r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*' r"Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",  # noqa: ISC001
+    r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*',
+    r"Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
     r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$",
     # sqlite
     r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$",
@@ -38,8 +39,12 @@ FOREIGN_KEY_PATTERNS = [
     r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY ',
     r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
 ]
+CHECK_CONSTRAINT_PATTERNS = [
+    r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)",
+]
 FOREIGN_KEY_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in FOREIGN_KEY_PATTERNS]
 DUPLICATE_KEY_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in DUPLICATE_KEY_PATTERNS]
+CHECK_CONSTRAINT_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in CHECK_CONSTRAINT_PATTERNS]
 
 
 class AdvancedAlchemyError(Exception):
@@ -140,18 +145,19 @@ class ErrorMessages(TypedDict, total=False):
     integrity: Union[str, Callable[[Exception], str]]  # noqa: UP007
     foreign_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
     multiple_rows: Union[str, Callable[[Exception], str]]  # noqa: UP007
+    check_constraint: Union[str, Callable[[Exception], str]]  # noqa: UP007
     other: Union[str, Callable[[Exception], str]]  # noqa: UP007
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
-    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment] # noqa: UP007
+    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]  # noqa: UP007
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]
 
 
 @contextmanager
-def wrap_sqlalchemy_exception(
+def wrap_sqlalchemy_exception(  # noqa: C901
     error_messages: ErrorMessages | None = None,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
@@ -181,11 +187,17 @@ def wrap_sqlalchemy_exception(
                     raise DuplicateKeyError(
                         detail=_get_error_message(error_messages=error_messages, key="duplicate_key", exc=exc),
                     ) from exc
+            for regex in CHECK_CONSTRAINT_REGEXES:
+                if (match := regex.findall(detail)) and match[0]:
+                    raise IntegrityError(
+                        detail=_get_error_message(error_messages=error_messages, key="check_constraint", exc=exc),
+                    ) from exc
             for regex in FOREIGN_KEY_REGEXES:
                 if (match := regex.findall(detail)) and match[0]:
                     raise ForeignKeyError(
                         detail=_get_error_message(error_messages=error_messages, key="foreign_key", exc=exc),
                     ) from exc
+
             raise IntegrityError(
                 detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
             ) from exc
