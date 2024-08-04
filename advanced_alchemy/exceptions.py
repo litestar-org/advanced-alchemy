@@ -11,32 +11,29 @@ from advanced_alchemy.utils.deprecation import deprecated
 
 DUPLICATE_KEY_PATTERNS = [
     # postgres
-    r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*',
-    r"Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
-    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$",
+    r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$',
+    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"
     # sqlite
     r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$",
     r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$",
     r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$",
     # mysql
-    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)'",
-    r" for key '(?P<columns>[^']+)'.*$",
-    r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\'",
-    r" for key \\'(?P<columns>.+)\\'.*$",
+    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"
+    r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$",
 ]
 FOREIGN_KEY_PATTERNS = [
     # postgres
-    r".*on table \"(?P<table>[^\"]+)\" violates ",
-    r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n",
-    r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) ",
-    r"is (not present in|still referenced from) table ",
+    r".*on table \"(?P<table>[^\"]+)\" violates "
+    r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
+    r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
+    r"is (not present in|still referenced from) table "
     r"\"(?P<key_table>[^\"]+)\".",
     # sqlite
     r"(?i).*foreign key constraint failed",
     # mysql
-    r".*Cannot (add|delete) or update a (child|parent) row: ",
-    r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], ',
-    r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY ',
+    r".*Cannot (add|delete) or update a (child|parent) row: "
+    r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
+    r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
     r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
 ]
 CHECK_CONSTRAINT_PATTERNS = [
