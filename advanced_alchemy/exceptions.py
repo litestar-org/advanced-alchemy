@@ -11,14 +11,14 @@ from advanced_alchemy.utils.deprecation import deprecated
 
 DUPLICATE_KEY_PATTERNS = [
     # postgres
-    r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$',
-    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"
+    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
+    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$",
     # sqlite
     r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$",
     r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$",
     r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$",
     # mysql
-    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"
+    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$",
     r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$",
 ]
 FOREIGN_KEY_PATTERNS = [
