@@ -135,7 +135,7 @@ class MultipleResultsFoundError(RepositoryError):
     """A single database result was required but more than one were found."""
 
 
-class ErrorMessages(TypedDict):
+class ErrorMessages(TypedDict, total=False):
     duplicate_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
     integrity: Union[str, Callable[[Exception], str]]  # noqa: UP007
     foreign_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
