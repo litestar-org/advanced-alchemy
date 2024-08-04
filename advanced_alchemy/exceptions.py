@@ -9,12 +9,37 @@ from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
 
 from advanced_alchemy.utils.deprecation import deprecated
 
-KEY_PATTERN = r"(?P<type_key>uq|ck|fk|pk)_(?P<table>[a-z][a-z0-9]+)_[a-z_]+"
-UNIQUE_CONSTRAINT_PATTERN = r"Key \(?(?P<column>\w+)\)?=\(?(?P<value>.*?)\)? already exists\."
-FOREIGN_KEY_PATTERN = r"Key \(?(?P<column>\w+)\)?=\(?(?P<value>.*?)\)? is not present in table\."
-
-unique_constraint_regex = re.compile(UNIQUE_CONSTRAINT_PATTERN)
-foreign_key_regex = re.compile(FOREIGN_KEY_PATTERN)
+DUPLICATE_KEY_PATTERNS = [
+    # postgres
+    r'^.*duplicate\s+key.*"(?P<columns>[^"]+)"\s*\n.*' r"Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",  # noqa: ISC001
+    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"
+    # sqlite
+    r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$",
+    r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$",
+    r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$"
+    # mysql
+    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)'"
+    r" for key '(?P<columns>[^']+)'.*$"
+    r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\'"
+    r" for key \\'(?P<columns>.+)\\'.*$",
+]
+FOREIGN_KEY_PATTERNS = [
+    # postgres
+    r".*on table \"(?P<table>[^\"]+)\" violates "
+    r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
+    r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
+    r"is (not present in|still referenced from) table "
+    r"\"(?P<key_table>[^\"]+)\"."
+    # sqlite
+    r"(?i).*foreign key constraint failed"
+    # mysql
+    r".*Cannot (add|delete) or update a (child|parent) row: "
+    r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
+    r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
+    r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
+]
+FOREIGN_KEY_REGEXES = [re.compile(pattern) for pattern in FOREIGN_KEY_PATTERNS]
+DUPLICATE_KEY_REGEXES = [re.compile(pattern) for pattern in DUPLICATE_KEY_PATTERNS]
 
 
 class AdvancedAlchemyError(Exception):
@@ -94,11 +119,19 @@ class IntegrityError(RepositoryError):
     """Data integrity error."""
 
 
+class DuplicateKeyError(IntegrityError):
+    """Duplicate key error."""
+
+
+class ForeignKeyError(IntegrityError):
+    """Foreign key error."""
+
+
 class NotFoundError(RepositoryError):
     """An identity does not exist."""
 
 
-class MultipleResultsFoundError(AdvancedAlchemyError):
+class MultipleResultsFoundError(RepositoryError):
     """A single database result was required but more than one were found."""
 
 
@@ -121,7 +154,6 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 @contextmanager
 def wrap_sqlalchemy_exception(
     error_messages: ErrorMessages | None = None,
-    constraint_pattern: str | None = None,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
@@ -135,7 +167,6 @@ def wrap_sqlalchemy_exception(
         caught repository exception from <class 'sqlalchemy.exc.SQLAlchemyError'>
     """
     try:
-        constraint_pattern = KEY_PATTERN if constraint_pattern is None else constraint_pattern
         yield
     except MultipleResultsFound as exc:
         if error_messages is not None:
@@ -146,20 +177,20 @@ def wrap_sqlalchemy_exception(
     except SQLAlchemyIntegrityError as exc:
         if error_messages is not None:
             detail = exc.orig.args[0] if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
-
-            if (match := unique_constraint_regex.findall(detail)) and match[0]:
-                error_key = "unique_constraint"
-            # need a new way to do this
-            # elif> constraint_type == "ck":
-            #   error_key = "check_constraint
-            elif (match := foreign_key_regex.findall(detail)) and match[0]:
-                error_key = "foreign_key"
-            else:
-                error_key = "integrity"
-            msg = _get_error_message(error_messages=error_messages, key=error_key, exc=exc)
-        else:
-            msg = f"An integrity error occurred: {exc}"
-        raise IntegrityError(detail=msg) from exc
+            for regex in DUPLICATE_KEY_REGEXES:
+                if (match := regex.findall(detail)) and match[0]:
+                    raise DuplicateKeyError(
+                        detail=_get_error_message(error_messages=error_messages, key="unique_constraint", exc=exc),
+                    ) from exc
+            for regex in FOREIGN_KEY_REGEXES:
+                if (match := regex.findall(detail)) and match[0]:
+                    raise ForeignKeyError(
+                        detail=_get_error_message(error_messages=error_messages, key="foreign_key", exc=exc),
+                    ) from exc
+            raise IntegrityError(
+                detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
+            ) from exc
+        raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
     except SQLAlchemyError as exc:
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
