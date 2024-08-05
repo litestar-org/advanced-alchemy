@@ -524,7 +524,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
         Returns:
             The added instance.
@@ -556,7 +556,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
         Returns:
             The added instances.
@@ -593,7 +593,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
@@ -644,7 +644,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
                 Defaults to `950` if left unset.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
@@ -735,7 +735,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             sanity_check: When true, the length of selected instances is compared to the deleted row count
             load: Set default relationships to be loaded
@@ -798,7 +798,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
@@ -911,7 +911,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -959,7 +959,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1008,7 +1008,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1073,7 +1073,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1160,7 +1160,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1221,7 +1221,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1282,7 +1282,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1339,7 +1339,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             auto_commit: Commit objects before returning. Defaults to
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
@@ -1431,7 +1431,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
             order_by: Set default order options for queries.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1518,7 +1518,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: list[OrderingPair] | OrderingPair | None = None,
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1578,7 +1578,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1670,7 +1670,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
@@ -1769,7 +1769,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, automatically uses ``self.id_attribute`` (`id` by default) to match .
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
@@ -1890,7 +1890,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
-            error_messages: A optional dictionary of templates to use
+            error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
