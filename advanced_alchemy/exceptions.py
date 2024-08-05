@@ -188,7 +188,7 @@ def wrap_sqlalchemy_exception(
                 for regex in regexes:
                     if (match := regex.findall(detail)) and match[0]:
                         raise exception(
-                            detail=_get_error_message(error_messages=error_messages, key=key, exc=exc)
+                            detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
                         ) from exc
 
             raise IntegrityError(
