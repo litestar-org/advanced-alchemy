@@ -154,7 +154,7 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 
 
 @contextmanager
-def wrap_sqlalchemy_exception(  # noqa: C901
+def wrap_sqlalchemy_exception(
     error_messages: ErrorMessages | None = None,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
@@ -178,22 +178,18 @@ def wrap_sqlalchemy_exception(  # noqa: C901
         raise MultipleResultsFoundError(detail=msg) from exc
     except SQLAlchemyIntegrityError as exc:
         if error_messages is not None:
+            _keys_to_regex = {
+                "duplicate_key": (DUPLICATE_KEY_REGEXES, DuplicateKeyError),
+                "check_constraint": (CHECK_CONSTRAINT_REGEXES, IntegrityError),
+                "foreign_key": (FOREIGN_KEY_REGEXES, ForeignKeyError),
+            }
             detail = exc.orig.args[0] if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
-            for regex in DUPLICATE_KEY_REGEXES:
-                if (match := regex.findall(detail)) and match[0]:
-                    raise DuplicateKeyError(
-                        detail=_get_error_message(error_messages=error_messages, key="duplicate_key", exc=exc),
-                    ) from exc
-            for regex in CHECK_CONSTRAINT_REGEXES:
-                if (match := regex.findall(detail)) and match[0]:
-                    raise IntegrityError(
-                        detail=_get_error_message(error_messages=error_messages, key="check_constraint", exc=exc),
-                    ) from exc
-            for regex in FOREIGN_KEY_REGEXES:
-                if (match := regex.findall(detail)) and match[0]:
-                    raise ForeignKeyError(
-                        detail=_get_error_message(error_messages=error_messages, key="foreign_key", exc=exc),
-                    ) from exc
+            for key, (regexes, exception) in _keys_to_regex.items():
+                for regex in regexes:
+                    if (match := regex.findall(detail)) and match[0]:
+                        raise exception(
+                            detail=_get_error_message(error_messages=error_messages, key=key, exc=exc)
+                        ) from exc
 
             raise IntegrityError(
                 detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
