@@ -1896,6 +1896,14 @@ async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_se
     assert await maybe_async(new_service.count()) == 2
 
 
+async def test_repo_error_messages(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
+    obj = await maybe_async(author_repo.get_one(id=first_author_id))
+    assert obj is not None
+    assert obj.name == "Agatha Christie"
+    with pytest.raises(RepositoryError):
+        _ = await author_repo.add(author_repo.model_type(id=first_author_id, name="Agatha Christie"))
+
+
 async def test_repo_encrypted_methods(
     raw_secrets_uuid: RawRecordData,
     secret_repo: SecretRepository,
