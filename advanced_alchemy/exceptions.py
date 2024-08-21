@@ -9,39 +9,72 @@ from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
 
 from advanced_alchemy.utils.deprecation import deprecated
 
-DUPLICATE_KEY_PATTERNS = [
-    # postgres
-    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
-    r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$",
-    # sqlite
-    r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$",
-    r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$",
-    r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$",
-    # mysql
-    r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$",
-    r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$",
-]
-FOREIGN_KEY_PATTERNS = [
-    # postgres
-    r".*on table \"(?P<table>[^\"]+)\" violates "
-    r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
-    r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
-    r"is (not present in|still referenced from) table "
-    r"\"(?P<key_table>[^\"]+)\".",
-    # sqlite
-    r"(?i).*foreign key constraint failed",
-    # mysql
-    r".*Cannot (add|delete) or update a (child|parent) row: "
-    r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
-    r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
-    r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
-]
-CHECK_CONSTRAINT_PATTERNS = [
-    r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)",
-]
-FOREIGN_KEY_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in FOREIGN_KEY_PATTERNS]
-DUPLICATE_KEY_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in DUPLICATE_KEY_PATTERNS]
-CHECK_CONSTRAINT_REGEXES = [re.compile(pattern, re.DOTALL) for pattern in CHECK_CONSTRAINT_PATTERNS]
+FOREIGN_KEY_REGEXES = {
+    "postgresql": [
+        re.compile(
+            r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
+        ),
+        re.compile(r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"),
+    ],
+    "sqlite": [
+        re.compile(r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$"),
+        re.compile(r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$"),
+        re.compile(r"^.*PRIMARY\s+KEY\s+must\s+be\s+unique.*$"),
+    ],
+    "mysql": [
+        re.compile(r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"),
+        re.compile(r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$"),
+    ],
+    "oracle": [],
+    "spanner": [],
+    "duckdb": [],
+    "mssql": [],
+    "bigquery": [],
+    "cockroach": [],
+}
+
+DUPLICATE_KEY_REGEXES = {
+    "postgresql": [
+        re.compile(
+            r".*on table \"(?P<table>[^\"]+)\" violates "
+            r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
+            r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
+            r"is (not present in|still referenced from) table "
+            r"\"(?P<key_table>[^\"]+)\".",
+        ),
+    ],
+    "sqlite": [
+        re.compile(r"(?i).*foreign key constraint failed"),
+    ],
+    "mysql": [
+        re.compile(
+            r".*Cannot (add|delete) or update a (child|parent) row: "
+            r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
+            r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
+            r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
+        ),
+    ],
+    "oracle": [],
+    "spanner+spanner": [],
+    "duckdb": [],
+    "mssql": [],
+    "bigquery": [],
+    "cockroach": [],
+}
+
+CHECK_CONSTRAINT_REGEXES = {
+    "postgresql": [
+        re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)"),
+    ],
+    "sqlite": [],
+    "mysql": [],
+    "oracle": [],
+    "spanner+spanner": [],
+    "duckdb": [],
+    "mssql": [],
+    "bigquery": [],
+    "cockroach": [],
+}
 
 
 class AdvancedAlchemyError(Exception):
@@ -156,6 +189,7 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 @contextmanager
 def wrap_sqlalchemy_exception(
     error_messages: ErrorMessages | None = None,
+    dialect_name: str | None = None,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
@@ -177,11 +211,11 @@ def wrap_sqlalchemy_exception(
             msg = "Multiple rows matched the specified data"
         raise MultipleResultsFoundError(detail=msg) from exc
     except SQLAlchemyIntegrityError as exc:
-        if error_messages is not None:
+        if error_messages is not None and dialect_name is not None:
             _keys_to_regex = {
-                "duplicate_key": (DUPLICATE_KEY_REGEXES, DuplicateKeyError),
-                "check_constraint": (CHECK_CONSTRAINT_REGEXES, IntegrityError),
-                "foreign_key": (FOREIGN_KEY_REGEXES, ForeignKeyError),
+                "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
+                "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
+                "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
             detail = exc.orig.args[0] if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
             for key, (regexes, exception) in _keys_to_regex.items():

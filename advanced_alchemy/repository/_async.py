@@ -532,7 +532,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -564,7 +564,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             self.session.add_all(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -607,7 +607,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             instance = await self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -656,7 +656,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
@@ -748,7 +748,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
             statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
@@ -925,7 +925,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
@@ -974,7 +974,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1020,7 +1020,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1087,7 +1087,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -1178,7 +1178,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name, None)
@@ -1233,7 +1233,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1296,7 +1296,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -1354,7 +1354,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             default_messages=self.error_messages,
         )
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
@@ -1530,7 +1530,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1590,7 +1590,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1702,7 +1702,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
             )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and field != new_field_value:
@@ -1798,7 +1798,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 ]
                 match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
 
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             existing_objs = await self.list(
                 *match_filter,
                 load=load,
@@ -1902,7 +1902,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages):
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
