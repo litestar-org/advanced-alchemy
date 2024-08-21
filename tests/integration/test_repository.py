@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from time_machine import travel
 
 from advanced_alchemy import base
-from advanced_alchemy.exceptions import NotFoundError, RepositoryError
+from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -1900,7 +1900,7 @@ async def test_repo_error_messages(author_repo: AnyAuthorRepository, first_autho
     obj = await maybe_async(author_repo.get_one(id=first_author_id))
     assert obj is not None
     assert obj.name == "Agatha Christie"
-    with pytest.raises(RepositoryError):
+    with pytest.raises(IntegrityError):
         _ = await author_repo.add(author_repo.model_type(id=first_author_id, name="Agatha Christie"))
 
 
