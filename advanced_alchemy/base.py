@@ -18,6 +18,7 @@ from sqlalchemy.orm import (
     mapped_column,
     orm_insert_sentinel,
     registry,
+    validates,
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
@@ -199,6 +200,12 @@ class AuditColumns:
         onupdate=lambda: datetime.now(timezone.utc),
     )
     """Date/time of instance last update."""
+
+    @validates("created_at", "updated_at")
+    def validate_tz_info(self, _: str, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class BasicAttributes:
