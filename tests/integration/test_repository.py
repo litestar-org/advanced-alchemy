@@ -1897,6 +1897,8 @@ async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_se
 
 
 async def test_repo_error_messages(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        pytest.skip("Skipping mock repo does not works with fetched values")
     obj = await maybe_async(author_repo.get_one(id=first_author_id))
     assert obj is not None
     assert obj.name == "Agatha Christie"
