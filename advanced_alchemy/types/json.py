@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 
 
-class ORA_JSONB(TypeDecorator, SchemaType):  # type: ignore[misc] # noqa: N801
+class ORA_JSONB(TypeDecorator, SchemaType):  # noqa: N801
     """Oracle Binary JSON type.
 
     JsonB = _JSON().with_variant(PG_JSONB, "postgresql").with_variant(ORA_JSONB, "oracle")
