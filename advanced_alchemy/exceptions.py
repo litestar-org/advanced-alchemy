@@ -217,7 +217,7 @@ def wrap_sqlalchemy_exception(
                 "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
                 "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
-            detail = " - ".join(f"{exc_arg}!s" for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
+            detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
             for key, (regexes, exception) in _keys_to_regex.items():
                 for regex in regexes:
                     if (match := regex.findall(detail)) and match[0]:

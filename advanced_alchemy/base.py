@@ -358,6 +358,12 @@ class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, Dec
     registry = orm_registry
 
 
+class DefaultBase(CommonTableAttributes, DeclarativeBase):
+    """Base for all SQLAlchemy declarative models.  No primary key is added"""
+
+    registry = orm_registry
+
+
 class SQLQuery(BasicAttributes, DeclarativeBase):
     """Base for all SQLAlchemy custom mapped objects."""
 
