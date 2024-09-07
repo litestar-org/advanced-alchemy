@@ -664,5 +664,5 @@ async def test_no_type_hint_collection_relationship_alt_collection_class(
 
 def test_parse_type_from_element_failure() -> None:
     with pytest.raises(ImproperConfigurationError) as exc:
-        parse_type_from_element(1)  # type: ignore
+        parse_type_from_element(1, None)  # type: ignore
     assert str(exc.value) == "Unable to parse type from element '1'. Consider adding a type hint."

@@ -818,3 +818,58 @@ async def post_handler(data: DTOData[AModel], service: ModelService) -> AModel:
     with create_test_client(route_handlers=[module.post_handler]) as client:
         response = client.post("/", json={"id": 1, "val": "value"})
         assert response.json() == {"id": 1, "val": "value"}
+
+
+def test_dto_with_declared_attr(create_module: Callable[[str], ModuleType]) -> None:
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import Union
+
+from litestar import post
+from litestar.di import Provide
+from litestar.dto import DTOData, DTOField, Mark
+from litestar.dto.field import DTO_FIELD_META_KEY
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, column_property, declared_attr, mapped_column, sessionmaker
+
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig, base, repository, service
+
+engine = create_engine("sqlite:///:memory:", echo=True, connect_args={"check_same_thread": False})
+Session = sessionmaker(bind=engine, expire_on_commit=False)
+
+class Model(base.BigIntBase):
+    __tablename__ = "a"
+    a: Mapped[int] = mapped_column()
+
+    @declared_attr
+    def a_doubled(cls) -> Mapped[int]:
+        return column_property(cls.a * 2, info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)})
+
+class ModelCreateDTO(SQLAlchemyDTO[Model]):
+    config = SQLAlchemyDTOConfig(exclude={"id"})
+
+ModelReturnDTO = SQLAlchemyDTO[Model]
+
+class ModelRepository(repository.SQLAlchemySyncRepository[Model]):
+    model_type=Model
+
+class ModelService(service.SQLAlchemySyncRepositoryService[Model]):
+    repository_type = ModelRepository
+
+def provide_service( ) -> Generator[ModelService, None, None]:
+    Model.metadata.create_all(engine)
+    with Session() as db_session, ModelService.new(session=db_session) as service:
+        yield service
+    Model.metadata.drop_all(engine)
+
+@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+    return service.create(data, auto_commit=True)
+
+""",
+    )
+    with create_test_client(route_handlers=[module.post_handler]) as client:
+        response = client.post("/", json={"id": 1, "a": 21})
+        assert response.json() == {"id": 1, "a": 21, "a_doubled": 42}

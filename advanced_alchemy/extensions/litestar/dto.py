@@ -19,6 +19,7 @@ from sqlalchemy.orm import (
     CompositeProperty,
     DeclarativeBase,
     InspectionAttr,
+    InstrumentedAttribute,
     Mapped,
     MappedColumn,
     NotExtension,
@@ -124,9 +125,14 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"
                 raise NotImplementedError(msg)
         except KeyError:
-            field_definition = parse_type_from_element(elem)
+            field_definition = parse_type_from_element(elem, orm_descriptor)
 
-        dto_field = elem.info.get(DTO_FIELD_META_KEY, DTOField()) if hasattr(elem, "info") else DTOField()  # pyright: ignore[reportArgumentMemberType]
+        dto_field = elem.info.get(DTO_FIELD_META_KEY) if hasattr(elem, "info") else None  # pyright: ignore[reportArgumentMemberType]
+        if dto_field is None and isinstance(orm_descriptor, InstrumentedAttribute) and hasattr(orm_descriptor, "info"):
+            dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportArgumentMemberType]
+        if dto_field is None:
+            dto_field = DTOField()
+
         return [
             DTOFieldDefinition.from_field_definition(
                 field_definition=replace(
@@ -321,11 +327,12 @@ def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:
     return default, default_factory
 
 
-def parse_type_from_element(elem: ElementType) -> FieldDefinition:
+def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -> FieldDefinition:  # noqa: PLR0911
     """Parses a type from a SQLAlchemy element.
 
     Args:
         elem: The SQLAlchemy element to parse.
+        orm_descriptor: The attribute `elem` was extracted from.
 
     Returns:
         FieldDefinition: The parsed type.
@@ -351,6 +358,9 @@ def parse_type_from_element(elem: ElementType) -> FieldDefinition:
 
     if isinstance(elem, CompositeProperty):
         return FieldDefinition.from_annotation(elem.composite_class)
+
+    if isinstance(orm_descriptor, InstrumentedAttribute):
+        return FieldDefinition.from_annotation(orm_descriptor.type.python_type)
 
     msg = f"Unable to parse type from element '{elem}'. Consider adding a type hint."
     raise ImproperConfigurationError(
