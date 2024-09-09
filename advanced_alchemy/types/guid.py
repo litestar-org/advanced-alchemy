@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 
 UUID_UTILS_INSTALLED = find_spec("uuid_utils")
+NANOID_INSTALLED = find_spec("fastnanoid")
 
 
 class GUID(TypeDecorator[UUID]):

@@ -22,7 +22,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
-from advanced_alchemy.types import GUID, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
 
 if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
     from uuid_utils.compat import uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
@@ -32,6 +32,12 @@ else:
 
     uuid6 = uuid4  # type: ignore[assignment]
     uuid7 = uuid4  # type: ignore[assignment]
+
+if NANOID_INSTALLED and not TYPE_CHECKING:
+    from fastnanoid import generate as nanoid  # pyright: ignore[reportMissingImports]
+
+else:
+    nanoid = uuid4
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -55,6 +61,8 @@ __all__ = (
     "UUIDv6Base",
     "UUIDv7AuditBase",
     "UUIDv7Base",
+    "NanoIDAuditBase",
+    "NanoIDBase",
     "UUIDPrimaryKey",
     "UUIDv7PrimaryKey",
     "UUIDv6PrimaryKey",
@@ -70,6 +78,7 @@ UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
 BigIntBaseT = TypeVar("BigIntBaseT", bound="BigIntBase")
 UUIDv6BaseT = TypeVar("UUIDv6BaseT", bound="UUIDv6Base")
 UUIDv7BaseT = TypeVar("UUIDv7BaseT", bound="UUIDv7Base")
+NanoIDBaseT = TypeVar("NanoIDBaseT", bound="NanoIDBase")
 
 convention: NamingSchemaParameter = {
     "ix": "ix_%(column_0_label)s",
@@ -166,6 +175,17 @@ class UUIDv7PrimaryKey:
 
     id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True)
     """UUID Primary key column."""
+
+    @declared_attr
+    def _sentinel(cls) -> Mapped[int]:
+        return orm_insert_sentinel(name="sa_orm_sentinel")
+
+
+class NanoIDPrimaryKey:
+    """Nano ID Primary Key Field Mixin."""
+
+    id: Mapped[str] = mapped_column(default=nanoid, primary_key=True)
+    """Nano ID Primary key column."""
 
     @declared_attr
     def _sentinel(cls) -> Mapped[int]:
@@ -342,6 +362,18 @@ class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
 
 class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with UUID primary keys and audit columns."""
+
+    registry = orm_registry
+
+
+class NanoIDBase(NanoIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+    """Base for all SQLAlchemy declarative models with Nano ID primary keys."""
+
+    registry = orm_registry
+
+
+class NanoIDAuditBase(CommonTableAttributes, NanoIDPrimaryKey, AuditColumns, DeclarativeBase):
+    """Base for declarative models with Nano ID primary keys and audit columns."""
 
     registry = orm_registry
 

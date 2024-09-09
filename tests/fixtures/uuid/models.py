@@ -10,6 +10,7 @@ from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from advanced_alchemy.base import (
+    NanoIDBase,
     SlugKey,
     TableArgsType,  # pyright: ignore[reportPrivateUsage]
     UUIDAuditBase,
@@ -94,7 +95,7 @@ uuid_item_tag = Table(
 )
 
 
-class UUIDItem(UUIDBase):
+class UUIDItem(NanoIDBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
     tags: Mapped[List[UUIDTag]] = relationship(secondary=lambda: uuid_item_tag, back_populates="items")

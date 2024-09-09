@@ -59,6 +59,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
 uuid = ["uuid-utils>=0.6.1"]
+nanoid = ["fastnanoid>=0.4.1"]
 
 [build-system]
 build-backend = "hatchling.build"
