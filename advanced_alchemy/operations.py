@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ClauseElement, ColumnElement, UpdateBase
-from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.ext.compiler import compiles  # pyright: ignore[reportUnknownVariableType]
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -32,7 +32,7 @@ class MergeClause(ClauseElement):
 def visit_merge_clause(element: MergeClause, compiler: StrSQLCompiler, **kw: Any) -> str:
     case_predicate = ""
     if element.predicate is not None:
-        case_predicate = f" AND {element.predicate._compiler_dispatch(compiler, **kw)!s}"  # noqa: SLF001
+        case_predicate = f" AND {element.predicate._compiler_dispatch(compiler, **kw)!s}"  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
 
     if element.command == "INSERT":
         sets, sets_tos = list(element.on_sets), list(element.on_sets.values())
@@ -41,7 +41,7 @@ def visit_merge_clause(element: MergeClause, compiler: StrSQLCompiler, **kw: Any
             sets, sets_tos = list(sorted_on_sets), list(sorted_on_sets.values())
 
         merge_insert = ", ".join(sets)
-        values = ", ".join(e._compiler_dispatch(compiler, **kw) for e in sets_tos)  # noqa: SLF001
+        values = ", ".join(e._compiler_dispatch(compiler, **kw) for e in sets_tos)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
         return f"WHEN NOT MATCHED{case_predicate} THEN {element.command} ({merge_insert}) VALUES ({values})"
 
     set_list = list(element.on_sets.items())
@@ -54,7 +54,8 @@ def visit_merge_clause(element: MergeClause, compiler: StrSQLCompiler, **kw: Any
 
     if element.on_sets:
         values = ", ".join(
-            f"{name} = {column._compiler_dispatch(compiler, **kw)}" for name, column in set_list  # noqa: SLF001
+            f"{name} = {column._compiler_dispatch(compiler, **kw)}"  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
+            for name, column in set_list
         )
         merge_action = f" SET {values}"
 
@@ -75,12 +76,12 @@ class Merge(UpdateBase):
     def when_matched(self, operations: set[Literal["UPDATE", "DELETE", "INSERT"]]) -> MergeClause:
         for op in operations:
             self.clauses.append(clause := MergeClause(op))
-        return clause
+        return clause  # pyright: ignore[reportPossiblyUnboundVariable]
 
 
 @compiles(Merge)  # type: ignore[no-untyped-call, misc]
 def visit_merge(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
-    clauses = " ".join(clause._compiler_dispatch(compiler, **kw) for clause in element.clauses)  # noqa: SLF001
+    clauses = " ".join(clause._compiler_dispatch(compiler, **kw) for clause in element.clauses)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
     sql_text = f"MERGE INTO {element.into} USING {element.using} ON {element.on}"
 
     if clauses:

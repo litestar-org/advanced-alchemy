@@ -37,7 +37,7 @@ if NANOID_INSTALLED and not TYPE_CHECKING:
     from fastnanoid import generate as nanoid  # pyright: ignore[reportMissingImports]
 
 else:
-    nanoid = uuid4
+    nanoid = uuid4 # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause

@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_PASSWORD: super-secret
   postgres14:
-    image: postgres:14
+    image: postgres:16
     ports:
       - "5424:5432" # use a non-standard port here
     environment:

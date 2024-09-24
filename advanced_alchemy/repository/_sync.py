@@ -1719,24 +1719,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._expunge(instance, auto_expunge=auto_expunge)
             return instance
 
-    def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
-        return (
-            (
-                self._dialect.server_version_info is not None
-                and self._dialect.server_version_info[0] >= POSTGRES_VERSION_SUPPORTING_MERGE
-                and self._dialect.name == "postgresql"
-            )
-            or self._dialect.name == "oracle"
-        ) and not force_disable_merge
-
-    def _get_merge_stmt(
-        self,
-        into: Any,
-        using: Any,
-        on: Any,
-    ) -> Merge:
-        return Merge(into=into, using=using, on=on)
-
     def upsert_many(
         self,
         data: list[ModelT],
@@ -1806,12 +1788,22 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 auto_expunge=False,
             )
+            if self._supports_merge_operations(force_disable_merge=no_merge):
+                result = self.session.execute(self._get_merge_stmt(data=data, match_fields=match_fields))
+                instances = cast("list[ModelT]", result.fetchall())
+                self._flush_or_commit(auto_commit=auto_commit)
+                for instance in instances:
+                    self._expunge(instance, auto_expunge=auto_expunge)
+                return instances
+            # fallback to the insert/update method
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
                 matched_values = list(
                     {getattr(datum, field_name) for datum in existing_objs if datum},  # ensure the list is unique
                 )
-                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
+                match_filter.append(
+                    any_(matched_values) == field if self._prefer_any else field.in_(matched_values),  # type: ignore[arg-type]
+                )
             existing_ids = self._get_object_ids(existing_objs=existing_objs)
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:
@@ -1837,6 +1829,43 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
+
+    def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
+        return (
+            (
+                self._dialect.server_version_info is not None
+                and self._dialect.server_version_info[0] >= POSTGRES_VERSION_SUPPORTING_MERGE
+                and self._dialect.name == "postgresql"
+            )
+            or self._dialect.name == "oracle"
+        ) and not force_disable_merge
+
+    def _get_merge_stmt(
+        self,
+        data: list[ModelT],
+        match_fields: list[str],
+    ) -> Merge:
+        table = self.model_type.__table__
+        values = [
+            {column.name: getattr(item, column.name) for column in table.columns if hasattr(item, column.name)}
+            for item in data
+        ]
+
+        using = select(
+            *[sql_func.unnest([value[field] for value in values]).label(field) for field in match_fields],
+        ).subquery()
+
+        on = sql_func.and_(*[table.c[field] == using.c[field] for field in match_fields])
+
+        merge = Merge(into=table, using=using, on=on)
+
+        update_columns = {c.name: c for c in table.c if c.name not in match_fields}
+        insert_columns = {c.name: c for c in table.c}
+
+        merge.when_matched({"UPDATE"}).values(**update_columns)
+        merge.when_matched({"INSERT"}).values(**insert_columns)
+
+        return merge
 
     def _get_object_ids(self, existing_objs: list[ModelT]) -> list[Any]:
         return [obj_id for datum in existing_objs if (obj_id := getattr(datum, self.id_attribute)) is not None]
