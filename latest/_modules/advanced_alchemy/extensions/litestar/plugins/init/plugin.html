@@ -283,129 +283,124 @@ data-aria-dark="Switch to auto color mode">
 <span></span><span data-line="1"><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
 </span><span data-line="2">
 </span><span data-line="3"><span class="kn">import</span> <span class="nn">contextlib</span>
-</span><span data-line="4"><span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">date</span><span class="p">,</span> <span class="n">datetime</span>
-</span><span data-line="5"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">cast</span>
-</span><span data-line="6"><span class="kn">from</span> <span class="nn">uuid</span> <span class="kn">import</span> <span class="n">UUID</span>
-</span><span data-line="7">
-</span><span data-line="8"><span class="kn">from</span> <span class="nn">litestar.di</span> <span class="kn">import</span> <span class="n">Provide</span>
-</span><span data-line="9"><span class="kn">from</span> <span class="nn">litestar.dto</span> <span class="kn">import</span> <span class="n">DTOData</span>
-</span><span data-line="10"><span class="kn">from</span> <span class="nn">litestar.params</span> <span class="kn">import</span> <span class="n">Dependency</span><span class="p">,</span> <span class="n">Parameter</span>
-</span><span data-line="11"><span class="kn">from</span> <span class="nn">litestar.plugins</span> <span class="kn">import</span> <span class="n">CLIPluginProtocol</span><span class="p">,</span> <span class="n">InitPluginProtocol</span>
-</span><span data-line="12">
-</span><span data-line="13"><span class="kn">from</span> <span class="nn">advanced_alchemy.exceptions</span> <span class="kn">import</span> <span class="n">ImproperConfigurationError</span>
-</span><span data-line="14"><span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.plugins</span> <span class="kn">import</span> <span class="n">_slots_base</span>
-</span><span data-line="15"><span class="kn">from</span> <span class="nn">advanced_alchemy.filters</span> <span class="kn">import</span> <span class="p">(</span>
-</span><span data-line="16">    <span class="n">BeforeAfter</span><span class="p">,</span>
-</span><span data-line="17">    <span class="n">CollectionFilter</span><span class="p">,</span>
-</span><span data-line="18">    <span class="n">FilterTypes</span><span class="p">,</span>
-</span><span data-line="19">    <span class="n">LimitOffset</span><span class="p">,</span>
-</span><span data-line="20">    <span class="n">NotInCollectionFilter</span><span class="p">,</span>
-</span><span data-line="21">    <span class="n">NotInSearchFilter</span><span class="p">,</span>
-</span><span data-line="22">    <span class="n">OnBeforeAfter</span><span class="p">,</span>
-</span><span data-line="23">    <span class="n">OrderBy</span><span class="p">,</span>
-</span><span data-line="24">    <span class="n">SearchFilter</span><span class="p">,</span>
-</span><span data-line="25"><span class="p">)</span>
-</span><span data-line="26"><span class="kn">from</span> <span class="nn">advanced_alchemy.service</span> <span class="kn">import</span> <span class="n">OffsetPagination</span>
-</span><span data-line="27">
-</span><span data-line="28"><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-</span><span data-line="29">    <span class="kn">from</span> <span class="nn">click</span> <span class="kn">import</span> <span class="n">Group</span>
-</span><span data-line="30">    <span class="kn">from</span> <span class="nn">litestar.config.app</span> <span class="kn">import</span> <span class="n">AppConfig</span>
-</span><span data-line="31">    <span class="kn">from</span> <span class="nn">litestar.types</span> <span class="kn">import</span> <span class="n">BeforeMessageSendHookHandler</span>
+</span><span data-line="4"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">cast</span>
+</span><span data-line="5">
+</span><span data-line="6"><span class="kn">from</span> <span class="nn">litestar.di</span> <span class="kn">import</span> <span class="n">Provide</span>
+</span><span data-line="7"><span class="kn">from</span> <span class="nn">litestar.dto</span> <span class="kn">import</span> <span class="n">DTOData</span>
+</span><span data-line="8"><span class="kn">from</span> <span class="nn">litestar.params</span> <span class="kn">import</span> <span class="n">Dependency</span><span class="p">,</span> <span class="n">Parameter</span>
+</span><span data-line="9"><span class="kn">from</span> <span class="nn">litestar.plugins</span> <span class="kn">import</span> <span class="n">CLIPluginProtocol</span><span class="p">,</span> <span class="n">InitPluginProtocol</span>
+</span><span data-line="10">
+</span><span data-line="11"><span class="kn">from</span> <span class="nn">advanced_alchemy.exceptions</span> <span class="kn">import</span> <span class="n">ImproperConfigurationError</span>
+</span><span data-line="12"><span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.plugins</span> <span class="kn">import</span> <span class="n">_slots_base</span>
+</span><span data-line="13"><span class="kn">from</span> <span class="nn">advanced_alchemy.filters</span> <span class="kn">import</span> <span class="p">(</span>
+</span><span data-line="14">    <span class="n">BeforeAfter</span><span class="p">,</span>
+</span><span data-line="15">    <span class="n">CollectionFilter</span><span class="p">,</span>
+</span><span data-line="16">    <span class="n">FilterTypes</span><span class="p">,</span>
+</span><span data-line="17">    <span class="n">LimitOffset</span><span class="p">,</span>
+</span><span data-line="18">    <span class="n">NotInCollectionFilter</span><span class="p">,</span>
+</span><span data-line="19">    <span class="n">NotInSearchFilter</span><span class="p">,</span>
+</span><span data-line="20">    <span class="n">OnBeforeAfter</span><span class="p">,</span>
+</span><span data-line="21">    <span class="n">OrderBy</span><span class="p">,</span>
+</span><span data-line="22">    <span class="n">SearchFilter</span><span class="p">,</span>
+</span><span data-line="23"><span class="p">)</span>
+</span><span data-line="24"><span class="kn">from</span> <span class="nn">advanced_alchemy.service</span> <span class="kn">import</span> <span class="n">OffsetPagination</span>
+</span><span data-line="25">
+</span><span data-line="26"><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+</span><span data-line="27">    <span class="kn">from</span> <span class="nn">click</span> <span class="kn">import</span> <span class="n">Group</span>
+</span><span data-line="28">    <span class="kn">from</span> <span class="nn">litestar.config.app</span> <span class="kn">import</span> <span class="n">AppConfig</span>
+</span><span data-line="29">    <span class="kn">from</span> <span class="nn">litestar.types</span> <span class="kn">import</span> <span class="n">BeforeMessageSendHookHandler</span>
+</span><span data-line="30">
+</span><span data-line="31">    <span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.plugins.init.config</span> <span class="kn">import</span> <span class="n">SQLAlchemyAsyncConfig</span><span class="p">,</span> <span class="n">SQLAlchemySyncConfig</span>
 </span><span data-line="32">
-</span><span data-line="33">    <span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.plugins.init.config</span> <span class="kn">import</span> <span class="n">SQLAlchemyAsyncConfig</span><span class="p">,</span> <span class="n">SQLAlchemySyncConfig</span>
+</span><span data-line="33"><span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;SQLAlchemyInitPlugin&quot;</span><span class="p">,)</span>
 </span><span data-line="34">
-</span><span data-line="35"><span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;SQLAlchemyInitPlugin&quot;</span><span class="p">,)</span>
-</span><span data-line="36">
-</span><span data-line="37"><span class="n">signature_namespace_values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-</span><span data-line="38">    <span class="s2">&quot;BeforeAfter&quot;</span><span class="p">:</span> <span class="n">BeforeAfter</span><span class="p">,</span>
-</span><span data-line="39">    <span class="s2">&quot;OnBeforeAfter&quot;</span><span class="p">:</span> <span class="n">OnBeforeAfter</span><span class="p">,</span>
-</span><span data-line="40">    <span class="s2">&quot;CollectionFilter&quot;</span><span class="p">:</span> <span class="n">CollectionFilter</span><span class="p">,</span>
-</span><span data-line="41">    <span class="s2">&quot;LimitOffset&quot;</span><span class="p">:</span> <span class="n">LimitOffset</span><span class="p">,</span>
-</span><span data-line="42">    <span class="s2">&quot;OrderBy&quot;</span><span class="p">:</span> <span class="n">OrderBy</span><span class="p">,</span>
-</span><span data-line="43">    <span class="s2">&quot;SearchFilter&quot;</span><span class="p">:</span> <span class="n">SearchFilter</span><span class="p">,</span>
-</span><span data-line="44">    <span class="s2">&quot;NotInCollectionFilter&quot;</span><span class="p">:</span> <span class="n">NotInCollectionFilter</span><span class="p">,</span>
-</span><span data-line="45">    <span class="s2">&quot;NotInSearchFilter&quot;</span><span class="p">:</span> <span class="n">NotInSearchFilter</span><span class="p">,</span>
-</span><span data-line="46">    <span class="s2">&quot;FilterTypes&quot;</span><span class="p">:</span> <span class="n">FilterTypes</span><span class="p">,</span>
-</span><span data-line="47">    <span class="s2">&quot;OffsetPagination&quot;</span><span class="p">:</span> <span class="n">OffsetPagination</span><span class="p">,</span>
-</span><span data-line="48">    <span class="s2">&quot;Parameter&quot;</span><span class="p">:</span> <span class="n">Parameter</span><span class="p">,</span>
-</span><span data-line="49">    <span class="s2">&quot;Dependency&quot;</span><span class="p">:</span> <span class="n">Dependency</span><span class="p">,</span>
-</span><span data-line="50">    <span class="s2">&quot;DTOData&quot;</span><span class="p">:</span> <span class="n">DTOData</span><span class="p">,</span>
-</span><span data-line="51">    <span class="s2">&quot;UUID&quot;</span><span class="p">:</span> <span class="n">UUID</span><span class="p">,</span>
-</span><span data-line="52">    <span class="s2">&quot;date&quot;</span><span class="p">:</span> <span class="n">date</span><span class="p">,</span>
-</span><span data-line="53">    <span class="s2">&quot;datetime&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="p">,</span>
-</span><span data-line="54"><span class="p">}</span>
-</span><span data-line="55">
-</span><span data-line="56">
-<div class="viewcode-block" id="SQLAlchemyInitPlugin"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin">[docs]</a></span><span data-line="57"><span class="k">class</span> <span class="nc">SQLAlchemyInitPlugin</span><span class="p">(</span><span class="n">InitPluginProtocol</span><span class="p">,</span> <span class="n">CLIPluginProtocol</span><span class="p">,</span> <span class="n">_slots_base</span><span class="o">.</span><span class="n">SlotsBase</span><span class="p">):</span>
-</span><span data-line="58"><span class="w">    </span><span class="sd">&quot;&quot;&quot;SQLAlchemy application lifecycle configuration.&quot;&quot;&quot;</span>
-</span><span data-line="59">
-<div class="viewcode-block" id="SQLAlchemyInitPlugin.__init__"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin.__init__">[docs]</a></span><span data-line="60">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
-</span><span data-line="61">        <span class="bp">self</span><span class="p">,</span>
-</span><span data-line="62">        <span class="n">config</span><span class="p">:</span> <span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">],</span>
-</span><span data-line="63">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span data-line="64"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize ``SQLAlchemyPlugin``.</span>
+</span><span data-line="35"><span class="n">signature_namespace_values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+</span><span data-line="36">    <span class="s2">&quot;BeforeAfter&quot;</span><span class="p">:</span> <span class="n">BeforeAfter</span><span class="p">,</span>
+</span><span data-line="37">    <span class="s2">&quot;OnBeforeAfter&quot;</span><span class="p">:</span> <span class="n">OnBeforeAfter</span><span class="p">,</span>
+</span><span data-line="38">    <span class="s2">&quot;CollectionFilter&quot;</span><span class="p">:</span> <span class="n">CollectionFilter</span><span class="p">,</span>
+</span><span data-line="39">    <span class="s2">&quot;LimitOffset&quot;</span><span class="p">:</span> <span class="n">LimitOffset</span><span class="p">,</span>
+</span><span data-line="40">    <span class="s2">&quot;OrderBy&quot;</span><span class="p">:</span> <span class="n">OrderBy</span><span class="p">,</span>
+</span><span data-line="41">    <span class="s2">&quot;SearchFilter&quot;</span><span class="p">:</span> <span class="n">SearchFilter</span><span class="p">,</span>
+</span><span data-line="42">    <span class="s2">&quot;NotInCollectionFilter&quot;</span><span class="p">:</span> <span class="n">NotInCollectionFilter</span><span class="p">,</span>
+</span><span data-line="43">    <span class="s2">&quot;NotInSearchFilter&quot;</span><span class="p">:</span> <span class="n">NotInSearchFilter</span><span class="p">,</span>
+</span><span data-line="44">    <span class="s2">&quot;FilterTypes&quot;</span><span class="p">:</span> <span class="n">FilterTypes</span><span class="p">,</span>
+</span><span data-line="45">    <span class="s2">&quot;OffsetPagination&quot;</span><span class="p">:</span> <span class="n">OffsetPagination</span><span class="p">,</span>
+</span><span data-line="46">    <span class="s2">&quot;Parameter&quot;</span><span class="p">:</span> <span class="n">Parameter</span><span class="p">,</span>
+</span><span data-line="47">    <span class="s2">&quot;Dependency&quot;</span><span class="p">:</span> <span class="n">Dependency</span><span class="p">,</span>
+</span><span data-line="48">    <span class="s2">&quot;DTOData&quot;</span><span class="p">:</span> <span class="n">DTOData</span><span class="p">,</span>
+</span><span data-line="49"><span class="p">}</span>
+</span><span data-line="50">
+</span><span data-line="51">
+<div class="viewcode-block" id="SQLAlchemyInitPlugin"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin">[docs]</a></span><span data-line="52"><span class="k">class</span> <span class="nc">SQLAlchemyInitPlugin</span><span class="p">(</span><span class="n">InitPluginProtocol</span><span class="p">,</span> <span class="n">CLIPluginProtocol</span><span class="p">,</span> <span class="n">_slots_base</span><span class="o">.</span><span class="n">SlotsBase</span><span class="p">):</span>
+</span><span data-line="53"><span class="w">    </span><span class="sd">&quot;&quot;&quot;SQLAlchemy application lifecycle configuration.&quot;&quot;&quot;</span>
+</span><span data-line="54">
+<div class="viewcode-block" id="SQLAlchemyInitPlugin.__init__"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin.__init__">[docs]</a></span><span data-line="55">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="56">        <span class="bp">self</span><span class="p">,</span>
+</span><span data-line="57">        <span class="n">config</span><span class="p">:</span> <span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">],</span>
+</span><span data-line="58">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="59"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize ``SQLAlchemyPlugin``.</span>
+</span><span data-line="60">
+</span><span data-line="61"><span class="sd">        Args:</span>
+</span><span data-line="62"><span class="sd">            config: configure DB connection and hook handlers and dependencies.</span>
+</span><span data-line="63"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="64">        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">config</span></div>
 </span><span data-line="65">
-</span><span data-line="66"><span class="sd">        Args:</span>
-</span><span data-line="67"><span class="sd">            config: configure DB connection and hook handlers and dependencies.</span>
-</span><span data-line="68"><span class="sd">        &quot;&quot;&quot;</span>
-</span><span data-line="69">        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">config</span></div>
-</span><span data-line="70">
-</span><span data-line="71">    <span class="nd">@property</span>
-</span><span data-line="72">    <span class="k">def</span> <span class="nf">config</span><span class="p">(</span>
-</span><span data-line="73">        <span class="bp">self</span><span class="p">,</span>
-</span><span data-line="74">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">]:</span>
-</span><span data-line="75">        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span>
+</span><span data-line="66">    <span class="nd">@property</span>
+</span><span data-line="67">    <span class="k">def</span> <span class="nf">config</span><span class="p">(</span>
+</span><span data-line="68">        <span class="bp">self</span><span class="p">,</span>
+</span><span data-line="69">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">]:</span>
+</span><span data-line="70">        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span>
+</span><span data-line="71">
+<div class="viewcode-block" id="SQLAlchemyInitPlugin.on_cli_init"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin.on_cli_init">[docs]</a></span><span data-line="72">    <span class="k">def</span> <span class="nf">on_cli_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cli</span><span class="p">:</span> <span class="n">Group</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="73">        <span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.cli</span> <span class="kn">import</span> <span class="n">database_group</span>
+</span><span data-line="74">
+</span><span data-line="75">        <span class="n">cli</span><span class="o">.</span><span class="n">add_command</span><span class="p">(</span><span class="n">database_group</span><span class="p">)</span></div>
 </span><span data-line="76">
-<div class="viewcode-block" id="SQLAlchemyInitPlugin.on_cli_init"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin.on_cli_init">[docs]</a></span><span data-line="77">    <span class="k">def</span> <span class="nf">on_cli_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cli</span><span class="p">:</span> <span class="n">Group</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span data-line="78">        <span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.cli</span> <span class="kn">import</span> <span class="n">database_group</span>
-</span><span data-line="79">
-</span><span data-line="80">        <span class="n">cli</span><span class="o">.</span><span class="n">add_command</span><span class="p">(</span><span class="n">database_group</span><span class="p">)</span></div>
-</span><span data-line="81">
-</span><span data-line="82">    <span class="k">def</span> <span class="nf">_validate_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span data-line="83">        <span class="n">configs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">]</span>
-</span><span data-line="84">        <span class="n">scope_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">config</span><span class="o">.</span><span class="n">session_scope_key</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">}</span>
-</span><span data-line="85">        <span class="n">engine_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">config</span><span class="o">.</span><span class="n">engine_dependency_key</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">}</span>
-</span><span data-line="86">        <span class="n">session_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">config</span><span class="o">.</span><span class="n">session_dependency_key</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">}</span>
-</span><span data-line="87">        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">configs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">configs</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">(</span><span class="n">scope_keys</span><span class="p">,</span> <span class="n">engine_keys</span><span class="p">,</span> <span class="n">session_keys</span><span class="p">)):</span>
-</span><span data-line="88">            <span class="k">raise</span> <span class="n">ImproperConfigurationError</span><span class="p">(</span>
-</span><span data-line="89">                <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;When using multiple configurations, please ensure the `session_dependency_key` and `engine_dependency_key` settings are unique across all configs.  Additionally, iF you are using a custom `before_send` handler, ensure `session_scope_key` is unique.&quot;</span><span class="p">,</span>
-</span><span data-line="90">            <span class="p">)</span>
-</span><span data-line="91">
-<div class="viewcode-block" id="SQLAlchemyInitPlugin.on_app_init"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin.on_app_init">[docs]</a></span><span data-line="92">    <span class="k">def</span> <span class="nf">on_app_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_config</span><span class="p">:</span> <span class="n">AppConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AppConfig</span><span class="p">:</span>
-</span><span data-line="93"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Configure application for use with SQLAlchemy.</span>
-</span><span data-line="94">
-</span><span data-line="95"><span class="sd">        Args:</span>
-</span><span data-line="96"><span class="sd">            app_config: The :class:`AppConfig &lt;.config.app.AppConfig&gt;` instance.</span>
-</span><span data-line="97"><span class="sd">        &quot;&quot;&quot;</span>
-</span><span data-line="98">        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_config</span><span class="p">()</span>
+</span><span data-line="77">    <span class="k">def</span> <span class="nf">_validate_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="78">        <span class="n">configs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">]</span>
+</span><span data-line="79">        <span class="n">scope_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">config</span><span class="o">.</span><span class="n">session_scope_key</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">}</span>
+</span><span data-line="80">        <span class="n">engine_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">config</span><span class="o">.</span><span class="n">engine_dependency_key</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">}</span>
+</span><span data-line="81">        <span class="n">session_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">config</span><span class="o">.</span><span class="n">session_dependency_key</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">}</span>
+</span><span data-line="82">        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">configs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">configs</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">(</span><span class="n">scope_keys</span><span class="p">,</span> <span class="n">engine_keys</span><span class="p">,</span> <span class="n">session_keys</span><span class="p">)):</span>
+</span><span data-line="83">            <span class="k">raise</span> <span class="n">ImproperConfigurationError</span><span class="p">(</span>
+</span><span data-line="84">                <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;When using multiple configurations, please ensure the `session_dependency_key` and `engine_dependency_key` settings are unique across all configs.  Additionally, iF you are using a custom `before_send` handler, ensure `session_scope_key` is unique.&quot;</span><span class="p">,</span>
+</span><span data-line="85">            <span class="p">)</span>
+</span><span data-line="86">
+<div class="viewcode-block" id="SQLAlchemyInitPlugin.on_app_init"><a class="viewcode-back" href="../../../../../../reference/extensions/litestar/plugins/init/plugin.html#advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin.on_app_init">[docs]</a></span><span data-line="87">    <span class="k">def</span> <span class="nf">on_app_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_config</span><span class="p">:</span> <span class="n">AppConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AppConfig</span><span class="p">:</span>
+</span><span data-line="88"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Configure application for use with SQLAlchemy.</span>
+</span><span data-line="89">
+</span><span data-line="90"><span class="sd">        Args:</span>
+</span><span data-line="91"><span class="sd">            app_config: The :class:`AppConfig &lt;.config.app.AppConfig&gt;` instance.</span>
+</span><span data-line="92"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="93">        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_config</span><span class="p">()</span>
+</span><span data-line="94">        <span class="k">with</span> <span class="n">contextlib</span><span class="o">.</span><span class="n">suppress</span><span class="p">(</span><span class="ne">ImportError</span><span class="p">):</span>
+</span><span data-line="95">            <span class="kn">from</span> <span class="nn">asyncpg.pgproto</span> <span class="kn">import</span> <span class="n">pgproto</span>  <span class="c1"># pyright: ignore[reportMissingImports]</span>
+</span><span data-line="96">
+</span><span data-line="97">            <span class="n">signature_namespace_values</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;pgproto.UUID&quot;</span><span class="p">:</span> <span class="n">pgproto</span><span class="o">.</span><span class="n">UUID</span><span class="p">})</span>
+</span><span data-line="98">            <span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="o">=</span> <span class="p">{</span><span class="n">pgproto</span><span class="o">.</span><span class="n">UUID</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="ow">or</span> <span class="p">{})}</span>
 </span><span data-line="99">        <span class="k">with</span> <span class="n">contextlib</span><span class="o">.</span><span class="n">suppress</span><span class="p">(</span><span class="ne">ImportError</span><span class="p">):</span>
-</span><span data-line="100">            <span class="kn">from</span> <span class="nn">asyncpg.pgproto</span> <span class="kn">import</span> <span class="n">pgproto</span>  <span class="c1"># pyright: ignore[reportMissingImports]</span>
+</span><span data-line="100">            <span class="kn">import</span> <span class="nn">uuid_utils</span>  <span class="c1"># pyright: ignore[reportMissingImports]</span>
 </span><span data-line="101">
-</span><span data-line="102">            <span class="n">signature_namespace_values</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;pgproto.UUID&quot;</span><span class="p">:</span> <span class="n">pgproto</span><span class="o">.</span><span class="n">UUID</span><span class="p">})</span>
-</span><span data-line="103">            <span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="o">=</span> <span class="p">{</span><span class="n">pgproto</span><span class="o">.</span><span class="n">UUID</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="ow">or</span> <span class="p">{})}</span>
-</span><span data-line="104">        <span class="k">with</span> <span class="n">contextlib</span><span class="o">.</span><span class="n">suppress</span><span class="p">(</span><span class="ne">ImportError</span><span class="p">):</span>
-</span><span data-line="105">            <span class="kn">import</span> <span class="nn">uuid_utils</span>  <span class="c1"># pyright: ignore[reportMissingImports]</span>
-</span><span data-line="106">
-</span><span data-line="107">            <span class="n">signature_namespace_values</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;uuid_utils.UUID&quot;</span><span class="p">:</span> <span class="n">uuid_utils</span><span class="o">.</span><span class="n">UUID</span><span class="p">})</span>
-</span><span data-line="108">            <span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="o">=</span> <span class="p">{</span><span class="n">uuid_utils</span><span class="o">.</span><span class="n">UUID</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="ow">or</span> <span class="p">{})}</span>
-</span><span data-line="109">            <span class="n">app_config</span><span class="o">.</span><span class="n">type_decoders</span> <span class="o">=</span> <span class="p">[</span>
-</span><span data-line="110">                <span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="ow">is</span> <span class="n">uuid_utils</span><span class="o">.</span><span class="n">UUID</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="n">t</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">))),</span>
-</span><span data-line="111">                <span class="o">*</span><span class="p">(</span><span class="n">app_config</span><span class="o">.</span><span class="n">type_decoders</span> <span class="ow">or</span> <span class="p">[]),</span>
-</span><span data-line="112">            <span class="p">]</span>
-</span><span data-line="113">        <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">]:</span>
-</span><span data-line="114">            <span class="n">signature_namespace_values</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">signature_namespace</span><span class="p">)</span>
-</span><span data-line="115">            <span class="n">app_config</span><span class="o">.</span><span class="n">lifespan</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">lifespan</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
-</span><span data-line="116">
-</span><span data-line="117">            <span class="n">app_config</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
-</span><span data-line="118">                <span class="p">{</span>
-</span><span data-line="119">                    <span class="n">config</span><span class="o">.</span><span class="n">engine_dependency_key</span><span class="p">:</span> <span class="n">Provide</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">provide_engine</span><span class="p">,</span> <span class="n">sync_to_thread</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
-</span><span data-line="120">                    <span class="n">config</span><span class="o">.</span><span class="n">session_dependency_key</span><span class="p">:</span> <span class="n">Provide</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">provide_session</span><span class="p">,</span> <span class="n">sync_to_thread</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
-</span><span data-line="121">                <span class="p">},</span>
-</span><span data-line="122">            <span class="p">)</span>
-</span><span data-line="123">            <span class="n">app_config</span><span class="o">.</span><span class="n">before_send</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;BeforeMessageSendHookHandler&quot;</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">before_send_handler</span><span class="p">))</span>
-</span><span data-line="124">        <span class="n">app_config</span><span class="o">.</span><span class="n">signature_namespace</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">signature_namespace_values</span><span class="p">)</span>
-</span><span data-line="125">
-</span><span data-line="126">        <span class="k">return</span> <span class="n">app_config</span></div></div>
+</span><span data-line="102">            <span class="n">signature_namespace_values</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;uuid_utils.UUID&quot;</span><span class="p">:</span> <span class="n">uuid_utils</span><span class="o">.</span><span class="n">UUID</span><span class="p">})</span>
+</span><span data-line="103">            <span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="o">=</span> <span class="p">{</span><span class="n">uuid_utils</span><span class="o">.</span><span class="n">UUID</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="n">app_config</span><span class="o">.</span><span class="n">type_encoders</span> <span class="ow">or</span> <span class="p">{})}</span>
+</span><span data-line="104">            <span class="n">app_config</span><span class="o">.</span><span class="n">type_decoders</span> <span class="o">=</span> <span class="p">[</span>
+</span><span data-line="105">                <span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="ow">is</span> <span class="n">uuid_utils</span><span class="o">.</span><span class="n">UUID</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="n">t</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">))),</span>
+</span><span data-line="106">                <span class="o">*</span><span class="p">(</span><span class="n">app_config</span><span class="o">.</span><span class="n">type_decoders</span> <span class="ow">or</span> <span class="p">[]),</span>
+</span><span data-line="107">            <span class="p">]</span>
+</span><span data-line="108">        <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">]:</span>
+</span><span data-line="109">            <span class="n">signature_namespace_values</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">signature_namespace</span><span class="p">)</span>
+</span><span data-line="110">            <span class="n">app_config</span><span class="o">.</span><span class="n">lifespan</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">lifespan</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="111">
+</span><span data-line="112">            <span class="n">app_config</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+</span><span data-line="113">                <span class="p">{</span>
+</span><span data-line="114">                    <span class="n">config</span><span class="o">.</span><span class="n">engine_dependency_key</span><span class="p">:</span> <span class="n">Provide</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">provide_engine</span><span class="p">,</span> <span class="n">sync_to_thread</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+</span><span data-line="115">                    <span class="n">config</span><span class="o">.</span><span class="n">session_dependency_key</span><span class="p">:</span> <span class="n">Provide</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">provide_session</span><span class="p">,</span> <span class="n">sync_to_thread</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+</span><span data-line="116">                <span class="p">},</span>
+</span><span data-line="117">            <span class="p">)</span>
+</span><span data-line="118">            <span class="n">app_config</span><span class="o">.</span><span class="n">before_send</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;BeforeMessageSendHookHandler&quot;</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">before_send_handler</span><span class="p">))</span>
+</span><span data-line="119">        <span class="n">app_config</span><span class="o">.</span><span class="n">signature_namespace</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">signature_namespace_values</span><span class="p">)</span>
+</span><span data-line="120">
+</span><span data-line="121">        <span class="k">return</span> <span class="n">app_config</span></div></div>
 </span></pre></div>
         </article><button class="back-to-top" type="button">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
