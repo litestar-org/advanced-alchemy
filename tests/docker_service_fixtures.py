@@ -25,7 +25,7 @@ from tests.helpers import wrap_sync
 
 async def wait_until_responsive(
     check: Callable[..., Awaitable],
-    timeout: float,
+    timeout: float,  # noqa: ASYNC109
     pause: float,
     **kwargs: Any,
 ) -> None:
@@ -84,7 +84,7 @@ class DockerServiceRegistry:
         name: str,
         *,
         check: Callable[..., Any],
-        timeout: float = 30,
+        timeout: float = 30,  # noqa: ASYNC109
         pause: float = 0.1,
         **kwargs: Any,
     ) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+import uuid
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -143,3 +145,15 @@ def test_app_state(config_cls: type[SQLAlchemySyncConfig], monkeypatch: MonkeyPa
         }
         create_session_maker_mock.assert_called_once()
         create_engine_mock.assert_called_once()
+
+
+def test_namespace_resolution() -> None:
+    # https://github.com/litestar-org/advanced-alchemy/issues/256
+
+    from litestar import Litestar, get
+
+    @get("/")
+    async def handler(param: datetime.datetime, other_param: uuid.UUID) -> None:
+        return None
+
+    Litestar([handler])

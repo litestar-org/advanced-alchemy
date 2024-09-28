@@ -1,4 +1,9 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, Tuple, TypeVar, Union
+
+from sqlalchemy.orm import InstrumentedAttribute
+from typing_extensions import TypeAlias
 
 if TYPE_CHECKING:
     from sqlalchemy import RowMapping, Select
@@ -12,6 +17,9 @@ __all__ = (
     "SelectT",
     "RowT",
     "MISSING",
+    "OrderingPair",
+    "RowMappingT",
+    "ModelOrRowMappingT",
     "SQLAlchemySyncRepositoryT",
     "SQLAlchemyAsyncRepositoryT",
 )
@@ -27,6 +35,7 @@ SQLAlchemyAsyncRepositoryT = TypeVar(
     "SQLAlchemyAsyncRepositoryT",
     bound="SQLAlchemyAsyncRepository[Any]",
 )
+OrderingPair: TypeAlias = Tuple[Union[str, InstrumentedAttribute[Any]], bool]
 
 
 class _MISSING:

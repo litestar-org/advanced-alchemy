@@ -20,7 +20,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_
 from typing_extensions import Annotated
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig, parse_type_from_element
+from advanced_alchemy.extensions.litestar.dto import (
+    SQLAlchemyDTO,
+    SQLAlchemyDTOConfig,
+    parse_type_from_element,  # type: ignore
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -137,7 +141,7 @@ async def test_model_list_dto(author_model: type[DeclarativeBase], asgi_connecti
     dto_data = await get_model_from_dto(dto_type, List[author_model], asgi_connection, raw)  # type: ignore
     assert isinstance(dto_data, list)
     assert_model_values(
-        dto_data[0],
+        dto_data[0],  # type: ignore
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
@@ -212,7 +216,7 @@ async def test_dto_for_private_model_field(
     assert "field" not in vars(await get_model_from_dto(dto_type, Model, asgi_connection, raw))
 
     dto_instance = dto_type(asgi_connection)
-    serializable = dto_instance.data_to_encodable_type(
+    serializable = dto_instance.data_to_encodable_type(  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         Model(
             id=UUID("0956ca9e-5671-4d7d-a862-b98e6368ed2c"),
             created=datetime.min,
@@ -660,5 +664,5 @@ async def test_no_type_hint_collection_relationship_alt_collection_class(
 
 def test_parse_type_from_element_failure() -> None:
     with pytest.raises(ImproperConfigurationError) as exc:
-        parse_type_from_element(1)  # type: ignore
+        parse_type_from_element(1, None)  # type: ignore
     assert str(exc.value) == "Unable to parse type from element '1'. Consider adding a type hint."

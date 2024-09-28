@@ -19,6 +19,7 @@ from sqlalchemy.orm import (
     CompositeProperty,
     DeclarativeBase,
     InspectionAttr,
+    InstrumentedAttribute,
     Mapped,
     MappedColumn,
     NotExtension,
@@ -39,7 +40,9 @@ __all__ = ("SQLAlchemyDTO",)
 
 T = TypeVar("T", bound="DeclarativeBase | Collection[DeclarativeBase]")
 
-ElementType: TypeAlias = "Column | RelationshipProperty | CompositeProperty | ColumnClause | Label"
+ElementType: TypeAlias = (
+    "Column[Any] | RelationshipProperty[Any] | CompositeProperty[Any] | ColumnClause[Any] | Label[Any]"
+)
 SQLA_NS = {**vars(orm), **vars(sql)}
 
 
@@ -72,7 +75,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if hasattr(cls, "config"):
-            cls.config = cls._ensure_sqla_dto_config(cls.config)
+            cls.config = cls._ensure_sqla_dto_config(cls.config)  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @singledispatchmethod
     @classmethod
@@ -102,15 +105,15 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             raise NotImplementedError(msg)
 
         elem: ElementType
-        if isinstance(orm_descriptor.property, ColumnProperty):
-            if not isinstance(orm_descriptor.property.expression, (Column, ColumnClause, Label)):
-                msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}, {type(orm_descriptor.property.expression)}'"
+        if isinstance(orm_descriptor.property, ColumnProperty):  # pyright: ignore[reportUnknownMemberType]
+            if not isinstance(orm_descriptor.property.expression, (Column, ColumnClause, Label)):  # pyright: ignore[reportUnknownMemberType]
+                msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}, {type(orm_descriptor.property.expression)}'"  # pyright: ignore[reportUnknownMemberType]
                 raise NotImplementedError(msg)
-            elem = orm_descriptor.property.expression
-        elif isinstance(orm_descriptor.property, (RelationshipProperty, CompositeProperty)):
-            elem = orm_descriptor.property
+            elem = orm_descriptor.property.expression  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        elif isinstance(orm_descriptor.property, (RelationshipProperty, CompositeProperty)):  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            elem = orm_descriptor.property  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         else:
-            msg = f"Unhandled property type: '{orm_descriptor.property}'"
+            msg = f"Unhandled property type: '{orm_descriptor.property}'"  # pyright: ignore[reportUnknownMemberType]
             raise NotImplementedError(msg)
 
         default, default_factory = _detect_defaults(elem)
@@ -122,9 +125,14 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"
                 raise NotImplementedError(msg)
         except KeyError:
-            field_definition = parse_type_from_element(elem)
+            field_definition = parse_type_from_element(elem, orm_descriptor)
 
-        dto_field = elem.info.get(DTO_FIELD_META_KEY, DTOField()) if hasattr(elem, "info") else DTOField()
+        dto_field = elem.info.get(DTO_FIELD_META_KEY) if hasattr(elem, "info") else None  # pyright: ignore[reportArgumentMemberType]
+        if dto_field is None and isinstance(orm_descriptor, InstrumentedAttribute) and hasattr(orm_descriptor, "info"):
+            dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportArgumentMemberType]
+        if dto_field is None:
+            dto_field = DTOField()
+
         return [
             DTOFieldDefinition.from_field_definition(
                 field_definition=replace(
@@ -319,11 +327,12 @@ def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:
     return default, default_factory
 
 
-def parse_type_from_element(elem: ElementType) -> FieldDefinition:
+def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -> FieldDefinition:  # noqa: PLR0911
     """Parses a type from a SQLAlchemy element.
 
     Args:
         elem: The SQLAlchemy element to parse.
+        orm_descriptor: The attribute `elem` was extracted from.
 
     Returns:
         FieldDefinition: The parsed type.
@@ -350,13 +359,16 @@ def parse_type_from_element(elem: ElementType) -> FieldDefinition:
     if isinstance(elem, CompositeProperty):
         return FieldDefinition.from_annotation(elem.composite_class)
 
+    if isinstance(orm_descriptor, InstrumentedAttribute):
+        return FieldDefinition.from_annotation(orm_descriptor.type.python_type)
+
     msg = f"Unable to parse type from element '{elem}'. Consider adding a type hint."
     raise ImproperConfigurationError(
         msg,
     )
 
 
-def detect_nullable_relationship(elem: RelationshipProperty) -> bool:
+def detect_nullable_relationship(elem: RelationshipProperty[Any]) -> bool:
     """Detects if a relationship is nullable.
 
     This attempts to decide if we should allow a ``None`` default value for a relationship by looking at the

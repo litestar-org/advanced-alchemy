@@ -196,7 +196,11 @@ async def test_sqlalchemy_repo_add(mock_repo: SQLAlchemyAsyncRepository[Any]) ->
     assert instance is mock_instance
     mock_repo.session.add.assert_called_once_with(mock_instance)  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(  # pyright: ignore[reportFunctionMemberAccess]
+        instance=mock_instance,
+        attribute_names=None,
+        with_for_update=None,
+    )
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
@@ -402,7 +406,11 @@ async def test_sqlalchemy_repo_get_or_upsert_member_existing_upsert(
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo._attach_to_session.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(  # pyright: ignore[reportFunctionMemberAccess]
+        instance=mock_instance,
+        attribute_names=None,
+        with_for_update=None,
+    )
 
 
 async def test_sqlalchemy_repo_get_or_upsert_member_existing_no_upsert(
@@ -439,7 +447,7 @@ async def test_sqlalchemy_repo_get_or_upsert_member_created(
     assert created is True
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.add.assert_called_once_with(instance)  # pyright: ignore[reportFunctionMemberAccess]
-    mock_repo.session.refresh.assert_called_once_with(instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(instance=instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
 
 
 async def test_sqlalchemy_repo_get_one_or_none_member(
@@ -736,7 +744,11 @@ async def test_sqlalchemy_repo_update(
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(  # pyright: ignore[reportFunctionMemberAccess]
+        instance=mock_instance,
+        attribute_names=None,
+        with_for_update=None,
+    )
 
 
 async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:
@@ -752,7 +764,11 @@ async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository[Any],
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
-    mock_repo.session.refresh.assert_called_once_with(mock_instance, attribute_names=None, with_for_update=None)  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.refresh.assert_called_once_with(  # pyright: ignore[reportFunctionMemberAccess]
+        instance=mock_instance,
+        attribute_names=None,
+        with_for_update=None,
+    )
 
 
 async def test_attach_to_session_unexpected_strategy_raises_valueerror(

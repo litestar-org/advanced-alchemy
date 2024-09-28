@@ -29,6 +29,7 @@ dependencies = [
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet; sys_platform == \"darwin\"",
+  "eval_type_backport; python_version <= \"3.9\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
@@ -45,7 +46,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.16.0"
+version = "0.20.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -58,6 +59,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
 uuid = ["uuid-utils>=0.6.1"]
+nanoid = ["fastnanoid>=0.4.1"]
 
 [build-system]
 build-backend = "hatchling.build"
@@ -98,6 +100,7 @@ dev = [
   "duckdb>=0.9.0",
   "asgi-lifespan>=2.1.0",
   "aioodbc>=0.5.0",
+  "eval-type-backport>=0.2.0",
 ]
 docs = [
   "sphinx>=7.1.2",
@@ -210,6 +213,7 @@ exclude_lines = [
 line-length = 120
 
 [tool.ruff]
+exclude = [".venv", "node_modules"]
 line-length = 120
 src = ["advanced_alchemy", "tests"]
 target-version = "py38"
@@ -244,6 +248,7 @@ ignore = [
   "ARG002",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
   "PD011",   # pandas
+  "PLR0912",
 ]
 select = ["ALL"]
 
@@ -251,7 +256,7 @@ select = ["ALL"]
 convention = "google"
 
 [tool.ruff.lint.mccabe]
-max-complexity = 12
+max-complexity = 14
 
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = [
@@ -261,7 +266,7 @@ classmethod-decorators = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"advanced_alchemy/repository/*.py" = ['PLR0912', 'C901']
+"advanced_alchemy/repository/*.py" = ['C901']
 "tests/**/*.*" = [
   "A",
   "ARG",
@@ -341,6 +346,10 @@ disallow_untyped_decorators = false
 module = "advanced_alchemy.types.json"
 
 [[tool.mypy.overrides]]
+module = "advanced_alchemy.service.typing"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
 warn_unreachable = false
 
@@ -372,7 +381,7 @@ venvPath = "."
 
 [tool.unasyncd]
 add_editors_note = true
-cache = false
+cache = true
 ruff_fix = true
 update_docstrings = true
 
@@ -470,7 +479,7 @@ body = """
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     {% for commit in commits %}
         * (`{{ commit.id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit.id }}>`_) {% if commit.breaking %}[**breaking**] {% endif %} - {{ commit.message | upper_first }} {% if commit.github.username %} by `@{{ commit.github.username }} <https://github.com/{{ commit.github.username }}>`_ {%- endif %}\
-          {% if commit.github.pr_number %} in `#{{ commit.github.pr_number }} <https://gihub.com/litestar-org/advanced-alchemy/pull/{{ commit.github.pr_number }}>`_ {%- endif %}\
+          {% if commit.github.pr_number %} in `#{{ commit.github.pr_number }} <https://github.com/litestar-org/advanced-alchemy/pull/{{ commit.github.pr_number }}>`_ {%- endif %}\
     {% endfor %}
 {% endfor %}\n
 """

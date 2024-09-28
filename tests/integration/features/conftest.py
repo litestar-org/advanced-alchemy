@@ -53,6 +53,15 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
         DeclarativeBase,
     ): ...
 
+    class NewNanoIDBase(base.NanoIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+
+    class NewNanoIDAuditBase(
+        base.NanoIDPrimaryKey,
+        base.CommonTableAttributes,
+        base.AuditColumns,
+        DeclarativeBase,
+    ): ...
+
     class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewBigIntAuditBase(base.BigIntPrimaryKey, base.CommonTableAttributes, base.AuditColumns, DeclarativeBase): ...
@@ -63,6 +72,8 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
     monkeypatch.setattr(base, "UUIDv6AuditBase", NewUUIDv6AuditBase)
     monkeypatch.setattr(base, "UUIDv7Base", NewUUIDv7Base)
     monkeypatch.setattr(base, "UUIDv7AuditBase", NewUUIDv7AuditBase)
+    monkeypatch.setattr(base, "NanoIDBase", NewNanoIDBase)
+    monkeypatch.setattr(base, "NanoIDAuditBase", NewNanoIDAuditBase)
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
     monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 

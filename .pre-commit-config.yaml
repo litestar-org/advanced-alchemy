@@ -3,7 +3,7 @@ default_language_version:
 default_install_hook_types: [commit-msg, pre-commit]
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.2.0
+    rev: v3.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
@@ -18,12 +18,12 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
   - repo: https://github.com/provinzkraut/unasyncd
-    rev: "v0.7.1"
+    rev: "v0.8.1"
     hooks:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.4.10"
+    rev: "v0.6.1"
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -36,7 +36,7 @@ repos:
         additional_dependencies:
           - tomli
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.10.1"
+    rev: "v1.11.1"
     hooks:
       - id: mypy
         exclude: "docs"

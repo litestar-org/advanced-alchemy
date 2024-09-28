@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from time_machine import travel
 
 from advanced_alchemy import base
-from advanced_alchemy.exceptions import NotFoundError, RepositoryError
+from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -1894,6 +1894,16 @@ async def test_repo_custom_statement(author_repo: AnyAuthorRepository, author_se
     service_type = type(author_service)
     new_service = service_type(session=author_repo.session, statement=select(author_repo.model_type))
     assert await maybe_async(new_service.count()) == 2
+
+
+async def test_repo_error_messages(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
+    if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+        pytest.skip("Skipping mock repo does not works with fetched values")
+    obj = await maybe_async(author_repo.get_one(id=first_author_id))
+    assert obj is not None
+    assert obj.name == "Agatha Christie"
+    with pytest.raises(IntegrityError):
+        _ = await author_repo.add(author_repo.model_type(id=first_author_id, name="Agatha Christie"))
 
 
 async def test_repo_encrypted_methods(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 import string
-from typing import TYPE_CHECKING, Any, Iterable, List, cast, overload
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import (
@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import InstrumentedAttribute
 
-from advanced_alchemy.exceptions import IntegrityError, NotFoundError, RepositoryError
+from advanced_alchemy.exceptions import ErrorMessages, IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -27,6 +27,7 @@ from advanced_alchemy.filters import (
     StatementFilter,
 )
 from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol, SQLAlchemyAsyncSlugRepositoryProtocol
+from advanced_alchemy.repository._util import DEFAULT_ERROR_MESSAGE_TEMPLATES
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
     CollectionT,
@@ -34,7 +35,8 @@ from advanced_alchemy.repository.memory.base import (
     SQLAlchemyInMemoryStore,
     SQLAlchemyMultiStore,
 )
-from advanced_alchemy.repository.typing import MISSING, ModelT
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair
+from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -69,8 +71,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         "attribute_names",
         "with_for_update",
         "force_basic_query_mode",
+        "order_by",
         "load",
         "execution_options",
+        "error_messages",
     }
 
     def __init__(
@@ -81,6 +85,8 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -90,6 +96,8 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
+        self.error_messages = self._get_error_messages(error_messages=error_messages)
+        self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
@@ -100,6 +108,21 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
 
     def __init_subclass__(cls) -> None:
         cls.__database_registry__[cls] = cls.__database__  # pyright: ignore[reportGeneralTypeIssues]
+
+    @staticmethod
+    def _get_error_messages(
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        default_messages: ErrorMessages | None | EmptyType = Empty,
+    ) -> ErrorMessages | None:
+        if error_messages == Empty:
+            error_messages = None
+        default_messages = cast(
+            "Optional[ErrorMessages]",
+            default_messages if default_messages != Empty else DEFAULT_ERROR_MESSAGE_TEMPLATES,
+        )
+        if error_messages is not None and default_messages is not None:
+            default_messages.update(cast("ErrorMessages", error_messages))
+        return default_messages
 
     @classmethod
     def __database_add__(cls, identity: Any, data: ModelT) -> ModelT:
@@ -390,6 +413,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -400,6 +424,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -411,6 +436,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -431,6 +457,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -465,6 +492,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -504,6 +532,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> ModelT:
         try:
             self.__database__.add(self.model_type, data)
@@ -518,6 +547,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
     ) -> list[ModelT]:
         for obj in data:
             await self.add(obj)
@@ -533,6 +563,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -545,6 +576,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -557,6 +589,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -573,6 +606,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         chunk_size: int | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -588,9 +622,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *filters: StatementFilter | ColumnElement[bool],
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        sanity_check: bool = True,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        sanity_check: bool = True,
         **kwargs: Any,
     ) -> list[ModelT]:
         result = self.__collection__().list()
@@ -609,6 +644,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
@@ -625,6 +661,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
     ) -> list[ModelT]:
@@ -633,9 +670,11 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        auto_expunge: bool | None = None,
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
+        order_by: list[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -660,6 +699,7 @@ class SQLAlchemyAsyncMockSlugRepository(
     async def get_by_slug(
         self,
         slug: str,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,

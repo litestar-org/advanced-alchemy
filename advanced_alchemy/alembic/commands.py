@@ -32,7 +32,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         stdout: TextIO = sys.stdout,
         cmd_opts: Namespace | None = None,
         config_args: Mapping[str, Any] | None = None,
-        attributes: dict | None = None,
+        attributes: dict[str, Any] | None = None,
         template_directory: Path | None = None,
         version_table_schema: str | None = None,
         render_as_batch: bool = True,
@@ -124,7 +124,7 @@ class AlembicCommands:
     def heads(self, verbose: bool = False, resolve_dependencies: bool = False) -> None:
         """Show current available heads in the script directory."""
 
-        return migration_command.heads(config=self.config, verbose=verbose, resolve_dependencies=resolve_dependencies)  # type: ignore  # noqa: PGH003
+        return migration_command.heads(config=self.config, verbose=verbose, resolve_dependencies=resolve_dependencies)
 
     def history(
         self,
@@ -193,7 +193,7 @@ class AlembicCommands:
     ) -> None:
         """Show the revision(s) denoted by the given symbol."""
 
-        return migration_command.show(config=self.config, rev=rev)  # type: ignore  # noqa: PGH003
+        return migration_command.show(config=self.config, rev=rev)
 
     def init(
         self,
@@ -232,17 +232,17 @@ class AlembicCommands:
         return migration_command.stamp(config=self.config, revision=revision, sql=sql, tag=tag, purge=purge)
 
     def _get_alembic_command_config(self) -> AlembicCommandConfig:
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if self.sqlalchemy_config.alembic_config.script_config:
             kwargs["file_"] = self.sqlalchemy_config.alembic_config.script_config
         if self.sqlalchemy_config.alembic_config.template_path:
             kwargs["template_directory"] = self.sqlalchemy_config.alembic_config.template_path
         kwargs.update(
             {
-                "engine": self.sqlalchemy_config.get_engine(),  # type: ignore[dict-item]
+                "engine": self.sqlalchemy_config.get_engine(),
                 "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
             },
         )
-        self.config = AlembicCommandConfig(**kwargs)  # type: ignore  # noqa: PGH003
+        self.config = AlembicCommandConfig(**kwargs)
         self.config.set_main_option("script_location", self.sqlalchemy_config.alembic_config.script_location)
         return self.config

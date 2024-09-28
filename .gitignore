@@ -168,3 +168,5 @@ cython_debug/
 
 # generated changelog
 /docs/changelog.md
+.cursorrules
+.cursorignore
