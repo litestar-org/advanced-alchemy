@@ -1091,9 +1091,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
-                    field_name: kwargs.get(field_name, None)
+                    field_name: kwargs.get(field_name)
                     for field_name in match_fields
-                    if kwargs.get(field_name, None) is not None
+                    if kwargs.get(field_name) is not None
                 }
             else:
                 match_filter = kwargs
@@ -1182,9 +1182,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
-                    field_name: kwargs.get(field_name, None)
+                    field_name: kwargs.get(field_name)
                     for field_name in match_fields
-                    if kwargs.get(field_name, None) is not None
+                    if kwargs.get(field_name) is not None
                 }
             else:
                 match_filter = kwargs
