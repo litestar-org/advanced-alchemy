@@ -3,7 +3,16 @@ from __future__ import annotations
 import inspect
 from contextlib import AbstractContextManager
 from functools import partial
-from typing import TYPE_CHECKING, AsyncContextManager, Awaitable, Callable, ContextManager, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    AsyncContextManager,
+    Awaitable,
+    Callable,
+    ContextManager,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import anyio
 from typing_extensions import ParamSpec
