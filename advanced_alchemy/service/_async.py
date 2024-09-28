@@ -26,6 +26,7 @@ from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     UNSET,
+    BulkModelDictT,
     ModelDictListT,
     ModelDictT,
     is_dict,
@@ -122,7 +123,6 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
             error_messages: A set of custom error messages to use for operations
             load: Set default relationships to be loaded
             execution_options: Set default execution options
-            to_schema: a default schema model to use when ``to_schema`` is true
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         self.repository = self.repository_type(
@@ -227,6 +227,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
             execution_options: Set default execution options
 
 
+
         Returns:
             Representation of instance with identifier `item_id`.
         """
@@ -245,8 +246,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
         *filters: StatementFilter | ColumnElement[bool],
         statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool | None = None,
-        error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT:
@@ -341,6 +342,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
                 **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
             )
 
+        if is_dto_data(data):
+            return cast("ModelT", data.create_instance())
         return cast("ModelT", data)
 
     async def list_and_count(
@@ -505,7 +508,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def create_many(
         self,
-        data: ModelDictListT[ModelT],
+        data: BulkModelDictT[ModelT],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
@@ -540,14 +543,15 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         data: ModelDictT[ModelT],
         item_id: Any | None = None,
         *,
-        id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository update operation.
 
@@ -606,12 +610,13 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def update_many(
         self,
-        data: ModelDictListT[ModelT],
+        data: BulkModelDictT[ModelT],
         *,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance update.
 
@@ -646,14 +651,15 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         data: ModelDictT[ModelT],
         item_id: Any | None = None,
         *,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -701,14 +707,15 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
     async def upsert_many(
         self,
-        data: ModelDictListT[ModelT],
+        data: BulkModelDictT[ModelT],
         *,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
         match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
@@ -750,14 +757,15 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         self,
         *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -810,13 +818,14 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         self,
         *filters: StatementFilter | ColumnElement[bool],
         match_fields: list[str] | str | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -865,12 +874,12 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         self,
         item_id: Any,
         *,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
-        auto_commit: bool | None = None,
-        auto_expunge: bool | None = None,
     ) -> ModelT:
         """Wrap repository delete operation.
 
@@ -904,12 +913,13 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         self,
         item_ids: list[Any],
         *,
-        id_attribute: str | InstrumentedAttribute[Any] | None = None,
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        chunk_size: int | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        chunk_size: int | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
 
@@ -945,10 +955,12 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
     async def delete_where(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        sanity_check: bool = True,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
