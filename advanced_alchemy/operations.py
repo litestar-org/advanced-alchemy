@@ -82,7 +82,7 @@ class Merge(UpdateBase):
 @compiles(Merge)  # type: ignore[no-untyped-call, misc]
 def visit_merge(element: Merge, compiler: StrSQLCompiler, **kw: Any) -> str:
     clauses = " ".join(clause._compiler_dispatch(compiler, **kw) for clause in element.clauses)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
-    sql_text = f"MERGE INTO {element.into} USING {element.using} ON {element.on}"
+    sql_text = f"MERGE INTO {element.into} USING {element.using} ON ({element.on})"
 
     if clauses:
         sql_text += f" {clauses}"

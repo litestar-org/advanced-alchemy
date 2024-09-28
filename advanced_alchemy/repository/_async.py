@@ -23,6 +23,7 @@ from sqlalchemy import (
     StatementLambdaElement,
     TextClause,
     any_,
+    bindparam,
     delete,
     lambda_stmt,
     over,
@@ -1829,6 +1830,117 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
+    async def _upsert_many_default(
+        self,
+        data: list[ModelT],
+        *,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]:
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=self.error_messages,
+        )
+        instances: list[ModelT] = []
+        data_to_update: list[ModelT] = []
+        data_to_insert: list[ModelT] = []
+        match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields is None:
+            match_fields = [self.id_attribute]
+        match_filter: list[StatementFilter | ColumnElement[bool]] = []
+        if match_fields:
+            for field_name in match_fields:
+                field = get_instrumented_attr(self.model_type, field_name)
+                matched_values = [
+                    field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
+                ]
+                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
+
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            existing_objs = await self.list(
+                *match_filter,
+                load=load,
+                execution_options=execution_options,
+                auto_expunge=False,
+            )
+            for field_name in match_fields:
+                field = get_instrumented_attr(self.model_type, field_name)
+                matched_values = list(
+                    {getattr(datum, field_name) for datum in existing_objs if datum},  # ensure the list is unique
+                )
+                match_filter.append(
+                    any_(matched_values) == field if self._prefer_any else field.in_(matched_values),  # type: ignore[arg-type]
+                )
+            existing_ids = self._get_object_ids(existing_objs=existing_objs)
+            data = self._merge_on_match_fields(data, existing_objs, match_fields)
+            for datum in data:
+                if getattr(datum, self.id_attribute, None) in existing_ids:
+                    data_to_update.append(datum)
+                else:
+                    data_to_insert.append(datum)
+            if data_to_insert:
+                instances.extend(
+                    await self.add_many(data_to_insert, auto_commit=False, auto_expunge=False),
+                )
+            if data_to_update:
+                instances.extend(
+                    await self.update_many(
+                        data_to_update,
+                        auto_commit=False,
+                        auto_expunge=False,
+                        load=load,
+                        execution_options=execution_options,
+                    ),
+                )
+            await self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+        return instances
+
+    async def _upsert_many_merge(
+        self,
+        data: list[ModelT],
+        *,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        match_fields: list[str] | str | None = None,
+        error_messages: ErrorMessages | None | EmptyType = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+    ) -> list[ModelT]:
+        error_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=self.error_messages,
+        )
+        match_fields = self._get_match_fields(match_fields=match_fields)
+        if match_fields is None:
+            match_fields = [self.id_attribute]
+
+        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            target = self.model_type.__table__
+            columns = [column for column in target.columns if column.name not in match_fields]
+            source = select(bindparam("src_data", type_=list, expanding=True))  # pyright: ignore[reportUnknownArgumentType]
+            if self._dialect.name == "oracle":
+                source = source.select_from(text("DUAL"))
+
+            on_clause = sql_func.and_(*[target.c[field] == source.c[field] for field in match_fields])
+            merge_stmt = Merge(into=target, using=source, on=on_clause)
+            merge_stmt = merge_stmt.when_matched({"UPDATE"}).values(
+                **{column.name: source.c[column.name] for column in columns},
+            )
+
+            values = [{column.name: getattr(item, column.name) for column in target.columns} for item in data]
+            result = await self.session.execute(merge_stmt, bind_arguments={"src_data": values})
+            instances = result.fetchall()
+            await self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+        return instances
+
     def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
         return (
             (
@@ -1845,18 +1957,23 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         match_fields: list[str],
     ) -> Merge:
         target = self.model_type.__table__
-        values = [
+        bind_values = [
             {column.name: getattr(item, column.name) for column in target.columns if hasattr(item, column.name)}
             for item in data
         ]
 
-        source = select(
-            *[sql_func([value[column.name] for value in values]).label(column.name) for column in target.columns],
-        ).subquery(name="src")
+        source = (
+            select(
+                *[text(f":_{column.name}").label(column.name) for column in target.columns],  # pyright: ignore[reportUnknownArgumentType]
+            )
+            .select_from(text("(values :data)"))
+            .params(data=bind_values)
+            .subquery(name="src")
+        )
 
-        on = sql_func.and_(*[target.c[field] == source.c[field] for field in match_fields])
+        on_clause = sql_func.and_(*[target.c[field] == source.c[field] for field in match_fields])
 
-        merge = Merge(into=target, using=source, on=on)
+        merge = Merge(into=target, using=source, on=on_clause)
 
         update_columns = {c.name: c for c in target.c if c.name not in match_fields}
         insert_columns = {c.name: c for c in target.c}
