@@ -229,18 +229,7 @@ data-aria-dark="Switch to auto color mode">
     <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
       <i class="i-lucide close"></i>
     </button>
-    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
-<li><a class="reference internal" href="#advanced_alchemy.operations.MergeClause"><code class="docutils literal notranslate"><span class="pre">MergeClause</span></code></a><ul>
-<li><a class="reference internal" href="#advanced_alchemy.operations.MergeClause.__init__"><code class="docutils literal notranslate">__init__()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#advanced_alchemy.operations.Merge"><code class="docutils literal notranslate"><span class="pre">Merge</span></code></a><ul>
-<li><a class="reference internal" href="#advanced_alchemy.operations.Merge.inherit_cache"><code class="docutils literal notranslate">inherit_cache</span></code></a></li>
-<li><a class="reference internal" href="#advanced_alchemy.operations.Merge.__init__"><code class="docutils literal notranslate">__init__()</span></code></a></li>
-</ul>
-</li>
-</ul>
-</div><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
   data-type="github" data-user="litestar-org" data-repo="advanced-alchemy">
   <span class="w-8 flex items-center justify-around shrink-0 text-3xl">
     <iconify-icon icon="simple-icons:github"></iconify-icon>
@@ -294,48 +283,13 @@ data-aria-dark="Switch to auto color mode">
         <article class="yue" role="main">
           <section id="module-advanced_alchemy.operations">
 <span id="operations"></span><h1>operations<a class="headerlink" href="#module-advanced_alchemy.operations" title="Permalink to this heading">¶</a></h1>
-<dl class="py class">
-<dt class="sig sig-object py" id="advanced_alchemy.operations.MergeClause">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">advanced_alchemy.operations.</span></span><span class="sig-name descname"><span class="pre">MergeClause</span></span><a class="reference internal" href="../_modules/advanced_alchemy/operations.html#MergeClause"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.operations.MergeClause" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.sqlalchemy.org/en/20/core/foundation.html#sqlalchemy.sql.expression.ClauseElement" title="(in SQLAlchemy v2.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClauseElement</span></code></a></p>
-<dl class="py method">
-<dt class="sig sig-object py" id="advanced_alchemy.operations.MergeClause.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">command</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'INSERT'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'UPDATE'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'DELETE'</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../_modules/advanced_alchemy/operations.html#MergeClause.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.operations.MergeClause.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="advanced_alchemy.operations.Merge">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">advanced_alchemy.operations.</span></span><span class="sig-name descname"><span class="pre">Merge</span></span><a class="reference internal" href="../_modules/advanced_alchemy/operations.html#Merge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.operations.Merge" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.sqlalchemy.org/en/20/core/dml.html#sqlalchemy.sql.expression.UpdateBase" title="(in SQLAlchemy v2.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">UpdateBase</span></code></a></p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="advanced_alchemy.operations.Merge.inherit_cache">
-<span class="sig-name descname"><span class="pre">inherit_cache</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#advanced_alchemy.operations.Merge.inherit_cache" title="Permalink to this definition">¶</a></dt>
-<dd><p>Indicate if this <code class="xref py py-class docutils literal notranslate"><span class="pre">HasCacheKey</span></code> instance should make use of the
-cache key generation scheme used by its immediate superclass.</p>
-<p>The attribute defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>, which indicates that a construct has
-not yet taken into account whether or not its appropriate for it to
-participate in caching; this is functionally equivalent to setting the
-value to <code class="docutils literal notranslate"><span class="pre">False</span></code>, except that a warning is also emitted.</p>
-<p>This flag can be set to <code class="docutils literal notranslate"><span class="pre">True</span></code> on a particular class, if the SQL that
-corresponds to the object does not change based on attributes which
-are local to this class, and not its superclass.</p>
-<div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><a class="reference external" href="https://docs.sqlalchemy.org/en/20/core/compiler.html#compilerext-caching" title="(in SQLAlchemy v2.0)"><span>Enabling Caching Support for Custom Constructs</span></a> - General guideslines for setting the
-<code class="xref py py-attr docutils literal notranslate"><span class="pre">HasCacheKey.inherit_cache</span></code> attribute for third-party or user
-defined SQL constructs.</p>
-</div>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="advanced_alchemy.operations.Merge.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">into</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">using</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">on</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../_modules/advanced_alchemy/operations.html#Merge.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.operations.Merge.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
+<p>This module is reserved for future customer operations.</p>
+<p>This could include things like:
+- Merge
+- Create Table as Select
+- Copy To
+- Copy From
+- etc.</p>
 </section>
 
         </article><button class="back-to-top" type="button">
