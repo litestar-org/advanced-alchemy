@@ -34,7 +34,6 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute
 
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
-from advanced_alchemy.operations import Merge
 from advanced_alchemy.repository._util import (
     DEFAULT_ERROR_MESSAGE_TEMPLATES,
     FilterableRepository,
@@ -1717,24 +1716,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             self._expunge(instance, auto_expunge=auto_expunge)
             return instance
-
-    def _supports_merge_operations(self, force_disable_merge: bool = False) -> bool:
-        return (
-            (
-                self._dialect.server_version_info is not None
-                and self._dialect.server_version_info[0] >= POSTGRES_VERSION_SUPPORTING_MERGE
-                and self._dialect.name == "postgresql"
-            )
-            or self._dialect.name == "oracle"
-        ) and not force_disable_merge
-
-    def _get_merge_stmt(
-        self,
-        into: Any,
-        using: Any,
-        on: Any,
-    ) -> Merge:
-        return Merge(into=into, using=using, on=on)
 
     async def upsert_many(
         self,

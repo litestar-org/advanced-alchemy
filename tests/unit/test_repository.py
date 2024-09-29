@@ -256,7 +256,6 @@ async def test_sqlalchemy_repo_upsert_many(
 
     mock_instances = [MagicMock(), MagicMock(), MagicMock()]
     monkeypatch.setattr(mock_repo, "model_type", UUIDModel)
-    mocker.patch.object(mock_repo, "_supports_merge_operations", return_value=False)
     mocker.patch.object(mock_repo.session, "scalars", return_value=mock_instances)
     mocker.patch.object(mock_repo, "list", return_value=mock_instances)
     mocker.patch.object(mock_repo, "add_many", return_value=mock_instances)
