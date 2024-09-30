@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Sequence, cast
 
 from anyio import run
+from click import Path as ClickPath
 from click import argument, group, option
 from litestar.cli._utils import LitestarGroup, console
 
@@ -356,3 +358,42 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
             _drop_all,
             config,
         )
+
+@database_group.command(name="dump-table", help="Dump specified tables from the database to JSON files.")
+@option(
+    "--table",
+    help="Name(s) of the table(s) to dump. Multiple tables can be specified.",
+    type=str,
+    required=True,
+    multiple=True,
+)
+@option(
+    "--dump-dir",
+    help="Directory to save the JSON dump files. Defaults to the current working directory.",
+    type=ClickPath(path_type=Path),
+    default=Path.cwd() / "json_dump",
+    required=False,
+)
+def dump_table(app: Litestar, table: tuple[str, ...], dump_dir: Path) -> None:
+
+    # Refer to it by a different name that reads more naturally in code that follows.
+    table_names = table
+
+    from advanced_alchemy.alembic.utils import dump_tables
+
+    # TODO: Find a way to read from different registries
+    from advanced_alchemy.base import orm_registry
+    from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
+
+    configs = get_database_migration_plugin(app).config
+
+    if not isinstance(configs, Sequence):
+        configs = [configs]
+
+    async def _dump_tables() -> None:
+        for config in configs:
+            target_tables = set(config.alembic_config.target_metadata.tables).intersection(table_names)
+            models = [mapper.class_ for mapper in orm_registry.mappers if mapper.class_.__table__.name in target_tables]
+            await dump_tables(dump_dir, config.get_session(), models)
+
+    run(_dump_tables)

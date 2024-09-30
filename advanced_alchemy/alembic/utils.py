@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ContextManager
 
 from litestar.cli._utils import console
 from sqlalchemy import Engine, MetaData, Table
 from typing_extensions import TypeIs
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncEngine
+    from pathlib import Path
+    from typing import AsyncContextManager
+
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+    from sqlalchemy.orm import DeclarativeBase, Session
 
 
 async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metadata: MetaData) -> None:
@@ -35,3 +39,38 @@ async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metada
     if _is_sync(engine):
         return _drop_tables_sync(engine)
     return await _drop_tables_async(engine)
+
+
+async def dump_tables(dump_dir: Path, session: ContextManager[Session] | AsyncContextManager[AsyncSession], models: list[type[DeclarativeBase]]) -> None:
+    from types import new_class
+
+    from advanced_alchemy._serialization import encode_json
+
+    def _is_sync(
+        session: AsyncContextManager[AsyncSession] | ContextManager[Session],
+    ) -> TypeIs[ContextManager[Session]]:
+        return isinstance(session, ContextManager)
+
+    def _dump_table_sync(session: ContextManager[Session]) -> None:
+        from advanced_alchemy.repository import SQLAlchemySyncRepository
+        with session as _session:
+            for model in models:
+                json_path = dump_dir / f"{model.__tablename__}.json"
+                console.rule(f"[bold yellow] Dumping table '{json_path.stem}' to '{json_path}'", align="left")
+                repo = new_class("repo", (SQLAlchemySyncRepository,), exec_body=lambda ns, model=model: ns.setdefault("model_type", model))
+                json_path.write_text(encode_json([row.to_dict() for row in repo(session=_session).list()]))
+
+    async def _dump_table_async(session: AsyncContextManager[AsyncSession]) -> None:
+        from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+        async with session as _session:
+            for model in models:
+                json_path = dump_dir / f"{model.__tablename__}.json"
+                console.rule(f"[bold yellow] Dumping table '{json_path.stem}' to '{json_path}'", align="left")
+                repo = new_class("repo", (SQLAlchemyAsyncRepository,), exec_body=lambda ns, model=model: ns.setdefault("model_type", model))
+                json_path.write_text(encode_json([row.to_dict() for row in await repo(session=_session).list()]))
+
+    dump_dir.mkdir(exist_ok=True)
+
+    if _is_sync(session):
+        return _dump_table_sync(session)
+    return await _dump_table_async(session)
