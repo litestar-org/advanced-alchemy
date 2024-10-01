@@ -413,4 +413,4 @@ def dump_table(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> N
             await dump_tables(dump_dir, config.get_session(), models)
             console.rule("[green bold]Data dump complete", align="left")
 
-    run(_dump_tables)
+    return run(_dump_tables)
