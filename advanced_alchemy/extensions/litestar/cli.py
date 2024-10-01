@@ -362,22 +362,29 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
 @database_group.command(name="dump-table", help="Dump specified tables from the database to JSON files.")
 @option(
     "--table",
-    help="Name(s) of the table(s) to dump. Multiple tables can be specified.",
+    "table_names",
+    help="Name of the table to dump. Multiple tables can be specified. Use '*' to dump all tables.",
     type=str,
     required=True,
     multiple=True,
 )
 @option(
-    "--dump-dir",
-    help="Directory to save the JSON dump files. Defaults to the current working directory.",
-    type=ClickPath(path_type=Path),
+    "--dir",
+    "dump_dir",
+    help="Directory to save the JSON dump files. Defaults to WORKDIR/json_dump",
+    type=ClickPath(path_type=Path),  # type: ignore
     default=Path.cwd() / "json_dump",
     required=False,
 )
-def dump_table(app: Litestar, table: tuple[str, ...], dump_dir: Path) -> None:
+def dump_table(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> None:
 
-    # Refer to it by a different name that reads more naturally in code that follows.
-    table_names = table
+    from rich.prompt import Confirm
+
+    all_tables = "*" in table_names
+
+    if all_tables and not Confirm.ask("[yellow bold]You have specified '*'. Are you sure you want to dump all tables from the database?"):
+        # user has decided not to dump all tables
+        return console.rule("[red bold]No data was dumped.", style="red", align="left")
 
     from advanced_alchemy.alembic.utils import dump_tables
 
@@ -392,8 +399,18 @@ def dump_table(app: Litestar, table: tuple[str, ...], dump_dir: Path) -> None:
 
     async def _dump_tables() -> None:
         for config in configs:
-            target_tables = set(config.alembic_config.target_metadata.tables).intersection(table_names)
+            target_tables = set(config.alembic_config.target_metadata.tables)
+
+            if not all_tables:
+                # only consider tables specified by user
+                for table_name in set(table_names) - target_tables:
+                    console.rule(f"[red bold]Skipping table '{table_name}' because it is not available in the default registry", style="red", align="left")
+                target_tables.intersection_update(table_names)
+            else:
+                console.rule("[yellow bold]Dumping all tables", style="yellow", align="left")
+
             models = [mapper.class_ for mapper in orm_registry.mappers if mapper.class_.__table__.name in target_tables]
             await dump_tables(dump_dir, config.get_session(), models)
+            console.rule("[green bold]Data dump complete", align="left")
 
     run(_dump_tables)

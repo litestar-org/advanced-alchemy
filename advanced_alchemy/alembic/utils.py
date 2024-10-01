@@ -56,7 +56,7 @@ async def dump_tables(dump_dir: Path, session: ContextManager[Session] | AsyncCo
         with session as _session:
             for model in models:
                 json_path = dump_dir / f"{model.__tablename__}.json"
-                console.rule(f"[bold yellow] Dumping table '{json_path.stem}' to '{json_path}'", align="left")
+                console.rule(f"[yellow bold]Dumping table '{json_path.stem}' to '{json_path}'", style="yellow", align="left")
                 repo = new_class("repo", (SQLAlchemySyncRepository,), exec_body=lambda ns, model=model: ns.setdefault("model_type", model))
                 json_path.write_text(encode_json([row.to_dict() for row in repo(session=_session).list()]))
 
@@ -65,7 +65,7 @@ async def dump_tables(dump_dir: Path, session: ContextManager[Session] | AsyncCo
         async with session as _session:
             for model in models:
                 json_path = dump_dir / f"{model.__tablename__}.json"
-                console.rule(f"[bold yellow] Dumping table '{json_path.stem}' to '{json_path}'", align="left")
+                console.rule(f"[yellow bold]Dumping table '{json_path.stem}' to '{json_path}'", style="yellow", align="left")
                 repo = new_class("repo", (SQLAlchemyAsyncRepository,), exec_body=lambda ns, model=model: ns.setdefault("model_type", model))
                 json_path.write_text(encode_json([row.to_dict() for row in await repo(session=_session).list()]))
 
