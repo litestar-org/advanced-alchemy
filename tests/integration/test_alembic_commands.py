@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy import base
 from advanced_alchemy.alembic import commands
-from advanced_alchemy.alembic.utils import drop_all
+from advanced_alchemy.alembic.utils import drop_all, dump_tables
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from alembic.util.exc import CommandError
 from tests.fixtures.uuid import models as models_uuid
@@ -252,6 +252,25 @@ async def test_drop_all(
     )
     result = capsys.readouterr()
     assert "Successfully dropped all objects" in result.out
+
+
+async def test_dump_tables(
+    any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
+    capsys: CaptureFixture[str],
+    tmp_project_dir: Path,
+) -> None:
+    from examples.litestar.litestar_repo_only import AuthorModel, BookModel, app
+
+    await maybe_async(any_config.create_all_metadata(app))
+
+    await dump_tables(
+        tmp_project_dir,
+        any_config.get_session(),
+        [AuthorModel, BookModel],
+    )
+    result = capsys.readouterr()
+    assert "Dumping table 'author'" in result.out
+    assert "Dumping table 'book'" in result.out
 
 
 """
