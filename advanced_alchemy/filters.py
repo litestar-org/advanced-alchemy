@@ -288,7 +288,7 @@ class SearchFilter(StatementFilter):
     field_name: str | set[str]
     """Name of the model attribute to search on."""
     value: str
-    """Values for ``NOT LIKE`` clause."""
+    """Search value."""
     ignore_case: bool | None = False
     """Should the search be case insensitive."""
 
