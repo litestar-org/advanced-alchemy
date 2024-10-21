@@ -96,6 +96,10 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
             else self.sqlalchemy_config.get_engine()
         )
         self.session_maker = self.sqlalchemy_config.create_session_maker()
+
+        session_maker = cast("SessionMakerT", self.session_maker)
+        self.session_class = session_maker.class_
+
         self.app: Sanic
 
     async def _do_commit(self, session: Session | AsyncSession) -> None:
@@ -181,7 +185,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
                 self.get_sessionmaker_from_request,
             )
             bootstrap.add_dependency(
-                type(self.session_maker),
+                self.session_class,
                 self.get_session_from_request,
             )
 
