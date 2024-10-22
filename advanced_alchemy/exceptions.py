@@ -9,7 +9,7 @@ from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
 
 from advanced_alchemy.utils.deprecation import deprecated
 
-FOREIGN_KEY_REGEXES = {
+DUPLICATE_KEY_REGEXES = {
     "postgresql": [
         re.compile(
             r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
@@ -33,7 +33,7 @@ FOREIGN_KEY_REGEXES = {
     "cockroach": [],
 }
 
-DUPLICATE_KEY_REGEXES = {
+FOREIGN_KEY_REGEXES = {
     "postgresql": [
         re.compile(
             r".*on table \"(?P<table>[^\"]+)\" violates "
