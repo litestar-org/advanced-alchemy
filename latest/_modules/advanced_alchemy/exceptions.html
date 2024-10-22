@@ -291,7 +291,7 @@ data-aria-dark="Switch to auto color mode">
 </span><span data-line="9">
 </span><span data-line="10"><span class="kn">from</span> <span class="nn">advanced_alchemy.utils.deprecation</span> <span class="kn">import</span> <span class="n">deprecated</span>
 </span><span data-line="11">
-</span><span data-line="12"><span class="n">FOREIGN_KEY_REGEXES</span> <span class="o">=</span> <span class="p">{</span>
+</span><span data-line="12"><span class="n">DUPLICATE_KEY_REGEXES</span> <span class="o">=</span> <span class="p">{</span>
 </span><span data-line="13">    <span class="s2">&quot;postgresql&quot;</span><span class="p">:</span> <span class="p">[</span>
 </span><span data-line="14">        <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
 </span><span data-line="15">            <span class="sa">r</span><span class="s2">&quot;^.*duplicate\s+key.*</span><span class="se">\&quot;</span><span class="s2">(?P&lt;columns&gt;[^</span><span class="se">\&quot;</span><span class="s2">]+)</span><span class="se">\&quot;</span><span class="s2">\s*\n.*Key\s+\((?P&lt;key&gt;.*)\)=\((?P&lt;value&gt;.*)\)\s+already\s+exists.*$&quot;</span><span class="p">,</span>
@@ -315,7 +315,7 @@ data-aria-dark="Switch to auto color mode">
 </span><span data-line="33">    <span class="s2">&quot;cockroach&quot;</span><span class="p">:</span> <span class="p">[],</span>
 </span><span data-line="34"><span class="p">}</span>
 </span><span data-line="35">
-</span><span data-line="36"><span class="n">DUPLICATE_KEY_REGEXES</span> <span class="o">=</span> <span class="p">{</span>
+</span><span data-line="36"><span class="n">FOREIGN_KEY_REGEXES</span> <span class="o">=</span> <span class="p">{</span>
 </span><span data-line="37">    <span class="s2">&quot;postgresql&quot;</span><span class="p">:</span> <span class="p">[</span>
 </span><span data-line="38">        <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
 </span><span data-line="39">            <span class="sa">r</span><span class="s2">&quot;.*on table </span><span class="se">\&quot;</span><span class="s2">(?P&lt;table&gt;[^</span><span class="se">\&quot;</span><span class="s2">]+)</span><span class="se">\&quot;</span><span class="s2"> violates &quot;</span>
