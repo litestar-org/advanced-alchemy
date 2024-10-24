@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-cryptography = None
+cryptography = None # type: ignore[var-annotated,unused-ignore]
 with contextlib.suppress(ImportError):
     from cryptography.fernet import Fernet
     from cryptography.hazmat.backends import default_backend
