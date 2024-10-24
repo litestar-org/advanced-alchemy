@@ -359,7 +359,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
             config,
         )
 
-@database_group.command(name="dump-table", help="Dump specified tables from the database to JSON files.")
+@database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
 @option(
     "--table",
     "table_names",
@@ -370,13 +370,13 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
 )
 @option(
     "--dir",
-    "dump_dir",
-    help="Directory to save the JSON dump files. Defaults to WORKDIR/json_dump",
-    type=ClickPath(path_type=Path),  # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
-    default=Path.cwd() / "json_dump",
+    "fixtures",
+    help="Directory to save the JSON files. Defaults to WORKDIR/fixtures",
+    type=ClickPath(path_type=Path), # type: ignore[type-var] # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
+    default=Path.cwd() / "fixtures",
     required=False,
 )
-def dump_table(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> None:
+def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> None:
 
     from rich.prompt import Confirm
 
