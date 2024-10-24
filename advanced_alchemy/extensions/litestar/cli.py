@@ -372,7 +372,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     "--dir",
     "dump_dir",
     help="Directory to save the JSON dump files. Defaults to WORKDIR/json_dump",
-    type=ClickPath(path_type=Path),  # type: ignore
+    type=ClickPath(path_type=Path),  # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
     default=Path.cwd() / "json_dump",
     required=False,
 )
