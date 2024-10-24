@@ -233,6 +233,7 @@ data-aria-dark="Switch to auto color mode">
 <li><a class="reference internal" href="#litestar-cli">Litestar CLI</a><ul>
 <li><a class="reference internal" href="#litestar-cli-downgrade">downgrade</a></li>
 <li><a class="reference internal" href="#litestar-cli-drop-all">drop-all</a></li>
+<li><a class="reference internal" href="#litestar-cli-dump-data">dump-data</a></li>
 <li><a class="reference internal" href="#litestar-cli-init">init</a></li>
 <li><a class="reference internal" href="#litestar-cli-make-migrations">make-migrations</a></li>
 <li><a class="reference internal" href="#litestar-cli-merge-migrations">merge-migrations</a></li>
@@ -364,6 +365,26 @@ data-aria-dark="Switch to auto color mode">
 <dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p>
 </dd>
 </dl>
+</dd></dl>
+
+</section>
+<section id="litestar-cli-dump-data">
+<h3>dump-data<a class="headerlink" href="#litestar-cli-dump-data" title="Permalink to this heading">¶</a></h3>
+<p>Dump specified tables from the database to JSON files.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span data-line="1">Litestar<span class="w"> </span>CLI<span class="w"> </span>dump-data<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span>
+</span></pre></div>
+</div>
+<p class="rubric">Options</p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-Litestar-CLI-dump-data-table">
+<span class="sig-name descname"><span class="pre">--table</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;table_names&gt;</span></span><a class="headerlink" href="#cmdoption-Litestar-CLI-dump-data-table" title="Permalink to this definition">¶</a></dt>
+<dd><p><strong>Required</strong> Name of the table to dump. Multiple tables can be specified. Use ‘*’ to dump all tables.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-Litestar-CLI-dump-data-dir">
+<span class="sig-name descname"><span class="pre">--dir</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;fixtures&gt;</span></span><a class="headerlink" href="#cmdoption-Litestar-CLI-dump-data-dir" title="Permalink to this definition">¶</a></dt>
+<dd><p>Directory to save the JSON files. Defaults to WORKDIR/fixtures</p>
 </dd></dl>
 
 </section>
