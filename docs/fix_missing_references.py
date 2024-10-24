@@ -13,7 +13,7 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
     if not hasattr(node, "attributes"):
         return None
 
-    attributes = node.attributes  # type: ignore[attr-defined]
+    attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
     target = attributes["reftarget"]
     py_domain = env.domains["py"]
 
