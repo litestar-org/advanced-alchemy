@@ -23,7 +23,7 @@ current_year = datetime.now().year  # noqa: DTZ005
 project = __project__
 copyright = f"{current_year}, Litestar Organization"  # noqa: A001
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
-
+suppress_warnings = ["autosectionlabel.*"]
 # -- General configuration ---------------------------------------------------
 extensions = [
     "sphinx.ext.autodoc",
@@ -32,7 +32,8 @@ extensions = [
     "sphinx.ext.githubpages",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
-    "docs.fix_missing_references",
+    "auto_pytabs.sphinx_ext",
+    "tools.sphinx_ext",
     "sphinx_copybutton",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
@@ -42,6 +43,7 @@ extensions = [
     "sphinx_togglebutton",
     "sphinx_paramlinks",
 ]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "msgspec": ("https://jcristharif.com/msgspec/", None),
@@ -49,6 +51,8 @@ intersphinx_mapping = {
     "alembic": ("https://alembic.sqlalchemy.org/en/latest/", None),
     "litestar": ("https://docs.litestar.dev/latest/", None),
     "click": ("https://click.palletsprojects.com/en/8.1.x/", None),
+    "anyio": ("https://anyio.readthedocs.io/en/stable/", None),
+    "multidict": ("https://multidict.aio-libs.org/en/stable/", None),
 }
 PY_CLASS = "py:class"
 PY_RE = r"py:.*"
@@ -78,6 +82,8 @@ nitpick_ignore = [
     (PY_CLASS, "CollectionT"),
     (PY_CLASS, "EmptyType"),
     (PY_CLASS, "ModelT"),
+    (PY_CLASS, "FilterTypeT"),
+    (PY_CLASS, "pydantic.main.BaseModel"),
     (PY_CLASS, "T"),
     (PY_CLASS, "advanced_alchemy.repository.typing.ModelT"),
     (PY_CLASS, "AsyncSession"),
@@ -86,6 +92,8 @@ nitpick_ignore = [
     (PY_CLASS, "SyncMockRepoT"),
     (PY_CLASS, "AsyncMockRepoT"),
     (PY_ATTR, "AsyncGenericMockRepository.id_attribute"),
+    (PY_ATTR, "advanced_alchemy.repository.AbstractAsyncRepository.id_attribute"),
+    (PY_ATTR, "AbstractAsyncRepository.id_attribute")
 ]
 nitpick_ignore_regex = [
     (PY_RE, r"advanced_alchemy.*\.T"),
@@ -109,8 +117,16 @@ autodoc_type_aliases = {
     "FilterTypes": "FilterTypes",
     "Dialect": "sqlalchemy.engine.Dialect",
     "Session": "sqlalchemy.orm.Session",
-    "scoped_session": "sqlalchemy.orm.Session",
+    "MetaData": "sqlalchemy.MetaData",
+    "scoped_session": "sqlalchemy.orm.scoped_session",
     "TypeDecorator": "sqlalchemy.TypeDecorator",
+    "BeforeMessageSendHookHandler":"litestar.types.BeforeMessageSendHookHandler",
+    "Message": "litestar.types.Message", "Scope":"litestar.types.Scope",
+    "litestar.types.Message": "litestar.types.Message",
+    'FilterTypeT': "advanced_alchemy.service.typing.FilterTypeT",
+        'ModelDTOT': "advanced_alchemy.service.typing.ModelDTOT",
+         'ModelOrRowMappingT': "advanced_alchemy.repository.typing.ModelOrRowMappingT",
+         "pydantic.main.BaseModel":"pydantic.BaseModel","ColumnElement":"sqlalchemy.ColumnElement"
 }
 
 autosectionlabel_prefix_document = True

@@ -15,6 +15,7 @@ from advanced_alchemy.repository._sync import (
 )
 from advanced_alchemy.repository._util import (
     DEFAULT_ERROR_MESSAGE_TEMPLATES,
+    FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
     get_instrumented_attr,
@@ -27,7 +28,7 @@ __all__ = (
     "SQLAlchemyAsyncRepository",
     "SQLAlchemyAsyncRepositoryProtocol",
     "SQLAlchemyAsyncSlugRepositoryProtocol",
-    "FilterableRepositoryProtocol",
+    "FilterableRepositoryProtocol","FilterableRepository",
     "SQLAlchemySyncRepositoryProtocol",
     "SQLAlchemySyncSlugRepositoryProtocol",
     "SQLAlchemyAsyncQueryRepository",

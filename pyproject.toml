@@ -125,6 +125,7 @@ dev-dependencies = [
   "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
   "auto-pytabs[sphinx]>=0.4.0",
   "git-cliff>=2.2.1",
+  "myst-parser",
   # - Linting
   "pre-commit>=3.4.0",
   "mypy>=1.5.1",
