@@ -8,7 +8,7 @@ import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import CaptureFixture, FixtureRequest
 from pytest_lazyfixture import lazy_fixture
-from sqlalchemy import Engine, ForeignKey
+from sqlalchemy import Engine, ForeignKey, String
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column, relationship, sessionmaker
 
@@ -262,39 +262,38 @@ async def test_dump_tables(
 ) -> None:
 
     from advanced_alchemy.base import (
-        AuditColumns,
         CommonTableAttributes,
         DeclarativeBase,
         UUIDPrimaryKey,
         create_registry,
     )
-    class _UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase):
+    class _UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, DeclarativeBase):
         registry = create_registry()
 
-    class _AuthorModel(_UUIDAuditBase):
-        name: Mapped[str]
+    class TestAuthorModel(_UUIDAuditBase):
+        name: Mapped[str] = mapped_column(String(10))
 
-    class _BookModel(_UUIDAuditBase):
-        title: Mapped[str]
-        author_id: Mapped[UUID] = mapped_column(ForeignKey("__author_model.id"))
+    class TestBookModel(_UUIDAuditBase):
+        title: Mapped[str] = mapped_column(String(10))
+        author_id: Mapped[UUID] = mapped_column(ForeignKey("test_author_model.id"))
 
-    _BookModel.author = relationship(_AuthorModel, lazy="joined", innerjoin=True, viewonly=True)
-    _AuthorModel.books = relationship(_BookModel, back_populates="author", lazy="noload", uselist=True)
+    TestBookModel.author = relationship(TestAuthorModel, lazy="joined", innerjoin=True, viewonly=True)
+    TestAuthorModel.books = relationship(TestBookModel, back_populates="author", lazy="noload", uselist=True)
 
     if isinstance(any_config, SQLAlchemySyncConfig):
-        _BookModel.metadata.create_all(any_config.get_engine())
+        TestBookModel.metadata.create_all(any_config.get_engine())
     else:
         async with any_config.get_engine().begin() as conn:
-            await conn.run_sync(_BookModel.metadata.create_all)
+            await conn.run_sync(TestBookModel.metadata.create_all)
 
     await dump_tables(
         tmp_project_dir,
         any_config.get_session(),
-        [_AuthorModel, _BookModel],
+        [TestAuthorModel, TestBookModel],
     )
     result = capsys.readouterr()
-    assert "Dumping table '__author_model'" in result.out
-    assert "Dumping table '__book_model" in result.out
+    assert "Dumping table 'test_author_model'" in result.out
+    assert "Dumping table 'test_book_model" in result.out
 
 
 """
