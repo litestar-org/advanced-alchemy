@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Sequence, cast
 
 from anyio import run
+from click import Path as ClickPath
 from click import argument, group, option
 from litestar.cli._utils import LitestarGroup, console
 
@@ -356,3 +358,59 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
             _drop_all,
             config,
         )
+
+@database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
+@option(
+    "--table",
+    "table_names",
+    help="Name of the table to dump. Multiple tables can be specified. Use '*' to dump all tables.",
+    type=str,
+    required=True,
+    multiple=True,
+)
+@option(
+    "--dir",
+    "fixtures",
+    help="Directory to save the JSON files. Defaults to WORKDIR/fixtures",
+    type=ClickPath(path_type=Path), # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
+    default=Path.cwd() / "fixtures",
+    required=False,
+)
+def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> None:
+
+    from rich.prompt import Confirm
+
+    all_tables = "*" in table_names
+
+    if all_tables and not Confirm.ask("[yellow bold]You have specified '*'. Are you sure you want to dump all tables from the database?"):
+        # user has decided not to dump all tables
+        return console.rule("[red bold]No data was dumped.", style="red", align="left")
+
+    from advanced_alchemy.alembic.utils import dump_tables
+
+    # _TODO: Find a way to read from different registries
+    from advanced_alchemy.base import orm_registry
+    from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
+
+    configs = get_database_migration_plugin(app).config
+
+    if not isinstance(configs, Sequence):
+        configs = [configs]
+
+    async def _dump_tables() -> None:
+        for config in configs:
+            target_tables = set(config.alembic_config.target_metadata.tables)
+
+            if not all_tables:
+                # only consider tables specified by user
+                for table_name in set(table_names) - target_tables:
+                    console.rule(f"[red bold]Skipping table '{table_name}' because it is not available in the default registry", style="red", align="left")
+                target_tables.intersection_update(table_names)
+            else:
+                console.rule("[yellow bold]Dumping all tables", style="yellow", align="left")
+
+            models = [mapper.class_ for mapper in orm_registry.mappers if mapper.class_.__table__.name in target_tables]
+            await dump_tables(dump_dir, config.get_session(), models)
+            console.rule("[green bold]Data dump complete", align="left")
+
+    return run(_dump_tables)
