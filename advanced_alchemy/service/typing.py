@@ -195,7 +195,6 @@ def schema_dump(
         return cast("ModelT", data.as_builtins())  # pyright: ignore[reportUnknownVariableType]
     return cast("ModelT", data)
 
-
 __all__ = (
     "ModelDictT",
     "ModelDictListT",

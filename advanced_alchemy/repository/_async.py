@@ -2244,7 +2244,7 @@ class SQLAlchemyAsyncQueryRepository:
 
     @staticmethod
     def check_not_found(item_or_none: T | None) -> T:
-        """Raise :class:`RepositoryNotFoundException` if ``item_or_none`` is ``None``.
+        """Raise :class:`NotFoundError` if ``item_or_none`` is ``None``.
 
         Args:
             item_or_none: Item to be tested for existence.
