@@ -7,7 +7,7 @@ from msgspec import Struct
 from pydantic import BaseModel
 from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import Mapped, MappedAsDataclass, Session
+from sqlalchemy.orm import Mapped, Session
 
 from advanced_alchemy.base import CommonTableAttributes, DeclarativeBase, SQLQuery, UUIDPrimaryKey, create_registry
 from advanced_alchemy.repository import (
@@ -83,7 +83,7 @@ class USStateAsyncService(SQLAlchemyAsyncRepositoryService[USState]):
     model_type = USState
 
 
-class StateQuery(MappedAsDataclass, SQLQuery):
+class StateQuery(SQLQuery):
     """Nonsensical query to test custom SQL queries."""
 
     __table__ = select(  # type: ignore
