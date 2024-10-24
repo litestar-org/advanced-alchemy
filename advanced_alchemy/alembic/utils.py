@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ContextManager
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from typing import TYPE_CHECKING
 
 from litestar.cli._utils import console
 from sqlalchemy import Engine, MetaData, Table
@@ -8,7 +9,6 @@ from typing_extensions import TypeIs
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import AsyncContextManager
 
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import DeclarativeBase, Session
@@ -41,17 +41,17 @@ async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metada
     return await _drop_tables_async(engine)
 
 
-async def dump_tables(dump_dir: Path, session: ContextManager[Session] | AsyncContextManager[AsyncSession], models: list[type[DeclarativeBase]]) -> None:
+async def dump_tables(dump_dir: Path, session: AbstractContextManager[Session] | AbstractAsyncContextManager[AsyncSession], models: list[type[DeclarativeBase]]) -> None:
     from types import new_class
 
     from advanced_alchemy._serialization import encode_json
 
     def _is_sync(
-        session: AsyncContextManager[AsyncSession] | ContextManager[Session],
-    ) -> TypeIs[ContextManager[Session]]:
-        return isinstance(session, ContextManager)
+        session: AbstractAsyncContextManager[AsyncSession] | AbstractContextManager[Session],
+    ) -> TypeIs[AbstractContextManager[Session]]:
+        return isinstance(session, AbstractContextManager)
 
-    def _dump_table_sync(session: ContextManager[Session]) -> None:
+    def _dump_table_sync(session: AbstractContextManager[Session]) -> None:
         from advanced_alchemy.repository import SQLAlchemySyncRepository
         with session as _session:
             for model in models:
@@ -60,7 +60,7 @@ async def dump_tables(dump_dir: Path, session: ContextManager[Session] | AsyncCo
                 repo = new_class("repo", (SQLAlchemySyncRepository,), exec_body=lambda ns, model=model: ns.setdefault("model_type", model))  # type: ignore[misc]
                 json_path.write_text(encode_json([row.to_dict() for row in repo(session=_session).list()]))
 
-    async def _dump_table_async(session: AsyncContextManager[AsyncSession]) -> None:
+    async def _dump_table_async(session: AbstractAsyncContextManager[AsyncSession]) -> None:
         from advanced_alchemy.repository import SQLAlchemyAsyncRepository
         async with session as _session:
             for model in models:

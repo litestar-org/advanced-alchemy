@@ -404,7 +404,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         return cast("StatementLambdaElement", self.statement)
 
     @classmethod
-    async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool:  # noqa: ARG003
+    async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool:
         return True
 
     async def get(

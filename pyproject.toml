@@ -234,6 +234,7 @@ ignore = [
   "PT",
   "TD",
   "ARG002",  # ignore for now; investigate
+  "ARG003",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
   "PD011",   # pandas
   "PLR0912",

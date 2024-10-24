@@ -119,7 +119,7 @@ class UniqueMixin:
         return obj
 
     @classmethod
-    def unique_hash(cls, *args: Any, **kwargs: Any) -> Hashable:  # noqa: ARG003
+    def unique_hash(cls, *args: Any, **kwargs: Any) -> Hashable:
         """Generate a unique key based on the provided arguments.
 
         This method should be implemented in the subclass.
@@ -139,7 +139,7 @@ class UniqueMixin:
         raise NotImplementedError(msg)
 
     @classmethod
-    def unique_filter(cls, *args: Any, **kwargs: Any) -> ColumnElement[bool]:  # noqa: ARG003
+    def unique_filter(cls, *args: Any, **kwargs: Any) -> ColumnElement[bool]:
         """Generate a filter condition for ensuring uniqueness.
 
         This method should be implemented in the subclass.
