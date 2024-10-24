@@ -40,7 +40,7 @@ with app.app_context():
         Message.metadata.create_all(conn)
 
     session = db.session
-    repo = MessageRepository(session=session)
+    repo = MessageRepository(session=session) # pyright: ignore[reportArgumentType]
     repo.add(Message(text="Hello, world!"))
 
     message = repo.list()[0]

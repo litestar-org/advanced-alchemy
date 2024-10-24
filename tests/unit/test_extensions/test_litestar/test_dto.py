@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from datetime import date, datetime
-from typing import TYPE_CHECKING, ClassVar, List, TypeVar
+from typing import TYPE_CHECKING, Annotated, ClassVar, TypeVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,7 +17,6 @@ from litestar.testing import RequestFactory
 from litestar.typing import FieldDefinition
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
-from typing_extensions import Annotated
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.dto import (
@@ -138,7 +137,7 @@ async def test_model_read_dto(
 async def test_model_list_dto(author_model: type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
     dto_type = SQLAlchemyDTO[author_model]  # type: ignore
     raw = b'[{"id": "97108ac1-ffcb-411d-8b1e-d9183399f63b","name":"Agatha Christie","dob":"1890-09-15","created":"0001-01-01T00:00:00","updated":"0001-01-01T00:00:00"}]'
-    dto_data = await get_model_from_dto(dto_type, List[author_model], asgi_connection, raw)  # type: ignore
+    dto_data = await get_model_from_dto(dto_type, list[author_model], asgi_connection, raw)  # type: ignore
     assert isinstance(dto_data, list)
     assert_model_values(
         dto_data[0],  # type: ignore
@@ -282,7 +281,7 @@ class A(Base):
 
 class B(Base):
     __tablename__ = "b"
-    a: Mapped[List[A]] = relationship("A")
+    a: Mapped[list[A]] = relationship("A")
 
 dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
 """,

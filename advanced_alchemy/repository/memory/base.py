@@ -195,7 +195,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         self._update_relationship(elem, data)
                     # Remove duplicates added by orm when updating list items
                     if isinstance(value, list):
-                        setattr(data, relationship.key, type(value)(set(value)))
+                        setattr(data, relationship.key, type(value)(set(value))) # pyright: ignore[reportUnknownArgumentType]
                 else:
                     if remote_value := getattr(value, remote.key):
                         setattr(data, local.key, remote_value)

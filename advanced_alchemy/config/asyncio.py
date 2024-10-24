@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, AsyncGenerator
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -14,6 +14,7 @@ from advanced_alchemy.config.common import (
 from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
     from typing import Callable
 
     from sqlalchemy.orm import Session

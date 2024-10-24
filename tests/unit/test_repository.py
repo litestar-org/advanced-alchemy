@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Collection, Union, cast
+from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 

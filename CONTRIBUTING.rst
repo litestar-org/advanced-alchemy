@@ -4,12 +4,8 @@ Contribution guide
 Setting up the environment
 --------------------------
 
-1. Install `PDM <https://pdm.fming.dev/latest/>`_
-2. Run ``pdm install -G:all`` to create a `virtual environment <https://docs.python.org/3/tutorial/venv.html>`_ and install
-   the dependencies
-3. If you're working on the documentation and need to build it locally, install the extra dependencies with ``pdm install -G:docs``
-4. Install `pre-commit <https://pre-commit.com/>`_
-5. Run ``pre-commit install`` to install pre-commit hooks
+1. Run ``make install-uv`` to install `uv <https://docs.astral.sh/uv/>`_ if not already installed
+1. Run ``make install`` to install all dependencies and pre-commit hooks
 
 Code contributions
 ------------------
@@ -21,8 +17,8 @@ Workflow
 2. Clone your fork locally with git
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
-5. (Optional) Run ``pre-commit run --all-files`` to run linters and formatters. This step is optional and will be executed
-   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes
+5. Run ``male lint`` to run linters and formatters. This step is optional and will be executed
+   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes
 6. Commit your changes to git
 7. Push the changes to your fork
 8. Open a `pull request <https://docs.github.com/en/pull-requests>`_. Give the pull request a descriptive title

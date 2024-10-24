@@ -21,7 +21,7 @@ warnings.filterwarnings("ignore", category=SAWarning)
 # -- Project information -----------------------------------------------------
 current_year = datetime.now().year  # noqa: DTZ005
 project = __project__
-copyright = f"{current_year}, Litestar Organization"
+copyright = f"{current_year}, Litestar Organization"  # noqa: A001
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
 
 # -- General configuration ---------------------------------------------------
@@ -42,7 +42,9 @@ extensions = [
     "sphinx_togglebutton",
     "sphinx_paramlinks",
 ]
-
+autodoc_type_aliases = {
+  "Dialect": "sqlalchemy.engine.Dialect",
+}
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "msgspec": ("https://jcristharif.com/msgspec/", None),
@@ -142,7 +144,7 @@ html_theme_options = {
     "github_repo_name": "advanced-alchemy",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
     "navigation_with_keys": True,
-    "nav_links": [  # TODO(provinzkraut): I need a guide on extra_navbar_items and its magic :P
+    "nav_links": [  # TODO(provinzkraut): I need a guide on extra_navbar_items and its magic :P  # noqa: FIX002
         {"title": "Home", "url": "index"},
         {
             "title": "Community",
@@ -223,11 +225,11 @@ html_theme_options = {
 
 
 def update_html_context(
-    app: Sphinx,
-    pagename: str,
-    templatename: str,
+    _app: Sphinx,
+    _pagename: str,
+    _templatename: str,
     context: dict[str, Any],
-    doctree: document,
+    _doctree: document,
 ) -> None:
     context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
 

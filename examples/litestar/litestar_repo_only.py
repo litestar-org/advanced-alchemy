@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TCH003
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID  # noqa: TCH003
 
 from litestar import Litestar
@@ -38,7 +38,7 @@ class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[date]]  # noqa: UP007
-    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
+    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -127,7 +127,7 @@ class AuthorController(Controller):
     ) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_repo.list_and_count(limit_offset)
-        type_adapter = TypeAdapter(List[Author])
+        type_adapter = TypeAdapter(list[Author])
         return OffsetPagination[Author](
             items=type_adapter.validate_python(results),
             total=total,

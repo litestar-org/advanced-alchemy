@@ -8,8 +8,7 @@ from sqlalchemy import ColumnElement, select
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable
-    from typing import Iterator
+    from collections.abc import Hashable, Iterator
 
     from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession

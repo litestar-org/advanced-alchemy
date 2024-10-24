@@ -80,7 +80,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         setattr(app.state, self.sessionmaker_key, self.config.create_session_maker())
 
         app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
-        app.add_event_handler("shutdown", self.on_shutdown)
+        app.add_event_handler("shutdown", self.on_shutdown) # pyright: ignore[reportUnknownMemberType]
 
         self._app = app
 
@@ -114,7 +114,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
     async def session_handler(self, session: Session | AsyncSession, request: Request, response: Response) -> None:
         try:
             if self.autocommit_strategy:
-                await self._commit_strategies[self.autocommit_strategy](session=session, response=response)
+                await self._commit_strategies[self.autocommit_strategy](session=session, response=response) # pyright: ignore[reportArgumentType]
         finally:
             await self._do_close(session)
             delattr(request.state, self.session_key)

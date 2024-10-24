@@ -16,6 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python",
   "Topic :: Software Development",
   "Typing :: Typed",
@@ -68,19 +69,16 @@ requires = ["hatchling"]
 [tool.hatch.build.targets.wheel]
 packages = ["advanced_alchemy", "advanced_alchemy.extensions.litestar"]
 
-[tool.pdm]
-ignore_package_warnings = [
-  "alabaster",
-  "sphinxcontrib-*",
-  "sphinx-*",
-  "sphinx",
-  "pre-commit",
-  "pydata-sphinx-*",
-  "slotscheck",
-]
-
-[tool.pdm.dev-dependencies]
-dev = [
+[tool.uv]
+dev-dependencies = [
+  # - Testing
+  "litestar[cli]>=2.0.0",
+  "fastapi>=0.101.0",
+  "sanic[ext]>=23.6.0",
+  "sanic-testing>=23.6.0",
+  "msgspec>=0.18.2",
+  "flask>=3.0.0",
+  "flask-sqlalchemy>=3.1.1",
   "asyncmy>=0.2.8",
   "asyncpg>=0.28.0",
   "oracledb>=1.4.0",
@@ -101,41 +99,7 @@ dev = [
   "asgi-lifespan>=2.1.0",
   "aioodbc>=0.5.0",
   "eval-type-backport>=0.2.0",
-]
-docs = [
-  "sphinx>=7.1.2",
-  "sphinx-autobuild>=2021.3.14",
-  "sphinx-copybutton>=0.5.2",
-  "sphinx-click>=5.0.1",
-  "sphinx-toolbox>=3.5.0",
-  "sphinx-design>=0.5.0",
-  "sphinx-paramlinks>=0.6.0",
-  "sphinx-togglebutton>=0.3.2",
-  #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
-  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
-  "auto-pytabs[sphinx]>=0.4.0",
-  "git-cliff>=2.2.1",
-]
-extensions = [
-  "litestar[cli]>=2.0.0",
-  "fastapi>=0.101.0",
-  "sanic[ext]>=23.6.0",
-  "sanic-testing>=23.6.0",
-  "msgspec>=0.18.2",
-  "flask>=3.0.0",
-  "flask-sqlalchemy>=3.1.1",
-]
-linting = [
-  "pre-commit>=3.4.0",
-  "mypy>=1.5.1",
-  "ruff>=0.0.287",
-  "asyncpg-stubs",
-  "types-pytest-lazy-fixture",
-  "types-click",
-  "types-pyyaml",
-  "pyright>=1.1.350",
-]
-test = [
+  # - Testing - Pytest
   "pytest>=7.4.1,<8.0.0",
   "pytest-xdist>=3.3.1",
   "pytest-lazy-fixture>=0.6.3",
@@ -148,6 +112,30 @@ test = [
   "pytest-cov",
   "pytest-sugar>=1.0.0",
   "pytest-databases>=0.2.1",
+  # - Documentation
+  "sphinx>=7.1.2",
+  "sphinx-autobuild>=2021.3.14",
+  "sphinx-copybutton>=0.5.2",
+  "sphinx-click>=5.0.1",
+  "sphinx-toolbox>=3.5.0",
+  "sphinx-design>=0.5.0",
+  "sphinx-paramlinks>=0.6.0",
+  "sphinx-togglebutton>=0.3.2",
+  #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "auto-pytabs[sphinx]>=0.4.0",
+  "git-cliff>=2.2.1",
+  # - Linting
+  "pre-commit>=3.4.0",
+  "mypy>=1.5.1",
+  "ruff>=0.0.287",
+  "asyncpg-stubs",
+  "types-pytest-lazy-fixture",
+  "types-click",
+  "types-docutils",
+  "types-pyyaml",
+  "pyright>=1.1.350",
+  "slotscheck"
 ]
 
 [tool.pytest.ini_options]
@@ -300,6 +288,8 @@ ban-relative-imports = "all"
 known-first-party = ["advanced_alchemy", "tests"]
 
 [tool.mypy]
+packages = ["advanced_alchemy", "tests", "docs", "examples"]
+python_version = "3.8"
 disallow_any_generics = false
 disallow_untyped_decorators = true
 implicit_reexport = false

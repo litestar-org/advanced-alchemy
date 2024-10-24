@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Sequence, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, cast
 
 from anyio import run
 from click import Path as ClickPath

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    Iterable,
-    List,
     Literal,
     Protocol,
-    Sequence,
-    Tuple,
     Union,
     cast,
 )
@@ -90,10 +87,10 @@ def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
 
 def get_abstract_loader_options(
     loader_options: LoadSpec | None,
-    default_loader_options: List[_AbstractLoad] | None = None,  # noqa: UP006
+    default_loader_options: list[_AbstractLoad] | None = None,
     default_options_have_wildcards: bool = False,
-) -> Tuple[List[_AbstractLoad], bool]:  # noqa: UP006
-    loads: List[_AbstractLoad] = default_loader_options if default_loader_options is not None else []  # noqa: UP006
+) -> tuple[list[_AbstractLoad], bool]:
+    loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
