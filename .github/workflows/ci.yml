@@ -55,22 +55,22 @@ jobs:
       - name: Run mypy
         run: uv run mypy
 
-  # pyright:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
+  pyright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-  #     - name: Set up Python
-  #       run: uv python install 3.9
+      - name: Set up Python
+        run: uv python install 3.9
 
-  #     - name: Install dependencies
-  #       run: uv sync --all-extras --dev
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
 
-  #     - name: Run pyright
-  #       run: uv run pyright
+      - name: Run pyright
+        run: uv run pyright
 
   slotscheck:
     runs-on: ubuntu-latest
@@ -81,7 +81,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Set up Python
-        run: uv python install 3.9
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --all-extras --dev

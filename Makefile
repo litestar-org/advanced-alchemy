@@ -87,7 +87,7 @@ pre-commit: 										## Runs pre-commit hooks; includes ruff formatting and lin
 .PHONY: slotscheck
 slotscheck: 										## Run slotscheck
 	@echo "=> Running slotscheck"
-	@uv run slotscheck advanced_alchemy/ --exclude-modules=advanced_alchemy.alembic.templates.*
+	@uv run slotscheck advanced_alchemy/
 	@echo "=> slotscheck complete"
 
 .PHONY: lint
