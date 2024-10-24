@@ -287,6 +287,16 @@ ban-relative-imports = "all"
 [tool.ruff.lint.isort]
 known-first-party = ["advanced_alchemy", "tests"]
 
+[tool.slotscheck]
+strict-imports = true
+exclude-modules = '''
+(
+  ^tests.*
+  |^advanced_alchemy\.alembic\.templates.*
+)
+'''
+require-superclass = false
+
 [tool.mypy]
 packages = ["advanced_alchemy", "tests", "docs", "examples"]
 python_version = "3.8"
