@@ -42,9 +42,6 @@ extensions = [
     "sphinx_togglebutton",
     "sphinx_paramlinks",
 ]
-autodoc_type_aliases = {
-  "Dialect": "sqlalchemy.engine.Dialect",
-}
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "msgspec": ("https://jcristharif.com/msgspec/", None),
@@ -108,7 +105,13 @@ autodoc_class_signature = "separated"
 autodoc_default_options = {"special-members": "__init__", "show-inheritance": True, "members": True}
 autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
-autodoc_type_aliases = {"FilterTypes": "FilterTypes"}
+autodoc_type_aliases = {
+    "FilterTypes": "FilterTypes",
+    "Dialect": "sqlalchemy.engine.Dialect",
+    "Session": "sqlalchemy.orm.Session",
+    "scoped_session": "sqlalchemy.orm.Session",
+    "TypeDecorator": "sqlalchemy.TypeDecorator",
+}
 
 autosectionlabel_prefix_document = True
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
