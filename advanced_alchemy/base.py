@@ -37,7 +37,7 @@ if NANOID_INSTALLED and not TYPE_CHECKING:
     from fastnanoid import generate as nanoid  # pyright: ignore[reportMissingImports]
 
 else:
-    nanoid = uuid4
+    nanoid = uuid4 # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -114,8 +114,8 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
             if isinstance(arg_to_merge, tuple):
-                last_positional_arg = arg_to_merge[-1]
-                args.extend(arg_to_merge[:-1])
+                last_positional_arg = arg_to_merge[-1] # pyright: ignore[reportUnknownVariableType]
+                args.extend(arg_to_merge[:-1]) # pyright: ignore[reportUnknownArgumentType]
                 if isinstance(last_positional_arg, dict):
                     kwargs.update(last_positional_arg)  # pyright: ignore[reportUnknownArgumentType]
                 else:

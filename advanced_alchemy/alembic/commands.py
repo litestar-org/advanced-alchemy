@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Mapping, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from alembic import command as migration_command
@@ -11,6 +11,7 @@ from alembic.ddl.impl import DefaultImpl
 if TYPE_CHECKING:
     import os
     from argparse import Namespace
+    from collections.abc import Mapping
     from pathlib import Path
 
     from sqlalchemy import Engine

@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import re
 import string
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, cast, overload
+from typing import TYPE_CHECKING, Any, Optional, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import (
@@ -43,6 +43,7 @@ from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
     from collections import abc
+    from collections.abc import Iterable
     from datetime import datetime
 
     from sqlalchemy.orm.scoping import scoped_session
@@ -683,7 +684,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         return self._list_and_count_basic(*filters, **kwargs)
 
     def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:
-        for value in self._filter_result_by_kwargs(cast("List[ModelT]", collection), kwargs):
+        for value in self._filter_result_by_kwargs(cast("list[ModelT]", collection), kwargs):
             self.__filtered_store__.add(value)
         return collection
 

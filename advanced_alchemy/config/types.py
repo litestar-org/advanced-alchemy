@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from typing_extensions import TypeAlias
 
 

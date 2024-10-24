@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import re
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, TypedDict, Union
+from typing import TYPE_CHECKING, Any, Callable, TypedDict, Union
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
 
 from advanced_alchemy.utils.deprecation import deprecated
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 DUPLICATE_KEY_REGEXES = {
     "postgresql": [

@@ -7,7 +7,8 @@ from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
-    from typing import Any, Mapping
+    from collections.abc import Mapping
+    from typing import Any
 
     from sqlalchemy.engine.interfaces import IsolationLevel
     from sqlalchemy.pool import Pool

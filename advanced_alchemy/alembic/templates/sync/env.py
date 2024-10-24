@@ -42,20 +42,20 @@ def order_columns(
 ) -> ops.CreateTableOp:
     """Orders ID first and the audit columns at the end."""
     special_names = {"id": -100, "sa_orm_sentinel": 3001, "created_at": 3002, "updated_at": 3003}
-    cols_by_key = [
+    cols_by_key = [  # pyright: ignore[reportUnknownVariableType]
         (
             special_names.get(col.key, index) if isinstance(col, Column) else 2000,
             col.copy(),  # type: ignore[attr-defined]
         )
         for index, col in enumerate(op.columns)
     ]
-    columns = [col for _, col in sorted(cols_by_key, key=lambda entry: entry[0])]
+    columns = [col for _, col in sorted(cols_by_key, key=lambda entry: entry[0])] # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType,reportUnknownLambdaType]
     return ops.CreateTableOp(
         op.table_name,
-        columns,
+        columns, # pyright: ignore[reportUnknownArgumentType]
         schema=op.schema,
         # TODO: Remove when https://github.com/sqlalchemy/alembic/issues/1193 is fixed  # noqa: FIX002
-        _namespace_metadata=op._namespace_metadata,  # noqa: SLF001
+        _namespace_metadata=op._namespace_metadata,  # noqa: SLF001 # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         **op.kw,
     )
 
@@ -122,7 +122,7 @@ def run_migrations_online() -> None:
             future=True,
         ),
     )
-    if connectable is None:
+    if connectable is None: # pyright: ignore[reportUnnecessaryComparison]
         msg = "Could not get engine from config.  Please ensure your `alembic.ini` according to the official Alembic documentation."
         raise RuntimeError(
             msg,

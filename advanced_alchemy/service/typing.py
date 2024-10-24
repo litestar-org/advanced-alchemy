@@ -6,23 +6,22 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
+    Annotated,
     Any,
     ClassVar,
-    Dict,
     Final,
     Generic,
-    List,
     Protocol,
-    Sequence,
     TypeVar,
     Union,
     cast,
     runtime_checkable,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeGuard
+from typing_extensions import TypeAlias, TypeGuard
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
@@ -135,9 +134,9 @@ except ImportError:
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticOrMsgspecT = Union[Struct, BaseModel]
-ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
-ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
-BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
+ModelDictT: TypeAlias = Union[dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
+ModelDictListT: TypeAlias = Sequence[Union[dict[str, Any], ModelT, Struct, BaseModel]]
+BulkModelDictT: TypeAlias = Union[Sequence[Union[dict[str, Any], ModelT, Struct, BaseModel]], DTOData[list[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
 
 
 def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
