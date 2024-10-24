@@ -83,10 +83,10 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def handle_orm_descriptor(
         cls,
         extension_type: NotExtension | AssociationProxyExtensionType | HybridExtensionType,
-        orm_descriptor: InspectionAttr,  # noqa: ARG003
-        key: str,  # noqa: ARG003
-        model_type_hints: dict[str, FieldDefinition],  # noqa: ARG003
-        model_name: str,  # noqa: ARG003
+        orm_descriptor: InspectionAttr,
+        key: str,
+        model_type_hints: dict[str, FieldDefinition],
+        model_name: str,
     ) -> list[DTOFieldDefinition]:
         msg = f"Unsupported extension type: {extension_type}"
         raise NotImplementedError(msg)
@@ -185,9 +185,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def _(
         cls,
         extension_type: HybridExtensionType,
-        key: str,  # noqa: ARG003
+        key: str,
         orm_descriptor: InspectionAttr,
-        model_type_hints: dict[str, FieldDefinition],  # noqa: ARG003
+        model_type_hints: dict[str, FieldDefinition],
         model_name: str,
     ) -> list[DTOFieldDefinition]:
         if not isinstance(orm_descriptor, hybrid_property):

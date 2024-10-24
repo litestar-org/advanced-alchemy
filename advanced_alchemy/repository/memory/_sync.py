@@ -405,7 +405,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         return cast("StatementLambdaElement", self.statement)
 
     @classmethod
-    def check_health(cls, session: Session | scoped_session[Session]) -> bool:  # noqa: ARG003
+    def check_health(cls, session: Session | scoped_session[Session]) -> bool:
         return True
 
     def get(

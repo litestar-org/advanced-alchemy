@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type, cast
+from typing import cast
 from uuid import UUID
 
 import pytest
