@@ -87,7 +87,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run slotscheck
-        run: uv run slotscheck advanced-alchemy
+        run: uv run slotscheck advanced_alchemy
 
   test:
     name: "test (${{ matrix.python-version }}"
