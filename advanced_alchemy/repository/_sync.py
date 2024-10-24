@@ -8,12 +8,9 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
-    Iterable,
-    List,
     Literal,
     Optional,
     Protocol,
-    Sequence,
     cast,
     runtime_checkable,
 )
@@ -49,6 +46,8 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
@@ -1901,7 +1900,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("List[ModelT]", instances)
+            return cast("list[ModelT]", instances)
 
     def filter_collection_by_kwargs(
         self,
@@ -2246,7 +2245,7 @@ class SQLAlchemySyncQueryRepository:
 
     @staticmethod
     def check_not_found(item_or_none: T | None) -> T:
-        """Raise :class:`RepositoryNotFoundException` if ``item_or_none`` is ``None``.
+        """Raise :class:`NotFoundError` if ``item_or_none`` is ``None``.
 
         Args:
             item_or_none: Item to be tested for existence.

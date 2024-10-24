@@ -105,8 +105,8 @@ def autocommit_handler_maker(
         """Handle commit/rollback, closing and cleaning up sessions before sending.
 
         Args:
-            message: ASGI-``Message``
-            scope: An ASGI-``Scope``
+            message: ASGI-``litestar.types.Message``
+            scope: An ASGI-``litestar.types.Scope``
 
         Returns:
             None

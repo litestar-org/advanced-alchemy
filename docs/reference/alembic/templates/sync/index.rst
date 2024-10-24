@@ -13,5 +13,4 @@ Available API References
     :titlesonly:
 
     alembic-ini
-    env
     script-py

@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from collections.abc import Generator, Iterator
 from datetime import date, datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 from unittest.mock import NonCallableMagicMock
 from uuid import UUID, uuid4
 
@@ -63,13 +64,13 @@ xfail = pytest.mark.xfail
 
 
 RepositoryPKType = Literal["uuid", "bigint"]
-SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
-AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
-RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
-ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
-ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
-TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
-SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
+SecretModel = type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
+AuthorModel = type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
+RuleModel = type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
+ModelWithFetchedValue = type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
+ItemModel = type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
+TagModel = type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
+SlugBookModel = type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
 
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
@@ -109,7 +110,7 @@ AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_b
 ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
 ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
 
-RawRecordData = List[Dict[str, Any]]
+RawRecordData = list[dict[str, Any]]
 
 mock_engines = {"mock_async_engine", "mock_sync_engine"}
 

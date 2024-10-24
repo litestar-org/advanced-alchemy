@@ -46,7 +46,7 @@ def post_handler(data: A) -> A:
     return data
 
 @get("/a")
-def get_handler() -> List[A]:
+def get_handler() -> list[A]:
     return [A(id=1, a="test"), A(id=2, a="test2")]
 
 @get("/a/1")

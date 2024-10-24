@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import suppress
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from advanced_alchemy.alembic.commands import AlembicCommands as _AlembicCommands
 

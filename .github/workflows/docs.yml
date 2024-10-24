@@ -15,29 +15,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-      - uses: pdm-project/setup-pdm@v4
-        name: Set up PDM
-        with:
-          python-version: "3.12"
-          allow-python-prereleases: true
-          cache: true
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install dependencies
-        run: pdm install -G:docs
+        run: uv sync --all-extras --dev
 
       - name: Fetch gh pages
         run: git fetch origin gh-pages --depth=1
 
       - name: Build release docs
-        run: pdm run python tools/build_docs.py docs-build
+        run: uv run python tools/build_docs.py docs-build
         if: github.event_name == 'release'
 
       - name: Build dev docs
-        run: pdm run python tools/build_docs.py docs-build
+        run: uv run python tools/build_docs.py docs-build
         if: github.event_name == 'push'
 
       - name: Deploy

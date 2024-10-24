@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from litestar.plugins import InitPluginProtocol
 
@@ -14,6 +14,8 @@ from advanced_alchemy.extensions.litestar.plugins.init import (
 from advanced_alchemy.extensions.litestar.plugins.serialization import SQLAlchemySerializationPlugin
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from litestar.config.app import AppConfig
 
 
