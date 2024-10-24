@@ -388,7 +388,7 @@ def dump_table(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> N
 
     from advanced_alchemy.alembic.utils import dump_tables
 
-    # TODO: Find a way to read from different registries
+    # _TODO: Find a way to read from different registries
     from advanced_alchemy.base import orm_registry
     from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
 
