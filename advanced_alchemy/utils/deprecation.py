@@ -46,23 +46,23 @@ def warn_deprecation(
         access_type = "Use of"
 
     if pending:
-        parts.append(f"{access_type} {kind} awaiting deprecation {deprecated_name!r}") # pyright: ignore[reportUnknownMemberType]
+        parts.append(f"{access_type} {kind} awaiting deprecation {deprecated_name!r}")  # pyright: ignore[reportUnknownMemberType]
     else:
-        parts.append(f"{access_type} deprecated {kind} {deprecated_name!r}") # pyright: ignore[reportUnknownMemberType]
+        parts.append(f"{access_type} deprecated {kind} {deprecated_name!r}")  # pyright: ignore[reportUnknownMemberType]
 
-    parts.extend( # pyright: ignore[reportUnknownMemberType]
+    parts.extend(  # pyright: ignore[reportUnknownMemberType]
         (
             f"Deprecated in advanced-alchemy {version}",
             f"This {kind} will be removed in {removal_in or 'the next major version'}",
         ),
     )
     if alternative:
-        parts.append(f"Use {alternative!r} instead") # pyright: ignore[reportUnknownMemberType]
+        parts.append(f"Use {alternative!r} instead")  # pyright: ignore[reportUnknownMemberType]
 
     if info:
-        parts.append(info) # pyright: ignore[reportUnknownMemberType]
+        parts.append(info)  # pyright: ignore[reportUnknownMemberType]
 
-    text = ". ".join(parts) # pyright: ignore[reportUnknownArgumentType]
+    text = ". ".join(parts)  # pyright: ignore[reportUnknownArgumentType]
     warning_class = PendingDeprecationWarning if pending else DeprecationWarning
 
     warn(text, warning_class, stacklevel=2)

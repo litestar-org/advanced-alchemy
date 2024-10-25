@@ -13,6 +13,9 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    List,
+    Tuple,
+    Type,
     cast,
     overload,
 )
@@ -39,11 +42,13 @@ if TYPE_CHECKING:
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.service.typing import FilterTypeT
 
+__all__ = ("ResultConverter", "find_filter")
+
 
 def _default_msgspec_deserializer(
     target_type: Any,
     value: Any,
-    type_decoders: Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]] | None = None,
+    type_decoders: Sequence[Tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]] | None = None,
 ) -> Any:  # pragma: no cover
     """Transform values non-natively supported by ``msgspec``
 
@@ -72,7 +77,7 @@ def _default_msgspec_deserializer(
 
 
 def find_filter(
-    filter_type: type[FilterTypeT],
+    filter_type: Type[FilterTypeT],
     filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter],
 ) -> FilterTypeT | None:
     """Get the filter specified by filter type from the filters.
@@ -120,7 +125,7 @@ class ResultConverter:
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
-        schema_type: type[ModelDTOT],
+        schema_type: Type[ModelDTOT],
     ) -> ModelDTOT: ...
 
     @overload
@@ -130,7 +135,7 @@ class ResultConverter:
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
-        schema_type: type[ModelDTOT],
+        schema_type: Type[ModelDTOT],
     ) -> OffsetPagination[ModelDTOT]: ...
 
     def to_schema(
@@ -144,7 +149,7 @@ class ResultConverter:
         total: int | None = None,
         filters: Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None = None,
         *,
-        schema_type: type[ModelDTOT] | None = None,
+        schema_type: Type[ModelDTOT] | None = None,
     ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
         """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
 
@@ -193,7 +198,7 @@ class ResultConverter:
             return OffsetPagination[ModelDTOT](
                 items=convert(
                     obj=data,
-                    type=list[schema_type],  # type: ignore[valid-type]
+                    type=List[schema_type],  # type: ignore[valid-type]
                     from_attributes=True,
                     dec_hook=partial(
                         _default_msgspec_deserializer,
@@ -217,7 +222,7 @@ class ResultConverter:
             total = total if total else len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
             return OffsetPagination[ModelDTOT](
-                items=get_type_adapter(list[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
+                items=get_type_adapter(List[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
                 limit=limit_offset.limit,
                 offset=limit_offset.offset,
                 total=total,

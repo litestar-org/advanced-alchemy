@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List
 
 import pytest
 from sqlalchemy import ColumnElement, String, UniqueConstraint, create_engine, func, select
@@ -15,11 +15,11 @@ from advanced_alchemy.mixins import UniqueMixin
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Any
+    from typing import Any, Dict, List
 
 
 @pytest.fixture(name="rows")
-def generate_mock_data() -> Iterator[list[dict[str, Any]]]:
+def generate_mock_data() -> Iterator[List[Dict[str, Any]]]:
     rows = [{"col_1": i, "col_2": f"value_{i}", "col_3": i} for i in range(1, 3)]
     # Duplicate the last row in the list to violate the unique constraint
     rows.extend([rows[-1]] * 3)  # 3 is arbitrary
@@ -56,7 +56,7 @@ class BigIntModelWithMaybeUniqueValue(UniqueMixin, BigIntBase):
         return (cls.col_1 == col_1) & (cls.col_3 == col_3)
 
 
-def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
+def test_as_unique_sync(rows: List[Dict[str, Any]]) -> None:
     engine = create_engine("sqlite://")
 
     orm_registry.metadata.create_all(engine)
@@ -82,7 +82,7 @@ def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
             session.add_all(BigIntModelWithMaybeUniqueValue.as_unique_sync(session, **row) for row in rows)
 
 
-async def test_as_unique_async(rows: list[dict[str, Any]]) -> None:
+async def test_as_unique_async(rows: List[Dict[str, Any]]) -> None:
     engine = create_async_engine("sqlite+aiosqlite://")
 
     async with engine.begin() as conn:

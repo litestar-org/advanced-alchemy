@@ -47,7 +47,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Set up Python
-        run: uv python install 3.9
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --all-extras --dev
@@ -64,7 +64,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Set up Python
-        run: uv python install 3.9
+        run: uv python install 3.12
 
       - name: Install dependencies
         run: uv sync --all-extras --dev
@@ -94,7 +94,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     uses: ./.github/workflows/test.yml
     with:
       coverage: ${{ matrix.python-version == '3.12' }}

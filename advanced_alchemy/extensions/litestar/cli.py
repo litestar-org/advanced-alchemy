@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Tuple, cast
 
 from anyio import run
 from click import Path as ClickPath
@@ -196,8 +197,8 @@ def create_revision(
 
     def process_revision_directives(
         context: MigrationContext,  # noqa: ARG001
-        revision: tuple[str],  # noqa: ARG001
-        directives: list[MigrationScript],
+        revision: Tuple[str],  # noqa: ARG001
+        directives: List[MigrationScript],
     ) -> None:
         """Handle revision directives."""
 
@@ -359,6 +360,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
             config,
         )
 
+
 @database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
 @option(
     "--table",
@@ -372,17 +374,18 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     "--dir",
     "dump_dir",
     help="Directory to save the JSON files. Defaults to WORKDIR/fixtures",
-    type=ClickPath(path_type=Path), # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
+    type=ClickPath(path_type=Path),  # type: ignore[type-var] # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
     default=Path.cwd() / "fixtures",
     required=False,
 )
-def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> None:
-
+def dump_table_data(app: Litestar, table_names: Tuple[str, ...], dump_dir: Path) -> None:
     from rich.prompt import Confirm
 
     all_tables = "*" in table_names
 
-    if all_tables and not Confirm.ask("[yellow bold]You have specified '*'. Are you sure you want to dump all tables from the database?"):
+    if all_tables and not Confirm.ask(
+        "[yellow bold]You have specified '*'. Are you sure you want to dump all tables from the database?",
+    ):
         # user has decided not to dump all tables
         return console.rule("[red bold]No data was dumped.", style="red", align="left")
 
@@ -404,7 +407,11 @@ def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path)
             if not all_tables:
                 # only consider tables specified by user
                 for table_name in set(table_names) - target_tables:
-                    console.rule(f"[red bold]Skipping table '{table_name}' because it is not available in the default registry", style="red", align="left")
+                    console.rule(
+                        f"[red bold]Skipping table '{table_name}' because it is not available in the default registry",
+                        style="red",
+                        align="left",
+                    )
                 target_tables.intersection_update(table_names)
             else:
                 console.rule("[yellow bold]Dumping all tables", style="yellow", align="left")

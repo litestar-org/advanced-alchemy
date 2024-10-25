@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, ClassVar, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, ClassVar, Dict, Generic, Type, TypeVar, cast
 
 from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config.engine import EngineConfig
@@ -10,7 +10,7 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty, simple_asdict
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Dict, Type
 
     from sqlalchemy import Connection, Engine, MetaData
     from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
@@ -20,11 +20,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.utils.dataclass import EmptyType
 
-__all__ = (
-    "GenericSQLAlchemyConfig",
-    "GenericSessionConfig",
-    "GenericAlembicConfig",
-)
 
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 
@@ -51,25 +46,25 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     bind: EngineT | ConnectionT | None | EmptyType = Empty
     """The :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection <sqlalchemy.engine.Connection>` that new
     :class:`Session <sqlalchemy.orm.Session>` objects will be bound to."""
-    binds: dict[type[Any] | Mapper | TableClause | str, EngineT | ConnectionT] | None | EmptyType = Empty  # pyright: ignore[reportMissingTypeArgument]
+    binds: Dict[Type[Any] | Mapper | TableClause | str, EngineT | ConnectionT] | None | EmptyType = Empty  # pyright: ignore[reportMissingTypeArgument]
     """A dictionary which may specify any number of :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection
     <sqlalchemy.engine.Connection>` objects as the source of connectivity for SQL operations on a per-entity basis. The
     keys of the dictionary consist of any series of mapped classes, arbitrary Python classes that are bases for mapped
     classes, :class:`Table <sqlalchemy.schema.Table>` objects and :class:`Mapper <sqlalchemy.orm.Mapper>` objects. The
     values of the dictionary are then instances of :class:`Engine <sqlalchemy.engine.Engine>` or less commonly
     :class:`Connection <sqlalchemy.engine.Connection>` objects."""
-    class_: type[SessionT] | EmptyType = Empty
+    class_: Type[SessionT] | EmptyType = Empty
     """Class to use in order to create new :class:`Session <sqlalchemy.orm.Session>` objects."""
     expire_on_commit: bool | EmptyType = Empty
     """If ``True``, all instances will be expired after each commit."""
-    info: dict[str, Any] | None | EmptyType = Empty
+    info: Dict[str, Any] | None | EmptyType = Empty
     """Optional dictionary of information that will be available via the
     :attr:`Session.info <sqlalchemy.orm.Session.info>`"""
     join_transaction_mode: JoinTransactionMode | EmptyType = Empty
     """Describes the transactional behavior to take when a given bind is a Connection that has already begun a
     transaction outside the scope of this Session; in other words the
     :attr:`Connection.in_transaction() <sqlalchemy.Connection.in_transaction>` method returns True."""
-    query_cls: type[Query] | None | EmptyType = Empty  # pyright: ignore[reportMissingTypeArgument]
+    query_cls: Type[Query] | None | EmptyType = Empty  # pyright: ignore[reportMissingTypeArgument]
     """Class which should be used to create new Query objects, as returned by the
     :attr:`Session.query() <sqlalchemy.orm.Session.query>` method."""
     twophase: bool | EmptyType = Empty
@@ -93,7 +88,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Configuration options for either the :class:`async_sessionmaker <sqlalchemy.ext.asyncio.async_sessionmaker>`
     or :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`.
     """
-    session_maker_class: type[sessionmaker[Session] | async_sessionmaker[AsyncSession]]
+    session_maker_class: Type[sessionmaker[Session] | async_sessionmaker[AsyncSession]]
     """Sessionmaker class to use."""
     connection_string: str | None = field(default=None)
     """Database connection string in one of the formats supported by SQLAlchemy.
@@ -150,7 +145,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             event.listen(Session, "before_flush", touch_updated_timestamp)
 
     @property
-    def engine_config_dict(self) -> dict[str, Any]:
+    def engine_config_dict(self) -> Dict[str, Any]:
         """Return the engine configuration as a dict.
 
         Returns:
@@ -160,7 +155,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         return simple_asdict(self.engine_config, exclude_empty=True)
 
     @property
-    def session_config_dict(self) -> dict[str, Any]:
+    def session_config_dict(self) -> Dict[str, Any]:
         """Return the session configuration as a dict.
 
         Returns:

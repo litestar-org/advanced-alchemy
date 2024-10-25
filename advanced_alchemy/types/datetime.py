@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
+
+__all__ = ("DateTimeUTC",)
 
 
 class DateTimeUTC(TypeDecorator[datetime.datetime]):
@@ -20,7 +22,7 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
     cache_ok = True
 
     @property
-    def python_type(self) -> type[datetime.datetime]:
+    def python_type(self) -> Type[datetime.datetime]:
         return datetime.datetime
 
     def process_bind_param(self, value: datetime.datetime | None, dialect: Dialect) -> datetime.datetime | None:

@@ -125,10 +125,10 @@ def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client:
     assert client.get("/").status_code == 200
     assert mock.call_count == 2
     assert isinstance(
-        mock.call_args_list[0].args[0],
+        mock.call_args_List[0].args[0],
         AsyncSession if isinstance(alchemy.config, SQLAlchemyAsyncConfig) else Session,
     )
-    assert mock.call_args_list[1].args[0] is mock.call_args_list[0].args[0]
+    assert mock.call_args_List[1].args[0] is mock.call_args_List[0].args[0]
 
 
 def test_session_no_autocommit(
@@ -260,5 +260,5 @@ def test_multiple_instances(app: FastAPI) -> None:
 
         assert alchemy_1.get_engine() is not alchemy_2.get_engine()
         assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
-        assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
-        assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
+        assert mock.call_args_List[0].kwargs["session"] is not mock.call_args_List[1].kwargs["session"]
+        assert mock.call_args_List[0].kwargs["engine"] is not mock.call_args_List[1].kwargs["engine"]

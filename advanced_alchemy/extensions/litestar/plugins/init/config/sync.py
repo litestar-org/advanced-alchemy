@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Literal, cast
+from typing import TYPE_CHECKING, Callable, Dict, Literal, cast
 
 from litestar.cli._utils import console
 from litestar.constants import HTTP_RESPONSE_START
@@ -24,7 +24,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.engine import Engi
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
-    from typing import Any
+    from typing import Any, Dict
 
     from litestar import Litestar
     from litestar.datastructures.state import State
@@ -249,7 +249,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         return session
 
     @property
-    def signature_namespace(self) -> dict[str, Any]:
+    def signature_namespace(self) -> Dict[str, Any]:
         """Return the plugin's signature namespace.
 
         Returns:
@@ -269,7 +269,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             except OperationalError as exc:
                 console.print(f"[bold red] * Could not create target metadata.  Reason: {exc}")
 
-    def create_app_state_items(self) -> dict[str, Any]:
+    def create_app_state_items(self) -> Dict[str, Any]:
         """Key/value pairs to be stored in application state."""
         return {
             self.engine_app_state_key: self.get_engine(),

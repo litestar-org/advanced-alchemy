@@ -4,12 +4,12 @@ import abc
 import base64
 import contextlib
 import os
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Type
 
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-cryptography = None # type: ignore[var-annotated,unused-ignore]
+cryptography = None  # type: ignore[var-annotated,unused-ignore]
 with contextlib.suppress(ImportError):
     from cryptography.fernet import Fernet
     from cryptography.hazmat.backends import default_backend
@@ -17,6 +17,8 @@ with contextlib.suppress(ImportError):
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
+
+__all__ = ("EncryptedString", "EncryptedText", "EncryptionBackend", "FernetBackend", "PGCryptoBackend")
 
 
 class EncryptionBackend(abc.ABC):
@@ -99,7 +101,7 @@ class EncryptedString(TypeDecorator[str]):
     def __init__(
         self,
         key: str | bytes | Callable[[], str | bytes] = os.urandom(32),
-        backend: type[EncryptionBackend] = FernetBackend,
+        backend: Type[EncryptionBackend] = FernetBackend,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -107,7 +109,7 @@ class EncryptedString(TypeDecorator[str]):
         self.backend = backend()
 
     @property
-    def python_type(self) -> type[str]:
+    def python_type(self) -> Type[str]:
         return str
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:

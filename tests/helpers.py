@@ -4,7 +4,7 @@ import inspect
 from collections.abc import Awaitable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from functools import partial
-from typing import TYPE_CHECKING, Callable, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Callable, Type, TypeVar, cast, overload
 
 import anyio
 from typing_extensions import ParamSpec
@@ -25,7 +25,7 @@ class _ContextManagerWrapper:
 
     async def __aexit__(
         self,
-        exc_type: type[BaseException] | None,
+        exc_type: Type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool | None:

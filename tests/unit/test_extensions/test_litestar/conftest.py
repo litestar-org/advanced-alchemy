@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator, Generator
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Dict, List, Tuple, TypeVar, cast
 from unittest.mock import ANY
 
 import pytest
@@ -64,7 +64,7 @@ def int_factory() -> Callable[[], int]:
 
 
 @pytest.fixture
-def expected_field_defs(int_factory: Callable[[], int]) -> list[DTOFieldDefinition]:
+def expected_field_defs(int_factory: Callable[[], int]) -> List[DTOFieldDefinition]:
     return [
         DTOFieldDefinition.from_field_definition(
             field_definition=FieldDefinition.from_kwarg(
@@ -183,22 +183,22 @@ def create_scope() -> Callable[..., Scope]:
         app: Litestar | None = None,
         asgi: ASGIVersion | None = None,
         auth: Any = None,
-        client: tuple[str, int] | None = ("testclient", 50000),
-        extensions: dict[str, dict[object, object]] | None = None,
+        client: Tuple[str, int] | None = ("testclient", 50000),
+        extensions: Dict[str, Dict[object, object]] | None = None,
         http_version: str = "1.1",
         path: str = "/",
-        path_params: dict[str, str] | None = None,
+        path_params: Dict[str, str] | None = None,
         query_string: str = "",
         root_path: str = "",
         route_handler: RouteHandlerType | None = None,
         scheme: str = "http",
-        server: tuple[str, int | None] | None = ("testserver", 80),
+        server: Tuple[str, int | None] | None = ("testserver", 80),
         session: ScopeSession | None = None,  # pyright: ignore[reportUnknownParameterType]
-        state: dict[str, Any] | None = None,
+        state: Dict[str, Any] | None = None,
         user: Any = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Dict[str, Any],
     ) -> Scope:
-        scope: dict[str, Any] = {
+        scope: Dict[str, Any] = {
             "app": app,
             "asgi": asgi or {"spec_version": "2.0", "version": "3.0"},
             "auth": auth,

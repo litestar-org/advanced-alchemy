@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Tuple, cast
 
 from sqlalchemy import Column, Engine, engine_from_config, pool
 
@@ -37,7 +37,7 @@ writer = rewriter.Rewriter()
 @writer.rewrites(ops.CreateTableOp)
 def order_columns(
     context: EnvironmentContext,  # noqa: ARG001
-    revision: tuple[str, ...],  # noqa: ARG001
+    revision: Tuple[str, ...],  # noqa: ARG001
     op: ops.CreateTableOp,
 ) -> ops.CreateTableOp:
     """Orders ID first and the audit columns at the end."""
@@ -49,10 +49,10 @@ def order_columns(
         )
         for index, col in enumerate(op.columns)
     ]
-    columns = [col for _, col in sorted(cols_by_key, key=lambda entry: entry[0])] # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType,reportUnknownLambdaType]
+    columns = [col for _, col in sorted(cols_by_key, key=lambda entry: entry[0])]  # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType,reportUnknownLambdaType]
     return ops.CreateTableOp(
         op.table_name,
-        columns, # pyright: ignore[reportUnknownArgumentType]
+        columns,  # pyright: ignore[reportUnknownArgumentType]
         schema=op.schema,
         # TODO: Remove when https://github.com/sqlalchemy/alembic/issues/1193 is fixed  # noqa: FIX002
         _namespace_metadata=op._namespace_metadata,  # noqa: SLF001 # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
@@ -122,7 +122,7 @@ def run_migrations_online() -> None:
             future=True,
         ),
     )
-    if connectable is None: # pyright: ignore[reportUnnecessaryComparison]
+    if connectable is None:  # pyright: ignore[reportUnnecessaryComparison]
         msg = "Could not get engine from config.  Please ensure your `alembic.ini` according to the official Alembic documentation."
         raise RuntimeError(
             msg,

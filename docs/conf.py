@@ -5,7 +5,7 @@ import os
 import warnings
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict
 
 from sqlalchemy.exc import SAWarning
 
@@ -14,6 +14,9 @@ from advanced_alchemy.__metadata__ import __project__, __version__
 if TYPE_CHECKING:
     from sphinx.addnodes import document
     from sphinx.application import Sphinx
+
+__all__ = ("delayed_setup", "setup", "update_html_context")
+
 
 # -- Environmental Data ------------------------------------------------------
 warnings.filterwarnings("ignore", category=SAWarning)
@@ -26,8 +29,9 @@ release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit("
 suppress_warnings = ["autosectionlabel.*"]
 # -- General configuration ---------------------------------------------------
 extensions = [
-    "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
+    "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.githubpages",
     "sphinx.ext.viewcode",
@@ -59,6 +63,7 @@ PY_RE = r"py:.*"
 PY_METH = "py:meth"
 PY_ATTR = "py:attr"
 PY_OBJ = "py:obj"
+PY_FUNC = "py:func"
 
 nitpicky = True
 nitpick_ignore = [
@@ -93,7 +98,13 @@ nitpick_ignore = [
     (PY_CLASS, "AsyncMockRepoT"),
     (PY_ATTR, "AsyncGenericMockRepository.id_attribute"),
     (PY_ATTR, "advanced_alchemy.repository.AbstractAsyncRepository.id_attribute"),
-    (PY_ATTR, "AbstractAsyncRepository.id_attribute")
+    (PY_ATTR, "AbstractAsyncRepository.id_attribute"),
+    (PY_ATTR, "sqlalchemy.Connection.in_transaction"),
+    (PY_FUNC, "sqlalchemy.get_engine"),
+    (PY_CLASS, "Config"),
+    (PY_CLASS, "DeclarativeBase"),
+    (PY_CLASS, "sqlalchemy.MetaData"),
+    (PY_CLASS, "EngineConfig"),
 ]
 nitpick_ignore_regex = [
     (PY_RE, r"advanced_alchemy.*\.T"),
@@ -120,13 +131,18 @@ autodoc_type_aliases = {
     "MetaData": "sqlalchemy.MetaData",
     "scoped_session": "sqlalchemy.orm.scoped_session",
     "TypeDecorator": "sqlalchemy.TypeDecorator",
-    "BeforeMessageSendHookHandler":"litestar.types.BeforeMessageSendHookHandler",
-    "Message": "litestar.types.Message", "Scope":"litestar.types.Scope",
+    "BeforeMessageSendHookHandler": "litestar.types.BeforeMessageSendHookHandler",
+    "Message": "litestar.types.Message",
+    "Scope": "litestar.types.Scope",
     "litestar.types.Message": "litestar.types.Message",
-    'FilterTypeT': "advanced_alchemy.service.typing.FilterTypeT",
-        'ModelDTOT': "advanced_alchemy.service.typing.ModelDTOT",
-         'ModelOrRowMappingT': "advanced_alchemy.repository.typing.ModelOrRowMappingT",
-         "pydantic.main.BaseModel":"pydantic.BaseModel","ColumnElement":"sqlalchemy.ColumnElement"
+    "FilterTypeT": "advanced_alchemy.service.typing.FilterTypeT",
+    "ModelDTOT": "advanced_alchemy.service.typing.ModelDTOT",
+    "ModelOrRowMappingT": "advanced_alchemy.repository.typing.ModelOrRowMappingT",
+    "pydantic.main.BaseModel": "pydantic.BaseModel",
+    "ColumnElement": "sqlalchemy.ColumnElement",
+    "datastructures.State": "litestar.datastructures.State",
+    "AsyncSessionConfig": "advanced_alchemy.config.asyncio.AsyncAsessionConfig",
+    "SyncSessionConfig": "advanced_alchemy.config.sync.SyncSessionConfig",
 }
 
 autosectionlabel_prefix_document = True
@@ -247,7 +263,7 @@ def update_html_context(
     _app: Sphinx,
     _pagename: str,
     _templatename: str,
-    context: dict[str, Any],
+    context: Dict[str, Any],
     _doctree: document,
 ) -> None:
     context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
@@ -264,7 +280,7 @@ def delayed_setup(app: Sphinx) -> None:
     app.setup_extension("shibuya")
 
 
-def setup(app: Sphinx) -> dict[str, bool]:
+def setup(app: Sphinx) -> Dict[str, bool]:
     app.connect("builder-inited", delayed_setup, priority=0)
     app.setup_extension("litestar_sphinx_theme")
     return {"parallel_read_safe": True, "parallel_write_safe": True}

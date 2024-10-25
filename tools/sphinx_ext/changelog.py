@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal
 
 from docutils import nodes
 from docutils.parsers.rst import directives
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 _GH_BASE_URL = "https://github.com/litestar-org/advanced-alchemy"
 
 
-def _parse_gh_reference(raw: str, type_: Literal["issues", "pull"]) -> list[str]:
+def _parse_gh_reference(raw: str, type_: Literal["issues", "pull"]) -> List[str]:
     return [f"{_GH_BASE_URL}/{type_}/{r.strip()}" for r in raw.split(" ") if r]
 
 
@@ -27,14 +27,14 @@ class ChangeDirective(SphinxDirective):
     required_arguments = 1
     has_content = True
     final_argument_whitespace = True
-    option_spec: ClassVar[dict[str, Any]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
+    option_spec: ClassVar[Dict[str, Any]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         "type": partial(directives.choice, values=("feature", "bugfix", "misc")),
         "breaking": directives.flag,
         "issue": directives.unchanged,
         "pr": directives.unchanged,
     }
 
-    def run(self) -> list[nodes.Node]:
+    def run(self) -> List[nodes.Node]:
         self.assert_has_content()
 
         change_type = self.options.get("type", "misc").lower()
@@ -75,9 +75,9 @@ class ChangeDirective(SphinxDirective):
 class ChangelogDirective(SphinxDirective):
     required_arguments = 1
     has_content = True
-    option_spec: ClassVar[dict[str, Any]] = {"date": directives.unchanged}  # pyright: ignore[reportIncompatibleVariableOverride]
+    option_spec: ClassVar[Dict[str, Any]] = {"date": directives.unchanged}  # pyright: ignore[reportIncompatibleVariableOverride]
 
-    def run(self) -> list[nodes.Node]:
+    def run(self) -> List[nodes.Node]:
         self.assert_has_content()
 
         version = self.arguments[0]
@@ -154,7 +154,7 @@ class ChangelogDirective(SphinxDirective):
         return [section_target, changelog_node]
 
 
-def setup(app: Sphinx) -> dict[str, str]:
+def setup(app: Sphinx) -> Dict[str, str]:
     app.add_directive("changelog", ChangelogDirective)
     app.add_directive("change", ChangeDirective)
 

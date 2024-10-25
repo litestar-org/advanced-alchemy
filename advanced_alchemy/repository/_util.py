@@ -4,8 +4,12 @@ from collections.abc import Iterable, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
+    Dict,
+    List,
     Literal,
     Protocol,
+    Tuple,
+    Type,
     Union,
     cast,
 )
@@ -67,7 +71,7 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
 
 
 def get_instrumented_attr(
-    model: type[ModelProtocol],
+    model: Type[ModelProtocol],
     key: str | InstrumentedAttribute[Any],
 ) -> InstrumentedAttribute[Any]:
     if isinstance(key, str):
@@ -75,7 +79,7 @@ def get_instrumented_attr(
     return key
 
 
-def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
+def model_from_dict(model: Type[ModelT], **kwargs: Any) -> ModelT:
     """Return ORM Object from Dictionary."""
     data = {
         column_name: kwargs[column_name]
@@ -87,10 +91,10 @@ def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
 
 def get_abstract_loader_options(
     loader_options: LoadSpec | None,
-    default_loader_options: list[_AbstractLoad] | None = None,
+    default_loader_options: List[_AbstractLoad] | None = None,
     default_options_have_wildcards: bool = False,
-) -> tuple[list[_AbstractLoad], bool]:
-    loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
+) -> Tuple[List[_AbstractLoad], bool]:
+    loads: List[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
@@ -130,15 +134,15 @@ def get_abstract_loader_options(
 
 
 class FilterableRepositoryProtocol(Protocol[ModelT]):
-    model_type: type[ModelT]
+    model_type: Type[ModelT]
 
 
 class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
-    model_type: type[ModelT]
+    model_type: Type[ModelT]
     _prefer_any: bool = False
-    prefer_any_dialects: tuple[str] | None = ("postgresql",)
+    prefer_any_dialects: Tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    order_by: list[OrderingPair] | OrderingPair | None = None
+    order_by: List[OrderingPair] | OrderingPair | None = None
     """List of ordering pairs to use for sorting."""
 
     def _apply_filters(
@@ -175,7 +179,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     def _filter_select_by_kwargs(
         self,
         statement: StatementLambdaElement,
-        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
+        kwargs: Dict[Any, Any] | Iterable[Tuple[Any, Any]],
     ) -> StatementLambdaElement:
         for key, val in dict(kwargs).items():
             statement = self._filter_by_where(statement=statement, field_name=key, value=val)
@@ -202,7 +206,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     def _apply_order_by(
         self,
         statement: StatementLambdaElement,
-        order_by: list[tuple[str | InstrumentedAttribute[Any], bool]] | tuple[str | InstrumentedAttribute[Any], bool],
+        order_by: List[Tuple[str | InstrumentedAttribute[Any], bool]] | Tuple[str | InstrumentedAttribute[Any], bool],
     ) -> StatementLambdaElement:
         if not isinstance(order_by, list):
             order_by = [order_by]

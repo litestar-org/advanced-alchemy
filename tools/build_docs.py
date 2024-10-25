@@ -9,7 +9,7 @@ import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, List, TypedDict, cast
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -35,7 +35,7 @@ parser.add_argument("output")
 
 
 class VersionSpec(TypedDict):
-    versions: list[str]
+    versions: List[str]
     latest: str
 
 
@@ -55,9 +55,9 @@ def load_version_spec() -> VersionSpec:
 
 def build(output_dir: str, version: str | None) -> None:
     if version is None:
-        version = importlib.metadata.version("litestar_htmx").rsplit(".")[0]
+        version = importlib.metadata.version("advanced_alchemy").rsplit(".")[0]
     else:
-        os.environ["_LITESTAR_HTMX_DOCS_BUILD_VERSION"] = version
+        os.environ["_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION"] = version
 
     subprocess.run(["make", "docs"], check=True)  # noqa: S603, S607
 

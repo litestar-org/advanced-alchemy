@@ -69,5 +69,6 @@ __all__ = (
     "DEFAULT_ERROR_MESSAGE_TEMPLATES",
     "Empty",
     "EmptyType",
-    "ErrorMessages","FilterTypeT",
+    "ErrorMessages",
+    "FilterTypeT",
 )

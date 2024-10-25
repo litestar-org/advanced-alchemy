@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, Dict, List, TextIO
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from alembic import command as migration_command
@@ -21,6 +21,20 @@ if TYPE_CHECKING:
     from alembic.runtime.environment import ProcessRevisionDirectiveFn
     from alembic.script.base import Script
 
+__all__ = ("AlembicCommandConfig", "AlembicCommands", "AlembicDuckDBImpl", "AlembicSpannerImpl")
+
+
+class AlembicSpannerImpl(DefaultImpl):
+    """Alembic implementation for Spanner."""
+
+    __dialect__ = "spanner+spanner"
+
+
+class AlembicDuckDBImpl(DefaultImpl):
+    """Alembic implementation for DuckDB."""
+
+    __dialect__ = "duckdb"
+
 
 class AlembicCommandConfig(_AlembicCommandConfig):
     def __init__(
@@ -33,7 +47,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         stdout: TextIO = sys.stdout,
         cmd_opts: Namespace | None = None,
         config_args: Mapping[str, Any] | None = None,
-        attributes: dict[str, Any] | None = None,
+        attributes: Dict[str, Any] | None = None,
         template_directory: Path | None = None,
         version_table_schema: str | None = None,
         render_as_batch: bool = True,
@@ -63,18 +77,6 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         if self.template_directory is not None:
             return str(self.template_directory)
         return super().get_template_directory()
-
-
-class AlembicSpannerImpl(DefaultImpl):
-    """Alembic implementation for Spanner."""
-
-    __dialect__ = "spanner+spanner"
-
-
-class AlembicDuckDBImpl(DefaultImpl):
-    """Alembic implementation for DuckDB."""
-
-    __dialect__ = "duckdb"
 
 
 class AlembicCommands:
@@ -171,7 +173,7 @@ class AlembicCommands:
         rev_id: str | None = None,
         depends_on: str | None = None,
         process_revision_directives: ProcessRevisionDirectiveFn | None = None,
-    ) -> Script | list[Script | None] | None:
+    ) -> Script | List[Script | None] | None:
         """Create a new revision file."""
 
         return migration_command.revision(
@@ -233,7 +235,7 @@ class AlembicCommands:
         return migration_command.stamp(config=self.config, revision=revision, sql=sql, tag=tag, purge=purge)
 
     def _get_alembic_command_config(self) -> AlembicCommandConfig:
-        kwargs: dict[str, Any] = {}
+        kwargs: Dict[str, Any] = {}
         if self.sqlalchemy_config.alembic_config.script_config:
             kwargs["file_"] = self.sqlalchemy_config.alembic_config.script_config
         if self.sqlalchemy_config.alembic_config.template_path:

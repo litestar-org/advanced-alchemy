@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Callable, Dict, List, Optional, Tuple
 from uuid import UUID
 
 import pytest
@@ -55,7 +55,7 @@ class TaggableMixin:
         )
 
     @declared_attr
-    def assigned_tags(cls) -> Mapped[list[Tag]]:
+    def assigned_tags(cls) -> Mapped[List[Tag]]:
         return relationship(
             "Tag",
             secondary=lambda: cls.tag_association_table,
@@ -65,7 +65,7 @@ class TaggableMixin:
         )
 
     @declared_attr
-    def tags(cls) -> AssociationProxy[list[str]]:
+    def tags(cls) -> AssociationProxy[List[str]]:
         return association_proxy(
             "assigned_tags",
             "name",
@@ -88,11 +88,11 @@ class Book(Base):
     title: Mapped[str] = mapped_column(String(length=250), default="Hi")  # pyright: ignore
     author_id: Mapped[str] = mapped_column(ForeignKey("author.id"), default="123")  # pyright: ignore
     first_author: Mapped[Author] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
-    reviews: Mapped[list[BookReview]] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
+    reviews: Mapped[List[BookReview]] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
     bar: Mapped[str] = mapped_column(default="Hello")  # pyright: ignore
     SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
-    number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
+    number_of_reviews: Mapped[Optional[int]] = column_property(
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
@@ -126,9 +126,9 @@ class BookAuthorTestData:
 
 
 @pytest.fixture
-def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], tuple[dict[str, Any], Book]]:
-    def _generate(rename_strategy: RenameStrategy, test_data: BookAuthorTestData) -> tuple[dict[str, Any], Book]:
-        data: dict[str, Any] = {
+def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dict[str, Any], Book]]:
+    def _generate(rename_strategy: RenameStrategy, test_data: BookAuthorTestData) -> Tuple[Dict[str, Any], Book]:
+        data: Dict[str, Any] = {
             _rename_field(name="id", strategy=rename_strategy): test_data.book_id,
             _rename_field(name="title", strategy=rename_strategy): test_data.book_title,
             _rename_field(name="author_id", strategy=rename_strategy): test_data.book_author_id,
@@ -176,7 +176,7 @@ def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], tuple[dic
 )
 def test_fields_alias_generator_sqlalchemy(
     rename_strategy: RenameStrategy,
-    book_json_data: Callable[[RenameStrategy, BookAuthorTestData], tuple[dict[str, Any], Book]],
+    book_json_data: Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dict[str, Any], Book]],
 ) -> None:
     test_data = BookAuthorTestData()
     json_data, instance = book_json_data(rename_strategy, test_data)
@@ -211,7 +211,7 @@ model_with_func_query = select(ConcreteBase, func_result_query.label("func_resul
 
 class ModelWithFunc(Base):
     __table__ = model_with_func_query
-    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)  # noqa: UP007
+    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)
 
 
 def test_model_using_func() -> None:
@@ -235,7 +235,7 @@ def test_dto_with_association_proxy(create_module: Callable[[str], ModuleType]) 
         """
 from __future__ import annotations
 
-from typing import Final, List
+from typing import Dict, List, Set, Tuple, Type, Final, List
 
 from sqlalchemy import Column
 from sqlalchemy import ForeignKey
@@ -259,9 +259,9 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "user"
     id: Mapped[int] = mapped_column(primary_key=True)
-    kw: Mapped[list[Keyword]] = relationship(secondary=lambda: user_keyword_table, info=dto_field("private"))
+    kw: Mapped[List[Keyword]] = relationship(secondary=lambda: user_keyword_table, info=dto_field("private"))
     # proxy the 'keyword' attribute from the 'kw' relationship
-    keywords: AssociationProxy[list[str]] = association_proxy("kw", "keyword")
+    keywords: AssociationProxy[List[str]] = association_proxy("kw", "keyword")
 
 class Keyword(Base):
     __tablename__ = "keyword"
@@ -723,7 +723,7 @@ def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None
         """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generator
+from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING, Generator
 
 from litestar import post
 from litestar.di import Provide
@@ -773,7 +773,7 @@ async def test_dto_to_async_service(create_module: Callable[[str], ModuleType]) 
         """
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from typing import Dict, List, Set, Tuple, Type, AsyncGenerator
 
 from litestar import post
 from litestar.di import Provide
@@ -824,7 +824,7 @@ def test_dto_with_declared_attr(create_module: Callable[[str], ModuleType]) -> N
         """
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, List, Set, Tuple, Type, Union
 
 from litestar import post
 from litestar.di import Provide

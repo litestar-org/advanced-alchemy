@@ -9,19 +9,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
-    Annotated,
     Any,
     ClassVar,
+    Dict,
     Final,
     Generic,
+    List,
     Protocol,
+    Tuple,
+    Type,
     TypeVar,
     Union,
     cast,
     runtime_checkable,
 )
 
-from typing_extensions import TypeAlias, TypeGuard
+from typing_extensions import Annotated, TypeAlias, TypeGuard
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
@@ -38,9 +41,9 @@ except ImportError:  # pragma: nocover
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
-        model_fields: ClassVar[dict[str, Any]]
+        model_fields: ClassVar[Dict[str, Any]]
 
-        def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        def model_dump(*args: Any, **kwargs: Any) -> Dict[str, Any]:
             """Placeholder"""
             return {}
 
@@ -76,7 +79,7 @@ except ImportError:
 
 
 @lru_cache(typed=True)
-def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
+def get_type_adapter(f: Type[T]) -> TypeAdapter[T]:
     """Caches and returns a pydantic type adapter"""
     if PYDANTIC_USE_FAILFAST:
         return TypeAdapter(
@@ -96,7 +99,7 @@ except ImportError:  # pragma: nocover
     class Struct(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
-        __struct_fields__: ClassVar[tuple[str, ...]]
+        __struct_fields__: ClassVar[Tuple[str, ...]]
 
     def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
         """Placeholder implementation"""
@@ -125,7 +128,7 @@ except ImportError:
             """Placeholder implementation"""
             return cast("T", kwargs)
 
-        def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
+        def as_builtins(*args: Any, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[no-redef]
             """Placeholder implementation"""
             return {}
 
@@ -134,9 +137,9 @@ except ImportError:
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 PydanticOrMsgspecT = Union[Struct, BaseModel]
-ModelDictT: TypeAlias = Union[dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
-ModelDictListT: TypeAlias = Sequence[Union[dict[str, Any], ModelT, Struct, BaseModel]]
-BulkModelDictT: TypeAlias = Union[Sequence[Union[dict[str, Any], ModelT, Struct, BaseModel]], DTOData[list[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
+ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
+ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
+BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
 
 
 def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
@@ -151,15 +154,15 @@ def is_msgspec_model(v: Any) -> TypeGuard[Struct]:
     return MSGSPEC_INSTALLED and isinstance(v, Struct)
 
 
-def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
+def is_dict(v: Any) -> TypeGuard[Dict[str, Any]]:
     return isinstance(v, dict)
 
 
-def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
+def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[Dict[str, Any]]:
     return is_dict(v) and field_name in v
 
 
-def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
+def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[Dict[str, Any]]:
     return is_dict(v) and field_name not in v
 
 
@@ -180,9 +183,9 @@ def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]
 
 
 def schema_dump(
-    data: dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
+    data: Dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
     exclude_unset: bool = True,
-) -> dict[str, Any] | ModelT:
+) -> Dict[str, Any] | ModelT:
     if is_dict(data):
         return data
     if is_pydantic_model(data):
@@ -194,6 +197,7 @@ def schema_dump(
     if is_dto_data(data):
         return cast("ModelT", data.as_builtins())  # pyright: ignore[reportUnknownVariableType]
     return cast("ModelT", data)
+
 
 __all__ = (
     "ModelDictT",

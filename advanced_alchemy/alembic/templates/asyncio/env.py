@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Tuple, cast
 
 from sqlalchemy import Column, pool
 from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
@@ -39,22 +39,22 @@ writer = rewriter.Rewriter()
 @writer.rewrites(ops.CreateTableOp)
 def order_columns(
     context: EnvironmentContext,  # noqa: ARG001
-    revision: tuple[str, ...],  # noqa: ARG001
+    revision: Tuple[str, ...],  # noqa: ARG001
     op: ops.CreateTableOp,
 ) -> ops.CreateTableOp:
     """Orders ID first and the audit columns at the end."""
     special_names = {"id": -100, "sa_orm_sentinel": 3001, "created_at": 3002, "updated_at": 3003}
-    cols_by_key = [ # pyright: ignore[reportUnknownVariableType]
+    cols_by_key = [  # pyright: ignore[reportUnknownVariableType]
         (
             special_names.get(col.key, index) if isinstance(col, Column) else 2000,
             col.copy(),  # type: ignore[attr-defined]
         )
         for index, col in enumerate(op.columns)
     ]
-    columns = [col for _, col in sorted(cols_by_key, key=lambda entry: entry[0])] # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType,reportUnknownLambdaType]
+    columns = [col for _, col in sorted(cols_by_key, key=lambda entry: entry[0])]  # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType,reportUnknownLambdaType]
     return ops.CreateTableOp(
         op.table_name,
-        columns, # pyright: ignore[reportUnknownArgumentType]
+        columns,  # pyright: ignore[reportUnknownArgumentType]
         schema=op.schema,
         # TODO: Remove when https://github.com/sqlalchemy/alembic/issues/1193 is fixed  # noqa: FIX002
         _namespace_metadata=op._namespace_metadata,  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]

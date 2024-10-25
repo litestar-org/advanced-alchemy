@@ -59,8 +59,8 @@ Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
-uuid = ["uuid-utils>=0.6.1"]
 nanoid = ["fastnanoid>=0.4.1"]
+uuid = ["uuid-utils>=0.6.1"]
 
 [build-system]
 build-backend = "hatchling.build"
@@ -121,6 +121,7 @@ dev-dependencies = [
   "sphinx-design>=0.5.0",
   "sphinx-paramlinks>=0.6.0",
   "sphinx-togglebutton>=0.3.2",
+  "sphinx-autodoc-typehints",
   #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
   "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
   "auto-pytabs[sphinx]>=0.4.0",
@@ -128,15 +129,24 @@ dev-dependencies = [
   "myst-parser",
   # - Linting
   "pre-commit>=3.4.0",
-  "mypy>=1.5.1",
   "ruff>=0.0.287",
+  "pyright>=1.1.350",
+  "mypy>=1.5.1",
   "asyncpg-stubs",
   "types-pytest-lazy-fixture",
   "types-click",
   "types-docutils",
   "types-pyyaml",
-  "pyright>=1.1.350",
-  "slotscheck"
+  "types-Pillow",
+  "types-PyMySQL",
+  "types-Pygments",
+  "types-aiofiles",
+  "types-colorama",
+  "types-psycopg2",
+  "types-python-dateutil",
+  "types-pytz",
+  "types-ujson",
+  "slotscheck",
 ]
 
 [tool.pytest.ini_options]
@@ -239,11 +249,17 @@ ignore = [
   "PERF203", # ignore for now; investigate
   "PD011",   # pandas
   "PLR0912",
+  "ISC001",
+  "COM812",
 ]
 select = ["ALL"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.pyupgrade]
+# Preserve types, even if a file imports `from __future__ import annotations`.
+keep-runtime-typing = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 14
@@ -290,7 +306,6 @@ ban-relative-imports = "all"
 known-first-party = ["advanced_alchemy", "tests"]
 
 [tool.slotscheck]
-strict-imports = true
 exclude-modules = '''
 (
   ^tests.*
@@ -298,6 +313,7 @@ exclude-modules = '''
 )
 '''
 require-superclass = false
+strict-imports = true
 
 [tool.mypy]
 packages = ["advanced_alchemy", "tests", "docs", "examples"]

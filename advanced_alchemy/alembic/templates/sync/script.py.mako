@@ -9,7 +9,7 @@ Create Date: ${create_date}
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING
 
 import sqlalchemy as sa
 from alembic import op

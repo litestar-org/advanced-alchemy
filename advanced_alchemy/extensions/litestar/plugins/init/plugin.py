@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Dict, cast
 
 from litestar.di import Provide
 from litestar.dto import DTOData
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 __all__ = ("SQLAlchemyInitPlugin",)
 
-signature_namespace_values: dict[str, Any] = {
+signature_namespace_values: Dict[str, Any] = {
     "BeforeAfter": BeforeAfter,
     "OnBeforeAfter": OnBeforeAfter,
     "CollectionFilter": CollectionFilter,

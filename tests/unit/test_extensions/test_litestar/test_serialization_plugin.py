@@ -27,7 +27,7 @@ async def test_serialization_plugin(
         """
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List, Set, Tuple, Type, List
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -46,7 +46,7 @@ def post_handler(data: A) -> A:
     return data
 
 @get("/a")
-def get_handler() -> list[A]:
+def get_handler() -> List[A]:
     return [A(id=1, a="test"), A(id=2, a="test2")]
 
 @get("/a/1")

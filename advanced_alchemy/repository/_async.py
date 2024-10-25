@@ -5,10 +5,14 @@ import string
 from typing import (
     TYPE_CHECKING,
     Any,
+    Dict,
     Final,
+    List,
     Literal,
     Optional,
     Protocol,
+    Tuple,
+    Type,
     cast,
     runtime_checkable,
 )
@@ -54,6 +58,7 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.filters import StatementFilter
 
+
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
@@ -63,26 +68,26 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     """Base Protocol"""
 
     id_attribute: Any
-    match_fields: list[str] | str | None = None
-    statement: Select[tuple[ModelT]] | StatementLambdaElement
+    match_fields: List[str] | str | None = None
+    statement: Select[Tuple[ModelT]] | StatementLambdaElement
     session: AsyncSession | async_scoped_session[AsyncSession]
     auto_expunge: bool
     auto_refresh: bool
     auto_commit: bool
-    order_by: list[OrderingPair] | OrderingPair | None = None
+    order_by: List[OrderingPair] | OrderingPair | None = None
     error_messages: ErrorMessages | None = None
 
     def __init__(
         self,
         *,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         session: AsyncSession | async_scoped_session[AsyncSession],
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        execution_options: Dict[str, Any] | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         **kwargs: Any,
     ) -> None: ...
@@ -90,7 +95,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     @classmethod
     def get_id_attribute_value(
         cls,
-        item: ModelT | type[ModelT],
+        item: ModelT | Type[ModelT],
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any: ...
 
@@ -117,7 +122,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
 
     async def add_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
@@ -133,12 +138,12 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT: ...
 
     async def delete_many(
         self,
-        item_ids: list[Any],
+        item_ids: List[Any],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
@@ -146,7 +151,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         chunk_size: int | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> Sequence[ModelT]: ...
 
     async def delete_where(
@@ -156,7 +161,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         sanity_check: bool = True,
         **kwargs: Any,
     ) -> Sequence[ModelT]: ...
@@ -166,7 +171,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *filters: StatementFilter | ColumnElement[bool],
         load: LoadSpec | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> bool: ...
 
@@ -175,21 +180,21 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         item_id: Any,
         *,
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT: ...
 
     async def get_one(
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT: ...
 
@@ -197,17 +202,17 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None: ...
 
     async def get_or_upsert(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -216,14 +221,14 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_refresh: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[ModelT, bool]: ...
+    ) -> Tuple[ModelT, bool]: ...
 
     async def get_and_update(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -231,17 +236,17 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_refresh: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[ModelT, bool]: ...
+    ) -> Tuple[ModelT, bool]: ...
 
     async def count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         load: LoadSpec | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int: ...
 
@@ -257,26 +262,26 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT: ...
 
     async def update_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]: ...
+        execution_options: Dict[str, Any] | None = None,
+    ) -> List[ModelT]: ...
 
     def _get_update_many_statement(
         self,
-        model_type: type[ModelT],
+        model_type: Type[ModelT],
         supports_returning: bool,
-        loader_options: list[_AbstractLoad] | None,
-        execution_options: dict[str, Any] | None,
+        loader_options: List[_AbstractLoad] | None,
+        execution_options: Dict[str, Any] | None,
     ) -> StatementLambdaElement: ...
 
     async def upsert(
@@ -288,49 +293,49 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT: ...
 
     async def upsert_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]: ...
+        execution_options: Dict[str, Any] | None = None,
+    ) -> List[ModelT]: ...
 
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         force_basic_query_mode: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        execution_options: Dict[str, Any] | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]: ...
+    ) -> Tuple[List[ModelT], int]: ...
 
     async def list(
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        execution_options: Dict[str, Any] | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         **kwargs: Any,
-    ) -> list[ModelT]: ...
+    ) -> List[ModelT]: ...
 
     @classmethod
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool: ...
@@ -344,7 +349,7 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
         *,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None: ...
 
@@ -359,7 +364,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     """SQLAlchemy based implementation of the repository interface."""
 
     id_attribute: Any = "id"
-    match_fields: list[str] | str | None = None
+    match_fields: List[str] | str | None = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     _uniquify_results: bool = False
     """Optionally apply the ``unique()`` method to results before returning.
@@ -370,15 +375,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     def __init__(
         self,
         *,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         session: AsyncSession | async_scoped_session[AsyncSession],
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -433,7 +438,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     @classmethod
     def get_id_attribute_value(
         cls,
-        item: ModelT | type[ModelT],
+        item: ModelT | Type[ModelT],
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any:
         """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
@@ -491,7 +496,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     def _get_loader_options(
         self,
         loader_options: LoadSpec | None,
-    ) -> tuple[list[_AbstractLoad], bool] | tuple[None, bool]:
+    ) -> Tuple[List[_AbstractLoad], bool] | Tuple[None, bool]:
         if loader_options is None:
             # no need to return them here; We are using the default_options, which have
             # already been added to the base stmt
@@ -539,7 +544,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def add_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
@@ -578,7 +583,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
 
@@ -619,7 +624,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def delete_many(
         self,
-        item_ids: list[Any],
+        item_ids: List[Any],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
@@ -627,7 +632,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         chunk_size: int | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> Sequence[ModelT]:
         """Delete instance identified by `item_id`.
 
@@ -660,7 +665,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 self.model_type,
                 id_attribute if id_attribute is not None else self.id_attribute,
             )
-            instances: list[ModelT] = []
+            instances: List[ModelT] = []
             if self._prefer_any:
                 chunk_size = len(item_ids) + 1
             chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
@@ -721,7 +726,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: ErrorMessages | None | EmptyType = Empty,
         sanity_check: bool = True,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Delete instances specified by referenced kwargs and filters.
@@ -756,7 +761,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement = statement.execution_options(**execution_options)
             statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
             statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
-            instances: list[ModelT] = []
+            instances: List[ModelT] = []
             if self._dialect.delete_executemany_returning:
                 statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
                 instances.extend(await self.session.scalars(statement))
@@ -788,7 +793,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: StatementFilter | ColumnElement[bool],
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
@@ -820,7 +825,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     def _to_lambda_stmt(
         self,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement,
         global_track_bound_values: bool = True,
         track_closure_variables: bool = True,
         enable_tracking: bool = True,
@@ -839,13 +844,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     def _get_base_stmt(
         self,
         *,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement,
         global_track_bound_values: bool = True,
         track_closure_variables: bool = True,
         enable_tracking: bool = True,
         track_bound_values: bool = True,
-        loader_options: list[_AbstractLoad] | None,
-        execution_options: dict[str, Any] | None,
+        loader_options: List[_AbstractLoad] | None,
+        execution_options: Dict[str, Any] | None,
     ) -> StatementLambdaElement:
         if loader_options:
             statement = statement.options(*loader_options)
@@ -862,13 +867,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     def _get_delete_many_statement(
         self,
         *,
-        model_type: type[ModelT],
+        model_type: Type[ModelT],
         id_attribute: InstrumentedAttribute[Any],
-        id_chunk: list[Any],
+        id_chunk: List[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
-        loader_options: list[_AbstractLoad] | None,
-        execution_options: dict[str, Any] | None,
+        loader_options: List[_AbstractLoad] | None,
+        execution_options: Dict[str, Any] | None,
     ) -> StatementLambdaElement:
         if statement_type == "delete":
             statement = lambda_stmt(lambda: delete(model_type))
@@ -892,11 +897,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         item_id: Any,
         *,
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -942,10 +947,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -991,10 +996,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -1029,7 +1034,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
-                "Result[tuple[ModelT]]",
+                "Result[Tuple[ModelT]]",
                 (await self._execute(statement, uniquify=loader_options_have_wildcard)),
             ).scalar_one_or_none()
             if instance:
@@ -1039,7 +1044,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     async def get_or_upsert(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         upsert: bool = True,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
@@ -1048,9 +1053,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_refresh: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[ModelT, bool]:
+    ) -> Tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
 
         Args:
@@ -1129,7 +1134,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     async def get_and_update(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         attribute_names: Iterable[str] | None = None,
         with_for_update: bool | None = None,
         auto_commit: bool | None = None,
@@ -1137,9 +1142,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_refresh: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[ModelT, bool]:
+    ) -> Tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
 
         Args:
@@ -1206,10 +1211,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     async def count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> int:
         """Get the count of records returned by a query.
@@ -1259,7 +1264,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -1315,14 +1320,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def update_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_commit: bool | None = None,
         auto_expunge: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]:
+        execution_options: Dict[str, Any] | None = None,
+    ) -> List[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
         This function has an optimized bulk update based on the configured SQL dialect:
@@ -1351,7 +1356,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
+        data_to_update: List[Dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
@@ -1382,10 +1387,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     def _get_update_many_statement(
         self,
-        model_type: type[ModelT],
+        model_type: Type[ModelT],
         supports_returning: bool,
-        loader_options: list[_AbstractLoad] | None,
-        execution_options: dict[str, Any] | None,
+        loader_options: List[_AbstractLoad] | None,
+        execution_options: Dict[str, Any] | None,
     ) -> StatementLambdaElement:
         statement = lambda_stmt(lambda: update(model_type))
         if supports_returning:
@@ -1409,15 +1414,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> Tuple[List[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -1499,13 +1504,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> Tuple[List[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -1514,7 +1519,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
             statement: To facilitate customization of the underlying select query.
                 Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            order_by: list[OrderingPair] | OrderingPair | None = None,
+            order_by: List[OrderingPair] | OrderingPair | None = None,
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1547,7 +1552,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = self._filter_select_by_kwargs(statement, kwargs)
             result = await self._execute(statement, uniquify=loader_options_have_wildcard)
             count: int = 0
-            instances: list[ModelT] = []
+            instances: List[ModelT] = []
             for i, (instance, count_value) in enumerate(result):
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -1559,13 +1564,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> Tuple[List[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -1610,7 +1615,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             count = count_result.scalar_one()
             result = await self._execute(statement, uniquify=loader_options_have_wildcard)
-            instances: list[ModelT] = []
+            instances: List[ModelT] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -1619,8 +1624,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     def _get_count_stmt(
         self,
         statement: StatementLambdaElement,
-        loader_options: list[_AbstractLoad] | None,
-        execution_options: dict[str, Any] | None,
+        loader_options: List[_AbstractLoad] | None,
+        execution_options: Dict[str, Any] | None,
     ) -> StatementLambdaElement:
         if loader_options:
             statement = statement.options(*loader_options)
@@ -1641,10 +1646,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         auto_refresh: bool | None = None,
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
     ) -> ModelT:
         """Update or create instance.
 
@@ -1718,16 +1723,16 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def upsert_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_expunge: bool | None = None,
         auto_commit: bool | None = None,
         no_merge: bool = False,
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
-    ) -> list[ModelT]:
+        execution_options: Dict[str, Any] | None = None,
+    ) -> List[ModelT]:
         """Update or create instance.
 
         Update instances with the attribute values present on `data`, or create a new instance if
@@ -1763,13 +1768,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        instances: list[ModelT] = []
-        data_to_update: list[ModelT] = []
-        data_to_insert: list[ModelT] = []
+        instances: List[ModelT] = []
+        data_to_update: List[ModelT] = []
+        data_to_insert: List[ModelT] = []
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
-        match_filter: list[StatementFilter | ColumnElement[bool]] = []
+        match_filter: List[StatementFilter | ColumnElement[bool]] = []
         if match_fields:
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
@@ -1817,14 +1822,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
-    def _get_object_ids(self, existing_objs: list[ModelT]) -> list[Any]:
+    def _get_object_ids(self, existing_objs: List[ModelT]) -> List[Any]:
         return [obj_id for datum in existing_objs if (obj_id := getattr(datum, self.id_attribute)) is not None]
 
     def _get_match_fields(
         self,
-        match_fields: list[str] | str | None = None,
+        match_fields: List[str] | str | None = None,
         id_attribute: str | None = None,
-    ) -> list[str] | None:
+    ) -> List[str] | None:
         id_attribute = id_attribute or self.id_attribute
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
@@ -1833,10 +1838,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     def _merge_on_match_fields(
         self,
-        data: list[ModelT],
-        existing_data: list[ModelT],
-        match_fields: list[str] | str | None = None,
-    ) -> list[ModelT]:
+        data: List[ModelT],
+        existing_data: List[ModelT],
+        match_fields: List[str] | str | None = None,
+    ) -> List[ModelT]:
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
@@ -1853,13 +1858,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self,
         *filters: StatementFilter | ColumnElement[bool],
         auto_expunge: bool | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
-        order_by: list[OrderingPair] | OrderingPair | None = None,
+        statement: Select[Tuple[ModelT]] | StatementLambdaElement | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -1899,11 +1904,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("list[ModelT]", instances)
+            return cast("List[ModelT]", instances)
 
     def filter_collection_by_kwargs(
         self,
-        collection: Select[tuple[ModelT]] | StatementLambdaElement,
+        collection: Select[Tuple[ModelT]] | StatementLambdaElement,
         /,
         **kwargs: Any,
     ) -> StatementLambdaElement:
@@ -1996,7 +2001,7 @@ class SQLAlchemyAsyncSlugRepository(
         slug: str,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ModelT | None:
         """Select record by slug value."""
@@ -2035,7 +2040,7 @@ class SQLAlchemyAsyncSlugRepository(
         self,
         slug: str,
         load: LoadSpec | None = None,
-        execution_options: dict[str, Any] | None = None,
+        execution_options: Dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> bool:
         return await self.exists(slug=slug, load=load, execution_options=execution_options, **kwargs) is False
@@ -2071,7 +2076,7 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def get_one(
         self,
-        statement: Select[tuple[Any]],
+        statement: Select[Tuple[Any]],
         **kwargs: Any,
     ) -> RowMapping:
         """Get instance identified by ``kwargs``.
@@ -2100,7 +2105,7 @@ class SQLAlchemyAsyncQueryRepository:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
-            statement: To facilitate customization of the underlying select query.\
+            statement: To facilitate customization of the underlying select query.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2134,7 +2139,7 @@ class SQLAlchemyAsyncQueryRepository:
         statement: Select[Any],
         force_basic_query_mode: bool | None = None,
         **kwargs: Any,
-    ) -> tuple[list[RowMapping], int]:
+    ) -> Tuple[List[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -2154,7 +2159,7 @@ class SQLAlchemyAsyncQueryRepository:
         self,
         statement: Select[Any],
         **kwargs: Any,
-    ) -> tuple[list[RowMapping], int]:
+    ) -> Tuple[List[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -2172,7 +2177,7 @@ class SQLAlchemyAsyncQueryRepository:
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
             count: int = 0
-            instances: list[RowMapping] = []
+            instances: List[RowMapping] = []
             for i, (instance, count_value) in enumerate(result):
                 instances.append(instance)
                 if i == 0:
@@ -2186,7 +2191,7 @@ class SQLAlchemyAsyncQueryRepository:
         self,
         statement: Select[Any],
         **kwargs: Any,
-    ) -> tuple[list[RowMapping], int]:
+    ) -> Tuple[List[RowMapping], int]:
         """List records with total count.
 
         Args:
@@ -2203,12 +2208,12 @@ class SQLAlchemyAsyncQueryRepository:
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
             result = await self.execute(statement)
-            instances: list[RowMapping] = []
+            instances: List[RowMapping] = []
             for (instance,) in result:
                 instances.append(instance)
             return instances, count
 
-    async def list(self, statement: Select[Any], **kwargs: Any) -> list[RowMapping]:
+    async def list(self, statement: Select[Any], **kwargs: Any) -> List[RowMapping]:
         """Get a list of instances, optionally filtered.
 
         Args:

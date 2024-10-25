@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generic, Protocol, cast, overload
 
 from sanic import HTTPResponse, Request, Sanic  # noqa: TCH002
 from sqlalchemy import Engine
@@ -17,7 +17,7 @@ try:
 
     SANIC_INSTALLED = True
 except ModuleNotFoundError:
-    SANIC_INSTALLED = False # pyright: ignore[reportConstantRedefinition]
+    SANIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
     Extension = type("Extension", (), {})  # type: ignore  # noqa: PGH003
     Extend = type("Extend", (), {})  # type: ignore  # noqa: PGH003
     Default = type("Default", (), {})  # type: ignore  # noqa: PGH003
@@ -30,12 +30,14 @@ if TYPE_CHECKING:
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.config.types import CommitStrategy
 
+__all__ = ("CommitStrategyExecutor", "SanicAdvancedAlchemy")
+
 
 class CommitStrategyExecutor(Protocol):
     async def __call__(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None: ...
 
 
-class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT]): # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
+class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT]):  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
     name = "AdvancedAlchemy"
 
     @overload
@@ -85,7 +87,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         self.session_maker_key = session_maker_key
         self.session_key = session_key
         self.autocommit_strategy = autocommit
-        self._commit_strategies: dict[CommitStrategy, CommitStrategyExecutor] = { # pyright: ignore[reportAttributeAccessIssue]
+        self._commit_strategies: Dict[CommitStrategy, CommitStrategyExecutor] = {  # pyright: ignore[reportAttributeAccessIssue]
             "always": self._commit_strategy_always,
             "match_status": self._commit_strategy_match_status,
         }
@@ -100,7 +102,7 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         session_maker = cast("SessionMakerT", self.session_maker)
         self.session_class = session_maker.class_
 
-        self.app: Sanic # pyright: ignore[reportMissingTypeArgument]
+        self.app: Sanic  # pyright: ignore[reportMissingTypeArgument]
 
     async def _do_commit(self, session: Session | AsyncSession) -> None:
         if not isinstance(session, AsyncSession):
@@ -135,17 +137,17 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
     async def session_handler(self, session: Session | AsyncSession, request: Request, response: HTTPResponse) -> None:
         try:
             if self.autocommit_strategy:
-                await self._commit_strategies[self.autocommit_strategy](session=session, response=response) # pyright: ignore[reportArgumentType]
+                await self._commit_strategies[self.autocommit_strategy](session=session, response=response)  # pyright: ignore[reportArgumentType]
         finally:
             await self._do_close(session)
             delattr(request.ctx, self.session_key)
 
     def get_engine(self) -> EngineT:
-        engine = getattr(self.app.ctx, self.engine_key, None) # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+        engine = getattr(self.app.ctx, self.engine_key, None)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         if engine is not None:
             return cast(EngineT, engine)
         engine = cast(EngineT, self.engine)
-        setattr(self.app.ctx, self.engine_key, engine) # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+        setattr(self.app.ctx, self.engine_key, engine)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         return engine
 
     def get_sessionmaker(self) -> Callable[[], SessionT]:
@@ -169,47 +171,47 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
     def get_session_from_request(self, request: Request) -> SessionT:
         return cast("SessionT", getattr(request.ctx, self.session_key, None))
 
-    def startup(self, bootstrap: Extend) -> None: # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
+    def startup(self, bootstrap: Extend) -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
         """Advanced Alchemy Sanic extension startup hook."""
 
-        @self.app.before_server_start # pyright: ignore[reportUnknownMemberType]
-        async def on_startup(_: Any) -> None: # pyright: ignore[reportUnusedFunction]
-            setattr(self.app.ctx, self.engine_key, self.engine) # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
-            setattr(self.app.ctx, self.session_maker_key, self.session_maker) # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
-            bootstrap.add_dependency( # pyright: ignore[reportUnknownMemberType]
+        @self.app.before_server_start  # pyright: ignore[reportUnknownMemberType]
+        async def on_startup(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
+            setattr(self.app.ctx, self.engine_key, self.engine)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+            setattr(self.app.ctx, self.session_maker_key, self.session_maker)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+            bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
                 type(self.engine),
                 self.get_engine_from_request,
             )
-            bootstrap.add_dependency( # pyright: ignore[reportUnknownMemberType]
+            bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
                 type(self.session_maker),
                 self.get_sessionmaker_from_request,
             )
-            bootstrap.add_dependency( # pyright: ignore[reportUnknownMemberType]
+            bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
                 self.session_class,
                 self.get_session_from_request,
             )
 
-        @self.app.after_server_stop # pyright: ignore[reportUnknownMemberType]
+        @self.app.after_server_stop  # pyright: ignore[reportUnknownMemberType]
         async def on_shutdown(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
             if isinstance(self.engine, Engine):
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(None, self.engine.dispose)
             else:
                 await self.engine.dispose()
-            if hasattr(self.app.ctx, self.engine_key): # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
-                delattr(self.app.ctx, self.engine_key) # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
-            if hasattr(self.app.ctx, self.session_maker_key): # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
-                delattr(self.app.ctx, self.session_maker_key) # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+            if hasattr(self.app.ctx, self.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+                delattr(self.app.ctx, self.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+            if hasattr(self.app.ctx, self.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+                delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
 
-        @self.app.middleware("request") # pyright: ignore[reportUnknownMemberType]
-        async def on_request(request: Request) -> None: # pyright: ignore[reportUnusedFunction]
+        @self.app.middleware("request")  # pyright: ignore[reportUnknownMemberType]
+        async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
             session: Session | AsyncSession | None = getattr(request.ctx, self.session_key, None)
             if session is None:
                 session = self.get_session(request)
                 setattr(request.ctx, self.session_key, session)
 
         @self.app.middleware("response")  # type: ignore[arg-type]
-        async def on_response(request: Request, response: HTTPResponse) -> None: # pyright: ignore[reportUnusedFunction]
+        async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
             session: Session | AsyncSession | None = getattr(request.ctx, self.session_key, None)
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)

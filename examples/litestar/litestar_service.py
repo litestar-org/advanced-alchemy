@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 from litestar import Litestar
 from litestar.controller import Controller
@@ -43,7 +43,7 @@ class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[date | None]
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2

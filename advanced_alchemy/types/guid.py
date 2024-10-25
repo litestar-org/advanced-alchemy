@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from base64 import b64decode
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Type, cast
 from uuid import UUID
 
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
@@ -13,6 +13,9 @@ from typing_extensions import Buffer
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
+
+__all__ = ("GUID",)
+
 
 UUID_UTILS_INSTALLED = find_spec("uuid_utils")
 NANOID_INSTALLED = find_spec("fastnanoid")
@@ -34,7 +37,7 @@ class GUID(TypeDecorator[UUID]):
     cache_ok = True
 
     @property
-    def python_type(self) -> type[UUID]:
+    def python_type(self) -> Type[UUID]:
         return UUID
 
     def __init__(self, *args: Any, binary: bool = True, **kwargs: Any) -> None:

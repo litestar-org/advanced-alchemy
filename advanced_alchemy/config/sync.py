@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -11,14 +11,7 @@ from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionC
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from typing import Callable
-
-
-__all__ = (
-    "SQLAlchemySyncConfig",
-    "SyncSessionConfig",
-    "AlembicSyncConfig",
-)
+    from typing import Callable, Type
 
 
 class SyncSessionConfig(GenericSessionConfig[Connection, Engine, Session]):
@@ -43,7 +36,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
     """
     session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
-    session_maker_class: type[sessionmaker[Session]] = sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
+    session_maker_class: Type[sessionmaker[Session]] = sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
     """Sessionmaker class to use."""
     alembic_config: AlembicSyncConfig = field(default_factory=AlembicSyncConfig)
     """Configuration for the SQLAlchemy Alembic migrations.

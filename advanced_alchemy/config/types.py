@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal, Tuple
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"
 """Type alias for a mapping of type encoders."""
-TypeDecodersSequence: TypeAlias = "Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
+TypeDecodersSequence: TypeAlias = "Sequence[Tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
 """Type alias for a sequence of type decoders."""
 CommitStrategy = Literal["always", "match_status"]
 """Commit strategy for SQLAlchemy sessions."""

@@ -12,6 +12,23 @@ from advanced_alchemy.utils.deprecation import deprecated
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+__all__ = (
+    "AdvancedAlchemyError",
+    "ConflictError",
+    "DuplicateKeyError",
+    "ErrorMessages",
+    "ForeignKeyError",
+    "ImproperConfigurationError",
+    "IntegrityError",
+    "MissingDependencyError",
+    "MultipleResultsFoundError",
+    "NotFoundError",
+    "RepositoryError",
+    "SerializationError",
+    "wrap_sqlalchemy_exception",
+)
+
+
 DUPLICATE_KEY_REGEXES = {
     "postgresql": [
         re.compile(
@@ -174,16 +191,16 @@ class MultipleResultsFoundError(RepositoryError):
 
 
 class ErrorMessages(TypedDict, total=False):
-    duplicate_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
-    integrity: Union[str, Callable[[Exception], str]]  # noqa: UP007
-    foreign_key: Union[str, Callable[[Exception], str]]  # noqa: UP007
-    multiple_rows: Union[str, Callable[[Exception], str]]  # noqa: UP007
-    check_constraint: Union[str, Callable[[Exception], str]]  # noqa: UP007
-    other: Union[str, Callable[[Exception], str]]  # noqa: UP007
+    duplicate_key: Union[str, Callable[[Exception], str]]
+    integrity: Union[str, Callable[[Exception], str]]
+    foreign_key: Union[str, Callable[[Exception], str]]
+    multiple_rows: Union[str, Callable[[Exception], str]]
+    check_constraint: Union[str, Callable[[Exception], str]]
+    other: Union[str, Callable[[Exception], str]]
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
-    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]  # noqa: UP007
+    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]

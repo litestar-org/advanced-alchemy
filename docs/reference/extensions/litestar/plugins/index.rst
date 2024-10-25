@@ -18,4 +18,3 @@ Available API References
     init/config/common
     init/config/engine
     init/config/sync
-    init/config/types

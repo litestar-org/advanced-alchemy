@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import List
 from uuid import UUID
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
@@ -26,7 +27,7 @@ class UUIDAuthor(UUIDAuditBase):
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)  # pyright: ignore
     dob: Mapped[date] = mapped_column(nullable=True)  # pyright: ignore
-    books: Mapped[list[UUIDBook]] = relationship(
+    books: Mapped[List[UUIDBook]] = relationship(
         lazy="selectin",
         back_populates="author",
         cascade="all, delete",
@@ -96,14 +97,14 @@ uuid_item_tag = Table(
 class UUIDItem(UUIDBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
-    tags: Mapped[list[UUIDTag]] = relationship(secondary=lambda: uuid_item_tag, back_populates="items")
+    tags: Mapped[List[UUIDTag]] = relationship(secondary=lambda: uuid_item_tag, back_populates="items")
 
 
 class UUIDTag(UUIDAuditBase):
     """The event log domain object."""
 
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-    items: Mapped[list[UUIDItem]] = relationship(secondary=lambda: uuid_item_tag, back_populates="tags")
+    items: Mapped[List[UUIDItem]] = relationship(secondary=lambda: uuid_item_tag, back_populates="tags")
 
 
 class UUIDRule(UUIDAuditBase):

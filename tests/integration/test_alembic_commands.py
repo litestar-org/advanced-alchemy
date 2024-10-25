@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Type, cast
 from uuid import UUID
 
 import pytest
@@ -20,11 +20,11 @@ from alembic.util.exc import CommandError
 from tests.fixtures.uuid import models as models_uuid
 from tests.helpers import maybe_async
 
-AuthorModel = type[models_uuid.UUIDAuthor]
-RuleModel = type[models_uuid.UUIDRule]
-ModelWithFetchedValue = type[models_uuid.UUIDModelWithFetchedValue]
-ItemModel = type[models_uuid.UUIDItem]
-TagModel = type[models_uuid.UUIDTag]
+AuthorModel = Type[models_uuid.UUIDAuthor]
+RuleModel = Type[models_uuid.UUIDRule]
+ModelWithFetchedValue = Type[models_uuid.UUIDModelWithFetchedValue]
+ItemModel = Type[models_uuid.UUIDItem]
+TagModel = Type[models_uuid.UUIDTag]
 
 pytestmark = [
     pytest.mark.integration,
@@ -260,13 +260,13 @@ async def test_dump_tables(
     capsys: CaptureFixture[str],
     tmp_project_dir: Path,
 ) -> None:
-
     from advanced_alchemy.base import (
         CommonTableAttributes,
         DeclarativeBase,
         UUIDPrimaryKey,
         create_registry,
     )
+
     class _UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, DeclarativeBase):
         registry = create_registry()
 

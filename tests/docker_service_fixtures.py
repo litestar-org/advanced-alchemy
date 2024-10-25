@@ -241,7 +241,7 @@ def spanner_responsive(host: str) -> bool:
     try:
         os.environ["SPANNER_EMULATOR_HOST"] = "localhost:9010"
         os.environ["GOOGLE_CLOUD_PROJECT"] = "emulator-test-project"
-        spanner_client = spanner.Client(project="emulator-test-project", credentials=AnonymousCredentials()) # type: ignore[no-untyped-call]
+        spanner_client = spanner.Client(project="emulator-test-project", credentials=AnonymousCredentials())  # type: ignore[no-untyped-call]
         instance = spanner_client.instance("test-instance")
         with contextlib.suppress(Exception):
             instance.create()

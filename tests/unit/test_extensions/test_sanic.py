@@ -93,7 +93,7 @@ def test_inject_engine(app: Sanic, alchemy: SanicAdvancedAlchemy) -> None:
         return HTTPResponse(status=200)
 
     client = SanicTestClient(app=app)
-    assert client.get("/")[1].status == 200 # pyright: ignore[reportOptionalMemberAccess]
+    assert client.get("/")[1].status == 200  # pyright: ignore[reportOptionalMemberAccess]
 
 
 """

@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Type, TypeVar, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
@@ -37,7 +37,7 @@ if NANOID_INSTALLED and not TYPE_CHECKING:
     from fastnanoid import generate as nanoid  # pyright: ignore[reportMissingImports]
 
 else:
-    nanoid = uuid4 # type: ignore[assignment]
+    nanoid = uuid4  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -63,6 +63,7 @@ __all__ = (
     "UUIDv7Base",
     "NanoIDAuditBase",
     "NanoIDBase",
+    "NanoIDPrimaryKey",
     "UUIDPrimaryKey",
     "UUIDv7PrimaryKey",
     "UUIDv6PrimaryKey",
@@ -71,6 +72,7 @@ __all__ = (
     "orm_registry",
     "merge_table_arguments",
     "TableArgsType",
+    "BasicAttributes",
 )
 
 
@@ -92,7 +94,7 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
+def merge_table_arguments(cls: Type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
     """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
@@ -106,16 +108,16 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
     Returns:
         tuple | dict: The merged __table_args__ property
     """
-    args: list[Any] = []
-    kwargs: dict[str, Any] = {}
+    args: List[Any] = []
+    kwargs: Dict[str, Any] = {}
 
     mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in cls.__bases__)  # pyright: ignore[reportUnknownParameter,reportUnknownArgumentType,reportArgumentType]
 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
             if isinstance(arg_to_merge, tuple):
-                last_positional_arg = arg_to_merge[-1] # pyright: ignore[reportUnknownVariableType]
-                args.extend(arg_to_merge[:-1]) # pyright: ignore[reportUnknownArgumentType]
+                last_positional_arg = arg_to_merge[-1]  # pyright: ignore[reportUnknownVariableType]
+                args.extend(arg_to_merge[:-1])  # pyright: ignore[reportUnknownArgumentType]
                 if isinstance(last_positional_arg, dict):
                     kwargs.update(last_positional_arg)  # pyright: ignore[reportUnknownArgumentType]
                 else:
@@ -139,11 +141,11 @@ class ModelProtocol(Protocol):
         __mapper__: Mapper[Any]
         __name__: str
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None) -> Dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
-            dict[str, Any]: A dict representation of the model
+            Dict[str, Any]: A dict representation of the model
         """
         ...
 
@@ -236,11 +238,11 @@ class BasicAttributes:
         __table__: FromClause
         __mapper__: Mapper[Any]
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None) -> Dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
-            dict[str, Any]: A dict representation of the model
+            Dict[str, Any]: A dict representation of the model
         """
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
         return {
@@ -301,13 +303,13 @@ class SlugKey:
 
 
 def create_registry(
-    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+    custom_annotation_map: Dict[Any, Type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
     """Create a new SQLAlchemy registry."""
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
+    type_annotation_map: Dict[Any, Type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
         datetime: DateTimeUTC,

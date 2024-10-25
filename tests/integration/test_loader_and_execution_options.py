@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from uuid import UUID
 
 import pytest
@@ -36,7 +36,7 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
     class UUIDCountry(UUIDBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        states: Mapped[list[UUIDState]] = relationship(back_populates="country", uselist=True, lazy="noload")
+        states: Mapped[List[UUIDState]] = relationship(back_populates="country", uselist=True, lazy="noload")
 
     class UUIDState(UUIDBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
@@ -139,7 +139,7 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
     class BigIntCountry(BigIntBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        states: Mapped[list[BigIntState]] = relationship(back_populates="country", uselist=True)
+        states: Mapped[List[BigIntState]] = relationship(back_populates="country", uselist=True)
 
     class BigIntState(BigIntBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore

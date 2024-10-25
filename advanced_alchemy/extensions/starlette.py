@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Generic, Protocol, cast, overload
+from typing import TYPE_CHECKING, Callable, Dict, Generic, Protocol, cast, overload
 
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.config.types import CommitStrategy
+
+__all__ = ("CommitStrategyExecutor", "StarletteAdvancedAlchemy")
 
 
 class CommitStrategyExecutor(Protocol):
@@ -54,7 +56,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         self.sessionmaker_key: str
         self.session_key: str
         self.autocommit_strategy = autocommit
-        self._commit_strategies: dict[CommitStrategy, CommitStrategyExecutor] = {
+        self._commit_strategies: Dict[CommitStrategy, CommitStrategyExecutor] = {
             "always": self._commit_strategy_always,
             "match_status": self._commit_strategy_match_status,
         }
@@ -80,7 +82,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         setattr(app.state, self.sessionmaker_key, self.config.create_session_maker())
 
         app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
-        app.add_event_handler("shutdown", self.on_shutdown) # pyright: ignore[reportUnknownMemberType]
+        app.add_event_handler("shutdown", self.on_shutdown)  # pyright: ignore[reportUnknownMemberType]
 
         self._app = app
 
@@ -114,7 +116,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
     async def session_handler(self, session: Session | AsyncSession, request: Request, response: Response) -> None:
         try:
             if self.autocommit_strategy:
-                await self._commit_strategies[self.autocommit_strategy](session=session, response=response) # pyright: ignore[reportArgumentType]
+                await self._commit_strategies[self.autocommit_strategy](session=session, response=response)  # pyright: ignore[reportArgumentType]
         finally:
             await self._do_close(session)
             delattr(request.state, self.session_key)
