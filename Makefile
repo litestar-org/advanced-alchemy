@@ -28,7 +28,8 @@ install-uv: 										## Install latest version of uv
 	@curl -LsSf https://astral.sh/uv/install.sh | sh
 
 .PHONY: install
-install: clean										## Install the project, dependencies, and pre-commit for local development
+install: destroy clean								## Install the project, dependencies, and pre-commit for local development
+	@uv python pin 3.12
 	@uv sync --all-extras --dev
 	@echo "=> Install complete!"
 
@@ -48,6 +49,7 @@ clean: 												## Cleanup temporary build artifacts
 
 .PHONY: destroy
 destroy: 											## Destroy the virtual environment
+	@uv run pre-commit clean
 	@rm -rf .venv
 
 .PHONY: lock
@@ -90,8 +92,12 @@ slotscheck: 										## Run slotscheck
 	@uv run slotscheck advanced_alchemy/
 	@echo "=> slotscheck complete"
 
+.PHONY: fix
+fix:  												## Run formatting scripts
+	@uv run ruff check --fix --unsafe-fixes
+
 .PHONY: lint
-lint: pre-commit type-check slotscheck						## Run all linting
+lint: pre-commit type-check slotscheck				## Run all linting
 
 .PHONY: coverage
 coverage:  											## Run the tests and generate coverage report

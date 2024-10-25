@@ -118,7 +118,7 @@ class InMemoryStore(Generic[T]):
 class MultiStore(Generic[T]):
     def __init__(self, store_type: Type[InMemoryStore[T]]) -> None:
         self.store_type = store_type
-        self._store: defaultDict[Any, InMemoryStore[T]] = defaultdict(store_type)
+        self._store: defaultdict[Any, InMemoryStore[T]] = defaultdict(store_type)
 
     def add(self, identity: Any, obj: T) -> T:
         return self._store[identity].add(obj)

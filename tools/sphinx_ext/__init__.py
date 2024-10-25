@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple, Type
+from typing import TYPE_CHECKING, Dict
 
 from tools.sphinx_ext import changelog, missing_references
 

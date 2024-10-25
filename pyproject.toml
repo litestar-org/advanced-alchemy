@@ -214,7 +214,7 @@ line-length = 120
 [tool.ruff]
 exclude = [".venv", "node_modules"]
 line-length = 120
-src = ["advanced_alchemy", "tests"]
+src = ["advanced_alchemy", "tests", "docs", "tools"]
 target-version = "py38"
 
 [tool.ruff.lint]
@@ -302,6 +302,7 @@ classmethod-decorators = [
 [tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
 ban-relative-imports = "all"
+
 [tool.ruff.lint.isort]
 known-first-party = ["advanced_alchemy", "tests"]
 
