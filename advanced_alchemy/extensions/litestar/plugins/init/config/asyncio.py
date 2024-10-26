@@ -133,7 +133,7 @@ autocommit_before_send_handler = autocommit_handler_maker()
 
 @dataclass
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
-    """Async SQLAlchemy Configuration."""
+    """Litestar Async SQLAlchemy Configuration."""
 
     before_send_handler: BeforeMessageSendHookHandler | None | Literal["autocommit", "autocommit_include_redirects"] = (
         None
