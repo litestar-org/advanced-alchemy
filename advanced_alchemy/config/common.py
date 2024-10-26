@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, ClassVar, Dict, Generic, Type, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, ClassVar, Dict, Generic, Type, cast
+
+from typing_extensions import TypeVar
 
 from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config.engine import EngineConfig

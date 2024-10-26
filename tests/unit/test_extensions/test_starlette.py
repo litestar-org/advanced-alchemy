@@ -115,11 +115,11 @@ def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client:
     mock = MagicMock()
     SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
-    def some_dependency(session: SessionDependency) -> None: # pyright: ignore[reportInvalidTypeForm]
+    def some_dependency(session: SessionDependency) -> None:  # pyright: ignore[reportInvalidTypeForm]
         mock(session)
 
     @app.get("/")
-    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None: # pyright: ignore[reportInvalidTypeForm]
+    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:  # pyright: ignore[reportInvalidTypeForm]
         mock(session)
 
     assert client.get("/").status_code == 200

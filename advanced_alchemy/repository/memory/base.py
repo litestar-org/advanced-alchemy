@@ -6,10 +6,11 @@ import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Type, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, Type, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
+from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT  # pyright: ignore[reportPrivateUsage]

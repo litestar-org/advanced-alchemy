@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator, Generator
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Tuple, TypeVar, cast
+from typing import Any, Callable, Dict, List, Tuple, cast
 from unittest.mock import ANY
 
 import pytest
@@ -30,6 +30,7 @@ from pytest import FixtureRequest, MonkeyPatch
 from sqlalchemy import Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
+from typing_extensions import TypeVar
 
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig

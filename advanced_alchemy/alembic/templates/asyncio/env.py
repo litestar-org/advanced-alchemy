@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.alembic.commands import AlembicCommandConfig
     from alembic.runtime.environment import EnvironmentContext
 
-__all__ = ["do_run_migrations", "run_migrations_offline", "run_migrations_online"]
+__all__ = ("do_run_migrations", "run_migrations_offline", "run_migrations_online")
 
 
 # this is the Alembic Config object, which provides
@@ -126,7 +126,7 @@ async def run_migrations_online() -> None:
             future=True,
         ),
     )
-    if connectable is None:
+    if connectable is None:  # pyright: ignore[reportUnnecessaryComparison]
         msg = "Could not get engine from config.  Please ensure your `alembic.ini` according to the official Alembic documentation."
         raise RuntimeError(
             msg,

@@ -36,7 +36,7 @@ class AsyncSessionConfig(GenericSessionConfig[AsyncConnection, AsyncEngine, Asyn
 
 @dataclass
 class AlembicAsyncConfig(GenericAlembicConfig):
-    """Configuration for an Async Alembic's :class:`Config <alembic.config.Config>`.
+    """Configuration for an Async Alembic's Config class`.
 
     For details see: https://alembic.sqlalchemy.org/en/latest/api/config.html
     """

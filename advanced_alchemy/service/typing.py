@@ -18,13 +18,12 @@ from typing import (
     Protocol,
     Tuple,
     Type,
-    TypeVar,
     Union,
     cast,
     runtime_checkable,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeGuard
+from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT

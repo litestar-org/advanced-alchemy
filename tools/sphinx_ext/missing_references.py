@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
 from docutils.utils import get_source_line
+from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -48,6 +49,16 @@ def get_module_global_imports(module_import_path: str, reference_target_source_o
 
 
 def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:  # noqa: ARG001, PLR0911
+    """Handle warning for missing references by checking if they are valid type imports.
+
+    Args:
+        app: The Sphinx application instance
+        domain: The domain of the reference
+        node: The node containing the reference
+
+    Returns:
+        bool | None: True if the warning should be suppressed, None otherwise
+    """
     ignore_refs: Dict[str | re.Pattern, set[str] | re.Pattern] = app.config["ignore_missing_refs"]
     if node.tagname != "pending_xref":  # type: ignore[attr-defined]
         return None
@@ -56,7 +67,41 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
         return None
 
     attributes = node.attributes  # type: ignore[attr-defined]
-    target = attributes["reftarget"]
+    target = attributes.get("reftarget")
+
+    # Ensure target is a string
+    if not isinstance(target, str):
+        return None
+
+    # Common SQLAlchemy and Litestar types that should be ignored
+    common_types = {
+        # SQLAlchemy types
+        "AsyncEngine",
+        "Engine",
+        "AsyncConnection",
+        "Connection",
+        "Session",
+        "AsyncSession",
+        "sessionmaker",
+        "async_sessionmaker",
+        "scoped_session",
+        # Litestar types
+        "BeforeMessageSendHookHandler",
+        "State",
+        "Scope",
+        "Message",
+        "Litestar",
+        # Repository types
+        "SQLAlchemyAsyncRepository",
+        # Error types
+        "NotFoundError",
+        # Config types
+        "SQLAlchemySyncConfig",
+        "EngineConfig",
+    }
+
+    if target in common_types:
+        return True
 
     if reference_target_source_obj := attributes.get(
         "py:class",
@@ -75,8 +120,9 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
     # to suppress specific warnings
     source_line = get_source_line(node)[0]
     source = source_line.split(" ")[-1]
-    if target in ignore_refs.get(source, []):
+    if target in ignore_refs.get(source, []):  # pyright: ignore[reportOperatorIssue]
         return True
+
     ignore_ref_rgs = {rg: targets for rg, targets in ignore_refs.items() if isinstance(rg, re.Pattern)}
     for pattern, targets in ignore_ref_rgs.items():
         if not pattern.match(source):
@@ -90,11 +136,27 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
 
 
 def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: Element) -> Element | None:
+    """Handle missing references by attempting to resolve them through different methods.
+
+    Args:
+        app: The Sphinx application instance
+        env: The Sphinx build environment
+        node: The pending cross-reference node
+        contnode: The content node
+
+    Returns:
+        Element | None: The resolved reference node if found, None otherwise
+    """
     if not hasattr(node, "attributes"):
         return None
 
     attributes = node.attributes  # type: ignore[attr-defined]
     target = attributes["reftarget"]
+
+    # Ensure target is a string and not a TypeVar
+    if not isinstance(target, str) or isinstance(target, TypeVar):
+        return None
+
     py_domain = env.domains["py"]
 
     # autodoc sometimes incorrectly resolves these types, so we try to resolve them as py:data first and fall back to any
@@ -116,7 +178,6 @@ def on_env_before_read_docs(app: Sphinx, env: BuildEnvironment, docnames: set[st
 def setup(app: Sphinx) -> Dict[str, bool]:
     app.connect("env-before-read-docs", on_env_before_read_docs)
     app.connect("missing-reference", on_missing_reference)
-    app.connect("warn-missing-reference", on_warn_missing_reference)
     app.add_config_value("ignore_missing_refs", default={}, rebuild=False)
 
     return {"parallel_read_safe": True, "parallel_write_safe": True}

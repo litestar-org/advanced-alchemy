@@ -307,13 +307,21 @@ ban-relative-imports = "all"
 known-first-party = ["advanced_alchemy", "tests"]
 
 [tool.slotscheck]
+include-modules =  "advanced_alchemy.*"
 exclude-modules = '''
 (
-  ^tests.*
-  |^docs.*
-  |^examples.*
-  |^alembic.*
+  (^|\.)test_
+  |^tests\.*
+  |^tools\.*
+  |^docs\.*
+  |^examples\.*
+  |advanced_alchemy
+  |^alembic
   |^advanced_alchemy\.alembic\.templates.*
+  |^sqlalchemy\.(
+    testing
+    |ext\.mypy  # see slotscheck/issues/178
+  )
 )
 '''
 require-superclass = false

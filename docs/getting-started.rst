@@ -35,6 +35,13 @@ Installing ``advanced-alchemy`` is as easy as calling your favorite Python packa
 
             pipx install advanced-alchemy
 
+    .. tab-item:: uv
+
+        .. code-block:: bash
+            :caption: Using `UV <https://docs.astral.sh/uv/>`_
+
+            uv add advanced-alchemy
+
     .. tab-item:: pdm
 
         .. code-block:: bash

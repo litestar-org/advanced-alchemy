@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import inspect
 from functools import wraps
-from typing import Callable, Literal, TypeVar
+from typing import Callable, Literal
 from warnings import warn
 
-from typing_extensions import ParamSpec
+from typing_extensions import ParamSpec, TypeVar
 
 __all__ = ("deprecated", "warn_deprecation")
 

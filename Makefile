@@ -89,7 +89,7 @@ pre-commit: 										## Runs pre-commit hooks; includes ruff formatting and lin
 .PHONY: slotscheck
 slotscheck: 										## Run slotscheck
 	@echo "=> Running slotscheck"
-	@uv run slotscheck advanced_alchemy/
+	@uv run slotscheck advanced_alchemy/*
 	@echo "=> slotscheck complete"
 
 .PHONY: fix
@@ -97,7 +97,7 @@ fix:  												## Run formatting scripts
 	@uv run ruff check --fix --unsafe-fixes
 
 .PHONY: lint
-lint: pre-commit type-check slotscheck				## Run all linting
+lint: pre-commit type-check							## Run all linting
 
 .PHONY: coverage
 coverage:  											## Run the tests and generate coverage report

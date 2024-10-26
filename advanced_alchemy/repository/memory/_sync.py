@@ -162,15 +162,15 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         item: ModelT | Type[ModelT],
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any:
-        """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
+        """Get value of attribute named as :attr:`id_attribute` on ``item``.
 
         Args:
-            item: Anything that should have an attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` value.
+            item: Anything that should have an attribute named as :attr:`id_attribute` value.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `None`, but can reference any surrogate or candidate key for the table.
 
         Returns:
-            The value of attribute on ``item`` named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`.
+            The value of attribute on ``item`` named as :attr:`id_attribute`.
         """
         if isinstance(id_attribute, InstrumentedAttribute):
             id_attribute = id_attribute.key
@@ -187,12 +187,12 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
         Args:
             item_id: Value of ID to be set on instance
-            item: Anything that should have an attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` value.
+            item: Anything that should have an attribute named as :attr:`id_attribute` value.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `None`, but can reference any surrogate or candidate key for the table.
 
         Returns:
-            Item with ``item_id`` set to :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`
+            Item with ``item_id`` set to :attr:`id_attribute`
         """
         if isinstance(id_attribute, InstrumentedAttribute):
             id_attribute = id_attribute.key
