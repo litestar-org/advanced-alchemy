@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TCH003
-from typing import TYPE_CHECKING, Annotated, List
+from typing import TYPE_CHECKING, List
 from uuid import UUID  # noqa: TCH003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
@@ -9,6 +9,7 @@ from pydantic import BaseModel as _BaseModel
 from sqlalchemy import ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TCH002
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from typing_extensions import Annotated
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig

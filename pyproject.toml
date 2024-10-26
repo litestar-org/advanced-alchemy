@@ -310,6 +310,9 @@ known-first-party = ["advanced_alchemy", "tests"]
 exclude-modules = '''
 (
   ^tests.*
+  |^docs.*
+  |^examples.*
+  |^alembic.*
   |^advanced_alchemy\.alembic\.templates.*
 )
 '''

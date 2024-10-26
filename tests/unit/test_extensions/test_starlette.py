@@ -115,20 +115,22 @@ def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client:
     mock = MagicMock()
     SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
-    def some_dependency(session: SessionDependency) -> None:
+    def some_dependency(session: SessionDependency) -> None: # pyright: ignore[reportInvalidTypeForm]
         mock(session)
 
     @app.get("/")
-    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:
+    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None: # pyright: ignore[reportInvalidTypeForm]
         mock(session)
 
     assert client.get("/").status_code == 200
     assert mock.call_count == 2
+    call_1_session = mock.call_args_list[0].args[0]
+    call_2_session = mock.call_args_list[1].args[0]
     assert isinstance(
-        mock.call_args_List[0].args[0],
+        call_1_session,
         AsyncSession if isinstance(alchemy.config, SQLAlchemyAsyncConfig) else Session,
     )
-    assert mock.call_args_List[1].args[0] is mock.call_args_List[0].args[0]
+    assert call_1_session is call_2_session
 
 
 def test_session_no_autocommit(
@@ -260,5 +262,5 @@ def test_multiple_instances(app: FastAPI) -> None:
 
         assert alchemy_1.get_engine() is not alchemy_2.get_engine()
         assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
-        assert mock.call_args_List[0].kwargs["session"] is not mock.call_args_List[1].kwargs["session"]
-        assert mock.call_args_List[0].kwargs["engine"] is not mock.call_args_List[1].kwargs["engine"]
+        assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
+        assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Annotated, ClassVar, Dict, List, Type, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Dict, List, Type, TypeVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,6 +17,7 @@ from litestar.testing import RequestFactory
 from litestar.typing import FieldDefinition
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
+from typing_extensions import Annotated
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.dto import (
