@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Annotated, Callable, Union, cast
+from typing import TYPE_CHECKING, Callable, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,7 +11,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
 from starlette.requests import Request
-from typing_extensions import assert_type
+from typing_extensions import Annotated, assert_type
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
