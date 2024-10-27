@@ -29,6 +29,10 @@ __all__ = (
     "GenericSQLAlchemyConfig",
     "GenericSessionConfig",
     "GenericAlembicConfig",
+    "ConnectionT",
+    "EngineT",
+    "SessionT",
+    "SessionMakerT",
 )
 
 """Path to the Alembic templates."""
