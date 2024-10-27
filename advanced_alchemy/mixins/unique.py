@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Dict, Tuple, Type
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement, select
 
@@ -38,12 +38,12 @@ class UniqueMixin:
     @classmethod
     def _check_uniqueness(
         cls,
-        cache: Dict[Tuple[Type[Self], Hashable], Self] | None,
+        cache: dict[tuple[type[Self], Hashable], Self] | None,
         session: AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session],
-        key: Tuple[Type[Self], Hashable],
+        key: tuple[type[Self], Hashable],
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Dict[Tuple[Type[Self], Hashable], Self], Select[Tuple[Self]], Self | None]:
+    ) -> tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Self | None]:
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)

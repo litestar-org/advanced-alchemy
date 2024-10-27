@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, Generic, Protocol, cast, overload
+from typing import TYPE_CHECKING, Callable, Generic, Protocol, cast, overload
 
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -82,7 +82,7 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
         self.sessionmaker_key: str
         self.session_key: str
         self.autocommit_strategy = autocommit
-        self._commit_strategies: Dict[CommitStrategy, CommitStrategyExecutor] = {
+        self._commit_strategies: dict[CommitStrategy, CommitStrategyExecutor] = {
             "always": self._commit_strategy_always,
             "match_status": self._commit_strategy_match_status,
         }

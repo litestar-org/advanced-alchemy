@@ -269,7 +269,7 @@ convention = "google"
 
 [tool.ruff.lint.pyupgrade]
 # Preserve types, even if a file imports `from __future__ import annotations`.
-keep-runtime-typing = true
+# keep-runtime-typing = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 14

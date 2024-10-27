@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Tuple, cast
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import Column, pool
 from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
@@ -39,7 +39,7 @@ writer = rewriter.Rewriter()
 @writer.rewrites(ops.CreateTableOp)
 def order_columns(
     context: EnvironmentContext,  # noqa: ARG001
-    revision: Tuple[str, ...],  # noqa: ARG001
+    revision: tuple[str, ...],  # noqa: ARG001
     op: ops.CreateTableOp,
 ) -> ops.CreateTableOp:
     """Orders ID first and the audit columns at the end."""

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 from anyio import run
 from click import Path as ClickPath
@@ -196,8 +196,8 @@ def create_revision(
 
     def process_revision_directives(
         context: MigrationContext,  # noqa: ARG001
-        revision: Tuple[str],  # noqa: ARG001
-        directives: List[MigrationScript],
+        revision: tuple[str],  # noqa: ARG001
+        directives: list[MigrationScript],
     ) -> None:
         """Handle revision directives."""
 
@@ -377,7 +377,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     default=Path.cwd() / "fixtures",
     required=False,
 )
-def dump_table_data(app: Litestar, table_names: Tuple[str, ...], dump_dir: Path) -> None:
+def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path) -> None:
     from rich.prompt import Confirm
 
     all_tables = "*" in table_names

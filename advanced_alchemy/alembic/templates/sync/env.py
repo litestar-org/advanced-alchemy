@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Tuple, cast
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import Column, Engine, engine_from_config, pool
 
@@ -37,7 +37,7 @@ writer = rewriter.Rewriter()
 @writer.rewrites(ops.CreateTableOp)
 def order_columns(
     context: EnvironmentContext,  # noqa: ARG001
-    revision: Tuple[str, ...],  # noqa: ARG001
+    revision: tuple[str, ...],  # noqa: ARG001
     op: ops.CreateTableOp,
 ) -> ops.CreateTableOp:
     """Orders ID first and the audit columns at the end."""

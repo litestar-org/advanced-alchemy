@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, TextIO
+from typing import TYPE_CHECKING, Any, Mapping, TextIO
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from alembic import command as migration_command
@@ -44,7 +44,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         stdout: TextIO = sys.stdout,
         cmd_opts: Namespace | None = None,
         config_args: Mapping[str, Any] | None = None,
-        attributes: Dict[str, Any] | None = None,
+        attributes: dict[str, Any] | None = None,
         template_directory: Path | None = None,
         version_table_schema: str | None = None,
         render_as_batch: bool = True,
@@ -234,7 +234,7 @@ class AlembicCommands:
         rev_id: str | None = None,
         depends_on: str | None = None,
         process_revision_directives: ProcessRevisionDirectiveFn | None = None,
-    ) -> Script | List[Script | None] | None:
+    ) -> Script | list[Script | None] | None:
         """Create a new revision file.
 
         Args:
@@ -334,7 +334,7 @@ class AlembicCommands:
         Returns:
             AlembicCommandConfig: The configuration for Alembic commands.
         """
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if self.sqlalchemy_config.alembic_config.script_config:
             kwargs["file_"] = self.sqlalchemy_config.alembic_config.script_config
         if self.sqlalchemy_config.alembic_config.template_path:

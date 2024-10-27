@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Type
+from typing import TYPE_CHECKING, Callable, Literal
 
 from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any, Dict, List, Type
+    from typing import Any
 
     from sqlalchemy.engine.interfaces import IsolationLevel
     from sqlalchemy.pool import Pool
@@ -31,7 +31,7 @@ class EngineConfig:
     See: https://docs.sqlalchemy.org/en/20/core/engines.html
     """
 
-    connect_args: Dict[Any, Any] | EmptyType = Empty
+    connect_args: dict[Any, Any] | EmptyType = Empty
     """A dictionary of arguments which will be passed directly to the DBAPI's ``connect()`` method as keyword arguments.
     """
     echo: _EchoFlagType | EmptyType = Empty
@@ -108,7 +108,7 @@ class EngineConfig:
     underlying connection pool for the engine, bypassing whatever connection parameters are present in the URL argument.
     For information on constructing connection pools manually, see
     `Connection Pooling <https://docs.sqlalchemy.org/en/20/core/pooling.html>`_."""
-    poolclass: Type[Pool] | None | EmptyType = Empty
+    poolclass: type[Pool] | None | EmptyType = Empty
     """A :class:`Pool <sqlalchemy.pool.Pool>` subclass, which will be used to create a connection pool instance using
     the connection parameters given in the URL. Note this differs from pool in that you don`t actually instantiate the
     pool in this case, you just indicate what type of pool to be used."""
@@ -142,7 +142,7 @@ class EngineConfig:
     instead of FIFO (first-in-first-out). Using LIFO, a server-side timeout scheme can reduce the number of connections
     used during non-peak periods of use. When planning for server-side timeouts, ensure that a recycle or pre-ping
     strategy is in use to gracefully handle stale connections."""
-    plugins: List[str] | EmptyType = Empty
+    plugins: list[str] | EmptyType = Empty
     """String list of plugin names to load. See :class:`CreateEnginePlugin <sqlalchemy.engine.CreateEnginePlugin>` for
     background."""
     query_cache_size: int | EmptyType = Empty

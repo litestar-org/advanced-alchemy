@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -15,7 +15,7 @@ from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
-    from typing import Callable, Type
+    from typing import Callable
 
     from sqlalchemy.orm import Session
 
@@ -32,7 +32,7 @@ __all__ = (
 class AsyncSessionConfig(GenericSessionConfig[AsyncConnection, AsyncEngine, AsyncSession]):
     """SQLAlchemy async session config."""
 
-    sync_session_class: Type[Session] | None | EmptyType = Empty
+    sync_session_class: type[Session] | None | EmptyType = Empty
     """A :class:`Session <sqlalchemy.orm.Session>` subclass or other callable which will be used to construct the
     :class:`Session <sqlalchemy.orm.Session>` which will be proxied. This parameter may be used to provide custom
     :class:`Session <sqlalchemy.orm.Session>` subclasses. Defaults to the
@@ -63,7 +63,7 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     """
     session_config: AsyncSessionConfig = field(default_factory=AsyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`async_sessionmaker<sqlalchemy.ext.asyncio.async_sessionmaker>`."""
-    session_maker_class: Type[async_sessionmaker[AsyncSession]] = async_sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
+    session_maker_class: type[async_sessionmaker[AsyncSession]] = async_sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
     """Sessionmaker class to use."""
     alembic_config: AlembicAsyncConfig = field(default_factory=AlembicAsyncConfig)
     """Configuration for the SQLAlchemy Alembic migrations.

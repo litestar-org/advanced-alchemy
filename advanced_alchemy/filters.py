@@ -7,13 +7,13 @@ from collections import abc  # noqa: TCH003
 from dataclasses import dataclass
 from datetime import datetime  # noqa: TCH003
 from operator import attrgetter
-from typing import TYPE_CHECKING, Any, Generic, List, Literal, Tuple, Type, cast
+from typing import TYPE_CHECKING, Any, Generic, Literal, cast
 
 from sqlalchemy import BinaryExpression, and_, any_, or_, text
 from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
-    from typing import Callable, List, Tuple, Type
+    from typing import Callable
 
     from sqlalchemy import ColumnElement, Select, StatementLambdaElement
     from sqlalchemy.orm import InstrumentedAttribute
@@ -47,7 +47,7 @@ FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | 
 
 class StatementFilter(ABC):
     @abstractmethod
-    def append_to_statement(self, statement: Select[Tuple[ModelT]], model: Type[ModelT]) -> Select[Tuple[ModelT]]:
+    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
         return statement
 
     @abstractmethod
@@ -78,7 +78,7 @@ class BeforeAfter(StatementFilter):
     after: datetime | None
     """Filter results where field later than this."""
 
-    def append_to_statement(self, statement: Select[Tuple[ModelT]], model: Type[ModelT]) -> Select[Tuple[ModelT]]:
+    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
             statement = statement.where(field < self.before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
@@ -89,7 +89,7 @@ class BeforeAfter(StatementFilter):
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
@@ -112,7 +112,7 @@ class OnBeforeAfter(StatementFilter):
     on_or_after: datetime | None
     """Filter results where field on or later than this."""
 
-    def append_to_statement(self, statement: Select[Tuple[ModelT]], model: Type[ModelT]) -> Select[Tuple[ModelT]]:
+    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
             statement = statement.where(field <= self.on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
@@ -123,7 +123,7 @@ class OnBeforeAfter(StatementFilter):
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
@@ -152,10 +152,10 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     def append_to_statement(
         self,
-        statement: Select[Tuple[ModelT]],
-        model: Type[ModelT],
+        statement: Select[tuple[ModelT]],
+        model: type[ModelT],
         prefer_any: bool = False,
-    ) -> Select[Tuple[ModelT]]:
+    ) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.values is None:
             return statement
@@ -168,7 +168,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
         prefer_any: bool = False,
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
@@ -199,10 +199,10 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     def append_to_statement(
         self,
-        statement: Select[Tuple[ModelT]],
-        model: Type[ModelT],
+        statement: Select[tuple[ModelT]],
+        model: type[ModelT],
         prefer_any: bool = False,
-    ) -> Select[Tuple[ModelT]]:
+    ) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
         if not self.values:
             return statement
@@ -213,7 +213,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
         prefer_any: bool = False,
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
@@ -241,13 +241,13 @@ class LimitOffset(PaginationFilter):
     offset: int
     """Value for ``OFFSET`` clause of query."""
 
-    def append_to_statement(self, statement: Select[Tuple[ModelT]], model: Type[ModelT]) -> Select[Tuple[ModelT]]:
+    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
         return statement.limit(self.limit).offset(self.offset)
 
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
     ) -> StatementLambdaElement:
         limit = self.limit
         offset = self.offset
@@ -264,7 +264,7 @@ class OrderBy(StatementFilter):
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort ascending or descending"""
 
-    def append_to_statement(self, statement: Select[Tuple[ModelT]], model: Type[ModelT]) -> Select[Tuple[ModelT]]:
+    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.sort_order == "desc":
             return statement.order_by(field.desc())
@@ -273,7 +273,7 @@ class OrderBy(StatementFilter):
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         fragment = field.desc() if self.sort_order == "desc" else field.asc()
@@ -305,8 +305,8 @@ class SearchFilter(StatementFilter):
     def normalized_field_names(self) -> set[str]:
         return {self.field_name} if isinstance(self.field_name, str) else self.field_name
 
-    def get_search_clauses(self, model: Type[ModelT]) -> List[BinaryExpression[bool]]:
-        search_clause: List[BinaryExpression[bool]] = []
+    def get_search_clauses(self, model: type[ModelT]) -> list[BinaryExpression[bool]]:
+        search_clause: list[BinaryExpression[bool]] = []
         for field_name in self.normalized_field_names:
             field = self._get_instrumented_attr(model, field_name)
             search_text = f"%{self.value}%"
@@ -315,16 +315,16 @@ class SearchFilter(StatementFilter):
 
     def append_to_statement(
         self,
-        statement: Select[Tuple[ModelT]],
-        model: Type[ModelT],
-    ) -> Select[Tuple[ModelT]]:
+        statement: Select[tuple[ModelT]],
+        model: type[ModelT],
+    ) -> Select[tuple[ModelT]]:
         where_clause = self._operator(*self.get_search_clauses(model))
         return statement.where(where_clause)
 
     def append_to_lambda_statement(
         self,
         statement: StatementLambdaElement,
-        model: Type[ModelT],
+        model: type[ModelT],
     ) -> StatementLambdaElement:
         where_clause = self._operator(*self.get_search_clauses(model))
         statement += lambda s: s.where(where_clause)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]

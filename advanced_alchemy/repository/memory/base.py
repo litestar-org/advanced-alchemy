@@ -6,7 +6,7 @@ import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Type, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
@@ -32,7 +32,7 @@ class _NotSet:
 
 class InMemoryStore(Generic[T]):
     def __init__(self) -> None:
-        self._store: Dict[Any, T] = {}
+        self._store: dict[Any, T] = {}
 
     def _resolve_key(self, key: Any) -> Any:
         """Test different key representations
@@ -66,12 +66,12 @@ class InMemoryStore(Generic[T]):
         return obj
 
     @overload
-    def get(self, key: Any, default: Type[_NotSet] = _NotSet) -> T: ...
+    def get(self, key: Any, default: type[_NotSet] = _NotSet) -> T: ...
 
     @overload
     def get(self, key: Any, default: AnyObject) -> T | AnyObject: ...
 
-    def get(self, key: Any, default: AnyObject | Type[_NotSet] = _NotSet) -> T | AnyObject:
+    def get(self, key: Any, default: AnyObject | type[_NotSet] = _NotSet) -> T | AnyObject:
         """Get the object identified by `key`, or return `default` if set or raise a `KeyError` otherwise
 
         Args:
@@ -98,7 +98,7 @@ class InMemoryStore(Generic[T]):
     def remove(self, key: Any) -> T:
         return self._store.pop(self._resolve_key(key))
 
-    def list(self) -> List[T]:
+    def list(self) -> list[T]:
         return list(self._store.values())
 
     def remove_all(self) -> None:
@@ -117,7 +117,7 @@ class InMemoryStore(Generic[T]):
 
 
 class MultiStore(Generic[T]):
-    def __init__(self, store_type: Type[InMemoryStore[T]]) -> None:
+    def __init__(self, store_type: type[InMemoryStore[T]]) -> None:
         self.store_type = store_type
         self._store: defaultdict[Any, InMemoryStore[T]] = defaultdict(store_type)
 
@@ -236,7 +236,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                 setattr(data, elem.key, default_value)
 
     def changed_attrs(self, data: ModelT) -> Iterable[str]:
-        res: List[str] = []
+        res: list[str] = []
         mapper = inspect(data)
         if mapper is None:
             msg = f"Cannot inspect {data.__class__} model"
@@ -292,8 +292,8 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
             data: The model to update
         """
         obj_mapper = object_mapper(data)
-        mappers: Dict[str, Mapper[Any]] = {}
-        column_relationships: Dict[ColumnElement[Any], RelationshipProperty[Any]] = {}
+        mappers: dict[str, Mapper[Any]] = {}
+        column_relationships: dict[ColumnElement[Any], RelationshipProperty[Any]] = {}
 
         for mapper in obj_mapper.registry.mappers:
             for table in mapper.tables:
@@ -304,7 +304,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
                 column_relationships[column] = relationship
         # sourcery skip: assign-if-exp
         if state := inspect(data):
-            new_attrs: Dict[str, Any] = state.dict
+            new_attrs: dict[str, Any] = state.dict
         else:
             new_attrs = {}
 

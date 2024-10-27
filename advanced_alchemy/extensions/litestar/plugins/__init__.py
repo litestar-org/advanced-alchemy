@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 from litestar.plugins import InitPluginProtocol
 
@@ -22,7 +22,7 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
 
     def __init__(
         self,
-        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | List[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | list[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
     ) -> None:
         """Initialize ``SQLAlchemyPlugin``.
 

@@ -16,8 +16,6 @@ from typing import (
     Generic,
     List,
     Protocol,
-    Tuple,
-    Type,
     Union,
     cast,
     runtime_checkable,
@@ -40,9 +38,9 @@ except ImportError:  # pragma: nocover
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
-        model_fields: ClassVar[Dict[str, Any]]
+        model_fields: ClassVar[dict[str, Any]]
 
-        def model_dump(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+        def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
             """Placeholder"""
             return {}
 
@@ -78,7 +76,7 @@ except ImportError:
 
 
 @lru_cache(typed=True)
-def get_type_adapter(f: Type[T]) -> TypeAdapter[T]:
+def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
     """Caches and returns a pydantic type adapter"""
     if PYDANTIC_USE_FAILFAST:
         return TypeAdapter(
@@ -98,7 +96,7 @@ except ImportError:  # pragma: nocover
     class Struct(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
-        __struct_fields__: ClassVar[Tuple[str, ...]]
+        __struct_fields__: ClassVar[tuple[str, ...]]
 
     def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
         """Placeholder implementation"""
@@ -127,7 +125,7 @@ except ImportError:
             """Placeholder implementation"""
             return cast("T", kwargs)
 
-        def as_builtins(*args: Any, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[no-redef]
+        def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
             """Placeholder implementation"""
             return {}
 
@@ -153,15 +151,15 @@ def is_msgspec_model(v: Any) -> TypeGuard[Struct]:
     return MSGSPEC_INSTALLED and isinstance(v, Struct)
 
 
-def is_dict(v: Any) -> TypeGuard[Dict[str, Any]]:
+def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
     return isinstance(v, dict)
 
 
-def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[Dict[str, Any]]:
+def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
     return is_dict(v) and field_name in v
 
 
-def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[Dict[str, Any]]:
+def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
     return is_dict(v) and field_name not in v
 
 
@@ -182,9 +180,9 @@ def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]
 
 
 def schema_dump(
-    data: Dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
+    data: dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
     exclude_unset: bool = True,
-) -> Dict[str, Any] | ModelT:
+) -> dict[str, Any] | ModelT:
     if is_dict(data):
         return data
     if is_pydantic_model(data):

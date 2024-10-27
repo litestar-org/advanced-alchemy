@@ -4,7 +4,7 @@ import abc
 import base64
 import contextlib
 import os
-from typing import TYPE_CHECKING, Any, Callable, Type
+from typing import TYPE_CHECKING, Any, Callable
 
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
@@ -250,7 +250,7 @@ class EncryptedString(TypeDecorator[str]):
         self.backend = backend()
 
     @property
-    def python_type(self) -> Type[str]:
+    def python_type(self) -> type[str]:
         """Returns the Python type for this type decorator.
 
         Returns:

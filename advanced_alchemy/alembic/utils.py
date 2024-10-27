@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from typing import TYPE_CHECKING, List, Type
+from typing import TYPE_CHECKING
 
 from litestar.cli._utils import console
 from sqlalchemy import Engine, MetaData, Table
@@ -46,7 +46,7 @@ async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metada
 async def dump_tables(
     dump_dir: Path,
     session: AbstractContextManager[Session] | AbstractAsyncContextManager[AsyncSession],
-    models: List[Type[DeclarativeBase]],
+    models: list[type[DeclarativeBase]],
 ) -> None:
     from types import new_class
 

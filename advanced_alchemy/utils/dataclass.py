@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import Field, fields, is_dataclass
 from inspect import isclass
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Protocol, Tuple, Type, final, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Type, final, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -35,7 +35,7 @@ EmptyType: TypeAlias = Type[Empty]
 class DataclassProtocol(Protocol):
     """Protocol for instance checking dataclasses"""
 
-    __dataclass_fields__: ClassVar[Dict[str, Any]]
+    __dataclass_fields__: ClassVar[dict[str, Any]]
 
 
 def extract_dataclass_fields(
@@ -44,7 +44,7 @@ def extract_dataclass_fields(
     exclude_empty: bool = False,
     include: AbstractSet[str] | None = None,
     exclude: AbstractSet[str] | None = None,
-) -> Tuple[Field[Any], ...]:
+) -> tuple[Field[Any], ...]:
     """Extract dataclass fields.
 
     Args:
@@ -84,7 +84,7 @@ def extract_dataclass_items(
     exclude_empty: bool = False,
     include: AbstractSet[str] | None = None,
     exclude: AbstractSet[str] | None = None,
-) -> Tuple[Tuple[str, Any], ...]:
+) -> tuple[tuple[str, Any], ...]:
     """Extract dataclass name, value pairs.
 
     Unlike the 'asdict' method exports by the stdlib, this function does not pickle values.
@@ -109,7 +109,7 @@ def simple_asdict(
     exclude_empty: bool = False,
     convert_nested: bool = True,
     exclude: set[str] | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Convert a dataclass to a dictionary.
 
     This method has important differences to the standard library version:
@@ -126,7 +126,7 @@ def simple_asdict(
     Returns:
         A dictionary of key/value pairs.
     """
-    ret: Dict[str, Any] = {}
+    ret: dict[str, Any] = {}
     for field in extract_dataclass_fields(obj, exclude_none, exclude_empty, exclude=exclude):
         value = getattr(obj, field.name)
         if is_dataclass_instance(value) and convert_nested:
@@ -148,7 +148,7 @@ def is_dataclass_instance(obj: Any) -> TypeGuard[DataclassProtocol]:
     return hasattr(type(obj), "__dataclass_fields__")  # pyright: ignore[reportUnknownArgumentType]
 
 
-def is_dataclass_class(annotation: Any) -> TypeGuard[Type[DataclassProtocol]]:
+def is_dataclass_class(annotation: Any) -> TypeGuard[type[DataclassProtocol]]:
     """Wrap :func:`is_dataclass <dataclasses.is_dataclass>` in a :data:`typing.TypeGuard`.
 
     Args:

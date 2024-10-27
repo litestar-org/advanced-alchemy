@@ -7,14 +7,10 @@ from typing import (
     Any,
     ClassVar,
     Collection,
-    Dict,
     Generator,
     Generic,
-    List,
     Literal,
     Optional,
-    Tuple,
-    Type,
 )
 
 from litestar.dto.base_dto import AbstractDTO
@@ -96,9 +92,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         extension_type: NotExtension | AssociationProxyExtensionType | HybridExtensionType,
         orm_descriptor: InspectionAttr,
         key: str,
-        model_type_hints: Dict[str, FieldDefinition],
+        model_type_hints: dict[str, FieldDefinition],
         model_name: str,
-    ) -> List[DTOFieldDefinition]:
+    ) -> list[DTOFieldDefinition]:
         msg = f"Unsupported extension type: {extension_type}"
         raise NotImplementedError(msg)
 
@@ -109,9 +105,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         extension_type: NotExtension,
         key: str,
         orm_descriptor: InspectionAttr,
-        model_type_hints: Dict[str, FieldDefinition],
+        model_type_hints: dict[str, FieldDefinition],
         model_name: str,
-    ) -> List[DTOFieldDefinition]:
+    ) -> list[DTOFieldDefinition]:
         if not isinstance(orm_descriptor, QueryableAttribute):
             msg = f"Unexpected descriptor type for '{extension_type}': '{orm_descriptor}'"
             raise NotImplementedError(msg)
@@ -165,9 +161,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         extension_type: AssociationProxyExtensionType,
         key: str,
         orm_descriptor: InspectionAttr,
-        model_type_hints: Dict[str, FieldDefinition],
+        model_type_hints: dict[str, FieldDefinition],
         model_name: str,
-    ) -> List[DTOFieldDefinition]:
+    ) -> list[DTOFieldDefinition]:
         if not isinstance(orm_descriptor, AssociationProxy):
             msg = f"Unexpected descriptor type '{orm_descriptor}' for '{extension_type}'"
             raise NotImplementedError(msg)
@@ -198,9 +194,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         extension_type: HybridExtensionType,
         key: str,
         orm_descriptor: InspectionAttr,
-        model_type_hints: Dict[str, FieldDefinition],
+        model_type_hints: dict[str, FieldDefinition],
         model_name: str,
-    ) -> List[DTOFieldDefinition]:
+    ) -> list[DTOFieldDefinition]:
         if not isinstance(orm_descriptor, hybrid_property):
             msg = f"Unexpected descriptor type '{orm_descriptor}' for '{extension_type}'"
             raise NotImplementedError(msg)
@@ -238,7 +234,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         return field_defs
 
     @classmethod
-    def generate_field_definitions(cls, model_type: Type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
+    def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
         """Generate DTO field definitions from a SQLAlchemy model.
 
         Args:
@@ -323,7 +319,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         return field_definition.is_subclass_of(DeclarativeBase)
 
 
-def _detect_defaults(elem: ElementType) -> Tuple[Any, Any]:
+def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:
     default: Any = Empty
     default_factory: Any = None  # pyright:ignore  # noqa: PGH003
     if sqla_default := getattr(elem, "default", None):

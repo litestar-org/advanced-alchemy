@@ -6,7 +6,7 @@ import os
 import warnings
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.exc import SAWarning
 
@@ -328,7 +328,7 @@ def update_html_context(
     _app: Sphinx,
     _pagename: str,
     _templatename: str,
-    context: Dict[str, Any],
+    context: dict[str, Any],
     _doctree: document,
 ) -> None:
     context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
@@ -345,7 +345,7 @@ def delayed_setup(app: Sphinx) -> None:
     app.setup_extension("shibuya")
 
 
-def setup(app: Sphinx) -> Dict[str, bool]:
+def setup(app: Sphinx) -> dict[str, bool]:
     app.connect("builder-inited", delayed_setup, priority=0)
     app.setup_extension("litestar_sphinx_theme")
     return {"parallel_read_safe": True, "parallel_write_safe": True}

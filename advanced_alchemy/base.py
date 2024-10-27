@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Type, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
@@ -95,7 +95,7 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(cls: Type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
+def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
     """Merge Table Arguments.
 
     When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
@@ -109,8 +109,8 @@ def merge_table_arguments(cls: Type[DeclarativeBase], table_args: TableArgsType 
     Returns:
         tuple | dict: The merged __table_args__ property
     """
-    args: List[Any] = []
-    kwargs: Dict[str, Any] = {}
+    args: list[Any] = []
+    kwargs: dict[str, Any] = {}
 
     mixin_table_args = (getattr(super(base_cls, cls), "__table_args__", None) for base_cls in cls.__bases__)  # pyright: ignore[reportUnknownParameter,reportUnknownArgumentType,reportArgumentType]
 
@@ -142,7 +142,7 @@ class ModelProtocol(Protocol):
         __mapper__: Mapper[Any]
         __name__: str
 
-    def to_dict(self, exclude: set[str] | None = None) -> Dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -239,7 +239,7 @@ class BasicAttributes:
         __table__: FromClause
         __mapper__: Mapper[Any]
 
-    def to_dict(self, exclude: set[str] | None = None) -> Dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -304,13 +304,13 @@ class SlugKey:
 
 
 def create_registry(
-    custom_annotation_map: Dict[Any, Type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
     """Create a new SQLAlchemy registry."""
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: Dict[Any, Type[TypeEngine[Any]] | TypeEngine[Any]] = {
+    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
         datetime: DateTimeUTC,
