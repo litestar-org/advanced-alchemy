@@ -89,8 +89,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run slotscheck
-        run: uv run slotscheck \
-          -m advanced_alchemy.config \
+        run: uv run slotscheck -m advanced_alchemy.config \
           -m advanced_alchemy.repository \
           -m advanced_alchemy.service \
           -m advanced_alchemy.extensions \
