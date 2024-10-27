@@ -195,7 +195,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             msg = f"Unexpected descriptor type '{orm_descriptor}' for '{extension_type}'"
             raise NotImplementedError(msg)
 
-        getter_sig = ParsedSignature.from_fn(orm_descriptor.fget, {})  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
+        getter_sig = ParsedSignature.from_fn(orm_descriptor.fget, {})  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
 
         field_defs = [
             DTOFieldDefinition.from_field_definition(
@@ -229,6 +229,19 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
     @classmethod
     def generate_field_definitions(cls, model_type: Type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
+        """Generate DTO field definitions from a SQLAlchemy model.
+
+        Args:
+            model_type (typing.Type[sqlalchemy.orm.DeclarativeBase]): The SQLAlchemy model type to generate field definitions from.
+
+        Returns:
+            collections.abc.Generator[litestar.dto.data_structures.DTOFieldDefinition, None, None]: A generator yielding DTO field definitions.
+
+        Raises:
+            RuntimeError: If the mapper cannot be found for the model type.
+            NotImplementedError: If an unsupported property or extension type is encountered.
+            ImproperConfigurationError: If a type cannot be parsed from an element.
+        """
         if (mapper := inspect(model_type)) is None:  # pragma: no cover # pyright: ignore[reportUnnecessaryComparison]
             msg = "Unexpected `None` value for mapper."  # type: ignore[unreachable]
             raise RuntimeError(msg)

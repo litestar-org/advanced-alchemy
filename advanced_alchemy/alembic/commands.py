@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Dict, List, TextIO
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, TextIO
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from alembic import command as migration_command
@@ -11,7 +11,6 @@ from alembic.ddl.impl import DefaultImpl
 if TYPE_CHECKING:
     import os
     from argparse import Namespace
-    from collections.abc import Mapping
     from pathlib import Path
 
     from sqlalchemy import Engine
@@ -55,16 +54,16 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         """Initialize the AlembicCommandConfig.
 
         Args:
-            engine (Engine | AsyncEngine): The SQLAlchemy engine instance.
+            engine (sqlalchemy.engine.Engine | sqlalchemy.ext.asyncio.AsyncEngine): The SQLAlchemy engine instance.
             version_table_name (str): The name of the version table.
             file_ (str | os.PathLike[str] | None): The file path for the alembic configuration.
             ini_section (str): The ini section name.
-            output_buffer (TextIO | None): The output buffer for alembic commands.
-            stdout (TextIO): The standard output stream.
-            cmd_opts (Namespace | None): Command line options.
-            config_args (Mapping[str, Any] | None): Additional configuration arguments.
-            attributes (Dict[str, Any] | None): Additional attributes for the configuration.
-            template_directory (Path | None): The directory for alembic templates.
+            output_buffer (typing.TextIO | None): The output buffer for alembic commands.
+            stdout (typing.TextIO): The standard output stream.
+            cmd_opts (argparse.Namespace | None): Command line options.
+            config_args (typing.Mapping[str, typing.Any] | None): Additional configuration arguments.
+            attributes (dict[str, typing.Any] | None): Additional attributes for the configuration.
+            template_directory (pathlib.Path | None): The directory for alembic templates.
             version_table_schema (str | None): The schema for the version table.
             render_as_batch (bool): Whether to render migrations as batch.
             compare_type (bool): Whether to compare types during migrations.

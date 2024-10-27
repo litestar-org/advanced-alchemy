@@ -48,9 +48,9 @@ class StarletteAdvancedAlchemy(Generic[EngineT, SessionT]):
     Args:
         config (advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig | advanced_alchemy.config.sync.SQLAlchemySyncConfig):
             The SQLAlchemy configuration.
-        autocommit (advanced_alchemy.config.types.CommitStrategy | None, optional):
+        autocommit (advanced_alchemy.config.types.CommitStrategy | None):
             The commit strategy to use. Defaults to None.
-        app (starlette.applications.Starlette | None, optional):
+        app (starlette.applications.Starlette | None):
             The Starlette application instance. Defaults to None.
     """
 

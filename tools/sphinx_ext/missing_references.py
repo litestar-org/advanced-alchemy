@@ -1,17 +1,16 @@
 """Sphinx extension for changelog and change directives."""
 
+# ruff: noqa: FIX002 PLR0911 ARG001
 from __future__ import annotations
 
 import ast
 import importlib
 import inspect
 import re
-from functools import cache  # type: ignore[attr-defined] # pyright: ignore[reportAttributeAccessIssue]
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from docutils.utils import get_source_line
-from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -22,7 +21,6 @@ if TYPE_CHECKING:
     from sphinx.environment import BuildEnvironment
 
 
-@cache
 def _get_module_ast(source_file: str) -> ast.AST | ast.Module:
     return ast.parse(Path(source_file).read_text(encoding="utf-8"))
 
@@ -35,20 +33,19 @@ def _get_import_nodes(nodes: list[ast.stmt]) -> Generator[ast.Import | ast.Impor
             yield from _get_import_nodes(node.body)
 
 
-@cache
 def get_module_global_imports(module_import_path: str, reference_target_source_obj: str) -> set[str]:
     """Return a set of names that are imported globally within the containing module of ``reference_target_source_obj``,
     including imports in ``if TYPE_CHECKING`` blocks.
     """
     module = importlib.import_module(module_import_path)
     obj = getattr(module, reference_target_source_obj)
-    tree = _get_module_ast(inspect.getsourcefile(obj))  # pyright: ignore[reportArgumentType]
+    tree = _get_module_ast(inspect.getsourcefile(obj))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
     import_nodes = _get_import_nodes(tree.body)  # type: ignore[attr-defined]
     return {path.asname or path.name for import_node in import_nodes for path in import_node.names}
 
 
-def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:  # noqa: ARG001, PLR0911
+def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:
     """Handle warning for missing references by checking if they are valid type imports.
 
     Args:
@@ -66,42 +63,8 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
     if not hasattr(node, "attributes"):
         return None
 
-    attributes = node.attributes  # type: ignore[attr-defined]
-    target = attributes.get("reftarget")
-
-    # Ensure target is a string
-    if not isinstance(target, str):
-        return None
-
-    # Common SQLAlchemy and Litestar types that should be ignored
-    common_types = {
-        # SQLAlchemy types
-        "AsyncEngine",
-        "Engine",
-        "AsyncConnection",
-        "Connection",
-        "Session",
-        "AsyncSession",
-        "sessionmaker",
-        "async_sessionmaker",
-        "scoped_session",
-        # Litestar types
-        "BeforeMessageSendHookHandler",
-        "State",
-        "Scope",
-        "Message",
-        "Litestar",
-        # Repository types
-        "SQLAlchemyAsyncRepository",
-        # Error types
-        "NotFoundError",
-        # Config types
-        "SQLAlchemySyncConfig",
-        "EngineConfig",
-    }
-
-    if target in common_types:
-        return True
+    attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
+    target = attributes["reftarget"]
 
     if reference_target_source_obj := attributes.get(
         "py:class",
@@ -120,16 +83,15 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
     # to suppress specific warnings
     source_line = get_source_line(node)[0]
     source = source_line.split(" ")[-1]
-    if target in ignore_refs.get(source, []):  # pyright: ignore[reportOperatorIssue]
+    if target in ignore_refs.get(source, []):  # type: ignore[operator]
         return True
-
     ignore_ref_rgs = {rg: targets for rg, targets in ignore_refs.items() if isinstance(rg, re.Pattern)}
     for pattern, targets in ignore_ref_rgs.items():
         if not pattern.match(source):
             continue
         if isinstance(targets, set) and target in targets:
             return True
-        if targets.match(target):  # pyright: ignore[reportAttributeAccessIssue]
+        if targets.match(target):  # type: ignore[union-attr]  # pyright: ignore[reportAttributeAccessIssue]
             return True
 
     return None
@@ -150,11 +112,11 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
     if not hasattr(node, "attributes"):
         return None
 
-    attributes = node.attributes  # type: ignore[attr-defined]
+    attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
     target = attributes["reftarget"]
 
-    # Ensure target is a string and not a TypeVar
-    if not isinstance(target, str) or isinstance(target, TypeVar):
+    # Remove this check since it's causing issues
+    if not isinstance(target, str):
         return None
 
     py_domain = env.domains["py"]
@@ -169,14 +131,15 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
     return new_node
 
 
-def on_env_before_read_docs(app: Sphinx, env: BuildEnvironment, docnames: set[str]) -> None:  # noqa: ARG001
+def on_env_before_read_docs(app: Sphinx, env: BuildEnvironment, docnames: set[str]) -> None:
     tmp_examples_path = Path.cwd() / "docs/_build/_tmp_examples"
     tmp_examples_path.mkdir(exist_ok=True, parents=True)
-    env.tmp_examples_path = tmp_examples_path  # pyright: ignore[reportAttributeAccessIssue]
+    env.tmp_examples_path = tmp_examples_path  # type: ignore[attr-defined] # pyright: ignore[reportAttributeAccessIssue]
 
 
 def setup(app: Sphinx) -> dict[str, bool]:
     app.connect("env-before-read-docs", on_env_before_read_docs)
     app.connect("missing-reference", on_missing_reference)
-    app.add_config_value("ignore_missing_refs", default={}, rebuild=False)
+    app.connect("warn-missing-reference", on_warn_missing_reference)
+    app.add_config_value("ignore_missing_refs", default={}, rebuild="")
     return {"parallel_read_safe": True, "parallel_write_safe": True}

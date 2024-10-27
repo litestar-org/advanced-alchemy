@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 __all__ = (
     "DataclassProtocol",
     "Empty",
+    "EmptyType",
     "extract_dataclass_fields",
     "extract_dataclass_items",
     "is_dataclass_class",

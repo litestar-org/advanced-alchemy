@@ -130,7 +130,11 @@ class AdvancedAlchemyError(Exception):
 class MissingDependencyError(AdvancedAlchemyError, ImportError):
     """Missing optional dependency.
 
-    This exception is raised only when a module depends on a dependency that has not been installed.
+    This exception is raised when a module depends on a dependency that has not been installed.
+
+    Args:
+        package: Name of the missing package.
+        install_package: Optional alternative package name to install.
     """
 
     def __init__(self, package: str, install_package: str | None = None) -> None:
@@ -144,20 +148,44 @@ class MissingDependencyError(AdvancedAlchemyError, ImportError):
 class ImproperConfigurationError(AdvancedAlchemyError):
     """Improper Configuration error.
 
-    This exception is raised only when a module depends on a dependency that has not been installed.
+    This exception is raised when there is an issue with the configuration of a module.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
     """
 
 
 class SerializationError(AdvancedAlchemyError):
-    """Encoding or decoding of an object failed."""
+    """Encoding or decoding error.
+
+    This exception is raised when serialization or deserialization of an object fails.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class RepositoryError(AdvancedAlchemyError):
-    """Base repository exception type."""
+    """Base repository exception type.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class ConflictError(RepositoryError):
-    """Data integrity error."""
+    """Data integrity error.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+
+    Note:
+        This class is deprecated in favor of :class:`advanced_alchemy.exceptions.IntegrityError`.
+    """
 
     @deprecated(
         version="0.7.1",
@@ -171,23 +199,52 @@ class ConflictError(RepositoryError):
 
 
 class IntegrityError(RepositoryError):
-    """Data integrity error."""
+    """Data integrity error.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class DuplicateKeyError(IntegrityError):
-    """Duplicate key error."""
+    """Duplicate key error.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class ForeignKeyError(IntegrityError):
-    """Foreign key error."""
+    """Foreign key error.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class NotFoundError(RepositoryError):
-    """An identity does not exist."""
+    """Not found error.
+
+    This exception is raised when a requested resource is not found.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class MultipleResultsFoundError(RepositoryError):
-    """A single database result was required but more than one were found."""
+    """Multiple results found error.
+
+    This exception is raised when a single result was expected but multiple were found.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
 
 
 class ErrorMessages(TypedDict, total=False):

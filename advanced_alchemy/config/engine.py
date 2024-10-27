@@ -23,9 +23,10 @@ _ParamStyle = Literal["qmark", "numeric", "named", "format", "pyformat", "numeri
 
 @dataclass
 class EngineConfig:
-    """Configuration for SQLAlchemy's :class:`Engine <sqlalchemy.engine.Engine>`.
+    """Configuration for SQLAlchemy's Engine.
 
-    For details see: https://docs.sqlalchemy.org/en/20/core/engines.html
+    This class provides configuration options for SQLAlchemy engine creation.
+    See: https://docs.sqlalchemy.org/en/20/core/engines.html
     """
 
     connect_args: Dict[Any, Any] | EmptyType = Empty

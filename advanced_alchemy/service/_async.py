@@ -25,7 +25,7 @@ from advanced_alchemy.repository._util import (
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
-    UNSET,
+    UNSET,  # pyright: ignore[reportAttributeAccessIssue]
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,

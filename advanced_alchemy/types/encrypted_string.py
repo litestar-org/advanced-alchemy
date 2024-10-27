@@ -144,7 +144,7 @@ class FernetBackend(EncryptionBackend):
 
     Attributes:
         key (bytes): The base64-encoded key used for encryption and decryption.
-        fernet (Fernet): The Fernet instance used for encryption and decryption.
+        fernet (cryptography.fernet.Fernet): The Fernet instance used for encryption/decryption.
     """
 
     def mount_vault(self, key: str | bytes) -> None:

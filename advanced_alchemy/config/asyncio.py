@@ -36,15 +36,20 @@ class AsyncSessionConfig(GenericSessionConfig[AsyncConnection, AsyncEngine, Asyn
 
 @dataclass
 class AlembicAsyncConfig(GenericAlembicConfig):
-    """Configuration for an Async Alembic's Config class`.
+    """Configuration for an Async Alembic's Config class.
 
-    For details see: https://alembic.sqlalchemy.org/en/latest/api/config.html
+    See Also:
+        https://alembic.sqlalchemy.org/en/latest/api/config.html
     """
 
 
 @dataclass
 class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]):
-    """Async SQLAlchemy Configuration."""
+    """Async SQLAlchemy Configuration.
+
+    Note:
+        The alembic configuration options are documented in the Alembic documentation.
+    """
 
     create_engine_callable: Callable[[str], AsyncEngine] = create_async_engine
     """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
@@ -61,6 +66,10 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     """
 
     def __post_init__(self) -> None:
+        """Post initialization hook.
+
+        Sets the metadata on the alembic config if metadata is provided.
+        """
         if self.metadata:
             self.alembic_config.target_metadata = self.metadata
         super().__post_init__()
@@ -69,6 +78,11 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     async def get_session(
         self,
     ) -> AsyncGenerator[AsyncSession, None]:
+        """Get a session from the session maker.
+
+        Returns:
+            AsyncGenerator[AsyncSession, None]: An async context manager that yields an AsyncSession.
+        """
         session_maker = self.create_session_maker()
         async with session_maker() as session:
             yield session

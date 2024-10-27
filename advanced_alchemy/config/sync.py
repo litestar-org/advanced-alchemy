@@ -1,8 +1,10 @@
+"""Sync SQLAlchemy configuration module."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Generator, Type
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -14,13 +16,14 @@ if TYPE_CHECKING:
     from typing import Callable, Type
 
 
+@dataclass
 class SyncSessionConfig(GenericSessionConfig[Connection, Engine, Session]):
-    """Sync Session Config"""
+    """Configuration for synchronous SQLAlchemy sessions."""
 
 
 @dataclass
 class AlembicSyncConfig(GenericAlembicConfig):
-    """Configuration for a Sync Alembic's Config Class.
+    """Configuration for Alembic's synchronous migrations.
 
     For details see: https://alembic.sqlalchemy.org/en/latest/api/config.html
     """
@@ -28,7 +31,11 @@ class AlembicSyncConfig(GenericAlembicConfig):
 
 @dataclass
 class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker[Session]]):
-    """Sync SQLAlchemy Configuration."""
+    """Synchronous SQLAlchemy Configuration.
+
+    Note:
+        The alembic configuration options are documented in the Alembic documentation.
+    """
 
     create_engine_callable: Callable[[str], Engine] = create_engine
     """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass."""
@@ -43,14 +50,27 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
     """
 
     def __post_init__(self) -> None:
+        """Initialize the configuration after dataclass initialization.
+
+        Sets the metadata on the alembic config if provided.
+        """
         if self.metadata:
             self.alembic_config.target_metadata = self.metadata
         super().__post_init__()
 
     @contextmanager
-    def get_session(
-        self,
-    ) -> Generator[Session, None, None]:
+    def get_session(self) -> Generator[Session, None, None]:
+        """Get a session context manager.
+
+        Returns:
+            Generator[sqlalchemy.orm.Session, None, None]: A context manager yielding an active SQLAlchemy Session.
+
+        Examples:
+            Using the session context manager:
+
+            >>> with config.get_session() as session:
+            ...     session.execute(...)
+        """
         session_maker = self.create_session_maker()
         with session_maker() as session:
             yield session

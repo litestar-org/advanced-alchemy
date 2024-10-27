@@ -37,21 +37,21 @@ class CommitStrategyExecutor(Protocol):
     async def __call__(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None: ...
 
 
-class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT]):  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
+class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
     """Sanic extension for integrating Advanced Alchemy with SQLAlchemy.
 
     Args:
         sqlalchemy_config (advanced_alchemy.config.sync.SQLAlchemySyncConfig | advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig):
             Configuration for SQLAlchemy.
-        autocommit (advanced_alchemy.config.types.CommitStrategy | None, optional):
+        autocommit (advanced_alchemy.config.types.CommitStrategy | None):
             Strategy for committing transactions. Defaults to None.
-        counters (sanic.helpers.Default | bool, optional):
+        counters (sanic.helpers.Default | bool | None):
             Enables or disables counters. Defaults to sanic.helpers._default.
-        session_maker_key (str, optional):
+        session_maker_key (str| None):
             Key for the session maker in app context. Defaults to "sessionmaker".
-        engine_key (str, optional):
+        engine_key (str| None):
             Key for the engine in app context. Defaults to "engine".
-        session_key (str, optional):
+        session_key (str| None):
             Key for the session in request context. Defaults to "session".
     """
 
