@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 _EchoFlagType: TypeAlias = "None | bool | Literal['debug']"
 _ParamStyle = Literal["qmark", "numeric", "named", "format", "pyformat", "numeric_dollar"]
 
+__all__ = ("EngineConfig",)
+
 
 @dataclass
 class EngineConfig:

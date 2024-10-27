@@ -12,8 +12,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
     from typing import Callable, Type
+
+
+__all__ = (
+    "SQLAlchemySyncConfig",
+    "SyncSessionConfig",
+    "AlembicSyncConfig",
+)
 
 
 @dataclass

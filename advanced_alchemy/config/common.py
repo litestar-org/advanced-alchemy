@@ -25,6 +25,12 @@ if TYPE_CHECKING:
 
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 
+__all__ = (
+    "GenericSQLAlchemyConfig",
+    "GenericSessionConfig",
+    "GenericAlembicConfig",
+)
+
 """Path to the Alembic templates."""
 ConnectionT = TypeVar("ConnectionT", bound=Union["Connection", "AsyncConnection"])
 """Type variable for SQLAlchemy connection types."""
