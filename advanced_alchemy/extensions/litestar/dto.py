@@ -2,7 +2,20 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, ClassVar, Dict, Generic, List, Literal, Optional, Tuple, Type
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Collection,
+    Dict,
+    Generator,
+    Generic,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+)
 
 from litestar.dto.base_dto import AbstractDTO
 from litestar.dto.config import DTOConfig
@@ -33,9 +46,6 @@ from typing_extensions import TypeVar
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Generator
-    from typing import Any, Dict, List, Tuple, Type
-
     from typing_extensions import TypeAlias
 
 __all__ = ("SQLAlchemyDTO",)
