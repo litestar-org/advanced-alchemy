@@ -6,9 +6,9 @@ import ast
 import importlib
 import inspect
 import re
-from functools import cache  # pyright: ignore[reportAttributeAccessIssue]
+from functools import cache  # type: ignore[attr-defined] # pyright: ignore[reportAttributeAccessIssue]
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING
 
 from docutils.utils import get_source_line
 from typing_extensions import TypeVar
@@ -27,7 +27,7 @@ def _get_module_ast(source_file: str) -> ast.AST | ast.Module:
     return ast.parse(Path(source_file).read_text(encoding="utf-8"))
 
 
-def _get_import_nodes(nodes: List[ast.stmt]) -> Generator[ast.Import | ast.ImportFrom, None, None]:
+def _get_import_nodes(nodes: list[ast.stmt]) -> Generator[ast.Import | ast.ImportFrom, None, None]:
     for node in nodes:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             yield node
@@ -59,7 +59,7 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
     Returns:
         bool | None: True if the warning should be suppressed, None otherwise
     """
-    ignore_refs: Dict[str | re.Pattern, set[str] | re.Pattern] = app.config["ignore_missing_refs"]
+    ignore_refs: dict[str | re.Pattern, set[str] | re.Pattern] = app.config["ignore_missing_refs"]
     if node.tagname != "pending_xref":  # type: ignore[attr-defined]
         return None
 
@@ -175,9 +175,8 @@ def on_env_before_read_docs(app: Sphinx, env: BuildEnvironment, docnames: set[st
     env.tmp_examples_path = tmp_examples_path  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def setup(app: Sphinx) -> Dict[str, bool]:
+def setup(app: Sphinx) -> dict[str, bool]:
     app.connect("env-before-read-docs", on_env_before_read_docs)
     app.connect("missing-reference", on_missing_reference)
     app.add_config_value("ignore_missing_refs", default={}, rebuild=False)
-
     return {"parallel_read_safe": True, "parallel_write_safe": True}

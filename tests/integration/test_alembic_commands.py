@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import CaptureFixture, FixtureRequest
-from pytest_lazyfixture import lazy_fixture
+from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, ForeignKey, String
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column, relationship, sessionmaker
@@ -188,7 +188,7 @@ def async_sqlalchemy_config(
 
 
 @pytest.fixture(
-    params=[lazy_fixture("sync_sqlalchemy_config"), lazy_fixture("async_sqlalchemy_config")],
+    params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
 def any_config(request: FixtureRequest) -> SQLAlchemySyncConfig | SQLAlchemyAsyncConfig:

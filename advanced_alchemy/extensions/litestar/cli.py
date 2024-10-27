@@ -374,7 +374,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     "--dir",
     "dump_dir",
     help="Directory to save the JSON files. Defaults to WORKDIR/fixtures",
-    type=ClickPath(path_type=Path),  # type: ignore[type-var] # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
+    type=ClickPath(path_type=Path),  # type: ignore[type-var,unused-ignore] # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator, reportArgumentType]
     default=Path.cwd() / "fixtures",
     required=False,
 )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TCH003
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 from uuid import UUID  # noqa: TCH003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
@@ -39,7 +39,7 @@ class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[date | None]
-    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")
+    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2

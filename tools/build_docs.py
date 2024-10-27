@@ -9,7 +9,7 @@ import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, List, TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -35,7 +35,7 @@ parser.add_argument("output")
 
 
 class VersionSpec(TypedDict):
-    versions: List[str]
+    versions: list[str]
     latest: str
 
 

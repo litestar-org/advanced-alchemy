@@ -1,4 +1,5 @@
 # Configuration file for the Sphinx documentation builder.
+# ruff: noqa: ERA001
 from __future__ import annotations
 
 import os
@@ -106,7 +107,7 @@ nitpick_ignore = [
     (PY_CLASS, "State"),
     (PY_CLASS, "Message"),
     (PY_CLASS, "Litestar"),
-        (PY_CLASS, "Default"),
+    (PY_CLASS, "Default"),
     (PY_ATTR, "AsyncGenericMockRepository.id_attribute"),
     (PY_ATTR, "advanced_alchemy.repository.AbstractAsyncRepository.id_attribute"),
     (PY_ATTR, "AbstractAsyncRepository.id_attribute"),
@@ -114,15 +115,22 @@ nitpick_ignore = [
     (PY_CLASS, "Config"),
     (PY_CLASS, "DeclarativeBase"),
     (PY_CLASS, "TypeDecorator"),
-    (PY_CLASS, "EngineConfig"),    (PY_CLASS, "Engine"),    (PY_CLASS, "AsyncEngine"),    (PY_CLASS, "Namespace"),(PY_CLASS, "Path"),
+    (PY_CLASS, "EngineConfig"),
+    (PY_CLASS, "Engine"),
+    (PY_CLASS, "AsyncEngine"),
+    (PY_CLASS, "Namespace"),
+    (PY_CLASS, "Path"),
     (PY_CLASS, "MetaData"),
     (PY_CLASS, "Dialect"),
     (PY_CLASS, "ColumnElement"),
     (PY_CLASS, "RowMapping"),
-    (PY_CLASS, "Session"),    (PY_CLASS, "sessionmaker"),    (PY_CLASS, "async_sessionmaker"),
+    (PY_CLASS, "Session"),
+    (PY_CLASS, "sessionmaker"),
+    (PY_CLASS, "async_sessionmaker"),
     (PY_CLASS, "scoped_session"),
     (PY_CLASS, "async_scoped_session"),
-    (PY_EXC, "NotFoundError"),    (PY_EXC, "advanced_alchemy.exceptions.NotFoundError"),
+    (PY_EXC, "NotFoundError"),
+    (PY_EXC, "advanced_alchemy.exceptions.NotFoundError"),
     (PY_CLASS, "NotFoundError"),
     (PY_CLASS, "advanced_alchemy.exceptions.NotFoundError"),
     (PY_CLASS, "ModelOrRowMappingT"),
@@ -134,9 +142,11 @@ nitpick_ignore = [
     (PY_CLASS, "advanced_alchemy.repository._util.FilterableRepositoryProtocol"),
     (PY_CLASS, "AppConfig"),
     (PY_CLASS, "config.app.AppConfig"),
-    (PY_CLASS, "Group"),(PY_CLASS,"BeforeMessageSendHookHandler"),
-            (PY_CLASS, "FieldDefinition"),(PY_CLASS,"serialization.encode_json"),
-            (PY_CLASS, "serialization.decode_json"),
+    (PY_CLASS, "Group"),
+    (PY_CLASS, "BeforeMessageSendHookHandler"),
+    (PY_CLASS, "FieldDefinition"),
+    (PY_CLASS, "serialization.encode_json"),
+    (PY_CLASS, "serialization.decode_json"),
     (PY_CLASS, "advanced_alchemy.repository._util.FilterableRepository"),
     (PY_CLASS, "advanced_alchemy.repository._async.SQLAlchemyAsyncRepository"),
     (PY_CLASS, "advanced_alchemy.repository._async.SQLAlchemyAsyncSlugRepositoryProtocol"),
@@ -184,7 +194,7 @@ autodoc_class_signature = "separated"
 autodoc_default_options = {"special-members": "__init__", "show-inheritance": True, "members": True}
 autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
-autodoc_mock_imports = ['sqlalchemy','alembic','litestar','sanic','starlette','fastapi']
+autodoc_mock_imports = ["alembic"]
 
 
 autosectionlabel_prefix_document = True

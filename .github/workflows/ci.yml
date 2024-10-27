@@ -74,22 +74,29 @@ jobs:
 
   # # TODO(cofin)
   # # AttributeError: 'SuiteRequirements' object has no attribute 'computed_reflects_normally'
-  # slotscheck:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
+  slotscheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-  #     - name: Set up Python
-  #       run: uv python install 3.12
+      - name: Set up Python
+        run: uv python install 3.12
 
-  #     - name: Install dependencies
-  #       run: uv sync --all-extras --dev
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
 
-  #     - name: Run slotscheck
-  #       run: uv run slotscheck advanced_alchemy
+      - name: Run slotscheck
+        run: uv run slotscheck \
+          -m advanced_alchemy.config \
+          -m advanced_alchemy.repository \
+          -m advanced_alchemy.service \
+          -m advanced_alchemy.extensions \
+          -m advanced_alchemy.base \
+          -m advanced_alchemy.types \
+          -m advanced_alchemy.operations
 
   test:
     name: "test (${{ matrix.python-version }}"

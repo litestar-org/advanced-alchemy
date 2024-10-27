@@ -3,5 +3,5 @@ repositories
 ============
 
 .. automodule:: advanced_alchemy.repository
-    :members:
-    :noindex: Empty
+    :members: SQLAlchemyAsyncRepository SQLAlchemyAsyncSlugRepository SQLAlchemyAsyncQueryRepository SQLAlchemySyncRepository SQLAlchemySyncSlugRepository SQLAlchemySyncQueryRepository
+    :noindex: Empty EmptyType ErrorMessages

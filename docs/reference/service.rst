@@ -3,4 +3,4 @@ services
 ============
 
 .. automodule:: advanced_alchemy.service
-    :members:
+    :members: SQLAlchemyAsyncRepositoryService SQLAlchemySyncRepositoryService

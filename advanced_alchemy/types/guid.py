@@ -1,18 +1,15 @@
-from __future__ import annotations
-
+# ruff: noqa: FA100
 from base64 import b64decode
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, Type, cast
+from typing import Any, Optional, Type, Union, cast
 from uuid import UUID
 
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
 from sqlalchemy.dialects.oracle import RAW as ORA_RAW
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.engine import Dialect
 from sqlalchemy.types import BINARY, CHAR, TypeDecorator
 from typing_extensions import Buffer
-
-if TYPE_CHECKING:
-    from sqlalchemy.engine import Dialect
 
 __all__ = ("GUID",)
 
@@ -56,9 +53,9 @@ class GUID(TypeDecorator[UUID]):
 
     def process_bind_param(
         self,
-        value: bytes | str | UUID | None,
+        value: Optional[Union[bytes, str, UUID]],
         dialect: Dialect,
-    ) -> bytes | str | None:
+    ) -> Optional[Union[bytes, str]]:
         if value is None:
             return value
         if dialect.name in {"postgresql", "duckdb", "cockroachdb", "mssql"}:
@@ -72,9 +69,9 @@ class GUID(TypeDecorator[UUID]):
 
     def process_result_value(
         self,
-        value: bytes | str | UUID | None,
+        value: Optional[Union[bytes, str, UUID]],
         dialect: Dialect,
-    ) -> UUID | None:
+    ) -> Optional[UUID]:
         if value is None:
             return value
         if value.__class__.__name__ == "UUID":
@@ -86,7 +83,7 @@ class GUID(TypeDecorator[UUID]):
         return UUID(hex=cast("str", value))
 
     @staticmethod
-    def to_uuid(value: Any) -> UUID | None:
+    def to_uuid(value: Any) -> Optional[UUID]:
         if value.__class__.__name__ == "UUID" or value is None:
             return cast("UUID | None", value)
         try:

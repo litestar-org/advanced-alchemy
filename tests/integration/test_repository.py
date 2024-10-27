@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 import pytest
 from msgspec import Struct
 from pydantic import BaseModel
-from pytest_lazyfixture import lazy_fixture
+from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
@@ -824,7 +824,7 @@ async def seed_db_async(
             await conn.execute(insert(secret_model), raw_secrets)
 
 
-@pytest.fixture(params=[lazy_fixture("session"), lazy_fixture("async_session")], ids=["sync", "async"])
+@pytest.fixture(params=[lf("session"), lf("async_session")], ids=["sync", "async"])
 def any_session(request: FixtureRequest) -> AsyncSession | Session:
     """Return a session for the current session"""
     if isinstance(request.param, AsyncSession):
@@ -834,7 +834,7 @@ def any_session(request: FixtureRequest) -> AsyncSession | Session:
     return request.param  # type: ignore[no-any-return]
 
 
-@pytest.fixture(params=[lazy_fixture("engine"), lazy_fixture("async_engine")], ids=["sync", "async"])
+@pytest.fixture(params=[lf("engine"), lf("async_engine")], ids=["sync", "async"])
 async def any_engine(
     request: FixtureRequest,
 ) -> Engine | AsyncEngine:

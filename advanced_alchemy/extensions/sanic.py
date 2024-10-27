@@ -38,6 +38,23 @@ class CommitStrategyExecutor(Protocol):
 
 
 class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT]):  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
+    """Sanic extension for integrating Advanced Alchemy with SQLAlchemy.
+
+    Args:
+        sqlalchemy_config (advanced_alchemy.config.sync.SQLAlchemySyncConfig | advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig):
+            Configuration for SQLAlchemy.
+        autocommit (advanced_alchemy.config.types.CommitStrategy | None, optional):
+            Strategy for committing transactions. Defaults to None.
+        counters (sanic.helpers.Default | bool, optional):
+            Enables or disables counters. Defaults to sanic.helpers._default.
+        session_maker_key (str, optional):
+            Key for the session maker in app context. Defaults to "sessionmaker".
+        engine_key (str, optional):
+            Key for the engine in app context. Defaults to "engine".
+        session_key (str, optional):
+            Key for the session in request context. Defaults to "session".
+    """
+
     name = "AdvancedAlchemy"
 
     @overload
@@ -105,6 +122,12 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         self.app: Sanic  # pyright: ignore[reportMissingTypeArgument]
 
     async def _do_commit(self, session: Session | AsyncSession) -> None:
+        """Commit the current transaction.
+
+        Args:
+            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
+                The session to commit.
+        """
         if not isinstance(session, AsyncSession):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, session.commit)
@@ -112,6 +135,12 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
             await session.commit()
 
     async def _do_rollback(self, session: Session | AsyncSession) -> None:
+        """Rollback the current transaction.
+
+        Args:
+            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
+                The session to rollback.
+        """
         if not isinstance(session, AsyncSession):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, session.rollback)
@@ -119,6 +148,12 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
             await session.rollback()
 
     async def _do_close(self, session: Session | AsyncSession) -> None:
+        """Close the session.
+
+        Args:
+            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
+                The session to close.
+        """
         if not isinstance(session, AsyncSession):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, session.close)
@@ -126,15 +161,41 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
             await session.close()
 
     async def _commit_strategy_always(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None:
+        """Commit strategy that always commits the session.
+
+        Args:
+            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
+                The session to commit.
+            response (sanic.HTTPResponse):
+                The HTTP response.
+        """
         await self._do_commit(session)
 
     async def _commit_strategy_match_status(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None:
+        """Commit strategy that commits based on the response status.
+
+        Args:
+            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
+                The session to commit or rollback.
+            response (sanic.HTTPResponse):
+                The HTTP response.
+        """
         if 200 <= response.status < 300:  # noqa: PLR2004
             await self._do_commit(session)
         else:
             await self._do_rollback(session)
 
     async def session_handler(self, session: Session | AsyncSession, request: Request, response: HTTPResponse) -> None:
+        """Handle the session lifecycle based on the commit strategy.
+
+        Args:
+            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
+                The current session.
+            request (sanic.Request):
+                The incoming request.
+            response (sanic.HTTPResponse):
+                The outgoing response.
+        """
         try:
             if self.autocommit_strategy:
                 await self._commit_strategies[self.autocommit_strategy](session=session, response=response)  # pyright: ignore[reportArgumentType]
@@ -143,6 +204,11 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
             delattr(request.ctx, self.session_key)
 
     def get_engine(self) -> EngineT:
+        """Retrieve the SQLAlchemy engine from the app context.
+
+        Returns:
+            EngineT: The SQLAlchemy engine.
+        """
         engine = getattr(self.app.ctx, self.engine_key, None)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         if engine is not None:
             return cast(EngineT, engine)
@@ -151,9 +217,22 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         return engine
 
     def get_sessionmaker(self) -> Callable[[], SessionT]:
+        """Retrieve the session maker.
+
+        Returns:
+            Callable[[], SessionT]: A callable that returns a new session.
+        """
         return cast(Callable[[], SessionT], self.session_maker)
 
     def get_session(self, request: Request) -> SessionT:
+        """Retrieve or create a session for the current request.
+
+        Args:
+            request (sanic.Request): The incoming request.
+
+        Returns:
+            SessionT: The session associated with the request.
+        """
         session = getattr(request.ctx, self.session_key, None)
         if session is not None:
             return cast(SessionT, session)
@@ -163,16 +242,44 @@ class SanicAdvancedAlchemy(Extension, Generic[EngineT, SessionT, SessionMakerT])
         return session
 
     def get_engine_from_request(self, request: Request) -> EngineT:
+        """Retrieve the engine from the request context.
+
+        Args:
+            request (sanic.Request): The incoming request.
+
+        Returns:
+            EngineT: The SQLAlchemy engine.
+        """
         return cast("EngineT", getattr(request.app.ctx, self.engine_key, None))
 
     def get_sessionmaker_from_request(self, request: Request) -> SessionMakerT:
+        """Retrieve the session maker from the request context.
+
+        Args:
+            request (sanic.Request): The incoming request.
+
+        Returns:
+            SessionMakerT: The session maker.
+        """
         return cast("SessionMakerT", getattr(request.app.ctx, self.session_maker_key, None))
 
     def get_session_from_request(self, request: Request) -> SessionT:
+        """Retrieve the session from the request context.
+
+        Args:
+            request (sanic.Request): The incoming request.
+
+        Returns:
+            SessionT: The session associated with the request.
+        """
         return cast("SessionT", getattr(request.ctx, self.session_key, None))
 
     def startup(self, bootstrap: Extend) -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
-        """Advanced Alchemy Sanic extension startup hook."""
+        """Advanced Alchemy Sanic extension startup hook.
+
+        Args:
+            bootstrap (sanic_ext.Extend): The Sanic extension bootstrap.
+        """
 
         @self.app.before_server_start  # pyright: ignore[reportUnknownMemberType]
         async def on_startup(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
