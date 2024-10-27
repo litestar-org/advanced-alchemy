@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, Literal, cast
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, Dict, Literal, cast
 
 from litestar.cli._utils import console
 from litestar.constants import HTTP_RESPONSE_START
@@ -23,8 +23,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-    from typing import Any, Dict
+    from typing import Any
 
     from litestar import Litestar
     from litestar.datastructures.state import State

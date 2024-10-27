@@ -23,7 +23,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.engine import Engi
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine
-    from typing import Any, Dict
+    from typing import Any
 
     from litestar import Litestar
     from litestar.datastructures.state import State

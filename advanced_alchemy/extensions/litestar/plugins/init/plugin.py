@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, Sequence, cast
 
 from litestar.di import Provide
 from litestar.dto import DTOData
