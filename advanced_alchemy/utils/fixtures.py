@@ -7,6 +7,8 @@ from anyio import Path as AsyncPath
 
 from advanced_alchemy._serialization import decode_json
 
+__all__ = ("open_fixture", "open_fixture_async")
+
 
 def open_fixture(fixtures_path: Path | AsyncPath, fixture_name: str) -> Any:
     """Loads JSON file with the specified fixture name

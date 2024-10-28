@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import inspect
-from contextlib import AbstractContextManager
+from collections.abc import Awaitable
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from functools import partial
-from typing import TYPE_CHECKING, AsyncContextManager, Awaitable, Callable, ContextManager, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Callable, Type, TypeVar, cast, overload
 
 import anyio
 from typing_extensions import ParamSpec
@@ -16,7 +17,7 @@ P = ParamSpec("P")
 
 
 class _ContextManagerWrapper:
-    def __init__(self, cm: ContextManager[T]) -> None:
+    def __init__(self, cm: AbstractContextManager[T]) -> None:
         self._cm = cm
 
     async def __aenter__(self) -> T:  # pyright: ignore
@@ -24,7 +25,7 @@ class _ContextManagerWrapper:
 
     async def __aexit__(
         self,
-        exc_type: type[BaseException] | None,
+        exc_type: Type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool | None:
@@ -43,9 +44,9 @@ async def maybe_async(obj: Awaitable[T] | T) -> T:
     return cast(T, await obj) if inspect.isawaitable(obj) else cast(T, obj)  # type: ignore[redundant-cast]
 
 
-def maybe_async_cm(obj: ContextManager[T] | AsyncContextManager[T]) -> AsyncContextManager[T]:
+def maybe_async_cm(obj: AbstractContextManager[T] | AbstractAsyncContextManager[T]) -> AbstractAsyncContextManager[T]:
     if isinstance(obj, AbstractContextManager):
-        return cast(AsyncContextManager[T], _ContextManagerWrapper(obj))
+        return cast(AbstractAsyncContextManager[T], _ContextManagerWrapper(obj))
     return obj
 
 

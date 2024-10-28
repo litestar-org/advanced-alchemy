@@ -8,7 +8,7 @@ from pytest import FixtureRequest
 from pytest_mock import MockerFixture
 from sanic import HTTPResponse, Request, Sanic
 from sanic_ext import Extend
-from sanic_testing.testing import SanicTestClient
+from sanic_testing.testing import SanicTestClient  # type: ignore[import-untyped]
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
@@ -93,7 +93,7 @@ def test_inject_engine(app: Sanic, alchemy: SanicAdvancedAlchemy) -> None:
         return HTTPResponse(status=200)
 
     client = SanicTestClient(app=app)
-    assert client.get("/")[1].status == 200
+    assert client.get("/")[1].status == 200  # pyright: ignore[reportOptionalMemberAccess]
 
 
 """

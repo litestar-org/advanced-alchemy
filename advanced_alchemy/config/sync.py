@@ -1,3 +1,5 @@
+"""Sync SQLAlchemy configuration module."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -20,13 +22,14 @@ __all__ = (
 )
 
 
+@dataclass
 class SyncSessionConfig(GenericSessionConfig[Connection, Engine, Session]):
-    pass
+    """Configuration for synchronous SQLAlchemy sessions."""
 
 
 @dataclass
 class AlembicSyncConfig(GenericAlembicConfig):
-    """Configuration for a Sync Alembic's :class:`Config <alembic.config.Config>`.
+    """Configuration for Alembic's synchronous migrations.
 
     For details see: https://alembic.sqlalchemy.org/en/latest/api/config.html
     """
@@ -34,12 +37,14 @@ class AlembicSyncConfig(GenericAlembicConfig):
 
 @dataclass
 class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker[Session]]):
-    """Sync SQLAlchemy Configuration."""
+    """Synchronous SQLAlchemy Configuration.
+
+    Note:
+        The alembic configuration options are documented in the Alembic documentation.
+    """
 
     create_engine_callable: Callable[[str], Engine] = create_engine
-    """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
-    subclass.
-    """
+    """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass."""
     session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
     session_maker_class: type[sessionmaker[Session]] = sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -51,14 +56,27 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
     """
 
     def __post_init__(self) -> None:
+        """Initialize the configuration after dataclass initialization.
+
+        Sets the metadata on the alembic config if provided.
+        """
         if self.metadata:
             self.alembic_config.target_metadata = self.metadata
         super().__post_init__()
 
     @contextmanager
-    def get_session(
-        self,
-    ) -> Generator[Session, None, None]:
+    def get_session(self) -> Generator[Session, None, None]:
+        """Get a session context manager.
+
+        Yields:
+            Generator[sqlalchemy.orm.Session, None, None]: A context manager yielding an active SQLAlchemy Session.
+
+        Examples:
+            Using the session context manager:
+
+            >>> with config.get_session() as session:
+            ...     session.execute(...)
+        """
         session_maker = self.create_session_maker()
         with session_maker() as session:
             yield session

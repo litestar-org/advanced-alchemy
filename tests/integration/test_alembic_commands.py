@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type, cast
+from typing import Generator, Type, cast
 from uuid import UUID
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest import CaptureFixture, FixtureRequest
-from pytest_lazyfixture import lazy_fixture
+from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, ForeignKey, String
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column, relationship, sessionmaker
@@ -98,10 +98,10 @@ pytestmark = [
         ),
     ],
 )
-def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
+def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig, None, None]:
     engine = cast(Engine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
-    return SQLAlchemySyncConfig(
+    yield SQLAlchemySyncConfig(
         engine_instance=engine,
         session_maker=sessionmaker(bind=engine, expire_on_commit=False),
         metadata=orm_registry.metadata,
@@ -177,10 +177,10 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
 )
 def async_sqlalchemy_config(
     request: FixtureRequest,
-) -> SQLAlchemyAsyncConfig:
+) -> Generator[SQLAlchemyAsyncConfig, None, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
-    return SQLAlchemyAsyncConfig(
+    yield SQLAlchemyAsyncConfig(
         engine_instance=async_engine,
         session_maker=async_sessionmaker(bind=async_engine, expire_on_commit=False),
         metadata=orm_registry.metadata,
@@ -188,7 +188,7 @@ def async_sqlalchemy_config(
 
 
 @pytest.fixture(
-    params=[lazy_fixture("sync_sqlalchemy_config"), lazy_fixture("async_sqlalchemy_config")],
+    params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
 def any_config(request: FixtureRequest) -> SQLAlchemySyncConfig | SQLAlchemyAsyncConfig:
@@ -260,13 +260,13 @@ async def test_dump_tables(
     capsys: CaptureFixture[str],
     tmp_project_dir: Path,
 ) -> None:
-
     from advanced_alchemy.base import (
         CommonTableAttributes,
         DeclarativeBase,
         UUIDPrimaryKey,
         create_registry,
     )
+
     class _UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, DeclarativeBase):
         registry = create_registry()
 

@@ -13,6 +13,5 @@ Available API References
     :titlesonly:
 
     alembic
-    cli
     dto
-    plugins/index
+    plugins

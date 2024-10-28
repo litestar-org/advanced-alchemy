@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Tuple, Union
 
 from sqlalchemy.orm import InstrumentedAttribute
-from typing_extensions import TypeAlias
+from typing_extensions import TypeAlias, TypeVar
 
 if TYPE_CHECKING:
     from sqlalchemy import RowMapping, Select
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
 
 __all__ = (
+    "T",
     "ModelT",
     "SelectT",
     "RowT",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncGenerator, Generator, cast
+from collections.abc import AsyncGenerator, Generator
+from typing import TYPE_CHECKING, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
 
 import pytest

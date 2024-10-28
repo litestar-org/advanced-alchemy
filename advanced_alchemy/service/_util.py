@@ -8,15 +8,7 @@ from __future__ import annotations
 
 from functools import partial
 from pathlib import Path, PurePath
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    List,
-    Sequence,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Callable, List, Sequence, cast, overload
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
@@ -26,10 +18,10 @@ from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
-    BaseModel,
+    BaseModel,  # pyright: ignore[reportAttributeAccessIssue]
     ModelDTOT,
-    Struct,
-    convert,
+    Struct,  # pyright: ignore[reportAttributeAccessIssue]
+    convert,  # pyright: ignore[reportAttributeAccessIssue]
     get_type_adapter,
 )
 
@@ -39,6 +31,8 @@ if TYPE_CHECKING:
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.service.typing import FilterTypeT
+
+__all__ = ("ResultConverter", "find_filter")
 
 
 def _default_msgspec_deserializer(
@@ -147,14 +141,15 @@ class ResultConverter:
         *,
         schema_type: type[ModelDTOT] | None = None,
     ) -> ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]:
-        """Convert the object to a response schema.  When `schema_type` is None, the model is returned with no conversion.
+        """Convert the object to a response schema.
+
+        When `schema_type` is None, the model is returned with no conversion.
 
         Args:
             data: The return from one of the service calls.
-            total: the total number of rows in the data
-            filters: Collection route filters.
-            schema_type: Collection route filters.
-
+            total: The total number of rows in the data.
+            filters: Collection of route filters.
+            schema_type: Optional schema type to convert the data to
         Returns:
             The list of instances retrieved from the repository.
         """

@@ -8,8 +8,7 @@ from sqlalchemy import ColumnElement, select
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable
-    from typing import Iterator
+    from collections.abc import Hashable, Iterator
 
     from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +16,8 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from sqlalchemy.orm.scoping import scoped_session
     from typing_extensions import Self
+
+__all__ = ("UniqueMixin",)
 
 
 class UniqueMixin:
@@ -120,7 +121,7 @@ class UniqueMixin:
         return obj
 
     @classmethod
-    def unique_hash(cls, *args: Any, **kwargs: Any) -> Hashable:  # noqa: ARG003
+    def unique_hash(cls, *args: Any, **kwargs: Any) -> Hashable:
         """Generate a unique key based on the provided arguments.
 
         This method should be implemented in the subclass.
@@ -140,7 +141,7 @@ class UniqueMixin:
         raise NotImplementedError(msg)
 
     @classmethod
-    def unique_filter(cls, *args: Any, **kwargs: Any) -> ColumnElement[bool]:  # noqa: ARG003
+    def unique_filter(cls, *args: Any, **kwargs: Any) -> ColumnElement[bool]:
         """Generate a filter condition for ensuring uniqueness.
 
         This method should be implemented in the subclass.

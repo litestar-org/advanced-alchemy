@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, Index, MetaData, Sequence, String, UniqueConstraint
@@ -21,6 +21,7 @@ from sqlalchemy.orm import (
     validates,
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
+from typing_extensions import TypeVar
 
 from advanced_alchemy.types import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
 
@@ -37,7 +38,7 @@ if NANOID_INSTALLED and not TYPE_CHECKING:
     from fastnanoid import generate as nanoid  # pyright: ignore[reportMissingImports]
 
 else:
-    nanoid = uuid4
+    nanoid = uuid4  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -63,6 +64,7 @@ __all__ = (
     "UUIDv7Base",
     "NanoIDAuditBase",
     "NanoIDBase",
+    "NanoIDPrimaryKey",
     "UUIDPrimaryKey",
     "UUIDv7PrimaryKey",
     "UUIDv6PrimaryKey",
@@ -71,6 +73,7 @@ __all__ = (
     "orm_registry",
     "merge_table_arguments",
     "TableArgsType",
+    "BasicAttributes",
 )
 
 
@@ -114,8 +117,8 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
     for arg_to_merge in (*mixin_table_args, table_args):
         if arg_to_merge:
             if isinstance(arg_to_merge, tuple):
-                last_positional_arg = arg_to_merge[-1]
-                args.extend(arg_to_merge[:-1])
+                last_positional_arg = arg_to_merge[-1]  # pyright: ignore[reportUnknownVariableType]
+                args.extend(arg_to_merge[:-1])  # pyright: ignore[reportUnknownArgumentType]
                 if isinstance(last_positional_arg, dict):
                     kwargs.update(last_positional_arg)  # pyright: ignore[reportUnknownArgumentType]
                 else:
@@ -143,7 +146,7 @@ class ModelProtocol(Protocol):
         """Convert model to dictionary.
 
         Returns:
-            dict[str, Any]: A dict representation of the model
+            Dict[str, Any]: A dict representation of the model
         """
         ...
 
@@ -240,7 +243,7 @@ class BasicAttributes:
         """Convert model to dictionary.
 
         Returns:
-            dict[str, Any]: A dict representation of the model
+            Dict[str, Any]: A dict representation of the model
         """
         exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
         return {

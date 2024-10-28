@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from datetime import date, datetime
-from typing import TYPE_CHECKING, ClassVar, List, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Dict, List, Type
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,7 +17,7 @@ from litestar.testing import RequestFactory
 from litestar.typing import FieldDefinition
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
-from typing_extensions import Annotated
+from typing_extensions import Annotated, TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.dto import (
@@ -29,11 +29,11 @@ from advanced_alchemy.extensions.litestar.dto import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
-    from typing import Any
+    from typing import Any, Dict, List, Type
 
 
 @pytest.fixture(name="base")
-def fx_base() -> type[DeclarativeBase]:
+def fx_base() -> Type[DeclarativeBase]:
     class Base(DeclarativeBase):
         id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True)
         created: Mapped[datetime] = mapped_column(
@@ -55,7 +55,7 @@ def fx_base() -> type[DeclarativeBase]:
 
 
 @pytest.fixture(name="author_model")
-def fx_author_model(base: DeclarativeBase) -> type[DeclarativeBase]:
+def fx_author_model(base: DeclarativeBase) -> Type[DeclarativeBase]:
     class Author(base):  # type: ignore
         name: Mapped[str]
         dob: Mapped[date]
@@ -81,7 +81,7 @@ DataT = TypeVar("DataT", bound=DeclarativeBase)
 
 
 async def get_model_from_dto(
-    dto_type: type[SQLAlchemyDTO[DataT]],
+    dto_type: Type[SQLAlchemyDTO[DataT]],
     annotation: Any,
     asgi_connection: Request[Any, Any, Any],
     raw: bytes,
@@ -97,12 +97,12 @@ async def get_model_from_dto(
     return dto_type(asgi_connection).decode_bytes(raw)
 
 
-def assert_model_values(model_instance: DeclarativeBase, expected_values: dict[str, Any]) -> None:
+def assert_model_values(model_instance: DeclarativeBase, expected_values: Dict[str, Any]) -> None:
     assert {k: v for k, v in model_instance.__dict__.items() if not k.startswith("_")} == expected_values
 
 
 async def test_model_write_dto(
-    author_model: type[DeclarativeBase],
+    author_model: Type[DeclarativeBase],
     raw_author: bytes,
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
@@ -118,7 +118,7 @@ async def test_model_write_dto(
 
 
 async def test_model_read_dto(
-    author_model: type[DeclarativeBase],
+    author_model: Type[DeclarativeBase],
     raw_author: bytes,
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
@@ -135,7 +135,7 @@ async def test_model_read_dto(
     )
 
 
-async def test_model_list_dto(author_model: type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
+async def test_model_list_dto(author_model: Type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
     dto_type = SQLAlchemyDTO[author_model]  # type: ignore
     raw = b'[{"id": "97108ac1-ffcb-411d-8b1e-d9183399f63b","name":"Agatha Christie","dob":"1890-09-15","created":"0001-01-01T00:00:00","updated":"0001-01-01T00:00:00"}]'
     dto_data = await get_model_from_dto(dto_type, List[author_model], asgi_connection, raw)  # type: ignore
@@ -151,7 +151,7 @@ async def test_model_list_dto(author_model: type[DeclarativeBase], asgi_connecti
 
 
 async def test_dto_exclude(
-    author_model: type[DeclarativeBase],
+    author_model: Type[DeclarativeBase],
     raw_author: bytes,
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
@@ -165,7 +165,7 @@ async def test_dto_exclude(
     assert "id" not in vars(model)
 
 
-async def test_write_dto_field_default(base: type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
+async def test_write_dto_field_default(base: Type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
     class Model(base):  # type: ignore
         field: Mapped[int] = mapped_column(default=3)
 
@@ -175,7 +175,7 @@ async def test_write_dto_field_default(base: type[DeclarativeBase], asgi_connect
 
 
 async def test_write_dto_for_model_field_factory_default(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     val = uuid4()
@@ -189,7 +189,7 @@ async def test_write_dto_for_model_field_factory_default(
 
 
 async def test_write_dto_for_model_field_unsupported_default(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     """Test for error condition where we don't know what to do with a default
@@ -203,7 +203,7 @@ async def test_write_dto_for_model_field_unsupported_default(
 
 
 async def test_dto_for_private_model_field(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Model(base):  # type: ignore
@@ -228,7 +228,7 @@ async def test_dto_for_private_model_field(
 
 
 async def test_dto_for_non_mapped_model_field(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Model(base):  # type: ignore
@@ -240,7 +240,7 @@ async def test_dto_for_non_mapped_model_field(
 
 
 async def test_dto_mapped_as_dataclass_model_type(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     """Test declare pydantic type on `dto.DTOField`."""
@@ -255,7 +255,7 @@ async def test_dto_mapped_as_dataclass_model_type(
 
 
 async def test_to_mapped_model_with_collection_relationship(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     create_module: Callable[[str], ModuleType],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
@@ -265,7 +265,7 @@ async def test_to_mapped_model_with_collection_relationship(
         """
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List, Set, Tuple, Type, List
 
 from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -349,7 +349,7 @@ async def test_dto_mapped_union(
         """
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, List, Set, Tuple, Type, Union
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -382,7 +382,7 @@ async def test_dto_mapped_union_type(
         """
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, List, Set, Tuple, Type, Union
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -454,7 +454,7 @@ async def test_dto_optional_relationship_with_none_value(
         """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, List, Set, Tuple, Type, Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -517,7 +517,7 @@ class B(Base):
         f"""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -559,7 +559,7 @@ async def test_dto_mapped_builtin_collection(
         """
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, List, Set, Tuple, Type, Union
 
 from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -589,7 +589,7 @@ dto_type = SQLAlchemyDTO[A]
     assert vars(model)["c"] == [1, 2, 3]
 
 
-async def test_no_type_hint_column(base: type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
+async def test_no_type_hint_column(base: Type[DeclarativeBase], asgi_connection: Request[Any, Any, Any]) -> None:
     class Model(base):  # type: ignore
         nullable_field = mapped_column(sqlalchemy.String)
         not_nullable_field = mapped_column(sqlalchemy.String, nullable=False, default="")
@@ -601,7 +601,7 @@ async def test_no_type_hint_column(base: type[DeclarativeBase], asgi_connection:
 
 
 async def test_no_type_hint_scalar_relationship_with_nullable_fk(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Child(base):  # type: ignore
@@ -617,7 +617,7 @@ async def test_no_type_hint_scalar_relationship_with_nullable_fk(
 
 
 async def test_no_type_hint_scalar_relationship_with_not_nullable_fk(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Child(base):  # type: ignore
@@ -633,7 +633,7 @@ async def test_no_type_hint_scalar_relationship_with_not_nullable_fk(
 
 
 async def test_no_type_hint_collection_relationship(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Child(base):  # type: ignore
@@ -648,7 +648,7 @@ async def test_no_type_hint_collection_relationship(
 
 
 async def test_no_type_hint_collection_relationship_alt_collection_class(
-    base: type[DeclarativeBase],
+    base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Child(base):  # type: ignore

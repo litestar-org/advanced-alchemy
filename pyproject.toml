@@ -16,6 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python",
   "Topic :: Software Development",
   "Typing :: Typed",
@@ -58,100 +59,108 @@ Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
-uuid = ["uuid-utils>=0.6.1"]
 nanoid = ["fastnanoid>=0.4.1"]
+uuid = ["uuid-utils>=0.6.1"]
+
+[dependency-groups]
+cockroachdb = [
+  "asyncpg>=0.29.0",
+  "psycopg2-binary>=2.9.10",
+  "psycopg[binary,pool]>=3.2.3",
+  "sqlalchemy-cockroachdb>=2.0.2",
+]
+dev = [
+  "asgi-lifespan",
+  "eval-type-backport",
+  { include-group = "lint" },
+  { include-group = "doc" },
+  { include-group = "test" },
+  { include-group = "litestar" },
+  { include-group = "fastapi" },
+  { include-group = "flask" },
+  { include-group = "sanic" },
+  { include-group = "sqlite" },
+  { include-group = "oracle" },
+  { include-group = "duckdb" },
+  { include-group = "mssql" },
+  { include-group = "mysql" },
+  { include-group = "spanner" },
+  { include-group = "cockroachdb" },
+  { include-group = "postgres" },
+]
+doc = [
+  "auto-pytabs[sphinx]>=0.5.0",
+  "git-cliff>=2.6.1",
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "sphinx>=7.0.0; python_version <= \"3.9\"",
+  "sphinx>=8.0.0; python_version >= \"3.10\"",
+  "sphinx-autobuild>=2021.3.14",
+  "sphinx-copybutton>=0.5.2",
+  "sphinx-click>=6.0.0",
+  "sphinx-design>=0.5.0",
+  "sphinxcontrib-mermaid>=0.9.2",
+  "sphinx-paramlinks>=0.6.0",
+  "sphinx-togglebutton>=0.3.2",
+  "sphinx-toolbox>=3.8.1",
+]
+duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
+fastapi = ["fastapi[all]>=0.115.3"]
+flask = ["flask-sqlalchemy>=3.1.1"]
+lint = [
+  "mypy>=1.13.0",
+  "pre-commit>=3.5.0",
+  "pyright>=1.1.386",
+  "ruff>=0.7.1",
+  "slotscheck>=0.16.5",
+  "asyncpg-stubs",
+  "types-Pillow",
+  "types-PyMySQL",
+  "types-PyYAML",
+  "types-Pygments",
+  "types-aiofiles",
+  "types-colorama",
+  "types-docutils",
+  "types-psycopg2",
+  "types-python-dateutil",
+  "types-pytz",
+  "types-ujson",
+]
+litestar = ["litestar[cli]>=2.12.1"]
+mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
+mysql = ["asyncmy>=0.2.9"]
+oracle = ["oracledb>=2.4.1"]
+postgres = ["asyncpg>=0.29.0", "psycopg2-binary>=2.9.10", "psycopg[binary,pool]>=3.2.3"]
+sanic = ["sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
+spanner = ["sqlalchemy-spanner>=1.7.0"]
+sqlite = ["aiosqlite>=0.20.0"]
+test = [
+  "coverage>=7.6.1",
+  "pytest>=7.4.4",
+  "pytest-asyncio>=0.23.8",
+  "pytest-cov>=5.0.0",
+  "pytest-databases>=0.10.0",
+  "pytest-lazy-fixtures>=1.1.1",
+  "pytest-mock>=3.14.0",
+  "pytest-sugar>=1.0.0",
+  "pytest-xdist>=3.6.1",
+  "time-machine>=2.15.0",
+]
 
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["advanced_alchemy", "advanced_alchemy.extensions.litestar"]
-
-[tool.pdm]
-ignore_package_warnings = [
-  "alabaster",
-  "sphinxcontrib-*",
-  "sphinx-*",
-  "sphinx",
-  "pre-commit",
-  "pydata-sphinx-*",
-  "slotscheck",
-]
-
-[tool.pdm.dev-dependencies]
-dev = [
-  "asyncmy>=0.2.8",
-  "asyncpg>=0.28.0",
-  "oracledb>=1.4.0",
-  "redis>=5.0.0",
-  "duckdb-engine>=0.9.2",
-  "aiosqlite>=0.19.0",
-  "psycopg[pool,binary]>=3.1.10",
-  "psycopg2-binary",
-  "pytest-xdist>=3.3.1",
-  "sqlalchemy-spanner>=1.6.2",
-  "sqlalchemy-cockroachdb>=2.0.0",
-  "litestar>=2.0.1",
-  "fastapi>=0.103.1",
-  "msgspec>=0.18.2",
-  "orjson>=3.9.7",
-  "pyodbc>=4.0.39",
-  "duckdb>=0.9.0",
-  "asgi-lifespan>=2.1.0",
-  "aioodbc>=0.5.0",
-  "eval-type-backport>=0.2.0",
-]
-docs = [
-  "sphinx>=7.1.2",
-  "sphinx-autobuild>=2021.3.14",
-  "sphinx-copybutton>=0.5.2",
-  "sphinx-click>=5.0.1",
-  "sphinx-toolbox>=3.5.0",
-  "sphinx-design>=0.5.0",
-  "sphinx-paramlinks>=0.6.0",
-  "sphinx-togglebutton>=0.3.2",
-  #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
-  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
-  "auto-pytabs[sphinx]>=0.4.0",
-  "git-cliff>=2.2.1",
-]
-extensions = [
-  "litestar[cli]>=2.0.0",
-  "fastapi>=0.101.0",
-  "sanic[ext]>=23.6.0",
-  "sanic-testing>=23.6.0",
-  "msgspec>=0.18.2",
-  "flask>=3.0.0",
-  "flask-sqlalchemy>=3.1.1",
-]
-linting = [
-  "pre-commit>=3.4.0",
-  "mypy>=1.5.1",
-  "ruff>=0.0.287",
-  "asyncpg-stubs",
-  "types-pytest-lazy-fixture",
-  "types-click",
-  "types-pyyaml",
-  "pyright>=1.1.350",
-]
-test = [
-  "pytest>=7.4.1,<8.0.0",
-  "pytest-xdist>=3.3.1",
-  "pytest-lazy-fixture>=0.6.3",
-  "pytest-asyncio>=0.21.1",
-  "pytest-mock>=3.11.1",
-  "time-machine>=2.12.0",
-  "httpx>=0.24.1",
-  "pytz",
-  "coverage",
-  "pytest-cov",
-  "pytest-sugar>=1.0.0",
-  "pytest-databases>=0.2.1",
+packages = [
+  "advanced_alchemy",
+  "advanced_alchemy.extensions.litestar",
+  "advanced_alchemy.extensions.sanic",
+  "advanced_alchemy.extensions.starlette",
 ]
 
 [tool.pytest.ini_options]
 addopts = ["-q", "-ra"]
+# asyncio_default_fixture_loop_scope = "session"
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
@@ -215,7 +224,7 @@ line-length = 120
 [tool.ruff]
 exclude = [".venv", "node_modules"]
 line-length = 120
-src = ["advanced_alchemy", "tests"]
+src = ["advanced_alchemy", "tests", "docs", "tools"]
 target-version = "py38"
 
 [tool.ruff.lint]
@@ -246,14 +255,21 @@ ignore = [
   "PT",
   "TD",
   "ARG002",  # ignore for now; investigate
+  "ARG003",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
   "PD011",   # pandas
   "PLR0912",
+  "ISC001",
+  "COM812",
 ]
 select = ["ALL"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.pyupgrade]
+# Preserve types, even if a file imports `from __future__ import annotations`.
+# keep-runtime-typing = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 14
@@ -296,13 +312,35 @@ classmethod-decorators = [
 [tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
 ban-relative-imports = "all"
+
 [tool.ruff.lint.isort]
 known-first-party = ["advanced_alchemy", "tests"]
+
+[tool.slotscheck]
+exclude-modules = '''
+(
+  (^|\.)test_
+  |^tests\.*
+  |^tools\.*
+  |^docs\.*
+  |^examples\.*
+  |^sqlalchemy\.(
+    testing
+    |ext\.mypy  # see slotscheck/issues/178
+  )
+  |^alembic\.testing\.suite.*  # Add this line to exclude Alembic test suite
+)
+'''
+include-modules = "advanced_alchemy.*"
+require-superclass = false
+strict-imports = true
 
 [tool.mypy]
 disallow_any_generics = false
 disallow_untyped_decorators = true
 implicit_reexport = false
+packages = ["advanced_alchemy", "tests", "docs", "examples"]
+python_version = "3.8"
 show_error_codes = true
 strict = true
 warn_redundant_casts = true
@@ -440,7 +478,7 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 
 [tool.codespell]
 ignore-words-list = "selectin"
-skip = 'pdm.lock, examples/us_state_lookup.json'
+skip = 'pdm.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
 
 [tool.git-cliff.changelog]
 header = """

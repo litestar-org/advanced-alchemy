@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, ClassVar, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Union, cast
+
+from typing_extensions import TypeVar
 
 from advanced_alchemy.base import orm_registry
 from advanced_alchemy.config.engine import EngineConfig
@@ -24,18 +26,23 @@ __all__ = (
     "GenericSQLAlchemyConfig",
     "GenericSessionConfig",
     "GenericAlembicConfig",
+    "ConnectionT",
+    "EngineT",
+    "SessionT",
+    "SessionMakerT",
+    "ALEMBIC_TEMPLATE_PATH",
 )
 
-ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 
+ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 """Path to the Alembic templates."""
-ConnectionT = TypeVar("ConnectionT", bound="Connection | AsyncConnection")
-"""Type variable for a SQLAlchemy connection."""
-EngineT = TypeVar("EngineT", bound="Engine | AsyncEngine")
+ConnectionT = TypeVar("ConnectionT", bound=Union["Connection", "AsyncConnection"])
+"""Type variable for SQLAlchemy connection types."""
+EngineT = TypeVar("EngineT", bound=Union["Engine", "AsyncEngine"])
 """Type variable for a SQLAlchemy engine."""
-SessionT = TypeVar("SessionT", bound="Session | AsyncSession")
+SessionT = TypeVar("SessionT", bound=Union["Session", "AsyncSession"])
 """Type variable for a SQLAlchemy session."""
-SessionMakerT = TypeVar("SessionMakerT", bound="sessionmaker[Session] | async_sessionmaker[AsyncSession]")
+SessionMakerT = TypeVar("SessionMakerT", bound=Union["sessionmaker[Session]", "async_sessionmaker[AsyncSession]"])
 """Type variable for a SQLAlchemy sessionmaker."""
 
 

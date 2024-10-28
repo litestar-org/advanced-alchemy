@@ -1,20 +1,19 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, cast
+# ruff: noqa: FA100
+from typing import Any, Dict, Optional, Type, Union, cast
 
 from sqlalchemy import text, util
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
+from sqlalchemy.engine import Dialect
 from sqlalchemy.types import JSON as _JSON
 from sqlalchemy.types import SchemaType, TypeDecorator, TypeEngine
 
 from advanced_alchemy._serialization import decode_json, encode_json
 
-if TYPE_CHECKING:
-    from sqlalchemy.engine import Dialect
+__all__ = ("ORA_JSONB",)
 
 
-class ORA_JSONB(TypeDecorator, SchemaType):  # noqa: N801
+class ORA_JSONB(TypeDecorator[Dict[str, Any]], SchemaType):  # noqa: N801
     """Oracle Binary JSON type.
 
     JsonB = _JSON().with_variant(PG_JSONB, "postgresql").with_variant(ORA_JSONB, "oracle")
@@ -25,7 +24,7 @@ class ORA_JSONB(TypeDecorator, SchemaType):  # noqa: N801
     cache_ok = True
 
     @property
-    def python_type(self) -> type[dict[str, Any]]:
+    def python_type(self) -> Type[Dict[str, Any]]:
         return dict
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -39,10 +38,10 @@ class ORA_JSONB(TypeDecorator, SchemaType):  # noqa: N801
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         return dialect.type_descriptor(ORA_BLOB())
 
-    def process_bind_param(self, value: Any, dialect: Dialect) -> Any | None:
+    def process_bind_param(self, value: Any, dialect: Dialect) -> Optional[Any]:
         return value if value is None else encode_json(value)
 
-    def process_result_value(self, value: bytes | None, dialect: Dialect) -> Any | None:
+    def process_result_value(self, value: Union[bytes, None], dialect: Dialect) -> Optional[Any]:
         if dialect.oracledb_ver < (2,):  # type: ignore[attr-defined]
             return value if value is None else decode_json(value)
         return value
@@ -50,7 +49,7 @@ class ORA_JSONB(TypeDecorator, SchemaType):  # noqa: N801
     def _should_create_constraint(self, compiler: Any, **kw: Any) -> bool:
         return cast("bool", compiler.dialect.name == "oracle")
 
-    def _variant_mapping_for_set_table(self, column: Any) -> dict[str, Any] | None:
+    def _variant_mapping_for_set_table(self, column: Any) -> Optional[Dict[str, Any]]:
         if column.type._variant_mapping:  # noqa: SLF001
             variant_mapping = dict(column.type._variant_mapping)  # noqa: SLF001
             variant_mapping["_default"] = column.type

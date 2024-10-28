@@ -39,8 +39,8 @@ with app.app_context():
     with db.engine.begin() as conn:
         Message.metadata.create_all(conn)
 
-    session = db.session
-    repo = MessageRepository(session=session)
+    session = db.session  # type: ignore[assignment,unused-ignore]
+    repo = MessageRepository(session=session)  # pyright: ignore[reportArgumentType]
     repo.add(Message(text="Hello, world!"))
 
     message = repo.list()[0]

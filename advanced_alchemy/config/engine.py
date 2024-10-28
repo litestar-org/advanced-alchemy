@@ -7,7 +7,8 @@ from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
-    from typing import Any, Mapping
+    from collections.abc import Mapping
+    from typing import Any
 
     from sqlalchemy.engine.interfaces import IsolationLevel
     from sqlalchemy.pool import Pool
@@ -16,17 +17,18 @@ if TYPE_CHECKING:
     from advanced_alchemy.utils.dataclass import EmptyType
 
 
-__all__ = ("EngineConfig",)
-
 _EchoFlagType: TypeAlias = "None | bool | Literal['debug']"
 _ParamStyle = Literal["qmark", "numeric", "named", "format", "pyformat", "numeric_dollar"]
+
+__all__ = ("EngineConfig",)
 
 
 @dataclass
 class EngineConfig:
-    """Configuration for SQLAlchemy's :class:`Engine <sqlalchemy.engine.Engine>`.
+    """Configuration for SQLAlchemy's Engine.
 
-    For details see: https://docs.sqlalchemy.org/en/20/core/engines.html
+    This class provides configuration options for SQLAlchemy engine creation.
+    See: https://docs.sqlalchemy.org/en/20/core/engines.html
     """
 
     connect_args: dict[Any, Any] | EmptyType = Empty

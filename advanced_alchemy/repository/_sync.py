@@ -8,12 +8,11 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
-    Iterable,
     List,
     Literal,
     Optional,
     Protocol,
-    Sequence,
+    Tuple,
     cast,
     runtime_checkable,
 )
@@ -49,12 +48,15 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import ColumnElement
 
     from advanced_alchemy.filters import StatementFilter
+
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
@@ -438,15 +440,15 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         item: ModelT | type[ModelT],
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any:
-        """Get value of attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` on ``item``.
+        """Get value of attribute named as :attr:`id_attribute` on ``item``.
 
         Args:
-            item: Anything that should have an attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` value.
+            item: Anything that should have an attribute named as :attr:`id_attribute` value.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `None`, but can reference any surrogate or candidate key for the table.
 
         Returns:
-            The value of attribute on ``item`` named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`.
+            The value of attribute on ``item`` named as :attr:`id_attribute`.
         """
         if isinstance(id_attribute, InstrumentedAttribute):
             id_attribute = id_attribute.key
@@ -463,12 +465,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             item_id: Value of ID to be set on instance
-            item: Anything that should have an attribute named as :attr:`id_attribute <AbstractAsyncRepository.id_attribute>` value.
+            item: Anything that should have an attribute named as :attr:`id_attribute` value.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `None`, but can reference any surrogate or candidate key for the table.
 
         Returns:
-            Item with ``item_id`` set to :attr:`id_attribute <AbstractAsyncRepository.id_attribute>`
+            Item with ``item_id`` set to :attr:`id_attribute`
         """
         if isinstance(id_attribute, InstrumentedAttribute):
             id_attribute = id_attribute.key
@@ -517,12 +519,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             data: Instance to be added to the collection.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
         Returns:
@@ -551,10 +550,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             data: list of Instances to be added to the collection.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
         Returns:
@@ -586,10 +583,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             item_id: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
@@ -635,10 +630,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             item_ids: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
@@ -730,10 +723,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             sanity_check: When true, the length of selected instances is compared to the deleted row count
@@ -904,10 +895,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             item_id: Identifier of the instance to be retrieved.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
@@ -954,10 +943,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1003,10 +990,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1031,7 +1016,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
-                "Result[tuple[ModelT]]",
+                "Result[Tuple[ModelT]]",
                 (self._execute(statement, uniquify=loader_options_have_wildcard)),
             ).scalar_one_or_none()
             if instance:
@@ -1066,12 +1051,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1153,12 +1135,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1219,7 +1198,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Args:
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1273,12 +1251,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
@@ -1334,10 +1309,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Args:
             data: A list of instances to update.  Each should have a value for `self.id_attribute` that exists in the
                 collection.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -1425,9 +1398,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Args:
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
+            auto_expunge: Remove object from session before returning.
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
@@ -1512,11 +1483,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            order_by: list[OrderingPair] | OrderingPair | None = None,
+            order_by: List[OrderingPair] | OrderingPair | None = None,
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1572,10 +1541,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
@@ -1661,12 +1628,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             error_messages: An optional dictionary of templates to use
@@ -1742,12 +1706,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             data: Instance to update existing, or be created. Identifier used to determine if an
                 existing instance exists is the value of an attribute on ``data`` named as value of
                 :attr:`~advanced_alchemy.repository.AbstractAsyncRepository.id_attribute`.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             no_merge: Skip the usage of optimized Merge statements
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
             match_fields: a list of keys to use to match the existing model.  When
                 empty, automatically uses ``self.id_attribute`` (`id` by default) to match .
             error_messages: An optional dictionary of templates to use
@@ -1866,10 +1827,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
@@ -2080,7 +2039,6 @@ class SQLAlchemySyncQueryRepository:
 
         Args:
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2102,7 +2060,7 @@ class SQLAlchemySyncQueryRepository:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
-            statement: To facilitate customization of the underlying select query.\
+            statement: To facilitate customization of the underlying select query.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2141,7 +2099,6 @@ class SQLAlchemySyncQueryRepository:
 
         Args:
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
             **kwargs: Instance attribute value filters.
 
@@ -2162,7 +2119,6 @@ class SQLAlchemySyncQueryRepository:
         Args:
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2192,8 +2148,7 @@ class SQLAlchemySyncQueryRepository:
         """List records with total count.
 
         Args:
-            statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>` .
+            statement: To facilitate customization of the underlying select query. .
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2246,7 +2201,7 @@ class SQLAlchemySyncQueryRepository:
 
     @staticmethod
     def check_not_found(item_or_none: T | None) -> T:
-        """Raise :class:`RepositoryNotFoundException` if ``item_or_none`` is ``None``.
+        """Raise :class:`NotFoundError` if ``item_or_none`` is ``None``.
 
         Args:
             item_or_none: Item to be tested for existence.

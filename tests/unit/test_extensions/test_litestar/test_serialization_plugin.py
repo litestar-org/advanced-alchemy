@@ -27,7 +27,7 @@ async def test_serialization_plugin(
         """
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List, Set, Tuple, Type, List
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 

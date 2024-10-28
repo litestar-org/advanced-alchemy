@@ -47,37 +47,25 @@ jobs:
           && sudo rm -rf /var/cache/apt/* \
           && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
-      - name: Set up python ${{ inputs.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-      - uses: pdm-project/setup-pdm@v4
-        name: Set up PDM
-        with:
-          python-version: ${{ inputs.python-version }}
-          allow-python-prereleases: false
-          cache: true
-          cache-dependency-path: |
-            ./pdm.lock
-
-      - name: Install base libraries
-        # install a few core libraries for testing and building
-        run: pip install nodeenv cython setuptools mypy cython pip --upgrade --quiet --user
+      - name: Set up Python
+        run: uv python install ${{ inputs.python-version }}
 
       - name: Install dependencies
-        run: pdm install -G:all
+        run: uv sync --all-extras --dev
 
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
       - name: Test
         if: ${{ !inputs.coverage }}
-        run: pdm run pytest --dist "loadgroup" -m "" tests -n 2
+        run: uv run pytest --dist "loadgroup" -m "" tests -n 2
 
       - name: Test with coverage
         if: ${{ inputs.coverage }}
-        run: pdm run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 2
+        run: uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 2
 
       - uses: actions/upload-artifact@v4
         if: ${{ inputs.coverage }}

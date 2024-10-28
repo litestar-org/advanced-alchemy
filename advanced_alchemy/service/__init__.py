@@ -22,6 +22,7 @@ from advanced_alchemy.service._sync import (
 from advanced_alchemy.service._util import ResultConverter, find_filter
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
+    FilterTypeT,
     ModelDictListT,
     ModelDictT,
     ModelDTOT,
@@ -69,4 +70,5 @@ __all__ = (
     "Empty",
     "EmptyType",
     "ErrorMessages",
+    "FilterTypeT",
 )

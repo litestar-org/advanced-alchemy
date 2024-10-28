@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Collection, Union, cast
+from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
+from pytest_lazy_fixtures import lf
 from sqlalchemy import String
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,7 +75,7 @@ def sync_mock_repo() -> SQLAlchemySyncRepository[MagicMock]:
     return Repo(session=MagicMock(spec=Session, bind=MagicMock()), statement=MagicMock())
 
 
-@pytest.fixture(params=[lazy_fixture("sync_mock_repo"), lazy_fixture("async_mock_repo")])
+@pytest.fixture(params=[lf("sync_mock_repo"), lf("async_mock_repo")])
 def mock_repo(request: FixtureRequest) -> SQLAlchemyAsyncRepository[MagicMock]:
     return cast(SQLAlchemyAsyncRepository[Any], request.param)
 

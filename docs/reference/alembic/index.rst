@@ -13,5 +13,3 @@ Available API References
     :titlesonly:
 
     commands
-    templates/asyncio/index
-    templates/sync/index

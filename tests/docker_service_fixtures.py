@@ -7,8 +7,9 @@ import re
 import subprocess
 import sys
 import timeit
+from collections.abc import Awaitable, Generator
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Generator
+from typing import Any, Callable
 
 import asyncmy
 import asyncpg
@@ -25,7 +26,7 @@ from tests.helpers import wrap_sync
 
 async def wait_until_responsive(
     check: Callable[..., Awaitable],
-    timeout: float,  # noqa: ASYNC109
+    timeout: float,
     pause: float,
     **kwargs: Any,
 ) -> None:
@@ -84,7 +85,7 @@ class DockerServiceRegistry:
         name: str,
         *,
         check: Callable[..., Any],
-        timeout: float = 30,  # noqa: ASYNC109
+        timeout: float = 30,
         pause: float = 0.1,
         **kwargs: Any,
     ) -> None:
@@ -137,7 +138,7 @@ async def mysql_responsive(host: str) -> bool:
             await cursor.execute("select 1 as is_available")
             resp = await cursor.fetchone()
         return resp[0] == 1  # type: ignore
-    except asyncmy.errors.OperationalError:
+    except asyncmy.errors.OperationalError:  # pyright: ignore[reportAttributeAccessIssue]
         return False
 
 
@@ -240,7 +241,7 @@ def spanner_responsive(host: str) -> bool:
     try:
         os.environ["SPANNER_EMULATOR_HOST"] = "localhost:9010"
         os.environ["GOOGLE_CLOUD_PROJECT"] = "emulator-test-project"
-        spanner_client = spanner.Client(project="emulator-test-project", credentials=AnonymousCredentials())
+        spanner_client = spanner.Client(project="emulator-test-project", credentials=AnonymousCredentials())  # type: ignore[no-untyped-call]
         instance = spanner_client.instance("test-instance")
         with contextlib.suppress(Exception):
             instance.create()

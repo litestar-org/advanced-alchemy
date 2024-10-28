@@ -6,10 +6,11 @@ import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
+from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT  # pyright: ignore[reportPrivateUsage]
@@ -195,7 +196,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         self._update_relationship(elem, data)
                     # Remove duplicates added by orm when updating list items
                     if isinstance(value, list):
-                        setattr(data, relationship.key, type(value)(set(value)))
+                        setattr(data, relationship.key, type(value)(set(value)))  # pyright: ignore[reportUnknownArgumentType]
                 else:
                     if remote_value := getattr(value, remote.key):
                         setattr(data, local.key, remote_value)

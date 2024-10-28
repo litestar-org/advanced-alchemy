@@ -7,9 +7,10 @@ from collections import abc  # noqa: TCH003
 from dataclasses import dataclass
 from datetime import datetime  # noqa: TCH003
 from operator import attrgetter
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, Literal, cast
 
 from sqlalchemy import BinaryExpression, and_, any_, or_, text
+from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
     from typing import Callable

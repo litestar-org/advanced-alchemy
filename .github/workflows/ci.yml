@@ -10,28 +10,86 @@ concurrency:
   group: test-${{ github.head_ref }}
   cancel-in-progress: true
 
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-      - name: Install Pre-Commit
-        run: python -m pip install pre-commit && pre-commit install
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create virtual environment
+        run: uv sync --all-extras --dev
+
+      - name: Install Pre-Commit hooks
+        run: uv run pre-commit install
 
       - name: Load cached Pre-Commit Dependencies
         id: cached-pre-commit-dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit/
           key: pre-commit|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Execute Pre-Commit
-        run: pre-commit run --show-diff-on-failure --color=always --all-files
+        run: uv run pre-commit run --show-diff-on-failure --color=always --all-files
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run mypy
+        run: uv run mypy
+
+  pyright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run pyright
+        run: uv run pyright
+
+  # # TODO(cofin)
+  # # AttributeError: 'SuiteRequirements' object has no attribute 'computed_reflects_normally'
+  slotscheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run slotscheck
+        run: uv run slotscheck -m advanced_alchemy.config  -m advanced_alchemy.repository -m advanced_alchemy.service -m advanced_alchemy.extensions -m advanced_alchemy.base -m advanced_alchemy.types -m advanced_alchemy.operations
 
   test:
     name: "test (${{ matrix.python-version }}"
@@ -103,7 +161,6 @@ jobs:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: litestar-org/advanced-alchemy
-
   build-docs:
     needs:
       - validate
@@ -116,23 +173,17 @@ jobs:
       - name: Install Microsoft ODBC
         run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-      - uses: pdm-project/setup-pdm@v4
-        name: Set up PDM
-        with:
-          python-version: "3.12"
-          allow-python-prereleases: true
-          cache: true
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install dependencies
-        run: pdm install -G:docs
+        run: uv sync --all-extras --dev
 
       - name: Build docs
-        run: pdm run make docs
+        run: uv run make docs
 
       - name: Save PR number
         env:

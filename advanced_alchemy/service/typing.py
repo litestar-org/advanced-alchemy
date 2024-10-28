@@ -6,6 +6,7 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
     Any,
@@ -15,14 +16,12 @@ from typing import (
     Generic,
     List,
     Protocol,
-    Sequence,
-    TypeVar,
     Union,
     cast,
     runtime_checkable,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeGuard
+from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT

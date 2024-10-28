@@ -7,7 +7,7 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Generic, Iterable, cast
+from typing import TYPE_CHECKING, Any, Generic, List, cast
 
 from sqlalchemy import Select
 from typing_extensions import Self
@@ -25,7 +25,7 @@ from advanced_alchemy.repository._util import (
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
-    UNSET,
+    UNSET,  # pyright: ignore[reportAttributeAccessIssue]
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,
@@ -37,7 +37,7 @@ from advanced_alchemy.service.typing import (
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Sequence
+    from collections.abc import AsyncIterator, Iterable, Sequence
 
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -152,7 +152,6 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
         Args:
             *filters: arguments for filtering.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -215,10 +214,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
         Args:
             item_id: Identifier of instance to be retrieved.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
@@ -255,10 +252,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -292,10 +287,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -363,9 +356,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
         Args:
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
+            auto_expunge: Remove object from session before returning.
             force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
@@ -443,10 +434,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
-                Defaults to :class:`SQLAlchemyAsyncRepository.statement <SQLAlchemyAsyncRepository>`
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
@@ -485,12 +474,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             data: Representation to be created.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
 
@@ -518,10 +504,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             data: Representations to be created.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
 
@@ -532,7 +516,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             data = data.create_instance()
         data = [(await self.to_model(datum, "create")) for datum in cast("ModelDictListT[ModelT]", data)]
         return await self.repository.add_many(
-            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+            data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             error_messages=error_messages,
@@ -563,12 +547,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
@@ -622,10 +603,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             data: Representations to be updated.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -638,7 +617,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             data = data.create_instance()
         data = [(await self.to_model(datum, "update")) for datum in cast("ModelDictListT[ModelT]", data)]
         return await self.repository.update_many(
-            cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+            cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_commit=auto_commit,
             auto_expunge=auto_expunge,
             error_messages=error_messages,
@@ -672,12 +651,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             error_messages: An optional dictionary of templates to use
@@ -720,15 +696,10 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """Wrap repository upsert operation.
 
         Args:
-            data: Instance to update existing, or be created. Identifier used to determine if an
-                existing instance exists is the value of an attribute on ``data`` named as value of
-                :attr:`~advanced_alchemy.repository.AbstractAsyncRepository.id_attribute`.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
-            no_merge: Skip the usage of optimized Merge statements
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            data: Instance to update existing, or be created.
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
+            no_merge: Skip the usage of optimized Merge statements (**reserved for future use**)
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             error_messages: An optional dictionary of templates to use
@@ -743,7 +714,7 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             data = data.create_instance()
         data = [(await self.to_model(datum, "upsert")) for datum in cast("ModelDictListT[ModelT]", data)]
         return await self.repository.upsert_many(
-            data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+            data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
             auto_expunge=auto_expunge,
             auto_commit=auto_commit,
             no_merge=no_merge,
@@ -782,12 +753,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -839,12 +807,9 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             with_for_update: indicating FOR UPDATE should be used, or may be a
                 dictionary containing flags to indicate a more specific set of
                 FOR UPDATE flags for the SELECT
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_refresh: Refresh object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_refresh <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -885,10 +850,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             item_id: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
@@ -925,10 +888,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             item_ids: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`.
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
@@ -967,10 +928,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             *filters: Types for specific filtering operations.
-            auto_expunge: Remove object from session before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_expunge <SQLAlchemyAsyncRepository>`
-            auto_commit: Commit objects before returning. Defaults to
-                :class:`SQLAlchemyAsyncRepository.auto_commit <SQLAlchemyAsyncRepository>`
+            auto_expunge: Remove object from session before returning.
+            auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             sanity_check: When true, the length of selected instances is compared to the deleted row count

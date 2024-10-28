@@ -1,20 +1,18 @@
-version: "3"
-
 services:
   postgres:
-    image: postgres:latest
+    image: docker.io/postgres:latest
     ports:
       - "5423:5432" # use a non-standard port here
     environment:
       POSTGRES_PASSWORD: super-secret
   postgres14:
-    image: postgres:14
+    image: docker.io/postgres:14
     ports:
       - "5424:5432" # use a non-standard port here
     environment:
       POSTGRES_PASSWORD: super-secret
   mysql:
-    image: mysql:latest
+    image: docker.io/mysql:latest
     ports:
       - "3360:3306" # use a non-standard port here
     environment:
@@ -25,7 +23,7 @@ services:
       MYSQL_ROOT_HOST: "%"
       LANG: C.UTF-8
   oracle18c:
-    image: gvenzl/oracle-xe:18-slim-faststart
+    image: docker.io/gvenzl/oracle-xe:18-slim-faststart
     ports:
       - "1512:1521" # use a non-standard port here
     environment:
@@ -33,7 +31,7 @@ services:
       APP_USER_PASSWORD: super-secret
       APP_USER: app
   oracle23c:
-    image: gvenzl/oracle-free:23-slim-faststart
+    image: docker.io/gvenzl/oracle-free:23-slim-faststart
     ports:
       - "1513:1521" # use a non-standard port here
     environment:
@@ -69,7 +67,7 @@ services:
       ACCEPT_EULA: Accepted
       MSSQL_TCP_PORT: 1433
   cockroachdb:
-    image: cockroachdb/cockroach:latest-v23.1
+    image: docker.io/cockroachdb/cockroach:latest
     command: start-single-node --insecure
     restart: "no"
     expose:

@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, ClassVar, Collection, Generic, Literal, Optional, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Collection,
+    Generator,
+    Generic,
+    Literal,
+    Optional,
+)
 
 from litestar.dto.base_dto import AbstractDTO
 from litestar.dto.config import DTOConfig
@@ -28,12 +37,11 @@ from sqlalchemy.orm import (
     RelationshipProperty,
 )
 from sqlalchemy.sql.expression import ColumnClause, Label
+from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
-    from typing import Any, Generator
-
     from typing_extensions import TypeAlias
 
 __all__ = ("SQLAlchemyDTO",)
@@ -82,10 +90,10 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def handle_orm_descriptor(
         cls,
         extension_type: NotExtension | AssociationProxyExtensionType | HybridExtensionType,
-        orm_descriptor: InspectionAttr,  # noqa: ARG003
-        key: str,  # noqa: ARG003
-        model_type_hints: dict[str, FieldDefinition],  # noqa: ARG003
-        model_name: str,  # noqa: ARG003
+        orm_descriptor: InspectionAttr,
+        key: str,
+        model_type_hints: dict[str, FieldDefinition],
+        model_name: str,
     ) -> list[DTOFieldDefinition]:
         msg = f"Unsupported extension type: {extension_type}"
         raise NotImplementedError(msg)
@@ -125,10 +133,10 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"
                 raise NotImplementedError(msg)
         except KeyError:
-            field_definition = parse_type_from_element(elem, orm_descriptor)
+            field_definition = parse_type_from_element(elem, orm_descriptor)  # pyright: ignore[reportUnknownArgumentType]
 
         dto_field = elem.info.get(DTO_FIELD_META_KEY) if hasattr(elem, "info") else None  # pyright: ignore[reportArgumentMemberType]
-        if dto_field is None and isinstance(orm_descriptor, InstrumentedAttribute) and hasattr(orm_descriptor, "info"):
+        if dto_field is None and isinstance(orm_descriptor, InstrumentedAttribute) and hasattr(orm_descriptor, "info"):  # pyright: ignore[reportUnknownArgumentType]
             dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportArgumentMemberType]
         if dto_field is None:
             dto_field = DTOField()
@@ -184,16 +192,16 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def _(
         cls,
         extension_type: HybridExtensionType,
-        key: str,  # noqa: ARG003
+        key: str,
         orm_descriptor: InspectionAttr,
-        model_type_hints: dict[str, FieldDefinition],  # noqa: ARG003
+        model_type_hints: dict[str, FieldDefinition],
         model_name: str,
     ) -> list[DTOFieldDefinition]:
         if not isinstance(orm_descriptor, hybrid_property):
             msg = f"Unexpected descriptor type '{orm_descriptor}' for '{extension_type}'"
             raise NotImplementedError(msg)
 
-        getter_sig = ParsedSignature.from_fn(orm_descriptor.fget, {})
+        getter_sig = ParsedSignature.from_fn(orm_descriptor.fget, {})  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
 
         field_defs = [
             DTOFieldDefinition.from_field_definition(
@@ -208,8 +216,8 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             ),
         ]
 
-        if orm_descriptor.fset is not None:
-            setter_sig = ParsedSignature.from_fn(orm_descriptor.fset, {})
+        if orm_descriptor.fset is not None:  # pyright: ignore[reportUnknownMemberType]
+            setter_sig = ParsedSignature.from_fn(orm_descriptor.fset, {})  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType]
             field_defs.append(
                 DTOFieldDefinition.from_field_definition(
                     field_definition=replace(
@@ -227,7 +235,20 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
     @classmethod
     def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
-        if (mapper := inspect(model_type)) is None:  # pragma: no cover
+        """Generate DTO field definitions from a SQLAlchemy model.
+
+        Args:
+            model_type (typing.Type[sqlalchemy.orm.DeclarativeBase]): The SQLAlchemy model type to generate field definitions from.
+
+        Yields:
+            collections.abc.Generator[litestar.dto.data_structures.DTOFieldDefinition, None, None]: A generator yielding DTO field definitions.
+
+        Raises:
+            RuntimeError: If the mapper cannot be found for the model type.
+            NotImplementedError: If an unsupported property or extension type is encountered.
+            ImproperConfigurationError: If a type cannot be parsed from an element.
+        """
+        if (mapper := inspect(model_type)) is None:  # pragma: no cover # pyright: ignore[reportUnnecessaryComparison]
             msg = "Unexpected `None` value for mapper."  # type: ignore[unreachable]
             raise RuntimeError(msg)
 
@@ -239,7 +260,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
         # the same hybrid property descriptor can be included in `all_orm_descriptors` multiple times, once
         # for each method name it is bound to. We only need to see it once, so track views of it here.
-        seen_hybrid_descriptors: set[hybrid_property] = set()
+        seen_hybrid_descriptors: set[hybrid_property] = set()  # pyright: ignore[reportUnknownVariableType,reportMissingTypeArgument]
         skipped_descriptors: set[str] = set()
         for composite_property in mapper.composites:
             for attr in composite_property.attrs:
@@ -252,18 +273,18 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 if orm_descriptor in seen_hybrid_descriptors:
                     continue
 
-                seen_hybrid_descriptors.add(orm_descriptor)
+                seen_hybrid_descriptors.add(orm_descriptor)  # pyright: ignore[reportUnknownMemberType]
 
             if key in skipped_descriptors:
                 continue
 
             should_skip_descriptor = False
             dto_field: DTOField | None = None
-            if hasattr(orm_descriptor, "property"):
+            if hasattr(orm_descriptor, "property"):  # pyright: ignore[reportUnknownArgumentType]
                 dto_field = orm_descriptor.property.info.get(DTO_FIELD_META_KEY)  # pyright: ignore  # noqa: PGH003
 
             # Case 1
-            is_field_marked_not_private = dto_field and dto_field.mark is not Mark.PRIVATE
+            is_field_marked_not_private = dto_field and dto_field.mark is not Mark.PRIVATE  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
             # Case 2
             should_exclude_anything_implicit = not include_implicit_fields and key not in model_type_hints
@@ -348,7 +369,7 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
 
     if isinstance(elem, RelationshipProperty):
         if elem.direction in (RelationshipDirection.ONETOMANY, RelationshipDirection.MANYTOMANY):
-            collection_type = FieldDefinition.from_annotation(elem.collection_class or list)
+            collection_type = FieldDefinition.from_annotation(elem.collection_class or list)  # pyright: ignore[reportUnknownMemberType]
             return FieldDefinition.from_annotation(collection_type.safe_generic_origin[elem.mapper.class_])
 
         if detect_nullable_relationship(elem):

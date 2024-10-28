@@ -5,15 +5,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from collections.abc import Generator, Iterator
 from datetime import date, datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, List, Literal, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Type, Union, cast
 from unittest.mock import NonCallableMagicMock
 from uuid import UUID, uuid4
 
 import pytest
 from msgspec import Struct
 from pydantic import BaseModel
-from pytest_lazyfixture import lazy_fixture
+from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, Table, and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
@@ -356,7 +357,7 @@ def tag_model(repository_pk_type: RepositoryPKType) -> TagModel:
 
 
 @pytest.fixture()
-def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
+def book_model(repository_pk_type: RepositoryPKType) -> Type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
     """Return the ``Book`` model matching the current repository PK type"""
     if repository_pk_type == "uuid":
         return models_uuid.UUIDBook
@@ -498,7 +499,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
         ),
     ],
 )
-def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Engine:
+def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Generator[Engine, None, None]:
     """Return a synchronous engine. Parametrized to return all engines supported by
     the repository PK type
     """
@@ -507,7 +508,7 @@ def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Eng
         pytest.skip(reason="Spanner does not support monotonically increasing primary keys")
     elif engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
         pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
-    return engine
+    yield engine
 
 
 @pytest.fixture()
@@ -607,7 +608,7 @@ def _seed_spanner(
     raw_authors_uuid: RawRecordData,
     raw_rules_uuid: RawRecordData,
     raw_slug_books_uuid: RawRecordData,
-) -> list[Table]:
+) -> List[Table]:
     update_raw_records(raw_authors=raw_authors_uuid, raw_rules=raw_rules_uuid)
 
     with engine.begin() as txn:
@@ -763,11 +764,11 @@ def session(
         ),
     ],
 )
-def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> AsyncEngine:
+def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Generator[AsyncEngine, None, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     if async_engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
         pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
-    return async_engine
+    yield async_engine
 
 
 @pytest.fixture()
@@ -823,7 +824,7 @@ async def seed_db_async(
             await conn.execute(insert(secret_model), raw_secrets)
 
 
-@pytest.fixture(params=[lazy_fixture("session"), lazy_fixture("async_session")], ids=["sync", "async"])
+@pytest.fixture(params=[lf("session"), lf("async_session")], ids=["sync", "async"])
 def any_session(request: FixtureRequest) -> AsyncSession | Session:
     """Return a session for the current session"""
     if isinstance(request.param, AsyncSession):
@@ -833,7 +834,7 @@ def any_session(request: FixtureRequest) -> AsyncSession | Session:
     return request.param  # type: ignore[no-any-return]
 
 
-@pytest.fixture(params=[lazy_fixture("engine"), lazy_fixture("async_engine")], ids=["sync", "async"])
+@pytest.fixture(params=[lf("engine"), lf("async_engine")], ids=["sync", "async"])
 async def any_engine(
     request: FixtureRequest,
 ) -> Engine | AsyncEngine:
@@ -1193,7 +1194,7 @@ def frozen_datetime() -> Generator[Coordinates, None, None]:
 async def test_repo_created_updated(
     frozen_datetime: Coordinates,
     author_repo: AnyAuthorRepository,
-    book_model: type[AnyBook],
+    book_model: Type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
@@ -1218,10 +1219,10 @@ async def test_repo_created_updated(
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
-        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+        book_model = cast("Type[models_uuid.UUIDBook]", book_model)
     else:
         author = cast(models_bigint.BigIntAuthor, author)
-        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+        book_model = cast("Type[models_bigint.BigIntBook]", book_model)
     author.name = "Altered"
     author = await maybe_async(author_repo.update(author))
     assert author.updated_at > original_update_dt
@@ -1237,7 +1238,7 @@ async def test_repo_created_updated(
 async def test_repo_created_updated_no_listener(
     frozen_datetime: Coordinates,
     author_repo: AuthorRepository,
-    book_model: type[AnyBook],
+    book_model: Type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
     from sqlalchemy import event
@@ -1269,10 +1270,10 @@ async def test_repo_created_updated_no_listener(
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
-        book_model = cast("type[models_uuid.UUIDBook]", book_model)
+        book_model = cast("Type[models_uuid.UUIDBook]", book_model)
     else:
         author = cast(models_bigint.BigIntAuthor, author)
-        book_model = cast("type[models_bigint.BigIntBook]", book_model)
+        book_model = cast("Type[models_bigint.BigIntBook]", book_model)
     author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
     author = await maybe_async(author_repo.update(author))
     assert author.updated_at == original_update_dt

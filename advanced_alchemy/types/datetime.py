@@ -1,13 +1,12 @@
-from __future__ import annotations
-
+# ruff: noqa: FA100
 import datetime
-from typing import TYPE_CHECKING
+from typing import Optional, Type
 
 from sqlalchemy import DateTime
+from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 
-if TYPE_CHECKING:
-    from sqlalchemy.engine import Dialect
+__all__ = ("DateTimeUTC",)
 
 
 class DateTimeUTC(TypeDecorator[datetime.datetime]):
@@ -20,10 +19,10 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
     cache_ok = True
 
     @property
-    def python_type(self) -> type[datetime.datetime]:
+    def python_type(self) -> Type[datetime.datetime]:
         return datetime.datetime
 
-    def process_bind_param(self, value: datetime.datetime | None, dialect: Dialect) -> datetime.datetime | None:
+    def process_bind_param(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:
         if value is None:
             return value
         if not value.tzinfo:
@@ -31,7 +30,7 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
             raise TypeError(msg)
         return value.astimezone(datetime.timezone.utc)
 
-    def process_result_value(self, value: datetime.datetime | None, dialect: Dialect) -> datetime.datetime | None:
+    def process_result_value(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:
         if value is None:
             return value
         if value.tzinfo is None:

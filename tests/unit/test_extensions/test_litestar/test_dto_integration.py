@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 from uuid import UUID
 
 import pytest
@@ -93,7 +93,7 @@ class Book(Base):
     bar: Mapped[str] = mapped_column(default="Hello")  # pyright: ignore
     SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
-    number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
+    number_of_reviews: Mapped[int | None] = column_property(
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
@@ -212,7 +212,7 @@ model_with_func_query = select(ConcreteBase, func_result_query.label("func_resul
 
 class ModelWithFunc(Base):
     __table__ = model_with_func_query
-    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)  # noqa: UP007
+    func_result: Mapped[int | None] = column_property(model_with_func_query.c.func_result)
 
 
 def test_model_using_func() -> None:
@@ -236,7 +236,7 @@ def test_dto_with_association_proxy(create_module: Callable[[str], ModuleType]) 
         """
 from __future__ import annotations
 
-from typing import Final, List
+from typing import Dict, List, Set, Tuple, Type, Final, List
 
 from sqlalchemy import Column
 from sqlalchemy import ForeignKey
@@ -724,7 +724,7 @@ def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None
         """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generator
+from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING, Generator
 
 from litestar import post
 from litestar.di import Provide
@@ -774,7 +774,7 @@ async def test_dto_to_async_service(create_module: Callable[[str], ModuleType]) 
         """
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from typing import Dict, List, Set, Tuple, Type, AsyncGenerator
 
 from litestar import post
 from litestar.di import Provide
@@ -825,7 +825,7 @@ def test_dto_with_declared_attr(create_module: Callable[[str], ModuleType]) -> N
         """
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, List, Set, Tuple, Type, Union
 
 from litestar import post
 from litestar.di import Provide

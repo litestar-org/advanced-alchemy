@@ -2,12 +2,24 @@ from __future__ import annotations
 
 from dataclasses import Field, fields, is_dataclass
 from inspect import isclass
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Protocol, Type, final, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Type, final, runtime_checkable
 
 if TYPE_CHECKING:
-    from typing import AbstractSet
+    from collections.abc import Iterable
+    from collections.abc import Set as AbstractSet
 
     from typing_extensions import TypeAlias, TypeGuard
+
+__all__ = (
+    "DataclassProtocol",
+    "Empty",
+    "EmptyType",
+    "extract_dataclass_fields",
+    "extract_dataclass_items",
+    "is_dataclass_class",
+    "is_dataclass_instance",
+    "simple_asdict",
+)
 
 
 @final

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, List
 
 
-def update_raw_records(raw_authors: list[dict[str, Any]], raw_rules: list[dict[str, Any]]) -> None:
+def update_raw_records(raw_authors: List[Dict[str, Any]], raw_rules: List[Dict[str, Any]]) -> None:
     for raw_author in raw_authors:
         raw_author["dob"] = datetime.strptime(raw_author["dob"], "%Y-%m-%d").date()
         raw_author["created_at"] = datetime.strptime(raw_author["created_at"], "%Y-%m-%dT%H:%M:%S").astimezone(

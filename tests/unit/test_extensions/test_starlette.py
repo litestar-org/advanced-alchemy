@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Callable, Generator, Union, cast
+from collections.abc import Generator
+from typing import TYPE_CHECKING, Callable, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -114,20 +115,22 @@ def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client:
     mock = MagicMock()
     SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
-    def some_dependency(session: SessionDependency) -> None:
+    def some_dependency(session: SessionDependency) -> None:  # pyright: ignore[reportInvalidTypeForm]
         mock(session)
 
     @app.get("/")
-    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:
+    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:  # pyright: ignore[reportInvalidTypeForm]
         mock(session)
 
     assert client.get("/").status_code == 200
     assert mock.call_count == 2
+    call_1_session = mock.call_args_list[0].args[0]
+    call_2_session = mock.call_args_list[1].args[0]
     assert isinstance(
-        mock.call_args_list[0].args[0],
+        call_1_session,
         AsyncSession if isinstance(alchemy.config, SQLAlchemyAsyncConfig) else Session,
     )
-    assert mock.call_args_list[1].args[0] is mock.call_args_list[0].args[0]
+    assert call_1_session is call_2_session
 
 
 def test_session_no_autocommit(
