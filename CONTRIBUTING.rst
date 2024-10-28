@@ -17,7 +17,7 @@ Workflow
 2. Clone your fork locally with git
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
-5. Run ``male lint`` to run linters and formatters. This step is optional and will be executed
+5. Run ``make lint`` to run linters and formatters. This step is optional and will be executed
    automatically by git before you make a commit, but you may want to run it manually in order to apply fixes   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes
 6. Commit your changes to git
 7. Push the changes to your fork
