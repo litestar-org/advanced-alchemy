@@ -18,7 +18,7 @@ Workflow
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
 5. Run ``make lint`` to run linters and formatters. This step is optional and will be executed
-   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes
+   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes  automatically by git before you make a commit, but you may want to run it manually in order to apply fixes
 6. Commit your changes to git
 7. Push the changes to your fork
 8. Open a `pull request <https://docs.github.com/en/pull-requests>`_. Give the pull request a descriptive title
