@@ -240,7 +240,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         Args:
             model_type (typing.Type[sqlalchemy.orm.DeclarativeBase]): The SQLAlchemy model type to generate field definitions from.
 
-        Returns:
+        Yields:
             collections.abc.Generator[litestar.dto.data_structures.DTOFieldDefinition, None, None]: A generator yielding DTO field definitions.
 
         Raises:
