@@ -1,13 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Sequence  # noqa: TCH003
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic
+from typing import Generic
 from uuid import UUID
 
 from typing_extensions import TypeVar
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 T = TypeVar("T")
 C = TypeVar("C", int, str, UUID)
