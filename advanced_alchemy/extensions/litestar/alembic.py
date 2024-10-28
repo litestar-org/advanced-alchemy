@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import suppress
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from advanced_alchemy.alembic.commands import AlembicCommands as _AlembicCommands
 
@@ -23,9 +24,7 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     with suppress(KeyError):
         return app.plugins.get(SQLAlchemyInitPlugin)
     msg = "Failed to initialize database migrations. The required plugin (SQLAlchemyPlugin or SQLAlchemyInitPlugin) is missing."
-    raise ImproperConfigurationError(
-        msg,
-    )
+    raise ImproperConfigurationError(msg)
 
 
 class AlembicCommands(_AlembicCommands):
