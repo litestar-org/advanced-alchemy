@@ -499,7 +499,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
         ),
     ],
 )
-def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Engine:
+def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Generator[Engine, None, None]:
     """Return a synchronous engine. Parametrized to return all engines supported by
     the repository PK type
     """
@@ -508,7 +508,7 @@ def engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Eng
         pytest.skip(reason="Spanner does not support monotonically increasing primary keys")
     elif engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
         pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
-    return engine
+    yield engine
 
 
 @pytest.fixture()
@@ -764,11 +764,11 @@ def session(
         ),
     ],
 )
-def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> AsyncEngine:
+def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) -> Generator[AsyncEngine, None, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     if async_engine.dialect.name.startswith("cockroach") and repository_pk_type == "bigint":
         pytest.skip(reason="Cockroachdb has special considerations for monotonically increasing primary keys.")
-    return async_engine
+    yield async_engine
 
 
 @pytest.fixture()

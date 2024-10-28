@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Type, cast
+from typing import Generator, Type, cast
 from uuid import UUID
 
 import pytest
@@ -98,10 +98,10 @@ pytestmark = [
         ),
     ],
 )
-def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
+def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig, None, None]:
     engine = cast(Engine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
-    return SQLAlchemySyncConfig(
+    yield SQLAlchemySyncConfig(
         engine_instance=engine,
         session_maker=sessionmaker(bind=engine, expire_on_commit=False),
         metadata=orm_registry.metadata,
@@ -177,10 +177,10 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> SQLAlchemySyncConfig:
 )
 def async_sqlalchemy_config(
     request: FixtureRequest,
-) -> SQLAlchemyAsyncConfig:
+) -> Generator[SQLAlchemyAsyncConfig, None, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
-    return SQLAlchemyAsyncConfig(
+    yield SQLAlchemyAsyncConfig(
         engine_instance=async_engine,
         session_maker=async_sessionmaker(bind=async_engine, expire_on_commit=False),
         metadata=orm_registry.metadata,
