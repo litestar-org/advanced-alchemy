@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Dict,
@@ -86,7 +87,12 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
 
 
 try:
-    from msgspec import UNSET, Struct, UnsetType, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
+    from msgspec import (
+        UNSET,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
+        Struct,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
+        UnsetType,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
+        convert,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
+    )
 
     MSGSPEC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
@@ -121,11 +127,11 @@ except ImportError:
             """Placeholder implementation"""
             return cast("T", kwargs)
 
-        def update_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
+        def update_instance(self, instance: T, **kwargs: Any) -> T:  # type: ignore[no-redef]
             """Placeholder implementation"""
             return cast("T", kwargs)
 
-        def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
+        def as_builtins(self) -> Any:  # type: ignore[no-redef]
             """Placeholder implementation"""
             return {}
 
@@ -227,3 +233,22 @@ __all__ = (
     "is_pydantic_model_without_field",
     "schema_dump",
 )
+
+
+if TYPE_CHECKING:
+    from litestar.dto.data_structures import (
+        DTOData,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
+    from msgspec import (
+        UNSET,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        Struct,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        UnsetType,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        convert,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
+    from pydantic import (
+        BaseModel,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        FailFast,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
+    from pydantic.type_adapter import (
+        TypeAdapter,  # noqa: TCH004 # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )

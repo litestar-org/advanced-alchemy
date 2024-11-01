@@ -35,7 +35,7 @@ install: destroy clean								## Install the project, dependencies, and pre-comm
 
 .PHONY: clean
 clean: 												## Cleanup temporary build artifacts
-	@echo "=> Cleaning working directory"
+	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache .unasyncd_cache/
 	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ -rf dist/ .eggs/
 	@find . -name '*.egg-info' -exec rm -rf {} +
 	@find . -type f -name '*.egg' -exec rm -f {} +
@@ -44,7 +44,6 @@ clean: 												## Cleanup temporary build artifacts
 	@find . -name '*~' -exec rm -f {} +
 	@find . -name '__pycache__' -exec rm -rf {} +
 	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
-	@rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache tests/**/.pytest_cache .mypy_cache .unasyncd_cache/
 	$(MAKE) docs-clean
 
 .PHONY: destroy
@@ -134,9 +133,7 @@ check-all: lint test-all coverage                   ## Run all linting, tests, a
 # Docs
 # =============================================================================
 docs-clean: 										## Dump the existing built docs
-	@echo "=> Cleaning documentation build assets"
 	@rm -rf docs/_build
-	@echo "=> Removed existing documentation build assets"
 
 docs-serve: docs-clean 								## Serve the docs locally
 	@echo "=> Serving documentation"
