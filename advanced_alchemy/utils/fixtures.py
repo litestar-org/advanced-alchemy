@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
-
-from anyio import Path as AsyncPath
+from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy._serialization import decode_json
+from advanced_alchemy.exceptions import MissingDependencyError
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from anyio import Path as AsyncPath
 
 __all__ = ("open_fixture", "open_fixture_async")
 
@@ -23,6 +26,8 @@ def open_fixture(fixtures_path: Path | AsyncPath, fixture_name: str) -> Any:
     Returns:
         Any: The parsed JSON data
     """
+    from pathlib import Path
+
     fixture = Path(fixtures_path / f"{fixture_name}.json")
     if fixture.exists():
         with fixture.open(mode="r", encoding="utf-8") as f:
@@ -45,6 +50,12 @@ async def open_fixture_async(fixtures_path: Path | AsyncPath, fixture_name: str)
     Returns:
         Any: The parsed JSON data
     """
+    try:
+        from anyio import Path as AsyncPath
+    except ImportError as exc:
+        msg = "The `anyio` library is required to use this function. Please install it with `pip install anyio`."
+        raise MissingDependencyError(msg) from exc
+
     fixture = AsyncPath(fixtures_path / f"{fixture_name}.json")
     if await fixture.exists():
         async with await fixture.open(mode="r", encoding="utf-8") as f:
