@@ -25,7 +25,6 @@ from advanced_alchemy.repository._util import (
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
-    UNSET,  # pyright: ignore[reportAttributeAccessIssue]
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,
@@ -330,6 +329,8 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
             )
 
         if is_msgspec_model(data):
+            from msgspec import UNSET
+
             return model_from_dict(
                 model=self.repository.model_type,
                 **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
