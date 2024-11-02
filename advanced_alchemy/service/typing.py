@@ -9,16 +9,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
+    TYPE_CHECKING,
     Any,
-    ClassVar,
     Dict,
     Final,
-    Generic,
     List,
-    Protocol,
     Union,
     cast,
-    runtime_checkable,
 )
 
 from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar
@@ -27,51 +24,26 @@ from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
 
 T = TypeVar("T")  # pragma: nocover
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
+    from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
 try:
     from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
     from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
 
     PYDANTIC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
-
-    @runtime_checkable
-    class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder Implementation"""
-
-        model_fields: ClassVar[dict[str, Any]]
-
-        def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            """Placeholder"""
-            return {}
-
-    class TypeAdapter(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder Implementation"""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
-            """Init"""
-
-        def validate_python(self, data: Any, *args: Any, **kwargs: Any) -> T:  # pragma: nocover
-            """Stub"""
-            return cast("T", data)
-
     PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
+if TYPE_CHECKING:
+    from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
 try:
     # this is from pydantic 2.8.  We should check for it before using it.
     from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
 
     PYDANTIC_USE_FAILFAST: Final[bool] = False
 except ImportError:
-
-    class FailFast:  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder Implementation for FailFast"""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
-            """Init"""
-
-        def __call__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
-            """Placeholder"""
-
     PYDANTIC_USE_FAILFAST: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 
@@ -85,50 +57,27 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
     return TypeAdapter(f)
 
 
+if TYPE_CHECKING:
+    from msgspec import UNSET, Struct, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
 try:
-    from msgspec import UNSET, Struct, UnsetType, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
+    from msgspec import (  # pyright: ignore[reportAssignmentType,reportUnusedImport]
+        UNSET,
+        Struct,
+        convert,
+    )
 
     MSGSPEC_INSTALLED: Final[bool] = True
 except ImportError:  # pragma: nocover
-    import enum
-
-    @runtime_checkable
-    class Struct(Protocol):  # type: ignore[no-redef]
-        """Placeholder Implementation"""
-
-        __struct_fields__: ClassVar[tuple[str, ...]]
-
-    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
-        """Placeholder implementation"""
-        return {}
-
-    class UnsetType(enum.Enum):  # type: ignore[no-redef] # pragma: nocover
-        UNSET = "UNSET"
-
-    UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]
     MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
+
+if TYPE_CHECKING:
+    from litestar.dto.data_structures import DTOData  # pyright: ignore[reportAssignmentType,reportUnusedImport]
 try:
     from litestar.dto.data_structures import DTOData  # pyright: ignore[reportAssignmentType,reportUnusedImport]
 
     LITESTAR_INSTALLED: Final[bool] = True
 except ImportError:
-
-    class DTOData(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
-        """Placeholder implementation"""
-
-        def create_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
-            """Placeholder implementation"""
-            return cast("T", kwargs)
-
-        def update_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
-            """Placeholder implementation"""
-            return cast("T", kwargs)
-
-        def as_builtins(*args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[no-redef]
-            """Placeholder implementation"""
-            return {}
-
     LITESTAR_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
