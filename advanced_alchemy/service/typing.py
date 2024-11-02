@@ -42,7 +42,7 @@ try:
     # this is from pydantic 2.8.  We should check for it before using it.
     from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
 
-    PYDANTIC_USE_FAILFAST: Final[bool] = True
+    PYDANTIC_USE_FAILFAST: Final[bool] = False
 except ImportError:
     PYDANTIC_USE_FAILFAST: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
 
