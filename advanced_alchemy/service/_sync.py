@@ -96,7 +96,13 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT] | SQLAlchemySyncSlugRepositoryProtocol[ModelT]]
+    """Type of the repository to use."""
+    loader_options: LoadSpec | None = None
+    """Default loader options for the repository."""
+    execution_options: dict[str, Any] | None = None
+    """Default execution options for the repository."""
     match_fields: list[str] | str | None = None
+    """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
 
     def __init__(
         self,
@@ -125,6 +131,8 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
             execution_options: Set default execution options
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
+        load = load if load is not None else self.loader_options
+        execution_options = execution_options if execution_options is not None else self.execution_options
         self.repository = self.repository_type(
             session=session,
             statement=statement,
