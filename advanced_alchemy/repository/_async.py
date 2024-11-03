@@ -362,9 +362,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     """SQLAlchemy based implementation of the repository interface."""
 
     id_attribute: Any = "id"
+    """Name of the unique identifier for the model."""
+    loader_options: LoadSpec | None = None
+    """Default loader options for the repository."""
+    execution_options: dict[str, Any] | None = None
+    """Default execution options for the repository."""
     match_fields: list[str] | str | None = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    _uniquify_results: bool = False
+    uniquify: bool = False
     """Optionally apply the ``unique()`` method to results before returning.
 
     This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
@@ -405,6 +410,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.order_by = order_by
         self.session = session
         self.error_messages = self._get_error_messages(error_messages=error_messages)
+        load = load if load is not None else self.loader_options
+        execution_options = execution_options if execution_options is not None else self.execution_options
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load,
         )
@@ -1940,7 +1947,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         uniquify: bool = False,
     ) -> Result[Any]:
         result = await self.session.execute(statement)
-        if uniquify or self._uniquify_results:
+        if uniquify or self.uniquify:
             result = result.unique()
         return result
 
