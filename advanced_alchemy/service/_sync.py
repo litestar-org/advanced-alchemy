@@ -103,11 +103,6 @@ class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
     """Default execution options for the repository."""
     match_fields: list[str] | str | None = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    uniquify: bool = False
-    """Optionally apply the ``unique()`` method to results before returning.
-
-    This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
-    """
 
     def __init__(
         self,
