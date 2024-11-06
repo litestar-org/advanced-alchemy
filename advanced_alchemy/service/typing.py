@@ -22,7 +22,7 @@ from typing import (
     runtime_checkable,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar
+from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar, dataclass_transform
 
 from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
@@ -34,8 +34,25 @@ LITESTAR_INSTALLED = bool(find_spec("litestar"))
 
 T = TypeVar("T")  # pragma: nocover
 
+if TYPE_CHECKING:
+    from litestar.dto.data_structures import (
+        DTOData,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
+    from msgspec import (
+        UNSET,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        Struct,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        UnsetType,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        convert,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
+    from pydantic import (
+        BaseModel,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+        FailFast,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
+    from pydantic.type_adapter import (
+        TypeAdapter,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
+    )
 
-if not PYDANTIC_INSTALLED:
+if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
 
     @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
@@ -96,9 +113,10 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
     return TypeAdapter(f)
 
 
-if not MSGSPEC_INSTALLED:
+if not MSGSPEC_INSTALLED and not TYPE_CHECKING:
     import enum
 
+    @dataclass_transform()
     @runtime_checkable
     class Struct(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
@@ -121,7 +139,7 @@ else:
         convert,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
     )
 
-if not LITESTAR_INSTALLED:
+if not LITESTAR_INSTALLED and not TYPE_CHECKING:
 
     class DTOData(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder implementation"""
@@ -236,22 +254,3 @@ __all__ = (
     "is_pydantic_model_without_field",
     "schema_dump",
 )
-
-
-if TYPE_CHECKING:
-    from litestar.dto.data_structures import (
-        DTOData,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]  # noqa: TCH004
-    )
-    from msgspec import (
-        UNSET,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
-        Struct,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
-        UnsetType,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
-        convert,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]  # noqa: TCH004
-    )
-    from pydantic import (
-        BaseModel,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
-        FailFast,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
-    )
-    from pydantic.type_adapter import (
-        TypeAdapter,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
-    )
