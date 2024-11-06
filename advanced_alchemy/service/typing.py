@@ -114,7 +114,7 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
 
 
 if not MSGSPEC_INSTALLED and not TYPE_CHECKING:
-    import enum
+    import enum  # type: ignore[unreachable]
 
     @dataclass_transform()
     @runtime_checkable
