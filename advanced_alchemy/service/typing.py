@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
 
     @runtime_checkable
-    class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
+    class BaseModel(Protocol):  # type: ignore[no-redef,unreachable] # pragma: nocover
         """Placeholder Implementation"""
 
         model_fields: ClassVar[dict[str, Any]]
@@ -64,7 +64,7 @@ if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
             """Placeholder"""
             return {}
 
-    class TypeAdapter(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
+    class TypeAdapter(Generic[T]):  # type: ignore[no-redef,unreachable] # pragma: nocover
         """Placeholder Implementation"""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
@@ -74,7 +74,7 @@ if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
             """Stub"""
             return cast("T", data)
 
-    class FailFast:  # type: ignore[no-redef] # pragma: nocover
+    class FailFast:  # type: ignore[no-redef,unreachable] # pragma: nocover
         """Placeholder Implementation for FailFast"""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: nocover
@@ -118,16 +118,16 @@ if not MSGSPEC_INSTALLED and not TYPE_CHECKING:
 
     @dataclass_transform()
     @runtime_checkable
-    class Struct(Protocol):  # type: ignore[no-redef]
+    class Struct(Protocol):  # type: ignore[no-redef,unreachable]
         """Placeholder Implementation"""
 
         __struct_fields__: ClassVar[tuple[str, ...]]
 
-    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef,unreachable] # noqa: ARG001
         """Placeholder implementation"""
         return {}
 
-    class UnsetType(enum.Enum):  # type: ignore[no-redef] # pragma: nocover
+    class UnsetType(enum.Enum):  # type: ignore[no-redef,unreachable] # pragma: nocover
         UNSET = "UNSET"
 
     UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]
@@ -141,14 +141,14 @@ else:
 
 if not LITESTAR_INSTALLED and not TYPE_CHECKING:
 
-    class DTOData(Generic[T]):  # type: ignore[no-redef] # pragma: nocover
+    class DTOData(Generic[T]):  # type: ignore[no-redef,unreachable] # pragma: nocover
         """Placeholder implementation"""
 
-        def create_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef]
+        def create_instance(*args: Any, **kwargs: Any) -> T:  # type: ignore[no-redef,unreachable]
             """Placeholder implementation"""
             return cast("T", kwargs)
 
-        def update_instance(self, instance: T, **kwargs: Any) -> T:  # type: ignore[no-redef]
+        def update_instance(self, instance: T, **kwargs: Any) -> T:  # type: ignore[no-redef,unreachable]
             """Placeholder implementation"""
             return cast("T", kwargs)
 
