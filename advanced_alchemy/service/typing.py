@@ -15,9 +15,11 @@ from typing import (
     Dict,
     Generic,
     List,
+    Protocol,
     Sequence,
     Union,
     cast,
+    runtime_checkable,
 )
 
 from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar
@@ -32,28 +34,11 @@ LITESTAR_INSTALLED = bool(find_spec("litestar"))
 
 T = TypeVar("T")  # pragma: nocover
 
-if TYPE_CHECKING:
-    from litestar.dto.data_structures import (
-        DTOData,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-    )
-    from msgspec import (
-        UNSET,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-        Struct,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-        UnsetType,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-        convert,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-    )
-    from pydantic import (
-        BaseModel,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-        FailFast,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-    )
-    from pydantic.type_adapter import (
-        TypeAdapter,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]
-    )
-
 
 if not PYDANTIC_INSTALLED:
 
-    class BaseModel:  # type: ignore[no-redef] # pragma: nocover
+    @runtime_checkable
+    class BaseModel(Protocol):  # type: ignore[no-redef] # pragma: nocover
         """Placeholder Implementation"""
 
         model_fields: ClassVar[dict[str, Any]]
@@ -114,7 +99,8 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
 if not MSGSPEC_INSTALLED:
     import enum
 
-    class Struct:  # type: ignore[no-redef]
+    @runtime_checkable
+    class Struct(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
         __struct_fields__: ClassVar[tuple[str, ...]]
@@ -129,9 +115,9 @@ if not MSGSPEC_INSTALLED:
     UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]
 else:
     from msgspec import (
-        UNSET,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
+        UNSET,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition] # type: ignore[assignment]
         Struct,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
-        UnsetType,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
+        UnsetType,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition] # type: ignore[assignment]
         convert,  # pyright: ignore[reportAssignmentType,reportUnusedImport,reportConstantRedefinition]
     )
 
@@ -250,3 +236,22 @@ __all__ = (
     "is_pydantic_model_without_field",
     "schema_dump",
 )
+
+
+if TYPE_CHECKING:
+    from litestar.dto.data_structures import (
+        DTOData,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]  # noqa: TCH004
+    )
+    from msgspec import (
+        UNSET,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
+        Struct,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
+        UnsetType,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
+        convert,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]  # noqa: TCH004
+    )
+    from pydantic import (
+        BaseModel,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
+        FailFast,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
+    )
+    from pydantic.type_adapter import (
+        TypeAdapter,  # pyright: ignore[reportAssignmentType,reportConstantRedefinition]   # noqa: TCH004
+    )
