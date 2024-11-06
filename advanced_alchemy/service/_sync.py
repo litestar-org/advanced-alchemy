@@ -9,7 +9,7 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Generic, List, cast
+from typing import TYPE_CHECKING, Any, Generic, Iterable, Iterator, List, Sequence, cast
 
 from sqlalchemy import Select
 from typing_extensions import Self
@@ -38,8 +38,6 @@ from advanced_alchemy.service.typing import (
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
-
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.orm import InstrumentedAttribute, Session
     from sqlalchemy.orm.scoping import scoped_session

@@ -7,7 +7,7 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Generic, List, cast
+from typing import TYPE_CHECKING, Any, AsyncIterator, Generic, Iterable, List, Sequence, cast
 
 from sqlalchemy import Select
 from typing_extensions import Self
@@ -36,8 +36,6 @@ from advanced_alchemy.service.typing import (
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterable, Sequence
-
     from sqlalchemy import Select, StatementLambdaElement
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session

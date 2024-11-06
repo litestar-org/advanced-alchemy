@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Sequence  # noqa: TCH003
 from dataclasses import dataclass
-from typing import Generic
-from uuid import UUID
-
-from typing_extensions import TypeVar
+from typing import Generic, Sequence, TypeVar
 
 T = TypeVar("T")
-C = TypeVar("C", int, str, UUID)
 
 __all__ = ("OffsetPagination",)
 

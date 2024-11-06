@@ -6,7 +6,6 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from functools import lru_cache
 from importlib.util import find_spec
 from typing import (
@@ -16,6 +15,7 @@ from typing import (
     Dict,
     Generic,
     List,
+    Sequence,
     Union,
     cast,
 )

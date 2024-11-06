@@ -6,10 +6,9 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, List, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, List, Sequence, cast, overload
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
