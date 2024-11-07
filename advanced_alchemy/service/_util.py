@@ -167,7 +167,7 @@ class ResultConverter:
                 offset=limit_offset.offset,
                 total=total,
             )
-        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):  # pyright: ignore[reportGeneralTypeIssues]
+        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
@@ -203,7 +203,7 @@ class ResultConverter:
                 total=total,
             )
 
-        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):  # pyright: ignore[reportGeneralTypeIssues]
+        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
