@@ -37,7 +37,7 @@ T = TypeVar("T")
 if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
 
     @runtime_checkable
-    class BaseModel(Protocol):  # type: ignore[unreachable]
+    class BaseModel(Protocol):
         """Placeholder Implementation"""
 
         model_fields: ClassVar[dict[str, Any]]
@@ -46,7 +46,7 @@ if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
             """Placeholder"""
             return {}
 
-    class TypeAdapter(Generic[T]):  # type: ignore[unreachable]
+    class TypeAdapter(Generic[T]):
         """Placeholder Implementation"""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -56,7 +56,7 @@ if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
             """Stub"""
             return cast("T", data)
 
-    class FailFast:  # type: ignore[unreachable]
+    class FailFast:
         """Placeholder Implementation for FailFast"""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -98,20 +98,20 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
 
 
 if not MSGSPEC_INSTALLED and not TYPE_CHECKING:
-    import enum  # type: ignore[unreachable]
+    import enum
 
     @dataclass_transform()
     @runtime_checkable
-    class Struct(Protocol):  # type: ignore[unreachable]
+    class Struct(Protocol):
         """Placeholder Implementation"""
 
         __struct_fields__: ClassVar[tuple[str, ...]]
 
-    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[unreachable] # noqa: ARG001
+    def convert(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
         """Placeholder implementation"""
         return {}
 
-    class UnsetType(enum.Enum):  # type: ignore[unreachable]
+    class UnsetType(enum.Enum):
         UNSET = "UNSET"
 
     UNSET = UnsetType.UNSET
@@ -125,7 +125,7 @@ else:
 
 if not LITESTAR_INSTALLED and not TYPE_CHECKING:
 
-    class DTOData(Generic[T]):  # type: ignore[unreachable]
+    class DTOData(Generic[T]):
         """Placeholder implementation"""
 
         def create_instance(*args: Any, **kwargs: Any) -> T:
