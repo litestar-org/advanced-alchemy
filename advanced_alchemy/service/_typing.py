@@ -1,40 +1,29 @@
-"""Service object implementation for SQLAlchemy.
+"""This is a simple wrapper around a few important classes in each library.
 
-RepositoryService object is generic on the domain model type which
-should be a SQLAlchemy model.
+This is used to ensure compatibility when one or more of the libraries are installed.
 """
 
 from __future__ import annotations
 
-from functools import lru_cache
 from importlib.util import find_spec
 from typing import (
-    TYPE_CHECKING,
     Any,
     ClassVar,
-    Dict,
     Generic,
-    List,
     Protocol,
-    Sequence,
-    Union,
     cast,
     runtime_checkable,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeVar, dataclass_transform
-
-from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
-from advanced_alchemy.repository.typing import ModelT
+from typing_extensions import TypeVar, dataclass_transform
 
 PYDANTIC_INSTALLED = bool(find_spec("pydantic"))
-PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
 MSGSPEC_INSTALLED = bool(find_spec("msgspec"))
 LITESTAR_INSTALLED = bool(find_spec("litestar"))
 
 T = TypeVar("T")
 
-if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
+if not PYDANTIC_INSTALLED:
 
     @runtime_checkable
     class BaseModel(Protocol):
@@ -56,7 +45,7 @@ if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
             """Stub"""
             return cast("T", data)
 
-    class FailFast:
+    class FailFast:  # pyright: ignore[reportRedeclaration]
         """Placeholder Implementation for FailFast"""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -67,37 +56,10 @@ if not PYDANTIC_INSTALLED and not TYPE_CHECKING:
 
 
 else:
-    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
-    from pydantic.type_adapter import (
-        TypeAdapter,  # type: ignore[assignment] # pyright: ignore[reportUnusedImport, reportAssignmentType]
-    )
-
-    try:
-        # this is from pydantic 2.8.  We should check for it before using it.
-        from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
-    except ImportError:
-
-        class FailFast:  # type: ignore[no-redef]
-            """Placeholder Implementation for FailFast"""
-
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                """Init"""
-
-            def __call__(self, *args: Any, **kwargs: Any) -> None:
-                """Placeholder"""
+    from pydantic import BaseModel, FailFast, TypeAdapter  # type: ignore[assignment]
 
 
-@lru_cache(typed=True)
-def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
-    """Caches and returns a pydantic type adapter"""
-    if PYDANTIC_USE_FAILFAST:
-        return TypeAdapter(
-            Annotated[f, FailFast()],  # type: ignore[operator]
-        )
-    return TypeAdapter(f)
-
-
-if not MSGSPEC_INSTALLED and not TYPE_CHECKING:
+if not MSGSPEC_INSTALLED:
     import enum
 
     @dataclass_transform()
@@ -114,16 +76,16 @@ if not MSGSPEC_INSTALLED and not TYPE_CHECKING:
     class UnsetType(enum.Enum):
         UNSET = "UNSET"
 
-    UNSET = UnsetType.UNSET
+    UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition]
 else:
-    from msgspec import (
-        UNSET,
+    from msgspec import (  # type: ignore[assignment]
+        UNSET,  # pyright: ignore[reportConstantRedefinition]
         Struct,
-        UnsetType,
+        UnsetType,  # pyright: ignore[reportAssignmentType]
         convert,
     )
 
-if not LITESTAR_INSTALLED and not TYPE_CHECKING:
+if not LITESTAR_INSTALLED:
 
     class DTOData(Generic[T]):
         """Placeholder implementation"""
@@ -140,31 +102,16 @@ if not LITESTAR_INSTALLED and not TYPE_CHECKING:
             """Placeholder implementation"""
             return {}
 else:
-    from litestar.dto.data_structures import DTOData
-
-FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
-ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
-PydanticOrMsgspecT = Union[Struct, BaseModel]
-ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
-ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
-BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]
+    from litestar.dto.data_structures import DTOData  # type: ignore[assignment]
 
 
 __all__ = (
-    "ModelDictT",
-    "ModelDictListT",
-    "FilterTypeT",
-    "ModelDTOT",
-    "BulkModelDictT",
-    "PydanticOrMsgspecT",
     "PYDANTIC_INSTALLED",
     "MSGSPEC_INSTALLED",
     "LITESTAR_INSTALLED",
-    "PYDANTIC_USE_FAILFAST",
     "DTOData",
     "BaseModel",
     "TypeAdapter",
-    "get_type_adapter",
     "FailFast",
     "Struct",
     "convert",
