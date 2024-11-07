@@ -6,10 +6,12 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
+    Iterable,
     List,
     Literal,
     Optional,
     Protocol,
+    Sequence,
     Tuple,
     cast,
     runtime_checkable,
@@ -46,8 +48,6 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
-
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session

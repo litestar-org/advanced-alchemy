@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from litestar import Litestar
 from litestar.controller import Controller
@@ -23,7 +23,6 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import OffsetPagination, SQLAlchemyAsyncRepositoryService
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
     from datetime import date
     from uuid import UUID
 

@@ -165,6 +165,7 @@ nitpick_ignore = [
     (PY_ATTR, "advanced_alchemy.repository.AbstractAsyncRepository.id_attribute"),
     (PY_CLASS, "advanced_alchemy.repository.typing.ModelOrRowMappingT"),
     (PY_CLASS, "advanced_alchemy.service.typing.ModelDTOT"),
+    (PY_CLASS, "advanced_alchemy.service._typing.ModelDTOT"),
 ]
 nitpick_ignore_regex = [
     (PY_RE, r"advanced_alchemy.*\.T"),

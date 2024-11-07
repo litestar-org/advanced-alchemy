@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TCH003
-from typing import TYPE_CHECKING
+from typing import AsyncGenerator
 from uuid import UUID  # noqa: TCH003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
@@ -17,9 +17,6 @@ from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import OffsetPagination, SQLAlchemyAsyncRepositoryService
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
 
 # #######################
 # Models

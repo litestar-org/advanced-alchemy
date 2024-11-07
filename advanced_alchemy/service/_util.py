@@ -6,10 +6,9 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, List, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, List, Sequence, cast, overload
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
@@ -19,10 +18,10 @@ from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
-    BaseModel,  # pyright: ignore[reportAttributeAccessIssue]
+    BaseModel,
     ModelDTOT,
-    Struct,  # pyright: ignore[reportAttributeAccessIssue]
-    convert,  # pyright: ignore[reportAttributeAccessIssue]
+    Struct,
+    convert,
     get_type_adapter,
 )
 
@@ -168,7 +167,7 @@ class ResultConverter:
                 offset=limit_offset.offset,
                 total=total,
             )
-        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
+        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
@@ -204,7 +203,7 @@ class ResultConverter:
                 total=total,
             )
 
-        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):
+        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",

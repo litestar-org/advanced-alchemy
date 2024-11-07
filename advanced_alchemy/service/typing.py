@@ -6,45 +6,49 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
-    Final,
     List,
+    Sequence,
+    TypeVar,
     Union,
     cast,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeGuard, TypeVar
+from typing_extensions import Annotated, TypeAlias, TypeGuard
 
-from advanced_alchemy.filters import StatementFilter  # noqa: TCH001
 from advanced_alchemy.repository.typing import ModelT
-
-T = TypeVar("T")  # pragma: nocover
+from advanced_alchemy.service._typing import (
+    LITESTAR_INSTALLED,
+    MSGSPEC_INSTALLED,
+    PYDANTIC_INSTALLED,
+    UNSET,
+    BaseModel,
+    DTOData,
+    FailFast,
+    Struct,
+    TypeAdapter,
+    convert,
+)
 
 if TYPE_CHECKING:
-    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
-    from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
-try:
-    from pydantic import BaseModel  # pyright: ignore[reportAssignmentType]
-    from pydantic.type_adapter import TypeAdapter  # pyright: ignore[reportUnusedImport, reportAssignmentType]
+    from advanced_alchemy.filters import StatementFilter
 
-    PYDANTIC_INSTALLED: Final[bool] = True
-except ImportError:  # pragma: nocover
-    PYDANTIC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
+PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
 
-if TYPE_CHECKING:
-    from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
-try:
-    # this is from pydantic 2.8.  We should check for it before using it.
-    from pydantic import FailFast  # pyright: ignore[reportAssignmentType]
 
-    PYDANTIC_USE_FAILFAST: Final[bool] = False
-except ImportError:
-    PYDANTIC_USE_FAILFAST: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
+T = TypeVar("T")
+
+
+FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
+ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
+PydanticOrMsgspecT = Union[Struct, BaseModel]
+ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
+ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
+BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]
 
 
 @lru_cache(typed=True)
@@ -52,40 +56,9 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
     """Caches and returns a pydantic type adapter"""
     if PYDANTIC_USE_FAILFAST:
         return TypeAdapter(
-            Annotated[f, FailFast()],  # type: ignore[operator]
+            Annotated[f, FailFast()],
         )
     return TypeAdapter(f)
-
-
-if TYPE_CHECKING:
-    from msgspec import UNSET, Struct, convert  # pyright: ignore[reportAssignmentType,reportUnusedImport]
-try:
-    from msgspec import (  # pyright: ignore[reportAssignmentType,reportUnusedImport]
-        UNSET,
-        Struct,
-        convert,
-    )
-
-    MSGSPEC_INSTALLED: Final[bool] = True
-except ImportError:  # pragma: nocover
-    MSGSPEC_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
-
-
-if TYPE_CHECKING:
-    from litestar.dto.data_structures import DTOData  # pyright: ignore[reportAssignmentType,reportUnusedImport]
-try:
-    from litestar.dto.data_structures import DTOData  # pyright: ignore[reportAssignmentType,reportUnusedImport]
-
-    LITESTAR_INSTALLED: Final[bool] = True
-except ImportError:
-    LITESTAR_INSTALLED: Final[bool] = False  # type: ignore # pyright: ignore[reportConstantRedefinition,reportGeneralTypeIssues]  # noqa: PGH003
-
-FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
-ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
-PydanticOrMsgspecT = Union[Struct, BaseModel]
-ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
-ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
-BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]  # pyright: ignore[reportInvalidTypeArguments]
 
 
 def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
@@ -164,6 +137,7 @@ __all__ = (
     "Struct",
     "convert",
     "UNSET",
+    "UnsetType",
     "is_dto_data",
     "is_dict",
     "is_dict_with_field",
@@ -176,3 +150,19 @@ __all__ = (
     "is_pydantic_model_without_field",
     "schema_dump",
 )
+
+if TYPE_CHECKING:
+    if not PYDANTIC_INSTALLED:
+        from advanced_alchemy.service._typing import BaseModel, FailFast, TypeAdapter
+    else:
+        from pydantic import BaseModel, FailFast, TypeAdapter  # type: ignore[assignment] # noqa: TCH004
+
+    if not MSGSPEC_INSTALLED:
+        from advanced_alchemy.service._typing import UNSET, Struct, UnsetType, convert
+    else:
+        from msgspec import UNSET, Struct, UnsetType, convert  # type: ignore[assignment]  # noqa: TCH004
+
+    if not LITESTAR_INSTALLED:
+        from advanced_alchemy.service._typing import DTOData
+    else:
+        from litestar.dto import DTOData  # type: ignore[assignment] # noqa: TCH004
