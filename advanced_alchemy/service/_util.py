@@ -18,10 +18,10 @@ from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
-    BaseModel,  # pyright: ignore[reportAttributeAccessIssue]
+    BaseModel,
     ModelDTOT,
-    Struct,  # pyright: ignore[reportAttributeAccessIssue]
-    convert,  # pyright: ignore[reportAttributeAccessIssue]
+    Struct,
+    convert,
     get_type_adapter,
 )
 
