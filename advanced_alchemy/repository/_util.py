@@ -181,7 +181,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         """Add a where clause to the statement."""
         # Static WHERE clause - no need to track
         return statement.add_criteria(
-            lambda s: s.where(expression), enable_tracking=False, track_closure_variables=False
+            lambda s: s.where(expression), track_closure_variables=False, track_on=[id(expression)]
         )
 
     def _filter_by_where(
@@ -193,7 +193,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         field = get_instrumented_attr(self.model_type, field_name)
         # Track only the value parameter since it's dynamic
         return statement.add_criteria(
-            lambda s: s.where(field == value), track_bound_values=True, track_closure_variables=False
+            lambda s: s.where(field == value), track_closure_variables=False, track_on=[id(value)]
         )
 
     def _apply_order_by(

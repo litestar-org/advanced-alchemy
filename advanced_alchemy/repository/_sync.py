@@ -861,33 +861,30 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
         # Base statement is static
-        if statement_type == "delete":
-            statement = lambda_stmt(lambda: delete(model_type), enable_tracking=False)
-        else:
-            statement = lambda_stmt(lambda: select(model_type), enable_tracking=False)
-
+        statement = delete(model_type) if statement_type == "delete" else select(model_type)
         if loader_options:
-            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
-
+            statement = statement.options(*loader_options)
         if execution_options:
-            statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options), enable_tracking=False
-            )
+            statement = statement.execution_options(**execution_options)
+        if supports_returning and statement_type != "select":
+            statement = statement.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
 
+        statement = lambda_stmt(lambda: statement)  # pyright: ignore[reportUnknownLambdaType]
         # Track only the id_chunk since it's dynamic
         if self._prefer_any:
             statement = statement.add_criteria(
                 lambda s: s.where(any_(id_chunk) == id_attribute),  # type: ignore[arg-type]
                 track_bound_values=True,
                 track_closure_variables=False,
+                track_on=[id(id_chunk)],
             )
         else:
             statement = statement.add_criteria(
-                lambda s: s.where(id_attribute.in_(id_chunk)), track_bound_values=True, track_closure_variables=False
+                lambda s: s.where(id_attribute.in_(id_chunk)),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[id(id_chunk)],
             )
-
-        if supports_returning and statement_type != "select":
-            statement = statement.add_criteria(lambda s: s.returning(model_type), enable_tracking=False)
 
         return statement
 
@@ -1372,17 +1369,23 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
         # Base update statement is static
-        statement = lambda_stmt(lambda: update(model_type), enable_tracking=False)
-
+        statement = update(model_type)
         if supports_returning:
-            statement = statement.add_criteria(lambda s: s.returning(model_type), enable_tracking=False)
-
+            statement = statement.returning(model_type)
+        statement = lambda_stmt(lambda: statement)
         if loader_options:
-            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
-
+            statement = statement.add_criteria(
+                lambda s: s.options(*loader_options),
+                track_bound_values=False,
+                track_closure_variables=False,
+                enable_tracking=False,
+            )
         if execution_options:
             statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options), enable_tracking=False
+                lambda s: s.execution_options(**execution_options),
+                track_bound_values=False,
+                track_closure_variables=False,
+                enable_tracking=False,
             )
         return statement
 

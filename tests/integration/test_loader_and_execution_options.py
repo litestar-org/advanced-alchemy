@@ -113,7 +113,7 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         si1_country_repo = CountryRepository(session=db_session)
         usa_country_1 = si1_country_repo.get_one(
             name="United States of America",
-            load=[noload("*")],
+            load=[noload(UUIDCountry.states)],
         )
         assert len(usa_country_1.states) == 0
         si0_country_repo = CountryRepository(session=db_session)
