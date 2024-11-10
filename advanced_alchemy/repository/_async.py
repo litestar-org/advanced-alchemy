@@ -842,24 +842,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        # Convert to lambda statement with minimal tracking
-        statement = self._to_lambda_stmt(
-            statement=statement,
-            track_bound_values=False,  # Static base statement
-            enable_tracking=False,
-        )
-
         if loader_options:
-            # Loader options are static
-            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
-
+            statement = statement.options(*loader_options)
         if execution_options:
-            # Execution options are static
-            statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options), enable_tracking=False
-            )
-
-        return statement
+            statement = statement.execution_options(**execution_options)
+        return self._to_lambda_stmt(statement=statement)
 
     def _get_delete_many_statement(
         self,
