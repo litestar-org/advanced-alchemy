@@ -840,24 +840,27 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self,
         *,
         statement: Select[tuple[ModelT]] | StatementLambdaElement,
-        global_track_bound_values: bool = True,
-        track_closure_variables: bool = True,
-        enable_tracking: bool = True,
-        track_bound_values: bool = True,
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        if loader_options:
-            statement = statement.options(*loader_options)
-        if execution_options:
-            statement = statement.execution_options(**execution_options)
-        return self._to_lambda_stmt(
+        # Convert to lambda statement with minimal tracking
+        statement = self._to_lambda_stmt(
             statement=statement,
-            track_bound_values=track_bound_values,
-            global_track_bound_values=global_track_bound_values,
-            track_closure_variables=track_closure_variables,
-            enable_tracking=enable_tracking,
+            track_bound_values=False,  # Static base statement
+            enable_tracking=False,
         )
+
+        if loader_options:
+            # Loader options are static
+            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
+
+        if execution_options:
+            # Execution options are static
+            statement = statement.add_criteria(
+                lambda s: s.execution_options(**execution_options), enable_tracking=False
+            )
+
+        return statement
 
     def _get_delete_many_statement(
         self,
@@ -870,20 +873,34 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
+        # Base statement is static
         if statement_type == "delete":
-            statement = lambda_stmt(lambda: delete(model_type))
-        elif statement_type == "select":
-            statement = lambda_stmt(lambda: select(model_type))
-        if loader_options:
-            statement = statement.options(*loader_options)
-        if execution_options:
-            statement = statement.execution_options(**execution_options)
-        if self._prefer_any:
-            statement += lambda s: s.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
+            statement = lambda_stmt(lambda: delete(model_type), enable_tracking=False)
         else:
-            statement += lambda s: s.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = lambda_stmt(lambda: select(model_type), enable_tracking=False)
+
+        if loader_options:
+            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
+
+        if execution_options:
+            statement = statement.add_criteria(
+                lambda s: s.execution_options(**execution_options), enable_tracking=False
+            )
+
+        # Track only the id_chunk since it's dynamic
+        if self._prefer_any:
+            statement = statement.add_criteria(
+                lambda s: s.where(any_(id_chunk) == id_attribute),  # type: ignore[arg-type]
+                track_bound_values=True,
+                track_closure_variables=False,
+            )
+        else:
+            statement = statement.add_criteria(
+                lambda s: s.where(id_attribute.in_(id_chunk)), track_bound_values=True, track_closure_variables=False
+            )
+
         if supports_returning and statement_type != "select":
-            statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.add_criteria(lambda s: s.returning(model_type), enable_tracking=False)
 
         return statement
 
@@ -1228,9 +1245,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            statement = statement.add_criteria(
-                lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
-            )
+            statement = self._get_count_stmt(statement, loader_options, execution_options)
             results = self._execute(statement, uniquify=loader_options_have_wildcard)
             return cast(int, results.scalar_one())
 
@@ -1369,22 +1384,18 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        statement = lambda_stmt(lambda: update(model_type))
+        # Base update statement is static
+        statement = lambda_stmt(lambda: update(model_type), enable_tracking=False)
+
         if supports_returning:
-            statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.add_criteria(lambda s: s.returning(model_type), enable_tracking=False)
+
         if loader_options:
-            statement = statement.add_criteria(
-                lambda s: s.options(*loader_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
+            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
+
         if execution_options:
             statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
+                lambda s: s.execution_options(**execution_options), enable_tracking=False
             )
         return statement
 
@@ -1598,12 +1609,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        if loader_options:
-            statement = statement.options(*loader_options)
-        if execution_options:
-            statement = statement.execution_options(**execution_options)
+        # Count statement transformations are static
         return statement.add_criteria(
-            lambda s: s.with_only_columns(sql_func.count(), maintain_column_froms=True).order_by(None),
+            lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
             enable_tracking=False,
             track_closure_variables=False,
         )

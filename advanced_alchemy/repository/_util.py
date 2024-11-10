@@ -178,8 +178,11 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         statement: StatementLambdaElement,
         expression: ColumnElement[bool],
     ) -> StatementLambdaElement:
-        statement += lambda s: s.where(expression)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        """Add a where clause to the statement."""
+        # Static WHERE clause - no need to track
+        return statement.add_criteria(
+            lambda s: s.where(expression), enable_tracking=False, track_closure_variables=False
+        )
 
     def _filter_by_where(
         self,
@@ -188,8 +191,10 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         value: Any,
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field == value)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        # Track only the value parameter since it's dynamic
+        return statement.add_criteria(
+            lambda s: s.where(field == value), track_bound_values=True, track_closure_variables=False
+        )
 
     def _apply_order_by(
         self,
@@ -210,5 +215,5 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         is_desc: bool,
     ) -> StatementLambdaElement:
         fragment = field.desc() if is_desc else field.asc()
-        statement += lambda s: s.order_by(fragment)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        # Static ORDER BY - no need to track
+        return statement.add_criteria(lambda s: s.order_by(fragment), enable_tracking=False)
