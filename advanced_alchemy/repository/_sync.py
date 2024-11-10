@@ -868,25 +868,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = statement.execution_options(**execution_options)
         if supports_returning and statement_type != "select":
             statement = statement.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
-
-        statement = lambda_stmt(lambda: statement)  # pyright: ignore[reportUnknownLambdaType]
-        # Track only the id_chunk since it's dynamic
         if self._prefer_any:
-            statement = statement.add_criteria(
-                lambda s: s.where(any_(id_chunk) == id_attribute),  # type: ignore[arg-type]
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[id(id_chunk)],
-            )
+            statement = statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
         else:
-            statement = statement.add_criteria(
-                lambda s: s.where(id_attribute.in_(id_chunk)),
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[id(id_chunk)],
-            )
-
-        return statement
+            statement = statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        return lambda_stmt(lambda: statement)  # pyright: ignore[reportUnknownLambdaType]
 
     def get(
         self,
@@ -1372,22 +1358,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         statement = update(model_type)
         if supports_returning:
             statement = statement.returning(model_type)
-        statement = lambda_stmt(lambda: statement)
         if loader_options:
-            statement = statement.add_criteria(
-                lambda s: s.options(*loader_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
+            statement = statement.options(*loader_options)
         if execution_options:
-            statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
-        return statement
+            statement = statement.execution_options(**execution_options)
+        return lambda_stmt(lambda: statement)
 
     def list_and_count(
         self,
