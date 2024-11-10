@@ -95,12 +95,18 @@ class BeforeAfter(StatementFilter):
         if self.before is not None:
             before = self.before
             statement = statement.add_criteria(
-                lambda s: s.where(field < before), track_bound_values=True, track_closure_variables=False
+                lambda s: s.where(field < before),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[before, id(model)],
             )
         if self.after is not None:
             after = self.after
             statement = statement.add_criteria(
-                lambda s: s.where(field > after), track_bound_values=True, track_closure_variables=False
+                lambda s: s.where(field > after),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[after, id(model)],
             )
         return statement
 
@@ -133,12 +139,18 @@ class OnBeforeAfter(StatementFilter):
         if self.on_or_before is not None:
             on_or_before = self.on_or_before
             statement = statement.add_criteria(
-                lambda s: s.where(field <= on_or_before), track_bound_values=True, track_closure_variables=False
+                lambda s: s.where(field <= on_or_before),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[on_or_before, id(model)],
             )
         if self.on_or_after is not None:
             on_or_after = self.on_or_after
             statement = statement.add_criteria(
-                lambda s: s.where(field >= on_or_after), track_bound_values=True, track_closure_variables=False
+                lambda s: s.where(field >= on_or_after),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[on_or_after, id(model)],
             )
         return statement
 
@@ -190,10 +202,14 @@ class CollectionFilter(InAnyFilter, Generic[T]):
                 lambda s: s.where(any_(values) == field),  # type: ignore[arg-type]
                 track_bound_values=True,
                 track_closure_variables=False,
+                track_on=[id(values), id(model)],
             )
         values = self.values
         return statement.add_criteria(
-            lambda s: s.where(field.in_(values)), track_bound_values=True, track_closure_variables=False
+            lambda s: s.where(field.in_(values)),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[id(values), id(model)],
         )
 
 
@@ -236,10 +252,14 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
                 lambda s: s.where(any_(values) != field),  # type: ignore[arg-type]
                 track_bound_values=True,
                 track_closure_variables=False,
+                track_on=[id(values), id(model)],
             )
         values = self.values
         return statement.add_criteria(
-            lambda s: s.where(field.notin_(values)), track_bound_values=True, track_closure_variables=False
+            lambda s: s.where(field.notin_(values)),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[id(values), id(model)],
         )
 
 
@@ -267,7 +287,10 @@ class LimitOffset(PaginationFilter):
         limit = self.limit
         offset = self.offset
         return statement.add_criteria(
-            lambda s: s.limit(limit).offset(offset), track_bound_values=True, track_closure_variables=False
+            lambda s: s.limit(limit).offset(offset),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[limit, offset, id(model)],
         )
 
 
@@ -293,7 +316,12 @@ class OrderBy(StatementFilter):
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         fragment = field.desc() if self.sort_order == "desc" else field.asc()
-        return statement.add_criteria(lambda s: s.order_by(fragment), enable_tracking=False)
+        return statement.add_criteria(
+            lambda s: s.order_by(fragment),
+            track_bound_values=False,
+            track_closure_variables=False,
+            track_on=[id(model), id(fragment)],
+        )
 
 
 @dataclass
@@ -342,7 +370,9 @@ class SearchFilter(StatementFilter):
     ) -> StatementLambdaElement:
         where_clause = self._operator(*self.get_search_clauses(model))
         return statement.add_criteria(
-            lambda s: s.where(where_clause), track_bound_values=True, track_closure_variables=False
+            lambda s: s.where(where_clause),
+            track_closure_variables=True,
+            track_on=[id(model), id(where_clause)],
         )
 
 
