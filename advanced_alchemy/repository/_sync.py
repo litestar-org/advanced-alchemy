@@ -867,7 +867,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         if execution_options:
             statement = statement.execution_options(**execution_options)
         if supports_returning and statement_type != "select":
-            statement = statement.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
+            statement = statement.returning(model_type)  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
         if self._prefer_any:
             statement = statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
         else:
