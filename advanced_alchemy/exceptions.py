@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Generator, TypedDict, Union
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
+from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
 
 from advanced_alchemy.utils.deprecation import deprecated
@@ -245,6 +246,17 @@ class MultipleResultsFoundError(RepositoryError):
     """
 
 
+class InvalidRequestError(RepositoryError):
+    """Invalid request error.
+
+    This exception is raised when SQLAlchemy is unable to complete the request due to a runtime error
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
+
+
 class ErrorMessages(TypedDict, total=False):
     duplicate_key: Union[str, Callable[[Exception], str]]
     integrity: Union[str, Callable[[Exception], str]]
@@ -304,6 +316,8 @@ def wrap_sqlalchemy_exception(
                 detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
             ) from exc
         raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
+    except SQLAlchemyInvalidRequestError as exc:
+        raise InvalidRequestError(detail="An invalid request was made.") from exc
     except SQLAlchemyError as exc:
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)

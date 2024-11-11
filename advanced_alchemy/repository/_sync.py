@@ -411,18 +411,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.order_by = order_by
         self.session = session
         self.error_messages = self._get_error_messages(error_messages=error_messages)
-        load = load if load is not None else self.loader_options
-        execution_options = execution_options if execution_options is not None else self.execution_options
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
-            loader_options=load,
+            loader_options=load if load is not None else self.loader_options,
         )
+        execution_options = execution_options if execution_options is not None else self.execution_options
         self._default_execution_options = execution_options or {}
-        _statement = select(self.model_type) if statement is None else statement
-        if self._default_loader_options:
-            _statement = _statement.options(*self._default_loader_options)
-        if self._default_execution_options:
-            _statement = _statement.execution_options(**self._default_execution_options)
-        self.statement = _statement
+        self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
@@ -499,14 +493,21 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             raise NotFoundError(msg)
         return item_or_none
 
+    def _get_execution_options(
+        self,
+        execution_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if execution_options is None:
+            return self._default_execution_options
+        return execution_options
+
     def _get_loader_options(
         self,
         loader_options: LoadSpec | None,
     ) -> tuple[list[_AbstractLoad], bool] | tuple[None, bool]:
         if loader_options is None:
-            # no need to return them here; We are using the default_options, which have
-            # already been added to the base stmt
-            return None, self._loader_options_have_wildcards
+            # use the defaults set at initialization
+            return self._default_loader_options, self._loader_options_have_wildcards
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
@@ -610,6 +611,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             instance = self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -657,6 +659,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
                 self.model_type,
@@ -747,6 +750,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
             statement = lambda_stmt(lambda: delete(model_type))  # pyright: ignore[reportUnknownLambdaType]
@@ -850,11 +854,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: dict[str, Any] | None,
         track_on: object | None = None,
     ) -> StatementLambdaElement:
-        if loader_options:
-            statement = statement.options(*loader_options)
-        if execution_options:
-            statement = statement.execution_options(**execution_options)
-        return self._to_lambda_stmt(
+        statement = self._to_lambda_stmt(
             statement=statement,
             global_track_bound_values=global_track_bound_values,
             track_closure_variables=track_closure_variables,
@@ -862,6 +862,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             track_bound_values=track_bound_values,
             track_on=track_on,
         )
+        if loader_options:
+            statement = statement.add_criteria(lambda s: s.options(*loader_options), enable_tracking=False)
+        if execution_options:
+            statement = statement.add_criteria(
+                lambda s: s.execution_options(**execution_options), enable_tracking=False
+            )
+        return statement
 
     def _get_delete_many_statement(
         self,
@@ -894,9 +901,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement_type,
                 model_type,
                 id_attribute,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,  # pyright: ignore[reportUnknownArgumentType]
+                f"{loader_options!s}:{execution_options!s}",
             ],
         )
 
@@ -935,6 +941,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = id_attribute if id_attribute is not None else self.id_attribute
@@ -946,11 +953,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_closure_variables=False,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,
+                    f"{self.model_type.__name__}",
                     id_attribute,
+                    id(statement),  # pyright: ignore[reportUnknownArgumentType]
+                    f"{loader_options!s}:{execution_options!s}",
                 ],
             )
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
@@ -992,6 +998,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1000,10 +1007,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,
+                    f"{self.model_type.__name__}",
+                    id(statement),
+                    f"{loader_options!s}:{execution_options!s}",
                 ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
@@ -1043,6 +1049,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1051,10 +1058,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,
+                    f"{self.model_type.__name__}",
+                    id(statement),
+                    f"{loader_options!s}:{execution_options!s}",
                 ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
@@ -1256,6 +1262,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1268,10 +1275,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_closure_variables=False,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,  # pyright: ignore[reportUnknownArgumentType]
+                    f"{self.model_type.__name__}",
+                    id(statement),  # pyright: ignore[reportUnknownArgumentType]
+                    f"{loader_options!s}:{execution_options!s}",
                 ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
@@ -1381,6 +1387,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         )
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
@@ -1389,7 +1396,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
-            execution_options = execution_options if execution_options is not None else {}
             if supports_returning:
                 instances = list(
                     self.session.scalars(
@@ -1427,10 +1433,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             lambda: statement,
             track_on=[
                 self._dialect.name,
-                self.model_type.__name__,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
+                f"{self.model_type.__name__}",
                 statement,
+                f"{loader_options!s}:{execution_options!s}",
             ],
         )
 
@@ -1553,6 +1558,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1561,10 +1567,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,
+                    f"{self.model_type.__name__}",
+                    id(statement),
+                    f"{loader_options!s}:{execution_options!s}",
                 ],
             )
             if order_by is None:
@@ -1618,6 +1623,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1626,10 +1632,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,
+                    f"{self.model_type.__name__}",
+                    id(statement),
+                    f"{loader_options!s}:{execution_options!s}",
                 ],
             )
             if order_by is None:
@@ -1664,12 +1669,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             track_bound_values=False,
             track_closure_variables=False,
             track_on=[
-                self.model_type,
-                "count",
-                self.model_type.__name__,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
-                statement,
+                self._dialect.name,
+                f"{self.model_type.__name__}",
+                id(statement),
+                f"{loader_options!s}:{execution_options!s}",
             ],
         )
 
@@ -1916,6 +1919,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+            execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
             statement = self._get_base_stmt(
@@ -1924,11 +1928,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 track_on=[
                     self._dialect.name,
-                    self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
-                    statement,
-                ],  # pyright: ignore[reportUnknownArgumentType]
+                    f"{self.model_type.__name__}",
+                    id(statement),  # pyright: ignore[reportUnknownArgumentType]
+                    f"{loader_options!s}:{execution_options!s}",
+                ],
             )
             if order_by is None:
                 order_by = self.order_by or []

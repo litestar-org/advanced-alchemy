@@ -50,7 +50,7 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             back_populates="products",
             cascade="all, delete",
             passive_deletes=True,
-            lazy="noload",
+            lazy="joined",
         )
         tags: AssociationProxy[List[str]] = association_proxy(
             "product_tags",
@@ -68,20 +68,20 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         product_1 = Product(name="Product 1", tags=["a new tag", "second tag"])
         db_session.add(product_1)
 
-        tags = db_session.execute(select(Tag)).fetchall()
+        tags = db_session.execute(select(Tag)).unique().fetchall()
         assert len(tags) == 2
 
         product_2 = Product(name="Product 2", tags=["third tag"])
         db_session.add(product_2)
-        tags = db_session.execute(select(Tag)).fetchall()
+        tags = db_session.execute(select(Tag)).unique().fetchall()
         assert len(tags) == 3
 
         product_2.tags = []
         db_session.add(product_2)
 
-        _product_2_validate = db_session.execute(select(Product).where(Product.name == "Product 2")).fetchone()
+        _product_2_validate = db_session.execute(select(Product).where(Product.name == "Product 2")).unique().fetchone()
         assert _product_2_validate
-        tags_2 = db_session.execute(select(Tag)).fetchall()
+        tags_2 = db_session.execute(select(Tag)).unique().fetchall()
         assert len(_product_2_validate[0].product_tags) == 0
         assert len(tags_2) == 3
         # add more assertions
@@ -124,7 +124,7 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             back_populates="products",
             cascade="all, delete",
             passive_deletes=True,
-            lazy="noload",
+            lazy="joined",
         )
         tags: AssociationProxy[List[str]] = association_proxy(
             "product_tags",
@@ -139,15 +139,15 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         await conn.run_sync(Tag.metadata.create_all)
 
     async with session_factory() as db_session:
-        product_1 = Product(name="Product 1", tags=["a new tag", "second tag"])
+        product_1 = Product(name="Product 1 async", tags=["a new tag", "second tag"])
         db_session.add(product_1)
 
         tags = await db_session.execute(select(Tag))
-        assert len(tags.fetchall()) == 2
+        assert len(tags.unique().fetchall()) == 2
 
-        product_2 = Product(name="Product 2", tags=["third tag"])
+        product_2 = Product(name="Product 2 async", tags=["third tag"])
         db_session.add(product_2)
         tags = await db_session.execute(select(Tag))
-        assert len(tags.fetchall()) == 3
+        assert len(tags.unique().fetchall()) == 3
 
         # add more assertions
