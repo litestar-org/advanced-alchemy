@@ -94,7 +94,7 @@ def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture()
-def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
+def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Generator[Engine, None, None]:
     """Oracle 18c instance for end-to-end testing.
 
     Args:
@@ -104,7 +104,7 @@ def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
     Returns:
         Async SQLAlchemy engine instance.
     """
-    return create_engine(
+    yield create_engine(
         "oracle+oracledb://:@",
         thick_mode=False,
         connect_args={
@@ -119,7 +119,7 @@ def oracle18c_engine(docker_ip: str, oracle18c_service: None) -> Engine:
 
 
 @pytest.fixture()
-def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
+def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Generator[Engine, None, None]:
     """Oracle 23c instance for end-to-end testing.
 
     Args:
@@ -129,7 +129,7 @@ def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
     Returns:
         Async SQLAlchemy engine instance.
     """
-    return create_engine(
+    yield create_engine(
         "oracle+oracledb://:@",
         thick_mode=False,
         connect_args={
@@ -144,9 +144,9 @@ def oracle23c_engine(docker_ip: str, oracle23c_service: None) -> Engine:
 
 
 @pytest.fixture()
-def psycopg_engine(docker_ip: str, postgres_service: None) -> Engine:
+def psycopg_engine(docker_ip: str, postgres_service: None) -> Generator[Engine, None, None]:
     """Postgresql instance for end-to-end testing."""
-    return create_engine(
+    yield create_engine(
         URL(
             drivername="postgresql+psycopg",
             username="postgres",
@@ -161,9 +161,9 @@ def psycopg_engine(docker_ip: str, postgres_service: None) -> Engine:
 
 
 @pytest.fixture()
-def mssql_engine(docker_ip: str, mssql_service: None) -> Engine:
+def mssql_engine(docker_ip: str, mssql_service: None) -> Generator[Engine, None, None]:
     """MS SQL instance for end-to-end testing."""
-    return create_engine(
+    yield create_engine(
         URL(
             drivername="mssql+pyodbc",
             username="sa",
@@ -196,33 +196,33 @@ def sqlite_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture()
-def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPatch) -> Engine:
+def spanner_engine(docker_ip: str, spanner_service: None, monkeypatch: MonkeyPatch) -> Generator[Engine, None, None]:
     """Postgresql instance for end-to-end testing."""
     monkeypatch.setenv("SPANNER_EMULATOR_HOST", "localhost:9010")
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "emulator-test-project")
 
-    return create_engine(
+    yield create_engine(
         "spanner+spanner:///projects/emulator-test-project/instances/test-instance/databases/test-database",
         poolclass=NullPool,
     )
 
 
 @pytest.fixture()
-def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Engine:
+def cockroachdb_engine(docker_ip: str, cockroachdb_service: None) -> Generator[Engine, None, None]:
     """CockroachDB instance for end-to-end testing."""
-    return create_engine(
+    yield create_engine(
         url="cockroachdb://root@localhost:26257/defaultdb?sslmode=disable",
         poolclass=NullPool,
     )
 
 
 @pytest.fixture()
-async def mock_sync_engine() -> NonCallableMagicMock:
+def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
     """Return a mocked Engine instance."""
     mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
     mock.dialect.name = "mock"
-    return mock
+    yield mock
 
 
 @pytest.fixture(
@@ -294,8 +294,8 @@ async def mock_sync_engine() -> NonCallableMagicMock:
         ),
     ],
 )
-def engine(request: FixtureRequest) -> Engine:
-    return cast(Engine, request.getfixturevalue(request.param))
+def engine(request: FixtureRequest) -> Generator[Engine, None, None]:
+    yield cast(Engine, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
@@ -328,9 +328,9 @@ async def aiosqlite_engine(tmp_path: Path) -> AsyncGenerator[AsyncEngine, None]:
 
 
 @pytest.fixture()
-async def asyncmy_engine(docker_ip: str, mysql_service: None) -> AsyncEngine:
+async def asyncmy_engine(docker_ip: str, mysql_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """Postgresql instance for end-to-end testing."""
-    return create_async_engine(
+    yield create_async_engine(
         URL(
             drivername="mysql+asyncmy",
             username="app",
@@ -345,9 +345,9 @@ async def asyncmy_engine(docker_ip: str, mysql_service: None) -> AsyncEngine:
 
 
 @pytest.fixture()
-async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
+async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """Postgresql instance for end-to-end testing."""
-    return create_async_engine(
+    yield create_async_engine(
         URL(
             drivername="postgresql+asyncpg",
             username="postgres",
@@ -362,9 +362,9 @@ async def asyncpg_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
 
 
 @pytest.fixture()
-async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncEngine:
+async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """Postgresql instance for end-to-end testing."""
-    return create_async_engine(
+    yield create_async_engine(
         URL(
             drivername="postgresql+psycopg",
             username="postgres",
@@ -379,18 +379,18 @@ async def psycopg_async_engine(docker_ip: str, postgres_service: None) -> AsyncE
 
 
 @pytest.fixture()
-async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) -> AsyncEngine:
+async def cockroachdb_async_engine(docker_ip: str, cockroachdb_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """Cockroach DB async engine instance for end-to-end testing."""
-    return create_async_engine(
+    yield create_async_engine(
         url="cockroachdb+asyncpg://root@localhost:26257/defaultdb",
         poolclass=NullPool,
     )
 
 
 @pytest.fixture()
-async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine:
+async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """MS SQL instance for end-to-end testing."""
-    return create_async_engine(
+    yield create_async_engine(
         URL(
             drivername="mssql+aioodbc",
             username="sa",
@@ -413,7 +413,7 @@ async def mssql_async_engine(docker_ip: str, mssql_service: None) -> AsyncEngine
 
 
 @pytest.fixture()
-async def oracle18c_async_engine(docker_ip: str, oracle18c_service: None) -> AsyncEngine:
+async def oracle18c_async_engine(docker_ip: str, oracle18c_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """Oracle 18c instance for end-to-end testing.
 
     Args:
@@ -423,7 +423,7 @@ async def oracle18c_async_engine(docker_ip: str, oracle18c_service: None) -> Asy
     Returns:
         Async SQLAlchemy engine instance.
     """
-    return create_async_engine(
+    yield create_async_engine(
         "oracle+oracledb://:@",
         thick_mode=False,
         connect_args={
@@ -438,7 +438,7 @@ async def oracle18c_async_engine(docker_ip: str, oracle18c_service: None) -> Asy
 
 
 @pytest.fixture()
-async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> AsyncEngine:
+async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> AsyncGenerator[AsyncEngine, None]:
     """Oracle 23c instance for end-to-end testing.
 
     Args:
@@ -448,7 +448,7 @@ async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> Asy
     Returns:
         Async SQLAlchemy engine instance.
     """
-    return create_async_engine(
+    yield create_async_engine(
         "oracle+oracledb://:@",
         thick_mode=False,
         connect_args={
@@ -463,12 +463,12 @@ async def oracle23c_async_engine(docker_ip: str, oracle23c_service: None) -> Asy
 
 
 @pytest.fixture()
-async def mock_async_engine() -> NonCallableMagicMock:
+async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
     """Return a mocked AsyncEngine instance."""
     mock = cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
     mock.dialect.name = "mock"
-    return mock
+    yield mock
 
 
 @pytest.fixture(
@@ -548,8 +548,8 @@ async def mock_async_engine() -> NonCallableMagicMock:
         ),
     ],
 )
-def async_engine(request: FixtureRequest) -> AsyncEngine:
-    return cast(AsyncEngine, request.getfixturevalue(request.param))
+async def async_engine(request: FixtureRequest) -> AsyncGenerator[AsyncEngine, None]:
+    yield cast(AsyncEngine, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()

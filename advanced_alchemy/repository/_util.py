@@ -21,6 +21,7 @@ from advanced_alchemy.repository.typing import ModelT, OrderingPair
 
 if TYPE_CHECKING:
     from sqlalchemy import (
+        Dialect,
         StatementLambdaElement,
     )
 
@@ -128,6 +129,7 @@ class FilterableRepositoryProtocol(Protocol[ModelT]):
 class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     model_type: type[ModelT]
     _prefer_any: bool = False
+    _dialect: Dialect
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     order_by: list[OrderingPair] | OrderingPair | None = None
@@ -178,8 +180,14 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         statement: StatementLambdaElement,
         expression: ColumnElement[bool],
     ) -> StatementLambdaElement:
-        statement += lambda s: s.where(expression)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        """Add a where clause to the statement."""
+        # Static WHERE clause - no need to track
+        return statement.add_criteria(
+            lambda s: s.where(expression),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[self._dialect.name, self.model_type.__name__, id(expression)],
+        )
 
     def _filter_by_where(
         self,
@@ -188,8 +196,13 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         value: Any,
     ) -> StatementLambdaElement:
         field = get_instrumented_attr(self.model_type, field_name)
-        statement += lambda s: s.where(field == value)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        # Track only the value parameter since it's dynamic
+        return statement.add_criteria(
+            lambda s: s.where(field == value),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[self._dialect.name, self.model_type.__name__, field, id(value)],
+        )
 
     def _apply_order_by(
         self,
@@ -210,5 +223,9 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         is_desc: bool,
     ) -> StatementLambdaElement:
         fragment = field.desc() if is_desc else field.asc()
-        statement += lambda s: s.order_by(fragment)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        # Static ORDER BY - no need to track
+        return statement.add_criteria(
+            lambda s: s.order_by(fragment),
+            track_closure_variables=False,
+            track_on=[self._dialect.name, self.model_type.__name__, field, is_desc],
+        )

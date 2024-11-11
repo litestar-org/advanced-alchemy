@@ -67,10 +67,7 @@ def test_lambda_statement_quirks(monkeypatch: MonkeyPatch, tmp_path: Path) -> No
         ile_de_france = State(name="Île-de-France", country=france)
 
         repo = USStateRepository(session=db_session)
-        repo.add(california)
-        repo.add(oregon)
-        repo.add(ile_de_france)
-        db_session.commit()
+        repo.add_many([california, oregon, ile_de_france], auto_commit=True)
 
         # Using only the ORM, this works fine:
 
@@ -99,20 +96,20 @@ def test_lambda_statement_quirks(monkeypatch: MonkeyPatch, tmp_path: Path) -> No
         stmt2 = select(State).where(State.country == usa)
 
         count = repo.count(statement=stmt2)
-        assert count == 2, f"Expected 2, got {count}"
+        assert count == 2, f"Count Expected 2, got {count}"
 
         count = repo.count(State.country == usa)
-        assert count == 2, f"Expected 2, got {count}"
+        assert count == 2, f"Count Expression Expected 2, got {count}"
 
         count = repo.count(statement=stmt2)
-        assert count == 2, f"Expected 2, got {count}"
+        assert count == 2, f"Recount Statement Expected 2, got {count}"
 
         # It also failed with
         states = repo.list(statement=stmt2)
         count = len(states)
-        assert count == 2, f"Expected 2, got {count}"
+        assert count == 2, f"List Statement Expected 2, got {count}"
 
         _states, count = repo.list_and_count(statement=stmt2)
-        assert count == 2, f"Expected 2, got {count}"
+        assert count == 2, f"List and Count Expected 2, got {count}"
         _states, count = repo.list_and_count(statement=stmt2, force_basic_query_mode=True)
-        assert count == 2, f"Expected 2, got {count}"
+        assert count == 2, f"List and Count (force_basic_query_mode) Expected 2, got {count}"

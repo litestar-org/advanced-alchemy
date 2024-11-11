@@ -825,6 +825,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         track_closure_variables: bool = True,
         enable_tracking: bool = True,
         track_bound_values: bool = True,
+        track_on: object | None = None,
     ) -> StatementLambdaElement:
         if isinstance(statement, Select):
             statement = lambda_stmt(
@@ -833,6 +834,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 global_track_bound_values=global_track_bound_values,
                 track_closure_variables=track_closure_variables,
                 enable_tracking=enable_tracking,
+                track_on=track_on,
             )
         return statement
 
@@ -846,6 +848,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         track_bound_values: bool = True,
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
+        track_on: object | None = None,
     ) -> StatementLambdaElement:
         if loader_options:
             statement = statement.options(*loader_options)
@@ -853,10 +856,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = statement.execution_options(**execution_options)
         return self._to_lambda_stmt(
             statement=statement,
-            track_bound_values=track_bound_values,
             global_track_bound_values=global_track_bound_values,
             track_closure_variables=track_closure_variables,
             enable_tracking=enable_tracking,
+            track_bound_values=track_bound_values,
+            track_on=track_on,
         )
 
     def _get_delete_many_statement(
@@ -870,22 +874,31 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        if statement_type == "delete":
-            statement = lambda_stmt(lambda: delete(model_type))
-        elif statement_type == "select":
-            statement = lambda_stmt(lambda: select(model_type))
+        # Base statement is static
+        statement = delete(model_type) if statement_type == "delete" else select(model_type)
         if loader_options:
             statement = statement.options(*loader_options)
         if execution_options:
             statement = statement.execution_options(**execution_options)
-        if self._prefer_any:
-            statement += lambda s: s.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
-        else:
-            statement += lambda s: s.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if supports_returning and statement_type != "select":
-            statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-
-        return statement
+            statement = statement.returning(model_type)  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
+        if self._prefer_any:
+            statement = statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
+        else:
+            statement = statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        return lambda_stmt(
+            lambda: statement,  # pyright: ignore[reportUnknownLambdaType]
+            track_bound_values=True,
+            track_on=[
+                self._dialect.name,
+                statement_type,
+                model_type,
+                id_attribute,
+                tuple(loader_options) if loader_options else "default",
+                tuple(execution_options) if execution_options else "default",
+                statement,  # pyright: ignore[reportUnknownArgumentType]
+            ],
+        )
 
     def get(
         self,
@@ -929,6 +942,16 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                track_bound_values=False,
+                track_closure_variables=False,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                    id_attribute,
+                ],
             )
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
             instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
@@ -975,6 +998,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1019,6 +1049,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1225,12 +1262,21 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                enable_tracking=False,
+                global_track_bound_values=False,
+                track_bound_values=False,
+                track_closure_variables=False,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,  # pyright: ignore[reportUnknownArgumentType]
+                ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            statement = statement.add_criteria(
-                lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
-            )
+            statement = self._get_count_stmt(statement, loader_options, execution_options)
             results = self._execute(statement, uniquify=loader_options_have_wildcard)
             return cast(int, results.scalar_one())
 
@@ -1369,24 +1415,24 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        statement = lambda_stmt(lambda: update(model_type))
+        # Base update statement is static
+        statement = update(model_type)
         if supports_returning:
-            statement += lambda s: s.returning(model_type)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.returning(model_type)
         if loader_options:
-            statement = statement.add_criteria(
-                lambda s: s.options(*loader_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
+            statement = statement.options(*loader_options)
         if execution_options:
-            statement = statement.add_criteria(
-                lambda s: s.execution_options(**execution_options),
-                track_bound_values=False,
-                track_closure_variables=False,
-                enable_tracking=False,
-            )
-        return statement
+            statement = statement.execution_options(**execution_options)
+        return lambda_stmt(
+            lambda: statement,
+            track_on=[
+                self._dialect.name,
+                self.model_type.__name__,
+                tuple(loader_options) if loader_options else "default",
+                tuple(execution_options) if execution_options else "default",
+                statement,
+            ],
+        )
 
     def list_and_count(
         self,
@@ -1513,6 +1559,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             if order_by is None:
                 order_by = self.order_by or []
@@ -1571,6 +1624,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             if order_by is None:
                 order_by = self.order_by or []
@@ -1598,14 +1658,19 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> StatementLambdaElement:
-        if loader_options:
-            statement = statement.options(*loader_options)
-        if execution_options:
-            statement = statement.execution_options(**execution_options)
+        # Count statement transformations are static
         return statement.add_criteria(
-            lambda s: s.with_only_columns(sql_func.count(), maintain_column_froms=True).order_by(None),
-            enable_tracking=False,
+            lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
+            track_bound_values=False,
             track_closure_variables=False,
+            track_on=[
+                self.model_type,
+                "count",
+                self.model_type.__name__,
+                tuple(loader_options) if loader_options else "default",
+                tuple(execution_options) if execution_options else "default",
+                statement,
+            ],
         )
 
     def upsert(
@@ -1857,6 +1922,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],  # pyright: ignore[reportUnknownArgumentType]
             )
             if order_by is None:
                 order_by = self.order_by or []
@@ -1868,25 +1940,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
             return cast("List[ModelT]", instances)
-
-    def filter_collection_by_kwargs(
-        self,
-        collection: Select[tuple[ModelT]] | StatementLambdaElement,
-        /,
-        **kwargs: Any,
-    ) -> StatementLambdaElement:
-        """Filter the collection by kwargs.
-
-        Args:
-            collection: statement to filter
-            **kwargs: key/value pairs such that objects remaining in the collection after filtering
-                have the property that their attribute named `key` has value equal to `value`.
-        """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
-            if not isinstance(collection, StatementLambdaElement):
-                collection = lambda_stmt(lambda: collection)
-            collection += lambda s: s.filter_by(**kwargs)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-            return collection
 
     @classmethod
     def check_health(cls, session: Session | scoped_session[Session]) -> bool:

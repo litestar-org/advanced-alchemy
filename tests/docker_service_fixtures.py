@@ -121,8 +121,8 @@ def docker_services(worker_id: str) -> Generator[DockerServiceRegistry, None, No
 
 
 @pytest.fixture(scope="session")
-def docker_ip(docker_services: DockerServiceRegistry) -> str:
-    return docker_services.docker_ip
+def docker_ip(docker_services: DockerServiceRegistry) -> Generator[str, None, None]:
+    yield docker_services.docker_ip
 
 
 async def mysql_responsive(host: str) -> bool:

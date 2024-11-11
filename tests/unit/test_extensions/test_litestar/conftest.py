@@ -60,13 +60,13 @@ async def disable_implicit_sync_warning() -> None:
 
 
 @pytest.fixture
-def int_factory() -> Callable[[], int]:
-    return lambda: 2
+def int_factory() -> Generator[Callable[[], int], None, None]:
+    yield lambda: 2
 
 
 @pytest.fixture
-def expected_field_defs(int_factory: Callable[[], int]) -> List[DTOFieldDefinition]:
-    return [
+def expected_field_defs(int_factory: Callable[[], int]) -> Generator[List[DTOFieldDefinition], None, None]:
+    yield [
         DTOFieldDefinition.from_field_definition(
             field_definition=FieldDefinition.from_kwarg(
                 annotation=int,
@@ -141,7 +141,7 @@ def expected_field_defs(int_factory: Callable[[], int]) -> List[DTOFieldDefiniti
 
 
 @pytest.fixture
-def create_module(tmp_path: Path, monkeypatch: MonkeyPatch) -> Callable[[str], ModuleType]:
+def create_module(tmp_path: Path, monkeypatch: MonkeyPatch) -> Generator[Callable[[str], ModuleType], None, None]:
     """Utility fixture for dynamic module creation."""
 
     def wrapped(source: str) -> ModuleType:
@@ -173,11 +173,11 @@ def create_module(tmp_path: Path, monkeypatch: MonkeyPatch) -> Callable[[str], M
         not_none(spec.loader).exec_module(module)
         return module
 
-    return wrapped
+    yield wrapped
 
 
 @pytest.fixture
-def create_scope() -> Callable[..., Scope]:
+def create_scope() -> Generator[Callable[..., Scope], None, None]:
     def inner(
         *,
         type: str = "http",
@@ -223,12 +223,12 @@ def create_scope() -> Callable[..., Scope]:
         }
         return cast("Scope", scope)
 
-    return inner  # pyright: ignore[reportUnknownVariableType]
+    yield inner  # pyright: ignore[reportUnknownVariableType]
 
 
 @pytest.fixture
-def scope(create_scope: Callable[..., Scope]) -> Scope:
-    return create_scope()
+def scope(create_scope: Callable[..., Scope]) -> Generator[Scope, None, None]:
+    yield create_scope()
 
 
 @pytest.fixture()
@@ -249,8 +249,8 @@ def engine() -> Generator[Engine, None, None]:
 async def sync_sqlalchemy_plugin(
     engine: Engine,
     session_maker: sessionmaker[Session] | None = None,
-) -> SQLAlchemyPlugin:
-    return SQLAlchemyPlugin(config=SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker))
+) -> AsyncGenerator[SQLAlchemyPlugin, None]:
+    yield SQLAlchemyPlugin(config=SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker))
 
 
 @pytest.fixture()
@@ -271,47 +271,47 @@ async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
 async def async_sqlalchemy_plugin(
     async_engine: AsyncEngine,
     async_session_maker: async_sessionmaker[AsyncSession] | None = None,
-) -> SQLAlchemyPlugin:
-    return SQLAlchemyPlugin(
+) -> AsyncGenerator[SQLAlchemyPlugin, None]:
+    yield SQLAlchemyPlugin(
         config=SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker),
     )
 
 
 @pytest.fixture(params=[pytest.param("sync_sqlalchemy_plugin"), pytest.param("async_sqlalchemy_plugin")])
-async def plugin(request: FixtureRequest) -> SQLAlchemyPlugin:
-    return cast(SQLAlchemyPlugin, request.getfixturevalue(request.param))
+async def plugin(request: FixtureRequest) -> AsyncGenerator[SQLAlchemyPlugin, None]:
+    yield cast(SQLAlchemyPlugin, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
-async def sync_app(sync_sqlalchemy_plugin: SQLAlchemyPlugin) -> Litestar:
-    return Litestar(plugins=[sync_sqlalchemy_plugin])
+async def sync_app(sync_sqlalchemy_plugin: SQLAlchemyPlugin) -> AsyncGenerator[Litestar, None]:
+    yield Litestar(plugins=[sync_sqlalchemy_plugin])
 
 
 @pytest.fixture()
-async def async_app(async_sqlalchemy_plugin: SQLAlchemyPlugin) -> Litestar:
-    return Litestar(plugins=[async_sqlalchemy_plugin])
+async def async_app(async_sqlalchemy_plugin: SQLAlchemyPlugin) -> AsyncGenerator[Litestar, None]:
+    yield Litestar(plugins=[async_sqlalchemy_plugin])
 
 
 @pytest.fixture()
-async def sync_alembic_commands(sync_app: Litestar) -> AlembicCommands:
-    return AlembicCommands(app=sync_app)
+async def sync_alembic_commands(sync_app: Litestar) -> AsyncGenerator[AlembicCommands, None]:
+    yield AlembicCommands(app=sync_app)
 
 
 @pytest.fixture()
-async def async_alembic_commands(async_app: Litestar) -> AlembicCommands:
-    return AlembicCommands(app=async_app)
+async def async_alembic_commands(async_app: Litestar) -> AsyncGenerator[AlembicCommands, None]:
+    yield AlembicCommands(app=async_app)
 
 
 @pytest.fixture(params=[pytest.param("sync_alembic_commands"), pytest.param("async_alembic_commands")])
-async def alembic_commands(request: FixtureRequest) -> AlembicCommands:
-    return cast(AlembicCommands, request.getfixturevalue(request.param))
+async def alembic_commands(request: FixtureRequest) -> AsyncGenerator[AlembicCommands, None]:
+    yield cast(AlembicCommands, request.getfixturevalue(request.param))
 
 
 @pytest.fixture(params=[pytest.param("sync_app"), pytest.param("async_app")])
-async def app(request: FixtureRequest) -> Litestar:
-    return cast(Litestar, request.getfixturevalue(request.param))
+async def app(request: FixtureRequest) -> AsyncGenerator[Litestar, None]:
+    yield cast(Litestar, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
-def request_factory() -> RequestFactory:
-    return RequestFactory()
+def request_factory() -> Generator[RequestFactory, None, None]:
+    yield RequestFactory()

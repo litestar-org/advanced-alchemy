@@ -221,7 +221,7 @@ def test_model_using_func() -> None:
     dto = SQLAlchemyDTO[Annotated[ModelWithFunc, config]]
 
     @get(dto=dto, signature_namespace={"ModelWithFunc": ModelWithFunc})
-    def get_handler() -> ModelWithFunc:
+    async def get_handler() -> ModelWithFunc:
         return instance
 
     with create_test_client(
@@ -279,7 +279,7 @@ user_keyword_table: Final[Table] = Table(
 dto = SQLAlchemyDTO[User]
 
 @get("/", return_dto=dto)
-def get_handler() -> User:
+async def get_handler() -> User:
     return User(id=1, kw=[Keyword(keyword="bar"), Keyword(keyword="baz")])
 """,
     )
@@ -319,7 +319,7 @@ class Interval(Base):
 dto = SQLAlchemyDTO[Interval]
 
 @get("/", return_dto=dto)
-def get_handler() -> Interval:
+async def get_handler() -> Interval:
     return Interval(id=1, start=1, end=3)
 """,
     )
@@ -364,7 +364,7 @@ class Interval(Base):
 dto = SQLAlchemyDTO[Interval]
 
 @get("/", return_dto=dto)
-def get_handler() -> Interval:
+async def get_handler() -> Interval:
     return Interval(id=1, start=1, end=3)
 """,
     )
@@ -439,7 +439,7 @@ async def test_dto_with_composite_map() -> None:
     dto = SQLAlchemyDTO[Vertex1]
 
     @post(dto=dto, signature_namespace={"Vertex": Vertex1})
-    def post_handler(data: Vertex1) -> Vertex1:
+    async def post_handler(data: Vertex1) -> Vertex1:
         return data
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -477,7 +477,7 @@ async def test_dto_with_composite_map_using_explicit_columns() -> None:
     dto = SQLAlchemyDTO[Vertex2]
 
     @post(dto=dto, signature_namespace={"Vertex": Vertex2})
-    def post_handler(data: Vertex2) -> Vertex2:
+    async def post_handler(data: Vertex2) -> Vertex2:
         return data
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -524,7 +524,7 @@ async def test_dto_with_composite_map_using_hybrid_imperative_mapping() -> None:
     dto = SQLAlchemyDTO[Vertex3]
 
     @post(dto=dto, signature_namespace={"Vertex": Vertex3})
-    def post_handler(data: Vertex3) -> Vertex3:
+    async def post_handler(data: Vertex3) -> Vertex3:
         return data
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -611,7 +611,7 @@ async def test_disable_implicitly_mapped_columns_using_annotated_notation() -> N
         signature_namespace={"Model": Model},
         dependencies={"model": Provide(lambda: Model(id=123, field="hi"), sync_to_thread=False)},
     )
-    def post_handler(model: Model) -> Model:
+    async def post_handler(model: Model) -> Model:
         return model
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -648,7 +648,7 @@ async def test_disable_implicitly_mapped_columns_special() -> None:
         signature_namespace={"Model": Model},
         dependencies={"model": Provide(lambda: Model(id=123, field="hi"), sync_to_thread=False)},
     )
-    def post_handler(model: Model) -> Model:
+    async def post_handler(model: Model) -> Model:
         return model
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -703,7 +703,7 @@ async def test_disable_implicitly_mapped_columns_with_hybrid_properties_and_Mark
             ),
         },
     )
-    def post_handler(model: Model) -> Model:
+    async def post_handler(model: Model) -> Model:
         return model
 
     with create_test_client(route_handlers=[post_handler]) as client:

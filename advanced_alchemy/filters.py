@@ -94,10 +94,20 @@ class BeforeAfter(StatementFilter):
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
             before = self.before
-            statement += lambda s: s.where(field < before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.add_criteria(
+                lambda s: s.where(field < before),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[self.__class__.__name__, model, self.field_name, self.before],
+            )
         if self.after is not None:
             after = self.after
-            statement += lambda s: s.where(field > after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.add_criteria(
+                lambda s: s.where(field > after),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[self.__class__.__name__, model, self.field_name, self.after],
+            )
         return statement
 
 
@@ -128,10 +138,20 @@ class OnBeforeAfter(StatementFilter):
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
             on_or_before = self.on_or_before
-            statement += lambda s: s.where(field <= on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.add_criteria(
+                lambda s: s.where(field <= on_or_before),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[self.__class__.__name__, model.__name__, self.field_name, self.on_or_before],
+            )
         if self.on_or_after is not None:
             on_or_after = self.on_or_after
-            statement += lambda s: s.where(field >= on_or_after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = statement.add_criteria(
+                lambda s: s.where(field >= on_or_after),
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[self.__class__.__name__, model.__name__, self.field_name, self.on_or_after],
+            )
         return statement
 
 
@@ -175,15 +195,22 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         if self.values is None:
             return statement
         if not self.values:
-            statement += lambda s: s.where(text("1=-1"))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-            return statement
+            return statement.add_criteria(lambda s: s.where(text("1=-1")), enable_tracking=False)
         if prefer_any:
             values = self.values
-            statement += lambda s: s.where(any_(values) == field)  # type: ignore[arg-type]
-            return statement
+            return statement.add_criteria(
+                lambda s: s.where(any_(values) == field),  # type: ignore[arg-type]
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[self.__class__.__name__, self.field_name, model.__name__],
+            )
         values = self.values
-        statement += lambda s: s.where(field.in_(values))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
-        return statement
+        return statement.add_criteria(
+            lambda s: s.where(field.in_(values)),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[self.__class__.__name__, self.field_name, model.__name__],
+        )
 
 
 @dataclass
@@ -221,11 +248,19 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
             return statement
         if prefer_any:
             values = self.values
-            statement += lambda s: s.where(any_(values) != field)  # type: ignore[arg-type]
-            return statement
+            return statement.add_criteria(
+                lambda s: s.where(any_(values) != field),  # type: ignore[arg-type]
+                track_bound_values=True,
+                track_closure_variables=False,
+                track_on=[self.__class__.__name__, self.field_name, model.__name__],
+            )
         values = self.values
-        statement += lambda s: s.where(field.notin_(values))  # pyright: ignore[reportUnknownLambdaType,reportArgumentType,reportUnknownMemberType]
-        return statement
+        return statement.add_criteria(
+            lambda s: s.where(field.notin_(values)),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[self.__class__.__name__, self.field_name, model.__name__],
+        )
 
 
 class PaginationFilter(StatementFilter, ABC):
@@ -251,8 +286,12 @@ class LimitOffset(PaginationFilter):
     ) -> StatementLambdaElement:
         limit = self.limit
         offset = self.offset
-        statement += lambda s: s.limit(limit).offset(offset)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        return statement.add_criteria(
+            lambda s: s.limit(limit).offset(offset),
+            track_bound_values=True,
+            track_closure_variables=False,
+            track_on=[self.__class__.__name__, limit, offset, model.__name__],
+        )
 
 
 @dataclass
@@ -277,9 +316,12 @@ class OrderBy(StatementFilter):
     ) -> StatementLambdaElement:
         field = self._get_instrumented_attr(model, self.field_name)
         fragment = field.desc() if self.sort_order == "desc" else field.asc()
-        statement += lambda s: s.order_by(fragment)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-
-        return statement
+        return statement.add_criteria(
+            lambda s: s.order_by(fragment),
+            track_bound_values=False,
+            track_closure_variables=False,
+            track_on=[self.__class__.__name__, model.__name__, self.field_name, self.sort_order],
+        )
 
 
 @dataclass
@@ -327,8 +369,18 @@ class SearchFilter(StatementFilter):
         model: type[ModelT],
     ) -> StatementLambdaElement:
         where_clause = self._operator(*self.get_search_clauses(model))
-        statement += lambda s: s.where(where_clause)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
+        return statement.add_criteria(
+            lambda s: s.where(where_clause),
+            track_bound_values=True,
+            track_closure_variables=True,
+            track_on=[
+                self.__class__.__name__,
+                model.__name__,
+                str(self.normalized_field_names),
+                self.value,
+                self.ignore_case,
+            ],
+        )
 
 
 @dataclass
