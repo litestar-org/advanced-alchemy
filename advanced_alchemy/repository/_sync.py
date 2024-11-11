@@ -894,8 +894,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement_type,
                 model_type,
                 id_attribute,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,  # pyright: ignore[reportUnknownArgumentType]
             ],
         )
@@ -947,8 +945,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                     id_attribute,
                 ],
@@ -1001,8 +997,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1052,8 +1046,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1269,8 +1261,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,  # pyright: ignore[reportUnknownArgumentType]
                 ],
             )
@@ -1428,8 +1418,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             track_on=[
                 self._dialect.name,
                 self.model_type.__name__,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,
             ],
         )
@@ -1562,8 +1550,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1627,8 +1613,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1667,8 +1651,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self.model_type,
                 "count",
                 self.model_type.__name__,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,
             ],
         )
@@ -1925,8 +1907,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],  # pyright: ignore[reportUnknownArgumentType]
             )

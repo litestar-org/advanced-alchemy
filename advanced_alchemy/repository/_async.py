@@ -893,8 +893,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement_type,
                 model_type,
                 id_attribute,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,  # pyright: ignore[reportUnknownArgumentType]
             ],
         )
@@ -946,8 +944,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                     id_attribute,
                 ],
@@ -1000,8 +996,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1051,8 +1045,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1268,8 +1260,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,  # pyright: ignore[reportUnknownArgumentType]
                 ],
             )
@@ -1427,8 +1417,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             track_on=[
                 self._dialect.name,
                 self.model_type.__name__,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,
             ],
         )
@@ -1561,8 +1549,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1626,8 +1612,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],
             )
@@ -1666,8 +1650,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 self.model_type,
                 "count",
                 self.model_type.__name__,
-                tuple(loader_options) if loader_options else "default",
-                tuple(execution_options) if execution_options else "default",
                 statement,
             ],
         )
@@ -1924,8 +1906,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 track_on=[
                     self._dialect.name,
                     self.model_type.__name__,
-                    tuple(loader_options) if loader_options else "default",
-                    tuple(execution_options) if execution_options else "default",
                     statement,
                 ],  # pyright: ignore[reportUnknownArgumentType]
             )
