@@ -9,7 +9,7 @@ resolution-markers = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "0.22.3"
+version = "0.23.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1553,7 +1553,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-spanner"
-version = "3.49.1"
+version = "3.50.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -1564,9 +1564,9 @@ dependencies = [
     { name = "protobuf" },
     { name = "sqlparse" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/24/e7/ffd07a559797a0129bee96dda24b9671610c77e163cef6bebd36e838ea88/google_cloud_spanner-3.49.1.tar.gz", hash = "sha256:c064d1175319f8c9b634a3888de226f4ec70493f7ec08a45321a4b17a47fc3ca", size = 558521 }
+sdist = { url = "https://files.pythonhosted.org/packages/de/c2/46b5401d253b096712ed3a3fb4c66d667561ea7efff6d2b7b0016fc410c6/google_cloud_spanner-3.50.0.tar.gz", hash = "sha256:d585aa9c2adca1ec494db93706ea0a51bce924a4e154800e049e5599adc9deb5", size = 575252 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/72/e2afc1d972bf61600d4b8574d944fcda29b996766cd4faea45f120984c95/google_cloud_spanner-3.49.1-py2.py3-none-any.whl", hash = "sha256:261eafb63b0dd55256afcb5f7149b7527e55b5c8aca8059f77771dfe935ab03b", size = 402731 },
+    { url = "https://files.pythonhosted.org/packages/2a/a9/fde441a9f46ff072c5d9c9b91a6b4a2b114acf1eeb5853fd0080f9e9d6b7/google_cloud_spanner-3.50.0-py2.py3-none-any.whl", hash = "sha256:6410e15d0f2b9229c0d23592ea98ab6b7387eff9e609b770b3ee0ecab0ce1fed", size = 416374 },
 ]
 
 [[package]]
