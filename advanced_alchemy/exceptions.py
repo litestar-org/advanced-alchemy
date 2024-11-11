@@ -247,7 +247,7 @@ class MultipleResultsFoundError(RepositoryError):
 
 
 class InvalidRequestError(RepositoryError):
-    """Multiple results found error.
+    """Invalid request error.
 
     This exception is raised when SQLAlchemy is unable to complete the request due to a runtime error
 
