@@ -142,7 +142,7 @@ class OnBeforeAfter(StatementFilter):
                 lambda s: s.where(field <= on_or_before),
                 track_bound_values=True,
                 track_closure_variables=False,
-                track_on=[self.__class__.__name__, model, self.field_name, self.on_or_before],
+                track_on=[self.__class__.__name__, model.__name__, self.field_name, self.on_or_before],
             )
         if self.on_or_after is not None:
             on_or_after = self.on_or_after
@@ -150,7 +150,7 @@ class OnBeforeAfter(StatementFilter):
                 lambda s: s.where(field >= on_or_after),
                 track_bound_values=True,
                 track_closure_variables=False,
-                track_on=[self.__class__.__name__, model, self.field_name, self.on_or_after],
+                track_on=[self.__class__.__name__, model.__name__, self.field_name, self.on_or_after],
             )
         return statement
 
@@ -202,14 +202,14 @@ class CollectionFilter(InAnyFilter, Generic[T]):
                 lambda s: s.where(any_(values) == field),  # type: ignore[arg-type]
                 track_bound_values=True,
                 track_closure_variables=False,
-                track_on=[self.__class__.__name__, self.field_name, model],
+                track_on=[self.__class__.__name__, self.field_name, model.__name__],
             )
         values = self.values
         return statement.add_criteria(
             lambda s: s.where(field.in_(values)),
             track_bound_values=True,
             track_closure_variables=False,
-            track_on=[self.__class__.__name__, self.field_name, model],
+            track_on=[self.__class__.__name__, self.field_name, model.__name__],
         )
 
 
@@ -252,14 +252,14 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
                 lambda s: s.where(any_(values) != field),  # type: ignore[arg-type]
                 track_bound_values=True,
                 track_closure_variables=False,
-                track_on=[self.__class__.__name__, self.field_name, model],
+                track_on=[self.__class__.__name__, self.field_name, model.__name__],
             )
         values = self.values
         return statement.add_criteria(
             lambda s: s.where(field.notin_(values)),
             track_bound_values=True,
             track_closure_variables=False,
-            track_on=[self.__class__.__name__, self.field_name, model],
+            track_on=[self.__class__.__name__, self.field_name, model.__name__],
         )
 
 
@@ -290,7 +290,7 @@ class LimitOffset(PaginationFilter):
             lambda s: s.limit(limit).offset(offset),
             track_bound_values=True,
             track_closure_variables=False,
-            track_on=[self.__class__.__name__, limit, offset, model],
+            track_on=[self.__class__.__name__, limit, offset, model.__name__],
         )
 
 
@@ -320,7 +320,7 @@ class OrderBy(StatementFilter):
             lambda s: s.order_by(fragment),
             track_bound_values=False,
             track_closure_variables=False,
-            track_on=[self.__class__.__name__, model, self.field_name, self.sort_order],
+            track_on=[self.__class__.__name__, model.__name__, self.field_name, self.sort_order],
         )
 
 
@@ -373,7 +373,13 @@ class SearchFilter(StatementFilter):
             lambda s: s.where(where_clause),
             track_bound_values=True,
             track_closure_variables=True,
-            track_on=[self.__class__.__name__, model, str(self.normalized_field_names), self.value, self.ignore_case],
+            track_on=[
+                self.__class__.__name__,
+                model.__name__,
+                str(self.normalized_field_names),
+                self.value,
+                self.ignore_case,
+            ],
         )
 
 
