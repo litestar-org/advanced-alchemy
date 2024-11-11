@@ -888,7 +888,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         return lambda_stmt(
             lambda: statement,  # pyright: ignore[reportUnknownLambdaType]
             track_bound_values=True,
-            track_on=[self._dialect.name, statement_type, model_type, id_attribute, id(statement)],  # pyright: ignore[reportUnknownArgumentType]
+            track_on=[
+                self._dialect.name,
+                statement_type,
+                model_type,
+                id_attribute,
+                tuple(loader_options) if loader_options else "default",
+                tuple(execution_options) if execution_options else "default",
+                statement,  # pyright: ignore[reportUnknownArgumentType]
+            ],
         )
 
     async def get(
@@ -933,7 +941,16 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, id_attribute, item_id],
+                track_bound_values=False,
+                track_closure_variables=False,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                    id_attribute,
+                ],
             )
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
             instance = (await self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
@@ -980,7 +997,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, statement],
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1025,7 +1048,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, statement],
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1232,7 +1261,17 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, id(statement)],
+                enable_tracking=False,
+                global_track_bound_values=False,
+                track_bound_values=False,
+                track_closure_variables=False,
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,  # pyright: ignore[reportUnknownArgumentType]
+                ],
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1383,7 +1422,16 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = statement.options(*loader_options)
         if execution_options:
             statement = statement.execution_options(**execution_options)
-        return lambda_stmt(lambda: statement, track_on=[self._dialect.name, self.model_type.__name__, id(statement)])
+        return lambda_stmt(
+            lambda: statement,
+            track_on=[
+                self._dialect.name,
+                self.model_type.__name__,
+                tuple(loader_options) if loader_options else "default",
+                tuple(execution_options) if execution_options else "default",
+                statement,
+            ],
+        )
 
     async def list_and_count(
         self,
@@ -1510,7 +1558,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, statement],
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             if order_by is None:
                 order_by = self.order_by or []
@@ -1569,7 +1623,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, statement],
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],
             )
             if order_by is None:
                 order_by = self.order_by or []
@@ -1602,7 +1662,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             lambda s: s.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None),
             track_bound_values=False,
             track_closure_variables=False,
-            track_on=[self.model_type, "count", self.model_type.__name__, id(statement)],
+            track_on=[
+                self.model_type,
+                "count",
+                self.model_type.__name__,
+                tuple(loader_options) if loader_options else "default",
+                tuple(execution_options) if execution_options else "default",
+                statement,
+            ],
         )
 
     async def upsert(
@@ -1854,7 +1921,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 statement=statement,
                 loader_options=loader_options,
                 execution_options=execution_options,
-                track_on=[self._dialect.name, self.model_type.__name__, id(statement)],  # pyright: ignore[reportUnknownArgumentType]
+                track_on=[
+                    self._dialect.name,
+                    self.model_type.__name__,
+                    tuple(loader_options) if loader_options else "default",
+                    tuple(execution_options) if execution_options else "default",
+                    statement,
+                ],  # pyright: ignore[reportUnknownArgumentType]
             )
             if order_by is None:
                 order_by = self.order_by or []

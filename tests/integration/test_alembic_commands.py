@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import AsyncGenerator, Generator, Type, cast
+from typing import Generator, Type, cast
 from uuid import UUID
 
 import pytest
@@ -175,9 +175,9 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncC
         ),
     ],
 )
-async def async_sqlalchemy_config(
+def async_sqlalchemy_config(
     request: FixtureRequest,
-) -> AsyncGenerator[SQLAlchemyAsyncConfig, None]:
+) -> Generator[SQLAlchemyAsyncConfig, None, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
     yield SQLAlchemyAsyncConfig(
@@ -191,7 +191,7 @@ async def async_sqlalchemy_config(
     params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
-async def any_config(request: FixtureRequest) -> AsyncGenerator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None]:
+def any_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None, None]:
     """Return a session for the current session"""
     if isinstance(request.param, SQLAlchemyAsyncConfig):
         request.getfixturevalue("async_sqlalchemy_config")
@@ -201,9 +201,9 @@ async def any_config(request: FixtureRequest) -> AsyncGenerator[SQLAlchemySyncCo
 
 
 @pytest.fixture()
-async def alembic_commands(
+def alembic_commands(
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
-) -> AsyncGenerator[commands.AlembicCommands, None]:
+) -> Generator[commands.AlembicCommands, None, None]:
     yield commands.AlembicCommands(
         sqlalchemy_config=any_config,
     )
