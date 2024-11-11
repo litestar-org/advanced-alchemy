@@ -83,7 +83,7 @@ type-check: mypy pyright                            ## Run all type checking
 .PHONY: pre-commit
 pre-commit: 										## Runs pre-commit hooks; includes ruff formatting and linting, codespell
 	@echo "=> Running pre-commit process"
-	@uv run pre-commit run --show-diff-on-failure --color=always --all-files
+	@uv run pre-commit run --color=always --all-files
 	@echo "=> Pre-commit complete"
 
 .PHONY: slotscheck

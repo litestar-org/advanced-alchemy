@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 import string
-from typing import TYPE_CHECKING, Any, List, Optional, cast, overload
+from typing import TYPE_CHECKING, Any, Optional, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import (
@@ -30,7 +30,6 @@ from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol
 from advanced_alchemy.repository._util import DEFAULT_ERROR_MESSAGE_TEMPLATES
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
-    CollectionT,
     InMemoryStore,
     SQLAlchemyInMemoryStore,
     SQLAlchemyMultiStore,
@@ -681,11 +680,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         return await self._list_and_count_basic(*filters, **kwargs)
-
-    def filter_collection_by_kwargs(self, collection: CollectionT, /, **kwargs: Any) -> CollectionT:
-        for value in self._filter_result_by_kwargs(cast("List[ModelT]", collection), kwargs):
-            self.__filtered_store__.add(value)
-        return collection
 
     async def list(self, *filters: StatementFilter | ColumnElement[bool], **kwargs: Any) -> list[ModelT]:
         result = self.__collection__().list()

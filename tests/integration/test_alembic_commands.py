@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Generator, Type, cast
+from typing import AsyncGenerator, Generator, Type, cast
 from uuid import UUID
 
 import pytest
@@ -175,9 +175,9 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncC
         ),
     ],
 )
-def async_sqlalchemy_config(
+async def async_sqlalchemy_config(
     request: FixtureRequest,
-) -> Generator[SQLAlchemyAsyncConfig, None, None]:
+) -> AsyncGenerator[SQLAlchemyAsyncConfig, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
     yield SQLAlchemyAsyncConfig(
@@ -191,28 +191,30 @@ def async_sqlalchemy_config(
     params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
-def any_config(request: FixtureRequest) -> SQLAlchemySyncConfig | SQLAlchemyAsyncConfig:
+async def any_config(request: FixtureRequest) -> AsyncGenerator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None]:
     """Return a session for the current session"""
     if isinstance(request.param, SQLAlchemyAsyncConfig):
         request.getfixturevalue("async_sqlalchemy_config")
     else:
         request.getfixturevalue("sync_sqlalchemy_config")
-    return request.param  # type: ignore[no-any-return]
+    yield request.param  # type: ignore[no-any-return]
 
 
 @pytest.fixture()
-def alembic_commands(any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig) -> commands.AlembicCommands:
-    return commands.AlembicCommands(
+async def alembic_commands(
+    any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
+) -> AsyncGenerator[commands.AlembicCommands, None]:
+    yield commands.AlembicCommands(
         sqlalchemy_config=any_config,
     )
 
 
 @pytest.fixture
-def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Path:
+def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Generator[Path, None, None]:
     path = tmp_path / "project_dir"
     path.mkdir(exist_ok=True)
     monkeypatch.chdir(path)
-    return path
+    yield path
 
 
 async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
@@ -240,24 +242,31 @@ async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, 
 async def test_drop_all(
     alembic_commands: commands.AlembicCommands,
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
-    capsys: CaptureFixture[str],
+    capfd: CaptureFixture[str],
 ) -> None:
     from examples.litestar.litestar_repo_only import app
 
     await maybe_async(any_config.create_all_metadata(app))
+    if isinstance(any_config, SQLAlchemySyncConfig):
+        assert any_config.metadata
+        any_config.metadata.create_all(any_config.get_engine())
+    else:
+        async with any_config.get_engine().begin() as conn:
+            assert any_config.metadata
+            await conn.run_sync(any_config.metadata.create_all)
 
     await drop_all(
         alembic_commands.config.engine,
         alembic_commands.sqlalchemy_config.alembic_config.version_table_name,
         alembic_commands.sqlalchemy_config.alembic_config.target_metadata,
     )
-    result = capsys.readouterr()
+    result = capfd.readouterr()
     assert "Successfully dropped all objects" in result.out
 
 
 async def test_dump_tables(
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
-    capsys: CaptureFixture[str],
+    capfd: CaptureFixture[str],
     tmp_project_dir: Path,
 ) -> None:
     from advanced_alchemy.base import (
@@ -291,7 +300,7 @@ async def test_dump_tables(
         any_config.get_session(),
         [TestAuthorModel, TestBookModel],
     )
-    result = capsys.readouterr()
+    result = capfd.readouterr()
     assert "Dumping table 'test_author_model'" in result.out
     assert "Dumping table 'test_book_model" in result.out
 

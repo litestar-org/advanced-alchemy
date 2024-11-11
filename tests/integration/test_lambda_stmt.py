@@ -19,7 +19,6 @@ xfail = pytest.mark.xfail
 # This test does not work when run in group for some reason.
 # If you run individually, it'll pass.
 @pytest.mark.xdist_group("lambda")
-@xfail()
 def test_lambda_statement_quirks(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     from sqlalchemy.orm import DeclarativeBase
 
