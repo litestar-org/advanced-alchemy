@@ -813,12 +813,23 @@ def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyn
         (datetime.max, None),
     ],
 )
-def test_filter_on_datetime_field(before: datetime, after: datetime, mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+def test_filter_on_datetime_field(
+    before: datetime,
+    after: datetime,
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+    monkeypatch: MonkeyPatch,
+) -> None:
     """Test through branches of _filter_on_datetime_field()"""
-    field_mock = MagicMock()
+    field_mock = MagicMock(return_value=before or after)
     statement = MagicMock()
     field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True  # pyright: ignore[reportFunctionMemberAccess,reportUnknownLambdaType]
+    monkeypatch.setattr(
+        BeforeAfter,
+        "append_to_statement",
+        MagicMock(return_value=mock_repo.statement),
+    )
     filter = BeforeAfter(field_name="updated_at", before=before, after=after)
-    statement = filter.append_to_statement(statement, MagicMock())  # type:ignore[assignment]
+    statement = filter.append_to_statement(statement, MagicMock(return_value=before or after))  # type:ignore[assignment]
     mock_repo.model_type.updated_at = field_mock
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
