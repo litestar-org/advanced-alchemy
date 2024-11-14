@@ -157,8 +157,8 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         if not self.values:
             return statement
         if prefer_any:
-            return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
-        return statement.where(field.in_(self.values))
+            return statement.where(any_(self.values) != field)  # type: ignore[arg-type]
+        return statement.where(field.notin_(self.values))
 
 
 class PaginationFilter(StatementFilter, ABC):

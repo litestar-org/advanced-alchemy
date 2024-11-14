@@ -1496,10 +1496,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             if order_by is None:
                 order_by = self.order_by or []
             statement = self._apply_order_by(statement=statement, order_by=order_by)
-            statement.add_columns(over(sql_func.count()))
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            result = await self._execute(statement, uniquify=loader_options_have_wildcard)
+            result = await self._execute(
+                statement.add_columns(over(sql_func.count())), uniquify=loader_options_have_wildcard
+            )
             count: int = 0
             instances: list[ModelT] = []
             for i, (instance, count_value) in enumerate(result):
