@@ -19,6 +19,7 @@ from advanced_alchemy.base import (
     merge_table_arguments,
 )
 from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
+from advanced_alchemy.types.file_object import FileMetadata, FileObject
 
 
 class UUIDAuthor(UUIDAuditBase):
@@ -73,6 +74,10 @@ class UUIDSecret(UUIDv7Base):
     long_secret: Mapped[str] = mapped_column(
         EncryptedText(key="super_secret"),
     )
+    length_validated_secret: Mapped[str] = mapped_column(
+        EncryptedString(key="super_secret", length=50),
+        nullable=True,
+    )
 
 
 class UUIDModelWithFetchedValue(UUIDv6Base):
@@ -112,3 +117,16 @@ class UUIDRule(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
     config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
+
+
+class UUIDFileDocument(UUIDv7Base):
+    """The file document domain model."""
+
+    title: Mapped[str] = mapped_column(String(length=100))
+    file: Mapped[FileMetadata] = mapped_column(
+        FileObject(backend="memory", base_path="test-files"),
+        nullable=True,
+    )
+    required_file: Mapped[FileMetadata] = mapped_column(
+        FileObject(backend="memory", base_path="test-files"),
+    )

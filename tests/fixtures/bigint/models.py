@@ -12,6 +12,7 @@ from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright:
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase, SlugKey, merge_table_arguments
 from advanced_alchemy.types import EncryptedString
 from advanced_alchemy.types.encrypted_string import EncryptedText
+from advanced_alchemy.types.file_object import FileMetadata, FileObject
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -108,4 +109,21 @@ class BigIntSecret(BigIntBase):
     )
     long_secret: Mapped[str] = mapped_column(
         EncryptedText(key="super_secret"),
+    )
+    length_validated_secret: Mapped[str] = mapped_column(
+        EncryptedString(key="super_secret", length=50),
+        nullable=True,
+    )
+
+
+class BigIntFileDocument(BigIntBase):
+    """The file document domain model."""
+
+    title: Mapped[str] = mapped_column(String(length=100))
+    file: Mapped[FileMetadata] = mapped_column(
+        FileObject(backend="memory", base_path="test-files"),
+        nullable=True,
+    )
+    required_file: Mapped[FileMetadata] = mapped_column(
+        FileObject(backend="memory", base_path="test-files"),
     )
