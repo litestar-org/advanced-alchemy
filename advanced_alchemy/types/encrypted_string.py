@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-from advanced_alchemy.exceptions import IntegrityError
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
@@ -305,8 +304,9 @@ class EncryptedString(TypeDecorator[str]):
 
         # Validate length if specified
         if self.length is not None and len(str(value)) > self.length:
-            msg = f"Unencrypted value exceeds maximum unencrypted length of {self.length}"
-            raise IntegrityError(msg)
+            msg = f"Value length {len(str(value))} exceeds maximum unencrypted length {self.length}"
+            raise ValueError(msg)
+
 
         self.mount_vault()
         return self.backend.encrypt(value)

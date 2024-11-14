@@ -114,6 +114,11 @@ ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
 ]
 
 
+FileDocumentModel = Type[Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]]
+AnyFileDocument = Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]
+FileDocumentRepository = SQLAlchemyAsyncRepository[AnyFileDocument]
+FileDocumentService = SQLAlchemyAsyncRepositoryService[AnyFileDocument]
+
 RawRecordData = List[Dict[str, Any]]
 
 mock_engines = {"mock_async_engine", "mock_sync_engine"}
@@ -382,6 +387,14 @@ def slug_book_model(
 def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
     """Return the ``Secret`` model matching the current repository PK type"""
     return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret
+
+
+@pytest.fixture()
+def file_document_model(repository_pk_type: str) -> type[FileDocumentModel]:
+    """Return the FileDocument model matching the current PK type."""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDFileDocument
+    return models_bigint.BigIntFileDocument
 
 
 @pytest.fixture()
@@ -1106,6 +1119,146 @@ def model_with_fetched_value_repo(
     else:
         repo = repository_module.ModelWithFetchedValueSyncRepository(session=any_session)
     yield cast(ModelWithFetchedValueRepository, repo)
+
+
+@pytest.fixture()
+def file_document_repo(
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+    request: FixtureRequest,
+) -> Generator[FileDocumentRepository, None, None]:
+    """Return a FileDocumentRepository based on the current PK and session type."""
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.FileDocumentAsyncMockRepository(session=any_session)
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.FileDocumentSyncMockRepository(session=any_session)
+    elif isinstance(any_session, AsyncSession):
+        repo = repository_module.FileDocumentAsyncRepository(session=any_session)
+    else:
+        repo = repository_module.FileDocumentSyncRepository(session=any_session)
+    yield cast(FileDocumentRepository, repo)
+
+
+@pytest.fixture(name="raw_file_documents")
+def fx_raw_file_documents(repository_pk_type: str) -> RawRecordData:
+    """File document representations."""
+    id_value = "97108ac1-ffcb-411d-8b1e-d9183399f63b" if repository_pk_type == "uuid" else 1
+    return [
+        {
+            "id": id_value,
+            "title": "Test Document",
+            "required_file": {
+                "filename": "test.txt",
+                "path": "test-files/test.txt",
+                "backend": "memory",
+                "size": 13,
+                "checksum": "abc123",
+                "content_type": "text/plain",
+                "created_at": datetime.now(timezone.utc),
+            },
+        },
+    ]
+
+
+async def test_file_object_crud(
+    file_document_repo: FileDocumentRepository,
+    file_document_model: type[FileDocumentModel],
+) -> None:
+    """Test basic CRUD operations with FileObject.
+
+    Args:
+        file_document_repo: The file document repository
+        file_document_model: The file document model class
+    """
+    # Test file data
+    file_data = b"Hello, World!"
+    filename = "test.txt"
+    content_type = "text/plain"
+
+    # Create document with file
+    document = file_document_model(title="Test Document")
+    file_metadata = await document.required_file.type.save_file(
+        file_data=file_data,
+        filename=filename,
+        content_type=content_type,
+    )
+    document.required_file = file_metadata
+
+    # Save to database
+    saved_document = await maybe_async(file_document_repo.add(document))
+    assert isinstance(saved_document.required_file, FileMetadata)
+    assert saved_document.required_file.filename == filename
+    assert saved_document.required_file.content_type == content_type
+    assert saved_document.required_file.size == len(file_data)
+
+    # Test URL generation
+    url = await saved_document.required_file.type.get_url(saved_document.required_file)
+    assert url.startswith("file://") or url.startswith("memory://")
+
+    # Test pre-signed upload URL
+    upload_url, path = await saved_document.required_file.type.get_upload_url(
+        filename="new.txt",
+        content_type="text/plain",
+    )
+    assert upload_url.startswith("file://") or upload_url.startswith("memory://")
+    assert path.startswith("test-files/")
+
+
+async def test_file_object_validation(
+    file_document_repo: FileDocumentRepository,
+    file_document_model: type[FileDocumentModel],
+) -> None:
+    """Test FileObject validation.
+
+    Args:
+        file_document_repo: The file document repository
+        file_document_model: The file document model class
+    """
+    # Test missing required file
+    with pytest.raises(ValueError):
+        document = file_document_model(title="Test Document")
+        await maybe_async(file_document_repo.add(document))
+
+    # Test invalid backend
+    with pytest.raises(ValueError):
+        file_document_model(
+            title="Test Document",
+            required_file=FileMetadata(
+                filename="test.txt",
+                path="/test/path",
+                backend="invalid",
+                size=0,
+                checksum="abc",
+                content_type="text/plain",
+                created_at=datetime.now(timezone.utc),
+            ),
+        )
+
+
+async def test_file_object_metadata(
+    file_document_repo: FileDocumentRepository,
+    file_document_model: type[FileDocumentModel],
+) -> None:
+    """Test FileObject metadata handling.
+
+    Args:
+        file_document_repo: The file document repository
+        file_document_model: The file document model class
+    """
+    file_data = b"Test data"
+    metadata = {"category": "test", "tags": ["sample"]}
+
+    document = file_document_model(title="Test Document")
+    file_metadata = await document.required_file.type.save_file(
+        file_data=file_data,
+        filename="test.txt",
+        content_type="text/plain",
+        metadata=metadata,
+    )
+    document.required_file = file_metadata
+
+    saved_document = await maybe_async(file_document_repo.add(document))
+    assert saved_document.required_file.metadata == metadata
 
 
 async def test_repo_count_method(author_repo: AnyAuthorRepository) -> None:
@@ -1958,33 +2111,27 @@ async def test_repo_encrypted_methods(
     assert obj.long_secret == updated.long_secret
 
 
-async def test_encrypted_string_length_validation(
-    request: FixtureRequest, secret_repo: SecretRepository, secret_model: SecretModel
-) -> None:
+async def test_encrypted_string_length_validation(secret_repo: SecretRepository, secret_model: SecretModel) -> None:
     """Test that EncryptedString enforces length validation.
 
     Args:
         secret_repo: The secret repository
         secret_model: The secret model class
     """
-    if any(fixture in request.fixturenames for fixture in ["mock_async_engine", "mock_sync_engine"]):
-        pytest.skip(
-            f"{SQLAlchemyAsyncMockRepository.__name__} does not works with client side validated encrypted strings lengths"
-        )
     # Test valid length
-    valid_secret = "AAAAAAAAA"
+    valid_secret = "A" * 50
     secret = secret_model(secret="test", long_secret="test", length_validated_secret=valid_secret)
     saved_secret = await maybe_async(secret_repo.add(secret))
     assert saved_secret.length_validated_secret == valid_secret
 
     # Test exceeding length
     long_secret = "A" * 51  # Exceeds 50 character limit
-    with pytest.raises(IntegrityError) as exc_info:
+    with pytest.raises(ValueError) as exc_info:
         secret = secret_model(secret="test", long_secret="test", length_validated_secret=long_secret)
         await maybe_async(secret_repo.add(secret))
 
-    assert exc_info.value.__class__.__name__ == "IntegrityError"
-    assert "exceeds maximum unencrypted length" in str(exc_info.value.detail)
+    assert "Value length" in str(exc_info.value)
+    assert "exceeds maximum unencrypted length" in str(exc_info.value)
 
 
 # service tests
