@@ -421,6 +421,7 @@ venvPath = "."
 add_editors_note = true
 cache = true
 ruff_fix = true
+ruff_format = true
 update_docstrings = true
 
 [tool.unasyncd.files]
