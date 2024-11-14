@@ -5,9 +5,8 @@
   <img src="https://raw.githubusercontent.com/litestar-org/branding/main/assets/Branding%20-%20SVG%20-%20Transparent/AA%20-%20Banner%20-%20Inline%20-%20Dark.svg#gh-dark-mode-only" alt="Litestar Logo - Dark" width="100%" height="auto" />
   <!-- github-banner-end -->
 </p>
-<!-- markdownlint-restore -->
-
 <div align="center">
+<!-- markdownlint-restore -->
 
 <!-- prettier-ignore-start -->
 
@@ -40,20 +39,18 @@ offering:
 - Pre-configured base classes with audit columns UUID or Big Integer primary keys and
   a [sentinel column](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns).
 - Synchronous and asynchronous repositories featuring:
-  - Common CRUD operations for SQLAlchemy models
-  - Bulk inserts, updates, upserts, and deletes with dialect-specific enhancements
-  - [lambda_stmt](https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.lambda_stmt) when possible
-    for improved query building performance
-  - Integrated counts, pagination, sorting, filtering with `LIKE`, `IN`, and dates before and/or after.
+    - Common CRUD operations for SQLAlchemy models
+    - Bulk inserts, updates, upserts, and deletes with dialect-specific enhancements
+    - Integrated counts, pagination, sorting, filtering with `LIKE`, `IN`, and dates before and/or after.
 - Tested support for multiple database backends including:
-  - SQLite via [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/) or [sqlite](https://docs.python.org/3/library/sqlite3.html)
-  - Postgres via [asyncpg](https://magicstack.github.io/asyncpg/current/) or [psycopg3 (async or sync)](https://www.psycopg.org/psycopg3/)
-  - MySQL via [asyncmy](https://github.com/long2ice/asyncmy)
-  - Oracle via [oracledb (async or sync)](https://oracle.github.io/python-oracledb/) (tested on 18c and 23c)
-  - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
-  - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine)
-  - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc) or [aioodbc](https://github.com/aio-libs/aioodbc)
-  - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
+    - SQLite via [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/) or [sqlite](https://docs.python.org/3/library/sqlite3.html)
+    - Postgres via [asyncpg](https://magicstack.github.io/asyncpg/current/) or [psycopg3 (async or sync)](https://www.psycopg.org/psycopg3/)
+    - MySQL via [asyncmy](https://github.com/long2ice/asyncmy)
+    - Oracle via [oracledb (async or sync)](https://oracle.github.io/python-oracledb/) (tested on 18c and 23c)
+    - Google Spanner via [spanner-sqlalchemy](https://github.com/googleapis/python-spanner-sqlalchemy/)
+    - DuckDB via [duckdb_engine](https://github.com/Mause/duckdb_engine)
+    - Microsoft SQL Server via [pyodbc](https://github.com/mkleehammer/pyodbc) or [aioodbc](https://github.com/aio-libs/aioodbc)
+    - CockroachDB via [sqlalchemy-cockroachdb (async or sync)](https://github.com/cockroachdb/sqlalchemy-cockroachdb)
 - ...and much more
 
 ## Usage
@@ -71,9 +68,10 @@ pip install advanced-alchemy
 
 Advanced Alchemy includes a set of asynchronous and synchronous repository classes for easy CRUD
 operations on your SQLAlchemy models.
-
+<!-- markdownlint-disable -->
 <details>
 <summary>Click to expand the example</summary>
+<!-- markdownlint-restore -->
 
 ```python
 from advanced_alchemy.base import UUIDBase
@@ -139,9 +137,10 @@ For a full standalone example, see the sample [here][standalone-example]
 Advanced Alchemy includes an additional service class to make working with a repository easier.
 This class is designed to accept data as a dictionary or SQLAlchemy model,
 and it will handle the type conversions for you.
-
+<!-- markdownlint-disable -->
 <details>
 <summary>Here's the same example from above but using a service to create the data:</summary>
+<!-- markdownlint-restore -->
 
 ```python
 from advanced_alchemy.base import UUIDBase
@@ -217,8 +216,10 @@ Advanced Alchemy is the official SQLAlchemy integration for Litestar.
 In addition to installing with `pip install advanced-alchemy`,
 it can also be installed as a Litestar extra with `pip install litestar[sqlalchemy]`.
 
+<!-- markdownlint-disable -->
 <details>
 <summary>Litestar Example</summary>
+<!-- markdownlint-restore -->
 
 ```python
 from litestar import Litestar
@@ -239,8 +240,10 @@ For a full Litestar example, check [here][litestar-example]
 
 #### FastAPI
 
+<!-- markdownlint-disable -->
 <details>
 <summary>FastAPI Example</summary>
+<!-- markdownlint-restore -->
 
 ```python
 from fastapi import FastAPI
@@ -260,8 +263,10 @@ For a full FastAPI example, see [here][fastapi-example]
 
 #### Starlette
 
+<!-- markdownlint-disable -->
 <details>
 <summary>Pre-built Example Apps</summary>
+<!-- markdownlint-restore -->
 
 ```python
 from starlette.applications import Starlette
@@ -279,8 +284,10 @@ alchemy = StarletteAdvancedAlchemy(
 
 #### Sanic
 
+<!-- markdownlint-disable -->
 <details>
 <summary>Pre-built Example Apps</summary>
+<!-- markdownlint-restore -->
 
 ```python
 from sanic import Sanic
@@ -307,9 +314,8 @@ Before contributing, please review the [contribution guide][contributing].
 If you have any questions, reach out to us on [Discord][discord], our org-wide [GitHub discussions][litestar-discussions] page,
 or the [project-specific GitHub discussions page][project-discussions].
 
-<hr>
-
 <!-- markdownlint-disable -->
+<hr />
 <p align="center">
   <!-- github-banner-start -->
   <img src="https://raw.githubusercontent.com/litestar-org/branding/main/assets/Branding%20-%20SVG%20-%20Transparent/Organization%20Project%20-%20Banner%20-%20Inline%20-%20Dark.svg" alt="Litestar Logo - Light" width="40%" height="auto" />

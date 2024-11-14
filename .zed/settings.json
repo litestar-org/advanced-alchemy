@@ -1,0 +1,28 @@
+// Folder-specific settings
+//
+// For a full list of overridable settings, and general information on folder-specific settings,
+// see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+{
+    "file_scan_exclusions": [
+        "**/.git",
+        "**/.svn",
+        "**/.hg",
+        "**/CVS",
+        "**/.DS_Store",
+        "**/Thumbs.db",
+        "**/.classpath",
+        "**/.venv",
+        "**/node_modules",
+        "**/.auto_pytabs_cache",
+        "**/__pycache__",
+        "**/.pytest_cache",
+        "**/.vscode",
+        "**/.idea",
+        ".dmypy.json",
+        "**/.settings"
+    ],
+    "inline_completions": {
+        "disabled_globs": [".env"]
+    },
+    "unnecessary_code_fade": 0.5
+}

@@ -801,7 +801,7 @@ def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyn
     """Ensures we don't filter on an empty collection."""
     statement = MagicMock()
     filter = CollectionFilter(field_name="id", values=[])  # type:ignore[var-annotated]
-    statement = filter.append_to_lambda_statement(statement, MagicMock())  # type:ignore[assignment]
+    statement = filter.append_to_statement(statement, MagicMock())  # type:ignore[assignment]
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
@@ -819,6 +819,6 @@ def test_filter_on_datetime_field(before: datetime, after: datetime, mock_repo: 
     statement = MagicMock()
     field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True  # pyright: ignore[reportFunctionMemberAccess,reportUnknownLambdaType]
     filter = BeforeAfter(field_name="updated_at", before=before, after=after)
-    statement = filter.append_to_lambda_statement(statement, MagicMock())  # type:ignore[assignment]
+    statement = filter.append_to_statement(statement, MagicMock())  # type:ignore[assignment]
     mock_repo.model_type.updated_at = field_mock
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]

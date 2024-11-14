@@ -9,14 +9,15 @@ from datetime import datetime  # noqa: TCH003
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Generic, Literal, cast
 
-from sqlalchemy import BinaryExpression, and_, any_, or_, text
+from sqlalchemy import BinaryExpression, Delete, Select, Update, and_, any_, or_, text
 from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
     from typing import Callable
 
-    from sqlalchemy import ColumnElement, Select, StatementLambdaElement
+    from sqlalchemy import ColumnElement
     from sqlalchemy.orm import InstrumentedAttribute
+    from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
     from typing_extensions import TypeAlias
 
     from advanced_alchemy import base
@@ -36,32 +37,29 @@ __all__ = (
     "InAnyFilter",
     "StatementFilter",
     "StatementFilterT",
+    "StatementTypeT",
 )
 
 T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound="base.ModelProtocol")
 StatementFilterT = TypeVar("StatementFilterT", bound="StatementFilter")
+StatementTypeT = TypeVar(
+    "StatementTypeT",
+    bound="ReturningDelete[tuple[Any]] |  ReturningUpdate[tuple[Any]] | Select[tuple[Any]] | Update | Delete",
+)
 FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter"
 """Aggregate type alias of the types supported for collection filtering."""
 
 
 class StatementFilter(ABC):
     @abstractmethod
-    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
-        return statement
-
-    @abstractmethod
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        *args: Any,
-        **kwargs: Any,
-    ) -> StatementLambdaElement:
+    def append_to_statement(
+        self, statement: StatementTypeT, model: type[ModelT], *args: Any, **kwargs: Any
+    ) -> StatementTypeT:
         return statement
 
     @staticmethod
     def _get_instrumented_attr(model: Any, key: str | InstrumentedAttribute[Any]) -> InstrumentedAttribute[Any]:
-        # copy this here to avoid a circular import of `get_instrumented_attribute`.  Maybe we move that function somewhere else?
         if isinstance(key, str):
             return cast("InstrumentedAttribute[Any]", getattr(model, key))
         return key
@@ -78,36 +76,12 @@ class BeforeAfter(StatementFilter):
     after: datetime | None
     """Filter results where field later than this."""
 
-    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
             statement = statement.where(field < self.before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if self.after is not None:
             statement = statement.where(field > self.after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-    ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        if self.before is not None:
-            before = self.before
-            statement = statement.add_criteria(
-                lambda s: s.where(field < before),
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[self.__class__.__name__, model, self.field_name, self.before],
-            )
-        if self.after is not None:
-            after = self.after
-            statement = statement.add_criteria(
-                lambda s: s.where(field > after),
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[self.__class__.__name__, model, self.field_name, self.after],
-            )
         return statement
 
 
@@ -122,36 +96,12 @@ class OnBeforeAfter(StatementFilter):
     on_or_after: datetime | None
     """Filter results where field on or later than this."""
 
-    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
             statement = statement.where(field <= self.on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if self.on_or_after is not None:
             statement = statement.where(field >= self.on_or_after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-        return statement
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-    ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        if self.on_or_before is not None:
-            on_or_before = self.on_or_before
-            statement = statement.add_criteria(
-                lambda s: s.where(field <= on_or_before),
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[self.__class__.__name__, model.__name__, self.field_name, self.on_or_before],
-            )
-        if self.on_or_after is not None:
-            on_or_after = self.on_or_after
-            statement = statement.add_criteria(
-                lambda s: s.where(field >= on_or_after),
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[self.__class__.__name__, model.__name__, self.field_name, self.on_or_after],
-            )
         return statement
 
 
@@ -172,10 +122,10 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     def append_to_statement(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: StatementTypeT,
         model: type[ModelT],
         prefer_any: bool = False,
-    ) -> Select[tuple[ModelT]]:
+    ) -> StatementTypeT:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.values is None:
             return statement
@@ -184,33 +134,6 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         if prefer_any:
             return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
         return statement.where(field.in_(self.values))
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-        prefer_any: bool = False,
-    ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        if self.values is None:
-            return statement
-        if not self.values:
-            return statement.add_criteria(lambda s: s.where(text("1=-1")), enable_tracking=False)
-        if prefer_any:
-            values = self.values
-            return statement.add_criteria(
-                lambda s: s.where(any_(values) == field),  # type: ignore[arg-type]
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[self.__class__.__name__, self.field_name, model.__name__],
-            )
-        values = self.values
-        return statement.add_criteria(
-            lambda s: s.where(field.in_(values)),
-            track_bound_values=True,
-            track_closure_variables=False,
-            track_on=[self.__class__.__name__, self.field_name, model.__name__],
-        )
 
 
 @dataclass
@@ -226,41 +149,16 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     def append_to_statement(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: StatementTypeT,
         model: type[ModelT],
         prefer_any: bool = False,
-    ) -> Select[tuple[ModelT]]:
+    ) -> StatementTypeT:
         field = self._get_instrumented_attr(model, self.field_name)
         if not self.values:
             return statement
         if prefer_any:
             return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
         return statement.where(field.in_(self.values))
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-        prefer_any: bool = False,
-    ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        if not self.values:
-            return statement
-        if prefer_any:
-            values = self.values
-            return statement.add_criteria(
-                lambda s: s.where(any_(values) != field),  # type: ignore[arg-type]
-                track_bound_values=True,
-                track_closure_variables=False,
-                track_on=[self.__class__.__name__, self.field_name, model.__name__],
-            )
-        values = self.values
-        return statement.add_criteria(
-            lambda s: s.where(field.notin_(values)),
-            track_bound_values=True,
-            track_closure_variables=False,
-            track_on=[self.__class__.__name__, self.field_name, model.__name__],
-        )
 
 
 class PaginationFilter(StatementFilter, ABC):
@@ -276,22 +174,10 @@ class LimitOffset(PaginationFilter):
     offset: int
     """Value for ``OFFSET`` clause of query."""
 
-    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
-        return statement.limit(self.limit).offset(self.offset)
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-    ) -> StatementLambdaElement:
-        limit = self.limit
-        offset = self.offset
-        return statement.add_criteria(
-            lambda s: s.limit(limit).offset(offset),
-            track_bound_values=True,
-            track_closure_variables=False,
-            track_on=[self.__class__.__name__, limit, offset, model.__name__],
-        )
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        if isinstance(statement, Select):
+            return statement.limit(self.limit).offset(self.offset)
+        return statement
 
 
 @dataclass
@@ -303,25 +189,13 @@ class OrderBy(StatementFilter):
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort ascending or descending"""
 
-    def append_to_statement(self, statement: Select[tuple[ModelT]], model: type[ModelT]) -> Select[tuple[ModelT]]:
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        if not isinstance(statement, Select):
+            return statement
         field = self._get_instrumented_attr(model, self.field_name)
         if self.sort_order == "desc":
             return statement.order_by(field.desc())
         return statement.order_by(field.asc())
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-    ) -> StatementLambdaElement:
-        field = self._get_instrumented_attr(model, self.field_name)
-        fragment = field.desc() if self.sort_order == "desc" else field.asc()
-        return statement.add_criteria(
-            lambda s: s.order_by(fragment),
-            track_bound_values=False,
-            track_closure_variables=False,
-            track_on=[self.__class__.__name__, model.__name__, self.field_name, self.sort_order],
-        )
 
 
 @dataclass
@@ -357,30 +231,11 @@ class SearchFilter(StatementFilter):
 
     def append_to_statement(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: StatementTypeT,
         model: type[ModelT],
-    ) -> Select[tuple[ModelT]]:
+    ) -> StatementTypeT:
         where_clause = self._operator(*self.get_search_clauses(model))
         return statement.where(where_clause)
-
-    def append_to_lambda_statement(
-        self,
-        statement: StatementLambdaElement,
-        model: type[ModelT],
-    ) -> StatementLambdaElement:
-        where_clause = self._operator(*self.get_search_clauses(model))
-        return statement.add_criteria(
-            lambda s: s.where(where_clause),
-            track_bound_values=True,
-            track_closure_variables=True,
-            track_on=[
-                self.__class__.__name__,
-                model.__name__,
-                str(self.normalized_field_names),
-                self.value,
-                self.ignore_case,
-            ],
-        )
 
 
 @dataclass
