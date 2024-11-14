@@ -839,9 +839,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             Modified select statement
         """
         if loader_options:
-            statement = statement.options(*loader_options)
+            statement = cast("StatementTypeT", statement.options(*loader_options))
         if execution_options:
-            statement = statement.execution_options(**execution_options)
+            statement = cast("StatementTypeT", statement.execution_options(**execution_options))
         return statement
 
     def _get_delete_many_statement(
