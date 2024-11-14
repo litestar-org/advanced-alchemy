@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Protocol, Sequence, Union, cast, overload
 
+from sqlalchemy import (
+    Select,
+)
 from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import (
     _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
@@ -16,6 +19,7 @@ from advanced_alchemy.filters import (
     InAnyFilter,
     PaginationFilter,
     StatementFilter,
+    StatementTypeT,
 )
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 
@@ -23,7 +27,6 @@ if TYPE_CHECKING:
     from sqlalchemy import (
         Delete,
         Dialect,
-        Select,
         Update,
     )
     from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
@@ -174,12 +177,8 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         self,
         *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
-        statement: Select[tuple[ModelT]]
-        | Delete
-        | ReturningDelete[tuple[ModelT]]
-        | ReturningUpdate[tuple[ModelT]]
-        | Update,
-    ) -> Select[tuple[ModelT]] | Delete | ReturningDelete[tuple[ModelT]] | ReturningUpdate[tuple[ModelT]] | Update:
+        statement: StatementTypeT,
+    ) -> StatementTypeT:
         """Apply filters to a select statement.
 
         Args:
@@ -202,25 +201,11 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
                 statement = filter_.append_to_statement(statement, self.model_type)
         return statement
 
-    @overload
     def _filter_select_by_kwargs(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: StatementTypeT,
         kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
-    ) -> Select[tuple[ModelT]]: ...
-
-    @overload
-    def _filter_select_by_kwargs(
-        self,
-        statement: Delete[ModelT],
-        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
-    ) -> Delete[ModelT]: ...
-
-    def _filter_select_by_kwargs(
-        self,
-        statement: Select[tuple[ModelT]] | Delete[ModelT],
-        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
-    ) -> Select[tuple[ModelT]] | Delete[ModelT]:
+    ) -> StatementTypeT:
         for key, val in dict(kwargs).items():
             field = get_instrumented_attr(self.model_type, key)
             statement = statement.where(field == val)
@@ -228,9 +213,9 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
     def _apply_order_by(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: StatementTypeT,
         order_by: list[tuple[str | InstrumentedAttribute[Any], bool]] | tuple[str | InstrumentedAttribute[Any], bool],
-    ) -> Select[tuple[ModelT]]:
+    ) -> StatementTypeT:
         if not isinstance(order_by, list):
             order_by = [order_by]
         for order_field, is_desc in order_by:
@@ -240,8 +225,10 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
     def _order_by_attribute(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: StatementTypeT,
         field: InstrumentedAttribute[Any],
         is_desc: bool,
-    ) -> Select[tuple[ModelT]]:
+    ) -> StatementTypeT:
+        if not isinstance(statement, Select):
+            return statement
         return statement.order_by(field.desc() if is_desc else field.asc())

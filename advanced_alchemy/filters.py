@@ -45,7 +45,7 @@ ModelT = TypeVar("ModelT", bound="base.ModelProtocol")
 StatementFilterT = TypeVar("StatementFilterT", bound="StatementFilter")
 StatementTypeT = TypeVar(
     "StatementTypeT",
-    bound="ReturningDelete[tuple[Any]] |  ReturningUpdate[tuple[Any]] | Select[tuple[Any]] | Update | Delete",
+    bound="ReturningDelete[tuple[Any]] |  ReturningUpdate[tuple[Any]] | Select[tuple[Any]] | Select[Any] | Update | Delete",
 )
 FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter"
 """Aggregate type alias of the types supported for collection filtering."""
