@@ -403,7 +403,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
     ) -> Update | ReturningUpdate[tuple[ModelT]]:
-        return self.statement  # type: ignore[no-return-any] # pyright: ignore[reportReturnType]
+        return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]
 
     @classmethod
     def check_health(cls, session: Session | scoped_session[Session]) -> bool:

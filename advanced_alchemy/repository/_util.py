@@ -196,7 +196,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             elif isinstance(filter_, (InAnyFilter,)):
                 statement = filter_.append_to_statement(statement, self.model_type)
             elif isinstance(filter_, ColumnElement):
-                statement = statement.where(filter_)
+                statement = cast("StatementTypeT", statement.where(filter_))
             else:
                 statement = filter_.append_to_statement(statement, self.model_type)
         return statement
@@ -208,7 +208,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     ) -> StatementTypeT:
         for key, val in dict(kwargs).items():
             field = get_instrumented_attr(self.model_type, key)
-            statement = statement.where(field == val)
+            statement = cast("StatementTypeT", statement.where(field == val))
         return statement
 
     def _apply_order_by(
@@ -231,4 +231,4 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     ) -> StatementTypeT:
         if not isinstance(statement, Select):
             return statement
-        return statement.order_by(field.desc() if is_desc else field.asc())
+        return cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))

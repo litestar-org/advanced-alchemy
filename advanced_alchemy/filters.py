@@ -79,9 +79,9 @@ class BeforeAfter(StatementFilter):
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
-            statement = statement.where(field < self.before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = cast("StatementTypeT", statement.where(field < self.before))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if self.after is not None:
-            statement = statement.where(field > self.after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = cast("StatementTypeT", statement.where(field > self.after))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
 
@@ -99,9 +99,9 @@ class OnBeforeAfter(StatementFilter):
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
-            statement = statement.where(field <= self.on_or_before)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = cast("StatementTypeT", statement.where(field <= self.on_or_before))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         if self.on_or_after is not None:
-            statement = statement.where(field >= self.on_or_after)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            statement = cast("StatementTypeT", statement.where(field >= self.on_or_after))  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         return statement
 
 
@@ -130,10 +130,10 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         if self.values is None:
             return statement
         if not self.values:
-            return statement.where(text("1=-1"))
+            return cast("StatementTypeT", statement.where(text("1=-1")))
         if prefer_any:
-            return statement.where(any_(self.values) == field)  # type: ignore[arg-type]
-        return statement.where(field.in_(self.values))
+            return cast("StatementTypeT", statement.where(any_(self.values) == field))  # type: ignore[arg-type]
+        return cast("StatementTypeT", statement.where(field.in_(self.values)))
 
 
 @dataclass
@@ -157,8 +157,8 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         if not self.values:
             return statement
         if prefer_any:
-            return statement.where(any_(self.values) != field)  # type: ignore[arg-type]
-        return statement.where(field.notin_(self.values))
+            return cast("StatementTypeT", statement.where(any_(self.values) != field))  # type: ignore[arg-type]
+        return cast("StatementTypeT", statement.where(field.notin_(self.values)))
 
 
 class PaginationFilter(StatementFilter, ABC):
@@ -176,7 +176,7 @@ class LimitOffset(PaginationFilter):
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         if isinstance(statement, Select):
-            return statement.limit(self.limit).offset(self.offset)
+            return cast("StatementTypeT", statement.limit(self.limit).offset(self.offset))
         return statement
 
 
@@ -194,8 +194,8 @@ class OrderBy(StatementFilter):
             return statement
         field = self._get_instrumented_attr(model, self.field_name)
         if self.sort_order == "desc":
-            return statement.order_by(field.desc())
-        return statement.order_by(field.asc())
+            return cast("StatementTypeT", statement.order_by(field.desc()))
+        return cast("StatementTypeT", statement.order_by(field.asc()))
 
 
 @dataclass
@@ -235,7 +235,7 @@ class SearchFilter(StatementFilter):
         model: type[ModelT],
     ) -> StatementTypeT:
         where_clause = self._operator(*self.get_search_clauses(model))
-        return statement.where(where_clause)
+        return cast("StatementTypeT", statement.where(where_clause))
 
 
 @dataclass
