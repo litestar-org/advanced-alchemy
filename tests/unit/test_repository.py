@@ -598,7 +598,7 @@ async def test_sqlalchemy_repo_list_with_pagination(
     """Test list operation with pagination."""
     statement = MagicMock()
     mock_repo_execute.return_value = MagicMock()
-    mocker.patch.object(LimitOffset, "append_to_lambda_statement", return_value=statement)
+    mocker.patch.object(LimitOffset, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(LimitOffset(2, 3)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
@@ -613,7 +613,7 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     statement = MagicMock()
     mocker.patch.object(mock_repo.model_type.updated_at, "__lt__", return_value="lt")
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
-    mocker.patch.object(BeforeAfter, "append_to_lambda_statement", return_value=statement)
+    mocker.patch.object(BeforeAfter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.max, datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
@@ -629,7 +629,7 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
     statement = MagicMock()
     mocker.patch.object(mock_repo.model_type.updated_at, "__le__", return_value="le")
     mocker.patch.object(mock_repo.model_type.updated_at, "__ge__", return_value="ge")
-    mocker.patch.object(OnBeforeAfter, "append_to_lambda_statement", return_value=statement)
+    mocker.patch.object(OnBeforeAfter, "append_to_statement", return_value=statement)
 
     mock_repo_execute.return_value = MagicMock()
     await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.max, datetime.min)))
@@ -646,7 +646,7 @@ async def test_sqlalchemy_repo_list_with_collection_filter(
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
-    mocker.patch.object(CollectionFilter, "append_to_lambda_statement", return_value=mock_repo.statement)
+    mocker.patch.object(CollectionFilter, "append_to_statement", return_value=mock_repo.statement)
     values = [1, 2, 3]
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
@@ -664,7 +664,7 @@ async def test_sqlalchemy_repo_list_with_null_collection_filter(
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
         CollectionFilter,
-        "append_to_lambda_statement",
+        "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
     await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))  # pyright: ignore[reportFunctionMemberAccess,reportUnknownArgumentType]
@@ -685,7 +685,7 @@ async def test_sqlalchemy_repo_empty_list_with_collection_filter(
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
     monkeypatch.setattr(
         CollectionFilter,
-        "append_to_lambda_statement",
+        "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
     await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
@@ -704,7 +704,7 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
         NotInCollectionFilter,
-        "append_to_lambda_statement",
+        "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
     values = [1, 2, 3]
@@ -724,7 +724,7 @@ async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
         NotInCollectionFilter,
-        "append_to_lambda_statement",
+        "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
     await maybe_async(mock_repo.list(NotInCollectionFilter[str](field_name, None)))  # pyright: ignore[reportFunctionMemberAccess]
