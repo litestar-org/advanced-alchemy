@@ -110,6 +110,7 @@ AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_b
 ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
 ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
 
+
 RawRecordData = List[Dict[str, Any]]
 
 mock_engines = {"mock_async_engine", "mock_sync_engine"}
@@ -1935,6 +1936,29 @@ async def test_repo_encrypted_methods(
     updated = await maybe_async(secret_repo.update(obj))
     assert obj.secret == updated.secret
     assert obj.long_secret == updated.long_secret
+
+
+async def test_encrypted_string_length_validation(secret_repo: SecretRepository, secret_model: SecretModel) -> None:
+    """Test that EncryptedString enforces length validation.
+
+    Args:
+        secret_repo: The secret repository
+        secret_model: The secret model class
+    """
+    # Test valid length
+    valid_secret = "AAAAAAAAA"
+    secret = secret_model(secret="test", long_secret="test", length_validated_secret=valid_secret)
+    saved_secret = await maybe_async(secret_repo.add(secret))
+    assert saved_secret.length_validated_secret == valid_secret
+
+    # Test exceeding length
+    long_secret = "A" * 51  # Exceeds 50 character limit
+    with pytest.raises(IntegrityError) as exc_info:
+        secret = secret_model(secret="test", long_secret="test", length_validated_secret=long_secret)
+        await maybe_async(secret_repo.add(secret))
+
+    assert exc_info.value.__class__.__name__ == "IntegrityError"
+    assert "exceeds maximum unencrypted length" in str(exc_info.value.detail)
 
 
 # service tests

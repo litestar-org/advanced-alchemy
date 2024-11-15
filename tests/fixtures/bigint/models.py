@@ -109,3 +109,7 @@ class BigIntSecret(BigIntBase):
     long_secret: Mapped[str] = mapped_column(
         EncryptedText(key="super_secret"),
     )
+    length_validated_secret: Mapped[str] = mapped_column(
+        EncryptedString(key="super_secret", length=10),
+        nullable=True,
+    )
