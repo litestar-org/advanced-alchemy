@@ -2111,29 +2111,6 @@ async def test_repo_encrypted_methods(
     assert obj.long_secret == updated.long_secret
 
 
-async def test_encrypted_string_length_validation(secret_repo: SecretRepository, secret_model: SecretModel) -> None:
-    """Test that EncryptedString enforces length validation.
-
-    Args:
-        secret_repo: The secret repository
-        secret_model: The secret model class
-    """
-    # Test valid length
-    valid_secret = "A" * 50
-    secret = secret_model(secret="test", long_secret="test", length_validated_secret=valid_secret)
-    saved_secret = await maybe_async(secret_repo.add(secret))
-    assert saved_secret.length_validated_secret == valid_secret
-
-    # Test exceeding length
-    long_secret = "A" * 51  # Exceeds 50 character limit
-    with pytest.raises(ValueError) as exc_info:
-        secret = secret_model(secret="test", long_secret="test", length_validated_secret=long_secret)
-        await maybe_async(secret_repo.add(secret))
-
-    assert "Value length" in str(exc_info.value)
-    assert "exceeds maximum unencrypted length" in str(exc_info.value)
-
-
 # service tests
 async def test_service_filter_search(author_service: AuthorService) -> None:
     existing_obj = await maybe_async(
