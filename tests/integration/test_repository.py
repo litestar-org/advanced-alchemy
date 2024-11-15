@@ -1938,13 +1938,19 @@ async def test_repo_encrypted_methods(
     assert obj.long_secret == updated.long_secret
 
 
-async def test_encrypted_string_length_validation(secret_repo: SecretRepository, secret_model: SecretModel) -> None:
+async def test_encrypted_string_length_validation(
+    request: FixtureRequest, secret_repo: SecretRepository, secret_model: SecretModel
+) -> None:
     """Test that EncryptedString enforces length validation.
 
     Args:
         secret_repo: The secret repository
         secret_model: The secret model class
     """
+    if any(fixture in request.fixturenames for fixture in ["mock_async_engine", "mock_sync_engine"]):
+        pytest.skip(
+            f"{SQLAlchemyAsyncMockRepository.__name__} does not works with client side validated encrypted strings lengths"
+        )
     # Test valid length
     valid_secret = "AAAAAAAAA"
     secret = secret_model(secret="test", long_secret="test", length_validated_secret=valid_secret)
