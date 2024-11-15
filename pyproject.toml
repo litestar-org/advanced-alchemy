@@ -437,6 +437,7 @@ module = [
   "uuid_utils",
   "uuid_utils.*",
   "fsspec",
+  "fastnanoid",
 ]
 
 [[tool.mypy.overrides]]
