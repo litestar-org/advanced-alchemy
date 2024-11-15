@@ -171,3 +171,4 @@ cython_debug/
 /docs/changelog.md
 .cursorrules
 .cursorignore
+.zed

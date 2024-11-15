@@ -149,6 +149,7 @@ nitpick_ignore = [
     (PY_CLASS, "Litestar"),
     (PY_CLASS, "DTOFieldDefinition"),
     (PY_CLASS, "advanced_alchemy.extensions.litestar.plugins._slots_base.SlotsBase"),
+    (PY_CLASS, "advanced_alchemy.filters.StatementTypeT"),
     (PY_CLASS, "Default"),
     (PY_CLASS, "bytes-like"),
     (PY_CLASS, "scoped_session"),

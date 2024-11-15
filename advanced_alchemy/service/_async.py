@@ -36,7 +36,7 @@ from advanced_alchemy.service.typing import (
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
-    from sqlalchemy import Select, StatementLambdaElement
+    from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm import InstrumentedAttribute
@@ -104,7 +104,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     def __init__(
         self,
         session: AsyncSession | async_scoped_session[AsyncSession],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -146,7 +146,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     async def count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
@@ -208,7 +208,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
         self,
         item_id: Any,
         *,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         id_attribute: str | InstrumentedAttribute[Any] | None = None,
         auto_expunge: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
@@ -246,7 +246,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     async def get_one(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         auto_expunge: bool | None = None,
         load: LoadSpec | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
@@ -281,7 +281,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     async def get_one_or_none(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         auto_expunge: bool | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
@@ -349,7 +349,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     async def list_and_count(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         auto_expunge: bool | None = None,
         force_basic_query_mode: bool | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
@@ -392,7 +392,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     async def new(
         cls,
         session: AsyncSession | async_scoped_session[AsyncSession] | None = None,
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         config: SQLAlchemyAsyncConfig | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
@@ -429,7 +429,7 @@ class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
     async def list(
         self,
         *filters: StatementFilter | ColumnElement[bool],
-        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
         auto_expunge: bool | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
