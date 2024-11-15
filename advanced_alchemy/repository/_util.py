@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Protocol, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Protocol, Sequence, Union, cast, overload
 
+from sqlalchemy import (
+    Select,
+)
 from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import (
     _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
@@ -16,14 +19,17 @@ from advanced_alchemy.filters import (
     InAnyFilter,
     PaginationFilter,
     StatementFilter,
+    StatementTypeT,
 )
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 
 if TYPE_CHECKING:
     from sqlalchemy import (
+        Delete,
         Dialect,
-        StatementLambdaElement,
+        Update,
     )
+    from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 
     from advanced_alchemy.base import ModelProtocol
 
@@ -135,12 +141,44 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     order_by: list[OrderingPair] | OrderingPair | None = None
     """List of ordering pairs to use for sorting."""
 
+    @overload
     def _apply_filters(
         self,
         *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
-        statement: StatementLambdaElement,
-    ) -> StatementLambdaElement:
+        statement: Select[tuple[ModelT]],
+    ) -> Select[tuple[ModelT]]: ...
+
+    @overload
+    def _apply_filters(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        apply_pagination: bool = True,
+        statement: Delete,
+    ) -> Delete: ...
+
+    @overload
+    def _apply_filters(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        apply_pagination: bool = True,
+        statement: ReturningDelete[tuple[ModelT]] | ReturningUpdate[tuple[ModelT]],
+    ) -> ReturningDelete[tuple[ModelT]] | ReturningUpdate[tuple[ModelT]]: ...
+
+    @overload
+    def _apply_filters(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        apply_pagination: bool = True,
+        statement: Update,
+    ) -> Update: ...
+
+    def _apply_filters(
+        self,
+        *filters: StatementFilter | ColumnElement[bool],
+        apply_pagination: bool = True,
+        statement: StatementTypeT,
+    ) -> StatementTypeT:
         """Apply filters to a select statement.
 
         Args:
@@ -148,67 +186,36 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             apply_pagination: applies pagination filters if true
             statement: select statement to apply filters
 
-        Keyword Args:
-            select: select to apply filters against
-
         Returns:
             The select with filters applied.
         """
         for filter_ in filters:
             if isinstance(filter_, (PaginationFilter,)):
                 if apply_pagination:
-                    statement = filter_.append_to_lambda_statement(statement, self.model_type)
+                    statement = filter_.append_to_statement(statement, self.model_type)
             elif isinstance(filter_, (InAnyFilter,)):
-                statement = filter_.append_to_lambda_statement(statement, self.model_type, prefer_any=self._prefer_any)
+                statement = filter_.append_to_statement(statement, self.model_type)
             elif isinstance(filter_, ColumnElement):
-                statement = self._filter_by_expression(expression=filter_, statement=statement)
+                statement = cast("StatementTypeT", statement.where(filter_))
             else:
-                statement = filter_.append_to_lambda_statement(statement, self.model_type)
+                statement = filter_.append_to_statement(statement, self.model_type)
         return statement
 
     def _filter_select_by_kwargs(
         self,
-        statement: StatementLambdaElement,
+        statement: StatementTypeT,
         kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
-    ) -> StatementLambdaElement:
+    ) -> StatementTypeT:
         for key, val in dict(kwargs).items():
-            statement = self._filter_by_where(statement=statement, field_name=key, value=val)
+            field = get_instrumented_attr(self.model_type, key)
+            statement = cast("StatementTypeT", statement.where(field == val))
         return statement
-
-    def _filter_by_expression(
-        self,
-        statement: StatementLambdaElement,
-        expression: ColumnElement[bool],
-    ) -> StatementLambdaElement:
-        """Add a where clause to the statement."""
-        # Static WHERE clause - no need to track
-        return statement.add_criteria(
-            lambda s: s.where(expression),
-            track_bound_values=True,
-            track_closure_variables=False,
-            track_on=[self._dialect.name, self.model_type.__name__, id(expression)],
-        )
-
-    def _filter_by_where(
-        self,
-        statement: StatementLambdaElement,
-        field_name: str | InstrumentedAttribute[Any],
-        value: Any,
-    ) -> StatementLambdaElement:
-        field = get_instrumented_attr(self.model_type, field_name)
-        # Track only the value parameter since it's dynamic
-        return statement.add_criteria(
-            lambda s: s.where(field == value),
-            track_bound_values=True,
-            track_closure_variables=False,
-            track_on=[self._dialect.name, self.model_type.__name__, field, id(value)],
-        )
 
     def _apply_order_by(
         self,
-        statement: StatementLambdaElement,
+        statement: StatementTypeT,
         order_by: list[tuple[str | InstrumentedAttribute[Any], bool]] | tuple[str | InstrumentedAttribute[Any], bool],
-    ) -> StatementLambdaElement:
+    ) -> StatementTypeT:
         if not isinstance(order_by, list):
             order_by = [order_by]
         for order_field, is_desc in order_by:
@@ -218,14 +225,10 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
     def _order_by_attribute(
         self,
-        statement: StatementLambdaElement,
+        statement: StatementTypeT,
         field: InstrumentedAttribute[Any],
         is_desc: bool,
-    ) -> StatementLambdaElement:
-        fragment = field.desc() if is_desc else field.asc()
-        # Static ORDER BY - no need to track
-        return statement.add_criteria(
-            lambda s: s.order_by(fragment),
-            track_closure_variables=False,
-            track_on=[self._dialect.name, self.model_type.__name__, field, is_desc],
-        )
+    ) -> StatementTypeT:
+        if not isinstance(statement, Select):
+            return statement
+        return cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))

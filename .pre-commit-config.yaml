@@ -24,9 +24,13 @@ repos:
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: "v0.7.3"
     hooks:
-      - id: ruff
-        args: ["--fix","--unsafe-fixes"]
-      - id: ruff-format
+      # Run the linter.
+    - id: ruff
+      types_or: [ python, pyi ]
+      args: [ --fix ]
+    # Run the formatter.
+    - id: ruff-format
+      types_or: [ python, pyi ]
   - repo: https://github.com/codespell-project/codespell
     rev: v2.3.0
     hooks:

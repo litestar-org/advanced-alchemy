@@ -13,6 +13,7 @@ from sqlalchemy import (
     Dialect,
     Select,
     StatementLambdaElement,
+    Update,
 )
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
+    from sqlalchemy.sql.dml import ReturningUpdate
 
     from advanced_alchemy.repository._util import (
         LoadSpec,
@@ -400,8 +402,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         supports_returning: bool,
         loader_options: list[_AbstractLoad] | None,
         execution_options: dict[str, Any] | None,
-    ) -> StatementLambdaElement:
-        return cast("StatementLambdaElement", self.statement)
+    ) -> Update | ReturningUpdate[tuple[ModelT]]:
+        return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]
 
     @classmethod
     def check_health(cls, session: Session | scoped_session[Session]) -> bool:
