@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
+from advanced_alchemy.exceptions import IntegrityError
+
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 
@@ -222,11 +224,13 @@ class EncryptedString(TypeDecorator[str]):
     Args:
         key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
         backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
+        length (int | None): The length of the unencrypted string. This is used for documentation and validation purposes only, as encrypted strings will be longer.
         **kwargs (Any | None): Additional arguments passed to the underlying String type.
 
     Attributes:
         key (str | bytes | Callable[[], str | bytes]): The encryption key.
         backend (EncryptionBackend): The encryption backend instance.
+        length (int | None): The unencrypted string length.
     """
 
     impl = String
@@ -236,6 +240,7 @@ class EncryptedString(TypeDecorator[str]):
         self,
         key: str | bytes | Callable[[], str | bytes] = os.urandom(32),
         backend: type[EncryptionBackend] = FernetBackend,
+        length: int | None = None,
         **kwargs: Any,
     ) -> None:
         """Initializes the EncryptedString TypeDecorator.
@@ -243,11 +248,13 @@ class EncryptedString(TypeDecorator[str]):
         Args:
             key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
             backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
+            length (int | None): The length of the unencrypted string. This is used for documentation and validation purposes only.
             **kwargs (Any | None): Additional arguments passed to the underlying String type.
         """
         super().__init__()
         self.key = key
         self.backend = backend()
+        self.length = length
 
     @property
     def python_type(self) -> type[str]:
@@ -261,6 +268,9 @@ class EncryptedString(TypeDecorator[str]):
     def load_dialect_impl(self, dialect: Dialect) -> Any:
         """Loads the appropriate dialect implementation based on the database dialect.
 
+        Note: The actual column length will be larger than the specified length due to encryption overhead.
+        For most encryption methods, the encrypted string will be approximately 1.35x longer than the original.
+
         Args:
             dialect (Dialect): The SQLAlchemy dialect.
 
@@ -268,15 +278,17 @@ class EncryptedString(TypeDecorator[str]):
             Any: The dialect-specific type descriptor.
         """
         if dialect.name in {"mysql", "mariadb"}:
+            # For MySQL/MariaDB, always use Text to avoid length limitations
             return dialect.type_descriptor(Text())
         if dialect.name == "oracle":
+            # Oracle has a 4000-byte limit for VARCHAR2 (by default)
             return dialect.type_descriptor(String(length=4000))
         return dialect.type_descriptor(String())
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
         """Processes the value before binding it to the SQL statement.
 
-        This method encrypts the value using the specified backend.
+        This method encrypts the value using the specified backend and validates length if specified.
 
         Args:
             value (Any): The value to process.
@@ -284,9 +296,18 @@ class EncryptedString(TypeDecorator[str]):
 
         Returns:
             str | None: The encrypted value or None if the input is None.
+
+        Raises:
+            ValueError: If the value exceeds the specified length.
         """
         if value is None:
             return value
+
+        # Validate length if specified
+        if self.length is not None and len(str(value)) > self.length:
+            msg = f"Unencrypted value exceeds maximum unencrypted length of {self.length}"
+            raise IntegrityError(msg)
+
         self.mount_vault()
         return self.backend.encrypt(value)
 
