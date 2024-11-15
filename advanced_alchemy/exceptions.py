@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import re
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, TypedDict, Union
+from typing import Any, Callable, Generator, TypedDict, Union, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
-from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError
+from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError, StatementError
 
 from advanced_alchemy.utils.deprecation import deprecated
 
@@ -291,6 +291,7 @@ def wrap_sqlalchemy_exception(
     """
     try:
         yield
+
     except MultipleResultsFound as exc:
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="multiple_rows", exc=exc)
@@ -318,6 +319,10 @@ def wrap_sqlalchemy_exception(
         raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
     except SQLAlchemyInvalidRequestError as exc:
         raise InvalidRequestError(detail="An invalid request was made.") from exc
+    except StatementError as exc:
+        raise IntegrityError(
+            detail=cast(str, getattr(exc.orig, "detail", "There was an issue processing the statement."))
+        ) from exc
     except SQLAlchemyError as exc:
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
