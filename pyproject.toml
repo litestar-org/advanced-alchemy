@@ -416,6 +416,7 @@ exclude = [
 ]
 include = ["advanced_alchemy"]
 pythonVersion = "3.8"
+reportMissingTypeStubs = true
 reportUnnecessaryTypeIgnoreComments = true
 strict = ["advanced_alchemy/**/*"]
 venv = ".venv"

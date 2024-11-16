@@ -23,7 +23,16 @@ from sqlalchemy.orm import (
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 from typing_extensions import TypeVar
 
-from advanced_alchemy.types import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED, BigIntIdentity, DateTimeUTC, JsonB
+from advanced_alchemy.types import (
+    GUID,
+    NANOID_INSTALLED,
+    UUID_UTILS_INSTALLED,
+    BigIntIdentity,
+    DateTimeUTC,
+    JsonB,
+    ObjectStore,
+    StoredObject,
+)
 
 if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
     from uuid_utils.compat import uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
@@ -316,6 +325,7 @@ def create_registry(
         datetime: DateTimeUTC,
         date: Date,
         dict: JsonB,
+        StoredObject: ObjectStore,
     }
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, Json

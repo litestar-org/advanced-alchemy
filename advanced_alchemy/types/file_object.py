@@ -1,63 +1,80 @@
 from __future__ import annotations
 
-import contextlib
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+from datetime import datetime, timedelta, timezone
+from importlib.util import find_spec
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Protocol, runtime_checkable
 
 from sqlalchemy import TypeDecorator
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.mutable import MutableComposite
 
-from advanced_alchemy.exceptions import ImproperConfigurationError, MissingDependencyError
+from advanced_alchemy.exceptions import MissingDependencyError
+from advanced_alchemy.types.json import JsonB
 from advanced_alchemy.utils.dataclass import Empty, EmptyType, simple_asdict
 
-fsspec = None  # type: ignore[var-annotated,unused-ignore]
-with contextlib.suppress(ImportError):
-    import fsspec  # type: ignore[no-redef]
+FSSPEC_INSTALLED = bool(find_spec("fsspec"))
+if not FSSPEC_INSTALLED and not TYPE_CHECKING:
+
+    class filesystem(Generic):  # noqa: N801
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            """Placeholder `filesystem` implementation"""
+
+        def rm(self, *args: Any, **kwargs: Any) -> None:
+            """Placeholder `rm` implementation"""
+
+        def put(self, *args: Any, **kwargs: Any) -> None:
+            """Placeholder `put` implementation"""
+
+        def url(self, *args: Any, **kwargs: Any) -> str:
+            """Placeholder `put` implementation"""
+            return ""
+
+else:
+    from fsspec import filesystem  # type: ignore[no-redef]  # pyright: ignore[reportUnknownVariableType]
+
 
 if TYPE_CHECKING:
-    import fsspec  # type: ignore[no-redef] # noqa: TCH004
+    from fsspec import (  # type: ignore[no-redef] # pyright: ignore[reportMissingTypeStubs]
+        filesystem,  # pyright: ignore[reportUnknownVariableType]  # noqa: TCH004
+    )
 
 
 @dataclass
-class FileMetadata:
-    """Metadata for stored files.
-
-    Args:
-        filename: Original filename
-        path: Storage path/key
-        backend: Storage backend (e.g., 'gcs', 's3', 'file')
-        size: File size in bytes
-        checksum: MD5 checksum of file
-        content_type: MIME type
-        created_at: Timestamp of creation
-        metadata: Additional metadata dict
-        last_modified: Last modification timestamp
-        etag: Entity tag for caching
-        version_id: Version identifier for versioned storage
-        storage_class: Storage class (e.g., 'STANDARD', 'NEARLINE')
-    """
+class StoredObject(MutableComposite):
+    """Metadata for stored files."""
 
     filename: str
+    """Object filename"""
     path: str
+    """Object storage path or key"""
     backend: str
     """Storage backend (e.g., 'gcs', 's3', 'file')"""
     uploaded_at: datetime
+    """Timestamp of when the file was uploaded/created"""
     size: int | None | EmptyType = Empty
+    """"File size in bytes"""
     checksum: str | None | EmptyType = Empty
+    """Checksum of saved object"""
     content_type: str | None | EmptyType = Empty
+    """Content/MIME type of object"""
     metadata: dict[str, Any] | None | EmptyType = Empty
+    """Additional metadata about the object."""
     last_modified: datetime | None | EmptyType = Empty
+    """Last object modification date"""
     etag: str | None | EmptyType = Empty
+    """ETAG of object"""
+    storage_class: str | None | EmptyType = Empty
+    """Storage class of object used to tag or classify object based on location, contents, or some other strategy (eg. `NEARLINE`, `COLDLINE`, `STANDARD`, `ARCHIVE`)"""
     version_id: str | None | EmptyType = Empty
+    """Version identifier for versioned objects"""
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary."""
         return simple_asdict(self, exclude_empty=True)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> FileMetadata:
+    def from_dict(cls, data: dict[str, Any]) -> StoredObject:
         """Create metadata from dictionary."""
         return cls(**data)
 
@@ -65,6 +82,9 @@ class FileMetadata:
 @runtime_checkable
 class StorageBackend(Protocol):
     """Protocol for storage backend implementations."""
+
+    backend: str
+    """Storage backend name (e.g., 'file', 'gcs', 's3')"""
 
     async def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
         """Save file data to storage.
@@ -88,26 +108,6 @@ class StorageBackend(Protocol):
         """
         ...
 
-    async def get_upload_url(
-        self,
-        path: str,
-        expires_in: int,
-        content_type: str,
-        max_size: int | None = None,
-    ) -> str:
-        """Get upload URL for file.
-
-        Args:
-            path: Path where the file will be stored
-            expires_in: Expiration time in seconds
-            content_type: MIME type of the file
-            max_size: Optional maximum file size in bytes
-
-        Returns:
-            Presigned URL for file upload
-        """
-        ...
-
     async def delete_file(self, path: str) -> None:
         """Delete a file from storage.
 
@@ -120,6 +120,9 @@ class StorageBackend(Protocol):
 class FSSpecBackend(StorageBackend):
     """FSSpec implementation of storage backend."""
 
+    backend: str
+    base_path: str
+
     def __init__(self, backend: str, base_path: str = "", **options: Any) -> None:
         """Initialize FSSpec backend.
 
@@ -131,12 +134,12 @@ class FSSpecBackend(StorageBackend):
         Raises:
             MissingDependencyError: If fsspec is not installed
         """
-        if fsspec is None:
+        if not FSSPEC_INSTALLED:
             raise MissingDependencyError(package="fsspec", install_package="fsspec")
 
         self.backend = backend
         self.base_path = base_path.rstrip("/")
-        self._fs = fsspec.filesystem(backend, **options)
+        self._fs = filesystem(backend, **options)
 
     async def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
         """Save file data using FSSpec."""
@@ -151,8 +154,8 @@ class FSSpecBackend(StorageBackend):
         """Get access URL using FSSpec."""
         full_path = f"{self.base_path}/{path}".lstrip("/")
 
-        if hasattr(self._fs, "get_signed_url"):
-            return await self._fs.get_signed_url(
+        if hasattr(self._fs, "url"):
+            return self._fs.url(
                 full_path,
                 expires=timedelta(seconds=expires_in),
             )
@@ -170,8 +173,8 @@ class FSSpecBackend(StorageBackend):
         """Generate upload URL using FSSpec."""
         full_path = f"{self.base_path}/{path}".lstrip("/")
 
-        if hasattr(self._fs, "get_signed_url"):
-            return await self._fs.get_signed_url(
+        if hasattr(self._fs, "url"):
+            return self._fs.url(
                 full_path,
                 expires=timedelta(seconds=expires_in),
                 http_method="PUT",
@@ -190,18 +193,17 @@ class FSSpecBackend(StorageBackend):
             self._fs.rm(full_path)
 
 
-class ObjectStore(TypeDecorator[JSONB]):
+class ObjectStore(TypeDecorator[StoredObject]):
     """Custom SQLAlchemy type for file objects using fsspec.
 
     Stores file metadata in JSONB and handles file operations through fsspec.
     """
 
-    impl = JSONB
+    impl = JsonB
     cache_ok = True
 
     # Default settings
     DEFAULT_EXPIRES_IN: ClassVar[int] = 3600  # 1 hour
-    SUPPORTED_BACKENDS: ClassVar[set[str]] = {"file", "memory", "gcs", "s3"}
 
     storage: StorageBackend
 
@@ -230,28 +232,25 @@ class ObjectStore(TypeDecorator[JSONB]):
         if isinstance(backend, StorageBackend):
             self.storage = backend
         else:
-            if backend not in self.SUPPORTED_BACKENDS:
-                msg = f"The configured object store backend is unsupported: {backend}"
-                raise ImproperConfigurationError(msg)
             self.storage = FSSpecBackend(backend=backend, base_path=base_path, **(backend_options or {}))
 
-    def process_bind_param(self, value: FileMetadata | dict[str, Any] | None, dialect: Any) -> dict[str, Any] | None:
+    def process_bind_param(self, value: StoredObject | dict[str, Any] | None, dialect: Any) -> dict[str, Any] | None:
         """Convert FileMetadata to database format."""
         if value is None:
             return None
         if isinstance(value, dict):
-            value = FileMetadata.from_dict(value)
+            value = StoredObject.from_dict(value)
         return value.to_dict()
 
-    def process_result_value(self, value: dict[str, Any] | None, dialect: Any) -> FileMetadata | None:
+    def process_result_value(self, value: dict[str, Any] | None, dialect: Any) -> StoredObject | None:
         """Convert database format to FileMetadata."""
         if value is None:
             return None
-        return FileMetadata.from_dict(value)
+        return StoredObject.from_dict(value)
 
     async def save_file(
         self, file_data: bytes, filename: str, content_type: str, metadata: dict[str, Any] | None = None
-    ) -> FileMetadata:
+    ) -> StoredObject:
         """Save file data and return metadata.
 
         Args:
@@ -264,50 +263,28 @@ class ObjectStore(TypeDecorator[JSONB]):
             FileMetadata object
         """
         path = f"{filename}"
-        checksum = hashlib.md5(file_data).hexdigest()
+        checksum = hashlib.md5(file_data).hexdigest()  # noqa: S324
 
         await self.storage.save_file(path, file_data, content_type)
 
-        return FileMetadata(
+        return StoredObject(
             filename=filename,
             path=path,
             backend=self.storage.backend,
             size=len(file_data),
             checksum=checksum,
             content_type=content_type,
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=datetime.now(timezone.utc),
             metadata=metadata,
         )
 
-    async def get_url(self, metadata: FileMetadata, expires_in: int | None = None) -> str:
+    async def get_url(self, metadata: StoredObject, expires_in: int | None = None) -> str:
         """Get URL for accessing file."""
         if expires_in is None:
             expires_in = self.DEFAULT_EXPIRES_IN
 
         return await self.storage.get_url(metadata.path, expires_in)
 
-    async def get_upload_url(
-        self,
-        filename: str,
-        content_type: str,
-        expires_in: int | None = None,
-        max_size: int | None = None,
-    ) -> tuple[str, str]:
-        """Generate pre-signed URL for direct upload."""
-        if expires_in is None:
-            expires_in = self.DEFAULT_EXPIRES_IN
-
-        path = f"{filename}"
-
-        upload_url = await self.storage.get_upload_url(
-            path,
-            expires_in,
-            content_type,
-            max_size,
-        )
-
-        return upload_url, path
-
-    async def delete_file(self, metadata: FileMetadata) -> None:
+    async def delete_file(self, metadata: StoredObject) -> None:
         """Delete file from storage."""
         await self.storage.delete_file(metadata.path)

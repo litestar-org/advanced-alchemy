@@ -1,4 +1,4 @@
-`"""Example domain objects for testing."""
+"""Example domain objects for testing."""
 
 from __future__ import annotations
 
