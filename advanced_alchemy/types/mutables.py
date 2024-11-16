@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, TypeVar, no_type_check
+from typing import Any, Dict, List, TypeVar, no_type_check
 
 from sqlalchemy.ext.mutable import Mutable
 from typing_extensions import Self
@@ -8,14 +8,14 @@ from typing_extensions import Self
 T = TypeVar("T", bound=Any)
 
 
-class MutableDict(Mutable, dict):
+class MutableDict(Mutable, Dict[str, Any]):
     @classmethod
     def coerce(cls, key: Any, value: Any) -> Any:
         """Convert plain dictionaries to MutableDict."""
 
         if not isinstance(value, MutableDict):
             if isinstance(value, dict):
-                return MutableDict(value)
+                return MutableDict(value)  # pyright: ignore[reportUnknownArgumentType]
 
             # this call will raise ValueError
             return Mutable.coerce(key, value)
@@ -24,13 +24,13 @@ class MutableDict(Mutable, dict):
     def __setitem__(self, key: Any, value: Any) -> None:
         """Detect dictionary set events and emit change events."""
 
-        dict.__setitem__(self, key, value)
+        dict.__setitem__(self, key, value)  # pyright: ignore[reportUnknownMemberType]
         self.changed()
 
     def __delitem__(self, key: Any) -> None:
         """Detect dictionary del events and emit change events."""
 
-        dict.__delitem__(self, key)
+        dict.__delitem__(self, key)  # pyright: ignore[reportUnknownMemberType]
         self.changed()
 
 
@@ -56,10 +56,10 @@ class MutableList(Mutable, List[T]):
     def coerce(cls, key: Any, value: Any) -> Any:
         if not isinstance(value, MutableList):
             if isinstance(value, list):
-                return MutableList(value)
+                return MutableList(value)  # pyright: ignore[reportUnknownVariableType]
             # this call will raise ValueError
             return Mutable.coerce(key, value)
-        return value
+        return value  # pyright: ignore[reportUnknownVariableType]
 
     @no_type_check
     def __reduce_ex__(self, proto: Any) -> tuple[type[MutableList[T]], tuple[list[T]]]:
@@ -84,7 +84,7 @@ class MutableList(Mutable, List[T]):
     def __delitem__(self, index: Any) -> None:
         """Detect list del events and emit change events."""
         old_value = self[index] if isinstance(index, slice) else self[index]
-        super().__delitem__(index)
+        super().__delitem__(index)  # pyright: ignore[reportUnknownArgumentType]
         self.changed()
         self._removed.extend(old_value)
 
