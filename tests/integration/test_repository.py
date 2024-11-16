@@ -44,6 +44,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
 )
 from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.types.file_object import StoredObject
 from advanced_alchemy.utils.text import slugify
 from tests.fixtures.bigint import models as models_bigint
 from tests.fixtures.bigint import repositories as repositories_bigint
@@ -390,7 +391,7 @@ def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
 
 
 @pytest.fixture()
-def file_document_model(repository_pk_type: str) -> type[FileDocumentModel]:
+def file_document_model(repository_pk_type: str) -> FileDocumentModel:
     """Return the FileDocument model matching the current PK type."""
     if repository_pk_type == "uuid":
         return models_uuid.UUIDFileDocument
@@ -1162,7 +1163,7 @@ def fx_raw_file_documents(repository_pk_type: str) -> RawRecordData:
 
 async def test_file_object_crud(
     file_document_repo: FileDocumentRepository,
-    file_document_model: type[FileDocumentModel],
+    file_document_model: FileDocumentModel,
 ) -> None:
     """Test basic CRUD operations with FileObject.
 
@@ -1186,13 +1187,13 @@ async def test_file_object_crud(
 
     # Save to database
     saved_document = await maybe_async(file_document_repo.add(document))
-    assert isinstance(saved_document.required_file, FileMetadata)
+    assert isinstance(saved_document.required_file, StoredObject)
     assert saved_document.required_file.filename == filename
     assert saved_document.required_file.content_type == content_type
     assert saved_document.required_file.size == len(file_data)
 
     # Test URL generation
-    url = await saved_document.required_file.type.get_url(saved_document.required_file)
+    url = await saved_document.required_file.get_url()
     assert url.startswith("file://") or url.startswith("memory://")
 
     # Test pre-signed upload URL
@@ -1206,7 +1207,7 @@ async def test_file_object_crud(
 
 async def test_file_object_validation(
     file_document_repo: FileDocumentRepository,
-    file_document_model: type[FileDocumentModel],
+    file_document_model: FileDocumentModel,
 ) -> None:
     """Test FileObject validation.
 
@@ -1223,21 +1224,21 @@ async def test_file_object_validation(
     with pytest.raises(ValueError):
         file_document_model(
             title="Test Document",
-            required_file=FileMetadata(
+            required_file=StoredObject(
                 filename="test.txt",
                 path="/test/path",
                 backend="invalid",
                 size=0,
                 checksum="abc",
                 content_type="text/plain",
-                created_at=datetime.now(timezone.utc),
+                uploaded_at=datetime.now(timezone.utc),
             ),
         )
 
 
 async def test_file_object_metadata(
     file_document_repo: FileDocumentRepository,
-    file_document_model: type[FileDocumentModel],
+    file_document_model: FileDocumentModel,
 ) -> None:
     """Test FileObject metadata handling.
 

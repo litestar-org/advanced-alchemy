@@ -6,15 +6,14 @@ from advanced_alchemy.types.encrypted_string import (
     FernetBackend,
     PGCryptoBackend,
 )
+from advanced_alchemy.types.file_object import ObjectStore, StoredObject
 from advanced_alchemy.types.guid import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED
 from advanced_alchemy.types.identity import BigIntIdentity
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 
 __all__ = (
     "GUID",
-    "NANOID_INSTALLED",
     "ORA_JSONB",
-    "UUID_UTILS_INSTALLED",
     "BigIntIdentity",
     "DateTimeUTC",
     "EncryptedString",
@@ -23,4 +22,8 @@ __all__ = (
     "FernetBackend",
     "JsonB",
     "PGCryptoBackend",
+    "UUID_UTILS_INSTALLED",
+    "NANOID_INSTALLED",
+    "ObjectStore",
+    "StoredObject",
 )
