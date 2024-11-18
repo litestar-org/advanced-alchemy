@@ -65,25 +65,7 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 @runtime_checkable
 class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
-    """Protocol defining the interface for async SQLAlchemy repositories.
-
-    This protocol defines the required attributes and methods that any async
-    SQLAlchemy repository implementation must provide.
-
-    Type Parameters:
-        ModelT: The SQLAlchemy model type this repository handles.
-
-    Attributes:
-        id_attribute: Name of the primary identifier attribute.
-        match_fields: Fields to match when checking existence.
-        statement: The SQL statement to execute.
-        session: The SQLAlchemy session for database operations.
-        auto_expunge: Whether to automatically expunge instances after operations.
-        auto_refresh: Whether to automatically refresh instances after operations.
-        auto_commit: Whether to automatically commit after operations.
-        order_by: Default ordering specification for queries.
-        error_messages: Custom error message templates.
-    """
+    """Base Protocol"""
 
     id_attribute: Any
     match_fields: list[str] | str | None = None
