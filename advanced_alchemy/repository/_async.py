@@ -64,15 +64,30 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 @runtime_checkable
 class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
-    """Base Protocol"""
+    """Protocol defining the interface for async SQLAlchemy repositories.
 
-    id_attribute: Any
-    match_fields: list[str] | str | None = None
-    statement: Select[tuple[ModelT]]
+    This protocol defines the required attributes and methods that any async
+    SQLAlchemy repository implementation must provide.
+
+    Type Parameters:
+        ModelT: The SQLAlchemy model type this repository handles.
+
+    Attributes:
+        session: The SQLAlchemy async session for database operations.
+        id_attribute: Name of the primary identifier attribute (default: "id").
+        auto_commit: Whether to automatically commit after operations (default: False).
+        auto_expunge: Whether to automatically expunge instances after operations (default: False).
+        auto_refresh: Whether to automatically refresh instances after operations (default: False).
+        match_fields: Fields to match when checking existence (default: None).
+        order_by: Default ordering specification for queries (default: None).
+        error_messages: Custom error message templates (default: None).
+    """
+
     session: AsyncSession | async_scoped_session[AsyncSession]
+    id_attribute: str
+    auto_commit: bool
     auto_expunge: bool
     auto_refresh: bool
-    auto_commit: bool
     order_by: list[OrderingPair] | OrderingPair | None = None
     error_messages: ErrorMessages | None = None
 
@@ -342,6 +357,14 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
 
 @runtime_checkable
 class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[ModelT], Protocol[ModelT]):
+    """Protocol for SQLAlchemy repositories that support slug-based operations.
+
+    Extends the base repository protocol to add slug-related functionality.
+
+    Type Parameters:
+        ModelT: The SQLAlchemy model type this repository handles.
+    """
+
     async def get_by_slug(
         self,
         slug: str,
@@ -350,17 +373,50 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> ModelT | None: ...
+    ) -> ModelT | None:
+        """Get a model instance by its slug.
+
+        Args:
+            slug: The slug value to search for.
+            error_messages: Optional custom error message templates.
+            load: Specification for eager loading of relationships.
+            execution_options: Options for statement execution.
+            **kwargs: Additional filtering criteria.
+
+        Returns:
+            ModelT | None: The found model instance or None if not found.
+        """
+        ...
 
     async def get_available_slug(
         self,
         value_to_slugify: str,
         **kwargs: Any,
-    ) -> str: ...
+    ) -> str:
+        """Generate a unique slug for a given value.
+
+        Args:
+            value_to_slugify: The string to convert to a slug.
+            **kwargs: Additional parameters for slug generation.
+
+        Returns:
+            str: A unique slug derived from the input value.
+        """
+        ...
 
 
 class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):
-    """SQLAlchemy based implementation of the repository interface."""
+    """Async SQLAlchemy repository implementation.
+
+    Provides a complete implementation of async database operations using SQLAlchemy,
+    including CRUD operations, filtering, and relationship loading.
+
+    Type Parameters:
+        ModelT: The SQLAlchemy model type this repository handles.
+
+    See Also:
+        :class:`~advanced_alchemy.repository._util.FilterableRepository`
+    """
 
     id_attribute: Any = "id"
     """Name of the unique identifier for the model."""
@@ -390,7 +446,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Repository pattern for SQLAlchemy models.
+        """Repository for SQLAlchemy models.
 
         Args:
             statement: To facilitate customization of the underlying select query.
@@ -1683,7 +1739,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Args:
             data: Instance to update existing, or be created. Identifier used to determine if an
                 existing instance exists is the value of an attribute on ``data`` named as value of
-                :attr:`~advanced_alchemy.repository.AbstractAsyncRepository.id_attribute`.
+                :attr:`id_attribute`.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             no_merge: Skip the usage of optimized Merge statements
@@ -1863,10 +1919,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         return text("SELECT 1")
 
     async def _attach_to_session(
-        self,
-        model: ModelT,
-        strategy: Literal["add", "merge"] = "add",
-        load: bool = True,
+        self, model: ModelT, strategy: Literal["add", "merge"] = "add", load: bool = True
     ) -> ModelT:
         """Attach detached instance to the session.
 

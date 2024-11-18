@@ -37,21 +37,50 @@ __all__ = (
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 """Path to the Alembic templates."""
 ConnectionT = TypeVar("ConnectionT", bound=Union["Connection", "AsyncConnection"])
-"""Type variable for SQLAlchemy connection types."""
+"""Type variable for SQLAlchemy connection types.
+
+See Also:
+    :class:`sqlalchemy.Connection`
+    :class:`sqlalchemy.ext.asyncio.AsyncConnection`
+"""
 EngineT = TypeVar("EngineT", bound=Union["Engine", "AsyncEngine"])
-"""Type variable for a SQLAlchemy engine."""
+"""Type variable for a SQLAlchemy engine.
+
+See Also:
+    :class:`sqlalchemy.Engine`
+    :class:`sqlalchemy.ext.asyncio.AsyncEngine`
+"""
 SessionT = TypeVar("SessionT", bound=Union["Session", "AsyncSession"])
-"""Type variable for a SQLAlchemy session."""
+"""Type variable for a SQLAlchemy session.
+
+See Also:
+    :class:`sqlalchemy.Session`
+    :class:`sqlalchemy.ext.asyncio.AsyncSession`
+"""
 SessionMakerT = TypeVar("SessionMakerT", bound=Union["sessionmaker[Session]", "async_sessionmaker[AsyncSession]"])
-"""Type variable for a SQLAlchemy sessionmaker."""
+"""Type variable for a SQLAlchemy sessionmaker.
+
+See Also:
+    :class:`sqlalchemy.orm.sessionmaker`
+    :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
+"""
 
 
 @dataclass
 class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
-    """SQLAlchemy async session config."""
+    """SQLAlchemy async session config.
+
+    Types:
+        ConnectionT: :class:`sqlalchemy.Connection` or :class:`sqlalchemy.ext.asyncio.AsyncConnection`
+        EngineT: :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine`
+        SessionT: :class:`sqlalchemy.Session` or :class:`sqlalchemy.ext.asyncio.AsyncSession`
+    """
 
     autobegin: bool | EmptyType = Empty
-    """Automatically start transactions when database access is requested by an operation."""
+    """Automatically start transactions when database access is requested by an operationn.
+
+    Bool or :class:`Empty <advanced_alchemy.utils.dataclass.Empty>`
+    """
     autoflush: bool | EmptyType = Empty
     """When ``True``, all query operations will issue a flush call to this :class:`Session <sqlalchemy.orm.Session>`
     before proceeding"""
@@ -90,7 +119,13 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
 
 @dataclass
 class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
-    """Common SQLAlchemy Configuration."""
+    """Common SQLAlchemy Configuration.
+
+    Types:
+        EngineT: :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine`
+        SessionT: :class:`sqlalchemy.Session` or :class:`sqlalchemy.ext.asyncio.AsyncSession`
+        SessionMakerT: :class:`sqlalchemy.orm.sessionmaker` or :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
+    """
 
     create_engine_callable: Callable[[str], EngineT]
     """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
@@ -101,7 +136,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     or :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`.
     """
     session_maker_class: type[sessionmaker[Session] | async_sessionmaker[AsyncSession]]
-    """Sessionmaker class to use."""
+    """Sessionmaker class to use.
+
+    See Also:
+        :class:`sqlalchemy.orm.sessionmaker`
+        :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
+    """
     connection_string: str | None = field(default=None)
     """Database connection string in one of the formats supported by SQLAlchemy.
 
@@ -180,7 +220,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """Return an engine. If none exists yet, create one.
 
         Returns:
-            Getter that returns the engine instance used by the plugin.
+            :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine` instance used by the plugin.
         """
         if self.engine_instance:
             return self.engine_instance
@@ -202,7 +242,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """Get a session maker. If none exists yet, create one.
 
         Returns:
-            Session factory used by the plugin.
+            :class:`sqlalchemy.orm.sessionmaker` or :class:`sqlalchemy.ext.asyncio.async_sessionmaker` factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
@@ -235,7 +275,10 @@ class GenericAlembicConfig:
     """A path to save generated migrations.
     """
     target_metadata: MetaData = orm_registry.metadata
-    """Metadata to use."""
+    """:class:`sqlalchemy.MetaData` to use for Alembic migrations.
+
+    Defaults to the metadata of the :class:`sqlalchemy.orm.registry <sqlalchemy.orm.registry>` used by the plugin.
+    """
     user_module_prefix: str | None = "sa."
     """User module prefix."""
     render_as_batch: bool = True

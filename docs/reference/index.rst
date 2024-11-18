@@ -41,4 +41,3 @@ Framework Integration
 
     extensions/index
     alembic/index
-

@@ -44,16 +44,69 @@ T = TypeVar("T")
 
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
+"""Type variable for filter types.
+
+:class:`~advanced_alchemy.filters.StatementFilter`
+"""
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
+"""Type variable for model DTOs.
+
+:class:`msgspec.Struct` or :class:`pydantic.BaseModel`
+"""
 PydanticOrMsgspecT = Union[Struct, BaseModel]
+"""Type alias for pydantic or msgspec models.
+
+:class:`msgspec.Struct` or :class:`pydantic.BaseModel`
+"""
 ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData[ModelT]]
+"""Type alias for model dictionaries.
+
+Represents:
+- :type: dict[str, Any]
+- :class:`~advanced_alchemy.base.ModelProtocol`
+- :class:`msgspec.Struct`
+- :class:`pydantic.BaseModel`
+- :class:`litestar.dto.data_structures.DTOData`
+- :class:`~advanced_alchemy.base.ModelProtocol`
+"""
 ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
-BulkModelDictT: TypeAlias = Union[Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]], DTOData[List[ModelT]]]
+"""Type alias for model dictionary lists.
+
+A list or sequence of any of the following:
+- :type: dict[str, Any]
+- :class:`~advanced_alchemy.base.ModelProtocol`
+- :class:`msgspec.Struct`
+- :class:`pydantic.BaseModel`
+
+"""
+BulkModelDictT: TypeAlias = Union[
+    Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]],
+    DTOData[List[ModelT]],
+]
+"""Type alias for bulk model dictionaries.
+
+A list or sequence of any of the following:
+- :type: dict[str, Any]
+- :class:`~advanced_alchemy.base.ModelProtocol`
+- :class:`msgspec.Struct`
+- :class:`pydantic.BaseModel`
+
+or
+
+- :class:`litestar.dto.data_structures.DTOData`
+"""
 
 
 @lru_cache(typed=True)
 def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
-    """Caches and returns a pydantic type adapter"""
+    """Caches and returns a pydantic type adapter.
+
+    Args:
+        f: Type to create a type adapter for.
+
+    Returns:
+        :class:`pydantic.TypeAdapter`[:class:`typing.TypeVar`[T]]
+    """
     if PYDANTIC_USE_FAILFAST:
         return TypeAdapter(
             Annotated[f, FailFast()],
@@ -62,42 +115,128 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
 
 
 def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
+    """Check if a value is a Litestar DTOData object.
+
+    Args:
+        v: Value to check.
+
+    Returns:
+        bool
+    """
     return LITESTAR_INSTALLED and isinstance(v, DTOData)
 
 
 def is_pydantic_model(v: Any) -> TypeGuard[BaseModel]:
+    """Check if a value is a pydantic model.
+
+    Args:
+        v: Value to check.
+
+    Returns:
+        bool
+    """
     return PYDANTIC_INSTALLED and isinstance(v, BaseModel)
 
 
 def is_msgspec_model(v: Any) -> TypeGuard[Struct]:
+    """Check if a value is a msgspec model.
+
+    Args:
+        v: Value to check.
+
+    Returns:
+        bool
+    """
     return MSGSPEC_INSTALLED and isinstance(v, Struct)
 
 
 def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
+    """Check if a value is a dictionary.
+
+    Args:
+        v: Value to check.
+
+    Returns:
+        bool
+    """
     return isinstance(v, dict)
 
 
 def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
+    """Check if a dictionary has a specific field.
+
+    Args:
+        v: Value to check.
+        field_name: Field name to check for.
+
+    Returns:
+        bool
+    """
     return is_dict(v) and field_name in v
 
 
 def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
+    """Check if a dictionary does not have a specific field.
+
+    Args:
+        v: Value to check.
+        field_name: Field name to check for.
+
+    Returns:
+        bool
+    """
     return is_dict(v) and field_name not in v
 
 
 def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
+    """Check if a pydantic model has a specific field.
+
+    Args:
+        v: Value to check.
+        field_name: Field name to check for.
+
+    Returns:
+        bool
+    """
     return is_pydantic_model(v) and field_name in v.model_fields
 
 
 def is_pydantic_model_without_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
+    """Check if a pydantic model does not have a specific field.
+
+    Args:
+        v: Value to check.
+        field_name: Field name to check for.
+
+    Returns:
+        bool
+    """
     return not is_pydantic_model_with_field(v, field_name)
 
 
 def is_msgspec_model_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
+    """Check if a msgspec model has a specific field.
+
+    Args:
+        v: Value to check.
+        field_name: Field name to check for.
+
+    Returns:
+        bool
+    """
     return is_msgspec_model(v) and field_name in v.__struct_fields__
 
 
 def is_msgspec_model_without_field(v: Any, field_name: str) -> TypeGuard[Struct]:
+    """Check if a msgspec model does not have a specific field.
+
+    Args:
+        v: Value to check.
+        field_name: Field name to check for.
+
+    Returns:
+        bool
+    """
     return not is_msgspec_model_with_field(v, field_name)
 
 
@@ -105,6 +244,20 @@ def schema_dump(
     data: dict[str, Any] | ModelT | Struct | BaseModel | DTOData[ModelT],
     exclude_unset: bool = True,
 ) -> dict[str, Any] | ModelT:
+    """Dump a data object to a dictionary.
+
+    Args:
+        data: Data to dump. Can be one of:
+            - :type: dict[str, Any]
+            - :class:`~advanced_alchemy.base.ModelProtocol`
+            - :class:`msgspec.Struct`
+            - :class:`pydantic.BaseModel`
+            - :class:`litestar.dto.data_structures.DTOData`
+        exclude_unset: Whether to exclude unset values.
+
+    Returns:
+        Union[:type: dict[str, Any], :class:`~advanced_alchemy.base.ModelProtocol`]
+    """
     if is_dict(data):
         return data
     if is_pydantic_model(data):

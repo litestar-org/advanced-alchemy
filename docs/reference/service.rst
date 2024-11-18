@@ -1,6 +1,11 @@
-============
+========
 services
-============
+========
+
 
 .. automodule:: advanced_alchemy.service
-    :members: SQLAlchemyAsyncRepositoryService SQLAlchemySyncRepositoryService
+    :members:
+    :imported-members:
+    :undoc-members:
+    :show-inheritance:
+    :noindex:

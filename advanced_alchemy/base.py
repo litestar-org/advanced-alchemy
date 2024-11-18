@@ -78,10 +78,15 @@ __all__ = (
 
 
 UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
+"""Type variable for :class:`UUIDBase`."""
 BigIntBaseT = TypeVar("BigIntBaseT", bound="BigIntBase")
+"""Type variable for :class:`BigIntBase`."""
 UUIDv6BaseT = TypeVar("UUIDv6BaseT", bound="UUIDv6Base")
+"""Type variable for :class:`UUIDv6Base`."""
 UUIDv7BaseT = TypeVar("UUIDv7BaseT", bound="UUIDv7Base")
+"""Type variable for :class:`UUIDv7Base`."""
 NanoIDBaseT = TypeVar("NanoIDBaseT", bound="NanoIDBase")
+"""Type variable for :class:`NanoIDBase`."""
 
 convention: NamingSchemaParameter = {
     "ix": "ix_%(column_0_label)s",
@@ -103,11 +108,11 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
     This function helps you merge the args together.
 
     Args:
-        cls (DeclarativeBase): This is the model that will get the table args
-        table_args: additional information to add to table_args
+        cls: :class:`sqlalchemy.orm.DeclarativeBase` This is the model that will get the table args
+        table_args: :class:`TableArgsType` additional information to add to table_args
 
     Returns:
-        tuple | dict: The merged __table_args__ property
+        :class:`TableArgsType`
     """
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
@@ -254,7 +259,11 @@ class BasicAttributes:
 
 
 class CommonTableAttributes(BasicAttributes):
-    """Common attributes for SQLALchemy tables."""
+    """Common attributes for SQLALchemy tables.
+
+    See Also:
+        :class:`BasicAttributes`
+    """
 
     if TYPE_CHECKING:
         __tablename__: str
@@ -306,7 +315,14 @@ class SlugKey:
 def create_registry(
     custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> registry:
-    """Create a new SQLAlchemy registry."""
+    """Create a new SQLAlchemy registry.
+
+    Args:
+        custom_annotation_map: :class:`dict` of custom type annotations to use for the registry
+
+    Returns:
+        :class:`sqlalchemy.orm.registry`
+    """
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
@@ -334,73 +350,148 @@ orm_registry = create_registry()
 
 
 class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with UUID primary keys."""
+    """Base for all SQLAlchemy declarative models with UUID primary keys.
+
+    See Also:
+        :class:`UUIDPrimaryKey`
+        :class:`CommonTableAttributes`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with UUID primary keys and audit columns."""
+    """Base for declarative models with UUID primary keys and audit columns.
+
+    See Also:
+        :class:`CommonTableAttributes`
+        :class:`UUIDPrimaryKey`
+        :class:`AuditColumns`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with UUID primary keys."""
+    """Base for all SQLAlchemy declarative models with UUID primary keys.
+
+    See Also:
+        :class:`UUIDv6PrimaryKey`
+        :class:`CommonTableAttributes`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with UUID primary keys and audit columns."""
+    """Base for declarative models with UUID primary keys and audit columns.
+
+    See Also:
+        :class:`CommonTableAttributes`
+        :class:`UUIDv6PrimaryKey`
+        :class:`AuditColumns`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with UUID primary keys."""
+    """Base for all SQLAlchemy declarative models with UUID primary keys.
+
+    See Also:
+        :class:`UUIDv7PrimaryKey`
+        :class:`CommonTableAttributes`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with UUID primary keys and audit columns."""
+    """Base for declarative models with UUID primary keys and audit columns.
+
+    See Also:
+        :class:`CommonTableAttributes`
+        :class:`UUIDv7PrimaryKey`
+        :class:`AuditColumns`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class NanoIDBase(NanoIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with Nano ID primary keys."""
+    """Base for all SQLAlchemy declarative models with Nano ID primary keys.
+
+    See Also:
+        :class:`NanoIDPrimaryKey`
+        :class:`CommonTableAttributes`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class NanoIDAuditBase(CommonTableAttributes, NanoIDPrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with Nano ID primary keys and audit columns."""
+    """Base for declarative models with Nano ID primary keys and audit columns.
+
+    See Also:
+        :class:`CommonTableAttributes`
+        :class:`NanoIDPrimaryKey`
+        :class:`AuditColumns`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class BigIntBase(BigIntPrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with BigInt primary keys."""
+    """Base for all SQLAlchemy declarative models with BigInt primary keys.
+
+    See Also:
+        :class:`BigIntPrimaryKey`
+        :class:`CommonTableAttributes`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with BigInt primary keys and audit columns."""
+    """Base for declarative models with BigInt primary keys and audit columns.
+
+    See Also:
+        :class:`CommonTableAttributes`
+        :class:`BigIntPrimaryKey`
+        :class:`AuditColumns`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class DefaultBase(CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models.  No primary key is added"""
+    """Base for all SQLAlchemy declarative models.  No primary key is added.
+
+    See Also:
+        :class:`CommonTableAttributes`
+        :class:`DeclarativeBase`
+    """
 
     registry = orm_registry
 
 
 class SQLQuery(BasicAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy custom mapped objects."""
+    """Base for all SQLAlchemy custom mapped objects.
+
+    See Also:
+        :class:`BasicAttributes`
+        :class:`DeclarativeBase`
+    """
 
     __allow_unmapped__ = True
     registry = orm_registry

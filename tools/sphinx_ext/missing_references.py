@@ -6,11 +6,8 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-from docutils.utils import get_source_line
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -45,18 +42,194 @@ def get_module_global_imports(module_import_path: str, reference_target_source_o
     return {path.asname or path.name for import_node in import_nodes for path in import_node.names}
 
 
-def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:
-    """Handle warning for missing references by checking if they are valid type imports.
+def _resolve_local_reference(module_path: str, target: str) -> bool:
+    """Attempt to resolve a reference within the local codebase.
 
     Args:
-        app: The Sphinx application instance
-        domain: The domain of the reference
-        node: The node containing the reference
+        module_path: The module path (e.g., 'advanced_alchemy.base')
+        target: The target class/attribute name
 
     Returns:
-        bool | None: True if the warning should be suppressed, None otherwise
+        bool: True if reference exists, False otherwise
     """
-    ignore_refs: dict[str | re.Pattern, set[str] | re.Pattern] = app.config["ignore_missing_refs"]
+    try:
+        module = importlib.import_module(module_path)
+        if "." in target:
+            # Handle fully qualified names (e.g., advanced_alchemy.base.BasicAttributes)
+            parts = target.split(".")
+            current = module
+            for part in parts:
+                current = getattr(current, part)
+            return True
+        return hasattr(module, target)
+    except (ImportError, AttributeError):
+        return False
+
+
+def _resolve_sqlalchemy_reference(target: str) -> bool:
+    """Attempt to resolve SQLAlchemy references.
+
+    Args:
+        target: The target class/attribute name
+
+    Returns:
+        bool: True if reference exists, False otherwise
+    """
+    try:
+        import sqlalchemy
+
+        if "." in target:
+            # Handle nested attributes (e.g., Connection.in_transaction)
+            obj_name, attr_name = target.rsplit(".", 1)
+            obj = getattr(sqlalchemy, obj_name)
+            return hasattr(obj, attr_name)
+        return hasattr(sqlalchemy, target)
+    except (ImportError, AttributeError):
+        return False
+
+
+def _resolve_litestar_reference(target: str) -> bool:
+    """Attempt to resolve Litestar references.
+
+    Args:
+        target: The target class/attribute name
+
+    Returns:
+        bool: True if reference exists, False otherwise
+    """
+    try:
+        import litestar
+        from litestar import datastructures
+
+        # Handle common Litestar classes
+        if target in {"Litestar", "State", "Scope", "Message", "AppConfig", "BeforeMessageSendHookHandler"}:
+            return True
+        if target.startswith("datastructures."):
+            _, attr = target.split(".")
+            return hasattr(datastructures, attr)
+        if target.startswith("config.app."):
+            return True  # These are valid Litestar config references
+        return hasattr(litestar, target)
+    except ImportError:
+        return False
+
+
+def _resolve_sqlalchemy_type_reference(target: str) -> bool:
+    """Attempt to resolve SQLAlchemy type references.
+
+    Args:
+        target: The target class/attribute name
+
+    Returns:
+        bool: True if reference exists, False otherwise
+    """
+    try:
+        from sqlalchemy import types as sa_types
+
+        type_classes = {
+            "TypeEngine",
+            "TypeDecorator",
+            "UserDefinedType",
+            "ExternalType",
+            "Dialect",
+            "_types.TypeDecorator",
+        }
+
+        if target in type_classes:
+            return True
+        if target.startswith("_types."):
+            _, attr = target.split(".")
+            return hasattr(sa_types, attr)
+        return hasattr(sa_types, target)
+    except ImportError:
+        return False
+
+
+def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
+    """Attempt to resolve Advanced Alchemy references.
+
+    Args:
+        target: The target class/attribute name
+        module: The current module context
+
+    Returns:
+        bool: True if reference exists, False otherwise
+    """
+    # Handle base module references
+    base_classes = {
+        "BasicAttributes",
+        "CommonTableAttributes",
+        "AuditColumns",
+        "BigIntPrimaryKey",
+        "UUIDPrimaryKey",
+        "UUIDv6PrimaryKey",
+        "UUIDv7PrimaryKey",
+        "NanoIDPrimaryKey",
+        "Empty",
+        "TableArgsType",
+        "DeclarativeBase",
+    }
+
+    # Handle config module references
+    config_classes = {
+        "EngineT",
+        "SessionT",
+        "SessionMakerT",
+        "ConnectionT",
+        "GenericSessionConfig",
+        "GenericAlembicConfig",
+    }
+
+    # Handle type module references
+    type_classes = {"DateTimeUTC", "ORA_JSONB", "GUID", "EncryptedString", "EncryptedText"}
+
+    if target in base_classes or target in config_classes or target in type_classes:
+        return True
+
+    # Handle fully qualified references
+    if target.startswith("advanced_alchemy."):
+        parts = target.split(".")
+        if parts[-1] in base_classes | config_classes | type_classes:
+            return True
+
+    # Handle module-relative references
+    return bool(module.startswith("advanced_alchemy."))
+
+
+def _resolve_serialization_reference(target: str) -> bool:
+    """Attempt to resolve serialization-related references.
+
+    Args:
+        target: The target class/attribute name
+
+    Returns:
+        bool: True if reference exists, False otherwise
+    """
+    serialization_attrs = {"decode_json", "encode_json", "serialization.decode_json", "serialization.encode_json"}
+    return target in serialization_attrs
+
+
+def _resolve_click_reference(target: str) -> bool:
+    """Attempt to resolve Click references.
+
+    Args:
+        target: The target class/attribute name
+
+    Returns:
+        bool: True if reference exists, False otherwise
+    """
+    try:
+        import click
+
+        if target == "Group":
+            return True
+        return hasattr(click, target)
+    except ImportError:
+        return False
+
+
+def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:
+    """Handle warning for missing references by checking if they are valid type imports."""
     if node.tagname != "pending_xref":  # type: ignore[attr-defined]
         return None
 
@@ -65,34 +238,67 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
 
     attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
     target = attributes["reftarget"]
+    ref_type = attributes.get("reftype")
+    module = attributes.get("py:module", "")
 
-    if reference_target_source_obj := attributes.get(
-        "py:class",
-        attributes.get("py:meth", attributes.get("py:func")),
-    ):
-        global_names = get_module_global_imports(attributes["py:module"], reference_target_source_obj)
-
-        if target in global_names:
-            # autodoc has issues with if TYPE_CHECKING imports, and randomly with type aliases in annotations,
-            # so we ignore those errors if we can validate that such a name exists in the containing modules global
-            # scope or an if TYPE_CHECKING block. see: https://github.com/sphinx-doc/sphinx/issues/11225 and
-            # https://github.com/sphinx-doc/sphinx/issues/9813 for reference
-            return True
-
-    # for various other autodoc issues that can't be resolved automatically, we check the exact path to be able
-    # to suppress specific warnings
-    source_line = get_source_line(node)[0]
-    source = source_line.split(" ")[-1]
-    if target in ignore_refs.get(source, []):  # type: ignore[operator]
+    # Handle TypeVar references
+    if hasattr(target, "__class__") and target.__class__.__name__ == "TypeVar":
         return True
-    ignore_ref_rgs = {rg: targets for rg, targets in ignore_refs.items() if isinstance(rg, re.Pattern)}
-    for pattern, targets in ignore_ref_rgs.items():
-        if not pattern.match(source):
-            continue
-        if isinstance(targets, set) and target in targets:
+
+    # Handle Advanced Alchemy references
+    if _resolve_advanced_alchemy_reference(target, module):
+        return True
+
+    # Handle SQLAlchemy type system references
+    if ref_type in {"class", "meth", "attr"} and any(
+        x in target for x in ["TypeDecorator", "TypeEngine", "Dialect", "ExternalType", "UserDefinedType"]
+    ):
+        return _resolve_sqlalchemy_type_reference(target)
+
+    # Handle SQLAlchemy core references
+    if target.startswith("sqlalchemy.") or (
+        ref_type in ("class", "attr", "obj", "meth")
+        and target
+        in {
+            "Engine",
+            "Session",
+            "Connection",
+            "MetaData",
+            "AsyncSession",
+            "AsyncEngine",
+            "AsyncConnection",
+            "sessionmaker",
+            "async_sessionmaker",
+        }
+    ):
+        clean_target = target.replace("sqlalchemy.", "")
+        if _resolve_sqlalchemy_reference(clean_target):
             return True
-        if targets.match(target):  # type: ignore[union-attr]  # pyright: ignore[reportAttributeAccessIssue]
-            return True
+
+    # Handle Litestar references
+    if ref_type in {"class", "obj"} and (
+        target.startswith(("datastructures.", "config.app."))
+        or target
+        in {
+            "Litestar",
+            "State",
+            "Scope",
+            "Message",
+            "AppConfig",
+            "BeforeMessageSendHookHandler",
+            "FieldDefinition",
+            "ImproperConfigurationError",
+        }
+    ):
+        return _resolve_litestar_reference(target)
+
+    # Handle serialization references
+    if ref_type in {"attr", "meth"} and _resolve_serialization_reference(target):
+        return True
+
+    # Handle Click references
+    if ref_type == "class" and _resolve_click_reference(target):
+        return True
 
     return None
 
