@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING, Sequence
 
 from litestar.plugins import InitPluginProtocol
 
+from advanced_alchemy.exceptions import NotFoundError
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
+from advanced_alchemy.extensions.litestar.plugins.exception_handlers import not_found_error_handler
 from advanced_alchemy.extensions.litestar.plugins.init import (
     EngineConfig,
     SQLAlchemyAsyncConfig,
@@ -44,6 +46,10 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
         app_config.plugins.extend([SQLAlchemyInitPlugin(config=self._config), SQLAlchemySerializationPlugin()])
+
+        if not app_config.exception_handlers.get(NotFoundError):
+            app_config.exception_handlers[NotFoundError] = not_found_error_handler
+
         return app_config
 
 
