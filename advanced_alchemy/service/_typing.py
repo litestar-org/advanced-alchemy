@@ -100,6 +100,8 @@ except ImportError:
 
 try:
     from litestar.dto.data_structures import DTOData
+
+    LITESTAR_INSTALLED = True
 except ImportError:
 
     @runtime_checkable
