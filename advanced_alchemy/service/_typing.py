@@ -5,11 +5,9 @@ This is used to ensure compatibility when one or more of the libraries are insta
 
 from __future__ import annotations
 
-from importlib.util import find_spec
 from typing import (
     Any,
     ClassVar,
-    Generic,
     Protocol,
     cast,
     runtime_checkable,
@@ -17,74 +15,88 @@ from typing import (
 
 from typing_extensions import TypeVar, dataclass_transform
 
-PYDANTIC_INSTALLED = bool(find_spec("pydantic"))
-MSGSPEC_INSTALLED = bool(find_spec("msgspec"))
-LITESTAR_INSTALLED = bool(find_spec("litestar"))
-
 T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
-if not PYDANTIC_INSTALLED:
+try:
+    from pydantic import BaseModel, FailFast, TypeAdapter
+
+    PYDANTIC_INSTALLED = True
+except ImportError:
 
     @runtime_checkable
-    class BaseModel(Protocol):
+    class BaseModel(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
         model_fields: ClassVar[dict[str, Any]]
 
-        def model_dump(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
             """Placeholder"""
             return {}
 
-    class TypeAdapter(Generic[T]):
+    @runtime_checkable
+    class TypeAdapter(Protocol[T_co]):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(
+            self,
+            type: Any,  # noqa: A002
+            *,
+            config: Any | None = None,
+            _parent_depth: int = 2,
+            module: str | None = None,
+        ) -> None:
             """Init"""
 
-        def validate_python(self, data: Any, *args: Any, **kwargs: Any) -> T:
+        def validate_python(
+            self,
+            object: Any,  # noqa: A002
+            /,
+            *,
+            strict: bool | None = None,
+            from_attributes: bool | None = None,
+            context: dict[str, Any] | None = None,
+        ) -> T_co:
             """Stub"""
-            return cast("T", data)
+            return cast("T_co", object)
 
-    class FailFast:  # pyright: ignore[reportRedeclaration]
+    @runtime_checkable
+    class FailFast(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation for FailFast"""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             """Init"""
 
-        def __call__(self, *args: Any, **kwargs: Any) -> None:
-            """Placeholder"""
+    PYDANTIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
-
-else:
-    from pydantic import BaseModel, FailFast, TypeAdapter  # type: ignore[assignment]
-
-
-if not MSGSPEC_INSTALLED:
-    import enum
-
-    @dataclass_transform()
-    @runtime_checkable
-    class Struct(Protocol):
-        """Placeholder Implementation"""
-
-        __struct_fields__: ClassVar[tuple[str, ...]]
-
-    def convert(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
-        """Placeholder implementation"""
-        return {}
-
-    class UnsetType(enum.Enum):
-        UNSET = "UNSET"
-
-    UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition]
-else:
-    from msgspec import (  # type: ignore[assignment]
-        UNSET,  # pyright: ignore[reportConstantRedefinition]
+try:
+    from msgspec import (
+        UNSET,
         Struct,
         UnsetType,  # pyright: ignore[reportAssignmentType]
         convert,
     )
 
+    MSGSPEC_INSTALLED: bool = True
+except ImportError:
+    import enum
+
+    @dataclass_transform()
+    @runtime_checkable
+    class Struct(Protocol):  # type: ignore[no-redef]
+        """Placeholder Implementation"""
+
+        __struct_fields__: ClassVar[tuple[str, ...]]
+
+    def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    class UnsetType(enum.Enum):  # type: ignore[no-redef]
+        UNSET = "UNSET"
+
+    UNSET = UnsetType.UNSET  # pyright: ignore[reportConstantRedefinition]
+    MSGSPEC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 try:
     from litestar.dto.data_structures import DTOData
@@ -111,6 +123,7 @@ except ImportError:
             """Placeholder implementation"""
             return {}
 
+    LITESTAR_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 __all__ = (
     "PYDANTIC_INSTALLED",
@@ -123,4 +136,5 @@ __all__ = (
     "Struct",
     "convert",
     "UNSET",
+    "UnsetType",
 )

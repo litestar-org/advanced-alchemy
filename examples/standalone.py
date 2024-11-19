@@ -1,8 +1,10 @@
-from pathlib import Path
+from __future__ import annotations
 
-from rich import get_console
+import pprint
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Mapped
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
@@ -10,8 +12,10 @@ from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.utils.fixtures import open_fixture
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Mapped
+
 here = Path(__file__).parent
-console = get_console()
 engine = create_engine("duckdb:///:memory:")
 config = SQLAlchemySyncConfig(
     engine_instance=create_engine("duckdb:///:memory:"), session_config=SyncSessionConfig(expire_on_commit=False)
@@ -44,19 +48,19 @@ def run_script() -> None:
         fixture = open_fixture(here, USStateRepository.model_type.__tablename__)
         objs = repo.add_many([USStateRepository.model_type(**raw_obj) for raw_obj in fixture])
         db_session.commit()
-        console.print(f"Created {len(objs)} new objects.")
+        pprint.pp(f"Created {len(objs)} new objects.")
 
         # 2) Select paginated data and total row count.
         created_objs, total_objs = repo.list_and_count(LimitOffset(limit=10, offset=0))
-        console.print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
+        pprint.pp(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
         # 3) Let's remove the batch of records selected.
         deleted_objs = repo.delete_many([new_obj.id for new_obj in created_objs])
-        console.print(f"Removed {len(deleted_objs)} records out of a total of {total_objs}.")
+        pprint.pp(f"Removed {len(deleted_objs)} records out of a total of {total_objs}.")
 
         # 4) Let's count the remaining rows
         remaining_count = repo.count()
-        console.print(f"Found {remaining_count} remaining records after delete.")
+        pprint.pp(f"Found {remaining_count} remaining records after delete.")
 
 
 if __name__ == "__main__":

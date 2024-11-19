@@ -180,7 +180,7 @@ class ResultConverter:
                 offset=limit_offset.offset,
                 total=total,
             )
-        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
+        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
@@ -216,12 +216,12 @@ class ResultConverter:
                 total=total,
             )
 
-        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
+        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
                     get_type_adapter(schema_type).validate_python(data, from_attributes=True),
-                )  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
+                )
             limit_offset = find_filter(LimitOffset, filters=filters)
             total = total if total else len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)

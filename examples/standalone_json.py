@@ -1,12 +1,17 @@
 # ruff: noqa: PLR2004, S101
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.orm import Mapped
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Mapped
 
 
 class Item(UUIDBase):
