@@ -1,8 +1,12 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Mapped, Session
+# ruff: noqa: PLR2004, S101
+import asyncio
+
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import Mapped
 
 from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.repository import SQLAlchemySyncRepository
+from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 
 class Item(UUIDBase):
@@ -11,57 +15,55 @@ class Item(UUIDBase):
     data: Mapped[dict]
 
 
-class ItemRepository(SQLAlchemySyncRepository[Item]):
+class ItemRepository(SQLAlchemyAsyncRepository[Item]):
     """Item repository."""
 
     model_type = Item
 
 
-engine = create_engine("postgresql+psycopg://username:password@localhost:5432/database")
+config = SQLAlchemyAsyncConfig(
+    engine_instance=create_async_engine("postgresql+psycopg://app:super-secret@localhost:5432/app"),
+    session_config=AsyncSessionConfig(expire_on_commit=False),
+)
 
 
-def run_script() -> None:
+async def run_script() -> None:
     # Initializes the database.
-    with engine.begin() as conn:
-        Item.metadata.create_all(conn)
-
-    with Session(engine) as session:
-        repo = ItemRepository(session=session)
+    async with config.get_engine().begin() as conn:
+        await conn.run_sync(Item.metadata.create_all)
+    async with config.get_session() as db_session:
+        repo = ItemRepository(session=db_session)
         # Add some data
-        items = [
-            Item(
-                name="Smartphone",
-                data={"price": 599.99, "brand": "XYZ"},
-            ),
-            Item(
-                name="Laptop",
-                data={"price": 1299.99, "brand": "ABC"},
-            ),
-            Item(
-                name="Headphones",
-                data={"not_price": 149.99, "brand": "DEF"},
-            ),
-        ]
-        repo.add_many(items)
-        session.commit()
-
-    with Session(engine) as session:
-        repo = ItemRepository(session=session)
-
-        # Do some queries with JSON operations
-        statement = (Item.data["price"].as_float() == 599.99) & (  # noqa: PLR2004
-            Item.data["brand"].as_string() == "XYZ"
+        await repo.add_many(
+            [
+                Item(
+                    name="Smartphone",
+                    data={"price": 599.99, "brand": "XYZ"},
+                ),
+                Item(
+                    name="Laptop",
+                    data={"price": 1299.99, "brand": "ABC"},
+                ),
+                Item(
+                    name="Headphones",
+                    data={"not_price": 149.99, "brand": "DEF"},
+                ),
+            ],
+            auto_commit=True,
         )
-        assert repo.exists(statement)  # noqa: S101
 
-        statement = Item.data.op("?")("price")
-        assert repo.count(statement) == 2  # noqa: PLR2004, S101
+    async with config.get_session() as db_session:
+        repo = ItemRepository(session=db_session)
+        # Do some queries with JSON operations
+        assert await repo.exists(Item.data["price"].as_float() == 599.99, Item.data["brand"].as_string() == "XYZ")
 
-        statement = Item.data.op("?")("not_price")
-        products = repo.list(statement)
-        assert len(products) == 1  # noqa: S101
-        assert products[0].name == "Headphones"  # noqa: S101
+        assert await repo.count(Item.data.op("?")("price")) == 2
+
+        products, total_products = await repo.list_and_count(Item.data.op("?")("not_price"))
+        assert len(products) == 1
+        assert total_products == 1
+        assert products[0].name == "Headphones"
 
 
 if __name__ == "__main__":
-    run_script()
+    asyncio.run(run_script())

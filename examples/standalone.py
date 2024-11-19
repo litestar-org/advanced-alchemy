@@ -2,15 +2,20 @@ from pathlib import Path
 
 from rich import get_console
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Mapped, Session, sessionmaker
+from sqlalchemy.orm import Mapped
 
 from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.utils.fixtures import open_fixture
 
 here = Path(__file__).parent
 console = get_console()
+engine = create_engine("duckdb:///:memory:")
+config = SQLAlchemySyncConfig(
+    engine_instance=create_engine("duckdb:///:memory:"), session_config=SyncSessionConfig(expire_on_commit=False)
+)
 
 
 class USState(UUIDBase):
@@ -26,21 +31,14 @@ class USStateRepository(SQLAlchemySyncRepository[USState]):
     model_type = USState
 
 
-engine = create_engine(
-    "duckdb:///:memory:",
-    future=True,
-)
-session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
-
-
 def run_script() -> None:
     """Load data from a fixture."""
 
     # Initializes the database.
-    with engine.begin() as conn:
+    with config.get_engine().begin() as conn:
         USState.metadata.create_all(conn)
 
-    with session_factory() as db_session:
+    with config.get_session() as db_session:
         # 1) Load the JSON data into the US States table.
         repo = USStateRepository(session=db_session)
         fixture = open_fixture(here, USStateRepository.model_type.__tablename__)

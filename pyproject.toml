@@ -102,6 +102,7 @@ doc = [
   "sphinx-paramlinks>=0.6.0",
   "sphinx-togglebutton>=0.3.2",
   "sphinx-toolbox>=3.8.1",
+  "sphinx-pyscript",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
 fastapi = ["fastapi[all]>=0.115.3"]

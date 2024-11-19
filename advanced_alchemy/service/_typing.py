@@ -85,12 +85,21 @@ else:
         convert,
     )
 
-if not LITESTAR_INSTALLED:
 
-    class DTOData(Generic[T]):
+try:
+    from litestar.dto.data_structures import DTOData
+except ImportError:
+
+    @runtime_checkable
+    class DTOData(Protocol[T]):  # type: ignore[no-redef]
         """Placeholder implementation"""
 
-        def create_instance(*args: Any, **kwargs: Any) -> T:
+        __slots__ = ("_backend", "_data_as_builtins")
+
+        def __init__(self, backend: Any, data_as_builtins: Any) -> None:
+            """Placeholder init"""
+
+        def create_instance(self, **kwargs: Any) -> T:
             """Placeholder implementation"""
             return cast("T", kwargs)
 
@@ -101,8 +110,6 @@ if not LITESTAR_INSTALLED:
         def as_builtins(self) -> Any:
             """Placeholder implementation"""
             return {}
-else:
-    from litestar.dto.data_structures import DTOData  # type: ignore[assignment]
 
 
 __all__ = (

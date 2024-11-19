@@ -14,7 +14,6 @@ A repository acts as a collection-like interface to your database models. It pro
 - Creating, reading, updating, and deleting records
 - Filtering and pagination
 - Bulk operations
-- Transaction management
 
 Basic Repository Usage
 ----------------------
