@@ -44,7 +44,7 @@ class AsyncSessionConfig(GenericSessionConfig[AsyncConnection, AsyncEngine, Asyn
 class AlembicAsyncConfig(GenericAlembicConfig):
     """Configuration for an Async Alembic's Config class.
 
-    See Also:
+    .. seealso::
         https://alembic.sqlalchemy.org/en/latest/api/config.html
     """
 

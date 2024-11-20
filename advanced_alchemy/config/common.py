@@ -39,28 +39,28 @@ ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 ConnectionT = TypeVar("ConnectionT", bound=Union["Connection", "AsyncConnection"])
 """Type variable for SQLAlchemy connection types.
 
-See Also:
+.. seealso::
     :class:`sqlalchemy.Connection`
     :class:`sqlalchemy.ext.asyncio.AsyncConnection`
 """
 EngineT = TypeVar("EngineT", bound=Union["Engine", "AsyncEngine"])
 """Type variable for a SQLAlchemy engine.
 
-See Also:
+.. seealso::
     :class:`sqlalchemy.Engine`
     :class:`sqlalchemy.ext.asyncio.AsyncEngine`
 """
 SessionT = TypeVar("SessionT", bound=Union["Session", "AsyncSession"])
 """Type variable for a SQLAlchemy session.
 
-See Also:
+.. seealso::
     :class:`sqlalchemy.Session`
     :class:`sqlalchemy.ext.asyncio.AsyncSession`
 """
 SessionMakerT = TypeVar("SessionMakerT", bound=Union["sessionmaker[Session]", "async_sessionmaker[AsyncSession]"])
 """Type variable for a SQLAlchemy sessionmaker.
 
-See Also:
+.. seealso::
     :class:`sqlalchemy.orm.sessionmaker`
     :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
 """
@@ -138,7 +138,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     session_maker_class: type[sessionmaker[Session] | async_sessionmaker[AsyncSession]]
     """Sessionmaker class to use.
 
-    See Also:
+    .. seealso::
         :class:`sqlalchemy.orm.sessionmaker`
         :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
     """

@@ -400,7 +400,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     Type Parameters:
         ModelT: The SQLAlchemy model type this repository handles.
 
-    See Also:
+    .. seealso::
         :class:`~advanced_alchemy.repository._util.FilterableRepository`
     """
 

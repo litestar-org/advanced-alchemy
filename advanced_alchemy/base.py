@@ -261,7 +261,7 @@ class BasicAttributes:
 class CommonTableAttributes(BasicAttributes):
     """Common attributes for SQLALchemy tables.
 
-    See Also:
+    .. seealso::
         :class:`BasicAttributes`
     """
 
@@ -352,7 +352,7 @@ orm_registry = create_registry()
 class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models with UUID primary keys.
 
-    See Also:
+    .. seealso::
         :class:`UUIDPrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
@@ -364,7 +364,7 @@ class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
 class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with UUID primary keys and audit columns.
 
-    See Also:
+    .. seealso::
         :class:`CommonTableAttributes`
         :class:`UUIDPrimaryKey`
         :class:`AuditColumns`
@@ -377,7 +377,7 @@ class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, Declara
 class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models with UUID primary keys.
 
-    See Also:
+    .. seealso::
         :class:`UUIDv6PrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
@@ -389,7 +389,7 @@ class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
 class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with UUID primary keys and audit columns.
 
-    See Also:
+    .. seealso::
         :class:`CommonTableAttributes`
         :class:`UUIDv6PrimaryKey`
         :class:`AuditColumns`
@@ -402,7 +402,7 @@ class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, Dec
 class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models with UUID primary keys.
 
-    See Also:
+    .. seealso::
         :class:`UUIDv7PrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
@@ -414,7 +414,7 @@ class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
 class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with UUID primary keys and audit columns.
 
-    See Also:
+    .. seealso::
         :class:`CommonTableAttributes`
         :class:`UUIDv7PrimaryKey`
         :class:`AuditColumns`
@@ -427,7 +427,7 @@ class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, Dec
 class NanoIDBase(NanoIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models with Nano ID primary keys.
 
-    See Also:
+    .. seealso::
         :class:`NanoIDPrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
@@ -439,7 +439,7 @@ class NanoIDBase(NanoIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
 class NanoIDAuditBase(CommonTableAttributes, NanoIDPrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with Nano ID primary keys and audit columns.
 
-    See Also:
+    .. seealso::
         :class:`CommonTableAttributes`
         :class:`NanoIDPrimaryKey`
         :class:`AuditColumns`
@@ -452,7 +452,7 @@ class NanoIDAuditBase(CommonTableAttributes, NanoIDPrimaryKey, AuditColumns, Dec
 class BigIntBase(BigIntPrimaryKey, CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models with BigInt primary keys.
 
-    See Also:
+    .. seealso::
         :class:`BigIntPrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
@@ -464,7 +464,7 @@ class BigIntBase(BigIntPrimaryKey, CommonTableAttributes, DeclarativeBase):
 class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, DeclarativeBase):
     """Base for declarative models with BigInt primary keys and audit columns.
 
-    See Also:
+    .. seealso::
         :class:`CommonTableAttributes`
         :class:`BigIntPrimaryKey`
         :class:`AuditColumns`
@@ -477,7 +477,7 @@ class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, Dec
 class DefaultBase(CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models.  No primary key is added.
 
-    See Also:
+    .. seealso::
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
     """
@@ -488,7 +488,7 @@ class DefaultBase(CommonTableAttributes, DeclarativeBase):
 class SQLQuery(BasicAttributes, DeclarativeBase):
     """Base for all SQLAlchemy custom mapped objects.
 
-    See Also:
+    .. seealso::
         :class:`BasicAttributes`
         :class:`DeclarativeBase`
     """

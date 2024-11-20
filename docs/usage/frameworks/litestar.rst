@@ -2,12 +2,21 @@
 Litestar Integration
 ====================
 
-Advanced Alchemy provides first-class integration with Litestar through its SQLAlchemy plugin, repository, and service patterns.
+Advanced Alchemy provides first-class integration with Litestar through its SQLAlchemy plugin, repository, and service patterns. This guide demonstrates building a complete CRUD API for a book management system.
+
+Key Features
+------------
+
+- SQLAlchemy plugin for session and transaction management
+- Repository pattern for database operations
+- Service layer for business logic and data transformation
+- Built-in pagination and filtering
+- CLI tools for database migrations
 
 Basic Setup
 -----------
 
-Configure the SQLAlchemy plugin with Litestar:
+First, configure the SQLAlchemy plugin with Litestar. The plugin handles database connection, session management, and dependency injection:
 
 .. code-block:: python
 
@@ -31,7 +40,7 @@ Configure the SQLAlchemy plugin with Litestar:
 SQLAlchemy Models
 -----------------
 
-Define your SQLAlchemy models:
+Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
 
 .. code-block:: python
 
@@ -46,7 +55,7 @@ Define your SQLAlchemy models:
         __tablename__ = "author"
         name: Mapped[str]
         dob: Mapped[date | None]
-        books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+        books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
     class BookModel(UUIDAuditBase):
         __tablename__ = "book"
@@ -57,34 +66,49 @@ Define your SQLAlchemy models:
 Pydantic Schemas
 ----------------
 
-Define Pydantic schemas for your models:
+Define Pydantic schemas for input validation and response serialization:
 
 .. code-block:: python
 
     from datetime import date
-    from pydantic import BaseModel as _BaseModel
+    from pydantic import BaseModel, ConfigDict
     from uuid import UUID
+    from typing import Optional
 
+    class BaseSchema(BaseModel):
+        """Base Schema with ORM mode enabled."""
+        model_config = ConfigDict(from_attributes=True)
 
-    class BaseModel(_BaseModel):
-        """Extend Pydantic's BaseModel to enable ORM mode"""
-        model_config = {"from_attributes": True}
-
-    class Author(BaseModel):
-        id: UUID | None
+    class Author(BaseSchema):
+        """Author response schema."""
+        id: UUID
         name: str
-        dob: date | None = None
+        dob: Optional[date] = None
 
-    class AuthorCreate(BaseModel):
+    class AuthorCreate(BaseSchema):
+        """Schema for creating authors."""
         name: str
-        dob: date | None = None
+        dob: Optional[date] = None
 
-    class AuthorUpdate(BaseModel):
-        name: str | None = None
-        dob: date | None = None
+    class AuthorUpdate(BaseSchema):
+        """Schema for updating authors."""
+        name: Optional[str] = None
+        dob: Optional[date] = None
 
-Repository and Service
-----------------------
+    class Book(BaseSchema):
+        """Book response schema with author details."""
+        id: UUID
+        title: str
+        author_id: UUID
+        author: Author
+
+    class BookCreate(BaseSchema):
+        """Schema for creating books."""
+        title: str
+        author_id: UUID
+
+Repository and Service Layer
+----------------------------
 
 Create repository, service classes, and dependency injection provider function:
 
@@ -111,30 +135,30 @@ Create repository, service classes, and dependency injection provider function:
 Controllers
 -----------
 
-Create controllers using the service:
+Create a controller class to handle HTTP endpoints. The controller uses dependency injection for services and includes built-in pagination:
 
 .. code-block:: python
 
-    from litestar.controller import Controller
-    from litestar.handlers.http_handlers.decorators import get, post, patch, delete
+    from litestar import Controller, get, post, patch, delete
+    from litestar.di import Provide
     from litestar.params import Parameter
-    from litestar.plugins.sqlalchemy.filters import LimitOffset
-    from litestar.plugins.sqlalchemy.service import OffsetPagination
-
-    from uuid import UUID
+    from litestar.pagination import OffsetPagination
+    from litestar.repository.filters import LimitOffset
 
     class AuthorController(Controller):
-        """Author CRUD"""
+        """Author CRUD endpoints."""
 
+        path = "/authors"
         dependencies = {"authors_service": Provide(provide_authors_service)}
+        tags = ["Authors"]
 
-        @get(path="/authors")
+        @get()
         async def list_authors(
             self,
             authors_service: AuthorService,
             limit_offset: LimitOffset,
         ) -> OffsetPagination[Author]:
-            """List authors."""
+            """List all authors with pagination."""
             results, total = await authors_service.list_and_count(limit_offset)
             return authors_service.to_schema(
                 data=results,
@@ -143,19 +167,17 @@ Create controllers using the service:
                 schema_type=Author,
             )
 
-        @post(path="/authors")
+        @post()
         async def create_author(
             self,
             authors_service: AuthorService,
             data: AuthorCreate,
         ) -> Author:
             """Create a new author."""
-            obj = await authors_service.create(
-                data.model_dump(exclude_unset=True, exclude_none=True),
-            )
+            obj = await authors_service.create(data)
             return authors_service.to_schema(data=obj, schema_type=Author)
 
-        @get(path="/authors/{author_id:uuid}")
+        @get(path="/{author_id:uuid}")
         async def get_author(
             self,
             authors_service: AuthorService,
@@ -168,7 +190,7 @@ Create controllers using the service:
             obj = await authors_service.get(author_id)
             return authors_service.to_schema(data=obj, schema_type=Author)
 
-        @patch(path="/authors/{author_id:uuid}")
+        @patch(path="/{author_id:uuid}")
         async def update_author(
             self,
             authors_service: AuthorService,
@@ -182,7 +204,7 @@ Create controllers using the service:
             obj = await authors_service.update(data=data, item_id=author_id)
             return authors_service.to_schema(obj, schema_type=Author)
 
-        @delete(path="/authors/{author_id:uuid}")
+        @delete(path="/{author_id:uuid}")
         async def delete_author(
             self,
             authors_service: AuthorService,
@@ -238,14 +260,21 @@ Finally, configure your Litestar application with the plugin and dependencies:
     )
 
 
-Litestar CLI & Alembic
-----------------------
+Database Migrations
+-------------------
 
-Advanced Alchemy provides a CLI for creating migrations and alembic configuration.
+Advanced Alchemy integrates with Litestar's CLI to provide database migration tools powered by Alembic:
 
 .. code-block:: bash
 
-    litestar database init ./migrations # this should match the folder you use in your configuration
+    # Initialize migrations directory
+    litestar database init ./migrations
+
+    # Create a new migration
     litestar database make-migrations
+
+    # Apply migrations
     litestar database upgrade
+
+    # Start the application
     litestar run
