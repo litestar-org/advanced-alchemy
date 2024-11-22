@@ -16,7 +16,7 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Engine, Table, and_, insert, select
+from sqlalchemy import Engine, Table, and_, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 from time_machine import travel
@@ -827,12 +827,14 @@ async def seed_db_async(
 
 
 @pytest.fixture(params=[lf("session"), lf("async_session")], ids=["sync", "async"])
-def any_session(request: FixtureRequest) -> Generator[AsyncSession | Session, None, None]:
+async def any_session(request: FixtureRequest) -> AsyncGenerator[AsyncSession | Session, None]:
     """Return a session for the current session"""
     if isinstance(request.param, AsyncSession):
         request.getfixturevalue("seed_db_async")
     else:
         request.getfixturevalue("seed_db_sync")
+    if "cockroachdb_async_engine" in request.fixturenames:
+        await maybe_async(request.param.execute(text("SET multiple_active_portals_enabled = true")))
     yield request.param  # type: ignore[no-any-return]
 
 
