@@ -22,9 +22,9 @@ if TYPE_CHECKING:
     from advanced_alchemy.utils.dataclass import EmptyType
 
 __all__ = (
-    "SQLAlchemyAsyncConfig",
-    "AsyncSessionConfig",
     "AlembicAsyncConfig",
+    "AsyncSessionConfig",
+    "SQLAlchemyAsyncConfig",
 )
 
 

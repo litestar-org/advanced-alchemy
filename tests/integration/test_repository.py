@@ -1,3 +1,4 @@
+# ruff: noqa: UP031
 """Unit tests for the SQLAlchemy Repository implementation."""
 
 from __future__ import annotations

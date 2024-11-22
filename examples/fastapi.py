@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import date  # noqa: TCH003
+from datetime import date  # noqa: TC003
 from typing import AsyncGenerator
-from uuid import UUID  # noqa: TCH003
+from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from pydantic import BaseModel as _BaseModel
 from sqlalchemy import ForeignKey, select
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TCH002
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 from typing_extensions import Annotated
 
