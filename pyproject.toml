@@ -480,7 +480,7 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 
 [tool.codespell]
 ignore-words-list = "selectin"
-skip = 'pdm.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
+skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
 
 [tool.git-cliff.changelog]
 header = """
