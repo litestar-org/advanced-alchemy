@@ -56,8 +56,3 @@ Installing ``advanced-alchemy`` is as easy as calling your favorite Python packa
             :caption: Using `Poetry <https://python-poetry.org/>`_
 
             poetry add advanced-alchemy
-
-Usage
------
-
-.. todo:: Add usage instructions

@@ -49,6 +49,7 @@ extensions = [
     "sphinx_design",
     "sphinx_togglebutton",
     "sphinx_paramlinks",
+    "sphinx_pyscript",
 ]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 intersphinx_mapping = {
