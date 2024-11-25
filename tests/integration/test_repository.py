@@ -819,6 +819,8 @@ async def seed_db_async(
             )
     else:
         async with async_engine.begin() as conn:
+            await conn.execute(text("SET multiple_active_portals_enabled = true"))
+            await conn.execute(text("SET autocommit_before_ddl = true"))
             await conn.run_sync(base.orm_registry.metadata.drop_all)
             await conn.run_sync(base.orm_registry.metadata.create_all)
             await conn.execute(insert(author_model), raw_authors)
