@@ -775,6 +775,7 @@ def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) 
 
 @pytest.fixture()
 async def seed_db_async(
+    request: FixtureRequest,
     async_engine: AsyncEngine | NonCallableMagicMock,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
@@ -819,8 +820,9 @@ async def seed_db_async(
             )
     else:
         async with async_engine.begin() as conn:
-            await conn.execute(text("SET multiple_active_portals_enabled = true"))
-            await conn.execute(text("SET autocommit_before_ddl = true"))
+            if "cockroachdb_async_engine" in request.fixturenames:
+                await conn.execute(text("SET multiple_active_portals_enabled = true"))
+                await conn.execute(text("SET autocommit_before_ddl = true"))
             await conn.run_sync(base.orm_registry.metadata.drop_all)
             await conn.run_sync(base.orm_registry.metadata.create_all)
             await conn.execute(insert(author_model), raw_authors)
