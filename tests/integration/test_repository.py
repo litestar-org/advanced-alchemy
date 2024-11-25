@@ -826,15 +826,22 @@ async def seed_db_async(
             await conn.execute(insert(secret_model), raw_secrets)
 
 
+@pytest.fixture(autouse=False)
+async def patch_cockroach_session(async_session: AsyncSession) -> AsyncGenerator[None, None]:
+    """Return a session for the current session"""
+    await async_session.execute(text("SET multiple_active_portals_enabled = true"))
+    yield None
+
+
 @pytest.fixture(params=[lf("session"), lf("async_session")], ids=["sync", "async"])
-async def any_session(request: FixtureRequest) -> AsyncGenerator[AsyncSession | Session, None]:
+def any_session(request: FixtureRequest) -> Generator[AsyncSession | Session, None, None]:
     """Return a session for the current session"""
     if isinstance(request.param, AsyncSession):
         request.getfixturevalue("seed_db_async")
+        if "cockroachdb_async_engine" in request.fixturenames:
+            request.getfixturevalue("patch_cockroach_session")
     else:
         request.getfixturevalue("seed_db_sync")
-    if "cockroachdb_async_engine" in request.fixturenames:
-        await maybe_async(request.param.execute(text("SET multiple_active_portals_enabled = true")))
     yield request.param  # type: ignore[no-any-return]
 
 
