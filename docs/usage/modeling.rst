@@ -3,12 +3,12 @@ Modeling
 ========
 
 Advanced Alchemy enhances SQLAlchemy's modeling capabilities with production-ready base classes, mixins, and specialized types.
-This guide demonstrates building a complete domain model for a blog application, showcasing key features and best practices.
+This guide demonstrates building a complete blog system with posts and tags, showcasing key features and best practices.
 
 Base Classes
 ------------
 
-Advanced Alchemy provides several base classes optimized for different use cases:
+Advanced Alchemy provides several base classes optimized for different use cases.  Any model can utilize these pre-defined declarative bases from sqlchemy.  Here's a brief overview of the included classes:
 
 .. list-table:: Base Classes and Features
    :header-rows: 1
@@ -17,35 +17,45 @@ Advanced Alchemy provides several base classes optimized for different use cases
    * - Base Class
      - Features
    * - ``BigIntBase``
-     - | - BIGINT primary keys for tables
+     - BIGINT primary keys for tables
    * - ``BigIntAuditBase``
-     - | - BIGINT primary keys for tables
-       | - Automatic created_at/updated_at timestamps
+     - BIGINT primary keys for tables, Automatic created_at/updated_at timestamps
    * - ``UUIDBase``
-     - | - UUID primary keys
+     - UUID primary keys
    * - ``UUIDv6Base``
-     - | - Time-sortable UUIDv6 primary keys
+     - UUIDv6 primary keys
    * - ``UUIDv7Base``
-     - | - Time-sortable UUIDv7 primary keys
+     - UUIDv7 primary keys
    * - ``UUIDAuditBase``
-     - | - UUID primary keys
-       | - Automatic created_at/updated_at timestamps
+     - UUID primary keys, Automatic created_at/updated_at timestamps
    * - ``UUIDv6AuditBase``
-     - | - Time-sortable UUIDv6 primary keys
-       | - Automatic created_at/updated_at timestamps
+     - UUIDv6 primary keys, Automatic created_at/updated_at timestamps
    * - ``UUIDv7AuditBase``
-     - | - Time-sortable UUIDv7 primary keys
-       | - Automatic created_at/updated_at timestamps
+     - Time-sortable UUIDv7 primary keys, Automatic created_at/updated_at timestamps
    * - ``NanoidBase``
-     - | - Nanoid primary keys
+     - URL-friendly unique identifiers, Shorter than UUIDs, collision resistant
    * - ``NanoidAuditBase``
-     - | - Nanoid primary keys
-       | - Automatic created_at/updated_at timestamps
+     - URL-friendly IDs with audit timestamps, Combines Nanoid benefits with audit trails
+
+Mixins
+-------
+
+Additionally, Advanced Alchemy provides mixins to enhance model functionality:
+
+.. list-table:: Available Mixins
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Mixin
+     - Features
    * - ``SlugKey``
-     - | - Adds URL-friendly slug field
+     - | Adds URL-friendly slug field
+   * - ``AuditColumns``
+     - | Automatic created_at/updated_at timestamps
+       | Tracks record modifications
    * - ``UniqueMixin``
-     - | - Automatic unique constraint handling
-       | - Duplicate record merging
+     - | Automatic Select or Create for many-to-many relationships
+
 
 Basic Model Example
 -------------------
@@ -232,6 +242,5 @@ Here's how to use these models with the UniqueMixin:
                 for tag_text in tag_names
             ],
         ))
-
 
 With this foundation in place, let's look at the repository pattern.

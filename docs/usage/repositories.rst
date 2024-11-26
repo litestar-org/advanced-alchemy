@@ -57,7 +57,6 @@ Base Repository Types
        | - Complex aggregations
        | - Raw SQL support
 
-
 Basic Repository Usage
 ----------------------
 
@@ -99,7 +98,7 @@ Advanced Alchemy provides powerful filtering capabilities:
 Pagination
 ----------
 
-``list_and_count`` enables us to quickly create paginated queries that include a total count of rows.
+`list_and_count` enables us to quickly create paginated queries that include a total count of rows.
 
 .. code-block:: python
 
@@ -212,7 +211,7 @@ Transaction Management
             return post
 
 
-**Note:** This is just to illustrate the concept. In practice, the ``UniqueMixin`` should be used to handle this lookup even more easily.
+**Note:** This is just to illustrate the concept. In practice, the ``UniqueMixin`` should be used to handle this lookup even more easily.  We'll see how this works in the next section.
 
 Specialized Repositories
 ------------------------

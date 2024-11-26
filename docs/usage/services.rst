@@ -16,154 +16,226 @@ Services provide:
 - Input validation
 - Complex operations involving multiple repositories
 - Consistent error handling
+- Automatic schema validation and transformation
 
 Basic Service Usage
 -------------------
 
-Let's enhance our blog example with services:
+Let's build upon our blog example by creating services for posts and tags:
 
 .. code-block:: python
 
     from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-    from sqlalchemy.ext.asyncio import AsyncSession
     from pydantic import BaseModel
-    from typing import Optional
+    from datetime import datetime
+    from typing import Optional, List
     from uuid import UUID
 
-    # Define DTOs for input/output
+    # Pydantic schemas for validation
     class PostCreate(BaseModel):
         title: str
         content: str
-        author_id: UUID
-        published: bool = False
+        tag_names: List[str]
 
-    class PostRead(BaseModel):
-        id: int
-        title: str
-        content: str
-        author_id: UUID
-        published: bool
-        created_at: datetime
-        updated_at: datetime
-
-    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
-        """Service for managing blog posts with data transformation."""
-
-        model_type = Post
-
-        # Define schema mappings
-        create_schema = PostCreate
-        read_schema = PostRead
-
-    async def create_post(session: AsyncSession, data: PostCreate) -> PostRead:
-        service = PostService(session=session)
-        # Service automatically handles validation and transformation
-        return await service.create(data)
-
-Data Transformation
--------------------
-
-Services automatically handle transformation between DTOs and database models:
-
-.. code-block:: python
-
-    from msgspec import Struct
-    from typing import List
-
-    # Using msgspec for better performance
-    class PostUpdate(Struct):
+    class PostUpdate(BaseModel):
         title: Optional[str] = None
         content: Optional[str] = None
         published: Optional[bool] = None
 
-    class PostWithTags(Struct):
+    class PostResponse(BaseModel):
         id: int
         title: str
         content: str
-        tags: List[str]  # Only include tag names
+        published: bool
+        published_at: Optional[datetime]
+        created_at: datetime
+        updated_at: datetime
+        tags: List["TagResponse"]
 
-    class EnhancedPostService(SQLAlchemyAsyncRepositoryService[Post]):
-        model_type = Post
-        create_schema = PostCreate
-        read_schema = PostWithTags
-        update_schema = PostUpdate
+        model_config = {"from_attributes": True}
 
-        async def to_schema(self, model: Post) -> PostWithTags:
-            """Custom transformation logic."""
-            data = await super().to_schema(model)
-            # Enhance the schema with computed fields
-            data.tags = [tag.name for tag in model.tags]
-            return data
+    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+        """Service for managing blog posts with automatic schema validation."""
 
-Complex Operations
+        repository_type = PostRepository
+
+Service Operations
 ------------------
 
-Services can encapsulate complex business logic:
+Services provide high-level methods for common operations:
 
 .. code-block:: python
 
-    class BlogService(SQLAlchemyAsyncRepositoryService[Post]):
-        model_type = Post
-
-        async def publish_with_notification(
-            self, post_id: int, notify_followers: bool = True
-        ) -> PostRead:
-            # Get post
-            post = await self.get_one(post_id)
-
-            # Update post
-            post.published = True
-            post = await self.update(post)
-
-            if notify_followers and post.author.followers:
-                # Business logic for notifications
-                await self._notify_followers(post)
-
-            return await self.to_schema(post)
-
-        async def _notify_followers(self, post: Post) -> None:
-            # Implementation of notification logic
-            ...
-
-Batch Operations
-----------------
-
-Services support efficient batch operations with schema transformation:
-
-.. code-block:: python
-
-    async def bulk_publish_posts(
-        session: AsyncSession, post_ids: list[int]
-    ) -> list[PostRead]:
-        service = PostService(session=session)
-
-        # Fetch and update posts
-        posts = await service.list(Post.id.in_(post_ids))
-        for post in posts:
-            post.published = True
-
-        # Update and transform all posts
-        updated_posts = await service.update_many(posts)
-        return await service.to_schema_list(updated_posts)
-
-Error Handling
---------------
-
-Services provide consistent error handling:
-
-.. code-block:: python
-
-    from advanced_alchemy.exceptions import NotFoundError
+    async def create_post_with_tags(
+        post_service: PostService,
+        data: PostCreate,
+    ) -> PostResponse:
+        """Create a post with associated tags."""
+        # Service automatically validates input using PostCreate schema
+        post = await post_service.create(
+            data,
+            auto_commit=True,
+        )
+        return post_service.to_schema(post)
 
     async def update_post(
-        session: AsyncSession, post_id: int, data: PostUpdate
-    ) -> PostRead:
-        service = PostService(session=session)
-        try:
-            post = await service.get_one(post_id)
-            return await service.update(post, data)
-        except NotFoundError:
-            raise HTTPException(status_code=404, detail="Post not found")
+        post_service: PostService,
+        post_id: int,
+        data: PostUpdate,
+    ) -> PostResponse:
+        """Update a post."""
+        post = await post_service.update(
+            item_id=post_id,
+            data=data,
+            auto_commit=True,
+        )
+        return post_service.to_schema(post)
 
-This completes our core usage guide. The next sections will cover framework-specific integrations
-and how to use Advanced Alchemy with Litestar, FastAPI, and Sanic.
+Complex Operations
+-------------------
+
+Services can handle complex business logic involving multiple repositories:
+
+.. code-block:: python
+
+    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+        """Higher-level service coordinating posts and tags."""
+
+        default_load_options = [Post.tags]
+        repository_type = PostRepository
+        match_fields = ["name"]
+
+        def __init__(self, **repo_kwargs: Any) -> None:
+            self.repository: PostRepository = self.repository_type(**repo_kwargs)
+            self.model_type = self.repository.model_type
+
+
+        async def create(
+            self,
+            data: ModelDictT[Post],
+            *,
+            auto_commit: bool | None = None,
+            auto_expunge: bool | None = None,
+            auto_refresh: bool | None = None,
+            error_messages: ErrorMessages | None | EmptyType = Empty,
+        ) -> Post:
+            """Create a new post."""
+            tags_added: list[str] = []
+            if isinstance(data, dict):
+                data["id"] = data.get("id", uuid4())
+                tags_added = data.pop("tags", [])
+            data = await self.to_model(data, "create")
+            if tags_added:
+                data.tags.extend(
+                    [
+                        await Tag.as_unique_async(self.repository.session, name=tag_text, slug=slugify(tag_text))
+                        for tag_text in tags_added
+                    ],
+                )
+            await super().create(
+                data=data,
+                auto_commit=auto_commit,
+                auto_expunge=True,
+                auto_refresh=False,
+                error_messages=error_messages,
+            )
+            return data
+
+        async def update(
+            self,
+            data: ModelDictT[Post],
+            item_id: Any | None = None,
+            *,
+            id_attribute: str | InstrumentedAttribute[Any] | None = None,
+            attribute_names: Iterable[str] | None = None,
+            with_for_update: bool | None = None,
+            auto_commit: bool | None = None,
+            auto_expunge: bool | None = None,
+            auto_refresh: bool | None = None,
+            error_messages: ErrorMessages | None | EmptyType = Empty,
+            load: LoadSpec | None = None,
+            execution_options: dict[str, Any] | None = None,
+        ) -> Post:
+            """Wrap repository update operation.
+
+            Returns:
+                Updated representation.
+            """
+            tags_updated: list[str] = []
+            if isinstance(data, dict):
+                tags_updated.extend(data.pop("tags", None) or [])
+                data["id"] = item_id
+                data = await self.to_model(data, "update")
+                existing_tags = [tag.name for tag in data.tags]
+                tags_to_remove = [tag for tag in data.tags if tag.name not in tags_updated]
+                tags_to_add = [tag for tag in tags_updated if tag not in existing_tags]
+                for tag_rm in tags_to_remove:
+                    data.tags.remove(tag_rm)
+                data.tags.extend(
+                    [
+                        await Tag.as_unique_async(self.repository.session, name=tag_text, slug=slugify(tag_text))
+                        for tag_text in tags_to_add
+                    ],
+                )
+            return await super().update(
+                data=data,
+                item_id=item_id,
+                attribute_names=attribute_names,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                error_messages=error_messages,
+            )
+
+
+        async def publish_post(
+            self,
+            post_id: int,
+            publish: bool = True,
+        ) -> PostResponse:
+            """Publish or unpublish a post with timestamp."""
+            data = PostUpdate(
+                published=publish,
+                published_at=datetime.utcnow() if publish else None,
+            )
+            post = await self.post_service.update(
+                item_id=post_id,
+                data=data,
+                auto_commit=True,
+            )
+            return self.post_service.to_schema(post)
+
+        async def get_trending_posts(
+            self,
+            days: int = 7,
+            min_views: int = 100,
+        ) -> List[PostResponse]:
+            """Get trending posts based on view count and recency."""
+            posts = await self.post_service.list(
+                Post.published == True,
+                Post.created_at > (datetime.utcnow() - timedelta(days=days)),
+                Post.view_count >= min_views,
+                order_by=[Post.view_count.desc()],
+            )
+            return self.post_service.to_schema(posts)
+
+        async def to_model(self, data: ModelDictT[Post], operation: str | None = None) -> Post:
+            """Convert a dictionary, Msgspec model, or Pydantic model to a Post model."""
+            if (is_msgspec_model(data) or is_pydantic_model(data)) and operation == "create" and data.slug is None:
+                data.slug = await self.repository.get_available_slug(data.name)
+            if (is_msgspec_model(data) or is_pydantic_model(data)) and operation == "update" and data.slug is None:
+                data.slug = await self.repository.get_available_slug(data.name)
+            if is_dict(data) and "slug" not in data and operation == "create":
+                data["slug"] = await self.repository.get_available_slug(data["name"])
+            if is_dict(data) and "slug" not in data and "name" in data and operation == "update":
+                data["slug"] = await self.repository.get_available_slug(data["name"])
+            return await super().to_model(data, operation)
+
+Framework Integration
+---------------------
+
+Services integrate seamlessly with both Litestar and FastAPI. For Litestar integration:

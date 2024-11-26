@@ -2,8 +2,13 @@
 Usage
 =====
 
-This guide provides detailed information about using Advanced Alchemy in your applications.
-Each section builds upon the previous ones to give you a complete understanding of the library's capabilities.
+This guide demonstrates building a complete blog system using Advanced Alchemy's features. We'll create a system that supports:
+
+- Posts with tags and slugs
+- Tag management with automatic deduplication
+- Efficient querying and pagination
+- Type-safe database operations
+- Schema validation and transformation
 
 .. toctree::
     :maxdepth: 2
@@ -21,34 +26,26 @@ Each section builds upon the previous ones to give you a complete understanding 
     frameworks/litestar
     frameworks/fastapi
 
-The guide follows a practical approach, building a complete blog application to demonstrate Advanced Alchemy's features:
+The guide follows a practical approach:
 
-1. **Modeling**: Learn how to define SQLAlchemy models using Advanced Alchemy's enhanced base classes and mixins
-2. **Repositories**: Implement type-safe database operations using the repository pattern
-3. **Services**: Build business logic layers with automatic schema validation and transformation
-4. **Framework Integration**: Integrate with popular frameworks like Litestar and FastAPI
+1. **Modeling**: Define SQLAlchemy models with Advanced Alchemy's enhanced base classes
+2. **Repositories**: Implement type-safe database operations using repositories
+3. **Services**: Build business logic with automatic schema validation
+4. **Framework Integration**: Integrate with Litestar and FastAPI
 
 Each section includes:
 
-- Detailed explanations of core concepts
-- Practical code examples
-- Best practices and common patterns
+- Concepts and usage overview
+- Complete code examples
+- Best practices
 - Performance considerations
 - Error handling strategies
 
 Prerequisites
 -------------
 
-Before starting, ensure you have:
-
 - Python 3.8+
 - SQLAlchemy 2.0+
-- A supported async database driver (asyncpg, aiomysql, or aiosqlite)
-- Basic understanding of SQLAlchemy and async Python
-
-Getting Started
----------------
-
-The best way to follow this guide is sequentially, as each section builds upon concepts introduced in previous sections. The example blog application will grow in complexity as we progress through the guide.
-
-For framework-specific guidance, refer to the respective integration sections after completing the core concepts.
+- Pydantic v2 or Msgspec (for schema validation)
+- Basic understanding of SQLAlchemy and async programming
+- Basic understanding of Pydantic or Msgspec
