@@ -51,7 +51,7 @@ FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 ModelDTOT = TypeVar("ModelDTOT", bound="Struct | BaseModel")
 """Type variable for model DTOs.
 
-:class:`msgspec.Struct` or :class:`pydantic.BaseModel`
+:class:`msgspec.Struct`|:class:`pydantic.BaseModel`
 """
 PydanticOrMsgspecT = Union[Struct, BaseModel]
 """Type alias for pydantic or msgspec models.
@@ -62,21 +62,13 @@ ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, Struct, BaseModel, DTOData
 """Type alias for model dictionaries.
 
 Represents:
-- :type: dict[str, Any]
-- :class:`~advanced_alchemy.base.ModelProtocol`
-- :class:`msgspec.Struct`
-- :class:`pydantic.BaseModel`
-- :class:`litestar.dto.data_structures.DTOData`
-- :class:`~advanced_alchemy.base.ModelProtocol`
+- :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` |  :class:`pydantic.BaseModel` | :class:`litestar.dto.data_structures.DTOData` | :class:`~advanced_alchemy.base.ModelProtocol`
 """
 ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, Struct, BaseModel]]
 """Type alias for model dictionary lists.
 
 A list or sequence of any of the following:
-- :type: dict[str, Any]
-- :class:`~advanced_alchemy.base.ModelProtocol`
-- :class:`msgspec.Struct`
-- :class:`pydantic.BaseModel`
+- :type:`Sequence`[:type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`]
 
 """
 BulkModelDictT: TypeAlias = Union[
@@ -85,15 +77,7 @@ BulkModelDictT: TypeAlias = Union[
 ]
 """Type alias for bulk model dictionaries.
 
-A list or sequence of any of the following:
-- :type: dict[str, Any]
-- :class:`~advanced_alchemy.base.ModelProtocol`
-- :class:`msgspec.Struct`
-- :class:`pydantic.BaseModel`
-
-or
-
-- :class:`litestar.dto.data_structures.DTOData`
+:type:`Sequence`[ :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` :class:`pydantic.BaseModel`] | :class:`litestar.dto.data_structures.DTOData`
 """
 
 
@@ -247,13 +231,8 @@ def schema_dump(
     """Dump a data object to a dictionary.
 
     Args:
-        data: Data to dump. Can be one of:
-            - :type: dict[str, Any]
-            - :class:`~advanced_alchemy.base.ModelProtocol`
-            - :class:`msgspec.Struct`
-            - :class:`pydantic.BaseModel`
-            - :class:`litestar.dto.data_structures.DTOData`
-        exclude_unset: Whether to exclude unset values.
+        data:  :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel` | :class:`litestar.dto.data_structures.DTOData[ModelT]`
+        exclude_unset: :type:`bool` Whether to exclude unset values.
 
     Returns:
         Union[:type: dict[str, Any], :class:`~advanced_alchemy.base.ModelProtocol`]

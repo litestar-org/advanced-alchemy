@@ -263,18 +263,89 @@ Finally, configure your Litestar application with the plugin and dependencies:
 Database Migrations
 -------------------
 
-Advanced Alchemy integrates with Litestar's CLI to provide database migration tools powered by Alembic:
+Advanced Alchemy integrates with Litestar's CLI to provide database migration tools powered by Alembic.  All alembic commands are integrated directly into the Litestar CLI.
+
+
+Command List
+^^^^^^^^^^^^
+
+To get a listing of available commands, run the following:
+
+.. code-block:: bash
+
+    litestar database
+
+.. code-block:: bash
+
+    Usage: app database [OPTIONS] COMMAND [ARGS]...
+
+    Manage SQLAlchemy database components.
+
+    ╭─ Options ────────────────────────────────────────────────────────────────────╮
+    │ --help  -h    Show this message and exit.                                    │
+    ╰──────────────────────────────────────────────────────────────────────────────╯
+    ╭─ Commands ───────────────────────────────────────────────────────────────────╮
+    │ downgrade              Downgrade database to a specific revision.            │
+    │ drop-all               Drop all tables from the database.                    │
+    │ dump-data              Dump specified tables from the database to JSON       │
+    │                        files.                                                │
+    │ init                   Initialize migrations for the project.                │
+    │ make-migrations        Create a new migration revision.                      │
+    │ merge-migrations       Merge multiple revisions into a single new revision.  │
+    │ show-current-revision  Shows the current revision for the database.          │
+    │ stamp-migration        Mark (Stamp) a specific revision as current without   │
+    │                        applying the migrations.                              │
+    │ upgrade                Upgrade database to a specific revision.              │
+    ╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+Initializing a new project
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you would like to initial set of alembic migrations, you can easily scaffold out new templates to setup a project.
+
+Assuming that you are using the default configuration for the SQLAlchemy configuration, you can run the following.
 
 .. code-block:: bash
 
     # Initialize migrations directory
     litestar database init ./migrations
 
+If you use a different path than `./migrations`, be sure to also set this in your SQLAlchemy config.  For instance, if you'd like to use `./alembic`:
+
+.. code-block:: python
+
+    config = SQLAlchemyAsyncConfig(
+        alembic_config=AlembicAsyncConfig(
+            script_location="./alembic/",
+        ),
+    )
+
+And then run the following:
+
+.. code-block:: bash
+
+    # Initialize migrations directory
+    litestar database init ./alembic
+
+You will now be configured to use the alternate directory for migrations.
+
+Generate New Migrations
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Once configured, you can run the following command to auto-generate new alembic migrations:
+
+.. code-block:: bash
+
     # Create a new migration
     litestar database make-migrations
 
-    # Apply migrations
-    litestar database upgrade
 
-    # Start the application
-    litestar run
+Upgrading a Database
+^^^^^^^^^^^^^^^^^^^^
+
+You can upgrade a database to the latest version by running the following command:
+
+.. code-block:: bash
+
+    litestar database upgrade

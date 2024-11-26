@@ -133,9 +133,10 @@ def provide_limit_offset_pagination(
 
 async def on_startup() -> None:
     """Initializes the database."""
+    metadata = sqlalchemy_config.metadata or sqlalchemy_config.alembic_config.target_metadata
     if sqlalchemy_config.create_all:
         async with sqlalchemy_config.get_engine().begin() as conn:
-            await conn.run_sync(UUIDBase.metadata.create_all)
+            await conn.run_sync(metadata.create_all)
 
 
 # #######################

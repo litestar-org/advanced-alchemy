@@ -21,6 +21,14 @@ Configure SQLAlchemy with FastAPI:
         session_config=session_config,
         create_all=True,
     )
+
+    async def on_startup() -> None:
+        """Initializes the database."""
+        metadata = sqlalchemy_config.metadata or sqlalchemy_config.alembic_config.target_metadata
+        if sqlalchemy_config.create_all:
+            async with sqlalchemy_config.get_engine().begin() as conn:
+                await conn.run_sync(metadata.create_all)
+
     app = FastAPI(on_startup=[on_startup])
     alchemy = StarletteAdvancedAlchemy(config=sqlalchemy_config, app=app)
 
