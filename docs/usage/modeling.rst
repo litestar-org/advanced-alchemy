@@ -79,7 +79,6 @@ Let's start with a simple blog post model:
             created_at: Timestamp of creation (from BigIntAuditBase)
             updated_at: Timestamp of last update (from BigIntAuditBase)
         """
-        __tablename__ = "post"
 
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
@@ -113,7 +112,6 @@ Let's implement a tagging system using a many-to-many relationship. This example
     )
 
     class Post(BigIntAuditBase):
-        __tablename__ = "post"
 
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
@@ -131,7 +129,6 @@ Let's implement a tagging system using a many-to-many relationship. This example
 
         The SlugKey mixin automatically adds a slug field to the model.
         """
-        __tablename__ = "tag"
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
         posts: Mapped[List[Post]] = relationship(
@@ -194,7 +191,6 @@ Let's enhance our Tag model with UniqueMixin:
         - Safe merging of duplicates
         - Consistent slug generation
         """
-        __tablename__ = "tag"
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
         posts: Mapped[list[Post]] = relationship(
