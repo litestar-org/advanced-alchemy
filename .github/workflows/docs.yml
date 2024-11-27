@@ -28,11 +28,11 @@ jobs:
         run: git fetch origin gh-pages --depth=1
 
       - name: Build release docs
-        run: uv run python tools/build_docs.py docs-build
+        run: uv run python tools/build_docs.py docs-build --version 1
         if: github.event_name == 'release'
 
       - name: Build dev docs
-        run: uv run python tools/build_docs.py docs-build
+        run: uv run python tools/build_docs.py docs-build --version main
         if: github.event_name == 'push'
 
       - name: Deploy
