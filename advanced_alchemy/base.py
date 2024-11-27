@@ -350,7 +350,7 @@ orm_registry = create_registry()
 
 
 class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with UUID primary keys.
+    """Base for all SQLAlchemy declarative models with UUID v4 primary keys.
 
     .. seealso::
         :class:`UUIDPrimaryKey`
@@ -362,7 +362,7 @@ class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
 
 
 class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with UUID primary keys and audit columns.
+    """Base for declarative models with UUID v4 primary keys and audit columns.
 
     .. seealso::
         :class:`CommonTableAttributes`
@@ -375,7 +375,7 @@ class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, Declara
 
 
 class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with UUID primary keys.
+    """Base for all SQLAlchemy declarative models with UUID v primary keys.
 
     .. seealso::
         :class:`UUIDv6PrimaryKey`
@@ -387,7 +387,7 @@ class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
 
 
 class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with UUID primary keys and audit columns.
+    """Base for declarative models with UUID v6 primary keys and audit columns.
 
     .. seealso::
         :class:`CommonTableAttributes`
@@ -400,7 +400,7 @@ class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, Dec
 
 
 class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
-    """Base for all SQLAlchemy declarative models with UUID primary keys.
+    """Base for all SQLAlchemy declarative models with UUID v7 primary keys.
 
     .. seealso::
         :class:`UUIDv7PrimaryKey`
@@ -412,7 +412,7 @@ class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
 
 
 class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, DeclarativeBase):
-    """Base for declarative models with UUID primary keys and audit columns.
+    """Base for declarative models with UUID v7 primary keys and audit columns.
 
     .. seealso::
         :class:`CommonTableAttributes`

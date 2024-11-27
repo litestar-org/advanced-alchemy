@@ -17,7 +17,7 @@ def open_fixture(fixtures_path: Path | AsyncPath, fixture_name: str) -> Any:
     """Loads JSON file with the specified fixture name
 
     Args:
-        fixtures_path: :class:`pathlib.Path` or :class:`anyio.Path` The path to look for fixtures
+        fixtures_path: :class:`pathlib.Path` | :class:`anyio.Path` The path to look for fixtures
         fixture_name (str): The fixture name to load.
 
     Raises:
@@ -41,7 +41,7 @@ async def open_fixture_async(fixtures_path: Path | AsyncPath, fixture_name: str)
     """Loads JSON file with the specified fixture name
 
     Args:
-        fixtures_path: :class:`pathlib.Path` or :class:`anyio.Path` The path to look for fixtures
+        fixtures_path: :class:`pathlib.Path` | :class:`anyio.Path` The path to look for fixtures
         fixture_name (str): The fixture name to load.
 
     Raises:

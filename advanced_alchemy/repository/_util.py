@@ -145,21 +145,6 @@ def get_abstract_loader_options(
         tuple[:class:`list`[:class:`sqlalchemy.orm.strategy_options._AbstractLoad`], bool]: A tuple containing:
             - :class:`list` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` SQLAlchemy loader option objects
             - Boolean indicating if any wildcard loaders are present
-
-    Example:
-        >>> from sqlalchemy.orm import relationship
-        >>> from sqlalchemy import Column, Integer, ForeignKey
-        >>> Base = declarative_base()
-        >>> class User(Base):
-        ...     __tablename__ = "users"
-        ...     id = Column(Integer, primary_key=True)
-        ...     posts = relationship("Post")
-        >>> class Post(Base):
-        ...     __tablename__ = "posts"
-        ...     id = Column(Integer, primary_key=True)
-        ...     user_id = Column(Integer, ForeignKey("users.id"))
-        >>> loads, has_wildcards = get_abstract_loader_options(User.posts)
-        >>> assert len(loads) == 1
     """
     loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
     options_have_wildcards = default_options_have_wildcards
@@ -278,23 +263,12 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         """Apply filters to a SQL statement.
 
         Args:
-            *filters: Filter conditions to apply. Can be:
-                - :class:`~advanced_alchemy.filters.StatementFilter` instances
-                - :class:`sqlalchemy.sql.expression.ColumnElement` boolean expressions
+            *filters: Filter conditions to apply.
             apply_pagination: Whether to apply pagination filters.
             statement: The base SQL statement to filter.
 
         Returns:
             StatementTypeT: The filtered SQL statement.
-
-        Example:
-            >>> from sqlalchemy import select
-            >>> stmt = select(User)
-            >>> filtered = repo._apply_filters(
-            ...     User.name == "John",
-            ...     PaginationFilter(limit=10),
-            ...     statement=stmt
-            ... )
         """
         for filter_ in filters:
             if isinstance(filter_, (PaginationFilter,)):
@@ -322,13 +296,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
         Returns:
             StatementTypeT: The filtered SQL statement.
-
-        Example:
-            >>> stmt = select(User)
-            >>> filtered = repo._filter_select_by_kwargs(
-            ...     stmt,
-            ...     {"name": "John", "age": 30}
-            ... )
         """
         for key, val in dict(kwargs).items():
             field = get_instrumented_attr(self.model_type, key)
@@ -350,13 +317,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
         Returns:
             StatementTypeT: The ordered SQL statement.
-
-        Example:
-            >>> stmt = select(User)
-            >>> ordered = repo._apply_order_by(
-            ...     stmt,
-            ...     [(User.name, False), (User.id, True)]
-            ... )
         """
         if not isinstance(order_by, list):
             order_by = [order_by]
@@ -380,14 +340,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
         Returns:
             StatementTypeT: The ordered SQL statement.
-
-        Example:
-            >>> stmt = select(User)
-            >>> ordered = repo._order_by_attribute(
-            ...     stmt,
-            ...     User.name,
-            ...     is_desc=True
-            ... )
         """
         if not isinstance(statement, Select):
             return statement

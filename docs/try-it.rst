@@ -1,5 +1,5 @@
 ==========
-Test Drive
+Try It Out
 ==========
 
 Want to quickly evaluate the features Advanced Alchemy offers?

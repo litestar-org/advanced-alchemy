@@ -157,14 +157,10 @@ class ResultConverter:
             data: The return from one of the service calls.
               Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
             total: The total number of rows in the data.
-            filters: :class:`~advanced_alchemy.filters.StatementFilter` or :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
+            filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
             schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
         Returns:
-            - :class:`~advanced_alchemy.base.ModelProtocol`
-            - :class:`sqlalchemy.orm.RowMapping`
-            - :class:`~advanced_alchemy.service.pagination.OffsetPagination`
-            - :class:`msgspec.Struct`
-            - :class:`pydantic.BaseModel`
+            - :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
         """
         if filters is None:
             filters = []
