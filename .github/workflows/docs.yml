@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - main
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   docs:
@@ -24,15 +26,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Fetch gh pages
-        run: git fetch origin gh-pages --depth=1
-
       - name: Build release docs
         run: uv run python tools/build_docs.py docs-build --version 1
         if: github.event_name == 'release'
 
       - name: Build dev docs
-        run: uv run python tools/build_docs.py docs-build --version main
+        run: uv run python tools/build_docs.py docs-build --version latest
         if: github.event_name == 'push'
 
       - name: Deploy
