@@ -40,10 +40,12 @@ class VersionSpec(TypedDict):
 
 
 @contextmanager
-def checkout(branch: str) -> Generator[None]:
-    subprocess.run(["git", "checkout", branch], check=True)  # noqa: S603, S607
+def checkout(branch: str, skip: bool = False) -> Generator[None]:
+    if not skip:
+        subprocess.run(["git", "checkout", branch], check=True)  # noqa: S603, S607
     yield
-    subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S603, S607
+    if not skip:
+        subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S603, S607
 
 
 def load_version_spec() -> VersionSpec:
@@ -61,7 +63,7 @@ def build(output_dir: str, version: str | None) -> None:
 
     subprocess.run(["make", "docs"], check=True)  # noqa: S603, S607
 
-    Path(output_dir).mkdir()
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
     Path(output_dir).joinpath(".nojekyll").touch(exist_ok=True)
 
     version_spec = load_version_spec()
@@ -76,7 +78,7 @@ def build(output_dir: str, version: str | None) -> None:
     shutil.copytree(docs_src_path, Path(output_dir) / version, dirs_exist_ok=True)
 
     # copy existing versions into our output dir to preserve them when cleaning the branch
-    with checkout("gh-pages"):
+    with checkout("gh-pages", skip=True):
         for other_version in [*version_spec["versions"], "latest"]:
             other_version_path = Path(other_version)
             other_version_target_path = Path(output_dir) / other_version
