@@ -89,14 +89,7 @@ pre-commit: 										## Runs pre-commit hooks; includes ruff formatting and lin
 .PHONY: slotscheck
 slotscheck: 										## Run slotscheck
 	@echo "=> Running slotscheck"
-	@uv run slotscheck \
-		-m advanced_alchemy.config \
-		-m advanced_alchemy.repository \
-		-m advanced_alchemy.service \
-		-m advanced_alchemy.extensions \
-		-m advanced_alchemy.base \
-		-m advanced_alchemy.types \
-		-m advanced_alchemy.operations
+	@uv run slotscheck
 	@echo "=> slotscheck complete"
 
 .PHONY: fix

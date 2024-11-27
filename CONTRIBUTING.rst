@@ -57,7 +57,7 @@ Running the docs locally
 
 To run or build the docs locally, you need to first install the required dependencies:
 
-``pdm install -G:docs``
+``make install``
 
 Then you can serve the documentation with ``make docs-serve``, or build them with ``make docs``.
 

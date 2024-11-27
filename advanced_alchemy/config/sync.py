@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 
 __all__ = (
+    "AlembicSyncConfig",
     "SQLAlchemySyncConfig",
     "SyncSessionConfig",
-    "AlembicSyncConfig",
 )
 
 

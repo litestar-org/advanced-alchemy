@@ -90,7 +90,7 @@ class SQLAlchemySyncQueryService(ResultConverter):
                 yield cls(session=db_session)
 
 
-class SQLAlchemySyncRepositoryReadService(Generic[ModelT], ResultConverter):
+class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT] | SQLAlchemySyncSlugRepositoryProtocol[ModelT]]

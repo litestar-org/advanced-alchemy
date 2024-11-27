@@ -2,28 +2,42 @@
 API Reference
 =============
 
-The API reference is automatically generated from the docstrings in the code, and is useful for
-finding out what methods and attributes are available for a given class. The API reference is
-divided into several sections, each of which is listed below.
+The API reference provides detailed documentation for all public classes, functions,
+and modules in Advanced Alchemy. Each section includes complete type information,
+usage examples, and links to related documentation.
 
-.. note:: Private methods and attributes are not included in the API reference.
-
-Available API References
-------------------------
+Core Components
+---------------
 
 .. toctree::
-    :titlesonly:
+    :maxdepth: 2
+    :caption: Core API
 
     base
-    exceptions
-    filters
+    mixins/index
+    config/index
     operations
-    repository
     types
-    service
+    exceptions
     utils
 
-    alembic/index
-    config/index
+Repository & Services
+---------------------
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Repository & Services
+
+    repository
+    filters
+    service
+
+Framework Integration
+---------------------
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Framework Support
+
     extensions/index
-    mixins/index
+    alembic/index

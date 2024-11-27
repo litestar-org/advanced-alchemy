@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, cast, overload
 
-from sanic import HTTPResponse, Request, Sanic  # noqa: TCH002
+from sanic import HTTPResponse, Request, Sanic  # noqa: TC002
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 

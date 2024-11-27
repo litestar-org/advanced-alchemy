@@ -6,7 +6,7 @@ from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request  # noqa: TCH002
+from starlette.requests import Request  # noqa: TC002
 
 from advanced_alchemy.config.common import EngineT, SessionT
 from advanced_alchemy.exceptions import ImproperConfigurationError

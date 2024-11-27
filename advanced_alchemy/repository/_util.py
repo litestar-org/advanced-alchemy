@@ -63,19 +63,37 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
     "other": "There was an error during data processing",
     "check_constraint": "The data failed a check constraint during processing",
 }
+"""Default error messages for repository errors."""
 
 
 def get_instrumented_attr(
     model: type[ModelProtocol],
     key: str | InstrumentedAttribute[Any],
 ) -> InstrumentedAttribute[Any]:
+    """Get an instrumented attribute from a model.
+
+    Args:
+        model: SQLAlchemy model class.
+        key: Either a string attribute name or an :class:`sqlalchemy.orm.InstrumentedAttribute`.
+
+    Returns:
+        :class:`sqlalchemy.orm.InstrumentedAttribute`: The instrumented attribute from the model.
+    """
     if isinstance(key, str):
         return cast("InstrumentedAttribute[Any]", getattr(model, key))
     return key
 
 
 def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
-    """Return ORM Object from Dictionary."""
+    """Create an ORM model instance from a dictionary of attributes.
+
+    Args:
+        model: The SQLAlchemy model class to instantiate.
+        **kwargs: Keyword arguments containing model attribute values.
+
+    Returns:
+        ModelT: A new instance of the model populated with the provided values.
+    """
     data = {
         column_name: kwargs[column_name]
         for column_name in model.__mapper__.columns.keys()  # noqa: SIM118  # pyright: ignore[reportUnknownMemberType]
@@ -89,6 +107,24 @@ def get_abstract_loader_options(
     default_loader_options: list[_AbstractLoad] | None = None,
     default_options_have_wildcards: bool = False,
 ) -> tuple[list[_AbstractLoad], bool]:
+    """Generate SQLAlchemy loader options for eager loading relationships.
+
+    Args:
+        loader_options :class:`~advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
+            - None: Use defaults
+            - :class:`sqlalchemy.orm.strategy_options._AbstractLoad`: Direct SQLAlchemy loader option
+            - :class:`sqlalchemy.orm.InstrumentedAttribute`: Model relationship attribute
+            - :class:`sqlalchemy.orm.RelationshipProperty`: SQLAlchemy relationship
+            - str: "*" for wildcard loading
+            - :class:`typing.Sequence` of the above
+        default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` loader options to start with.
+        default_options_have_wildcards: Whether the default options contain wildcards.
+
+    Returns:
+        tuple[:class:`list`[:class:`sqlalchemy.orm.strategy_options._AbstractLoad`], bool]: A tuple containing:
+            - :class:`list` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` SQLAlchemy loader option objects
+            - Boolean indicating if any wildcard loaders are present
+    """
     loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
@@ -129,17 +165,41 @@ def get_abstract_loader_options(
 
 
 class FilterableRepositoryProtocol(Protocol[ModelT]):
+    """Protocol defining the interface for filterable repositories.
+
+    This protocol defines the required attributes and methods that any
+    filterable repository implementation must provide.
+
+    Type Parameters:
+        ModelT: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model type this repository handles.
+
+    Attributes:
+        model_type: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model class this repository manages.
+    """
+
     model_type: type[ModelT]
 
 
 class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
+    """Default implementation of a filterable repository.
+
+    Provides core filtering, ordering and pagination functionality for
+    SQLAlchemy models.
+
+    Type Parameters:
+        ModelT: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model type this repository handles.
+    """
+
     model_type: type[ModelT]
-    _prefer_any: bool = False
-    _dialect: Dialect
+    """The SQLAlchemy model class this repository manages."""
     prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     order_by: list[OrderingPair] | OrderingPair | None = None
-    """List of ordering pairs to use for sorting."""
+    """List or single :class:`~advanced_alchemy.repository.typing.OrderingPair` to use for sorting."""
+    _prefer_any: bool = False
+    """Whether to prefer ANY() over IN() in queries."""
+    _dialect: Dialect
+    """The SQLAlchemy :class:`sqlalchemy.dialects.Dialect` being used."""
 
     @overload
     def _apply_filters(
@@ -179,15 +239,15 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         apply_pagination: bool = True,
         statement: StatementTypeT,
     ) -> StatementTypeT:
-        """Apply filters to a select statement.
+        """Apply filters to a SQL statement.
 
         Args:
-            *filters: filter types to apply to the query
-            apply_pagination: applies pagination filters if true
-            statement: select statement to apply filters
+            *filters: Filter conditions to apply.
+            apply_pagination: Whether to apply pagination filters.
+            statement: The base SQL statement to filter.
 
         Returns:
-            The select with filters applied.
+            StatementTypeT: The filtered SQL statement.
         """
         for filter_ in filters:
             if isinstance(filter_, (PaginationFilter,)):
@@ -206,6 +266,16 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         statement: StatementTypeT,
         kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
     ) -> StatementTypeT:
+        """Filter a statement using keyword arguments.
+
+        Args:
+            statement: :class:`sqlalchemy.sql.Select` The SQL statement to filter.
+            kwargs: Dictionary or iterable of tuples containing filter criteria.
+                Keys should be model attribute names, values are what to filter for.
+
+        Returns:
+            StatementTypeT: The filtered SQL statement.
+        """
         for key, val in dict(kwargs).items():
             field = get_instrumented_attr(self.model_type, key)
             statement = cast("StatementTypeT", statement.where(field == val))
@@ -216,6 +286,17 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         statement: StatementTypeT,
         order_by: list[tuple[str | InstrumentedAttribute[Any], bool]] | tuple[str | InstrumentedAttribute[Any], bool],
     ) -> StatementTypeT:
+        """Apply ordering to a SQL statement.
+
+        Args:
+            statement: The SQL statement to order.
+            order_by: Ordering specification. Either a single tuple or list of tuples where:
+                - First element is the field name or :class:`sqlalchemy.orm.InstrumentedAttribute` to order by
+                - Second element is a boolean indicating descending (True) or ascending (False)
+
+        Returns:
+            StatementTypeT: The ordered SQL statement.
+        """
         if not isinstance(order_by, list):
             order_by = [order_by]
         for order_field, is_desc in order_by:
@@ -229,6 +310,16 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         field: InstrumentedAttribute[Any],
         is_desc: bool,
     ) -> StatementTypeT:
+        """Apply ordering by a single attribute to a SQL statement.
+
+        Args:
+            statement: The SQL statement to order.
+            field: The model attribute to order by.
+            is_desc: Whether to order in descending (True) or ascending (False) order.
+
+        Returns:
+            StatementTypeT: The ordered SQL statement.
+        """
         if not isinstance(statement, Select):
             return statement
         return cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))

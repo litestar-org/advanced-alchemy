@@ -1,3 +1,4 @@
+# ruff: noqa: UP031
 """Unit tests for the SQLAlchemy Repository implementation."""
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Engine, Table, and_, insert, select
+from sqlalchemy import Engine, Table, and_, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 from time_machine import travel
@@ -774,6 +775,7 @@ def async_engine(request: FixtureRequest, repository_pk_type: RepositoryPKType) 
 
 @pytest.fixture()
 async def seed_db_async(
+    request: FixtureRequest,
     async_engine: AsyncEngine | NonCallableMagicMock,
     raw_authors: RawRecordData,
     raw_rules: RawRecordData,
@@ -818,6 +820,9 @@ async def seed_db_async(
             )
     else:
         async with async_engine.begin() as conn:
+            if "cockroachdb_async_engine" in request.fixturenames:
+                await conn.execute(text("SET multiple_active_portals_enabled = true"))
+                await conn.execute(text("SET autocommit_before_ddl = true"))
             await conn.run_sync(base.orm_registry.metadata.drop_all)
             await conn.run_sync(base.orm_registry.metadata.create_all)
             await conn.execute(insert(author_model), raw_authors)
@@ -825,11 +830,20 @@ async def seed_db_async(
             await conn.execute(insert(secret_model), raw_secrets)
 
 
+@pytest.fixture(autouse=False)
+async def patch_cockroach_session(async_session: AsyncSession) -> AsyncGenerator[None, None]:
+    """Return a session for the current session"""
+    await async_session.execute(text("SET multiple_active_portals_enabled = true"))
+    yield None
+
+
 @pytest.fixture(params=[lf("session"), lf("async_session")], ids=["sync", "async"])
 def any_session(request: FixtureRequest) -> Generator[AsyncSession | Session, None, None]:
     """Return a session for the current session"""
     if isinstance(request.param, AsyncSession):
         request.getfixturevalue("seed_db_async")
+        if "cockroachdb_async_engine" in request.fixturenames:
+            request.getfixturevalue("patch_cockroach_session")
     else:
         request.getfixturevalue("seed_db_sync")
     yield request.param  # type: ignore[no-any-return]

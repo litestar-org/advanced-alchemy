@@ -244,12 +244,10 @@ ignore = [
   "D202",    # pydocstyle - no blank lines allowed after function docstring
   "D205",    # pydocstyle - 1 blank line required between summary line and description
   "D415",    # pydocstyle - first line should end with a period, question mark, or exclamation point
-  "E501",    # pycodestyle line too long, handled by black
+  "E501",    # pydocstyle line too long, handled by black
   "PLW2901", # pylint - for loop variable overwritten by assignment target
   "RUF012",  # Ruff-specific rule - annotated with classvar
   "ANN401",
-  "ANN102",
-  "ANN101",
   "FBT",
   "PLR0913", # too many arguments
   "PT",
@@ -304,7 +302,7 @@ classmethod-decorators = [
   "S",
   "S101",
   "SIM",
-  "TCH",
+  "TC",
   "TRY",
   "UP006",
   "SLF001",
@@ -479,7 +477,7 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 
 [tool.codespell]
 ignore-words-list = "selectin"
-skip = 'pdm.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
+skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
 
 [tool.git-cliff.changelog]
 header = """
