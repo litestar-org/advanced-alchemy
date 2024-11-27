@@ -22,8 +22,8 @@ __all__ = (
     "EncryptedText",
     "EncryptionBackend",
     "FernetBackend",
-    "ObjectStore",
-    "StoredObject",
     "JsonB",
+    "ObjectStore",
     "PGCryptoBackend",
+    "StoredObject",
 )
