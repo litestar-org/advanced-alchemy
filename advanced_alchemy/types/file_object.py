@@ -36,7 +36,7 @@ else:
 
 if TYPE_CHECKING:
     from fsspec import (  # type: ignore[no-redef] # pyright: ignore[reportMissingTypeStubs]
-        filesystem,  # pyright: ignore[reportUnknownVariableType]  # noqa: TCH004
+        filesystem,  # pyright: ignore[reportUnknownVariableType]  # noqa: TC004
     )
 
 

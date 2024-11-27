@@ -21,6 +21,7 @@ __all__ = (
     "EncryptionBackend",
     "FernetBackend",
     "JsonB",
+    "ObjectStore",
     "PGCryptoBackend",
     "UUID_UTILS_INSTALLED",
     "NANOID_INSTALLED",
