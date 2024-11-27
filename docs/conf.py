@@ -185,7 +185,6 @@ html_context = {
 
 html_theme_options = {
     "logo_target": "/",
-    "announcement": "This documentation is currently under development.",
     "github_repo_name": "Advanced Alchemy",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
     "navigation_with_keys": True,
@@ -202,13 +201,13 @@ html_theme_options = {
                 },
                 {
                     "title": "Code of Conduct",
-                    "summary": "Review the etiquette for interacting with the Litestar community",
+                    "summary": "Review the etiquette for interacting with the Advanced Alchemy community",
                     "url": "https://github.com/litestar-org/.github?tab=coc-ov-file",
                     "icon": "coc",
                 },
                 {
                     "title": "Security",
-                    "summary": "Overview of Litestar's security protocols",
+                    "summary": "Overview of Advanced Alchemy's security protocols",
                     "url": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
                     "icon": "coc",
                 },
@@ -225,7 +224,7 @@ html_theme_options = {
                 },
                 {
                     "title": "Releases",
-                    "summary": "Explore the release process, versioning, and deprecation policy for Litestar",
+                    "summary": "Explore the release process, versioning, and deprecation policy for Advanced Alchemy",
                     "url": "releases",
                     "icon": "releases",
                 },
