@@ -116,20 +116,15 @@ labels:
     matcher:
       files: ['advanced_alchemy/extensions/flask/**/*','advanced_alchemy/extensions/flask.py']
 
-- label: 'area/sanic'
-    sync: true
-    matcher:
-      files: ['advanced_alchemy/extensions/sanic/**/*','advanced_alchemy/extensions/sanic.py']
+  - label: 'area/sanic'
+      sync: true
+      matcher:
+        files: ['advanced_alchemy/extensions/sanic/**/*','advanced_alchemy/extensions/sanic.py']
 
-- label: 'area/fastapi'
-    sync: true
-    matcher:
-      files: ['advanced_alchemy/extensions/starlette/**/*','advanced_alchemy/extensions/starlette.py']
-
-  - label: 'area/litestar'
-    sync: true
-    matcher:
-      files: ['advanced_alchemy/extensions/litestar/**/*']
+  - label: 'area/fastapi'
+      sync: true
+      matcher:
+        files: ['advanced_alchemy/extensions/starlette/**/*','advanced_alchemy/extensions/starlette.py']
 
   - label: 'area/litestar'
     sync: true
