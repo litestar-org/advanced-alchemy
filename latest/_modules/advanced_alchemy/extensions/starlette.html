@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en" data-accent-color="amber" data-content_root="../../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>advanced_alchemy.extensions.starlette - Advanced Alchemy</title><link rel="shortcut icon" href="../../../_static/favicon.svg"/><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><script>
+    function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
+    setColorMode(localStorage._theme||"auto");
+  </script><link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=397bb51e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/shibuya.css?v=83eaa723" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_paramlinks.css" />
+    <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/style.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/litestar-sphinx-theme.css?v=e9f54662" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sy-f-text: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+  --sy-f-heading: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+}
+</style>
+    <meta property="og:type" content="website"/><meta property="og:title" content="advanced_alchemy.extensions.starlette"/>
+<meta name="twitter:card" content="summary"/>
+<meta property="og:image" content="_static/logo-light.png"/>
+  </head>
+<body><div class="sy-head">
+  <div class="sy-head-blur"></div>
+  <div class="sy-head-inner sy-container mx-auto">
+    <a class="sy-head-brand" href="/">
+      <img class="light-logo" src="../../../_static/logo-light.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <img class="dark-logo" src="../../../_static/logo-dark.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <strong>advanced_alchemy</strong>
+    </a>
+    <div class="sy-head-nav" id="HeadNav">
+      <nav class="sy-head-links"><ul><li class="link"><a href="../../../index.html">Home</a></li>
+      <li class="link"><button type="button">
+            <span>Community</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../contribution-guide.html">
+                <span>Contributing</span>
+                <small>Learn how to contribute to the Advanced Alchemy project</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file">
+                <span>Code of Conduct</span>
+                <small>Review the etiquette for interacting with the Advanced Alchemy community</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file">
+                <span>Security</span>
+                <small>Overview of Advanced Alchemy's security protocols</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>About</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://litestar.dev/about/organization">
+                <span>Litestar Organization</span>
+                <small>Details about the Litestar organization</small>
+              </a></li><li><a href="../../../releases.html">
+                <span>Releases</span>
+                <small>Explore the release process, versioning, and deprecation policy for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Release notes</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../changelog.html">
+                <span>Changelog</span>
+                <small>All changes for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Help</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://discord.gg/litestar">
+                <span>Discord Help Forum</span>
+                <small>Dedicated Discord help forum</small>
+              </a></li><li><a href="https://github.com/litestar-org/advanced-alchemy/discussions">
+                <span>GitHub Discussions</span>
+                <small>GitHub Discussions</small>
+              </a></li><li><a href="https://stackoverflow.com/questions/tagged/litestar">
+                <span>Stack Overflow</span>
+                <small>We monitor the <code><b>litestar</b></code> tag on Stack Overflow</small>
+              </a></li></ul>
+      </li><li class="link">
+          <a href="https://github.com/sponsors/Litestar-Org">
+            <span>Sponsor</span></a>
+        </li></ul></nav>
+      <div class="sy-head-extra flex items-center print:hidden"><form class="searchbox flex items-center" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <kbd>/</kbd>
+</form><div class="sy-head-socials">
+  <a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+  <a href="https://discord.gg/litestar" aria-label="Discord">
+    <iconify-icon icon="simple-icons:discord"></iconify-icon>
+  </a></div></div>
+    </div>
+    <div class="sy-head-actions flex items-center shrink-0 print:hidden"><button class="js-theme theme-switch flex items-center"
+data-aria-auto="Switch to light color mode"
+data-aria-light="Switch to dark color mode"
+data-aria-dark="Switch to auto color mode">
+<i class="i-lucide theme-icon"></i>
+</button><button class="md:hidden flex items-center js-menu" aria-label="Menu" type="button" aria-controls="HeadNav" aria-expanded="false">
+        <div class="hamburger">
+          <span class="hamburger_1"></span>
+          <span class="hamburger_2 -translate-x-2"></span>
+          <span class="hamburger_3 -translate-x-1"></span>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="sy-page sy-container flex mx-auto">
+  <aside id="lside" class="sy-lside md:w-72 md:shrink-0 print:hidden">
+    <div class="sy-lside-inner md:sticky">
+      <div class="sy-scrollbar p-6"><div class="sidebar-links">
+  <ul>
+    <li><a class="icon-link" href="https://github.com/orgs/litestar-org/discussions">
+  <span class="icon">
+    <svg viewBox="0 0 24 24" fill="none">
+      <path fill="var(--accent-9)" fill-rule="evenodd" clip-rule="evenodd" d="M11 5a6 6 0 0 0-4.687 9.746c.215.27.315.62.231.954l-.514 2.058a1 1 0 0 0 1.485 1.1l2.848-1.71c.174-.104.374-.15.576-.148H13a6 6 0 0 0 0-12h-2Z"/>
+      <circle fill="white" cx="12" cy="11" r="1"/>
+      <circle fill="white" cx="9" cy="11" r="1"/>
+      <circle fill="white" cx="15" cy="11" r="1"/>
+    </svg>
+  </span>
+  <span class="text">Discussion</span>
+</a></li>
+  </ul>
+</div>
+        <div class="globaltoc" data-expand-depth="0"><p class="caption" role="heading" aria-level="3"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage/index.html">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/modeling.html">Modeling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/repositories.html">Repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/services.html">Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/utilities.html">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/frameworks/litestar.html">Litestar Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/frameworks/fastapi.html">FastAPI Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../reference/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/base.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/mixins/index.html">mixins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/mixins/unique.html">unique</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/config/index.html">config</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/asyncio.html">asyncio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/common.html">common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/engine.html">engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/sync.html">sync</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/types.html">types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/operations.html">operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/types.html">types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/exceptions.html">exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/utils.html">utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/repository.html">repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/filters.html">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/service.html">services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/extensions/index.html">extensions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/litestar/index.html">litestar</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/alembic.html">alembic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/dto.html">dto</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/plugins.html">plugin</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/sanic.html">sanic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/starlette.html">starlette</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/alembic/index.html">alembic</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/alembic/commands.html">commands</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contribution-guide.html">Contribution guide</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/search?q=user%3Alitestar-org+state%3Aopen+label%3A%22good+first+issue%22+++no%3Aassignee+repo%3A%22advanced-alchemy%22&amp;type=issues">Available Issues</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/litestar-org/.github?tab=coc-ov-file#readme">Code of Conduct</a></li>
+</ul>
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="lside-overlay js-menu" role="button" aria-label="Close left sidebar" aria-controls="lside" aria-expanded="false"></div>
+  <aside id="rside" class="sy-rside pb-3 w-64 shrink-0 order-last">
+    <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
+      <i class="i-lucide close"></i>
+    </button>
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
+  data-type="github" data-user="litestar-org" data-repo="advanced-alchemy">
+  <span class="w-8 flex items-center justify-around shrink-0 text-3xl">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </span>
+  <span class="flex-grow px-2 break-all">
+    <span>litestar-org/advanced-alchemy</span>
+    <span class="flex text-sm repo-stats-count">
+      <span class="flex items-center pr-3">
+        <iconify-icon icon="lucide:star"></iconify-icon>
+        <strong class="js-repo-stars ml-1">0</strong>
+      </span>
+      <span class="flex items-center">
+        <iconify-icon icon="lucide:git-fork"></iconify-icon>
+        <strong class="js-repo-forks ml-1">0</strong>
+      </span>
+    </span>
+  </span>
+</a><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
+  </aside>
+  <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
+  <main class="sy-main w-full max-sm:max-w-full print:pt-6"><div class="sy-breadcrumbs" role="navigation">
+  <div class="sy-breadcrumbs-inner flex items-center">
+    <div class="md:hidden mr-3">
+      <button class="js-menu" aria-label="Menu" type="button" aria-controls="lside" aria-expanded="false">
+        <i class="i-lucide menu"></i>
+      </button>
+    </div>
+    <ol class="flex-1" itemscope itemtype="https://schema.org/BreadcrumbList"><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../../index.html"><span itemprop="name">advanced_alchemy</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="1" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../index.html"><span itemprop="name">Module code</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="2" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">advanced_alchemy.extensions.starlette</strong>
+        <meta itemprop="position" content="3" />
+      </li></ol>
+    <div class="xl:hidden ml-1">
+      <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
+        aria-expanded="false">
+        <i class="i-lucide outdent"></i>
+      </button>
+    </div>
+  </div>
+</div><div class="flex flex-col break-words justify-between">
+      <div class="min-w-0 max-w-6xl px-6 pb-6 pt-8 xl:px-12">
+        <article class="yue" role="main">
+          <h1>Source code for advanced_alchemy.extensions.starlette</h1><div class="highlight"><pre>
+<span></span><span data-line="1"><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">cast</span><span class="p">,</span> <span class="n">overload</span>
+</span><span data-line="4">
+</span><span data-line="5"><span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Engine</span>
+</span><span data-line="6"><span class="kn">from</span> <span class="nn">sqlalchemy.ext.asyncio</span> <span class="kn">import</span> <span class="n">AsyncEngine</span><span class="p">,</span> <span class="n">AsyncSession</span>
+</span><span data-line="7"><span class="kn">from</span> <span class="nn">starlette.concurrency</span> <span class="kn">import</span> <span class="n">run_in_threadpool</span>
+</span><span data-line="8"><span class="kn">from</span> <span class="nn">starlette.middleware.base</span> <span class="kn">import</span> <span class="n">BaseHTTPMiddleware</span><span class="p">,</span> <span class="n">RequestResponseEndpoint</span>
+</span><span data-line="9"><span class="kn">from</span> <span class="nn">starlette.requests</span> <span class="kn">import</span> <span class="n">Request</span>  <span class="c1"># noqa: TC002</span>
+</span><span data-line="10">
+</span><span data-line="11"><span class="kn">from</span> <span class="nn">advanced_alchemy.config.common</span> <span class="kn">import</span> <span class="n">EngineT</span><span class="p">,</span> <span class="n">SessionT</span>
+</span><span data-line="12"><span class="kn">from</span> <span class="nn">advanced_alchemy.exceptions</span> <span class="kn">import</span> <span class="n">ImproperConfigurationError</span>
+</span><span data-line="13">
+</span><span data-line="14"><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+</span><span data-line="15">    <span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">Session</span>
+</span><span data-line="16">    <span class="kn">from</span> <span class="nn">starlette.applications</span> <span class="kn">import</span> <span class="n">Starlette</span>
+</span><span data-line="17">    <span class="kn">from</span> <span class="nn">starlette.responses</span> <span class="kn">import</span> <span class="n">Response</span>
+</span><span data-line="18">
+</span><span data-line="19">    <span class="kn">from</span> <span class="nn">advanced_alchemy.config.asyncio</span> <span class="kn">import</span> <span class="n">SQLAlchemyAsyncConfig</span>
+</span><span data-line="20">    <span class="kn">from</span> <span class="nn">advanced_alchemy.config.sync</span> <span class="kn">import</span> <span class="n">SQLAlchemySyncConfig</span>
+</span><span data-line="21">    <span class="kn">from</span> <span class="nn">advanced_alchemy.config.types</span> <span class="kn">import</span> <span class="n">CommitStrategy</span>
+</span><span data-line="22">
+</span><span data-line="23"><span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;CommitStrategyExecutor&quot;</span><span class="p">,</span> <span class="s2">&quot;StarletteAdvancedAlchemy&quot;</span><span class="p">)</span>
+</span><span data-line="24">
+</span><span data-line="25">
+<div class="viewcode-block" id="CommitStrategyExecutor">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.CommitStrategyExecutor">[docs]</a>
+</span><span data-line="26"><span class="k">class</span> <span class="nc">CommitStrategyExecutor</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+</span><span data-line="27"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Protocol for commit strategy executors.</span>
+</span><span data-line="28">
+</span><span data-line="29"><span class="sd">    Defines the callable signature for commit strategy functions.</span>
+</span><span data-line="30">
+</span><span data-line="31"><span class="sd">    Args:</span>
+</span><span data-line="32"><span class="sd">        session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession): The database session.</span>
+</span><span data-line="33"><span class="sd">        response (starlette.responses.Response): The HTTP response.</span>
+</span><span data-line="34">
+</span><span data-line="35"><span class="sd">    Returns:</span>
+</span><span data-line="36"><span class="sd">        None</span>
+</span><span data-line="37"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="38">
+</span><span data-line="39">    <span class="k">async</span> <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Response</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span></div>
+
+</span><span data-line="40">
+</span><span data-line="41">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy">[docs]</a>
+</span><span data-line="42"><span class="k">class</span> <span class="nc">StarletteAdvancedAlchemy</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">EngineT</span><span class="p">,</span> <span class="n">SessionT</span><span class="p">]):</span>
+</span><span data-line="43"><span class="w">    </span><span class="sd">&quot;&quot;&quot;AdvancedAlchemy integration for Starlette applications.</span>
+</span><span data-line="44">
+</span><span data-line="45"><span class="sd">    This class manages SQLAlchemy sessions and engine lifecycle within a Starlette application.</span>
+</span><span data-line="46"><span class="sd">    It provides middleware for handling transactions based on commit strategies.</span>
+</span><span data-line="47">
+</span><span data-line="48"><span class="sd">    Args:</span>
+</span><span data-line="49"><span class="sd">        config (advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig | advanced_alchemy.config.sync.SQLAlchemySyncConfig):</span>
+</span><span data-line="50"><span class="sd">            The SQLAlchemy configuration.</span>
+</span><span data-line="51"><span class="sd">        autocommit (advanced_alchemy.config.types.CommitStrategy | None):</span>
+</span><span data-line="52"><span class="sd">            The commit strategy to use. Defaults to None.</span>
+</span><span data-line="53"><span class="sd">        app (starlette.applications.Starlette | None):</span>
+</span><span data-line="54"><span class="sd">            The Starlette application instance. Defaults to None.</span>
+</span><span data-line="55"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="56">
+</span><span data-line="57">    <span class="nd">@overload</span>
+</span><span data-line="58">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="59">        <span class="bp">self</span><span class="p">:</span> <span class="n">StarletteAdvancedAlchemy</span><span class="p">[</span><span class="n">AsyncEngine</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">],</span>
+</span><span data-line="60">        <span class="n">config</span><span class="p">:</span> <span class="n">SQLAlchemyAsyncConfig</span><span class="p">,</span>
+</span><span data-line="61">        <span class="n">autocommit</span><span class="p">:</span> <span class="n">CommitStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="62">        <span class="n">app</span><span class="p">:</span> <span class="n">Starlette</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="63">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</span><span data-line="64">
+</span><span data-line="65">    <span class="nd">@overload</span>
+</span><span data-line="66">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="67">        <span class="bp">self</span><span class="p">:</span> <span class="n">StarletteAdvancedAlchemy</span><span class="p">[</span><span class="n">Engine</span><span class="p">,</span> <span class="n">Session</span><span class="p">],</span>
+</span><span data-line="68">        <span class="n">config</span><span class="p">:</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">,</span>
+</span><span data-line="69">        <span class="n">autocommit</span><span class="p">:</span> <span class="n">CommitStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="70">        <span class="n">app</span><span class="p">:</span> <span class="n">Starlette</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="71">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</span><span data-line="72">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.__init__">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.__init__">[docs]</a>
+</span><span data-line="73">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="74">        <span class="bp">self</span><span class="p">,</span>
+</span><span data-line="75">        <span class="n">config</span><span class="p">:</span> <span class="n">SQLAlchemyAsyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">,</span>
+</span><span data-line="76">        <span class="n">autocommit</span><span class="p">:</span> <span class="n">CommitStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="77">        <span class="n">app</span><span class="p">:</span> <span class="n">Starlette</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="78">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="79">        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+</span><span data-line="80">        <span class="bp">self</span><span class="o">.</span><span class="n">_app</span><span class="p">:</span> <span class="n">Starlette</span>
+</span><span data-line="81">        <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">:</span> <span class="nb">str</span>
+</span><span data-line="82">        <span class="bp">self</span><span class="o">.</span><span class="n">sessionmaker_key</span><span class="p">:</span> <span class="nb">str</span>
+</span><span data-line="83">        <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">:</span> <span class="nb">str</span>
+</span><span data-line="84">        <span class="bp">self</span><span class="o">.</span><span class="n">autocommit_strategy</span> <span class="o">=</span> <span class="n">autocommit</span>
+</span><span data-line="85">        <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategies</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CommitStrategy</span><span class="p">,</span> <span class="n">CommitStrategyExecutor</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+</span><span data-line="86">            <span class="s2">&quot;always&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategy_always</span><span class="p">,</span>
+</span><span data-line="87">            <span class="s2">&quot;match_status&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategy_match_status</span><span class="p">,</span>
+</span><span data-line="88">        <span class="p">}</span>
+</span><span data-line="89">        <span class="k">if</span> <span class="n">app</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="90">            <span class="bp">self</span><span class="o">.</span><span class="n">init_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span></div>
+
+</span><span data-line="91">
+</span><span data-line="92">    <span class="nd">@staticmethod</span>
+</span><span data-line="93">    <span class="k">def</span> <span class="nf">_make_unique_state_key</span><span class="p">(</span><span class="n">app</span><span class="p">:</span> <span class="n">Starlette</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span data-line="94"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Generates a unique state key for the Starlette application.</span>
+</span><span data-line="95">
+</span><span data-line="96"><span class="sd">        Ensures that the key does not already exist in the application&#39;s state.</span>
+</span><span data-line="97">
+</span><span data-line="98"><span class="sd">        Args:</span>
+</span><span data-line="99"><span class="sd">            app (starlette.applications.Starlette): The Starlette application instance.</span>
+</span><span data-line="100"><span class="sd">            key (str): The base key name.</span>
+</span><span data-line="101">
+</span><span data-line="102"><span class="sd">        Returns:</span>
+</span><span data-line="103"><span class="sd">            str: A unique key name.</span>
+</span><span data-line="104"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="105">        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span data-line="106">        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span data-line="107">            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+</span><span data-line="108">                <span class="k">return</span> <span class="n">key</span>
+</span><span data-line="109">            <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span data-line="110">            <span class="n">i</span> <span class="o">+=</span> <span class="n">i</span>
+</span><span data-line="111">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.init_app">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.init_app">[docs]</a>
+</span><span data-line="112">    <span class="k">def</span> <span class="nf">init_app</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app</span><span class="p">:</span> <span class="n">Starlette</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="113"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializes the Starlette application with SQLAlchemy engine and sessionmaker.</span>
+</span><span data-line="114">
+</span><span data-line="115"><span class="sd">        Sets up middleware and shutdown handlers for managing the database engine.</span>
+</span><span data-line="116">
+</span><span data-line="117"><span class="sd">        Args:</span>
+</span><span data-line="118"><span class="sd">            app (starlette.applications.Starlette): The Starlette application instance.</span>
+</span><span data-line="119"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="120">        <span class="n">engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get_engine</span><span class="p">()</span>
+</span><span data-line="121">        <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_unique_state_key</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;sqla_engine_</span><span class="si">{</span><span class="n">engine</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span data-line="122">        <span class="bp">self</span><span class="o">.</span><span class="n">sessionmaker_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_unique_state_key</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;sqla_sessionmaker_</span><span class="si">{</span><span class="n">engine</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span data-line="123">        <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;sqla_session_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">sessionmaker_key</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span data-line="124">
+</span><span data-line="125">        <span class="nb">setattr</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">,</span> <span class="n">engine</span><span class="p">)</span>
+</span><span data-line="126">        <span class="nb">setattr</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sessionmaker_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">create_session_maker</span><span class="p">())</span>
+</span><span data-line="127">
+</span><span data-line="128">        <span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span><span class="n">BaseHTTPMiddleware</span><span class="p">,</span> <span class="n">dispatch</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">middleware_dispatch</span><span class="p">)</span>
+</span><span data-line="129">        <span class="n">app</span><span class="o">.</span><span class="n">add_event_handler</span><span class="p">(</span><span class="s2">&quot;shutdown&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_shutdown</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="130">
+</span><span data-line="131">        <span class="bp">self</span><span class="o">.</span><span class="n">_app</span> <span class="o">=</span> <span class="n">app</span></div>
+
+</span><span data-line="132">
+</span><span data-line="133">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_do_commit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="134"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Commits the current transaction.</span>
+</span><span data-line="135">
+</span><span data-line="136"><span class="sd">        Args:</span>
+</span><span data-line="137"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="138"><span class="sd">                The database session to commit.</span>
+</span><span data-line="139">
+</span><span data-line="140"><span class="sd">        Returns:</span>
+</span><span data-line="141"><span class="sd">            None</span>
+</span><span data-line="142"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="143">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">):</span>
+</span><span data-line="144">            <span class="k">await</span> <span class="n">run_in_threadpool</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">)</span>
+</span><span data-line="145">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="146">            <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</span><span data-line="147">
+</span><span data-line="148">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_do_rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="149"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rolls back the current transaction.</span>
+</span><span data-line="150">
+</span><span data-line="151"><span class="sd">        Args:</span>
+</span><span data-line="152"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="153"><span class="sd">                The database session to rollback.</span>
+</span><span data-line="154">
+</span><span data-line="155"><span class="sd">        Returns:</span>
+</span><span data-line="156"><span class="sd">            None</span>
+</span><span data-line="157"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="158">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">):</span>
+</span><span data-line="159">            <span class="k">await</span> <span class="n">run_in_threadpool</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">rollback</span><span class="p">)</span>
+</span><span data-line="160">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="161">            <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+</span><span data-line="162">
+</span><span data-line="163">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_do_close</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="164"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Closes the database session.</span>
+</span><span data-line="165">
+</span><span data-line="166"><span class="sd">        Args:</span>
+</span><span data-line="167"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="168"><span class="sd">                The database session to close.</span>
+</span><span data-line="169">
+</span><span data-line="170"><span class="sd">        Returns:</span>
+</span><span data-line="171"><span class="sd">            None</span>
+</span><span data-line="172"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="173">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">):</span>
+</span><span data-line="174">            <span class="k">await</span> <span class="n">run_in_threadpool</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">close</span><span class="p">)</span>
+</span><span data-line="175">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="176">            <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span data-line="177">
+</span><span data-line="178">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_commit_strategy_always</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Response</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="179"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Commits the transaction regardless of the response status.</span>
+</span><span data-line="180">
+</span><span data-line="181"><span class="sd">        Args:</span>
+</span><span data-line="182"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="183"><span class="sd">                The database session to commit.</span>
+</span><span data-line="184"><span class="sd">            response (starlette.responses.Response):</span>
+</span><span data-line="185"><span class="sd">                The HTTP response.</span>
+</span><span data-line="186">
+</span><span data-line="187"><span class="sd">        Returns:</span>
+</span><span data-line="188"><span class="sd">            None</span>
+</span><span data-line="189"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="190">        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_commit</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="191">
+</span><span data-line="192">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_commit_strategy_match_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Response</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="193"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Commits or rolls back based on the response status code.</span>
+</span><span data-line="194">
+</span><span data-line="195"><span class="sd">        Commits if the status code is between 200 and 299, otherwise rolls back.</span>
+</span><span data-line="196">
+</span><span data-line="197"><span class="sd">        Args:</span>
+</span><span data-line="198"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="199"><span class="sd">                The database session.</span>
+</span><span data-line="200"><span class="sd">            response (starlette.responses.Response):</span>
+</span><span data-line="201"><span class="sd">                The HTTP response.</span>
+</span><span data-line="202">
+</span><span data-line="203"><span class="sd">        Returns:</span>
+</span><span data-line="204"><span class="sd">            None</span>
+</span><span data-line="205"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="206">        <span class="k">if</span> <span class="mi">200</span> <span class="o">&lt;=</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">&lt;</span> <span class="mi">300</span><span class="p">:</span>  <span class="c1"># noqa: PLR2004</span>
+</span><span data-line="207">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_commit</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="208">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="209">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_rollback</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="210">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.session_handler">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.session_handler">[docs]</a>
+</span><span data-line="211">    <span class="k">async</span> <span class="k">def</span> <span class="nf">session_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Response</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="212"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles the session after a request is processed.</span>
+</span><span data-line="213">
+</span><span data-line="214"><span class="sd">        Applies the commit strategy and ensures the session is closed.</span>
+</span><span data-line="215">
+</span><span data-line="216"><span class="sd">        Args:</span>
+</span><span data-line="217"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="218"><span class="sd">                The database session.</span>
+</span><span data-line="219"><span class="sd">            request (starlette.requests.Request):</span>
+</span><span data-line="220"><span class="sd">                The incoming HTTP request.</span>
+</span><span data-line="221"><span class="sd">            response (starlette.responses.Response):</span>
+</span><span data-line="222"><span class="sd">                The outgoing HTTP response.</span>
+</span><span data-line="223">
+</span><span data-line="224"><span class="sd">        Returns:</span>
+</span><span data-line="225"><span class="sd">            None</span>
+</span><span data-line="226"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="227">        <span class="k">try</span><span class="p">:</span>
+</span><span data-line="228">            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autocommit_strategy</span><span class="p">:</span>
+</span><span data-line="229">                <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategies</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">autocommit_strategy</span><span class="p">](</span><span class="n">session</span><span class="o">=</span><span class="n">session</span><span class="p">,</span> <span class="n">response</span><span class="o">=</span><span class="n">response</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportArgumentType]</span>
+</span><span data-line="230">        <span class="k">finally</span><span class="p">:</span>
+</span><span data-line="231">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_close</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="232">            <span class="nb">delattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">)</span></div>
+
+</span><span data-line="233">
+</span><span data-line="234">    <span class="nd">@property</span>
+</span><span data-line="235">    <span class="k">def</span> <span class="nf">app</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Starlette</span><span class="p">:</span>
+</span><span data-line="236"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the Starlette application instance.</span>
+</span><span data-line="237">
+</span><span data-line="238"><span class="sd">        Raises:</span>
+</span><span data-line="239"><span class="sd">            advanced_alchemy.exceptions.ImproperConfigurationError:</span>
+</span><span data-line="240"><span class="sd">                If the application is not initialized.</span>
+</span><span data-line="241">
+</span><span data-line="242"><span class="sd">        Returns:</span>
+</span><span data-line="243"><span class="sd">            starlette.applications.Starlette: The Starlette application instance.</span>
+</span><span data-line="244"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="245">        <span class="k">try</span><span class="p">:</span>
+</span><span data-line="246">            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_app</span>
+</span><span data-line="247">        <span class="k">except</span> <span class="ne">AttributeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span data-line="248">            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Application not initialized. Did you forget to call init_app?&quot;</span>
+</span><span data-line="249">            <span class="k">raise</span> <span class="n">ImproperConfigurationError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+</span><span data-line="250">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.get_engine">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.get_engine">[docs]</a>
+</span><span data-line="251">    <span class="k">def</span> <span class="nf">get_engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EngineT</span><span class="p">:</span>
+</span><span data-line="252"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieves the SQLAlchemy engine from the application state.</span>
+</span><span data-line="253">
+</span><span data-line="254"><span class="sd">        Returns:</span>
+</span><span data-line="255"><span class="sd">            EngineT: The SQLAlchemy engine instance.</span>
+</span><span data-line="256"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="257">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">EngineT</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">))</span></div>
+
+</span><span data-line="258">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.get_sessionmaker">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.get_sessionmaker">[docs]</a>
+</span><span data-line="259">    <span class="k">def</span> <span class="nf">get_sessionmaker</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">SessionT</span><span class="p">]:</span>
+</span><span data-line="260"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieves the sessionmaker from the application state.</span>
+</span><span data-line="261">
+</span><span data-line="262"><span class="sd">        Returns:</span>
+</span><span data-line="263"><span class="sd">            Callable[[], SessionT]: A callable that returns a new session instance.</span>
+</span><span data-line="264"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="265">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Callable</span><span class="p">[[],</span> <span class="n">SessionT</span><span class="p">],</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sessionmaker_key</span><span class="p">))</span></div>
+
+</span><span data-line="266">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.get_session">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.get_session">[docs]</a>
+</span><span data-line="267">    <span class="k">def</span> <span class="nf">get_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SessionT</span><span class="p">:</span>
+</span><span data-line="268"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieves or creates a database session for the current request.</span>
+</span><span data-line="269">
+</span><span data-line="270"><span class="sd">        Args:</span>
+</span><span data-line="271"><span class="sd">            request (starlette.requests.Request): The incoming HTTP request.</span>
+</span><span data-line="272">
+</span><span data-line="273"><span class="sd">        Returns:</span>
+</span><span data-line="274"><span class="sd">            SessionT: The database session.</span>
+</span><span data-line="275"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="276">        <span class="n">session</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span data-line="277">        <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="278">            <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">SessionT</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</span><span data-line="279">
+</span><span data-line="280">        <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sessionmaker</span><span class="p">()()</span>
+</span><span data-line="281">        <span class="nb">setattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</span><span data-line="282">        <span class="k">return</span> <span class="n">session</span></div>
+
+</span><span data-line="283">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.middleware_dispatch">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.middleware_dispatch">[docs]</a>
+</span><span data-line="284">    <span class="k">async</span> <span class="k">def</span> <span class="nf">middleware_dispatch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">call_next</span><span class="p">:</span> <span class="n">RequestResponseEndpoint</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span><span class="p">:</span>
+</span><span data-line="285"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Middleware dispatch function to handle requests and responses.</span>
+</span><span data-line="286">
+</span><span data-line="287"><span class="sd">        Processes the request, invokes the next middleware or route handler, and</span>
+</span><span data-line="288"><span class="sd">        applies the session handler after the response is generated.</span>
+</span><span data-line="289">
+</span><span data-line="290"><span class="sd">        Args:</span>
+</span><span data-line="291"><span class="sd">            request (starlette.requests.Request): The incoming HTTP request.</span>
+</span><span data-line="292"><span class="sd">            call_next (starlette.middleware.base.RequestResponseEndpoint):</span>
+</span><span data-line="293"><span class="sd">                The next middleware or route handler.</span>
+</span><span data-line="294">
+</span><span data-line="295"><span class="sd">        Returns:</span>
+</span><span data-line="296"><span class="sd">            starlette.responses.Response: The HTTP response.</span>
+</span><span data-line="297"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="298">        <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">call_next</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span><span data-line="299">        <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span data-line="300">        <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="301">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_handler</span><span class="p">(</span><span class="n">session</span><span class="o">=</span><span class="n">session</span><span class="p">,</span> <span class="n">request</span><span class="o">=</span><span class="n">request</span><span class="p">,</span> <span class="n">response</span><span class="o">=</span><span class="n">response</span><span class="p">)</span>
+</span><span data-line="302">
+</span><span data-line="303">        <span class="k">return</span> <span class="n">response</span></div>
+
+</span><span data-line="304">
+<div class="viewcode-block" id="StarletteAdvancedAlchemy.on_shutdown">
+<a class="viewcode-back" href="../../../reference/extensions/starlette.html#advanced_alchemy.extensions.starlette.StarletteAdvancedAlchemy.on_shutdown">[docs]</a>
+</span><span data-line="305">    <span class="k">async</span> <span class="k">def</span> <span class="nf">on_shutdown</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="306"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles the shutdown event by disposing of the SQLAlchemy engine.</span>
+</span><span data-line="307">
+</span><span data-line="308"><span class="sd">        Ensures that all connections are properly closed during application shutdown.</span>
+</span><span data-line="309">
+</span><span data-line="310"><span class="sd">        Returns:</span>
+</span><span data-line="311"><span class="sd">            None</span>
+</span><span data-line="312"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="313">        <span class="n">engine</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">)</span>
+</span><span data-line="314">        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">Engine</span><span class="p">):</span>
+</span><span data-line="315">            <span class="k">await</span> <span class="n">run_in_threadpool</span><span class="p">(</span><span class="n">engine</span><span class="o">.</span><span class="n">dispose</span><span class="p">)</span>
+</span><span data-line="316">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="317">            <span class="k">await</span> <span class="n">engine</span><span class="o">.</span><span class="n">dispose</span><span class="p">()</span>
+</span><span data-line="318">
+</span><span data-line="319">        <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">)</span>
+</span><span data-line="320">        <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sessionmaker_key</span><span class="p">)</span></div>
+</div>
+
+</span></pre></div>
+        </article><button class="back-to-top" type="button">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+  </svg>
+  <span>Back to top</span>
+</button><div class="navigation flex print:hidden"></div></div>
+    </div>
+  </main>
+</div>
+<footer class="sy-foot">
+  <div class="sy-foot-inner sy-container mx-auto">
+    <div class="sy-foot-reserved md:flex justify-between items-center">
+      <div class="sy-foot-copyright"><p>2024, Litestar Organization</p>
+  
+  <p>
+    Made with
+    
+    <a href="https://www.sphinx-doc.org/">Sphinx</a> and
+    
+    <a href="https://shibuya.lepture.com">Shibuya theme</a>.
+  </p>
+</div>
+      <div class="sy-foot-socials">
+<a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+  <iconify-icon icon="simple-icons:github"></iconify-icon>
+</a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+<a href="https://discord.gg/litestar" aria-label="Discord">
+  <iconify-icon icon="simple-icons:discord"></iconify-icon>
+</a>
+<a href="https://www.reddit.com/r/LitestarAPI" aria-label="Reddit">
+  <iconify-icon icon="simple-icons:reddit"></iconify-icon>
+</a></div>
+    </div>
+  </div>
+</footer>
+      <script src="../../../_static/documentation_options.js?v=c6cf4326"></script>
+      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=f281be69"></script>
+      <script src="../../../_static/litestar-theme.js?v=ab2dcc9e"></script>
+      <script>let toggleHintShow = 'Click to show';</script>
+      <script>let toggleHintHide = 'Click to hide';</script>
+      <script>let toggleOpenOnPrint = 'true';</script>
+      <script src="../../../_static/togglebutton.js?v=4a39c7ea"></script>
+      <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../_static/shibuya.js?v=e2e99575"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../_static/versioning.js"></script></body>
+</html>

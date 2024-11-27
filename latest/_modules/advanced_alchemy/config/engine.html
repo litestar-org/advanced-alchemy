@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en" data-accent-color="amber" data-content_root="../../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>advanced_alchemy.config.engine - Advanced Alchemy</title><link rel="shortcut icon" href="../../../_static/favicon.svg"/><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><script>
+    function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
+    setColorMode(localStorage._theme||"auto");
+  </script><link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=397bb51e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/shibuya.css?v=83eaa723" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_paramlinks.css" />
+    <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/style.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/litestar-sphinx-theme.css?v=e9f54662" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sy-f-text: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+  --sy-f-heading: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+}
+</style>
+    <meta property="og:type" content="website"/><meta property="og:title" content="advanced_alchemy.config.engine"/>
+<meta name="twitter:card" content="summary"/>
+<meta property="og:image" content="_static/logo-light.png"/>
+  </head>
+<body><div class="sy-head">
+  <div class="sy-head-blur"></div>
+  <div class="sy-head-inner sy-container mx-auto">
+    <a class="sy-head-brand" href="/">
+      <img class="light-logo" src="../../../_static/logo-light.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <img class="dark-logo" src="../../../_static/logo-dark.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <strong>advanced_alchemy</strong>
+    </a>
+    <div class="sy-head-nav" id="HeadNav">
+      <nav class="sy-head-links"><ul><li class="link"><a href="../../../index.html">Home</a></li>
+      <li class="link"><button type="button">
+            <span>Community</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../contribution-guide.html">
+                <span>Contributing</span>
+                <small>Learn how to contribute to the Advanced Alchemy project</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file">
+                <span>Code of Conduct</span>
+                <small>Review the etiquette for interacting with the Advanced Alchemy community</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file">
+                <span>Security</span>
+                <small>Overview of Advanced Alchemy's security protocols</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>About</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://litestar.dev/about/organization">
+                <span>Litestar Organization</span>
+                <small>Details about the Litestar organization</small>
+              </a></li><li><a href="../../../releases.html">
+                <span>Releases</span>
+                <small>Explore the release process, versioning, and deprecation policy for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Release notes</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../changelog.html">
+                <span>Changelog</span>
+                <small>All changes for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Help</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://discord.gg/litestar">
+                <span>Discord Help Forum</span>
+                <small>Dedicated Discord help forum</small>
+              </a></li><li><a href="https://github.com/litestar-org/advanced-alchemy/discussions">
+                <span>GitHub Discussions</span>
+                <small>GitHub Discussions</small>
+              </a></li><li><a href="https://stackoverflow.com/questions/tagged/litestar">
+                <span>Stack Overflow</span>
+                <small>We monitor the <code><b>litestar</b></code> tag on Stack Overflow</small>
+              </a></li></ul>
+      </li><li class="link">
+          <a href="https://github.com/sponsors/Litestar-Org">
+            <span>Sponsor</span></a>
+        </li></ul></nav>
+      <div class="sy-head-extra flex items-center print:hidden"><form class="searchbox flex items-center" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <kbd>/</kbd>
+</form><div class="sy-head-socials">
+  <a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+  <a href="https://discord.gg/litestar" aria-label="Discord">
+    <iconify-icon icon="simple-icons:discord"></iconify-icon>
+  </a></div></div>
+    </div>
+    <div class="sy-head-actions flex items-center shrink-0 print:hidden"><button class="js-theme theme-switch flex items-center"
+data-aria-auto="Switch to light color mode"
+data-aria-light="Switch to dark color mode"
+data-aria-dark="Switch to auto color mode">
+<i class="i-lucide theme-icon"></i>
+</button><button class="md:hidden flex items-center js-menu" aria-label="Menu" type="button" aria-controls="HeadNav" aria-expanded="false">
+        <div class="hamburger">
+          <span class="hamburger_1"></span>
+          <span class="hamburger_2 -translate-x-2"></span>
+          <span class="hamburger_3 -translate-x-1"></span>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="sy-page sy-container flex mx-auto">
+  <aside id="lside" class="sy-lside md:w-72 md:shrink-0 print:hidden">
+    <div class="sy-lside-inner md:sticky">
+      <div class="sy-scrollbar p-6"><div class="sidebar-links">
+  <ul>
+    <li><a class="icon-link" href="https://github.com/orgs/litestar-org/discussions">
+  <span class="icon">
+    <svg viewBox="0 0 24 24" fill="none">
+      <path fill="var(--accent-9)" fill-rule="evenodd" clip-rule="evenodd" d="M11 5a6 6 0 0 0-4.687 9.746c.215.27.315.62.231.954l-.514 2.058a1 1 0 0 0 1.485 1.1l2.848-1.71c.174-.104.374-.15.576-.148H13a6 6 0 0 0 0-12h-2Z"/>
+      <circle fill="white" cx="12" cy="11" r="1"/>
+      <circle fill="white" cx="9" cy="11" r="1"/>
+      <circle fill="white" cx="15" cy="11" r="1"/>
+    </svg>
+  </span>
+  <span class="text">Discussion</span>
+</a></li>
+  </ul>
+</div>
+        <div class="globaltoc" data-expand-depth="0"><p class="caption" role="heading" aria-level="3"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage/index.html">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/modeling.html">Modeling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/repositories.html">Repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/services.html">Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/utilities.html">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/frameworks/litestar.html">Litestar Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/frameworks/fastapi.html">FastAPI Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../reference/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/base.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/mixins/index.html">mixins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/mixins/unique.html">unique</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/config/index.html">config</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/asyncio.html">asyncio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/common.html">common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/engine.html">engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/sync.html">sync</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/types.html">types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/operations.html">operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/types.html">types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/exceptions.html">exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/utils.html">utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/repository.html">repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/filters.html">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/service.html">services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/extensions/index.html">extensions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/litestar/index.html">litestar</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/alembic.html">alembic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/dto.html">dto</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/plugins.html">plugin</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/sanic.html">sanic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/starlette.html">starlette</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/alembic/index.html">alembic</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/alembic/commands.html">commands</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contribution-guide.html">Contribution guide</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/search?q=user%3Alitestar-org+state%3Aopen+label%3A%22good+first+issue%22+++no%3Aassignee+repo%3A%22advanced-alchemy%22&amp;type=issues">Available Issues</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/litestar-org/.github?tab=coc-ov-file#readme">Code of Conduct</a></li>
+</ul>
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="lside-overlay js-menu" role="button" aria-label="Close left sidebar" aria-controls="lside" aria-expanded="false"></div>
+  <aside id="rside" class="sy-rside pb-3 w-64 shrink-0 order-last">
+    <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
+      <i class="i-lucide close"></i>
+    </button>
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
+  data-type="github" data-user="litestar-org" data-repo="advanced-alchemy">
+  <span class="w-8 flex items-center justify-around shrink-0 text-3xl">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </span>
+  <span class="flex-grow px-2 break-all">
+    <span>litestar-org/advanced-alchemy</span>
+    <span class="flex text-sm repo-stats-count">
+      <span class="flex items-center pr-3">
+        <iconify-icon icon="lucide:star"></iconify-icon>
+        <strong class="js-repo-stars ml-1">0</strong>
+      </span>
+      <span class="flex items-center">
+        <iconify-icon icon="lucide:git-fork"></iconify-icon>
+        <strong class="js-repo-forks ml-1">0</strong>
+      </span>
+    </span>
+  </span>
+</a><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
+  </aside>
+  <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
+  <main class="sy-main w-full max-sm:max-w-full print:pt-6"><div class="sy-breadcrumbs" role="navigation">
+  <div class="sy-breadcrumbs-inner flex items-center">
+    <div class="md:hidden mr-3">
+      <button class="js-menu" aria-label="Menu" type="button" aria-controls="lside" aria-expanded="false">
+        <i class="i-lucide menu"></i>
+      </button>
+    </div>
+    <ol class="flex-1" itemscope itemtype="https://schema.org/BreadcrumbList"><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../../index.html"><span itemprop="name">advanced_alchemy</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="1" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../index.html"><span itemprop="name">Module code</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="2" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">advanced_alchemy.config.engine</strong>
+        <meta itemprop="position" content="3" />
+      </li></ol>
+    <div class="xl:hidden ml-1">
+      <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
+        aria-expanded="false">
+        <i class="i-lucide outdent"></i>
+      </button>
+    </div>
+  </div>
+</div><div class="flex flex-col break-words justify-between">
+      <div class="min-w-0 max-w-6xl px-6 pb-6 pt-8 xl:px-12">
+        <article class="yue" role="main">
+          <h1>Source code for advanced_alchemy.config.engine</h1><div class="highlight"><pre>
+<span></span><span data-line="1"><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+</span><span data-line="4"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Literal</span>
+</span><span data-line="5">
+</span><span data-line="6"><span class="kn">from</span> <span class="nn">advanced_alchemy._serialization</span> <span class="kn">import</span> <span class="n">decode_json</span><span class="p">,</span> <span class="n">encode_json</span>
+</span><span data-line="7"><span class="kn">from</span> <span class="nn">advanced_alchemy.utils.dataclass</span> <span class="kn">import</span> <span class="n">Empty</span>
+</span><span data-line="8">
+</span><span data-line="9"><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+</span><span data-line="10">    <span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Mapping</span>
+</span><span data-line="11">    <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span>
+</span><span data-line="12">
+</span><span data-line="13">    <span class="kn">from</span> <span class="nn">sqlalchemy.engine.interfaces</span> <span class="kn">import</span> <span class="n">IsolationLevel</span>
+</span><span data-line="14">    <span class="kn">from</span> <span class="nn">sqlalchemy.pool</span> <span class="kn">import</span> <span class="n">Pool</span>
+</span><span data-line="15">    <span class="kn">from</span> <span class="nn">typing_extensions</span> <span class="kn">import</span> <span class="n">TypeAlias</span>
+</span><span data-line="16">
+</span><span data-line="17">    <span class="kn">from</span> <span class="nn">advanced_alchemy.utils.dataclass</span> <span class="kn">import</span> <span class="n">EmptyType</span>
+</span><span data-line="18">
+</span><span data-line="19">
+</span><span data-line="20"><span class="n">_EchoFlagType</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="s2">&quot;None | bool | Literal[&#39;debug&#39;]&quot;</span>
+</span><span data-line="21"><span class="n">_ParamStyle</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;qmark&quot;</span><span class="p">,</span> <span class="s2">&quot;numeric&quot;</span><span class="p">,</span> <span class="s2">&quot;named&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">,</span> <span class="s2">&quot;pyformat&quot;</span><span class="p">,</span> <span class="s2">&quot;numeric_dollar&quot;</span><span class="p">]</span>
+</span><span data-line="22">
+</span><span data-line="23"><span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;EngineConfig&quot;</span><span class="p">,)</span>
+</span><span data-line="24">
+</span><span data-line="25">
+<div class="viewcode-block" id="EngineConfig">
+<a class="viewcode-back" href="../../../reference/config/engine.html#advanced_alchemy.config.engine.EngineConfig">[docs]</a>
+</span><span data-line="26"><span class="nd">@dataclass</span>
+</span><span data-line="27"><span class="k">class</span> <span class="nc">EngineConfig</span><span class="p">:</span>
+</span><span data-line="28"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for SQLAlchemy&#39;s Engine.</span>
+</span><span data-line="29">
+</span><span data-line="30"><span class="sd">    This class provides configuration options for SQLAlchemy engine creation.</span>
+</span><span data-line="31"><span class="sd">    See: https://docs.sqlalchemy.org/en/20/core/engines.html</span>
+</span><span data-line="32"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="33">
+</span><span data-line="34">    <span class="n">connect_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="35"><span class="w">    </span><span class="sd">&quot;&quot;&quot;A dictionary of arguments which will be passed directly to the DBAPI&#39;s ``connect()`` method as keyword arguments.</span>
+</span><span data-line="36"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="37">    <span class="n">echo</span><span class="p">:</span> <span class="n">_EchoFlagType</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="38"><span class="w">    </span><span class="sd">&quot;&quot;&quot;If ``True``, the Engine will log all statements as well as a ``repr()`` of their parameter lists to the default</span>
+</span><span data-line="39"><span class="sd">    log handler, which defaults to ``sys.stdout`` for output. If set to the string &quot;debug&quot;, result rows will be printed</span>
+</span><span data-line="40"><span class="sd">    to the standard output as well. The echo attribute of Engine can be modified at any time to turn logging on and off;</span>
+</span><span data-line="41"><span class="sd">    direct control of logging is also available using the standard Python logging module.</span>
+</span><span data-line="42"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="43">    <span class="n">echo_pool</span><span class="p">:</span> <span class="n">_EchoFlagType</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="44"><span class="w">    </span><span class="sd">&quot;&quot;&quot;If ``True``, the connection pool will log informational output such as when connections are invalidated as well</span>
+</span><span data-line="45"><span class="sd">    as when connections are recycled to the default log handler, which defaults to sys.stdout for output. If set to the</span>
+</span><span data-line="46"><span class="sd">    string &quot;debug&quot;, the logging will include pool checkouts and checkins. Direct control of logging is also available</span>
+</span><span data-line="47"><span class="sd">    using the standard Python logging module.&quot;&quot;&quot;</span>
+</span><span data-line="48">    <span class="n">enable_from_linting</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="49"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Defaults to True. Will emit a warning if a given SELECT statement is found to have un-linked FROM elements which</span>
+</span><span data-line="50"><span class="sd">    would cause a cartesian product.&quot;&quot;&quot;</span>
+</span><span data-line="51">    <span class="n">execution_options</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="52"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Dictionary execution options which will be applied to all connections. See</span>
+</span><span data-line="53"><span class="sd">    :attr:`Connection.execution_options() &lt;sqlalchemy.engine.Connection.execution_options&gt;` for details.&quot;&quot;&quot;</span>
+</span><span data-line="54">    <span class="n">hide_parameters</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="55"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Boolean, when set to ``True``, SQL statement parameters will not be displayed in INFO logging nor will they be</span>
+</span><span data-line="56"><span class="sd">    formatted into the string representation of :class:`StatementError &lt;sqlalchemy.exc.StatementError&gt;` objects.&quot;&quot;&quot;</span>
+</span><span data-line="57">    <span class="n">insertmanyvalues_page_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="58"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Number of rows to format into an INSERT statement when the statement uses “insertmanyvalues” mode, which is a</span>
+</span><span data-line="59"><span class="sd">    paged form of bulk insert that is used for many backends when using executemany execution typically in conjunction</span>
+</span><span data-line="60"><span class="sd">    with RETURNING. Defaults to 1000, but may also be subject to dialect-specific limiting factors which may override</span>
+</span><span data-line="61"><span class="sd">    this value on a per-statement basis.&quot;&quot;&quot;</span>
+</span><span data-line="62">    <span class="n">isolation_level</span><span class="p">:</span> <span class="n">IsolationLevel</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="63"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional string name of an isolation level which will be set on all new connections unconditionally. Isolation</span>
+</span><span data-line="64"><span class="sd">    levels are typically some subset of the string names &quot;SERIALIZABLE&quot;, &quot;REPEATABLE READ&quot;, &quot;READ COMMITTED&quot;,</span>
+</span><span data-line="65"><span class="sd">    &quot;READ UNCOMMITTED&quot; and &quot;AUTOCOMMIT&quot; based on backend.&quot;&quot;&quot;</span>
+</span><span data-line="66">    <span class="n">json_deserializer</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">decode_json</span>
+</span><span data-line="67"><span class="w">    </span><span class="sd">&quot;&quot;&quot;For dialects that support the :class:`JSON &lt;sqlalchemy.types.JSON&gt;` datatype, this is a Python callable that will</span>
+</span><span data-line="68"><span class="sd">    convert a JSON string to a Python object. By default, this is set to Litestar&#39;s</span>
+</span><span data-line="69"><span class="sd">    :attr:`decode_json() &lt;.serialization.decode_json&gt;` function.&quot;&quot;&quot;</span>
+</span><span data-line="70">    <span class="n">json_serializer</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">encode_json</span>
+</span><span data-line="71"><span class="w">    </span><span class="sd">&quot;&quot;&quot;For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON.</span>
+</span><span data-line="72"><span class="sd">    By default, Litestar&#39;s :attr:`encode_json() &lt;.serialization.encode_json&gt;` is used.&quot;&quot;&quot;</span>
+</span><span data-line="73">    <span class="n">label_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="74"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional integer value which limits the size of dynamically generated column labels to that many characters. If</span>
+</span><span data-line="75"><span class="sd">    less than 6, labels are generated as “_(counter)”. If ``None``, the value of ``dialect.max_identifier_length``,</span>
+</span><span data-line="76"><span class="sd">    which may be affected via the</span>
+</span><span data-line="77"><span class="sd">    :attr:`get_engine.max_identifier_length parameter &lt;sqlalchemy.get_engine.params.max_identifier_length&gt;`, is</span>
+</span><span data-line="78"><span class="sd">    used instead. The value of</span>
+</span><span data-line="79"><span class="sd">    :attr:`get_engine.label_length &lt;sqlalchemy.get_engine.params.label_length&gt;` may not be larger than that of</span>
+</span><span data-line="80"><span class="sd">    :attr:`get_engine.max_identifier_length &lt;sqlalchemy.get_engine.params.max_identifier_length&gt;`.&quot;&quot;&quot;</span>
+</span><span data-line="81">    <span class="n">logging_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="82"><span class="w">    </span><span class="sd">&quot;&quot;&quot;String identifier which will be used within the “name” field of logging records generated within the</span>
+</span><span data-line="83"><span class="sd">    “sqlalchemy.engine” logger. Defaults to a hexstring of the object`s id.&quot;&quot;&quot;</span>
+</span><span data-line="84">    <span class="n">max_identifier_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="85"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Override the max_identifier_length determined by the dialect. if ``None`` or ``0``, has no effect. This is the</span>
+</span><span data-line="86"><span class="sd">    database`s configured maximum number of characters that may be used in a SQL identifier such as a table name, column</span>
+</span><span data-line="87"><span class="sd">    name, or label name. All dialects determine this value automatically, however in the case of a new database version</span>
+</span><span data-line="88"><span class="sd">    for which this value has changed but SQLAlchemy`s dialect has not been adjusted, the value may be passed here.&quot;&quot;&quot;</span>
+</span><span data-line="89">    <span class="n">max_overflow</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="90"><span class="w">    </span><span class="sd">&quot;&quot;&quot;The number of connections to allow in connection pool “overflow”, that is connections that can be opened above</span>
+</span><span data-line="91"><span class="sd">    and beyond the pool_size setting, which defaults to five. This is only used with</span>
+</span><span data-line="92"><span class="sd">    :class:`QueuePool &lt;sqlalchemy.pool.QueuePool&gt;`.&quot;&quot;&quot;</span>
+</span><span data-line="93">    <span class="n">module</span><span class="p">:</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="94"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Reference to a Python module object (the module itself, not its string name). Specifies an alternate DBAPI module</span>
+</span><span data-line="95"><span class="sd">    to be used by the engine`s dialect. Each sub-dialect references a specific DBAPI which will be imported before first</span>
+</span><span data-line="96"><span class="sd">    connect. This parameter causes the import to be bypassed, and the given module to be used instead. Can be used for</span>
+</span><span data-line="97"><span class="sd">    testing of DBAPIs as well as to inject “mock” DBAPI implementations into the</span>
+</span><span data-line="98"><span class="sd">    :class:`Engine &lt;sqlalchemy.engine.Engine&gt;`.&quot;&quot;&quot;</span>
+</span><span data-line="99">    <span class="n">paramstyle</span><span class="p">:</span> <span class="n">_ParamStyle</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="100"><span class="w">    </span><span class="sd">&quot;&quot;&quot;The paramstyle to use when rendering bound parameters. This style defaults to the one recommended by the DBAPI</span>
+</span><span data-line="101"><span class="sd">    itself, which is retrieved from the ``.paramstyle`` attribute of the DBAPI. However, most DBAPIs accept more than</span>
+</span><span data-line="102"><span class="sd">    one paramstyle, and in particular it may be desirable to change a “named” paramstyle into a “positional” one, or</span>
+</span><span data-line="103"><span class="sd">    vice versa. When this attribute is passed, it should be one of the values &quot;qmark&quot;, &quot;numeric&quot;, &quot;named&quot;, &quot;format&quot; or</span>
+</span><span data-line="104"><span class="sd">    &quot;pyformat&quot;, and should correspond to a parameter style known to be supported by the DBAPI in use.&quot;&quot;&quot;</span>
+</span><span data-line="105">    <span class="n">pool</span><span class="p">:</span> <span class="n">Pool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="106"><span class="w">    </span><span class="sd">&quot;&quot;&quot;An already-constructed instance of :class:`Pool &lt;sqlalchemy.pool.Pool&gt;`, such as a</span>
+</span><span data-line="107"><span class="sd">    :class:`QueuePool &lt;sqlalchemy.pool.QueuePool&gt;` instance. If non-None, this pool will be used directly as the</span>
+</span><span data-line="108"><span class="sd">    underlying connection pool for the engine, bypassing whatever connection parameters are present in the URL argument.</span>
+</span><span data-line="109"><span class="sd">    For information on constructing connection pools manually, see</span>
+</span><span data-line="110"><span class="sd">    `Connection Pooling &lt;https://docs.sqlalchemy.org/en/20/core/pooling.html&gt;`_.&quot;&quot;&quot;</span>
+</span><span data-line="111">    <span class="n">poolclass</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">Pool</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="112"><span class="w">    </span><span class="sd">&quot;&quot;&quot;A :class:`Pool &lt;sqlalchemy.pool.Pool&gt;` subclass, which will be used to create a connection pool instance using</span>
+</span><span data-line="113"><span class="sd">    the connection parameters given in the URL. Note this differs from pool in that you don`t actually instantiate the</span>
+</span><span data-line="114"><span class="sd">    pool in this case, you just indicate what type of pool to be used.&quot;&quot;&quot;</span>
+</span><span data-line="115">    <span class="n">pool_logging_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="116"><span class="w">    </span><span class="sd">&quot;&quot;&quot;String identifier which will be used within the “name” field of logging records generated within the</span>
+</span><span data-line="117"><span class="sd">    “sqlalchemy.pool” logger. Defaults to a hexstring of the object`s id.&quot;&quot;&quot;</span>
+</span><span data-line="118">    <span class="n">pool_pre_ping</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="119"><span class="w">    </span><span class="sd">&quot;&quot;&quot;If True will enable the connection pool “pre-ping” feature that tests connections for liveness upon each</span>
+</span><span data-line="120"><span class="sd">    checkout.&quot;&quot;&quot;</span>
+</span><span data-line="121">    <span class="n">pool_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="122"><span class="w">    </span><span class="sd">&quot;&quot;&quot;The number of connections to keep open inside the connection pool. This used with</span>
+</span><span data-line="123"><span class="sd">    :class:`QueuePool &lt;sqlalchemy.pool.QueuePool&gt;` as well as</span>
+</span><span data-line="124"><span class="sd">    :class:`SingletonThreadPool &lt;sqlalchemy.pool.SingletonThreadPool&gt;`. With</span>
+</span><span data-line="125"><span class="sd">    :class:`QueuePool &lt;sqlalchemy.pool.QueuePool&gt;`, a pool_size setting of ``0`` indicates no limit; to disable pooling,</span>
+</span><span data-line="126"><span class="sd">    set ``poolclass`` to :class:`NullPool &lt;sqlalchemy.pool.NullPool&gt;` instead.&quot;&quot;&quot;</span>
+</span><span data-line="127">    <span class="n">pool_recycle</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="128"><span class="w">    </span><span class="sd">&quot;&quot;&quot;This setting causes the pool to recycle connections after the given number of seconds has passed. It defaults to</span>
+</span><span data-line="129"><span class="sd">    ``-1``, or no timeout. For example, setting to ``3600`` means connections will be recycled after one hour. Note that</span>
+</span><span data-line="130"><span class="sd">    MySQL in particular will disconnect automatically if no activity is detected on a connection for eight hours</span>
+</span><span data-line="131"><span class="sd">    (although this is configurable with the MySQLDB connection itself and the server configuration as well).&quot;&quot;&quot;</span>
+</span><span data-line="132">    <span class="n">pool_reset_on_return</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;rollback&quot;</span><span class="p">,</span> <span class="s2">&quot;commit&quot;</span><span class="p">]</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="133"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the :attr:`Pool.reset_on_return &lt;sqlalchemy.pool.Pool.params.reset_on_return` parameter of the underlying</span>
+</span><span data-line="134"><span class="sd">    :class`Pool &lt;sqlalchemy.pool.Pool&gt;` object, which can be set to the values ``&quot;rollback&quot;``, ``&quot;commit&quot;``, or</span>
+</span><span data-line="135"><span class="sd">    ``None``.&quot;&quot;&quot;</span>
+</span><span data-line="136">    <span class="n">pool_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="137"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Number of seconds to wait before giving up on getting a connection from the pool. This is only used with</span>
+</span><span data-line="138"><span class="sd">    :class:`QueuePool &lt;sqlalchemy.pool.QueuePool&gt;`. This can be a float but is subject to the limitations of Python time</span>
+</span><span data-line="139"><span class="sd">    functions which may not be reliable in the tens of milliseconds.&quot;&quot;&quot;</span>
+</span><span data-line="140">    <span class="n">pool_use_lifo</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="141"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Use LIFO (last-in-first-out) when retrieving connections from :class:`QueuePool &lt;sqlalchemy.pool.QueuePool&gt;`</span>
+</span><span data-line="142"><span class="sd">    instead of FIFO (first-in-first-out). Using LIFO, a server-side timeout scheme can reduce the number of connections</span>
+</span><span data-line="143"><span class="sd">    used during non-peak periods of use. When planning for server-side timeouts, ensure that a recycle or pre-ping</span>
+</span><span data-line="144"><span class="sd">    strategy is in use to gracefully handle stale connections.&quot;&quot;&quot;</span>
+</span><span data-line="145">    <span class="n">plugins</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="146"><span class="w">    </span><span class="sd">&quot;&quot;&quot;String list of plugin names to load. See :class:`CreateEnginePlugin &lt;sqlalchemy.engine.CreateEnginePlugin&gt;` for</span>
+</span><span data-line="147"><span class="sd">    background.&quot;&quot;&quot;</span>
+</span><span data-line="148">    <span class="n">query_cache_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="149"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Size of the cache used to cache the SQL string form of queries. Set to zero to disable caching.</span>
+</span><span data-line="150">
+</span><span data-line="151"><span class="sd">    See :attr:`query_cache_size &lt;sqlalchemy.get_engine.params.query_cache_size&gt;` for more info.</span>
+</span><span data-line="152"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="153">    <span class="n">use_insertmanyvalues</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">EmptyType</span> <span class="o">=</span> <span class="n">Empty</span>
+</span><span data-line="154"><span class="w">    </span><span class="sd">&quot;&quot;&quot;``True`` by default, use the “insertmanyvalues” execution style for INSERT..RETURNING statements by default.&quot;&quot;&quot;</span></div>
+
+</span></pre></div>
+        </article><button class="back-to-top" type="button">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+  </svg>
+  <span>Back to top</span>
+</button><div class="navigation flex print:hidden"></div></div>
+    </div>
+  </main>
+</div>
+<footer class="sy-foot">
+  <div class="sy-foot-inner sy-container mx-auto">
+    <div class="sy-foot-reserved md:flex justify-between items-center">
+      <div class="sy-foot-copyright"><p>2024, Litestar Organization</p>
+  
+  <p>
+    Made with
+    
+    <a href="https://www.sphinx-doc.org/">Sphinx</a> and
+    
+    <a href="https://shibuya.lepture.com">Shibuya theme</a>.
+  </p>
+</div>
+      <div class="sy-foot-socials">
+<a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+  <iconify-icon icon="simple-icons:github"></iconify-icon>
+</a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+<a href="https://discord.gg/litestar" aria-label="Discord">
+  <iconify-icon icon="simple-icons:discord"></iconify-icon>
+</a>
+<a href="https://www.reddit.com/r/LitestarAPI" aria-label="Reddit">
+  <iconify-icon icon="simple-icons:reddit"></iconify-icon>
+</a></div>
+    </div>
+  </div>
+</footer>
+      <script src="../../../_static/documentation_options.js?v=c6cf4326"></script>
+      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=f281be69"></script>
+      <script src="../../../_static/litestar-theme.js?v=ab2dcc9e"></script>
+      <script>let toggleHintShow = 'Click to show';</script>
+      <script>let toggleHintHide = 'Click to hide';</script>
+      <script>let toggleOpenOnPrint = 'true';</script>
+      <script src="../../../_static/togglebutton.js?v=4a39c7ea"></script>
+      <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../_static/shibuya.js?v=e2e99575"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../_static/versioning.js"></script></body>
+</html>

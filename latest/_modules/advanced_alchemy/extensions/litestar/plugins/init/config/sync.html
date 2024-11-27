@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en" data-accent-color="amber" data-content_root="../../../../../../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>advanced_alchemy.extensions.litestar.plugins.init.config.sync - Advanced Alchemy</title><link rel="shortcut icon" href="../../../../../../../_static/favicon.svg"/><link rel="index" title="Index" href="../../../../../../../genindex.html" /><link rel="search" title="Search" href="../../../../../../../search.html" /><script>
+    function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
+    setColorMode(localStorage._theme||"auto");
+  </script><link rel="stylesheet" type="text/css" href="../../../../../../../_static/pygments.css?v=397bb51e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/shibuya.css?v=83eaa723" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/sphinx_paramlinks.css" />
+    <link media="print" rel="stylesheet" type="text/css" href="../../../../../../../_static/print.css?v=20ff2c19" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/style.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../../_static/litestar-sphinx-theme.css?v=e9f54662" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sy-f-text: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+  --sy-f-heading: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+}
+</style>
+    <meta property="og:type" content="website"/><meta property="og:title" content="advanced_alchemy.extensions.litestar.plugins.init.config.sync"/>
+<meta name="twitter:card" content="summary"/>
+<meta property="og:image" content="_static/logo-light.png"/>
+  </head>
+<body><div class="sy-head">
+  <div class="sy-head-blur"></div>
+  <div class="sy-head-inner sy-container mx-auto">
+    <a class="sy-head-brand" href="/">
+      <img class="light-logo" src="../../../../../../../_static/logo-light.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <img class="dark-logo" src="../../../../../../../_static/logo-dark.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <strong>advanced_alchemy</strong>
+    </a>
+    <div class="sy-head-nav" id="HeadNav">
+      <nav class="sy-head-links"><ul><li class="link"><a href="../../../../../../../index.html">Home</a></li>
+      <li class="link"><button type="button">
+            <span>Community</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../../../../../contribution-guide.html">
+                <span>Contributing</span>
+                <small>Learn how to contribute to the Advanced Alchemy project</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file">
+                <span>Code of Conduct</span>
+                <small>Review the etiquette for interacting with the Advanced Alchemy community</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file">
+                <span>Security</span>
+                <small>Overview of Advanced Alchemy's security protocols</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>About</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://litestar.dev/about/organization">
+                <span>Litestar Organization</span>
+                <small>Details about the Litestar organization</small>
+              </a></li><li><a href="../../../../../../../releases.html">
+                <span>Releases</span>
+                <small>Explore the release process, versioning, and deprecation policy for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Release notes</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../../../../../changelog.html">
+                <span>Changelog</span>
+                <small>All changes for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Help</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://discord.gg/litestar">
+                <span>Discord Help Forum</span>
+                <small>Dedicated Discord help forum</small>
+              </a></li><li><a href="https://github.com/litestar-org/advanced-alchemy/discussions">
+                <span>GitHub Discussions</span>
+                <small>GitHub Discussions</small>
+              </a></li><li><a href="https://stackoverflow.com/questions/tagged/litestar">
+                <span>Stack Overflow</span>
+                <small>We monitor the <code><b>litestar</b></code> tag on Stack Overflow</small>
+              </a></li></ul>
+      </li><li class="link">
+          <a href="https://github.com/sponsors/Litestar-Org">
+            <span>Sponsor</span></a>
+        </li></ul></nav>
+      <div class="sy-head-extra flex items-center print:hidden"><form class="searchbox flex items-center" action="../../../../../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <kbd>/</kbd>
+</form><div class="sy-head-socials">
+  <a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+  <a href="https://discord.gg/litestar" aria-label="Discord">
+    <iconify-icon icon="simple-icons:discord"></iconify-icon>
+  </a></div></div>
+    </div>
+    <div class="sy-head-actions flex items-center shrink-0 print:hidden"><button class="js-theme theme-switch flex items-center"
+data-aria-auto="Switch to light color mode"
+data-aria-light="Switch to dark color mode"
+data-aria-dark="Switch to auto color mode">
+<i class="i-lucide theme-icon"></i>
+</button><button class="md:hidden flex items-center js-menu" aria-label="Menu" type="button" aria-controls="HeadNav" aria-expanded="false">
+        <div class="hamburger">
+          <span class="hamburger_1"></span>
+          <span class="hamburger_2 -translate-x-2"></span>
+          <span class="hamburger_3 -translate-x-1"></span>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="sy-page sy-container flex mx-auto">
+  <aside id="lside" class="sy-lside md:w-72 md:shrink-0 print:hidden">
+    <div class="sy-lside-inner md:sticky">
+      <div class="sy-scrollbar p-6"><div class="sidebar-links">
+  <ul>
+    <li><a class="icon-link" href="https://github.com/orgs/litestar-org/discussions">
+  <span class="icon">
+    <svg viewBox="0 0 24 24" fill="none">
+      <path fill="var(--accent-9)" fill-rule="evenodd" clip-rule="evenodd" d="M11 5a6 6 0 0 0-4.687 9.746c.215.27.315.62.231.954l-.514 2.058a1 1 0 0 0 1.485 1.1l2.848-1.71c.174-.104.374-.15.576-.148H13a6 6 0 0 0 0-12h-2Z"/>
+      <circle fill="white" cx="12" cy="11" r="1"/>
+      <circle fill="white" cx="9" cy="11" r="1"/>
+      <circle fill="white" cx="15" cy="11" r="1"/>
+    </svg>
+  </span>
+  <span class="text">Discussion</span>
+</a></li>
+  </ul>
+</div>
+        <div class="globaltoc" data-expand-depth="0"><p class="caption" role="heading" aria-level="3"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../../usage/index.html">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../usage/modeling.html">Modeling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../usage/repositories.html">Repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../usage/services.html">Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../usage/utilities.html">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../usage/frameworks/litestar.html">Litestar Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../usage/frameworks/fastapi.html">FastAPI Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../../reference/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/base.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/mixins/index.html">mixins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/mixins/unique.html">unique</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/config/index.html">config</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/config/asyncio.html">asyncio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/config/common.html">common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/config/engine.html">engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/config/sync.html">sync</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/config/types.html">types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/operations.html">operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/types.html">types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/exceptions.html">exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/utils.html">utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/repository.html">repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/filters.html">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/service.html">services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/extensions/index.html">extensions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/extensions/litestar/index.html">litestar</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../../../reference/extensions/litestar/alembic.html">alembic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../../../reference/extensions/litestar/dto.html">dto</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../../../reference/extensions/litestar/plugins.html">plugin</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/extensions/sanic.html">sanic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/extensions/starlette.html">starlette</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../../reference/alembic/index.html">alembic</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../../../reference/alembic/commands.html">commands</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../../contribution-guide.html">Contribution guide</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/search?q=user%3Alitestar-org+state%3Aopen+label%3A%22good+first+issue%22+++no%3Aassignee+repo%3A%22advanced-alchemy%22&amp;type=issues">Available Issues</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/litestar-org/.github?tab=coc-ov-file#readme">Code of Conduct</a></li>
+</ul>
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="lside-overlay js-menu" role="button" aria-label="Close left sidebar" aria-controls="lside" aria-expanded="false"></div>
+  <aside id="rside" class="sy-rside pb-3 w-64 shrink-0 order-last">
+    <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
+      <i class="i-lucide close"></i>
+    </button>
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
+  data-type="github" data-user="litestar-org" data-repo="advanced-alchemy">
+  <span class="w-8 flex items-center justify-around shrink-0 text-3xl">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </span>
+  <span class="flex-grow px-2 break-all">
+    <span>litestar-org/advanced-alchemy</span>
+    <span class="flex text-sm repo-stats-count">
+      <span class="flex items-center pr-3">
+        <iconify-icon icon="lucide:star"></iconify-icon>
+        <strong class="js-repo-stars ml-1">0</strong>
+      </span>
+      <span class="flex items-center">
+        <iconify-icon icon="lucide:git-fork"></iconify-icon>
+        <strong class="js-repo-forks ml-1">0</strong>
+      </span>
+    </span>
+  </span>
+</a><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
+  </aside>
+  <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
+  <main class="sy-main w-full max-sm:max-w-full print:pt-6"><div class="sy-breadcrumbs" role="navigation">
+  <div class="sy-breadcrumbs-inner flex items-center">
+    <div class="md:hidden mr-3">
+      <button class="js-menu" aria-label="Menu" type="button" aria-controls="lside" aria-expanded="false">
+        <i class="i-lucide menu"></i>
+      </button>
+    </div>
+    <ol class="flex-1" itemscope itemtype="https://schema.org/BreadcrumbList"><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../../../../../../index.html"><span itemprop="name">advanced_alchemy</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="1" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../../../../../index.html"><span itemprop="name">Module code</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="2" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../../plugins.html"><span itemprop="name">advanced_alchemy.extensions.litestar.plugins</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="3" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">advanced_alchemy.extensions.litestar.plugins.init.config.sync</strong>
+        <meta itemprop="position" content="4" />
+      </li></ol>
+    <div class="xl:hidden ml-1">
+      <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
+        aria-expanded="false">
+        <i class="i-lucide outdent"></i>
+      </button>
+    </div>
+  </div>
+</div><div class="flex flex-col break-words justify-between">
+      <div class="min-w-0 max-w-6xl px-6 pb-6 pt-8 xl:px-12">
+        <article class="yue" role="main">
+          <h1>Source code for advanced_alchemy.extensions.litestar.plugins.init.config.sync</h1><div class="highlight"><pre>
+<span></span><span data-line="1"><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">asynccontextmanager</span>
+</span><span data-line="4"><span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+</span><span data-line="5"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">AsyncGenerator</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">cast</span>
+</span><span data-line="6">
+</span><span data-line="7"><span class="kn">from</span> <span class="nn">litestar.cli._utils</span> <span class="kn">import</span> <span class="n">console</span>
+</span><span data-line="8"><span class="kn">from</span> <span class="nn">litestar.constants</span> <span class="kn">import</span> <span class="n">HTTP_RESPONSE_START</span>
+</span><span data-line="9"><span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Engine</span>
+</span><span data-line="10"><span class="kn">from</span> <span class="nn">sqlalchemy.exc</span> <span class="kn">import</span> <span class="n">OperationalError</span>
+</span><span data-line="11"><span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">Session</span>
+</span><span data-line="12">
+</span><span data-line="13"><span class="kn">from</span> <span class="nn">advanced_alchemy.config.sync</span> <span class="kn">import</span> <span class="n">SQLAlchemySyncConfig</span> <span class="k">as</span> <span class="n">_SQLAlchemySyncConfig</span>
+</span><span data-line="14"><span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar._utils</span> <span class="kn">import</span> <span class="p">(</span>
+</span><span data-line="15">    <span class="n">delete_aa_scope_state</span><span class="p">,</span>
+</span><span data-line="16">    <span class="n">get_aa_scope_state</span><span class="p">,</span>
+</span><span data-line="17">    <span class="n">set_aa_scope_state</span><span class="p">,</span>
+</span><span data-line="18"><span class="p">)</span>
+</span><span data-line="19"><span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.plugins.init.config.common</span> <span class="kn">import</span> <span class="p">(</span>
+</span><span data-line="20">    <span class="n">SESSION_SCOPE_KEY</span><span class="p">,</span>
+</span><span data-line="21">    <span class="n">SESSION_TERMINUS_ASGI_EVENTS</span><span class="p">,</span>
+</span><span data-line="22"><span class="p">)</span>
+</span><span data-line="23"><span class="kn">from</span> <span class="nn">advanced_alchemy.extensions.litestar.plugins.init.config.engine</span> <span class="kn">import</span> <span class="n">EngineConfig</span>
+</span><span data-line="24">
+</span><span data-line="25"><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+</span><span data-line="26">    <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span>
+</span><span data-line="27">
+</span><span data-line="28">    <span class="kn">from</span> <span class="nn">litestar</span> <span class="kn">import</span> <span class="n">Litestar</span>
+</span><span data-line="29">    <span class="kn">from</span> <span class="nn">litestar.datastructures.state</span> <span class="kn">import</span> <span class="n">State</span>
+</span><span data-line="30">    <span class="kn">from</span> <span class="nn">litestar.types</span> <span class="kn">import</span> <span class="n">BeforeMessageSendHookHandler</span><span class="p">,</span> <span class="n">Message</span><span class="p">,</span> <span class="n">Scope</span>
+</span><span data-line="31">
+</span><span data-line="32"><span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span>
+</span><span data-line="33">    <span class="s2">&quot;SQLAlchemySyncConfig&quot;</span><span class="p">,</span>
+</span><span data-line="34">    <span class="s2">&quot;autocommit_before_send_handler&quot;</span><span class="p">,</span>
+</span><span data-line="35">    <span class="s2">&quot;autocommit_handler_maker&quot;</span><span class="p">,</span>
+</span><span data-line="36">    <span class="s2">&quot;default_before_send_handler&quot;</span><span class="p">,</span>
+</span><span data-line="37">    <span class="s2">&quot;default_handler_maker&quot;</span><span class="p">,</span>
+</span><span data-line="38"><span class="p">)</span>
+</span><span data-line="39">
+</span><span data-line="40">
+</span><span data-line="41"><span class="k">def</span> <span class="nf">default_handler_maker</span><span class="p">(</span>
+</span><span data-line="42">    <span class="n">session_scope_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">SESSION_SCOPE_KEY</span><span class="p">,</span>
+</span><span data-line="43"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Message</span><span class="p">,</span> <span class="n">Scope</span><span class="p">],</span> <span class="kc">None</span><span class="p">]:</span>
+</span><span data-line="44"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set up the handler to issue a transaction commit or rollback based on specified status codes</span>
+</span><span data-line="45"><span class="sd">    Args:</span>
+</span><span data-line="46"><span class="sd">        session_scope_key: The key to use within the application state</span>
+</span><span data-line="47">
+</span><span data-line="48"><span class="sd">    Returns:</span>
+</span><span data-line="49"><span class="sd">        The handler callable</span>
+</span><span data-line="50"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="51">
+</span><span data-line="52">    <span class="k">def</span> <span class="nf">handler</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="n">Message</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="53"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle commit/rollback, closing and cleaning up sessions before sending.</span>
+</span><span data-line="54">
+</span><span data-line="55"><span class="sd">        Args:</span>
+</span><span data-line="56"><span class="sd">            message: ASGI-``Message``</span>
+</span><span data-line="57"><span class="sd">            scope: An ASGI-``Scope``</span>
+</span><span data-line="58">
+</span><span data-line="59"><span class="sd">        Returns:</span>
+</span><span data-line="60"><span class="sd">            None</span>
+</span><span data-line="61"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="62">        <span class="n">session</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;Session | None&quot;</span><span class="p">,</span> <span class="n">get_aa_scope_state</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">session_scope_key</span><span class="p">))</span>
+</span><span data-line="63">        <span class="k">if</span> <span class="n">session</span> <span class="ow">and</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">SESSION_TERMINUS_ASGI_EVENTS</span><span class="p">:</span>
+</span><span data-line="64">            <span class="n">session</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span data-line="65">            <span class="n">delete_aa_scope_state</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">session_scope_key</span><span class="p">)</span>
+</span><span data-line="66">
+</span><span data-line="67">    <span class="k">return</span> <span class="n">handler</span>
+</span><span data-line="68">
+</span><span data-line="69">
+</span><span data-line="70"><span class="n">default_before_send_handler</span> <span class="o">=</span> <span class="n">default_handler_maker</span><span class="p">()</span>
+</span><span data-line="71">
+</span><span data-line="72">
+</span><span data-line="73"><span class="k">def</span> <span class="nf">autocommit_handler_maker</span><span class="p">(</span>
+</span><span data-line="74">    <span class="n">commit_on_redirect</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span data-line="75">    <span class="n">extra_commit_statuses</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="76">    <span class="n">extra_rollback_statuses</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="77">    <span class="n">session_scope_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">SESSION_SCOPE_KEY</span><span class="p">,</span>
+</span><span data-line="78"><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Message</span><span class="p">,</span> <span class="n">Scope</span><span class="p">],</span> <span class="kc">None</span><span class="p">]:</span>
+</span><span data-line="79"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set up the handler to issue a transaction commit or rollback based on specified status codes</span>
+</span><span data-line="80"><span class="sd">    Args:</span>
+</span><span data-line="81"><span class="sd">        commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)</span>
+</span><span data-line="82"><span class="sd">        extra_commit_statuses: A set of additional status codes that trigger a commit</span>
+</span><span data-line="83"><span class="sd">        extra_rollback_statuses: A set of additional status codes that trigger a rollback</span>
+</span><span data-line="84"><span class="sd">        session_scope_key: The key to use within the application state</span>
+</span><span data-line="85">
+</span><span data-line="86"><span class="sd">    Returns:</span>
+</span><span data-line="87"><span class="sd">        The handler callable</span>
+</span><span data-line="88"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="89">    <span class="k">if</span> <span class="n">extra_commit_statuses</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="90">        <span class="n">extra_commit_statuses</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+</span><span data-line="91">
+</span><span data-line="92">    <span class="k">if</span> <span class="n">extra_rollback_statuses</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="93">        <span class="n">extra_rollback_statuses</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+</span><span data-line="94">
+</span><span data-line="95">    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">extra_commit_statuses</span> <span class="o">&amp;</span> <span class="n">extra_rollback_statuses</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span data-line="96">        <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Extra rollback statuses and commit statuses must not share any status codes&quot;</span>
+</span><span data-line="97">        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+</span><span data-line="98">
+</span><span data-line="99">    <span class="n">commit_range</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">400</span> <span class="k">if</span> <span class="n">commit_on_redirect</span> <span class="k">else</span> <span class="mi">300</span><span class="p">)</span>
+</span><span data-line="100">
+</span><span data-line="101">    <span class="k">def</span> <span class="nf">handler</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="n">Message</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="102"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle commit/rollback, closing and cleaning up sessions before sending.</span>
+</span><span data-line="103">
+</span><span data-line="104"><span class="sd">        Args:</span>
+</span><span data-line="105"><span class="sd">            message: ASGI-``Message``</span>
+</span><span data-line="106"><span class="sd">            scope: An ASGI-``Scope``</span>
+</span><span data-line="107">
+</span><span data-line="108"><span class="sd">        Returns:</span>
+</span><span data-line="109"><span class="sd">            None</span>
+</span><span data-line="110"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="111">        <span class="n">session</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;Session | None&quot;</span><span class="p">,</span> <span class="n">get_aa_scope_state</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">session_scope_key</span><span class="p">))</span>
+</span><span data-line="112">        <span class="k">try</span><span class="p">:</span>
+</span><span data-line="113">            <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">HTTP_RESPONSE_START</span><span class="p">:</span>
+</span><span data-line="114">                <span class="k">if</span> <span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">commit_range</span> <span class="ow">or</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">extra_commit_statuses</span><span class="p">)</span> <span class="ow">and</span> <span class="n">message</span><span class="p">[</span>
+</span><span data-line="115">                    <span class="s2">&quot;status&quot;</span>
+</span><span data-line="116">                <span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">extra_rollback_statuses</span><span class="p">:</span>
+</span><span data-line="117">                    <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</span><span data-line="118">                <span class="k">else</span><span class="p">:</span>
+</span><span data-line="119">                    <span class="n">session</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+</span><span data-line="120">        <span class="k">finally</span><span class="p">:</span>
+</span><span data-line="121">            <span class="k">if</span> <span class="n">session</span> <span class="ow">and</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">SESSION_TERMINUS_ASGI_EVENTS</span><span class="p">:</span>
+</span><span data-line="122">                <span class="n">session</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span data-line="123">                <span class="n">delete_aa_scope_state</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">session_scope_key</span><span class="p">)</span>
+</span><span data-line="124">
+</span><span data-line="125">    <span class="k">return</span> <span class="n">handler</span>
+</span><span data-line="126">
+</span><span data-line="127">
+</span><span data-line="128"><span class="n">autocommit_before_send_handler</span> <span class="o">=</span> <span class="n">autocommit_handler_maker</span><span class="p">()</span>
+</span><span data-line="129">
+</span><span data-line="130">
+<div class="viewcode-block" id="SQLAlchemySyncConfig">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig">[docs]</a>
+</span><span data-line="131"><span class="nd">@dataclass</span>
+</span><span data-line="132"><span class="k">class</span> <span class="nc">SQLAlchemySyncConfig</span><span class="p">(</span><span class="n">_SQLAlchemySyncConfig</span><span class="p">):</span>
+</span><span data-line="133"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Litestar Sync SQLAlchemy Configuration.&quot;&quot;&quot;</span>
+</span><span data-line="134">
+</span><span data-line="135">    <span class="n">before_send_handler</span><span class="p">:</span> <span class="n">BeforeMessageSendHookHandler</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;autocommit&quot;</span><span class="p">,</span> <span class="s2">&quot;autocommit_include_redirects&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+</span><span data-line="136">        <span class="kc">None</span>
+</span><span data-line="137">    <span class="p">)</span>
+</span><span data-line="138"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Handler to call before the ASGI message is sent.</span>
+</span><span data-line="139">
+</span><span data-line="140"><span class="sd">    The handler should handle closing the session stored in the ASGI scope, if it&#39;s still open, and committing and</span>
+</span><span data-line="141"><span class="sd">    uncommitted data.</span>
+</span><span data-line="142"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="143">    <span class="n">engine_dependency_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;db_engine&quot;</span>
+</span><span data-line="144"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Key to use for the dependency injection of database engines.&quot;&quot;&quot;</span>
+</span><span data-line="145">    <span class="n">session_dependency_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;db_session&quot;</span>
+</span><span data-line="146"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Key to use for the dependency injection of database sessions.&quot;&quot;&quot;</span>
+</span><span data-line="147">    <span class="n">engine_app_state_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;db_engine&quot;</span>
+</span><span data-line="148"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Key under which to store the SQLAlchemy engine in the application :class:`State &lt;.datastructures.State&gt;`</span>
+</span><span data-line="149"><span class="sd">    instance.</span>
+</span><span data-line="150"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="151">    <span class="n">session_maker_app_state_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;session_maker_class&quot;</span>
+</span><span data-line="152"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Key under which to store the SQLAlchemy :class:`sessionmaker &lt;sqlalchemy.orm.sessionmaker&gt;` in the application</span>
+</span><span data-line="153"><span class="sd">    :class:`State &lt;.datastructures.State&gt;` instance.</span>
+</span><span data-line="154"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="155">    <span class="n">session_scope_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">SESSION_SCOPE_KEY</span>
+</span><span data-line="156"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Key under which to store the SQLAlchemy scope in the application.&quot;&quot;&quot;</span>
+</span><span data-line="157">    <span class="n">engine_config</span><span class="p">:</span> <span class="n">EngineConfig</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">EngineConfig</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportIncompatibleVariableOverride]</span>
+</span><span data-line="158"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for the SQLAlchemy engine.</span>
+</span><span data-line="159">
+</span><span data-line="160"><span class="sd">    The configuration options are documented in the SQLAlchemy documentation.</span>
+</span><span data-line="161"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="162">
+</span><span data-line="163">    <span class="k">def</span> <span class="nf">_ensure_unique</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">registry_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span data-line="164">        <span class="n">new_key</span> <span class="o">=</span> <span class="n">new_key</span> <span class="k">if</span> <span class="n">new_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">key</span>
+</span><span data-line="165">        <span class="k">if</span> <span class="n">new_key</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="n">registry_name</span><span class="p">,</span> <span class="p">{}):</span>
+</span><span data-line="166">            <span class="n">_iter</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span data-line="167">            <span class="n">new_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_unique</span><span class="p">(</span><span class="n">registry_name</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">_iter</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">_iter</span><span class="p">)</span>
+</span><span data-line="168">        <span class="k">return</span> <span class="n">new_key</span>
+</span><span data-line="169">
+</span><span data-line="170">    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="171">        <span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_unique</span><span class="p">(</span><span class="s2">&quot;_SESSION_SCOPE_KEY_REGISTRY&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">)</span>
+</span><span data-line="172">        <span class="bp">self</span><span class="o">.</span><span class="n">engine_app_state_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_unique</span><span class="p">(</span><span class="s2">&quot;_ENGINE_APP_STATE_KEY_REGISTRY&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_app_state_key</span><span class="p">)</span>
+</span><span data-line="173">        <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_app_state_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_unique</span><span class="p">(</span>
+</span><span data-line="174">            <span class="s2">&quot;_SESSIONMAKER_APP_STATE_KEY_REGISTRY&quot;</span><span class="p">,</span>
+</span><span data-line="175">            <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_app_state_key</span><span class="p">,</span>
+</span><span data-line="176">        <span class="p">)</span>
+</span><span data-line="177">        <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="n">_SESSION_SCOPE_KEY_REGISTRY</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">)</span>  <span class="c1"># noqa: SLF001</span>
+</span><span data-line="178">        <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="n">_ENGINE_APP_STATE_KEY_REGISTRY</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">engine_app_state_key</span><span class="p">)</span>  <span class="c1"># noqa: SLF001</span>
+</span><span data-line="179">        <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="n">_SESSIONMAKER_APP_STATE_KEY_REGISTRY</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_maker_app_state_key</span><span class="p">)</span>  <span class="c1"># noqa: SLF001</span>
+</span><span data-line="180">        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">before_send_handler</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="181">            <span class="bp">self</span><span class="o">.</span><span class="n">before_send_handler</span> <span class="o">=</span> <span class="n">default_handler_maker</span><span class="p">(</span><span class="n">session_scope_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">)</span>
+</span><span data-line="182">        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">before_send_handler</span> <span class="o">==</span> <span class="s2">&quot;autocommit&quot;</span><span class="p">:</span>
+</span><span data-line="183">            <span class="bp">self</span><span class="o">.</span><span class="n">before_send_handler</span> <span class="o">=</span> <span class="n">autocommit_handler_maker</span><span class="p">(</span><span class="n">session_scope_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">)</span>
+</span><span data-line="184">        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">before_send_handler</span> <span class="o">==</span> <span class="s2">&quot;autocommit_include_redirects&quot;</span><span class="p">:</span>
+</span><span data-line="185">            <span class="bp">self</span><span class="o">.</span><span class="n">before_send_handler</span> <span class="o">=</span> <span class="n">autocommit_handler_maker</span><span class="p">(</span>
+</span><span data-line="186">                <span class="n">session_scope_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">,</span>
+</span><span data-line="187">                <span class="n">commit_on_redirect</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span data-line="188">            <span class="p">)</span>
+</span><span data-line="189">        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__post_init__</span><span class="p">()</span>
+</span><span data-line="190">
+<div class="viewcode-block" id="SQLAlchemySyncConfig.create_session_maker">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig.create_session_maker">[docs]</a>
+</span><span data-line="191">    <span class="k">def</span> <span class="nf">create_session_maker</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Session</span><span class="p">]:</span>
+</span><span data-line="192"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Get a session maker. If none exists yet, create one.</span>
+</span><span data-line="193">
+</span><span data-line="194"><span class="sd">        Returns:</span>
+</span><span data-line="195"><span class="sd">            Session factory used by the plugin.</span>
+</span><span data-line="196"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="197">        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span><span class="p">:</span>
+</span><span data-line="198">            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span>
+</span><span data-line="199">
+</span><span data-line="200">        <span class="n">session_kws</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_config_dict</span>
+</span><span data-line="201">        <span class="k">if</span> <span class="n">session_kws</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;bind&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="202">            <span class="n">session_kws</span><span class="p">[</span><span class="s2">&quot;bind&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_engine</span><span class="p">()</span>
+</span><span data-line="203">        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_class</span><span class="p">(</span><span class="o">**</span><span class="n">session_kws</span><span class="p">)</span></div>
+
+</span><span data-line="204">
+</span><span data-line="205">    <span class="nd">@asynccontextmanager</span>
+</span><span data-line="206">    <span class="k">async</span> <span class="k">def</span> <span class="nf">lifespan</span><span class="p">(</span>
+</span><span data-line="207">        <span class="bp">self</span><span class="p">,</span>
+</span><span data-line="208">        <span class="n">app</span><span class="p">:</span> <span class="n">Litestar</span><span class="p">,</span>
+</span><span data-line="209">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncGenerator</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+</span><span data-line="210">        <span class="n">deps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_app_state_items</span><span class="p">()</span>
+</span><span data-line="211">        <span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">deps</span><span class="p">)</span>
+</span><span data-line="212">        <span class="k">try</span><span class="p">:</span>
+</span><span data-line="213">            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_all</span><span class="p">:</span>
+</span><span data-line="214">                <span class="bp">self</span><span class="o">.</span><span class="n">create_all_metadata</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+</span><span data-line="215">            <span class="k">yield</span>
+</span><span data-line="216">        <span class="k">finally</span><span class="p">:</span>
+</span><span data-line="217">            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_dependency_key</span> <span class="ow">in</span> <span class="n">deps</span><span class="p">:</span>
+</span><span data-line="218">                <span class="n">engine</span> <span class="o">=</span> <span class="n">deps</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">engine_dependency_key</span><span class="p">]</span>
+</span><span data-line="219">                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="s2">&quot;dispose&quot;</span><span class="p">):</span>
+</span><span data-line="220">                    <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;Engine&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="p">)</span><span class="o">.</span><span class="n">dispose</span><span class="p">()</span>
+</span><span data-line="221">
+<div class="viewcode-block" id="SQLAlchemySyncConfig.provide_engine">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig.provide_engine">[docs]</a>
+</span><span data-line="222">    <span class="k">def</span> <span class="nf">provide_engine</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">State</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Engine</span><span class="p">:</span>
+</span><span data-line="223"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an engine instance.</span>
+</span><span data-line="224">
+</span><span data-line="225"><span class="sd">        Args:</span>
+</span><span data-line="226"><span class="sd">            state: The ``Litestar.state`` instance.</span>
+</span><span data-line="227">
+</span><span data-line="228"><span class="sd">        Returns:</span>
+</span><span data-line="229"><span class="sd">            An engine instance.</span>
+</span><span data-line="230"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="231">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;Engine&quot;</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">engine_app_state_key</span><span class="p">))</span></div>
+
+</span><span data-line="232">
+<div class="viewcode-block" id="SQLAlchemySyncConfig.provide_session">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig.provide_session">[docs]</a>
+</span><span data-line="233">    <span class="k">def</span> <span class="nf">provide_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">State</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="n">Scope</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Session</span><span class="p">:</span>
+</span><span data-line="234"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a session instance.</span>
+</span><span data-line="235">
+</span><span data-line="236"><span class="sd">        Args:</span>
+</span><span data-line="237"><span class="sd">            state: The ``Litestar.state`` instance.</span>
+</span><span data-line="238"><span class="sd">            scope: The current connection&#39;s scope.</span>
+</span><span data-line="239">
+</span><span data-line="240"><span class="sd">        Returns:</span>
+</span><span data-line="241"><span class="sd">            A session instance.</span>
+</span><span data-line="242"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="243">        <span class="n">session</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;Session | None&quot;</span><span class="p">,</span> <span class="n">get_aa_scope_state</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">))</span>
+</span><span data-line="244">        <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="245">            <span class="n">session_maker</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;Callable[[], Session]&quot;</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">session_maker_app_state_key</span><span class="p">])</span>
+</span><span data-line="246">            <span class="n">session</span> <span class="o">=</span> <span class="n">session_maker</span><span class="p">()</span>
+</span><span data-line="247">            <span class="n">set_aa_scope_state</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_scope_key</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</span><span data-line="248">        <span class="k">return</span> <span class="n">session</span></div>
+
+</span><span data-line="249">
+</span><span data-line="250">    <span class="nd">@property</span>
+</span><span data-line="251">    <span class="k">def</span> <span class="nf">signature_namespace</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span data-line="252"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plugin&#39;s signature namespace.</span>
+</span><span data-line="253">
+</span><span data-line="254"><span class="sd">        Returns:</span>
+</span><span data-line="255"><span class="sd">            A string keyed dict of names to be added to the namespace for signature forward reference resolution.</span>
+</span><span data-line="256"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="257">        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;Engine&quot;</span><span class="p">:</span> <span class="n">Engine</span><span class="p">,</span> <span class="s2">&quot;Session&quot;</span><span class="p">:</span> <span class="n">Session</span><span class="p">}</span>
+</span><span data-line="258">
+<div class="viewcode-block" id="SQLAlchemySyncConfig.create_all_metadata">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig.create_all_metadata">[docs]</a>
+</span><span data-line="259">    <span class="k">def</span> <span class="nf">create_all_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app</span><span class="p">:</span> <span class="n">Litestar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="260"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Create all metadata</span>
+</span><span data-line="261">
+</span><span data-line="262"><span class="sd">        Args:</span>
+</span><span data-line="263"><span class="sd">            app (Litestar): The ``Litestar`` instance</span>
+</span><span data-line="264"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="265">        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_engine</span><span class="p">()</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+</span><span data-line="266">            <span class="k">try</span><span class="p">:</span>
+</span><span data-line="267">                <span class="bp">self</span><span class="o">.</span><span class="n">alembic_config</span><span class="o">.</span><span class="n">target_metadata</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">bind</span><span class="o">=</span><span class="n">conn</span><span class="p">)</span>
+</span><span data-line="268">            <span class="k">except</span> <span class="n">OperationalError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+</span><span data-line="269">                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[bold red] * Could not create target metadata.  Reason: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+</span><span data-line="270">
+<div class="viewcode-block" id="SQLAlchemySyncConfig.create_app_state_items">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig.create_app_state_items">[docs]</a>
+</span><span data-line="271">    <span class="k">def</span> <span class="nf">create_app_state_items</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span data-line="272"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Key/value pairs to be stored in application state.&quot;&quot;&quot;</span>
+</span><span data-line="273">        <span class="k">return</span> <span class="p">{</span>
+</span><span data-line="274">            <span class="bp">self</span><span class="o">.</span><span class="n">engine_app_state_key</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(),</span>
+</span><span data-line="275">            <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_app_state_key</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_session_maker</span><span class="p">(),</span>
+</span><span data-line="276">        <span class="p">}</span></div>
+
+</span><span data-line="277">
+<div class="viewcode-block" id="SQLAlchemySyncConfig.update_app_state">
+<a class="viewcode-back" href="../../../../../../../reference/extensions/litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig.update_app_state">[docs]</a>
+</span><span data-line="278">    <span class="k">def</span> <span class="nf">update_app_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app</span><span class="p">:</span> <span class="n">Litestar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="279"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Set the app state with engine and session.</span>
+</span><span data-line="280">
+</span><span data-line="281"><span class="sd">        Args:</span>
+</span><span data-line="282"><span class="sd">            app: The ``Litestar`` instance.</span>
+</span><span data-line="283"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="284">        <span class="n">app</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">create_app_state_items</span><span class="p">())</span></div>
+</div>
+
+</span></pre></div>
+        </article><button class="back-to-top" type="button">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+  </svg>
+  <span>Back to top</span>
+</button><div class="navigation flex print:hidden"></div></div>
+    </div>
+  </main>
+</div>
+<footer class="sy-foot">
+  <div class="sy-foot-inner sy-container mx-auto">
+    <div class="sy-foot-reserved md:flex justify-between items-center">
+      <div class="sy-foot-copyright"><p>2024, Litestar Organization</p>
+  
+  <p>
+    Made with
+    
+    <a href="https://www.sphinx-doc.org/">Sphinx</a> and
+    
+    <a href="https://shibuya.lepture.com">Shibuya theme</a>.
+  </p>
+</div>
+      <div class="sy-foot-socials">
+<a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+  <iconify-icon icon="simple-icons:github"></iconify-icon>
+</a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+<a href="https://discord.gg/litestar" aria-label="Discord">
+  <iconify-icon icon="simple-icons:discord"></iconify-icon>
+</a>
+<a href="https://www.reddit.com/r/LitestarAPI" aria-label="Reddit">
+  <iconify-icon icon="simple-icons:reddit"></iconify-icon>
+</a></div>
+    </div>
+  </div>
+</footer>
+      <script src="../../../../../../../_static/documentation_options.js?v=c6cf4326"></script>
+      <script src="../../../../../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../../../../../_static/copybutton.js?v=f281be69"></script>
+      <script src="../../../../../../../_static/litestar-theme.js?v=ab2dcc9e"></script>
+      <script>let toggleHintShow = 'Click to show';</script>
+      <script>let toggleHintHide = 'Click to hide';</script>
+      <script>let toggleOpenOnPrint = 'true';</script>
+      <script src="../../../../../../../_static/togglebutton.js?v=4a39c7ea"></script>
+      <script src="../../../../../../../_static/design-tabs.js?v=f930bc37"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../../../../../_static/shibuya.js?v=e2e99575"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../../../../../_static/versioning.js"></script></body>
+</html>

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en" data-accent-color="amber" data-content_root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>sanic - Advanced Alchemy</title><link rel="shortcut icon" href="../../_static/favicon.svg"/><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" /><link rel="next" title="starlette" href="starlette.html" /><link rel="prev" title="plugin" href="litestar/plugins.html" /><script>
+    function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
+    setColorMode(localStorage._theme||"auto");
+  </script><link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=397bb51e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/shibuya.css?v=83eaa723" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx_paramlinks.css" />
+    <link media="print" rel="stylesheet" type="text/css" href="../../_static/print.css?v=20ff2c19" />
+    <link rel="stylesheet" type="text/css" href="../../_static/style.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/litestar-sphinx-theme.css?v=e9f54662" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sy-f-text: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+  --sy-f-heading: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+}
+</style>
+    <meta property="og:type" content="website"/><meta property="og:title" content="sanic"/>
+<meta name="twitter:card" content="summary"/>
+<meta property="og:image" content="_static/logo-light.png"/>
+  </head>
+<body><div class="sy-head">
+  <div class="sy-head-blur"></div>
+  <div class="sy-head-inner sy-container mx-auto">
+    <a class="sy-head-brand" href="/">
+      <img class="light-logo" src="../../_static/logo-light.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <img class="dark-logo" src="../../_static/logo-dark.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <strong>advanced_alchemy</strong>
+    </a>
+    <div class="sy-head-nav" id="HeadNav">
+      <nav class="sy-head-links"><ul><li class="link"><a href="../../index.html">Home</a></li>
+      <li class="link"><button type="button">
+            <span>Community</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../contribution-guide.html">
+                <span>Contributing</span>
+                <small>Learn how to contribute to the Advanced Alchemy project</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file">
+                <span>Code of Conduct</span>
+                <small>Review the etiquette for interacting with the Advanced Alchemy community</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file">
+                <span>Security</span>
+                <small>Overview of Advanced Alchemy's security protocols</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>About</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://litestar.dev/about/organization">
+                <span>Litestar Organization</span>
+                <small>Details about the Litestar organization</small>
+              </a></li><li><a href="../../releases.html">
+                <span>Releases</span>
+                <small>Explore the release process, versioning, and deprecation policy for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Release notes</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../changelog.html">
+                <span>Changelog</span>
+                <small>All changes for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Help</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://discord.gg/litestar">
+                <span>Discord Help Forum</span>
+                <small>Dedicated Discord help forum</small>
+              </a></li><li><a href="https://github.com/litestar-org/advanced-alchemy/discussions">
+                <span>GitHub Discussions</span>
+                <small>GitHub Discussions</small>
+              </a></li><li><a href="https://stackoverflow.com/questions/tagged/litestar">
+                <span>Stack Overflow</span>
+                <small>We monitor the <code><b>litestar</b></code> tag on Stack Overflow</small>
+              </a></li></ul>
+      </li><li class="link">
+          <a href="https://github.com/sponsors/Litestar-Org">
+            <span>Sponsor</span></a>
+        </li></ul></nav>
+      <div class="sy-head-extra flex items-center print:hidden"><form class="searchbox flex items-center" action="../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <kbd>/</kbd>
+</form><div class="sy-head-socials">
+  <a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+  <a href="https://discord.gg/litestar" aria-label="Discord">
+    <iconify-icon icon="simple-icons:discord"></iconify-icon>
+  </a></div></div>
+    </div>
+    <div class="sy-head-actions flex items-center shrink-0 print:hidden"><button class="js-theme theme-switch flex items-center"
+data-aria-auto="Switch to light color mode"
+data-aria-light="Switch to dark color mode"
+data-aria-dark="Switch to auto color mode">
+<i class="i-lucide theme-icon"></i>
+</button><button class="md:hidden flex items-center js-menu" aria-label="Menu" type="button" aria-controls="HeadNav" aria-expanded="false">
+        <div class="hamburger">
+          <span class="hamburger_1"></span>
+          <span class="hamburger_2 -translate-x-2"></span>
+          <span class="hamburger_3 -translate-x-1"></span>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="sy-page sy-container flex mx-auto">
+  <aside id="lside" class="sy-lside md:w-72 md:shrink-0 print:hidden">
+    <div class="sy-lside-inner md:sticky">
+      <div class="sy-scrollbar p-6"><div class="sidebar-links">
+  <ul>
+    <li><a class="icon-link" href="https://github.com/orgs/litestar-org/discussions">
+  <span class="icon">
+    <svg viewBox="0 0 24 24" fill="none">
+      <path fill="var(--accent-9)" fill-rule="evenodd" clip-rule="evenodd" d="M11 5a6 6 0 0 0-4.687 9.746c.215.27.315.62.231.954l-.514 2.058a1 1 0 0 0 1.485 1.1l2.848-1.71c.174-.104.374-.15.576-.148H13a6 6 0 0 0 0-12h-2Z"/>
+      <circle fill="white" cx="12" cy="11" r="1"/>
+      <circle fill="white" cx="9" cy="11" r="1"/>
+      <circle fill="white" cx="15" cy="11" r="1"/>
+    </svg>
+  </span>
+  <span class="text">Discussion</span>
+</a></li>
+  </ul>
+</div>
+        <div class="globaltoc" data-expand-depth="0"><p class="caption" role="heading" aria-level="3"><span class="caption-text">Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/index.html">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../usage/modeling.html">Modeling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../usage/repositories.html">Repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../usage/services.html">Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../usage/utilities.html">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../usage/frameworks/litestar.html">Litestar Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../usage/frameworks/fastapi.html">FastAPI Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../base.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mixins/index.html">mixins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../mixins/unique.html">unique</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../config/index.html">config</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../config/asyncio.html">asyncio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../config/common.html">common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../config/engine.html">engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../config/sync.html">sync</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../config/types.html">types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../operations.html">operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types.html">types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../exceptions.html">exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../utils.html">utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../repository.html">repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../filters.html">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../service.html">services</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="index.html">extensions</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="litestar/index.html">litestar</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="litestar/alembic.html">alembic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="litestar/dto.html">dto</a></li>
+<li class="toctree-l4"><a class="reference internal" href="litestar/plugins.html">plugin</a></li>
+</ul>
+</li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">sanic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="starlette.html">starlette</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../alembic/index.html">alembic</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../alembic/commands.html">commands</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../contribution-guide.html">Contribution guide</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/search?q=user%3Alitestar-org+state%3Aopen+label%3A%22good+first+issue%22+++no%3Aassignee+repo%3A%22advanced-alchemy%22&amp;type=issues">Available Issues</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/litestar-org/.github?tab=coc-ov-file#readme">Code of Conduct</a></li>
+</ul>
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="lside-overlay js-menu" role="button" aria-label="Close left sidebar" aria-controls="lside" aria-expanded="false"></div>
+  <aside id="rside" class="sy-rside pb-3 w-64 shrink-0 order-last">
+    <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
+      <i class="i-lucide close"></i>
+    </button>
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div class="localtoc"><h3>On this page</h3><ul>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.CommitStrategyExecutor"><code class="docutils literal notranslate"><span class="pre">CommitStrategyExecutor</span></code></a><ul>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.CommitStrategyExecutor.__init__"><code class="docutils literal notranslate">__init__()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy"><code class="docutils literal notranslate"><span class="pre">SanicAdvancedAlchemy</span></code></a><ul>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.__init__"><code class="docutils literal notranslate">__init__()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler"><code class="docutils literal notranslate">session_handler()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine"><code class="docutils literal notranslate">get_engine()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker"><code class="docutils literal notranslate">get_sessionmaker()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session"><code class="docutils literal notranslate">get_session()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine_from_request"><code class="docutils literal notranslate">get_engine_from_request()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker_from_request"><code class="docutils literal notranslate">get_sessionmaker_from_request()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session_from_request"><code class="docutils literal notranslate">get_session_from_request()</span></code></a></li>
+<li><a class="reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.startup"><code class="docutils literal notranslate">startup()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
+  data-type="github" data-user="litestar-org" data-repo="advanced-alchemy">
+  <span class="w-8 flex items-center justify-around shrink-0 text-3xl">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </span>
+  <span class="flex-grow px-2 break-all">
+    <span>litestar-org/advanced-alchemy</span>
+    <span class="flex text-sm repo-stats-count">
+      <span class="flex items-center pr-3">
+        <iconify-icon icon="lucide:star"></iconify-icon>
+        <strong class="js-repo-stars ml-1">0</strong>
+      </span>
+      <span class="flex items-center">
+        <iconify-icon icon="lucide:git-fork"></iconify-icon>
+        <strong class="js-repo-forks ml-1">0</strong>
+      </span>
+    </span>
+  </span>
+</a><div class="edit-this-page">
+  <a href="https://github.com/litestar-org/advanced-alchemy/blob/master/docs/reference/extensions/sanic.rst">Edit this page</a>
+</div><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
+  </aside>
+  <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
+  <main class="sy-main w-full max-sm:max-w-full print:pt-6"><div class="sy-breadcrumbs" role="navigation">
+  <div class="sy-breadcrumbs-inner flex items-center">
+    <div class="md:hidden mr-3">
+      <button class="js-menu" aria-label="Menu" type="button" aria-controls="lside" aria-expanded="false">
+        <i class="i-lucide menu"></i>
+      </button>
+    </div>
+    <ol class="flex-1" itemscope itemtype="https://schema.org/BreadcrumbList"><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../index.html"><span itemprop="name">advanced_alchemy</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="1" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../index.html"><span itemprop="name">API Reference</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="2" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="index.html"><span itemprop="name">extensions</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="3" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">sanic</strong>
+        <meta itemprop="position" content="4" />
+      </li></ol>
+    <div class="xl:hidden ml-1">
+      <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
+        aria-expanded="false">
+        <i class="i-lucide outdent"></i>
+      </button>
+    </div>
+  </div>
+</div><div class="flex flex-col break-words justify-between">
+      <div class="min-w-0 max-w-6xl px-6 pb-6 pt-8 xl:px-12">
+        <article class="yue" role="main">
+          <section id="sanic">
+<h1>sanic<a class="headerlink" href="#sanic" title="Link to this heading">¶</a></h1>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>More details soon</p>
+</div>
+<dl class="py class" id="module-advanced_alchemy.extensions.sanic">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.CommitStrategyExecutor">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">advanced_alchemy.extensions.sanic.</span></span><span class="sig-name descname"><span class="pre">CommitStrategyExecutor</span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#CommitStrategyExecutor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.CommitStrategyExecutor" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Protocol" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Protocol</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.CommitStrategyExecutor.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#advanced_alchemy.extensions.sanic.CommitStrategyExecutor.__init__" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">advanced_alchemy.extensions.sanic.</span></span><span class="sig-name descname"><span class="pre">SanicAdvancedAlchemy</span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Generic" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Generic</span></code></a>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">EngineT</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">SessionT</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">SessionMakerT</span></code>], <code class="xref py py-class docutils literal notranslate"><span class="pre">Extension</span></code></p>
+<p>Sanic extension for integrating Advanced Alchemy with SQLAlchemy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.sqlalchemy_config"></span><strong>sqlalchemy_config</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.sqlalchemy_config">¶</a> (<em>advanced_alchemy.config.sync.SQLAlchemySyncConfig</em><em> | </em><em>advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig</em>) – Configuration for SQLAlchemy.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.autocommit"></span><strong>autocommit</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.autocommit">¶</a> (<em>advanced_alchemy.config.types.CommitStrategy</em><em> | </em><em>None</em>) – Strategy for committing transactions. Defaults to None.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.counters"></span><strong>counters</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.counters">¶</a> (<em>sanic.helpers.Default</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a><em> | </em><em>None</em>) – Enables or disables counters. Defaults to sanic.helpers._default.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.session_maker_key"></span><strong>session_maker_key</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.session_maker_key">¶</a> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>| </em><em>None</em>) – Key for the session maker in app context. Defaults to “sessionmaker”.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.engine_key"></span><strong>engine_key</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.engine_key">¶</a> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>| </em><em>None</em>) – Key for the engine in app context. Defaults to “engine”.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.session_key"></span><strong>session_key</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.params.session_key">¶</a> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>| </em><em>None</em>) – Key for the session in request context. Defaults to “session”.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sqlalchemy_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemyAsyncConfig" title="advanced_alchemy.extensions.litestar.SQLAlchemyAsyncConfig"><span class="pre">SQLAlchemyAsyncConfig</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocommit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CommitStrategy</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">counters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Default</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">_default</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_maker_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'sessionmaker'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'engine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'session'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.__init__" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sqlalchemy_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="litestar/plugins.html#advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig" title="advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig"><span class="pre">SQLAlchemySyncConfig</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocommit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CommitStrategy</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">counters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Default</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">_default</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_maker_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'sessionmaker'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'engine'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'session'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span></span></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">session_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Session</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">AsyncSession</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">HTTPResponse</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.session_handler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Handle the session lifecycle based on the commit strategy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler.params.session"></span><strong>session</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler.params.session">¶</a> (<a class="reference external" href="https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session" title="(in SQLAlchemy v2.0)"><em>sqlalchemy.orm.Session</em></a><em> | </em><a class="reference external" href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#sqlalchemy.ext.asyncio.AsyncSession" title="(in SQLAlchemy v2.0)"><em>sqlalchemy.ext.asyncio.AsyncSession</em></a>) – The current session.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler.params.request"></span><strong>request</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler.params.request">¶</a> (<em>sanic.Request</em>) – The incoming request.</p></li>
+<li><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler.params.response"></span><strong>response</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler.params.response">¶</a> (<em>sanic.HTTPResponse</em>) – The outgoing response.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine">
+<span class="sig-name descname"><span class="pre">get_engine</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine" title="(in SQLAlchemy v2.0)"><span class="pre">sqlalchemy.engine.Engine</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.get_engine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve the SQLAlchemy engine from the app context.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The SQLAlchemy engine.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>EngineT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker">
+<span class="sig-name descname"><span class="pre">get_sessionmaker</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session" title="(in SQLAlchemy v2.0)"><span class="pre">sqlalchemy.orm.Session</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.get_sessionmaker"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve the session maker.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A callable that returns a new session.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Callable[[], SessionT]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session">
+<span class="sig-name descname"><span class="pre">get_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">sanic.Request</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session" title="(in SQLAlchemy v2.0)"><span class="pre">sqlalchemy.orm.Session</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.get_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve or create a session for the current request.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session.params.request"></span><strong>request</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session.params.request">¶</a> (<em>sanic.Request</em>) – The incoming request.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The session associated with the request.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SessionT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine_from_request">
+<span class="sig-name descname"><span class="pre">get_engine_from_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">sanic.Request</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine" title="(in SQLAlchemy v2.0)"><span class="pre">sqlalchemy.engine.Engine</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.get_engine_from_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine_from_request" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve the engine from the request context.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine_from_request.params.request"></span><strong>request</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine_from_request.params.request">¶</a> (<em>sanic.Request</em>) – The incoming request.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The SQLAlchemy engine.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>EngineT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker_from_request">
+<span class="sig-name descname"><span class="pre">get_sessionmaker_from_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">sanic.Request</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">SessionMakerT</span></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.get_sessionmaker_from_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker_from_request" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve the session maker from the request context.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker_from_request.params.request"></span><strong>request</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker_from_request.params.request">¶</a> (<em>sanic.Request</em>) – The incoming request.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The session maker.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SessionMakerT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session_from_request">
+<span class="sig-name descname"><span class="pre">get_session_from_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">sanic.Request</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session" title="(in SQLAlchemy v2.0)"><span class="pre">sqlalchemy.orm.Session</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.get_session_from_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session_from_request" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve the session from the request context.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session_from_request.params.request"></span><strong>request</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session_from_request.params.request">¶</a> (<em>sanic.Request</em>) – The incoming request.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The session associated with the request.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SessionT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.startup">
+<span class="sig-name descname"><span class="pre">startup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bootstrap</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Extend</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/advanced_alchemy/extensions/sanic.html#SanicAdvancedAlchemy.startup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.startup" title="Link to this definition">¶</a></dt>
+<dd><p>Advanced Alchemy Sanic extension startup hook.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="target" id="advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.startup.params.bootstrap"></span><strong>bootstrap</strong><a class="paramlink headerlink reference internal" href="#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.startup.params.bootstrap">¶</a> (<em>sanic_ext.Extend</em>) – The Sanic extension bootstrap.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+        </article><button class="back-to-top" type="button">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+  </svg>
+  <span>Back to top</span>
+</button><div class="navigation flex print:hidden"><div class="navigation-prev">
+    <a href="litestar/plugins.html">
+      <i class="i-lucide chevron-left"></i>
+      <div class="page-info">
+        <span>Previous</span><div class="title">plugin</div></div>
+    </a>
+  </div><div class="navigation-next">
+    <a href="starlette.html">
+      <div class="page-info">
+        <span>Next</span>
+        <div class="title">starlette</div>
+      </div>
+      <i class="i-lucide chevron-right"></i>
+    </a>
+  </div></div></div>
+    </div>
+  </main>
+</div>
+<footer class="sy-foot">
+  <div class="sy-foot-inner sy-container mx-auto">
+    <div class="sy-foot-reserved md:flex justify-between items-center">
+      <div class="sy-foot-copyright"><p>2024, Litestar Organization</p>
+  
+  <p>
+    Made with
+    
+    <a href="https://www.sphinx-doc.org/">Sphinx</a> and
+    
+    <a href="https://shibuya.lepture.com">Shibuya theme</a>.
+  </p>
+</div>
+      <div class="sy-foot-socials">
+<a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+  <iconify-icon icon="simple-icons:github"></iconify-icon>
+</a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+<a href="https://discord.gg/litestar" aria-label="Discord">
+  <iconify-icon icon="simple-icons:discord"></iconify-icon>
+</a>
+<a href="https://www.reddit.com/r/LitestarAPI" aria-label="Reddit">
+  <iconify-icon icon="simple-icons:reddit"></iconify-icon>
+</a></div>
+    </div>
+  </div>
+</footer>
+      <script src="../../_static/documentation_options.js?v=c6cf4326"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../_static/copybutton.js?v=f281be69"></script>
+      <script src="../../_static/litestar-theme.js?v=ab2dcc9e"></script>
+      <script>let toggleHintShow = 'Click to show';</script>
+      <script>let toggleHintHide = 'Click to hide';</script>
+      <script>let toggleOpenOnPrint = 'true';</script>
+      <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+      <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../_static/shibuya.js?v=e2e99575"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../_static/versioning.js"></script></body>
+</html>

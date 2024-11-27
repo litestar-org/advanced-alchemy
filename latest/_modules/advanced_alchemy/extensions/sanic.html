@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en" data-accent-color="amber" data-content_root="../../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>advanced_alchemy.extensions.sanic - Advanced Alchemy</title><link rel="shortcut icon" href="../../../_static/favicon.svg"/><link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" /><script>
+    function setColorMode(t){let e=document.documentElement;e.setAttribute("data-color-mode",t);let a=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,s=t;"auto"===t&&(s=a?"dark":"light"),"light"===s?(e.classList.remove("dark"),e.classList.add("light")):(e.classList.remove("light"),e.classList.add("dark"))}
+    setColorMode(localStorage._theme||"auto");
+  </script><link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=397bb51e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/shibuya.css?v=83eaa723" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_paramlinks.css" />
+    <link media="print" rel="stylesheet" type="text/css" href="../../../_static/print.css?v=20ff2c19" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/style.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/litestar-sphinx-theme.css?v=e9f54662" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sy-f-text: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+  --sy-f-heading: "Inter", var(--sy-f-sys), var(--sy-f-cjk), sans-serif;
+}
+</style>
+    <meta property="og:type" content="website"/><meta property="og:title" content="advanced_alchemy.extensions.sanic"/>
+<meta name="twitter:card" content="summary"/>
+<meta property="og:image" content="_static/logo-light.png"/>
+  </head>
+<body><div class="sy-head">
+  <div class="sy-head-blur"></div>
+  <div class="sy-head-inner sy-container mx-auto">
+    <a class="sy-head-brand" href="/">
+      <img class="light-logo" src="../../../_static/logo-light.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <img class="dark-logo" src="../../../_static/logo-dark.png" alt="advanced_alchemy" height="28" loading="lazy" />
+      <strong>advanced_alchemy</strong>
+    </a>
+    <div class="sy-head-nav" id="HeadNav">
+      <nav class="sy-head-links"><ul><li class="link"><a href="../../../index.html">Home</a></li>
+      <li class="link"><button type="button">
+            <span>Community</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../contribution-guide.html">
+                <span>Contributing</span>
+                <small>Learn how to contribute to the Advanced Alchemy project</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file">
+                <span>Code of Conduct</span>
+                <small>Review the etiquette for interacting with the Advanced Alchemy community</small>
+              </a></li><li><a href="https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file">
+                <span>Security</span>
+                <small>Overview of Advanced Alchemy's security protocols</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>About</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://litestar.dev/about/organization">
+                <span>Litestar Organization</span>
+                <small>Details about the Litestar organization</small>
+              </a></li><li><a href="../../../releases.html">
+                <span>Releases</span>
+                <small>Explore the release process, versioning, and deprecation policy for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Release notes</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="../../../changelog.html">
+                <span>Changelog</span>
+                <small>All changes for Advanced Alchemy</small>
+              </a></li></ul>
+      </li>
+      <li class="link"><button type="button">
+            <span>Help</span>
+            <i class="i-lucide chevron-down"></i>
+          </button>
+        <ul><li><a href="https://discord.gg/litestar">
+                <span>Discord Help Forum</span>
+                <small>Dedicated Discord help forum</small>
+              </a></li><li><a href="https://github.com/litestar-org/advanced-alchemy/discussions">
+                <span>GitHub Discussions</span>
+                <small>GitHub Discussions</small>
+              </a></li><li><a href="https://stackoverflow.com/questions/tagged/litestar">
+                <span>Stack Overflow</span>
+                <small>We monitor the <code><b>litestar</b></code> tag on Stack Overflow</small>
+              </a></li></ul>
+      </li><li class="link">
+          <a href="https://github.com/sponsors/Litestar-Org">
+            <span>Sponsor</span></a>
+        </li></ul></nav>
+      <div class="sy-head-extra flex items-center print:hidden"><form class="searchbox flex items-center" action="../../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <kbd>/</kbd>
+</form><div class="sy-head-socials">
+  <a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+  <a href="https://discord.gg/litestar" aria-label="Discord">
+    <iconify-icon icon="simple-icons:discord"></iconify-icon>
+  </a></div></div>
+    </div>
+    <div class="sy-head-actions flex items-center shrink-0 print:hidden"><button class="js-theme theme-switch flex items-center"
+data-aria-auto="Switch to light color mode"
+data-aria-light="Switch to dark color mode"
+data-aria-dark="Switch to auto color mode">
+<i class="i-lucide theme-icon"></i>
+</button><button class="md:hidden flex items-center js-menu" aria-label="Menu" type="button" aria-controls="HeadNav" aria-expanded="false">
+        <div class="hamburger">
+          <span class="hamburger_1"></span>
+          <span class="hamburger_2 -translate-x-2"></span>
+          <span class="hamburger_3 -translate-x-1"></span>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="sy-page sy-container flex mx-auto">
+  <aside id="lside" class="sy-lside md:w-72 md:shrink-0 print:hidden">
+    <div class="sy-lside-inner md:sticky">
+      <div class="sy-scrollbar p-6"><div class="sidebar-links">
+  <ul>
+    <li><a class="icon-link" href="https://github.com/orgs/litestar-org/discussions">
+  <span class="icon">
+    <svg viewBox="0 0 24 24" fill="none">
+      <path fill="var(--accent-9)" fill-rule="evenodd" clip-rule="evenodd" d="M11 5a6 6 0 0 0-4.687 9.746c.215.27.315.62.231.954l-.514 2.058a1 1 0 0 0 1.485 1.1l2.848-1.71c.174-.104.374-.15.576-.148H13a6 6 0 0 0 0-12h-2Z"/>
+      <circle fill="white" cx="12" cy="11" r="1"/>
+      <circle fill="white" cx="9" cy="11" r="1"/>
+      <circle fill="white" cx="15" cy="11" r="1"/>
+    </svg>
+  </span>
+  <span class="text">Discussion</span>
+</a></li>
+  </ul>
+</div>
+        <div class="globaltoc" data-expand-depth="0"><p class="caption" role="heading" aria-level="3"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage/index.html">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/modeling.html">Modeling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/repositories.html">Repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/services.html">Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/utilities.html">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/frameworks/litestar.html">Litestar Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../usage/frameworks/fastapi.html">FastAPI Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../reference/index.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/base.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/mixins/index.html">mixins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/mixins/unique.html">unique</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/config/index.html">config</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/asyncio.html">asyncio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/common.html">common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/engine.html">engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/sync.html">sync</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/config/types.html">types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/operations.html">operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/types.html">types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/exceptions.html">exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/utils.html">utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/repository.html">repositories</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/filters.html">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/service.html">services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/extensions/index.html">extensions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/litestar/index.html">litestar</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/alembic.html">alembic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/dto.html">dto</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../reference/extensions/litestar/plugins.html">plugin</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/sanic.html">sanic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/extensions/starlette.html">starlette</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../reference/alembic/index.html">alembic</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../reference/alembic/commands.html">commands</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Contributing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contribution-guide.html">Contribution guide</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/search?q=user%3Alitestar-org+state%3Aopen+label%3A%22good+first+issue%22+++no%3Aassignee+repo%3A%22advanced-alchemy%22&amp;type=issues">Available Issues</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/litestar-org/.github?tab=coc-ov-file#readme">Code of Conduct</a></li>
+</ul>
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="lside-overlay js-menu" role="button" aria-label="Close left sidebar" aria-controls="lside" aria-expanded="false"></div>
+  <aside id="rside" class="sy-rside pb-3 w-64 shrink-0 order-last">
+    <button class="rside-close js-menu xl:hidden" aria-label="Close Table of Contents" type="button" aria-controls="rside" aria-expanded="false">
+      <i class="i-lucide close"></i>
+    </button>
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><a class="js-repo-stats repo-stats flex items-center" href="https://github.com/litestar-org/advanced-alchemy"
+  data-type="github" data-user="litestar-org" data-repo="advanced-alchemy">
+  <span class="w-8 flex items-center justify-around shrink-0 text-3xl">
+    <iconify-icon icon="simple-icons:github"></iconify-icon>
+  </span>
+  <span class="flex-grow px-2 break-all">
+    <span>litestar-org/advanced-alchemy</span>
+    <span class="flex text-sm repo-stats-count">
+      <span class="flex items-center pr-3">
+        <iconify-icon icon="lucide:star"></iconify-icon>
+        <strong class="js-repo-stars ml-1">0</strong>
+      </span>
+      <span class="flex items-center">
+        <iconify-icon icon="lucide:git-fork"></iconify-icon>
+        <strong class="js-repo-forks ml-1">0</strong>
+      </span>
+    </span>
+  </span>
+</a><div id="ethical-ad-placement" data-ea-publisher="readthedocs"></div></div>
+  </aside>
+  <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
+  <main class="sy-main w-full max-sm:max-w-full print:pt-6"><div class="sy-breadcrumbs" role="navigation">
+  <div class="sy-breadcrumbs-inner flex items-center">
+    <div class="md:hidden mr-3">
+      <button class="js-menu" aria-label="Menu" type="button" aria-controls="lside" aria-expanded="false">
+        <i class="i-lucide menu"></i>
+      </button>
+    </div>
+    <ol class="flex-1" itemscope itemtype="https://schema.org/BreadcrumbList"><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../../index.html"><span itemprop="name">advanced_alchemy</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="1" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../../index.html"><span itemprop="name">Module code</span></a>
+        <span>/</span>
+        <meta itemprop="position" content="2" />
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">advanced_alchemy.extensions.sanic</strong>
+        <meta itemprop="position" content="3" />
+      </li></ol>
+    <div class="xl:hidden ml-1">
+      <button class="js-menu" aria-label="Show table of contents" type="button" aria-controls="rside"
+        aria-expanded="false">
+        <i class="i-lucide outdent"></i>
+      </button>
+    </div>
+  </div>
+</div><div class="flex flex-col break-words justify-between">
+      <div class="min-w-0 max-w-6xl px-6 pb-6 pt-8 xl:px-12">
+        <article class="yue" role="main">
+          <h1>Source code for advanced_alchemy.extensions.sanic</h1><div class="highlight"><pre>
+<span></span><span data-line="1"><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+</span><span data-line="2">
+</span><span data-line="3"><span class="kn">import</span> <span class="nn">asyncio</span>
+</span><span data-line="4"><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">cast</span><span class="p">,</span> <span class="n">overload</span>
+</span><span data-line="5">
+</span><span data-line="6"><span class="kn">from</span> <span class="nn">sanic</span> <span class="kn">import</span> <span class="n">HTTPResponse</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Sanic</span>  <span class="c1"># noqa: TC002</span>
+</span><span data-line="7"><span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Engine</span>
+</span><span data-line="8"><span class="kn">from</span> <span class="nn">sqlalchemy.ext.asyncio</span> <span class="kn">import</span> <span class="n">AsyncEngine</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">async_sessionmaker</span>
+</span><span data-line="9">
+</span><span data-line="10"><span class="kn">from</span> <span class="nn">advanced_alchemy.config.common</span> <span class="kn">import</span> <span class="n">EngineT</span><span class="p">,</span> <span class="n">SessionMakerT</span><span class="p">,</span> <span class="n">SessionT</span>
+</span><span data-line="11"><span class="kn">from</span> <span class="nn">advanced_alchemy.exceptions</span> <span class="kn">import</span> <span class="n">MissingDependencyError</span>
+</span><span data-line="12">
+</span><span data-line="13"><span class="k">try</span><span class="p">:</span>
+</span><span data-line="14">    <span class="kn">from</span> <span class="nn">sanic.helpers</span> <span class="kn">import</span> <span class="n">Default</span><span class="p">,</span> <span class="n">_default</span>  <span class="c1"># pyright: ignore[reportPrivateUsage]</span>
+</span><span data-line="15">    <span class="kn">from</span> <span class="nn">sanic_ext</span> <span class="kn">import</span> <span class="n">Extend</span>
+</span><span data-line="16">    <span class="kn">from</span> <span class="nn">sanic_ext.extensions.base</span> <span class="kn">import</span> <span class="n">Extension</span>
+</span><span data-line="17">
+</span><span data-line="18">    <span class="n">SANIC_INSTALLED</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span data-line="19"><span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
+</span><span data-line="20">    <span class="n">SANIC_INSTALLED</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># pyright: ignore[reportConstantRedefinition]</span>
+</span><span data-line="21">    <span class="n">Extension</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="s2">&quot;Extension&quot;</span><span class="p">,</span> <span class="p">(),</span> <span class="p">{})</span>  <span class="c1"># type: ignore  # noqa: PGH003</span>
+</span><span data-line="22">    <span class="n">Extend</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="s2">&quot;Extend&quot;</span><span class="p">,</span> <span class="p">(),</span> <span class="p">{})</span>  <span class="c1"># type: ignore  # noqa: PGH003</span>
+</span><span data-line="23">    <span class="n">Default</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="s2">&quot;Default&quot;</span><span class="p">,</span> <span class="p">(),</span> <span class="p">{})</span>  <span class="c1"># type: ignore  # noqa: PGH003</span>
+</span><span data-line="24">    <span class="n">_default</span> <span class="o">=</span> <span class="n">Default</span><span class="p">()</span>
+</span><span data-line="25">
+</span><span data-line="26"><span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+</span><span data-line="27">    <span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">Session</span><span class="p">,</span> <span class="n">sessionmaker</span>
+</span><span data-line="28">
+</span><span data-line="29">    <span class="kn">from</span> <span class="nn">advanced_alchemy.config.asyncio</span> <span class="kn">import</span> <span class="n">SQLAlchemyAsyncConfig</span>
+</span><span data-line="30">    <span class="kn">from</span> <span class="nn">advanced_alchemy.config.sync</span> <span class="kn">import</span> <span class="n">SQLAlchemySyncConfig</span>
+</span><span data-line="31">    <span class="kn">from</span> <span class="nn">advanced_alchemy.config.types</span> <span class="kn">import</span> <span class="n">CommitStrategy</span>
+</span><span data-line="32">
+</span><span data-line="33"><span class="n">__all__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;CommitStrategyExecutor&quot;</span><span class="p">,</span> <span class="s2">&quot;SanicAdvancedAlchemy&quot;</span><span class="p">)</span>
+</span><span data-line="34">
+</span><span data-line="35">
+<div class="viewcode-block" id="CommitStrategyExecutor">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.CommitStrategyExecutor">[docs]</a>
+</span><span data-line="36"><span class="k">class</span> <span class="nc">CommitStrategyExecutor</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+</span><span data-line="37">    <span class="k">async</span> <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">HTTPResponse</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span></div>
+
+</span><span data-line="38">
+</span><span data-line="39">
+<div class="viewcode-block" id="SanicAdvancedAlchemy">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy">[docs]</a>
+</span><span data-line="40"><span class="k">class</span> <span class="nc">SanicAdvancedAlchemy</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">EngineT</span><span class="p">,</span> <span class="n">SessionT</span><span class="p">,</span> <span class="n">SessionMakerT</span><span class="p">],</span> <span class="n">Extension</span><span class="p">):</span>  <span class="c1"># pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]</span>
+</span><span data-line="41"><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sanic extension for integrating Advanced Alchemy with SQLAlchemy.</span>
+</span><span data-line="42">
+</span><span data-line="43"><span class="sd">    Args:</span>
+</span><span data-line="44"><span class="sd">        sqlalchemy_config (advanced_alchemy.config.sync.SQLAlchemySyncConfig | advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig):</span>
+</span><span data-line="45"><span class="sd">            Configuration for SQLAlchemy.</span>
+</span><span data-line="46"><span class="sd">        autocommit (advanced_alchemy.config.types.CommitStrategy | None):</span>
+</span><span data-line="47"><span class="sd">            Strategy for committing transactions. Defaults to None.</span>
+</span><span data-line="48"><span class="sd">        counters (sanic.helpers.Default | bool | None):</span>
+</span><span data-line="49"><span class="sd">            Enables or disables counters. Defaults to sanic.helpers._default.</span>
+</span><span data-line="50"><span class="sd">        session_maker_key (str| None):</span>
+</span><span data-line="51"><span class="sd">            Key for the session maker in app context. Defaults to &quot;sessionmaker&quot;.</span>
+</span><span data-line="52"><span class="sd">        engine_key (str| None):</span>
+</span><span data-line="53"><span class="sd">            Key for the engine in app context. Defaults to &quot;engine&quot;.</span>
+</span><span data-line="54"><span class="sd">        session_key (str| None):</span>
+</span><span data-line="55"><span class="sd">            Key for the session in request context. Defaults to &quot;session&quot;.</span>
+</span><span data-line="56"><span class="sd">    &quot;&quot;&quot;</span>
+</span><span data-line="57">
+</span><span data-line="58">    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;AdvancedAlchemy&quot;</span>
+</span><span data-line="59">
+</span><span data-line="60">    <span class="nd">@overload</span>
+</span><span data-line="61">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="62">        <span class="bp">self</span><span class="p">:</span> <span class="n">SanicAdvancedAlchemy</span><span class="p">[</span><span class="n">AsyncEngine</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">async_sessionmaker</span><span class="p">[</span><span class="n">AsyncSession</span><span class="p">]],</span>
+</span><span data-line="63">        <span class="o">*</span><span class="p">,</span>
+</span><span data-line="64">        <span class="n">sqlalchemy_config</span><span class="p">:</span> <span class="n">SQLAlchemyAsyncConfig</span><span class="p">,</span>
+</span><span data-line="65">        <span class="n">autocommit</span><span class="p">:</span> <span class="n">CommitStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="66">        <span class="n">counters</span><span class="p">:</span> <span class="n">Default</span> <span class="o">|</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_default</span><span class="p">,</span>  <span class="c1"># pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]</span>
+</span><span data-line="67">        <span class="n">session_maker_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sessionmaker&quot;</span><span class="p">,</span>
+</span><span data-line="68">        <span class="n">engine_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;engine&quot;</span><span class="p">,</span>
+</span><span data-line="69">        <span class="n">session_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;session&quot;</span><span class="p">,</span>
+</span><span data-line="70">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</span><span data-line="71">
+</span><span data-line="72">    <span class="nd">@overload</span>
+</span><span data-line="73">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="74">        <span class="bp">self</span><span class="p">:</span> <span class="n">SanicAdvancedAlchemy</span><span class="p">[</span><span class="n">Engine</span><span class="p">,</span> <span class="n">Session</span><span class="p">,</span> <span class="n">sessionmaker</span><span class="p">[</span><span class="n">Session</span><span class="p">]],</span>
+</span><span data-line="75">        <span class="o">*</span><span class="p">,</span>
+</span><span data-line="76">        <span class="n">sqlalchemy_config</span><span class="p">:</span> <span class="n">SQLAlchemySyncConfig</span><span class="p">,</span>
+</span><span data-line="77">        <span class="n">autocommit</span><span class="p">:</span> <span class="n">CommitStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="78">        <span class="n">counters</span><span class="p">:</span> <span class="n">Default</span> <span class="o">|</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_default</span><span class="p">,</span>  <span class="c1"># pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]</span>
+</span><span data-line="79">        <span class="n">session_maker_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sessionmaker&quot;</span><span class="p">,</span>
+</span><span data-line="80">        <span class="n">engine_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;engine&quot;</span><span class="p">,</span>
+</span><span data-line="81">        <span class="n">session_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;session&quot;</span><span class="p">,</span>
+</span><span data-line="82">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+</span><span data-line="83">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.__init__">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.__init__">[docs]</a>
+</span><span data-line="84">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+</span><span data-line="85">        <span class="bp">self</span><span class="p">:</span> <span class="p">(</span>
+</span><span data-line="86">            <span class="n">SanicAdvancedAlchemy</span><span class="p">[</span><span class="n">AsyncEngine</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">async_sessionmaker</span><span class="p">[</span><span class="n">AsyncSession</span><span class="p">]]</span>
+</span><span data-line="87">            <span class="o">|</span> <span class="n">SanicAdvancedAlchemy</span><span class="p">[</span><span class="n">Engine</span><span class="p">,</span> <span class="n">Session</span><span class="p">,</span> <span class="n">sessionmaker</span><span class="p">[</span><span class="n">Session</span><span class="p">]]</span>
+</span><span data-line="88">        <span class="p">),</span>
+</span><span data-line="89">        <span class="o">*</span><span class="p">,</span>
+</span><span data-line="90">        <span class="n">sqlalchemy_config</span><span class="p">:</span> <span class="n">SQLAlchemySyncConfig</span> <span class="o">|</span> <span class="n">SQLAlchemyAsyncConfig</span><span class="p">,</span>
+</span><span data-line="91">        <span class="n">autocommit</span><span class="p">:</span> <span class="n">CommitStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span data-line="92">        <span class="n">counters</span><span class="p">:</span> <span class="n">Default</span> <span class="o">|</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_default</span><span class="p">,</span>  <span class="c1"># pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]</span>
+</span><span data-line="93">        <span class="n">session_maker_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sessionmaker&quot;</span><span class="p">,</span>
+</span><span data-line="94">        <span class="n">engine_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;engine&quot;</span><span class="p">,</span>
+</span><span data-line="95">        <span class="n">session_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;session&quot;</span><span class="p">,</span>
+</span><span data-line="96">    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="97">        <span class="k">if</span> <span class="ow">not</span> <span class="n">SANIC_INSTALLED</span><span class="p">:</span>
+</span><span data-line="98">            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Could not locate either Sanic or Sanic Extensions. Both libraries must be installed to use Advanced Alchemy. Try: pip install sanic[ext]&quot;</span>
+</span><span data-line="99">            <span class="k">raise</span> <span class="n">MissingDependencyError</span><span class="p">(</span>
+</span><span data-line="100">                <span class="n">msg</span><span class="p">,</span>
+</span><span data-line="101">            <span class="p">)</span>
+</span><span data-line="102">        <span class="bp">self</span><span class="o">.</span><span class="n">sqlalchemy_config</span> <span class="o">=</span> <span class="n">sqlalchemy_config</span>
+</span><span data-line="103">        <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span> <span class="o">=</span> <span class="n">engine_key</span>
+</span><span data-line="104">        <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_key</span> <span class="o">=</span> <span class="n">session_maker_key</span>
+</span><span data-line="105">        <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span> <span class="o">=</span> <span class="n">session_key</span>
+</span><span data-line="106">        <span class="bp">self</span><span class="o">.</span><span class="n">autocommit_strategy</span> <span class="o">=</span> <span class="n">autocommit</span>
+</span><span data-line="107">        <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategies</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CommitStrategy</span><span class="p">,</span> <span class="n">CommitStrategyExecutor</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>  <span class="c1"># pyright: ignore[reportAttributeAccessIssue]</span>
+</span><span data-line="108">            <span class="s2">&quot;always&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategy_always</span><span class="p">,</span>
+</span><span data-line="109">            <span class="s2">&quot;match_status&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategy_match_status</span><span class="p">,</span>
+</span><span data-line="110">        <span class="p">}</span>
+</span><span data-line="111">        <span class="bp">self</span><span class="o">.</span><span class="n">counters</span> <span class="o">=</span> <span class="n">counters</span>
+</span><span data-line="112">        <span class="bp">self</span><span class="o">.</span><span class="n">engine</span> <span class="o">=</span> <span class="p">(</span>
+</span><span data-line="113">            <span class="bp">self</span><span class="o">.</span><span class="n">sqlalchemy_config</span><span class="o">.</span><span class="n">engine_instance</span>
+</span><span data-line="114">            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sqlalchemy_config</span><span class="o">.</span><span class="n">engine_instance</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+</span><span data-line="115">            <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">sqlalchemy_config</span><span class="o">.</span><span class="n">get_engine</span><span class="p">()</span>
+</span><span data-line="116">        <span class="p">)</span>
+</span><span data-line="117">        <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sqlalchemy_config</span><span class="o">.</span><span class="n">create_session_maker</span><span class="p">()</span>
+</span><span data-line="118">
+</span><span data-line="119">        <span class="n">session_maker</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;SessionMakerT&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span><span class="p">)</span>
+</span><span data-line="120">        <span class="bp">self</span><span class="o">.</span><span class="n">session_class</span> <span class="o">=</span> <span class="n">session_maker</span><span class="o">.</span><span class="n">class_</span>
+</span><span data-line="121">
+</span><span data-line="122">        <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="p">:</span> <span class="n">Sanic</span>  <span class="c1"># pyright: ignore[reportMissingTypeArgument]</span></div>
+
+</span><span data-line="123">
+</span><span data-line="124">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_do_commit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="125"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Commit the current transaction.</span>
+</span><span data-line="126">
+</span><span data-line="127"><span class="sd">        Args:</span>
+</span><span data-line="128"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="129"><span class="sd">                The session to commit.</span>
+</span><span data-line="130"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="131">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">):</span>
+</span><span data-line="132">            <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_event_loop</span><span class="p">()</span>
+</span><span data-line="133">            <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">)</span>
+</span><span data-line="134">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="135">            <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</span><span data-line="136">
+</span><span data-line="137">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_do_rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="138"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rollback the current transaction.</span>
+</span><span data-line="139">
+</span><span data-line="140"><span class="sd">        Args:</span>
+</span><span data-line="141"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="142"><span class="sd">                The session to rollback.</span>
+</span><span data-line="143"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="144">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">):</span>
+</span><span data-line="145">            <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_event_loop</span><span class="p">()</span>
+</span><span data-line="146">            <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">session</span><span class="o">.</span><span class="n">rollback</span><span class="p">)</span>
+</span><span data-line="147">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="148">            <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+</span><span data-line="149">
+</span><span data-line="150">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_do_close</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="151"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Close the session.</span>
+</span><span data-line="152">
+</span><span data-line="153"><span class="sd">        Args:</span>
+</span><span data-line="154"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="155"><span class="sd">                The session to close.</span>
+</span><span data-line="156"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="157">        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">AsyncSession</span><span class="p">):</span>
+</span><span data-line="158">            <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_event_loop</span><span class="p">()</span>
+</span><span data-line="159">            <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">session</span><span class="o">.</span><span class="n">close</span><span class="p">)</span>
+</span><span data-line="160">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="161">            <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span data-line="162">
+</span><span data-line="163">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_commit_strategy_always</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">HTTPResponse</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="164"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Commit strategy that always commits the session.</span>
+</span><span data-line="165">
+</span><span data-line="166"><span class="sd">        Args:</span>
+</span><span data-line="167"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="168"><span class="sd">                The session to commit.</span>
+</span><span data-line="169"><span class="sd">            response (sanic.HTTPResponse):</span>
+</span><span data-line="170"><span class="sd">                The HTTP response.</span>
+</span><span data-line="171"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="172">        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_commit</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="173">
+</span><span data-line="174">    <span class="k">async</span> <span class="k">def</span> <span class="nf">_commit_strategy_match_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">HTTPResponse</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="175"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Commit strategy that commits based on the response status.</span>
+</span><span data-line="176">
+</span><span data-line="177"><span class="sd">        Args:</span>
+</span><span data-line="178"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="179"><span class="sd">                The session to commit or rollback.</span>
+</span><span data-line="180"><span class="sd">            response (sanic.HTTPResponse):</span>
+</span><span data-line="181"><span class="sd">                The HTTP response.</span>
+</span><span data-line="182"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="183">        <span class="k">if</span> <span class="mi">200</span> <span class="o">&lt;=</span> <span class="n">response</span><span class="o">.</span><span class="n">status</span> <span class="o">&lt;</span> <span class="mi">300</span><span class="p">:</span>  <span class="c1"># noqa: PLR2004</span>
+</span><span data-line="184">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_commit</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="185">        <span class="k">else</span><span class="p">:</span>
+</span><span data-line="186">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_rollback</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="187">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.session_handler">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.session_handler">[docs]</a>
+</span><span data-line="188">    <span class="k">async</span> <span class="k">def</span> <span class="nf">session_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">HTTPResponse</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="189"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle the session lifecycle based on the commit strategy.</span>
+</span><span data-line="190">
+</span><span data-line="191"><span class="sd">        Args:</span>
+</span><span data-line="192"><span class="sd">            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):</span>
+</span><span data-line="193"><span class="sd">                The current session.</span>
+</span><span data-line="194"><span class="sd">            request (sanic.Request):</span>
+</span><span data-line="195"><span class="sd">                The incoming request.</span>
+</span><span data-line="196"><span class="sd">            response (sanic.HTTPResponse):</span>
+</span><span data-line="197"><span class="sd">                The outgoing response.</span>
+</span><span data-line="198"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="199">        <span class="k">try</span><span class="p">:</span>
+</span><span data-line="200">            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autocommit_strategy</span><span class="p">:</span>
+</span><span data-line="201">                <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_commit_strategies</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">autocommit_strategy</span><span class="p">](</span><span class="n">session</span><span class="o">=</span><span class="n">session</span><span class="p">,</span> <span class="n">response</span><span class="o">=</span><span class="n">response</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportArgumentType]</span>
+</span><span data-line="202">        <span class="k">finally</span><span class="p">:</span>
+</span><span data-line="203">            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_close</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+</span><span data-line="204">            <span class="nb">delattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">)</span></div>
+
+</span><span data-line="205">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.get_engine">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine">[docs]</a>
+</span><span data-line="206">    <span class="k">def</span> <span class="nf">get_engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EngineT</span><span class="p">:</span>
+</span><span data-line="207"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve the SQLAlchemy engine from the app context.</span>
+</span><span data-line="208">
+</span><span data-line="209"><span class="sd">        Returns:</span>
+</span><span data-line="210"><span class="sd">            EngineT: The SQLAlchemy engine.</span>
+</span><span data-line="211"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="212">        <span class="n">engine</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="213">        <span class="k">if</span> <span class="n">engine</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="214">            <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">EngineT</span><span class="p">,</span> <span class="n">engine</span><span class="p">)</span>
+</span><span data-line="215">        <span class="n">engine</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">EngineT</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine</span><span class="p">)</span>
+</span><span data-line="216">        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">,</span> <span class="n">engine</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="217">        <span class="k">return</span> <span class="n">engine</span></div>
+
+</span><span data-line="218">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.get_sessionmaker">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker">[docs]</a>
+</span><span data-line="219">    <span class="k">def</span> <span class="nf">get_sessionmaker</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">SessionT</span><span class="p">]:</span>
+</span><span data-line="220"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve the session maker.</span>
+</span><span data-line="221">
+</span><span data-line="222"><span class="sd">        Returns:</span>
+</span><span data-line="223"><span class="sd">            Callable[[], SessionT]: A callable that returns a new session.</span>
+</span><span data-line="224"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="225">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Callable</span><span class="p">[[],</span> <span class="n">SessionT</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span><span class="p">)</span></div>
+
+</span><span data-line="226">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.get_session">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session">[docs]</a>
+</span><span data-line="227">    <span class="k">def</span> <span class="nf">get_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SessionT</span><span class="p">:</span>
+</span><span data-line="228"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve or create a session for the current request.</span>
+</span><span data-line="229">
+</span><span data-line="230"><span class="sd">        Args:</span>
+</span><span data-line="231"><span class="sd">            request (sanic.Request): The incoming request.</span>
+</span><span data-line="232">
+</span><span data-line="233"><span class="sd">        Returns:</span>
+</span><span data-line="234"><span class="sd">            SessionT: The session associated with the request.</span>
+</span><span data-line="235"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="236">        <span class="n">session</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span data-line="237">        <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="238">            <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">SessionT</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</span><span data-line="239">
+</span><span data-line="240">        <span class="n">session</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;SessionT&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span><span class="p">())</span>
+</span><span data-line="241">        <span class="nb">setattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</span><span data-line="242">        <span class="k">return</span> <span class="n">session</span></div>
+
+</span><span data-line="243">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.get_engine_from_request">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_engine_from_request">[docs]</a>
+</span><span data-line="244">    <span class="k">def</span> <span class="nf">get_engine_from_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EngineT</span><span class="p">:</span>
+</span><span data-line="245"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve the engine from the request context.</span>
+</span><span data-line="246">
+</span><span data-line="247"><span class="sd">        Args:</span>
+</span><span data-line="248"><span class="sd">            request (sanic.Request): The incoming request.</span>
+</span><span data-line="249">
+</span><span data-line="250"><span class="sd">        Returns:</span>
+</span><span data-line="251"><span class="sd">            EngineT: The SQLAlchemy engine.</span>
+</span><span data-line="252"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="253">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;EngineT&quot;</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span></div>
+
+</span><span data-line="254">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.get_sessionmaker_from_request">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_sessionmaker_from_request">[docs]</a>
+</span><span data-line="255">    <span class="k">def</span> <span class="nf">get_sessionmaker_from_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SessionMakerT</span><span class="p">:</span>
+</span><span data-line="256"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve the session maker from the request context.</span>
+</span><span data-line="257">
+</span><span data-line="258"><span class="sd">        Args:</span>
+</span><span data-line="259"><span class="sd">            request (sanic.Request): The incoming request.</span>
+</span><span data-line="260">
+</span><span data-line="261"><span class="sd">        Returns:</span>
+</span><span data-line="262"><span class="sd">            SessionMakerT: The session maker.</span>
+</span><span data-line="263"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="264">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;SessionMakerT&quot;</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span></div>
+
+</span><span data-line="265">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.get_session_from_request">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.get_session_from_request">[docs]</a>
+</span><span data-line="266">    <span class="k">def</span> <span class="nf">get_session_from_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SessionT</span><span class="p">:</span>
+</span><span data-line="267"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve the session from the request context.</span>
+</span><span data-line="268">
+</span><span data-line="269"><span class="sd">        Args:</span>
+</span><span data-line="270"><span class="sd">            request (sanic.Request): The incoming request.</span>
+</span><span data-line="271">
+</span><span data-line="272"><span class="sd">        Returns:</span>
+</span><span data-line="273"><span class="sd">            SessionT: The session associated with the request.</span>
+</span><span data-line="274"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="275">        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;SessionT&quot;</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span></div>
+
+</span><span data-line="276">
+<div class="viewcode-block" id="SanicAdvancedAlchemy.startup">
+<a class="viewcode-back" href="../../../reference/extensions/sanic.html#advanced_alchemy.extensions.sanic.SanicAdvancedAlchemy.startup">[docs]</a>
+</span><span data-line="277">    <span class="k">def</span> <span class="nf">startup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bootstrap</span><span class="p">:</span> <span class="n">Extend</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]</span>
+</span><span data-line="278"><span class="w">        </span><span class="sd">&quot;&quot;&quot;Advanced Alchemy Sanic extension startup hook.</span>
+</span><span data-line="279">
+</span><span data-line="280"><span class="sd">        Args:</span>
+</span><span data-line="281"><span class="sd">            bootstrap (sanic_ext.Extend): The Sanic extension bootstrap.</span>
+</span><span data-line="282"><span class="sd">        &quot;&quot;&quot;</span>
+</span><span data-line="283">
+</span><span data-line="284">        <span class="nd">@self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">before_server_start</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="285">        <span class="k">async</span> <span class="k">def</span> <span class="nf">on_startup</span><span class="p">(</span><span class="n">_</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportUnusedFunction]</span>
+</span><span data-line="286">            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="287">            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="288">            <span class="n">bootstrap</span><span class="o">.</span><span class="n">add_dependency</span><span class="p">(</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="289">                <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">engine</span><span class="p">),</span>
+</span><span data-line="290">                <span class="bp">self</span><span class="o">.</span><span class="n">get_engine_from_request</span><span class="p">,</span>
+</span><span data-line="291">            <span class="p">)</span>
+</span><span data-line="292">            <span class="n">bootstrap</span><span class="o">.</span><span class="n">add_dependency</span><span class="p">(</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="293">                <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_maker</span><span class="p">),</span>
+</span><span data-line="294">                <span class="bp">self</span><span class="o">.</span><span class="n">get_sessionmaker_from_request</span><span class="p">,</span>
+</span><span data-line="295">            <span class="p">)</span>
+</span><span data-line="296">            <span class="n">bootstrap</span><span class="o">.</span><span class="n">add_dependency</span><span class="p">(</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="297">                <span class="bp">self</span><span class="o">.</span><span class="n">session_class</span><span class="p">,</span>
+</span><span data-line="298">                <span class="bp">self</span><span class="o">.</span><span class="n">get_session_from_request</span><span class="p">,</span>
+</span><span data-line="299">            <span class="p">)</span>
+</span><span data-line="300">
+</span><span data-line="301">        <span class="nd">@self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">after_server_stop</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="302">        <span class="k">async</span> <span class="k">def</span> <span class="nf">on_shutdown</span><span class="p">(</span><span class="n">_</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportUnusedFunction]</span>
+</span><span data-line="303">            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">engine</span><span class="p">,</span> <span class="n">Engine</span><span class="p">):</span>
+</span><span data-line="304">                <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_event_loop</span><span class="p">()</span>
+</span><span data-line="305">                <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">dispose</span><span class="p">)</span>
+</span><span data-line="306">            <span class="k">else</span><span class="p">:</span>
+</span><span data-line="307">                <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine</span><span class="o">.</span><span class="n">dispose</span><span class="p">()</span>
+</span><span data-line="308">            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">):</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="309">                <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_key</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="310">            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_key</span><span class="p">):</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="311">                <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_maker_key</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]</span>
+</span><span data-line="312">
+</span><span data-line="313">        <span class="nd">@self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>  <span class="c1"># pyright: ignore[reportUnknownMemberType]</span>
+</span><span data-line="314">        <span class="k">async</span> <span class="k">def</span> <span class="nf">on_request</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportUnusedFunction]</span>
+</span><span data-line="315">            <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span data-line="316">            <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="317">                <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_session</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+</span><span data-line="318">                <span class="nb">setattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+</span><span data-line="319">
+</span><span data-line="320">        <span class="nd">@self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s2">&quot;response&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
+</span><span data-line="321">        <span class="k">async</span> <span class="k">def</span> <span class="nf">on_response</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">HTTPResponse</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportUnusedFunction]</span>
+</span><span data-line="322">            <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="n">AsyncSession</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span data-line="323">            <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span data-line="324">                <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_handler</span><span class="p">(</span><span class="n">session</span><span class="o">=</span><span class="n">session</span><span class="p">,</span> <span class="n">request</span><span class="o">=</span><span class="n">request</span><span class="p">,</span> <span class="n">response</span><span class="o">=</span><span class="n">response</span><span class="p">)</span></div>
+</div>
+
+</span></pre></div>
+        </article><button class="back-to-top" type="button">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+  </svg>
+  <span>Back to top</span>
+</button><div class="navigation flex print:hidden"></div></div>
+    </div>
+  </main>
+</div>
+<footer class="sy-foot">
+  <div class="sy-foot-inner sy-container mx-auto">
+    <div class="sy-foot-reserved md:flex justify-between items-center">
+      <div class="sy-foot-copyright"><p>2024, Litestar Organization</p>
+  
+  <p>
+    Made with
+    
+    <a href="https://www.sphinx-doc.org/">Sphinx</a> and
+    
+    <a href="https://shibuya.lepture.com">Shibuya theme</a>.
+  </p>
+</div>
+      <div class="sy-foot-socials">
+<a href="https://github.com/litestar-org/advanced-alchemy" aria-label="GitHub">
+  <iconify-icon icon="simple-icons:github"></iconify-icon>
+</a>
+<a href="https://twitter.com/LitestarAPI" aria-label="X (Twitter)">
+  <iconify-icon icon="prime:twitter"></iconify-icon>
+</a>
+<a href="https://discord.gg/litestar" aria-label="Discord">
+  <iconify-icon icon="simple-icons:discord"></iconify-icon>
+</a>
+<a href="https://www.reddit.com/r/LitestarAPI" aria-label="Reddit">
+  <iconify-icon icon="simple-icons:reddit"></iconify-icon>
+</a></div>
+    </div>
+  </div>
+</footer>
+      <script src="../../../_static/documentation_options.js?v=c6cf4326"></script>
+      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=f281be69"></script>
+      <script src="../../../_static/litestar-theme.js?v=ab2dcc9e"></script>
+      <script>let toggleHintShow = 'Click to show';</script>
+      <script>let toggleHintHide = 'Click to hide';</script>
+      <script>let toggleOpenOnPrint = 'true';</script>
+      <script src="../../../_static/togglebutton.js?v=4a39c7ea"></script>
+      <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../_static/shibuya.js?v=e2e99575"></script>
+      <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+      <script src="../../../_static/versioning.js"></script></body>
+</html>
