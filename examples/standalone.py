@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Mapped
 
 here = Path(__file__).parent
-engine = create_engine("duckdb:///:memory:")
 config = SQLAlchemySyncConfig(
     engine_instance=create_engine("duckdb:///:memory:"), session_config=SyncSessionConfig(expire_on_commit=False)
 )

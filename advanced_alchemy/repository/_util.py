@@ -78,16 +78,6 @@ def get_instrumented_attr(
 
     Returns:
         :class:`sqlalchemy.orm.InstrumentedAttribute`: The instrumented attribute from the model.
-
-    Example:
-        >>> from sqlalchemy import Column, Integer
-        >>> from sqlalchemy.orm import declarative_base
-        >>> Base = declarative_base()
-        >>> class User(Base):
-        ...     __tablename__ = "users"
-        ...     id = Column(Integer, primary_key=True)
-        >>> attr = get_instrumented_attr(User, "id")
-        >>> assert attr == User.id
     """
     if isinstance(key, str):
         return cast("InstrumentedAttribute[Any]", getattr(model, key))

@@ -49,7 +49,7 @@ RowMappingT = TypeVar("RowMappingT", bound="RowMapping")
 ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtocol, RowMapping]")
 """Type variable for models or row mappings.
 
-:class:`~advanced_alchemy.base.ModelProtocol` or :class:`~sqlalchemy.engine.RowMapping`
+:class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping`
 """
 SQLAlchemySyncRepositoryT = TypeVar("SQLAlchemySyncRepositoryT", bound="SQLAlchemySyncRepository[Any]")
 """Type variable for synchronous SQLAlchemy repositories.

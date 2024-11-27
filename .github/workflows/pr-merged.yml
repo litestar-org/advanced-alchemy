@@ -6,7 +6,6 @@ on:
       - closed
     branches:
       - main
-      - v3.0
 
 jobs:
   close_and_notify:

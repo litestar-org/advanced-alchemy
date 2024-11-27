@@ -86,7 +86,9 @@ def find_filter(
 
 
 class ResultConverter:
-    """Simple mixin to help convert to a paginated response model the results set is a list.
+    """Simple mixin to help convert to a paginated response model.
+
+    Single objects are transformed to the supplied schema type, and lists of objects are automatically transformed into an `OffsetPagination` response of the supplied schema type.
 
     Args:
         data: A database model instance or row mapping.

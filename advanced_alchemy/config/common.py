@@ -77,7 +77,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     """
 
     autobegin: bool | EmptyType = Empty
-    """Automatically start transactions when database access is requested by an operationn.
+    """Automatically start transactions when database access is requested by an operation.
 
     Bool or :class:`Empty <advanced_alchemy.utils.dataclass.Empty>`
     """

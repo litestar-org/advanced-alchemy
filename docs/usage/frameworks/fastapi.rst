@@ -117,7 +117,7 @@ Set up dependency injection for the database session:
 
     async def provide_db_session(request: Request) -> AsyncSession:
         """Provide a DB session."""
-        return alchemy.get_session(request)
+        return alchemy.get_session(request) # this is the `StarletteAdvancedAlchemy` object
 
 Controllers
 -----------
