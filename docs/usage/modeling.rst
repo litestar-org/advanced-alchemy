@@ -158,7 +158,9 @@ If we want to interact with the models above, we might use something like the fo
         )
         new_tags = [Tag(name=name, slug=slugify(name)) for name in tag_names if name not in {tag.name for tag in existing_tags}]
         post.tags.extend(new_tags + list(existing_tags))
-        return await session.add(post)
+        session.merge(post)
+        await session.flush()
+        return post
 
 
 While not too difficult, there is definitely some additional logic required to handle the unique tags on this post.  Fortunately, we can remove some of this logic thanks to the ``UniqueMixin``.  Let's look at how we can do this.
@@ -236,11 +238,12 @@ Here's how to use these models with the UniqueMixin:
         2. Creating new tags if needed
         3. Merging duplicates
         """
-        return await session.add(post.tags.extend(
-                [
-                await Tag.as_unique_async(session, name=tag_text, slug=slugify(tag_text))
-                for tag_text in tag_names
-            ],
-        ))
+        post.tags = [
+          await Tag.as_unique_async(session, name=tag_text, slug=slugify(tag_text))
+          for tag_text in tag_names
+        ]
+        session.merge(post)
+        await session.flush()
+        return post
 
 With this foundation in place, let's look at the repository pattern.

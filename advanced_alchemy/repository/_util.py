@@ -103,17 +103,6 @@ def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
 
     Returns:
         ModelT: A new instance of the model populated with the provided values.
-
-    Example:
-        >>> from sqlalchemy import Column, Integer, String
-        >>> from sqlalchemy.orm import declarative_base
-        >>> Base = declarative_base()
-        >>> class User(Base):
-        ...     __tablename__ = "users"
-        ...     id = Column(Integer, primary_key=True)
-        ...     name = Column(String)
-        >>> user = model_from_dict(User, id=1, name="John")
-        >>> assert user.name == "John"
     """
     data = {
         column_name: kwargs[column_name]
@@ -131,7 +120,7 @@ def get_abstract_loader_options(
     """Generate SQLAlchemy loader options for eager loading relationships.
 
     Args:
-        loader_options: Specification for how to load relationships. Can be:
+        loader_options :class:`~advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
             - None: Use defaults
             - :class:`sqlalchemy.orm.strategy_options._AbstractLoad`: Direct SQLAlchemy loader option
             - :class:`sqlalchemy.orm.InstrumentedAttribute`: Model relationship attribute
