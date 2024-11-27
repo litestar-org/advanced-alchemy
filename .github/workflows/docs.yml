@@ -26,13 +26,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Build release docs
-        run: uv run python tools/build_docs.py docs-build --version 1
+      - name: Build Release Documentation
+        run: uv run python tools/build_docs.py docs-build --version latest
         if: github.event_name == 'release'
 
-      - name: Build dev docs
+      - name: Build Documentation
         run: uv run python tools/build_docs.py docs-build --version latest
-        if: github.event_name == 'push'
+        if: github.event_name != 'release'
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
