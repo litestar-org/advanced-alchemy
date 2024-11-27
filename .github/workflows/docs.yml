@@ -6,11 +6,15 @@ on:
   push:
     branches:
       - main
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
-  docs:
+  build:
     permissions:
       contents: write
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,18 +28,29 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Fetch gh pages
-        run: git fetch origin gh-pages --depth=1
-
-      - name: Build release docs
-        run: uv run python tools/build_docs.py docs-build --version 1
+      - name: Build Release Documentation
+        run: uv run python tools/build_docs.py docs-build --version latest
         if: github.event_name == 'release'
 
-      - name: Build dev docs
-        run: uv run python tools/build_docs.py docs-build --version main
-        if: github.event_name == 'push'
+      - name: Build Documentation
+        run: uv run python tools/build_docs.py docs-build --version latest
+        if: github.event_name != 'release'
 
-      - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: docs-build
+          path: docs-build/
+  deploy:
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
