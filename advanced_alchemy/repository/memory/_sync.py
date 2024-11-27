@@ -60,7 +60,10 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     __database__: SQLAlchemyMultiStore[ModelT] = SQLAlchemyMultiStore(SQLAlchemyInMemoryStore)
     __database_registry__: dict[type[SQLAlchemySyncMockRepository[ModelT]], SQLAlchemyMultiStore[ModelT]] = {}
-
+    loader_options: LoadSpec | None = None
+    """Default loader options for the repository."""
+    execution_options: dict[str, Any] | None = None
+    """Default execution options for the repository."""
     model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: list[str] | str | None = None
@@ -74,9 +77,10 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         "attribute_names",
         "with_for_update",
         "force_basic_query_mode",
+        "loader_options",
+        "execution_options",
         "order_by",
         "load",
-        "execution_options",
         "error_messages",
     }
 

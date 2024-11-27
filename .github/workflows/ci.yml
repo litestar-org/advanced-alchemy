@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
 
       - name: Set up Python
         run: uv python install 3.12
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
 
       - name: Set up Python
         run: uv python install 3.12
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
 
       - name: Set up Python
         run: uv python install 3.12
@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
 
       - name: Set up Python
         run: uv python install 3.12
@@ -156,11 +156,12 @@ jobs:
       #   run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: litestar-org/advanced-alchemy
+
   build-docs:
     needs:
       - validate
@@ -174,7 +175,7 @@ jobs:
         run: sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
 
       - name: Set up Python
         run: uv python install 3.12
@@ -185,10 +186,14 @@ jobs:
       - name: Build docs
         run: uv run make docs
 
-      - name: Save PR number
+      - name: Check docs links
         env:
-          PR_NUMBER: ${{ github.event.number }}
-        run: echo $PR_NUMBER > .pr_number
+          LITESTAR_DOCS_IGNORE_MISSING_EXAMPLE_OUTPUT: 1
+        run: uv run make docs-linkcheck
+
+      - name: Save PR number
+        run: |
+          echo "${{ github.event.number }}" > .pr_number
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -197,3 +202,4 @@ jobs:
           path: |
             docs/_build/html
             .pr_number
+          include-hidden-files: true

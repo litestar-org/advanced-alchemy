@@ -89,7 +89,7 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
                 yield cls(session=db_session)
 
 
-class SQLAlchemyAsyncRepositoryReadService(Generic[ModelT], ResultConverter):
+class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]]

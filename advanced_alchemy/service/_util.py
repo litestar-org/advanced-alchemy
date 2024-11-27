@@ -86,7 +86,17 @@ def find_filter(
 
 
 class ResultConverter:
-    """Simple mixin to help convert to a paginated response model the results set is a list."""
+    """Simple mixin to help convert to a paginated response model.
+
+    Single objects are transformed to the supplied schema type, and lists of objects are automatically transformed into an `OffsetPagination` response of the supplied schema type.
+
+    Args:
+        data: A database model instance or row mapping.
+              Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
+
+    Returns:
+        The converted schema object.
+    """
 
     @overload
     def to_schema(
@@ -147,11 +157,12 @@ class ResultConverter:
 
         Args:
             data: The return from one of the service calls.
+              Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
             total: The total number of rows in the data.
-            filters: Collection of route filters.
-            schema_type: Optional schema type to convert the data to
+            filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
+            schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
         Returns:
-            The list of instances retrieved from the repository.
+            - :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
         """
         if filters is None:
             filters = []
@@ -167,7 +178,7 @@ class ResultConverter:
                 offset=limit_offset.offset,
                 total=total,
             )
-        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
+        if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
@@ -203,12 +214,12 @@ class ResultConverter:
                 total=total,
             )
 
-        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):  # type: ignore[misc] # pyright: ignore[reportGeneralTypeIssues]
+        if PYDANTIC_INSTALLED and issubclass(schema_type, BaseModel):
             if not isinstance(data, Sequence):
                 return cast(
                     "ModelDTOT",
                     get_type_adapter(schema_type).validate_python(data, from_attributes=True),
-                )  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType,reportAttributeAccessIssue,reportCallIssue]
+                )
             limit_offset = find_filter(LimitOffset, filters=filters)
             total = total if total else len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)

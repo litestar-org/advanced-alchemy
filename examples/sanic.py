@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date  # noqa: TCH003
+from datetime import date  # noqa: TC003
 from typing import Any
-from uuid import UUID  # noqa: TCH003
+from uuid import UUID  # noqa: TC003
 
 from sanic import Request, Sanic
 from sanic_ext import Extend

@@ -338,10 +338,8 @@ def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:
         else:
             msg = "Unexpected default type"
             raise ValueError(msg)
-    elif (
-        isinstance(elem, RelationshipProperty)
-        and detect_nullable_relationship(elem)
-        or getattr(elem, "nullable", False)
+    elif (isinstance(elem, RelationshipProperty) and detect_nullable_relationship(elem)) or getattr(
+        elem, "nullable", False
     ):
         default = None
 

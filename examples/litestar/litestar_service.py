@@ -8,15 +8,14 @@ from litestar.di import Provide
 from litestar.handlers.http_handlers.decorators import delete, get, patch, post
 from litestar.params import Parameter
 from pydantic import BaseModel as _BaseModel
-from sqlalchemy import ForeignKey, select
-from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.extensions.litestar import (
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
     SQLAlchemyPlugin,
-    async_autocommit_before_send_handler,
 )
 from advanced_alchemy.filters import FilterTypes, LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -99,8 +98,8 @@ async def provide_authors_service(db_session: AsyncSession) -> AsyncGenerator[Au
 async def provide_author_details_service(db_session: AsyncSession) -> AsyncGenerator[AuthorService, None]:
     """This provides a simple example demonstrating how to override the join options for the repository."""
     async with AuthorService.new(
-        statement=select(AuthorModel).options(selectinload(AuthorModel.books)),
         session=db_session,
+        load=[AuthorModel.books],
     ) as service:
         yield service
 
@@ -209,15 +208,15 @@ class AuthorController(Controller):
 session_config = AsyncSessionConfig(expire_on_commit=False)
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
-    before_send_handler=async_autocommit_before_send_handler,
+    before_send_handler="autocommit",
     session_config=session_config,
     create_all=True,
 )  # Create 'db_session' dependency.
-sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
+alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
 app = Litestar(
     route_handlers=[AuthorController],
-    plugins=[sqlalchemy_plugin],
+    plugins=[alchemy],
     dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
 )

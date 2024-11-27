@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import date  # noqa: TCH003
+from contextlib import asynccontextmanager
+from datetime import date  # noqa: TC003
 from typing import AsyncGenerator
-from uuid import UUID  # noqa: TCH003
+from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from pydantic import BaseModel as _BaseModel
 from sqlalchemy import ForeignKey, select
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TCH002
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 from typing_extensions import Annotated
 
@@ -131,11 +132,14 @@ def provide_limit_offset_pagination(
     return LimitOffset(page_size, page_size * (current_page - 1))
 
 
-async def on_startup() -> None:
+@asynccontextmanager
+async def on_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
     """Initializes the database."""
+    metadata = sqlalchemy_config.metadata or sqlalchemy_config.alembic_config.target_metadata
     if sqlalchemy_config.create_all:
         async with sqlalchemy_config.get_engine().begin() as conn:
-            await conn.run_sync(UUIDBase.metadata.create_all)
+            await conn.run_sync(metadata.create_all)
+    yield
 
 
 # #######################
@@ -148,7 +152,7 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     session_config=session_config,
     create_all=True,
 )  # Create 'db_session' dependency.
-app = FastAPI(on_startup=[on_startup])
+app = FastAPI(lifespan=on_lifespan)
 alchemy = StarletteAdvancedAlchemy(config=sqlalchemy_config, app=app)
 
 # #######################

@@ -25,7 +25,7 @@ class Empty:
 
 
 EmptyType: TypeAlias = Type[Empty]
-"""Type alias for the :class:`Empty` sentinel class."""
+"""Type alias for the :class:`~advanced_alchemy.utils.dataclass.Empty` sentinel class."""
 
 
 @runtime_checkable
@@ -45,7 +45,7 @@ def extract_dataclass_fields(
     """Extract dataclass fields.
 
     Args:
-        dt: A dataclass instance.
+        dt: :class:`DataclassProtocol` instance.
         exclude_none: Whether to exclude None values.
         exclude_empty: Whether to exclude Empty values.
         include: An iterable of fields to include.
@@ -87,7 +87,7 @@ def extract_dataclass_items(
     Unlike the 'asdict' method exports by the stdlib, this function does not pickle values.
 
     Args:
-        dt: A dataclass instance.
+        dt: :class:`DataclassProtocol` instance.
         exclude_none: Whether to exclude None values.
         exclude_empty: Whether to exclude Empty values.
         include: An iterable of fields to include.
@@ -114,7 +114,7 @@ def simple_asdict(
     - it does not recurse into collections
 
     Args:
-        obj: A dataclass instance.
+        obj: :class:`DataclassProtocol` instance.
         exclude_none: Whether to exclude None values.
         exclude_empty: Whether to exclude Empty values.
         convert_nested: Whether to recursively convert nested dataclasses.
