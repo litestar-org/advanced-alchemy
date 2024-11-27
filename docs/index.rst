@@ -141,7 +141,6 @@ where you can pledge an amount towards an issue or feature you would like to see
     :hidden:
 
     getting-started
-    try-it
     usage/index
     reference/index
 

@@ -11,6 +11,9 @@ Configure SQLAlchemy with FastAPI:
 
 .. code-block:: python
 
+    from contextlib import asynccontextmanager
+    from typing import AsyncGenerator
+
     from fastapi import FastAPI
     from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
     from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
@@ -21,14 +24,16 @@ Configure SQLAlchemy with FastAPI:
         session_config=session_config
     )
 
-    async def on_startup() -> None:
+    @asynccontextmanager
+    async def on_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Initializes the database."""
         metadata = sqlalchemy_config.metadata or sqlalchemy_config.alembic_config.target_metadata
         if sqlalchemy_config.create_all:
             async with sqlalchemy_config.get_engine().begin() as conn:
                 await conn.run_sync(metadata.create_all)
+        yield
 
-    app = FastAPI(on_startup=[on_startup])
+    app = FastAPI(lifespan=on_lifespan)
     alchemy = StarletteAdvancedAlchemy(config=sqlalchemy_config, app=app)
 
 Models and Schemas
