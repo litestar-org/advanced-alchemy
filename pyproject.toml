@@ -437,6 +437,8 @@ module = [
   "uuid_utils",
   "uuid_utils.*",
   "fsspec",
+  "fsspec.*",
+  "gcsfs",
   "fastnanoid",
 ]
 

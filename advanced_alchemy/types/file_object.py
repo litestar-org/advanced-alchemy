@@ -4,7 +4,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Protocol, cast, runtime_checkable
 
 from sqlalchemy import TypeDecorator
 from sqlalchemy.ext.mutable import MutableComposite
@@ -16,7 +16,7 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType, simple_asdict
 FSSPEC_INSTALLED = bool(find_spec("fsspec"))
 if not FSSPEC_INSTALLED and not TYPE_CHECKING:
 
-    class filesystem(Generic):  # noqa: N801
+    class _FileSystem(Generic):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             """Placeholder `filesystem` implementation"""
 
@@ -30,14 +30,15 @@ if not FSSPEC_INSTALLED and not TYPE_CHECKING:
             """Placeholder `put` implementation"""
             return ""
 
+    def filesystem(protocol: str, **storage_options: Any) -> _FileSystem:  # noqa: ARG001
+        """Placeholder filesystem factory"""
+        return _FileSystem()
 else:
     from fsspec import filesystem  # type: ignore[no-redef]  # pyright: ignore[reportUnknownVariableType]
 
 
 if TYPE_CHECKING:
-    from fsspec import (  # type: ignore[no-redef] # pyright: ignore[reportMissingTypeStubs]
-        filesystem,  # pyright: ignore[reportUnknownVariableType]  # noqa: TC004
-    )
+    from fsspec.spec import AbstractFileSystem  # pyright: ignore[reportMissingTypeStubs]
 
 
 @dataclass
@@ -86,7 +87,7 @@ class StorageBackend(Protocol):
     backend: str
     """Storage backend name (e.g., 'file', 'gcs', 's3')"""
 
-    async def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
+    def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
         """Save file data to storage.
 
         Args:
@@ -96,7 +97,7 @@ class StorageBackend(Protocol):
         """
         ...
 
-    async def get_url(self, path: str, expires_in: int) -> str:
+    def get_url(self, path: str, expires_in: int) -> str:
         """Get access URL for file.
 
         Args:
@@ -108,7 +109,7 @@ class StorageBackend(Protocol):
         """
         ...
 
-    async def delete_file(self, path: str) -> None:
+    def delete_file(self, path: str) -> None:
         """Delete a file from storage.
 
         Args:
@@ -122,6 +123,7 @@ class FSSpecBackend(StorageBackend):
 
     backend: str
     base_path: str
+    _fs: AbstractFileSystem
 
     def __init__(self, backend: str, base_path: str = "", **options: Any) -> None:
         """Initialize FSSpec backend.
@@ -141,29 +143,28 @@ class FSSpecBackend(StorageBackend):
         self.base_path = base_path.rstrip("/")
         self._fs = filesystem(backend, **options)
 
-    async def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
+    def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
         """Save file data using FSSpec."""
         full_path = f"{self.base_path}/{path}".lstrip("/")
+        self._fs.put(full_path, data)  # pyright: ignore[reportUnknownMemberType]
 
-        if hasattr(self._fs, "async_put"):
-            await self._fs.async_put(full_path, data)
-        else:
-            self._fs.put(full_path, data)
-
-    async def get_url(self, path: str, expires_in: int) -> str:
+    def get_url(self, path: str, expires_in: int) -> str:
         """Get access URL using FSSpec."""
         full_path = f"{self.base_path}/{path}".lstrip("/")
 
         if hasattr(self._fs, "url"):
-            return self._fs.url(
-                full_path,
-                expires=timedelta(seconds=expires_in),
+            return cast(
+                "str",
+                self._fs.url(  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+                    full_path,
+                    expires=timedelta(seconds=expires_in),
+                ),
             )
 
         # For local filesystem, return direct path
         return f"file://{full_path}"
 
-    async def get_upload_url(
+    def get_upload_url(
         self,
         path: str,
         expires_in: int,
@@ -174,23 +175,22 @@ class FSSpecBackend(StorageBackend):
         full_path = f"{self.base_path}/{path}".lstrip("/")
 
         if hasattr(self._fs, "url"):
-            return self._fs.url(
-                full_path,
-                expires=timedelta(seconds=expires_in),
-                http_method="PUT",
-                content_type=content_type,
+            return cast(
+                "str",
+                self._fs.url(  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+                    full_path,
+                    expires=timedelta(seconds=expires_in),
+                    http_method="PUT",
+                    content_type=content_type,
+                ),
             )
 
         return f"file://{full_path}"
 
-    async def delete_file(self, path: str) -> None:
+    def delete_file(self, path: str) -> None:
         """Delete file using FSSpec."""
         full_path = f"{self.base_path}/{path}".lstrip("/")
-
-        if hasattr(self._fs, "async_rm"):
-            await self._fs.async_rm(full_path)
-        else:
-            self._fs.rm(full_path)
+        self._fs.rm(full_path)  # pyright: ignore[reportUnknownMemberType]
 
 
 class ObjectStore(TypeDecorator[StoredObject]):
@@ -248,7 +248,7 @@ class ObjectStore(TypeDecorator[StoredObject]):
             return None
         return StoredObject.from_dict(value)
 
-    async def save_file(
+    def save_file(
         self, file_data: bytes, filename: str, content_type: str, metadata: dict[str, Any] | None = None
     ) -> StoredObject:
         """Save file data and return metadata.
@@ -265,7 +265,7 @@ class ObjectStore(TypeDecorator[StoredObject]):
         path = f"{filename}"
         checksum = hashlib.md5(file_data).hexdigest()  # noqa: S324
 
-        await self.storage.save_file(path, file_data, content_type)
+        self.storage.save_file(path, file_data, content_type)
 
         return StoredObject(
             filename=filename,
@@ -283,8 +283,8 @@ class ObjectStore(TypeDecorator[StoredObject]):
         if expires_in is None:
             expires_in = self.DEFAULT_EXPIRES_IN
 
-        return await self.storage.get_url(metadata.path, expires_in)
+        return self.storage.get_url(metadata.path, expires_in)
 
     async def delete_file(self, metadata: StoredObject) -> None:
         """Delete file from storage."""
-        await self.storage.delete_file(metadata.path)
+        self.storage.delete_file(metadata.path)
