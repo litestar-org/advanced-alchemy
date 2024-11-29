@@ -7,4 +7,4 @@ utils
     :imported-members:
     :undoc-members:
     :show-inheritance:
-    :noindex:
+    :noindex:  FilterableRepositoryProtocol.model_type

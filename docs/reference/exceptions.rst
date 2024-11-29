@@ -4,4 +4,5 @@ exceptions
 
 .. automodule:: advanced_alchemy.exceptions
     :members:
-    :noindex: ErrorMessages
+    :no-index: ErrorMessages
+    :show-inheritance:
