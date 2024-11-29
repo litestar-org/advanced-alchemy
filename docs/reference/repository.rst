@@ -7,4 +7,4 @@ repositories
     :imported-members:
     :undoc-members:
     :show-inheritance:
-    :noindex:
+    :no-index: Empty
