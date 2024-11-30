@@ -30,6 +30,8 @@ from sqlalchemy.orm import (
     InspectionAttr,
     InstrumentedAttribute,
     Mapped,
+    WriteOnlyMapped,
+    DyanimcMapped,
     MappedColumn,
     NotExtension,
     QueryableAttribute,
@@ -127,10 +129,10 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         default, default_factory = _detect_defaults(elem)
 
         try:
-            if (field_definition := model_type_hints[key]).origin is Mapped:
+            if (field_definition := model_type_hints[key]).origin in {Mapped, DynamicMapped, WriteOnlyMapped}:
                 (field_definition,) = field_definition.inner_types
             else:
-                msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"
+                msg = f"Expected 'Mapped/DynamicMapped/WriteOnlyMapped' origin, got: '{field_definition.origin}'"
                 raise NotImplementedError(msg)
         except KeyError:
             field_definition = parse_type_from_element(elem, orm_descriptor)  # pyright: ignore[reportUnknownArgumentType]
