@@ -27,16 +27,16 @@ from sqlalchemy.orm import (
     ColumnProperty,
     CompositeProperty,
     DeclarativeBase,
+    DynamicMapped,
     InspectionAttr,
     InstrumentedAttribute,
     Mapped,
-    WriteOnlyMapped,
-    DynamicMapped,
     MappedColumn,
     NotExtension,
     QueryableAttribute,
     RelationshipDirection,
     RelationshipProperty,
+    WriteOnlyMapped,
 )
 from sqlalchemy.sql.expression import ColumnClause, Label
 from typing_extensions import TypeVar
