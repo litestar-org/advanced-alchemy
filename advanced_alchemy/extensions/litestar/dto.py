@@ -31,7 +31,7 @@ from sqlalchemy.orm import (
     InstrumentedAttribute,
     Mapped,
     WriteOnlyMapped,
-    DyanimcMapped,
+    DynamicMapped,
     MappedColumn,
     NotExtension,
     QueryableAttribute,
