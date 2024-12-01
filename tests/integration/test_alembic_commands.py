@@ -269,15 +269,12 @@ async def test_dump_tables(
     capfd: CaptureFixture[str],
     tmp_project_dir: Path,
 ) -> None:
-    from advanced_alchemy.base import (
-        CommonTableAttributes,
-        DeclarativeBase,
-        UUIDPrimaryKey,
-        create_registry,
-    )
+    from sqlalchemy.orm import DeclarativeBase
 
-    class _UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, DeclarativeBase):
-        registry = create_registry()
+    from advanced_alchemy import base, mixins
+
+    class _UUIDAuditBase(base.CommonTableAttributes, mixins.UUIDPrimaryKey, DeclarativeBase):
+        registry = base.create_registry()
 
     class TestAuthorModel(_UUIDAuditBase):
         name: Mapped[str] = mapped_column(String(10))

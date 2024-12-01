@@ -20,14 +20,14 @@ if TYPE_CHECKING:
 def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     from sqlalchemy.orm import DeclarativeBase
 
-    from advanced_alchemy import base
+    from advanced_alchemy import base, mixins
 
     orm_registry = base.create_registry()
 
-    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         registry = orm_registry
 
-    class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         registry = orm_registry
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
@@ -124,14 +124,14 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     from sqlalchemy.orm import DeclarativeBase
 
-    from advanced_alchemy import base
+    from advanced_alchemy import base, mixins
 
     orm_registry = base.create_registry()
 
-    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         registry = orm_registry
 
-    class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         registry = orm_registry
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)

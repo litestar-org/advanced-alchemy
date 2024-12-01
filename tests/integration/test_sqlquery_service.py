@@ -7,9 +7,9 @@ from msgspec import Struct
 from pydantic import BaseModel
 from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import Mapped, Session
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session
 
-from advanced_alchemy.base import CommonTableAttributes, DeclarativeBase, SQLQuery, UUIDPrimaryKey, create_registry
+from advanced_alchemy import base, mixins
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
@@ -32,10 +32,10 @@ pytestmark = [  # type: ignore
 ]
 here = Path(__file__).parent
 fixture_path = here.parent.parent / "examples"
-state_registry = create_registry()
+state_registry = base.create_registry()
 
 
-class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
     """Base for all SQLAlchemy declarative models with UUID primary keys."""
 
     registry = state_registry
@@ -83,7 +83,7 @@ class USStateAsyncService(SQLAlchemyAsyncRepositoryService[USState]):
     model_type = USState
 
 
-class StateQuery(SQLQuery):
+class StateQuery(base.SQLQuery):
     """Nonsensical query to test custom SQL queries."""
 
     __table__ = select(  # type: ignore

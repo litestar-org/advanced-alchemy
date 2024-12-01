@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import importlib
 import inspect
+import sys
 from collections.abc import Awaitable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Type, TypeVar, cast, overload
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable, List, Type, TypeVar, cast, overload
 
 import anyio
 from typing_extensions import ParamSpec
@@ -14,6 +17,13 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 P = ParamSpec("P")
+
+
+def purge_module(module_names: List[str], path: str | Path) -> None:
+    for name in module_names:
+        if name in sys.modules:
+            del sys.modules[name]
+    Path(importlib.util.cache_from_source(path)).unlink(missing_ok=True)  # type: ignore[arg-type]
 
 
 class _ContextManagerWrapper:
