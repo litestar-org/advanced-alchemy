@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Mapped, declared_attr, orm_insert_sentinel
+from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, orm_insert_sentinel
 
 
+@declarative_mixin
 class SentinelMixin:
     """Mixin to add a sentinel column for SQLAlchemy models."""
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from sqlalchemy import Sequence
-from sqlalchemy.orm import Mapped, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
 
 from advanced_alchemy.types import BigIntIdentity
 
 
+@declarative_mixin
 class BigIntPrimaryKey:
     """BigInt Primary Key Field Mixin."""
 

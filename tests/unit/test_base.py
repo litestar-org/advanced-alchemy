@@ -11,27 +11,21 @@ from tests.helpers import purge_module
 
 def test_deprecated_uuid_primary_keys() -> None:
     """Test that using UUIDv7PrimaryKey from base raises a deprecation warning."""
-    purge_module(["advanced_alchemy.base", "advanced_alchemy.mixins.uuid", "advanced_alchemy.mixins"], __file__)
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.UUIDv7PrimaryKey' instead"):
+    purge_module(["advanced_alchemy.base"], __file__)
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import UUIDv7PrimaryKey
 
-        _ = UUIDv7PrimaryKey()
-
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.UUIDv6PrimaryKey' instead"):
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import UUIDv6PrimaryKey
 
-        _ = UUIDv6PrimaryKey()
-
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.UUIDPrimaryKey' instead"):
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import UUIDPrimaryKey
-
-        _ = UUIDPrimaryKey()
 
 
 def test_deprecated_slug_mixin() -> None:
     """Test that using SlugMixin from base raises a deprecation warning."""
     purge_module(["advanced_alchemy.base", "advanced_alchemy.mixins.slug", "advanced_alchemy.mixins"], __file__)
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.SlugKey' instead"):
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import SlugKey
 
         _ = SlugKey()
@@ -40,7 +34,7 @@ def test_deprecated_slug_mixin() -> None:
 def test_deprecated_bigint_primary_key() -> None:
     """Test that using BigIntPrimaryKey from base raises a deprecation warning."""
     purge_module(["advanced_alchemy.base", "advanced_alchemy.mixins.bigint", "advanced_alchemy.mixins"], __file__)
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.BigIntPrimaryKey' instead"):
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import BigIntPrimaryKey
 
         _ = BigIntPrimaryKey()
@@ -49,7 +43,7 @@ def test_deprecated_bigint_primary_key() -> None:
 def test_deprecated_nanoid_primary_key() -> None:
     """Test that using NanoIDPrimaryKey from base raises a deprecation warning."""
     purge_module(["advanced_alchemy.base", "advanced_alchemy.mixins.nanoid", "advanced_alchemy.mixins"], __file__)
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.NanoIDPrimaryKey' instead"):
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import NanoIDPrimaryKey
 
         _ = NanoIDPrimaryKey()
@@ -58,7 +52,7 @@ def test_deprecated_nanoid_primary_key() -> None:
 def test_deprecated_audit_columns() -> None:
     """Test that using AuditColumns from base raises a deprecation warning."""
     purge_module(["advanced_alchemy.base", "advanced_alchemy.mixins.audit", "advanced_alchemy.mixins"], __file__)
-    with pytest.warns(DeprecationWarning, match="Use 'advanced_alchemy.mixins.AuditColumns' instead"):
+    with pytest.warns(DeprecationWarning, match="please import it from 'advanced_alchemy.mixins' instead"):
         from advanced_alchemy.base import AuditColumns
 
         _ = AuditColumns()

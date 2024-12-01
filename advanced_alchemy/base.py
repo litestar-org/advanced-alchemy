@@ -1,3 +1,4 @@
+# ruff: noqa: TC004
 """Application ORM configuration."""
 
 from __future__ import annotations
@@ -28,9 +29,6 @@ from advanced_alchemy.mixins import (
     NanoIDPrimaryKey as _NanoIDPrimaryKey,
 )
 from advanced_alchemy.mixins import (
-    SlugKey as _SlugKey,
-)
-from advanced_alchemy.mixins import (
     UUIDPrimaryKey as _UUIDPrimaryKey,
 )
 from advanced_alchemy.mixins import (
@@ -41,7 +39,7 @@ from advanced_alchemy.mixins import (
 )
 from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
 from advanced_alchemy.utils.dataclass import DataclassProtocol
-from advanced_alchemy.utils.deprecation import deprecated
+from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -50,34 +48,85 @@ if TYPE_CHECKING:
     )
     from sqlalchemy.types import TypeEngine
 
+    # these should stay here since they are deprecated.  They are imported in the __getattr__ function
+    from advanced_alchemy.mixins import (
+        AuditColumns,
+        BigIntPrimaryKey,
+        NanoIDPrimaryKey,
+        SlugKey,
+        UUIDPrimaryKey,
+        UUIDv6PrimaryKey,
+        UUIDv7PrimaryKey,
+    )
+
 
 __all__ = (
     "AuditColumns",
     "BasicAttributes",
     "BigIntAuditBase",
     "BigIntBase",
+    "BigIntBaseT",
     "BigIntPrimaryKey",
     "CommonTableAttributes",
     "ModelProtocol",
     "NanoIDAuditBase",
     "NanoIDBase",
+    "NanoIDBaseT",
     "NanoIDPrimaryKey",
     "SQLQuery",
     "SlugKey",
     "TableArgsType",
     "UUIDAuditBase",
     "UUIDBase",
+    "UUIDBaseT",
     "UUIDPrimaryKey",
     "UUIDv6AuditBase",
     "UUIDv6Base",
+    "UUIDv6BaseT",
     "UUIDv6PrimaryKey",
     "UUIDv7AuditBase",
     "UUIDv7Base",
+    "UUIDv7BaseT",
     "UUIDv7PrimaryKey",
+    "convention",
     "create_registry",
     "merge_table_arguments",
     "orm_registry",
+    "table_name_regexp",
 )
+
+
+def __getattr__(attr_name: str) -> object:
+    _deprecated_attrs = {
+        "SlugKey",
+        "AuditColumns",
+        "NanoIDPrimaryKey",
+        "BigIntPrimaryKey",
+        "UUIDPrimaryKey",
+        "UUIDv6PrimaryKey",
+        "UUIDv7PrimaryKey",
+    }
+    if attr_name in _deprecated_attrs:
+        from advanced_alchemy import mixins
+
+        module = "advanced_alchemy.mixins"
+        value = globals()[attr_name] = getattr(mixins, attr_name)
+
+        warn_deprecation(
+            deprecated_name=f"advanced_alchemy.base.{attr_name}",
+            version="0.26.0",
+            kind="import",
+            removal_in="1.0.0",
+            info=f"importing {attr_name} from 'advanced_alchemy.base' is deprecated, please import it from '{module}' instead",
+        )
+
+        return value
+    if attr_name in set(__all__).difference(_deprecated_attrs):
+        value = globals()[attr_name] = locals()[attr_name]
+        return value
+
+    msg = f"module {__name__!r} has no attribute {attr_name!r}"
+    raise AttributeError(msg)
 
 
 UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
@@ -101,104 +150,6 @@ convention: NamingSchemaParameter = {
 """Templates for automated constraint name generation."""
 table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.BigIntPrimaryKey",
-    removal_in="1.0.0",
-    info="`BigIntPrimaryKey` has been moved to `advanced_alchemy.mixins`",
-)
-class BigIntPrimaryKey(_BigIntPrimaryKey):
-    """BigInt Primary Key Field Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.BigIntPrimaryKey` instead.
-    """
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.UUIDPrimaryKey",
-    removal_in="1.0.0",
-    info="`UUIDPrimaryKey` has been moved to `advanced_alchemy.mixins`",
-)
-class UUIDPrimaryKey(_UUIDPrimaryKey):
-    """UUID Primary Key Field Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.UUIDPrimaryKey` instead.
-    """
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.UUIDv6PrimaryKey",
-    removal_in="1.0.0",
-    info="`UUIDv6PrimaryKey` has been moved to `advanced_alchemy.mixins`",
-)
-class UUIDv6PrimaryKey(_UUIDv6PrimaryKey):
-    """UUID v6 Primary Key Field Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.UUIDv6PrimaryKey` instead.
-    """
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.UUIDv7PrimaryKey",
-    removal_in="1.0.0",
-    info="`UUIDv7PrimaryKey` has been moved to `advanced_alchemy.mixins`",
-)
-class UUIDv7PrimaryKey(_UUIDv7PrimaryKey):
-    """UUID v7 Primary Key Field Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.UUIDv7PrimaryKey` instead.
-    """
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.NanoIDPrimaryKey",
-    removal_in="1.0.0",
-    info="`NanoIDPrimaryKey` has been moved to `advanced_alchemy.mixins`",
-)
-class NanoIDPrimaryKey(_NanoIDPrimaryKey):
-    """Nano ID Primary Key Field Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.NanoIDPrimaryKey` instead.
-    """
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.AuditColumns",
-    removal_in="1.0.0",
-    info="`AuditColumns` has been moved to `advanced_alchemy.mixins`",
-)
-class AuditColumns(_AuditColumns):
-    """Created/Updated At Fields Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.AuditColumns` instead.
-    """
-
-
-@deprecated(
-    version="0.26.0",
-    alternative="advanced_alchemy.mixins.SlugKey",
-    removal_in="1.0.0",
-    info="`SlugKey` has been moved to `advanced_alchemy.mixins`",
-)
-class SlugKey(_SlugKey):
-    """Slug unique Field Model Mixin.
-
-    .. deprecated:: 0.26.0
-        Use :class:`advanced_alchemy.mixins.SlugKey` instead.
-    """
 
 
 def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:

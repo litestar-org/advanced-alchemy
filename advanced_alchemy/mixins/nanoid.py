@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
 
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import NANOID_INSTALLED
@@ -13,6 +13,7 @@ else:
     from uuid import uuid4 as nanoid  # type: ignore[assignment]
 
 
+@declarative_mixin
 class NanoIDPrimaryKey(SentinelMixin):
     """Nano ID Primary Key Field Mixin."""
 

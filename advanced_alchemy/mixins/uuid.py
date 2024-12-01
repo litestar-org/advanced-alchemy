@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
 
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import UUID_UTILS_INSTALLED
@@ -17,6 +17,7 @@ else:
     uuid7 = uuid4  # type: ignore[assignment]
 
 
+@declarative_mixin
 class UUIDPrimaryKey(SentinelMixin):
     """UUID Primary Key Field Mixin."""
 
@@ -24,6 +25,7 @@ class UUIDPrimaryKey(SentinelMixin):
     """UUID Primary key column."""
 
 
+@declarative_mixin
 class UUIDv6PrimaryKey(SentinelMixin):
     """UUID v6 Primary Key Field Mixin."""
 
@@ -31,6 +33,7 @@ class UUIDv6PrimaryKey(SentinelMixin):
     """UUID Primary key column."""
 
 
+@declarative_mixin
 class UUIDv7PrimaryKey(SentinelMixin):
     """UUID v7 Primary Key Field Mixin."""
 
