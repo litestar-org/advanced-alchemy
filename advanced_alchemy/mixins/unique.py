@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement, select
+from sqlalchemy.orm import declarative_mixin
 
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 __all__ = ("UniqueMixin",)
 
 
+@declarative_mixin
 class UniqueMixin:
     """Mixin for instantiating objects while ensuring uniqueness on some field(s).
 

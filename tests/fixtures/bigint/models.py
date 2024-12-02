@@ -9,7 +9,8 @@ from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
-from advanced_alchemy.base import BigIntAuditBase, BigIntBase, SlugKey, merge_table_arguments
+from advanced_alchemy.base import BigIntAuditBase, BigIntBase, merge_table_arguments
+from advanced_alchemy.mixins import SlugKey
 from advanced_alchemy.types import EncryptedString
 from advanced_alchemy.types.encrypted_string import EncryptedText
 

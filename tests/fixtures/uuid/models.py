@@ -10,7 +10,6 @@ from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from advanced_alchemy.base import (
-    SlugKey,
     TableArgsType,  # pyright: ignore[reportPrivateUsage]
     UUIDAuditBase,
     UUIDBase,
@@ -18,6 +17,7 @@ from advanced_alchemy.base import (
     UUIDv7Base,
     merge_table_arguments,
 )
+from advanced_alchemy.mixins import SlugKey
 from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
 
 

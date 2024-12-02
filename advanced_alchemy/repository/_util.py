@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Literal, Protocol, Sequence, Un
 from sqlalchemy import (
     Select,
 )
-from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, noload, selectinload
 from sqlalchemy.orm.strategy_options import (
     _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
 )
@@ -106,6 +106,9 @@ def get_abstract_loader_options(
     loader_options: LoadSpec | None,
     default_loader_options: list[_AbstractLoad] | None = None,
     default_options_have_wildcards: bool = False,
+    merge_with_default: bool = True,
+    inherit_lazy_relationships: bool = True,
+    cycle_count: int = 0,
 ) -> tuple[list[_AbstractLoad], bool]:
     """Generate SQLAlchemy loader options for eager loading relationships.
 
@@ -119,13 +122,20 @@ def get_abstract_loader_options(
             - :class:`typing.Sequence` of the above
         default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` loader options to start with.
         default_options_have_wildcards: Whether the default options contain wildcards.
+        merge_with_default: Whether to merge the default options with the loader options.
+        inherit_lazy_relationships: Whether to inherit the ``lazy`` configuration from the model's relationships.
+        cycle_count: Number of times this function has been called recursively.
 
     Returns:
         tuple[:class:`list`[:class:`sqlalchemy.orm.strategy_options._AbstractLoad`], bool]: A tuple containing:
             - :class:`list` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` SQLAlchemy loader option objects
             - Boolean indicating if any wildcard loaders are present
     """
-    loads: list[_AbstractLoad] = default_loader_options if default_loader_options is not None else []
+    loads: list[_AbstractLoad] = []
+    if cycle_count == 0 and not inherit_lazy_relationships:
+        loads.append(noload("*"))
+    if cycle_count == 0 and merge_with_default and default_loader_options is not None:
+        loads.extend(default_loader_options)
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
@@ -150,6 +160,9 @@ def get_abstract_loader_options(
                 load_chain, options_have_wildcards = get_abstract_loader_options(
                     loader_options=attribute,  # pyright: ignore[reportUnknownArgumentType]
                     default_options_have_wildcards=options_have_wildcards,
+                    inherit_lazy_relationships=inherit_lazy_relationships,
+                    merge_with_default=merge_with_default,
+                    cycle_count=cycle_count + 1,
                 )
                 loader = load_chain[-1]
                 for sub_load in load_chain[-2::-1]:
@@ -159,6 +172,9 @@ def get_abstract_loader_options(
                 load_chain, options_have_wildcards = get_abstract_loader_options(
                     loader_options=attribute,  # pyright: ignore[reportUnknownArgumentType]
                     default_options_have_wildcards=options_have_wildcards,
+                    inherit_lazy_relationships=inherit_lazy_relationships,
+                    merge_with_default=merge_with_default,
+                    cycle_count=cycle_count + 1,
                 )
                 loads.extend(load_chain)
     return (loads, options_have_wildcards)
