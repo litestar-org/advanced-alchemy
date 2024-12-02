@@ -108,6 +108,7 @@ def get_abstract_loader_options(
     default_options_have_wildcards: bool = False,
     merge_with_default: bool = True,
     inherit_lazy_relationships: bool = True,
+    cycle_count: int = 0,
 ) -> tuple[list[_AbstractLoad], bool]:
     """Generate SQLAlchemy loader options for eager loading relationships.
 
@@ -123,6 +124,7 @@ def get_abstract_loader_options(
         default_options_have_wildcards: Whether the default options contain wildcards.
         merge_with_default: Whether to merge the default options with the loader options.
         inherit_lazy_relationships: Whether to inherit the ``lazy`` configuration from the model's relationships.
+        cycle_count: Number of times this function has been called recursively.
 
     Returns:
         tuple[:class:`list`[:class:`sqlalchemy.orm.strategy_options._AbstractLoad`], bool]: A tuple containing:
@@ -130,9 +132,9 @@ def get_abstract_loader_options(
             - Boolean indicating if any wildcard loaders are present
     """
     loads: list[_AbstractLoad] = []
-    if not inherit_lazy_relationships:
+    if cycle_count == 0 and not inherit_lazy_relationships:
         loads.append(noload("*"))
-    if merge_with_default and default_loader_options is not None:
+    if cycle_count == 0 and merge_with_default and default_loader_options is not None:
         loads.extend(default_loader_options)
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
@@ -160,6 +162,7 @@ def get_abstract_loader_options(
                     default_options_have_wildcards=options_have_wildcards,
                     inherit_lazy_relationships=inherit_lazy_relationships,
                     merge_with_default=merge_with_default,
+                    cycle_count=cycle_count + 1,
                 )
                 loader = load_chain[-1]
                 for sub_load in load_chain[-2::-1]:
@@ -171,6 +174,7 @@ def get_abstract_loader_options(
                     default_options_have_wildcards=options_have_wildcards,
                     inherit_lazy_relationships=inherit_lazy_relationships,
                     merge_with_default=merge_with_default,
+                    cycle_count=cycle_count + 1,
                 )
                 loads.extend(load_chain)
     return (loads, options_have_wildcards)
