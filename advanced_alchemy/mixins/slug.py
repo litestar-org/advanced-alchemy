@@ -22,11 +22,11 @@ class SlugKey:
         )
 
     @staticmethod
-    def _create_unique_slug_index(*_args: Any, **kwargs: Any) -> bool:
+    def _create_unique_slug_index(*_: Any, **kwargs: Any) -> bool:
         return bool(kwargs["dialect"].name.startswith("spanner"))
 
     @staticmethod
-    def _create_unique_slug_constraint(*_args: Any, **kwargs: Any) -> bool:
+    def _create_unique_slug_constraint(*_: Any, **kwargs: Any) -> bool:
         return not kwargs["dialect"].name.startswith("spanner")
 
     @declared_attr.directive
