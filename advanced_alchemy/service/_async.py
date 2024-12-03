@@ -22,7 +22,7 @@ from advanced_alchemy.repository._util import (
     LoadSpec,
     model_from_dict,
 )
-from advanced_alchemy.repository.typing import ModelT, OrderingPair
+from advanced_alchemy.repository.typing import ModelT, OrderingPair, SQLAlchemyAsyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     BulkModelDictT,
@@ -89,7 +89,7 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
                 yield cls(session=db_session)
 
 
-class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
+class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAlchemyAsyncRepositoryT]):
     """Service object that operates on a repository object."""
 
     repository_type: type[SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]]
@@ -130,17 +130,20 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         """
         load = load if load is not None else self.loader_options
         execution_options = execution_options if execution_options is not None else self.execution_options
-        self.repository = self.repository_type(
-            session=session,
-            statement=statement,
-            auto_expunge=auto_expunge,
-            auto_refresh=auto_refresh,
-            auto_commit=auto_commit,
-            order_by=order_by,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **repo_kwargs,
+        self.repository = cast(
+            "SQLAlchemyAsyncRepositoryT",
+            self.repository_type(
+                session=session,
+                statement=statement,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                auto_commit=auto_commit,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **repo_kwargs,
+            ),
         )
 
     async def count(
@@ -465,7 +468,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         )
 
 
-class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[ModelT]):
+class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[ModelT, SQLAlchemyAsyncRepositoryT]):
     """Service object that operates on a repository object."""
 
     async def create(

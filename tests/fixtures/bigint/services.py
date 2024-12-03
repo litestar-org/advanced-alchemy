@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -220,9 +218,6 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
     repository_type = SlugBookAsyncRepository
     match_fields = ["title"]
 
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
-
     async def to_model(
         self,
         data: ModelDictT[BigIntSlugBook],
@@ -236,14 +231,11 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
         return await super().to_model(data, operation)
 
 
-class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
+class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook, SlugBookSyncRepository]):
     """Book repository."""
 
     repository_type = SlugBookSyncRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(
         self,
@@ -258,14 +250,11 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
         return super().to_model(data, operation)
 
 
-class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
+class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook, SlugBookAsyncMockRepository]):
     """Book repository."""
 
     repository_type = SlugBookAsyncMockRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(
         self,
@@ -285,9 +274,6 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[BigIntSlugBook]):
 
     repository_type = SlugBookSyncMockRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(
         self,

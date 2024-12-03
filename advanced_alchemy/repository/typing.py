@@ -9,8 +9,8 @@ if TYPE_CHECKING:
     from sqlalchemy import RowMapping, Select
 
     from advanced_alchemy import base
-    from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
-    from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
+    from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol
+    from advanced_alchemy.repository._sync import SQLAlchemySyncRepositoryProtocol
 
 __all__ = (
     "MISSING",
@@ -29,7 +29,7 @@ T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound="base.ModelProtocol")
 """Type variable for SQLAlchemy models.
 
-:class:`~advanced_alchemy.base.ModelProtocol`
+:class:`advanced_alchemy.base.ModelProtocol`
 """
 SelectT = TypeVar("SelectT", bound="Select[Any]")
 """Type variable for SQLAlchemy select statements.
@@ -49,20 +49,23 @@ RowMappingT = TypeVar("RowMappingT", bound="RowMapping")
 ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtocol, RowMapping]")
 """Type variable for models or row mappings.
 
-:class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping`
+:class:`advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping`
 """
-SQLAlchemySyncRepositoryT = TypeVar("SQLAlchemySyncRepositoryT", bound="SQLAlchemySyncRepository[Any]")
+SQLAlchemySyncRepositoryT = TypeVar(
+    "SQLAlchemySyncRepositoryT",
+    bound="SQLAlchemySyncRepositoryProtocol[base.ModelProtocol]",
+)
 """Type variable for synchronous SQLAlchemy repositories.
 
-:class:`~advanced_alchemy.repository.SQLAlchemySyncRepository`
+:class:`advanced_alchemy.repository.SQLAlchemySyncRepository`
 """
 SQLAlchemyAsyncRepositoryT = TypeVar(
     "SQLAlchemyAsyncRepositoryT",
-    bound="SQLAlchemyAsyncRepository[Any]",
+    bound="SQLAlchemyAsyncRepositoryProtocol[base.ModelProtocol]",
 )
 """Type variable for asynchronous SQLAlchemy repositories.
 
-:class:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository`
+:class:`advanced_alchemy.repository.SQLAlchemyAsyncRepository`
 """
 OrderingPair: TypeAlias = Tuple[Union[str, InstrumentedAttribute[Any]], bool]
 """Type alias for ordering pairs.
@@ -82,5 +85,5 @@ class _MISSING:
 MISSING = _MISSING()
 """Missing value placeholder.
 
-:class:`~advanced_alchemy.repository.typing._MISSING`
+:class:`advanced_alchemy.repository.typing._MISSING`
 """

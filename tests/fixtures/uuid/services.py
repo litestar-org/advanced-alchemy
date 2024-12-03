@@ -137,7 +137,7 @@ class TagAsyncService(SQLAlchemyAsyncRepositoryService[UUIDTag]):
     repository_type = TagAsyncRepository
 
 
-class TagAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDTag]):
+class TagAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDTag, TagAsyncMockRepository]):
     """Tag repository."""
 
     repository_type = TagAsyncMockRepository
@@ -285,9 +285,6 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
 
     repository_type = SlugBookSyncMockRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(
         self,

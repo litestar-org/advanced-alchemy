@@ -113,7 +113,7 @@ def get_abstract_loader_options(
     """Generate SQLAlchemy loader options for eager loading relationships.
 
     Args:
-        loader_options :class:`~advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
+        loader_options :class:`advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
             - None: Use defaults
             - :class:`sqlalchemy.orm.strategy_options._AbstractLoad`: Direct SQLAlchemy loader option
             - :class:`sqlalchemy.orm.InstrumentedAttribute`: Model relationship attribute

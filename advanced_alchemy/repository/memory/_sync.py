@@ -16,6 +16,7 @@ from sqlalchemy import (
     Update,
 )
 from sqlalchemy.orm import InstrumentedAttribute, Session
+from typing_extensions import Self
 
 from advanced_alchemy.exceptions import ErrorMessages, IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
@@ -83,6 +84,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         "load",
         "error_messages",
     }
+
+    def __call__(self, *args: Any, **kwds: Any) -> Self:
+        return self
 
     def __init__(
         self,

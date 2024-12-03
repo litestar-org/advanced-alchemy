@@ -35,6 +35,7 @@ from sqlalchemy import (
 )
 from sqlalchemy import func as sql_func
 from sqlalchemy.orm import InstrumentedAttribute, Session
+from typing_extensions import Self
 
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.repository._util import (
@@ -91,6 +92,8 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: ErrorMessages | None | EmptyType = Empty,
         **kwargs: Any,
     ) -> None: ...
+
+    def __call__(self: Self, *args: Any, **kwds: Any) -> Self: ...
 
     @classmethod
     def get_id_attribute_value(

@@ -90,9 +90,6 @@ class ResultConverter:
 
     Single objects are transformed to the supplied schema type, and lists of objects are automatically transformed into an `OffsetPagination` response of the supplied schema type.
 
-    Args:
-        data: A database model instance or row mapping.
-              Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
 
     Returns:
         The converted schema object.
@@ -157,12 +154,12 @@ class ResultConverter:
 
         Args:
             data: The return from one of the service calls.
-              Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
+              Type: :class:`advanced_alchemy.repository.typing.ModelOrRowMappingT`
             total: The total number of rows in the data.
-            filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
-            schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
+            filters: :class:`advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
+            schema_type: :class:`advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
         Returns:
-            - :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
+            - :class:`advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
         """
         if filters is None:
             filters = []
