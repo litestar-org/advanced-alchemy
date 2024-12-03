@@ -427,7 +427,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     """
 
     def __call__(self: Self, *args: Any, **kwds: Any) -> Self:
-        return super().__call__(*args, **kwds)
+        return self
 
     def __init__(
         self,

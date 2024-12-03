@@ -427,6 +427,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
     """
 
+    def __call__(self: Self, *args: Any, **kwds: Any) -> Self:
+        return self
+
     def __init__(
         self,
         *,

@@ -59,7 +59,7 @@ from tests.fixtures.uuid.repositories import (
 )
 
 
-class SecretAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSecret]):
+class SecretAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSecret, SecretAsyncRepository]):
     """Rule repository."""
 
     repository_type = SecretAsyncRepository

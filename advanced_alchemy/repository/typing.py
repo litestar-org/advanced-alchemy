@@ -54,6 +54,7 @@ ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtoc
 SQLAlchemySyncRepositoryT = TypeVar(
     "SQLAlchemySyncRepositoryT",
     bound="SQLAlchemySyncRepositoryProtocol[base.ModelProtocol]",
+    covariant=True,
 )
 """Type variable for synchronous SQLAlchemy repositories.
 
@@ -62,6 +63,7 @@ SQLAlchemySyncRepositoryT = TypeVar(
 SQLAlchemyAsyncRepositoryT = TypeVar(
     "SQLAlchemyAsyncRepositoryT",
     bound="SQLAlchemyAsyncRepositoryProtocol[base.ModelProtocol]",
+    covariant=True,
 )
 """Type variable for asynchronous SQLAlchemy repositories.
 
