@@ -8,7 +8,8 @@ from litestar.dto import DTOData
 from litestar.params import Dependency, Parameter
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
-from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryError
+from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -65,10 +66,8 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         self._config = config
 
     @property
-    def config(
-        self,
-    ) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
-        return self._config
+    def config(self) -> Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
+        return self._config if isinstance(self._config, Sequence) else [self._config]
 
     def on_cli_init(self, cli: Group) -> None:
         from advanced_alchemy.extensions.litestar.cli import database_group
@@ -106,7 +105,10 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
                 (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
                 *(app_config.type_decoders or []),
             ]
-        for config in self._config if isinstance(self._config, Sequence) else [self._config]:
+        configure_exception_handler = False
+        for config in self.config:
+            if config.set_default_exception_handler:
+                configure_exception_handler = True
             signature_namespace_values.update(config.signature_namespace)
             app_config.lifespan.append(config.lifespan)  # pyright: ignore[reportUnknownMemberType]
 
@@ -118,5 +120,10 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
             )
             app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))
         app_config.signature_namespace.update(signature_namespace_values)
+        if configure_exception_handler and not any(
+            isinstance(exc, int) or issubclass(exc, RepositoryError)
+            for exc in app_config.exception_handlers  # pyright: ignore[reportUnknownMemberType]
+        ):
+            app_config.exception_handlers.update({RepositoryError: exception_to_http_response})  # pyright: ignore[reportUnknownMemberType]
 
         return app_config

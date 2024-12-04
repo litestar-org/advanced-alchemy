@@ -159,6 +159,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
     The configuration options are documented in the SQLAlchemy documentation.
     """
+    set_default_exception_handler: bool = True
+    """Sets the default exception handler on application start."""
 
     def _ensure_unique(self, registry_name: str, key: str, new_key: str | None = None, _iter: int = 0) -> str:
         new_key = new_key if new_key is not None else key
