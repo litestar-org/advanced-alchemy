@@ -286,7 +286,7 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
         usa_country_1 = si1_country_repo.get_one(
             name="United States of America",
         )
-        assert len(usa_country_1.states) == 0
+        assert len(usa_country_1.states) == 2
         usa_country_2 = si1_country_repo.get_one(
             name="United States of America",
             load=UUIDCountryTest.states,
