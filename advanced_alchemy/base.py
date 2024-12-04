@@ -15,7 +15,9 @@ from sqlalchemy.orm import (
     DeclarativeBase,
     Mapper,
     declared_attr,
-    registry,
+)
+from sqlalchemy.orm import (
+    registry as SQLAlchemyRegistry,  # noqa: N812
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 from typing_extensions import TypeVar
@@ -252,7 +254,7 @@ class CommonTableAttributes(BasicAttributes):
 
 def create_registry(
     custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
-) -> registry:
+) -> SQLAlchemyRegistry:
     """Create a new SQLAlchemy registry.
 
     Args:
@@ -292,7 +294,7 @@ def create_registry(
         type_annotation_map[Struct] = JsonB
     if custom_annotation_map is not None:
         type_annotation_map.update(custom_annotation_map)
-    return registry(metadata=meta, type_annotation_map=type_annotation_map)
+    return SQLAlchemyRegistry(metadata=meta, type_annotation_map=type_annotation_map)
 
 
 orm_registry = create_registry()
@@ -305,12 +307,20 @@ class AdvancedDeclarativeBase(DeclarativeBase):
         :class:`sqlalchemy.orm.DeclarativeBase`
     """
 
-    def __init_subclass__(cls) -> None:
-        if hasattr(cls, "abstract"):
-            return
-        if hasattr(cls, "registry"):
-            return
-        cls.registry = orm_registry
+    registry = orm_registry
+    __abstract__ = True
+    __metadata_registry__: dict[str | None, MetaData] = {}
+    __bind_key__: str | None = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        bind_key = getattr(cls, "__bind_key__", None)
+        if bind_key is not None:
+            if bind_key not in cls.__metadata_registry__:
+                cls.__metadata_registry__[bind_key] = MetaData(naming_convention=convention)
+            cls.metadata = cls.__metadata_registry__[bind_key]
+        elif None not in cls.__metadata_registry__ and getattr(cls, "metadata", None) is not None:
+            cls.__metadata_registry__[None] = cls.metadata
+        super().__init_subclass__(**kwargs)
 
 
 class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
@@ -322,6 +332,8 @@ class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, 
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
+
+    __abstract__ = True
 
 
 class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
@@ -335,6 +347,8 @@ class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, Advan
         :class:`AsyncAttrs`
     """
 
+    __abstract__ = True
+
 
 class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v6 primary keys.
@@ -345,6 +359,8 @@ class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
+
+    __abstract__ = True
 
 
 class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
@@ -358,6 +374,8 @@ class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, A
         :class:`AsyncAttrs`
     """
 
+    __abstract__ = True
+
 
 class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v7 primary keys.
@@ -368,6 +386,8 @@ class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
+
+    __abstract__ = True
 
 
 class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
@@ -381,6 +401,8 @@ class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, A
         :class:`AsyncAttrs`
     """
 
+    __abstract__ = True
+
 
 class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with Nano ID primary keys.
@@ -391,6 +413,8 @@ class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
+
+    __abstract__ = True
 
 
 class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
@@ -404,6 +428,8 @@ class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, A
         :class:`AsyncAttrs`
     """
 
+    __abstract__ = True
+
 
 class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with BigInt primary keys.
@@ -414,6 +440,8 @@ class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
+
+    __abstract__ = True
 
 
 class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
@@ -427,6 +455,8 @@ class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, A
         :class:`AsyncAttrs`
     """
 
+    __abstract__ = True
+
 
 class DefaultBase(CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models.  No primary key is added.
@@ -437,6 +467,8 @@ class DefaultBase(CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
         :class:`AsyncAttrs`
     """
 
+    __abstract__ = True
+
 
 class SQLQuery(BasicAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy custom mapped objects.
@@ -446,5 +478,7 @@ class SQLQuery(BasicAttributes, AdvancedDeclarativeBase, AsyncAttrs):
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
+
+    __abstract__ = True
 
     __allow_unmapped__ = True
