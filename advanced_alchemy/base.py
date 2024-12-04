@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapper,
@@ -296,19 +297,20 @@ def create_registry(
 orm_registry = create_registry()
 
 
-class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v4 primary keys.
 
     .. seealso::
         :class:`advanced_alchemy.mixins.UUIDPrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, DeclarativeBase):
+class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, DeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v4 primary keys and audit columns.
 
     .. seealso::
@@ -316,24 +318,26 @@ class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, Decla
         :class:`advanced_alchemy.mixins.UUIDPrimaryKey`
         :class:`advanced_alchemy.mixins.AuditColumns`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v6 primary keys.
 
     .. seealso::
         :class:`advanced_alchemy.mixins.UUIDv6PrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, DeclarativeBase):
+class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, DeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v6 primary keys and audit columns.
 
     .. seealso::
@@ -341,24 +345,26 @@ class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, D
         :class:`advanced_alchemy.mixins.UUIDv6PrimaryKey`
         :class:`advanced_alchemy.mixins.AuditColumns`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase):
+class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v7 primary keys.
 
     .. seealso::
         :class:`advanced_alchemy.mixins.UUIDv7PrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, DeclarativeBase):
+class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, DeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v7 primary keys and audit columns.
 
     .. seealso::
@@ -366,24 +372,26 @@ class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, D
         :class:`advanced_alchemy.mixins.UUIDv7PrimaryKey`
         :class:`advanced_alchemy.mixins.AuditColumns`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with Nano ID primary keys.
 
     .. seealso::
         :class:`advanced_alchemy.mixins.NanoIDPrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, DeclarativeBase):
+class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, DeclarativeBase, AsyncAttrs):
     """Base for declarative models with Nano ID primary keys and audit columns.
 
     .. seealso::
@@ -391,24 +399,26 @@ class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, D
         :class:`advanced_alchemy.mixins.NanoIDPrimaryKey`
         :class:`advanced_alchemy.mixins.AuditColumns`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, DeclarativeBase):
+class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with BigInt primary keys.
 
     .. seealso::
         :class:`advanced_alchemy.mixins.BigIntPrimaryKey`
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, DeclarativeBase):
+class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, DeclarativeBase, AsyncAttrs):
     """Base for declarative models with BigInt primary keys and audit columns.
 
     .. seealso::
@@ -416,28 +426,31 @@ class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, D
         :class:`advanced_alchemy.mixins.BigIntPrimaryKey`
         :class:`advanced_alchemy.mixins.AuditColumns`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class DefaultBase(CommonTableAttributes, DeclarativeBase):
+class DefaultBase(CommonTableAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models.  No primary key is added.
 
     .. seealso::
         :class:`CommonTableAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     registry = orm_registry
 
 
-class SQLQuery(BasicAttributes, DeclarativeBase):
+class SQLQuery(BasicAttributes, DeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy custom mapped objects.
 
     .. seealso::
         :class:`BasicAttributes`
         :class:`DeclarativeBase`
+        :class:`AsyncAttrs`
     """
 
     __allow_unmapped__ = True

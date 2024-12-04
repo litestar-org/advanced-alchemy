@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING, Any, Iterable, Literal, Protocol, Sequence, Un
 from sqlalchemy import (
     Select,
 )
-from sqlalchemy.orm import InstrumentedAttribute, MapperProperty, RelationshipProperty, joinedload, noload, selectinload
+from sqlalchemy.orm import (
+    InstrumentedAttribute,
+    MapperProperty,
+    RelationshipProperty,
+    joinedload,
+    lazyload,
+    selectinload,
+)
 from sqlalchemy.orm.strategy_options import (
     _AbstractLoad,  # pyright: ignore[reportPrivateUsage]  # pyright: ignore[reportPrivateUsage]
 )
@@ -133,7 +140,7 @@ def get_abstract_loader_options(
     """
     loads: list[_AbstractLoad] = []
     if cycle_count == 0 and not inherit_lazy_relationships:
-        loads.append(noload("*"))
+        loads.append(lazyload("*"))
     if cycle_count == 0 and merge_with_default and default_loader_options is not None:
         loads.extend(default_loader_options)
     options_have_wildcards = default_options_have_wildcards
