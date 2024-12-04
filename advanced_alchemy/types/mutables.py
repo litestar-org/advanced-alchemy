@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, TypeVar, no_type_check
+from typing import TYPE_CHECKING, Any, Dict, List, TypeVar, no_type_check
 
 from sqlalchemy.ext.mutable import Mutable
-from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from typing_extensions import Self  # noqa: F401
 
 T = TypeVar("T", bound=Any)
 

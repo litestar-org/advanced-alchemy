@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib.util import find_spec
@@ -38,7 +39,9 @@ else:
 
 
 if TYPE_CHECKING:
-    from fsspec.spec import AbstractFileSystem  # pyright: ignore[reportMissingTypeStubs]
+    from collections.abc import Iterator
+
+    from fsspec.spec import AbstractFileSystem  # pyright: ignore[reportMissingTypeStubs,reportMissingImports]
 
 
 @dataclass
@@ -87,7 +90,7 @@ class StorageBackend(Protocol):
     backend: str
     """Storage backend name (e.g., 'file', 'gcs', 's3')"""
 
-    def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
+    def save_file(self, path: str, data: bytes | str | Iterator[bytes], content_type: str | None = None) -> None:
         """Save file data to storage.
 
         Args:
@@ -124,6 +127,14 @@ class FSSpecBackend(StorageBackend):
     backend: str
     base_path: str
     _fs: AbstractFileSystem
+    _executor: ThreadPoolExecutor | None = None
+
+    @classmethod
+    def get_executor(cls) -> ThreadPoolExecutor:
+        """Gets or creates the thread pool executor for async operations."""
+        if cls._executor is None:
+            cls._executor = ThreadPoolExecutor(max_workers=10)
+        return cls._executor
 
     def __init__(self, backend: str, base_path: str = "", **options: Any) -> None:
         """Initialize FSSpec backend.
@@ -143,7 +154,7 @@ class FSSpecBackend(StorageBackend):
         self.base_path = base_path.rstrip("/")
         self._fs = filesystem(backend, **options)
 
-    def save_file(self, path: str, data: bytes, content_type: str | None = None) -> None:
+    def save_file(self, path: str, data: bytes | str | Iterator[bytes], content_type: str | None = None) -> None:
         """Save file data using FSSpec."""
         full_path = f"{self.base_path}/{path}".lstrip("/")
         self._fs.put(full_path, data)  # pyright: ignore[reportUnknownMemberType]
