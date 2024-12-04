@@ -407,6 +407,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     """Name of the unique identifier for the model."""
     loader_options: LoadSpec | None = None
     """Default loader options for the repository."""
+    inherit_lazy_relationships: bool = True
+    """Optionally ignore the default ``lazy`` configuration for model relationships.  This is useful for when you want to
+    replace instead of merge the model's loaded relationships with the ones specified in the ``load`` or ``default_loader_options`` configuration."""
+    merge_loader_options: bool = True
+    """Merges the default loader options with the loader options specified in the ``load`` argument.  This is useful for when you want to totally
+    replace instead of merge the model's loaded relationships with the ones specified in the ``load`` or ``default_loader_options`` configuration."""
     execution_options: dict[str, Any] | None = None
     """Default execution options for the repository."""
     match_fields: list[str] | str | None = None
@@ -454,6 +460,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.error_messages = self._get_error_messages(error_messages=error_messages)
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
+            inherit_lazy_relationships=self.inherit_lazy_relationships,
+            merge_with_default=self.merge_loader_options,
         )
         execution_options = execution_options if execution_options is not None else self.execution_options
         self._default_execution_options = execution_options or {}
@@ -553,6 +561,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
             default_options_have_wildcards=self._loader_options_have_wildcards,
+            inherit_lazy_relationships=self.inherit_lazy_relationships,
+            merge_with_default=self.merge_loader_options,
         )
 
     async def add(

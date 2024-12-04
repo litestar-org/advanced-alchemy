@@ -71,9 +71,9 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     """SQLAlchemy async session config.
 
     Types:
-        ConnectionT: :class:`sqlalchemy.Connection` or :class:`sqlalchemy.ext.asyncio.AsyncConnection`
-        EngineT: :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine`
-        SessionT: :class:`sqlalchemy.Session` or :class:`sqlalchemy.ext.asyncio.AsyncSession`
+        ConnectionT: :class:`sqlalchemy.Connection` | :class:`sqlalchemy.ext.asyncio.AsyncConnection`
+        EngineT: :class:`sqlalchemy.Engine` | :class:`sqlalchemy.ext.asyncio.AsyncEngine`
+        SessionT: :class:`sqlalchemy.Session` | :class:`sqlalchemy.ext.asyncio.AsyncSession`
     """
 
     autobegin: bool | EmptyType = Empty

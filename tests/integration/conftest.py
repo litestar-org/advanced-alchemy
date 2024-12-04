@@ -25,47 +25,52 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
     """
     from sqlalchemy.orm import DeclarativeBase
 
-    from advanced_alchemy import base
+    from advanced_alchemy import base, mixins
 
-    class NewUUIDBase(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewUUIDAuditBase(
-        base.UUIDPrimaryKey,
+        mixins.UUIDPrimaryKey,
         base.CommonTableAttributes,
-        base.AuditColumns,
+        mixins.AuditColumns,
         DeclarativeBase,
     ): ...
 
-    class NewUUIDv6Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+    class NewUUIDv6Base(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewUUIDv6AuditBase(
-        base.UUIDPrimaryKey,
+        mixins.UUIDPrimaryKey,
         base.CommonTableAttributes,
-        base.AuditColumns,
+        mixins.AuditColumns,
         DeclarativeBase,
     ): ...
 
-    class NewUUIDv7Base(base.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+    class NewUUIDv7Base(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewUUIDv7AuditBase(
-        base.UUIDPrimaryKey,
+        mixins.UUIDPrimaryKey,
         base.CommonTableAttributes,
-        base.AuditColumns,
+        mixins.AuditColumns,
         DeclarativeBase,
     ): ...
 
-    class NewNanoIDBase(base.NanoIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+    class NewNanoIDBase(mixins.NanoIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
     class NewNanoIDAuditBase(
-        base.NanoIDPrimaryKey,
+        mixins.NanoIDPrimaryKey,
         base.CommonTableAttributes,
-        base.AuditColumns,
+        mixins.AuditColumns,
         DeclarativeBase,
     ): ...
 
-    class NewBigIntBase(base.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase): ...
 
-    class NewBigIntAuditBase(base.BigIntPrimaryKey, base.CommonTableAttributes, base.AuditColumns, DeclarativeBase): ...
+    class NewBigIntAuditBase(
+        mixins.BigIntPrimaryKey,
+        base.CommonTableAttributes,
+        mixins.AuditColumns,
+        DeclarativeBase,
+    ): ...
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
     monkeypatch.setattr(base, "UUIDAuditBase", NewUUIDAuditBase)

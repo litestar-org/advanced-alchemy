@@ -13,3 +13,9 @@ Available API References
     :titlesonly:
 
     unique
+    nanoid
+    uuid
+    sentinel
+    bigint
+    audit
+    slug
