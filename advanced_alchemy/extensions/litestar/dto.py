@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from functools import singledispatchmethod
 from typing import (
     TYPE_CHECKING,
+    AbstractSet,
     Any,
     ClassVar,
     Collection,
@@ -27,6 +28,7 @@ from sqlalchemy.orm import (
     ColumnProperty,
     CompositeProperty,
     DeclarativeBase,
+    DynamicMapped,
     InspectionAttr,
     InstrumentedAttribute,
     Mapped,
@@ -35,6 +37,7 @@ from sqlalchemy.orm import (
     QueryableAttribute,
     RelationshipDirection,
     RelationshipProperty,
+    WriteOnlyMapped,
 )
 from sqlalchemy.sql.expression import ColumnClause, Label
 from typing_extensions import TypeVar
@@ -58,6 +61,31 @@ SQLA_NS = {**vars(orm), **vars(sql)}
 class SQLAlchemyDTOConfig(DTOConfig):
     """Additional controls for the generated SQLAlchemy DTO."""
 
+    exclude: AbstractSet[str | InstrumentedAttribute[Any]] = field(default_factory=set)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
+    """Explicitly exclude fields from the generated DTO.
+
+    If exclude is specified, all fields not specified in exclude will be included by default.
+
+    Notes:
+        - The field names are dot-separated paths to nested fields, e.g. ``"address.street"`` will
+            exclude the ``"street"`` field from a nested ``"address"`` model.
+        - 'exclude' mutually exclusive with 'include' - specifying both values will raise an
+            ``ImproperlyConfiguredException``.
+    """
+    include: AbstractSet[str | InstrumentedAttribute[Any]] = field(default_factory=set)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
+    """Explicitly include fields in the generated DTO.
+
+    If include is specified, all fields not specified in include will be excluded by default.
+
+    Notes:
+        - The field names are dot-separated paths to nested fields, e.g. ``"address.street"`` will
+            include the ``"street"`` field from a nested ``"address"`` model.
+        - 'include' mutually exclusive with 'exclude' - specifying both values will raise an
+            ``ImproperlyConfiguredException``.
+    """
+    rename_fields: dict[str | InstrumentedAttribute[Any], str] = field(default_factory=dict)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
+    """Mapping of field names, to new name."""
+
     include_implicit_fields: bool | Literal["hybrid-only"] = True
     """Fields that are implicitly mapped are included.
 
@@ -66,6 +94,14 @@ class SQLAlchemyDTOConfig(DTOConfig):
     When setting this to ``hybrid-only``, all implicitly mapped fields are excluded
     with the exception for hybrid properties.
     """
+
+    def __post_init__(self) -> None:
+        self.exclude = {f.key if isinstance(f, InstrumentedAttribute) else f for f in self.exclude}  # type: ignore[misc]
+        self.include = {f.key if isinstance(f, InstrumentedAttribute) else f for f in self.include}  # type: ignore[misc]
+        self.rename_fields = {  # type: ignore[misc]
+            f.key if isinstance(f, InstrumentedAttribute) else f: v for f, v in self.rename_fields.items()
+        }
+        super().__post_init__()
 
 
 class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
@@ -127,7 +163,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         default, default_factory = _detect_defaults(elem)
 
         try:
-            if (field_definition := model_type_hints[key]).origin is Mapped:
+            if (field_definition := model_type_hints[key]).origin in {Mapped, WriteOnlyMapped, DynamicMapped}:
                 (field_definition,) = field_definition.inner_types
             else:
                 msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"

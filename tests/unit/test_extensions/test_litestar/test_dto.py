@@ -666,3 +666,43 @@ def test_parse_type_from_element_failure() -> None:
     with pytest.raises(ImproperConfigurationError) as exc:
         parse_type_from_element(1, None)  # type: ignore
     assert str(exc.value) == "Unable to parse type from element '1'. Consider adding a type hint."
+
+
+async def test_to_mapped_model_with_dynamic_mapped(
+    create_module: Callable[[str], ModuleType],
+    asgi_connection: Request[Any, Any, Any],
+) -> None:
+    """Test building DTO with DynamicMapped relationship, and parsing data."""
+
+    module = create_module(
+        """
+from __future__ import annotations
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, WriteOnlyMapped
+from typing import List
+from typing_extensions import Annotated
+
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+class Child(Base):
+    ...
+
+class TestModel(Base):
+    child_id: Mapped[int] = mapped_column(ForeignKey("child.id"))
+    child: WriteOnlyMapped[Child] = relationship(Child)
+
+dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
+""",
+    )
+    model = await get_model_from_dto(
+        module.dto_type,
+        module.B,
+        asgi_connection,
+        b'{"id": 2, "child_id": 1, "child": {"id": 1}}',
+    )
+    assert isinstance(model, module.TestModel)
+    assert isinstance(model.child, module.Child)
