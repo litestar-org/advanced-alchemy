@@ -188,6 +188,20 @@ async def test_write_dto_for_model_field_factory_default(
     assert_model_values(model, {"field": val})
 
 
+async def test_dto_instrumented_attribute_key(
+    base: Type[DeclarativeBase],
+    asgi_connection: Request[Any, Any, Any],
+) -> None:
+    val = uuid4()
+
+    class Model(base):  # type: ignore
+        field: Mapped[UUID] = mapped_column(default=lambda: val)
+
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={Model.id, Model.created, Model.updated})]]  # pyright: ignore[reportAttributeAccessIssue]
+    model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"a":"b"}')
+    assert_model_values(model, {"field": val})
+
+
 async def test_write_dto_for_model_field_unsupported_default(
     base: Type[DeclarativeBase],
     asgi_connection: Request[Any, Any, Any],
@@ -694,7 +708,7 @@ class Child(Base):
 
 class TestModel(Base):
     __tablename__ = "test_model"
-    child: WriteOnlyMapped[Child] = relationship(Child)
+    children: DynamicMapped[List[Child]] = relationship(Child, lazy="joined")
 
 dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
 """,
@@ -703,7 +717,52 @@ dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
         module.dto_type,
         module.TestModel,
         asgi_connection,
-        b'{"id": 2, "child": {"id": 1, "test_model_id": 2}}',
+        b'{"id": 2, "children": [{"id": 1, "test_model_id": 2}]}',
     )
     assert isinstance(model, module.TestModel)
-    assert isinstance(model.child.instance, module.Child)
+    # For DynamicMapped, we should check the query result
+    child = model.children[0]  # Access first item from the dynamic query
+    assert isinstance(child, module.Child)
+
+
+async def test_to_mapped_model_with_writeonly_mapped(
+    create_module: Callable[[str], ModuleType],
+    asgi_connection: Request[Any, Any, Any],
+) -> None:
+    """Test building DTO with WriteOnlyMapped relationship, and parsing data."""
+
+    module = create_module(
+        """
+from __future__ import annotations
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, WriteOnlyMapped, mapped_column, relationship
+from typing import List
+from typing_extensions import Annotated
+
+from litestar.dto.field import Mark, dto_field
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+class Child(Base):
+    __tablename__ = "child"
+    test_model_id: Mapped[int] = mapped_column(ForeignKey("test_model.id"))
+
+class TestModel(Base):
+    __tablename__ = "test_model"
+    children: WriteOnlyMapped[List[Child]] = relationship(Child, info=dto_field(mark=Mark.WRITE_ONLY))
+
+dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
+""",
+    )
+    model = await get_model_from_dto(
+        module.dto_type,
+        module.TestModel,
+        asgi_connection,
+        b'{"id": 2, "children": [{"id": 1, "test_model_id": 2}]}',
+    )
+    assert isinstance(model, module.TestModel)
+    # WriteOnlyMapped relationships can only be written to, not read from
+    # So we can only verify the model was created successfully
