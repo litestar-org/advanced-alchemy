@@ -21,7 +21,6 @@ __all__ = ["do_run_migrations", "run_migrations_offline", "run_migrations_online
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config: AlembicCommandConfig = context.config  # type: ignore  # noqa: PGH003
-
 writer = rewriter.Rewriter()
 
 
