@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Union, cast
 
 from typing_extensions import TypeVar
 
-from advanced_alchemy.base import orm_registry
+from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config.engine import EngineConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty, simple_asdict
@@ -177,6 +177,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     This is a listener that will update ``created_at`` and ``updated_at`` columns on record modification.
     Disable if you plan to bring your own update mechanism for these columns"""
+    bind_key: str | None = None
+    """Bind key to register a metadata to a specific engine configuration."""
     _SESSION_SCOPE_KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: ClassVar[set[str]] = field(init=False, default=cast("set[str]", set()))
@@ -188,6 +190,10 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         if self.connection_string is not None and self.engine_instance is not None:
             msg = "Only one of 'connection_string' or 'engine_instance' can be provided."
             raise ImproperConfigurationError(msg)
+        if self.metadata is None:
+            self.metadata = metadata_registry.get(self.bind_key)
+        else:
+            metadata_registry.set(self.bind_key, self.metadata)
         if self.enable_touch_updated_timestamp_listener:
             from sqlalchemy import event
             from sqlalchemy.orm import Session
@@ -273,11 +279,6 @@ class GenericAlembicConfig:
     If unset, it defaults to connection's default schema."""
     script_location: str = "migrations"
     """A path to save generated migrations.
-    """
-    target_metadata: MetaData = orm_registry.metadata
-    """:class:`sqlalchemy.MetaData` to use for Alembic migrations.
-
-    Defaults to the metadata of the :class:`sqlalchemy.orm.registry <sqlalchemy.orm.registry>` used by the plugin.
     """
     user_module_prefix: str | None = "sa."
     """User module prefix."""

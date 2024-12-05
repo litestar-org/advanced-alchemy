@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator, Generator
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Tuple, cast
+from typing import Any, Callable, Dict, List, Sequence, Tuple, cast
 from unittest.mock import ANY
 
 import pytest
@@ -32,9 +32,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import TypeVar
 
+from advanced_alchemy.alembic.commands import AlembicCommands
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
-from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
 
 
 @pytest.fixture(autouse=True)
@@ -294,12 +294,16 @@ async def async_app(async_sqlalchemy_plugin: SQLAlchemyPlugin) -> AsyncGenerator
 
 @pytest.fixture()
 async def sync_alembic_commands(sync_app: Litestar) -> AsyncGenerator[AlembicCommands, None]:
-    yield AlembicCommands(app=sync_app)
+    plugin = sync_app.plugins.get(SQLAlchemyPlugin)
+    config = plugin.config[0] if isinstance(plugin.config, Sequence) else plugin.config
+    yield AlembicCommands(sqlalchemy_config=config)
 
 
 @pytest.fixture()
 async def async_alembic_commands(async_app: Litestar) -> AsyncGenerator[AlembicCommands, None]:
-    yield AlembicCommands(app=async_app)
+    plugin = async_app.plugins.get(SQLAlchemyPlugin)
+    config = plugin.config[0] if isinstance(plugin.config, Sequence) else plugin.config
+    yield AlembicCommands(sqlalchemy_config=config)
 
 
 @pytest.fixture(params=[pytest.param("sync_alembic_commands"), pytest.param("async_alembic_commands")])

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 from typing_extensions import Annotated
 
-from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+from advanced_alchemy.base import UUIDAuditBase, UUIDBase, metadata_registry
 from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
 from advanced_alchemy.filters import LimitOffset
@@ -135,7 +135,7 @@ def provide_limit_offset_pagination(
 @asynccontextmanager
 async def on_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
     """Initializes the database."""
-    metadata = sqlalchemy_config.metadata or sqlalchemy_config.alembic_config.target_metadata
+    metadata = metadata_registry.get(sqlalchemy_config.bind_key)
     if sqlalchemy_config.create_all:
         async with sqlalchemy_config.get_engine().begin() as conn:
             await conn.run_sync(metadata.create_all)

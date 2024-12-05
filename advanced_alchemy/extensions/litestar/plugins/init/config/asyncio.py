@@ -9,6 +9,7 @@ from litestar.constants import HTTP_RESPONSE_START
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar._utils import (
     delete_aa_scope_state,
@@ -162,6 +163,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
     The configuration options are documented in the SQLAlchemy documentation.
     """
+    set_default_exception_handler: bool = True
+    """Sets the default exception handler on application start."""
 
     def _ensure_unique(self, registry_name: str, key: str, new_key: str | None = None, _iter: int = 0) -> str:
         new_key = new_key if new_key is not None else key
@@ -267,7 +270,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         async with self.get_engine().begin() as conn:
             try:
-                await conn.run_sync(self.alembic_config.target_metadata.create_all)
+                await conn.run_sync(metadata_registry.get(self.bind_key).create_all)
             except OperationalError as exc:
                 console.print(f"[bold red] * Could not create target metadata.  Reason: {exc}")
 

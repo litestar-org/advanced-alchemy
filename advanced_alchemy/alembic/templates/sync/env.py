@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import Column, Engine, engine_from_config, pool
 
-from advanced_alchemy.base import orm_registry
+from advanced_alchemy.base import metadata_registry
 from alembic import context
 from alembic.autogenerate import rewriter
 from alembic.operations import ops
@@ -21,16 +21,6 @@ __all__ = ["do_run_migrations", "run_migrations_offline", "run_migrations_online
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config: AlembicCommandConfig = context.config  # type: ignore  # noqa: PGH003
-
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-target_metadata = orm_registry.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# ... etc.
-
 writer = rewriter.Rewriter()
 
 
@@ -73,7 +63,7 @@ def run_migrations_offline() -> None:
     """
     context.configure(
         url=config.db_url,
-        target_metadata=target_metadata,
+        target_metadata=metadata_registry.get(config.bind_key),
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=config.compare_type,
@@ -92,7 +82,7 @@ def do_run_migrations(connection: Connection) -> None:
     """Run migrations."""
     context.configure(
         connection=connection,
-        target_metadata=target_metadata,
+        target_metadata=metadata_registry.get(config.bind_key),
         compare_type=config.compare_type,
         version_table=config.version_table_name,
         version_table_pk=config.version_table_pk,

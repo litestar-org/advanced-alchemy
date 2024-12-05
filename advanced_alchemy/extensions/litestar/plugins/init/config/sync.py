@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar._utils import (
     delete_aa_scope_state,
@@ -159,6 +160,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
     The configuration options are documented in the SQLAlchemy documentation.
     """
+    set_default_exception_handler: bool = True
+    """Sets the default exception handler on application start."""
 
     def _ensure_unique(self, registry_name: str, key: str, new_key: str | None = None, _iter: int = 0) -> str:
         new_key = new_key if new_key is not None else key
@@ -264,7 +267,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
         with self.get_engine().begin() as conn:
             try:
-                self.alembic_config.target_metadata.create_all(bind=conn)
+                metadata_registry.get(self.bind_key).create_all(bind=conn)
             except OperationalError as exc:
                 console.print(f"[bold red] * Could not create target metadata.  Reason: {exc}")
 

@@ -6,14 +6,28 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from asgi_lifespan import LifespanManager
-from litestar import Litestar, get
-from litestar.testing import create_test_client  # type: ignore
+from litestar import Litestar, Request, Response, get
+from litestar.status_codes import (
+    HTTP_404_NOT_FOUND,
+    HTTP_409_CONFLICT,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+)
+from litestar.testing import RequestFactory, create_test_client
 from litestar.types.asgi_types import HTTPResponseStartEvent
 from pytest import MonkeyPatch
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.exceptions import (
+    DuplicateKeyError,
+    ForeignKeyError,
+    ImproperConfigurationError,
+    IntegrityError,
+    InvalidRequestError,
+    NotFoundError,
+    RepositoryError,
+)
 from advanced_alchemy.extensions.litestar._utils import set_aa_scope_state
+from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyInitPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
     autocommit_before_send_handler,
@@ -309,3 +323,92 @@ async def test_autocommit_handler_maker_multi(create_scope: Callable[..., Scope]
     await config2.before_send_handler(http_response_start, http_scope)  # type: ignore
     mock_session2.rollback.assert_called_once()
     mock_session1.rollback.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("exc", "status"),
+    [
+        (IntegrityError, HTTP_409_CONFLICT),
+        (ForeignKeyError, HTTP_409_CONFLICT),
+        (DuplicateKeyError, HTTP_409_CONFLICT),
+        (InvalidRequestError, HTTP_500_INTERNAL_SERVER_ERROR),
+        (NotFoundError, HTTP_404_NOT_FOUND),
+    ],
+)
+def test_repository_exception_to_http_response(exc: type[RepositoryError], status: int) -> None:
+    """Test default exception handler."""
+
+    config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
+    config2 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        session_dependency_key="other_session",
+        session_scope_key="_sqlalchemy_state_2",
+        engine_dependency_key="other_engine",
+    )
+    plugin = SQLAlchemyInitPlugin(config=[config1, config2])
+    app = Litestar(route_handlers=[], plugins=[plugin])
+    request = RequestFactory(app=app, server="testserver").get("/wherever")
+    response = exception_to_http_response(request, exc())
+    assert app.exception_handlers.get(exc) is None
+    assert app.exception_handlers.get(RepositoryError) is not None
+    assert response.status_code == status
+
+
+@pytest.mark.parametrize(
+    ("exc", "status"),
+    [
+        (IntegrityError, HTTP_409_CONFLICT),
+        (ForeignKeyError, HTTP_409_CONFLICT),
+        (DuplicateKeyError, HTTP_409_CONFLICT),
+        (InvalidRequestError, HTTP_500_INTERNAL_SERVER_ERROR),
+        (NotFoundError, HTTP_404_NOT_FOUND),
+    ],
+)
+def test_existing_repository_exception_to_http_response(exc: type[RepositoryError], status: int) -> None:
+    """Test default exception handler."""
+
+    def handler(request: Request[Any, Any, Any], exc: RepositoryError) -> Response[Any]:
+        return Response(status_code=200, content="OK")
+
+    config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
+    config2 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        session_dependency_key="other_session",
+        session_scope_key="_sqlalchemy_state_2",
+        engine_dependency_key="other_engine",
+    )
+    plugin = SQLAlchemyInitPlugin(config=[config1, config2])
+    app = Litestar(route_handlers=[], plugins=[plugin], exception_handlers={RepositoryError: handler})
+    request = RequestFactory(app=app, server="testserver").get("/wherever")
+    response = handler(request, exc())
+    assert app.exception_handlers.get(exc) is None
+    assert app.exception_handlers.get(RepositoryError) is not None
+    assert app.exception_handlers.get(RepositoryError) == handler
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("exc", "status"),
+    [
+        (IntegrityError, HTTP_409_CONFLICT),
+        (ForeignKeyError, HTTP_409_CONFLICT),
+        (DuplicateKeyError, HTTP_409_CONFLICT),
+        (InvalidRequestError, HTTP_500_INTERNAL_SERVER_ERROR),
+        (NotFoundError, HTTP_404_NOT_FOUND),
+    ],
+)
+def test_repository_disabled_exception_to_http_response(exc: type[RepositoryError], status: int) -> None:
+    """Test default exception handler."""
+
+    config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://", set_default_exception_handler=False)
+    config2 = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        session_dependency_key="other_session",
+        session_scope_key="_sqlalchemy_state_2",
+        engine_dependency_key="other_engine",
+        set_default_exception_handler=False,
+    )
+    plugin = SQLAlchemyInitPlugin(config=[config1, config2])
+    app = Litestar(route_handlers=[], plugins=[plugin])
+    assert app.exception_handlers.get(exc) is None
+    assert app.exception_handlers.get(RepositoryError) is None
