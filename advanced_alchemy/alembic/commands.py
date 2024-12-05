@@ -38,6 +38,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         self,
         engine: Engine | AsyncEngine,
         version_table_name: str,
+        bind_key: str | None = None,
         file_: str | os.PathLike[str] | None = None,
         ini_section: str = "alembic",
         output_buffer: TextIO | None = None,
@@ -56,6 +57,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         Args:
             engine (sqlalchemy.engine.Engine | sqlalchemy.ext.asyncio.AsyncEngine): The SQLAlchemy engine instance.
             version_table_name (str): The name of the version table.
+            bind_key (str | None): The bind key for the metadata.
             file_ (str | os.PathLike[str] | None): The file path for the alembic configuration.
             ini_section (str): The ini section name.
             output_buffer (typing.TextIO | None): The output buffer for alembic commands.
@@ -70,6 +72,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
             user_module_prefix (str | None): The prefix for user modules.
         """
         self.template_directory = template_directory
+        self.bind_key = bind_key
         self.version_table_name = version_table_name
         self.version_table_pk = engine.dialect.name != "spanner+spanner"
         self.version_table_schema = version_table_schema

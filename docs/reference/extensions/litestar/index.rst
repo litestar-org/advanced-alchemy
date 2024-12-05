@@ -19,6 +19,7 @@ API Reference for the ``Litestar`` extensions module
         advanced_alchemy.repository
         advanced_alchemy.service
         advanced_alchemy.types
+        advanced_alchemy.alembic.commands.AlembicCommands
         advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyPlugin
         advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemySerializationPlugin
         advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO
@@ -26,7 +27,6 @@ API Reference for the ``Litestar`` extensions module
     :members:
         AlembicAsyncConfig
         AlembicSyncConfig
-        AlembicCommands
         AsyncSessionConfig
         EngineConfig
         SQLAlchemyAsyncConfig
@@ -52,7 +52,6 @@ Additional API References
 .. toctree::
     :titlesonly:
 
-    alembic
     dto
     plugins
     cli

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from advanced_alchemy.base import BigIntBase, orm_registry
+from advanced_alchemy.base import BigIntBase, create_registry, orm_registry
 from advanced_alchemy.exceptions import MultipleResultsFoundError
 from advanced_alchemy.mixins import UniqueMixin
 
@@ -26,7 +26,11 @@ def generate_mock_data() -> Iterator[List[Dict[str, Any]]]:
     yield rows
 
 
+custom_registry = create_registry()
+
+
 class BigIntModelWithUniqueValue(UniqueMixin, BigIntBase):
+    registry = custom_registry
     col_1: Mapped[int]
     col_2: Mapped[str] = mapped_column(String(50))
     col_3: Mapped[int]
@@ -43,6 +47,8 @@ class BigIntModelWithUniqueValue(UniqueMixin, BigIntBase):
 
 
 class BigIntModelWithMaybeUniqueValue(UniqueMixin, BigIntBase):
+    registry = custom_registry
+
     col_1: Mapped[int]
     col_2: Mapped[str] = mapped_column(String(50))
     col_3: Mapped[int]

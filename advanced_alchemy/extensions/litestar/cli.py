@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Sequence, cast
 
@@ -11,10 +12,26 @@ from litestar.cli._utils import LitestarGroup, console
 if TYPE_CHECKING:
     from litestar import Litestar
 
+    from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
     from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
+
+
+def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
+    """Retrieve a database migration plugin from the Litestar application's plugins.
+
+    This function attempts to find and return either the SQLAlchemyPlugin or SQLAlchemyInitPlugin.
+    If neither plugin is found, it raises an ImproperlyConfiguredException.
+    """
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+    from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
+
+    with suppress(KeyError):
+        return app.plugins.get(SQLAlchemyInitPlugin)
+    msg = "Failed to initialize database migrations. The required plugin (SQLAlchemyPlugin or SQLAlchemyInitPlugin) is missing."
+    raise ImproperConfigurationError(msg)
 
 
 @group(cls=LitestarGroup, name="database")
@@ -29,11 +46,12 @@ def database_group() -> None:
 @option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
 def show_database_revision(app: Litestar, verbose: bool) -> None:
     """Show current database revision."""
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     console.rule("[yellow]Listing current revision[/]", align="left")
-
-    alembic_commands = AlembicCommands(app=app)
+    config = get_database_migration_plugin(app).config
+    sqlalchemy_config = config[0]
+    alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
     alembic_commands.current(verbose=verbose)
 
 
@@ -66,7 +84,7 @@ def downgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None,
     """Downgrade the database to the latest revision."""
     from rich.prompt import Confirm
 
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     console.rule("[yellow]Starting database downgrade process[/]", align="left")
     input_confirmed = (
@@ -75,7 +93,9 @@ def downgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None,
         else Confirm.ask(f"Are you sure you want to downgrade the database to the `{revision}` revision?")
     )
     if input_confirmed:
-        alembic_commands = AlembicCommands(app=app)
+        config = get_database_migration_plugin(app).config
+        sqlalchemy_config = config[0]
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.downgrade(revision=revision, sql=sql, tag=tag)
 
 
@@ -108,7 +128,7 @@ def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, n
     """Upgrade the database to the latest revision."""
     from rich.prompt import Confirm
 
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     console.rule("[yellow]Starting database upgrade process[/]", align="left")
     input_confirmed = (
@@ -117,7 +137,9 @@ def upgrade_database(app: Litestar, revision: str, sql: bool, tag: str | None, n
         else Confirm.ask(f"[bold]Are you sure you want migrate the database to the `{revision}` revision?[/]")
     )
     if input_confirmed:
-        alembic_commands = AlembicCommands(app=app)
+        config = get_database_migration_plugin(app).config
+        sqlalchemy_config = config[0]
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.upgrade(revision=revision, sql=sql, tag=tag)
 
 
@@ -141,7 +163,7 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     """Upgrade the database to the latest revision."""
     from rich.prompt import Confirm
 
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands, get_database_migration_plugin
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = get_database_migration_plugin(app)
@@ -151,7 +173,7 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
     if input_confirmed:
         for config in plugin.config:
             directory = config.alembic_config.script_location if directory is None else directory
-            alembic_commands = AlembicCommands(app)
+            alembic_commands = AlembicCommands(sqlalchemy_config=config)
             alembic_commands.init(directory=directory, multidb=multidb, package=package)
 
 
@@ -191,7 +213,7 @@ def create_revision(
     """Create a new database revision."""
     from rich.prompt import Prompt
 
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     def process_revision_directives(
         context: MigrationContext,  # noqa: ARG001
@@ -223,7 +245,9 @@ def create_revision(
     if message is None:
         message = "autogenerated" if no_prompt else Prompt.ask("Please enter a message describing this revision")
 
-    alembic_commands = AlembicCommands(app=app)
+    config = get_database_migration_plugin(app).config
+    sqlalchemy_config = config[0]
+    alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
     alembic_commands.revision(
         message=message,
         autogenerate=autogenerate,
@@ -265,13 +289,15 @@ def merge_revisions(
     """Merge multiple revisions into a single new revision."""
     from rich.prompt import Prompt
 
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     console.rule("[yellow]Starting database upgrade process[/]", align="left")
     if message is None:
         message = "autogenerated" if no_prompt else Prompt.ask("Please enter a message describing this revision")
 
-    alembic_commands = AlembicCommands(app=app)
+    config = get_database_migration_plugin(app).config
+    sqlalchemy_config = config[0]
+    alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
     alembic_commands.merge(message=message, revisions=revisions, branch_label=branch_label, rev_id=rev_id)
 
 
@@ -312,12 +338,14 @@ def stamp_revision(app: Litestar, revision: str, sql: bool, tag: str | None, pur
     """Create a new database revision."""
     from rich.prompt import Confirm
 
-    from advanced_alchemy.extensions.litestar.alembic import AlembicCommands
+    from advanced_alchemy.alembic.commands import AlembicCommands
 
     console.rule("[yellow]Stamping database revision as current[/]", align="left")
     input_confirmed = True if no_prompt else Confirm.ask("Are you sure you want to stamp revision as current?")
     if input_confirmed:
-        alembic_commands = AlembicCommands(app=app)
+        config = get_database_migration_plugin(app).config
+        sqlalchemy_config = config[0]
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.stamp(sql=sql, revision=revision, tag=tag, purge=purge)
 
 
@@ -335,7 +363,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     from rich.prompt import Confirm
 
     from advanced_alchemy.alembic.utils import drop_all
-    from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
+    from advanced_alchemy.base import metadata_registry
 
     console.rule("[yellow]Dropping all tables from the database[/]", align="left")
     input_confirmed = no_prompt or Confirm.ask("[bold red]Are you sure you want to drop all tables from the database?")
@@ -348,7 +376,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
         for config in configs:
             engine = config.get_engine()
 
-            await drop_all(engine, config.alembic_config.version_table_name, config.alembic_config.target_metadata)
+            await drop_all(engine, config.alembic_config.version_table_name, metadata_registry.get(config.bind_key))
 
     if input_confirmed:
         run(
@@ -388,14 +416,13 @@ def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path)
     from advanced_alchemy.alembic.utils import dump_tables
 
     # _TODO: Find a way to read from different registries
-    from advanced_alchemy.base import orm_registry
-    from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
+    from advanced_alchemy.base import metadata_registry, orm_registry
 
     configs = get_database_migration_plugin(app).config
 
     async def _dump_tables() -> None:
         for config in configs:
-            target_tables = set(config.alembic_config.target_metadata.tables)
+            target_tables = set(metadata_registry.get(config.bind_key).tables)
 
             if not all_tables:
                 # only consider tables specified by user

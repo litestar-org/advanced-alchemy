@@ -257,8 +257,8 @@ async def test_drop_all(
 
     await drop_all(
         alembic_commands.config.engine,
-        alembic_commands.sqlalchemy_config.alembic_config.version_table_name,
-        alembic_commands.sqlalchemy_config.alembic_config.target_metadata,
+        alembic_commands.config.version_table_name,
+        base.metadata_registry.get(alembic_commands.config.bind_key),
     )
     result = capfd.readouterr()
     assert "Successfully dropped all objects" in result.out

@@ -71,15 +71,6 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     The configuration options are documented in the Alembic documentation.
     """
 
-    def __post_init__(self) -> None:
-        """Post initialization hook.
-
-        Sets the metadata on the alembic config if metadata is provided.
-        """
-        if self.metadata:
-            self.alembic_config.target_metadata = self.metadata
-        super().__post_init__()
-
     @asynccontextmanager
     async def get_session(
         self,

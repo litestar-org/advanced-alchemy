@@ -13,3 +13,4 @@ Available API References
     :titlesonly:
 
     commands
+    utils
