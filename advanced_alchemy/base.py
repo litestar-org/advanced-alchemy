@@ -310,7 +310,6 @@ class MetadataRegistry:
     def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._registry = {}
         return cast(Self, cls._instance)
 
     def get(self, bind_key: str | None = None) -> MetaData:
@@ -352,9 +351,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)
         if bind_key is not None:
-            if bind_key not in cls.__metadata_registry__:
-                cls.__metadata_registry__[bind_key] = MetaData(naming_convention=convention)
-            cls.metadata = cls.__metadata_registry__[bind_key]
+            cls.metadata = cls.__metadata_registry__.get(bind_key)
         elif None not in cls.__metadata_registry__ and getattr(cls, "metadata", None) is not None:
             cls.__metadata_registry__[None] = cls.metadata
         super().__init_subclass__(**kwargs)
