@@ -105,10 +105,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
                 (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
                 *(app_config.type_decoders or []),
             ]
-        configure_exception_handler = False
-        for config in self.config:
-            if config.set_default_exception_handler:
-                configure_exception_handler = True
+        configure_exception_handler = any(config.set_default_exception_handler for config in self.config)
             signature_namespace_values.update(config.signature_namespace)
             app_config.lifespan.append(config.lifespan)  # pyright: ignore[reportUnknownMemberType]
 
