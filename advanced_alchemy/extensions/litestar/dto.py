@@ -96,12 +96,18 @@ class SQLAlchemyDTOConfig(DTOConfig):
     """
 
     def __post_init__(self) -> None:
-        self.exclude = {f.key if isinstance(f, InstrumentedAttribute) else f for f in self.exclude}  # type: ignore[misc]
-        self.include = {f.key if isinstance(f, InstrumentedAttribute) else f for f in self.include}  # type: ignore[misc]
-        self.rename_fields = {  # type: ignore[misc]
-            f.key if isinstance(f, InstrumentedAttribute) else f: v for f, v in self.rename_fields.items()
-        }
         super().__post_init__()
+        object.__setattr__(
+            self, "exclude", {f.key if isinstance(f, InstrumentedAttribute) else f for f in self.exclude}
+        )
+        object.__setattr__(
+            self, "include", {f.key if isinstance(f, InstrumentedAttribute) else f for f in self.include}
+        )
+        object.__setattr__(
+            self,
+            "rename_fields",
+            {f.key if isinstance(f, InstrumentedAttribute) else f: v for f, v in self.rename_fields.items()},
+        )
 
 
 class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):

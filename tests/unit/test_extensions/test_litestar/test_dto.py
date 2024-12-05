@@ -689,10 +689,11 @@ class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
 
 class Child(Base):
-    ...
+    __tablename__ = "child"
+    test_model_id: Mapped[int] = mapped_column(ForeignKey("test_model.id"))
 
 class TestModel(Base):
-    child_id: Mapped[int] = mapped_column(ForeignKey("child.id"))
+    __tablename__ = "test_model"
     child: WriteOnlyMapped[Child] = relationship(Child)
 
 dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
@@ -700,9 +701,9 @@ dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
     )
     model = await get_model_from_dto(
         module.dto_type,
-        module.B,
+        module.TestModel,
         asgi_connection,
-        b'{"id": 2, "child_id": 1, "child": {"id": 1}}',
+        b'{"id": 2, "child": {"id": 1, "test_model_id": 2}}',
     )
     assert isinstance(model, module.TestModel)
-    assert isinstance(model.child, module.Child)
+    assert isinstance(model.child.instance, module.Child)
