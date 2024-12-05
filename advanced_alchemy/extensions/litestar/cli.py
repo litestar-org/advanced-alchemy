@@ -145,12 +145,11 @@ def init_alembic(app: Litestar, directory: str | None, multidb: bool, package: b
 
     console.rule("[yellow]Initializing database migrations.", align="left")
     plugin = get_database_migration_plugin(app)
-    configs = plugin.config if isinstance(plugin.config, Sequence) else [plugin.config]
     input_confirmed = (
         True if no_prompt else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
     )
     if input_confirmed:
-        for config in configs:
+        for config in plugin.config:
             directory = config.alembic_config.script_location if directory is None else directory
             alembic_commands = AlembicCommands(app)
             alembic_commands.init(directory=directory, multidb=multidb, package=package)
@@ -341,9 +340,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     console.rule("[yellow]Dropping all tables from the database[/]", align="left")
     input_confirmed = no_prompt or Confirm.ask("[bold red]Are you sure you want to drop all tables from the database?")
 
-    config = get_database_migration_plugin(app).config  # pyright: ignore[reportPrivateUsage]
-    if not isinstance(config, Sequence):
-        config = [config]
+    config = get_database_migration_plugin(app).config
 
     async def _drop_all(
         configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
@@ -395,9 +392,6 @@ def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path)
     from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
 
     configs = get_database_migration_plugin(app).config
-
-    if not isinstance(configs, Sequence):
-        configs = [configs]
 
     async def _dump_tables() -> None:
         for config in configs:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from advanced_alchemy.alembic.commands import AlembicCommands as _AlembicCommands
 
@@ -30,8 +30,6 @@ class AlembicCommands(_AlembicCommands):
     def __init__(self, app: Litestar) -> None:
         self._app = app
         config = get_database_migration_plugin(self._app).config
-        if isinstance(config, Sequence):
-            self.sqlalchemy_config = config[0]
-        else:
-            self.sqlalchemy_config = config
+        # this should be updated to hold all of the  configs
+        self.sqlalchemy_config = config[0]
         self.config = self._get_alembic_command_config()
