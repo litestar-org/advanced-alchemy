@@ -1546,6 +1546,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             if order_by is None:
                 order_by = self.order_by or []
+            if self._contains_order_by(order_by):
+                statement = statement.order_by(None)
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1603,6 +1605,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             if order_by is None:
                 order_by = self.order_by or []
+            if self._contains_order_by(order_by):
+                statement = statement.order_by(None)
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1841,6 +1845,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                     setattr(datum, self.id_attribute, getattr(existing_datum, self.id_attribute))
         return data
 
+    @staticmethod
+    def _contains_order_by(order_by: list[OrderingPair] | OrderingPair | None) -> bool:
+        return bool((isinstance(order_by, list) and len(order_by) > 0) or order_by is not None)
+
     async def list(
         self,
         *filters: StatementFilter | ColumnElement[bool],
@@ -1883,6 +1891,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             if order_by is None:
                 order_by = self.order_by or []
+            if self._contains_order_by(order_by):
+                statement = statement.order_by(None)
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
