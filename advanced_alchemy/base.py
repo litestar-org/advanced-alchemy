@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -20,7 +20,7 @@ from sqlalchemy.orm import (
     registry as SQLAlchemyRegistry,  # noqa: N812
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
-from typing_extensions import TypeVar
+from typing_extensions import Self, TypeVar
 
 from advanced_alchemy.mixins import (
     AuditColumns as _AuditColumns,
@@ -95,6 +95,7 @@ __all__ = (
     "convention",
     "create_registry",
     "merge_table_arguments",
+    "metadata_registry",
     "orm_registry",
     "table_name_regexp",
 )
@@ -300,6 +301,42 @@ def create_registry(
 orm_registry = create_registry()
 
 
+class MetadataRegistry:
+    """A registry for metadata."""
+
+    _instance: MetadataRegistry | None = None
+    _registry: dict[str | None, MetaData] = {None: orm_registry.metadata}
+
+    def __new__(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._registry = {}
+        return cast(Self, cls._instance)
+
+    def get(self, bind_key: str | None = None) -> MetaData:
+        """Get the metadata for the given bind key."""
+        return self._registry.setdefault(bind_key, MetaData(naming_convention=convention))
+
+    def set(self, bind_key: str | None, metadata: MetaData) -> None:
+        """Set the metadata for the given bind key."""
+        self._registry[bind_key] = metadata
+
+    def __iter__(self) -> Iterator[str | None]:
+        return iter(self._registry)
+
+    def __getitem__(self, bind_key: str | None) -> MetaData:
+        return self._registry[bind_key]
+
+    def __setitem__(self, bind_key: str | None, metadata: MetaData) -> None:
+        self._registry[bind_key] = metadata
+
+    def __contains__(self, bind_key: str | None) -> bool:
+        return bind_key in self._registry
+
+
+metadata_registry = MetadataRegistry()
+
+
 class AdvancedDeclarativeBase(DeclarativeBase):
     """A subclass of declarative base that allows for overriding of the registry.
 
@@ -309,7 +346,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
 
     registry = orm_registry
     __abstract__ = True
-    __metadata_registry__: dict[str | None, MetaData] = {}
+    __metadata_registry__: MetadataRegistry = MetadataRegistry()
     __bind_key__: str | None = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -480,5 +517,4 @@ class SQLQuery(BasicAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """
 
     __abstract__ = True
-
     __allow_unmapped__ = True

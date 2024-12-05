@@ -335,6 +335,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
     from rich.prompt import Confirm
 
     from advanced_alchemy.alembic.utils import drop_all
+    from advanced_alchemy.base import metadata_registry
     from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
 
     console.rule("[yellow]Dropping all tables from the database[/]", align="left")
@@ -348,7 +349,7 @@ def drop_all(app: Litestar, no_prompt: bool) -> None:
         for config in configs:
             engine = config.get_engine()
 
-            await drop_all(engine, config.alembic_config.version_table_name, config.alembic_config.target_metadata)
+            await drop_all(engine, config.alembic_config.version_table_name, metadata_registry.get(config.bind_key))
 
     if input_confirmed:
         run(
@@ -388,14 +389,14 @@ def dump_table_data(app: Litestar, table_names: tuple[str, ...], dump_dir: Path)
     from advanced_alchemy.alembic.utils import dump_tables
 
     # _TODO: Find a way to read from different registries
-    from advanced_alchemy.base import orm_registry
+    from advanced_alchemy.base import metadata_registry, orm_registry
     from advanced_alchemy.extensions.litestar.alembic import get_database_migration_plugin
 
     configs = get_database_migration_plugin(app).config
 
     async def _dump_tables() -> None:
         for config in configs:
-            target_tables = set(config.alembic_config.target_metadata.tables)
+            target_tables = set(metadata_registry.get(config.bind_key).tables)
 
             if not all_tables:
                 # only consider tables specified by user
