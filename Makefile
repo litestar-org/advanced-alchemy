@@ -52,15 +52,15 @@ upgrade:                                            ## Upgrade all dependencies 
 .PHONY: clean
 clean:                                              ## Cleanup temporary build artifacts
 	@echo "${INFO} Cleaning working directory... 🧹"
-	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ dist/ .eggs/ \
-		.find . -name '*.egg-info' -exec rm -rf {} + \
-		.find . -type f --name '*.egg' -exec rm -f {} + \
-		.find . -name '*.pyc' -exec rm -f {} + \
-		.find . -name '*.pyo' -exec rm -f {} + \
-		.find . -name '*~' -exec rm -f {} + \
-		.find . -name '__pycache__' -exec rm -rf {} + \
-		.find . -name '.ipynb_checkpoints' -exec rm -rf {} + \
-		.rm -rf .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache .mypy_cache .unasyncd_cache/
+	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ dist/ .eggs/ .coverage coverage.xml coverage.json htmlcov/ .pytest_cache tests/.pytest_cache .mypy_cache .unasyncd_cache/
+	@find . -name '*.egg-info' -exec rm -rf {} +
+	@find . -type f -name '*.egg' -exec rm -f {} +
+	@find . -name '*.pyc' -exec rm -f {} +
+	@find . -name '*.pyo' -exec rm -f {} +
+	@find . -name '*~' -exec rm -f {} +
+	@find . -name '__pycache__' -exec rm -rf {} +
+	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
+	@rm -rf
 	@$(MAKE) docs-clean
 	@echo "${OK} Cleaned working directory 🧹 ✨"
 
