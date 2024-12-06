@@ -399,11 +399,9 @@ class TanStackFilter:
     def to_multifilter_format(self) -> dict[str, Any]:
         """Convert TanStack filter list to MultiFilter dict."""
 
-        def parse_filters(filters: list[dict[str, Any]], logical_op: str = "and") -> dict[str, Any]:
+        def parse_filters(filters: list[dict[str, Any]], logical_op: str = "and_") -> dict[str, Any]:
             return {
-                logical_op: [
-                    self._parse_single_filter(filt) for filt in filters if self._parse_single_filter(filt) is not None
-                ]
+                logical_op: [self._parse_single_filter(f) for f in filters if self._parse_single_filter(f) is not None]
             }
 
         return parse_filters(self.tanstack_filters)
@@ -413,9 +411,9 @@ class TanStackFilter:
             # Nested logical group
             return {
                 filter_obj["logical"]: [
-                    self._parse_single_filter(filt)
-                    for filt in filter_obj["filters"]
-                    if self._parse_single_filter(filt) is not None
+                    self._parse_single_filter(f)
+                    for f in filter_obj["filters"]
+                    if self._parse_single_filter(f) is not None
                 ]
             }
         # Single filter condition
