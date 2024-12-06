@@ -467,7 +467,7 @@ class TanStackFilter:
 
 
 @dataclass
-class AGGridFilterAdapter:
+class AGGridFilter:
     """Adapter to convert AG Grid filter input into MultiFilter-compatible format."""
 
     aggrid_filters: dict[str, dict[str, Any]]
