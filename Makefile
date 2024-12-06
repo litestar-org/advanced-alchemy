@@ -60,7 +60,6 @@ clean:                                              ## Cleanup temporary build a
 	@find . -name '*~' -exec rm -f {} +
 	@find . -name '__pycache__' -exec rm -rf {} +
 	@find . -name '.ipynb_checkpoints' -exec rm -rf {} +
-	@rm -rf
 	@$(MAKE) docs-clean
 	@echo "${OK} Cleaned working directory 🧹 ✨"
 
