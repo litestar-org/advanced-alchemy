@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import re
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, Iterator, Optional, Protocol, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -346,7 +346,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     registry = orm_registry
     __abstract__ = True
     __metadata_registry__: MetadataRegistry = MetadataRegistry()
-    __bind_key__: str | None = None
+    __bind_key__: Optional[None] = None  # noqa: UP007
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)
