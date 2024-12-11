@@ -9,7 +9,7 @@ resolution-markers = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "0.26.0"
+version = "0.26.1"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1507,7 +1507,7 @@ wheels = [
 
 [[package]]
 name = "google-api-core"
-version = "2.23.0"
+version = "2.24.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-auth" },
@@ -1516,9 +1516,9 @@ dependencies = [
     { name = "protobuf" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fa/6b/b98553c2061c4e2186f5bbfb1aa1a6ef13fc0775c096d18595d3c99ba023/google_api_core-2.23.0.tar.gz", hash = "sha256:2ceb087315e6af43f256704b871d99326b1f12a9d6ce99beaedec99ba26a0ace", size = 160094 }
+sdist = { url = "https://files.pythonhosted.org/packages/81/56/d70d66ed1b5ab5f6c27bf80ec889585ad8f865ff32acbafd3b2ef0bfb5d0/google_api_core-2.24.0.tar.gz", hash = "sha256:e255640547a597a4da010876d333208ddac417d60add22b6851a0c66a831fcaf", size = 162647 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/a4/c26886d57d90032c5f74c2e80aefdc38ec58551fc46bd4ce79fb2c9389fa/google_api_core-2.23.0-py3-none-any.whl", hash = "sha256:c20100d4c4c41070cf365f1d8ddf5365915291b5eb11b83829fbd1c999b5122f", size = 156554 },
+    { url = "https://files.pythonhosted.org/packages/a1/76/65b8b94e74bf1b6d1cc38d916089670c4da5029d25762441d8c5c19e51dd/google_api_core-2.24.0-py3-none-any.whl", hash = "sha256:10d82ac0fca69c82a25b3efdeefccf6f28e02ebb97925a8cce8edbfe379929d9", size = 158576 },
 ]
 
 [package.optional-dependencies]
@@ -1556,7 +1556,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-spanner"
-version = "3.50.1"
+version = "3.51.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -1567,9 +1567,9 @@ dependencies = [
     { name = "protobuf" },
     { name = "sqlparse" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f5/42/1459e6677381389cd96c098b5f515b4c6da28c899389d84043e9ac11b096/google_cloud_spanner-3.50.1.tar.gz", hash = "sha256:82937ea03b55de86bddf622f555aeae65ae86bb4f28ab35bd920ac505917c9bf", size = 575566 }
+sdist = { url = "https://files.pythonhosted.org/packages/90/f9/b30df85501ee1200328dd3bc69424dccc8a0b3389cd52f70d740a90fac87/google_cloud_spanner-3.51.0.tar.gz", hash = "sha256:346c2c20f64847883464fb0de5a6f9b48ecc6f79b032a2fb3a0aa088d9a9863f", size = 593310 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/ce/35abda83da7eacf458a55f628d350bb7c8f91215767b45a5cd2da4528e9b/google_cloud_spanner-3.50.1-py2.py3-none-any.whl", hash = "sha256:9d399aa53fae58816023a4eb31fa267333c3a879a9221229e7f06fdda543884a", size = 416477 },
+    { url = "https://files.pythonhosted.org/packages/cc/b0/b0328d320d80d6963e7c4eb1e07a40d791f2c2847cda6af033141b02852a/google_cloud_spanner-3.51.0-py2.py3-none-any.whl", hash = "sha256:2d01f33582526ebe7fab62034e92e722e512c21f6bc4abe27e03d86ef7ea576a", size = 432632 },
 ]
 
 [[package]]
@@ -1858,7 +1858,7 @@ wheels = [
 
 [[package]]
 name = "httpx"
-version = "0.28.0"
+version = "0.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1866,9 +1866,9 @@ dependencies = [
     { name = "httpcore" },
     { name = "idna" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/df/676b7cf674dd1bdc71a64ad393c89879f75e4a0ab8395165b498262ae106/httpx-0.28.0.tar.gz", hash = "sha256:0858d3bab51ba7e386637f22a61d8ccddaeec5f3fe4209da3a6168dbb91573e0", size = 141307 }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/fb/a19866137577ba60c6d8b69498dc36be479b13ba454f691348ddf428f185/httpx-0.28.0-py3-none-any.whl", hash = "sha256:dc0b419a0cfeb6e8b34e85167c0da2671206f5095f1baa9663d23bcfd6b535fc", size = 73551 },
+    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517 },
 ]
 
 [[package]]
@@ -2006,7 +2006,7 @@ wheels = [
 [[package]]
 name = "litestar-sphinx-theme"
 version = "0.3.1"
-source = { git = "https://github.com/litestar-org/litestar-sphinx-theme.git?rev=v3#4799f935c3023afb222058cba8c849e8fa9ae3ba" }
+source = { git = "https://github.com/litestar-org/litestar-sphinx-theme.git?rev=v3#e5f1df5af973eafafbc683e56d0f5762b2e0c315" }
 dependencies = [
     { name = "blacken-docs" },
     { name = "shibuya" },
@@ -2032,14 +2032,14 @@ wheels = [
 
 [[package]]
 name = "mako"
-version = "1.3.7"
+version = "1.3.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markupsafe" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/27/5af876b41cebd9d76fa8333b83ef9121726893f725952022edd194a1671e/mako-1.3.7.tar.gz", hash = "sha256:20405b1232e0759f0e7d87b01f6bb94fce0761747f1cb876ecf90bd512d0b639", size = 392052 }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/d9/8518279534ed7dace1795d5a47e49d5299dd0994eed1053996402a8902f9/mako-1.3.8.tar.gz", hash = "sha256:577b97e414580d3e088d47c2dbbe9594aa7a5146ed2875d4dfa9075af2dd3cc8", size = 392069 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/d8/c516e830071b849ad60ee1026315bb8566381ac648ac8bda314569b4b7e2/Mako-1.3.7-py3-none-any.whl", hash = "sha256:d18f990ad57f800ce8e76cbfb0b74afe471c293517e9f5003ace6dad5aa72c36", size = 78949 },
+    { url = "https://files.pythonhosted.org/packages/1e/bf/7a6a36ce2e4cafdfb202752be68850e22607fccd692847c45c1ae3c17ba6/Mako-1.3.8-py3-none-any.whl", hash = "sha256:42f48953c7eb91332040ff567eb7eea69b22e7a4affbc5ba8e845e8f730f6627", size = 78569 },
 ]
 
 [[package]]
@@ -2970,15 +2970,15 @@ wheels = [
 
 [[package]]
 name = "pydantic-extra-types"
-version = "2.10.0"
+version = "2.10.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/92/8542f406466d11bf348b795d498906034f9bb9016f09e906ff7fee6444be/pydantic_extra_types-2.10.0.tar.gz", hash = "sha256:552c47dd18fe1d00cfed75d9981162a2f3203cf7e77e55a3d3e70936f59587b9", size = 44559 }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/12/844a4796dbbc814ef0a706f403cb0f3029bf324c2bca2bf0681f4f7d8618/pydantic_extra_types-2.10.1.tar.gz", hash = "sha256:e4f937af34a754b8f1fa228a2fac867091a51f56ed0e8a61d5b3a6719b13c923", size = 85694 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/41/0b0cc8b59c31a04bdfde2ae71fccbb13c11fadafc8bd41a2af3e76db7e44/pydantic_extra_types-2.10.0-py3-none-any.whl", hash = "sha256:b19943914e6286548254f5079d1da094e9c0583ee91a8e611e9df24bfd07dbcd", size = 34185 },
+    { url = "https://files.pythonhosted.org/packages/a8/f1/92f7b4711d3d0d08981c2677ec9cdde6cb114205a69814bf803e0be5ae9b/pydantic_extra_types-2.10.1-py3-none-any.whl", hash = "sha256:db2c86c04a837bbac0d2d79bbd6f5d46c4c9253db11ca3fdd36a2b282575f1e2", size = 35155 },
 ]
 
 [[package]]
@@ -4064,25 +4064,25 @@ wheels = [
 
 [[package]]
 name = "sqlalchemy-spanner"
-version = "1.7.0"
+version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alembic" },
     { name = "google-cloud-spanner" },
     { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d4/8a/2eba58495905701280670e3a405992413bdd7a7372d80bdccacf66188c74/sqlalchemy_spanner-1.7.0.tar.gz", hash = "sha256:c5a184710d289a3ab8e20f10998928d08b5b89838cf39c7ed0b5f52e8ee6e13b", size = 77755 }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/93/f2e08ce143434070038136181033966c944d67851978501ba115010a05a7/sqlalchemy_spanner-1.8.0.tar.gz", hash = "sha256:52e8f44c3cfee6a951615b75315e7b7c98a4368b9fd10881d46b3d864b0bc232", size = 80162 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/c6/1397b64f271d32a77c580f7c07fbb322c2f0703f40cb7745df08baa7cb5f/sqlalchemy_spanner-1.7.0-py3-none-any.whl", hash = "sha256:9925037a50b94eda358d462b694aebde61bcbeca1bb7c5a0cf247f672a340d7c", size = 27723 },
+    { url = "https://files.pythonhosted.org/packages/04/09/93e7c4c317f65cd61cdb60954f216fd99b6fe0f4b02f47a9f84337e96ef5/sqlalchemy_spanner-1.8.0-py3-none-any.whl", hash = "sha256:5934153f6d23e08ed900eff221156cd7634f097de9d6c7b9a7d32e66c81e1d31", size = 29422 },
 ]
 
 [[package]]
 name = "sqlparse"
-version = "0.5.2"
+version = "0.5.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/57/61/5bc3aff85dc5bf98291b37cf469dab74b3d0aef2dd88eade9070a200af05/sqlparse-0.5.2.tar.gz", hash = "sha256:9e37b35e16d1cc652a2545f0997c1deb23ea28fa1f3eefe609eee3063c3b105f", size = 84951 }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/40/edede8dd6977b0d3da179a342c198ed100dd2aba4be081861ee5911e4da4/sqlparse-0.5.3.tar.gz", hash = "sha256:09f67787f56a0b16ecdbde1bfc7f5d9c3371ca683cfeaa8e6ff60b4807ec9272", size = 84999 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/13/5f6654c9d915077fae255686ca6fa42095b62b7337e3e1aa9e82caa6f43a/sqlparse-0.5.2-py3-none-any.whl", hash = "sha256:e99bc85c78160918c3e1d9230834ab8d80fc06c59d03f8db2618f65f65dda55e", size = 44407 },
+    { url = "https://files.pythonhosted.org/packages/a9/5c/bfd6bd0bf979426d405cc6e71eceb8701b148b16c21d2dc3c261efc61c7b/sqlparse-0.5.3-py3-none-any.whl", hash = "sha256:cf2196ed3418f3ba5de6af7e82c694a9fbdbfecccdfc72e281548517081f16ca", size = 44415 },
 ]
 
 [[package]]
@@ -4355,11 +4355,11 @@ wheels = [
 
 [[package]]
 name = "types-python-dateutil"
-version = "2.9.0.20241003"
+version = "2.9.0.20241206"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/31/f8/f6ee4c803a7beccffee21bb29a71573b39f7037c224843eff53e5308c16e/types-python-dateutil-2.9.0.20241003.tar.gz", hash = "sha256:58cb85449b2a56d6684e41aeefb4c4280631246a0da1a719bdbe6f3fb0317446", size = 9210 }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/60/47d92293d9bc521cd2301e423a358abfac0ad409b3a1606d8fbae1321961/types_python_dateutil-2.9.0.20241206.tar.gz", hash = "sha256:18f493414c26ffba692a72369fea7a154c502646301ebfe3d56a04b3767284cb", size = 13802 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/35/d6/ba5f61958f358028f2e2ba1b8e225b8e263053bd57d3a79e2d2db64c807b/types_python_dateutil-2.9.0.20241003-py3-none-any.whl", hash = "sha256:250e1d8e80e7bbc3a6c99b907762711d1a1cdd00e978ad39cb5940f6f0a87f3d", size = 9693 },
+    { url = "https://files.pythonhosted.org/packages/0f/b3/ca41df24db5eb99b00d97f89d7674a90cb6b3134c52fb8121b6d8d30f15c/types_python_dateutil-2.9.0.20241206-py3-none-any.whl", hash = "sha256:e248a4bc70a486d3e3ec84d0dc30eec3a5f979d6e7ee4123ae043eedbb987f53", size = 14384 },
 ]
 
 [[package]]
