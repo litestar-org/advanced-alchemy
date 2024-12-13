@@ -117,9 +117,6 @@ jobs:
         with:
           name: coverage-xml
 
-      - name: Fix coverage file for sonarcloud
-        run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
-
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         env:

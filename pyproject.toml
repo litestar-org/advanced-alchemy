@@ -193,6 +193,7 @@ markers = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
+branch = true
 concurrency = ["multiprocessing"]
 omit = [
   "*/tests/*",
@@ -205,6 +206,7 @@ omit = [
   "advanced_alchemy/service/*",
 ]
 parallel = true
+relative_files = true
 
 [tool.coverage.report]
 exclude_lines = [
