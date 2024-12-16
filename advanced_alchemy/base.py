@@ -40,7 +40,7 @@ from advanced_alchemy.mixins import (
 from advanced_alchemy.mixins import (
     UUIDv7PrimaryKey as _UUIDv7PrimaryKey,
 )
-from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, DateTimeUTC, JsonB, ObjectStore, StoredObject
 from advanced_alchemy.utils.dataclass import DataclassProtocol
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
@@ -273,6 +273,7 @@ def create_registry(
         datetime: DateTimeUTC,
         date: Date,
         dict: JsonB,
+        StoredObject: ObjectStore,
         DataclassProtocol: JsonB,
     }
     with contextlib.suppress(ImportError):
