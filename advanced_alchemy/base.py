@@ -346,7 +346,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     registry = orm_registry
     __abstract__ = True
     __metadata_registry__: MetadataRegistry = MetadataRegistry()
-    __bind_key__: Optional[None] = None  # noqa: UP007
+    __bind_key__: Optional[str] = None  # noqa: UP007
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)

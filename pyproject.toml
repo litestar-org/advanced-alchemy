@@ -91,7 +91,7 @@ dev = [
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
   "git-cliff>=2.6.1",
-  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3-uv",
   "sphinx>=7.0.0; python_version <= \"3.9\"",
   "sphinx>=8.0.0; python_version >= \"3.10\"",
   "sphinx-autobuild>=2021.3.14",
@@ -193,6 +193,7 @@ markers = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
+branch = true
 concurrency = ["multiprocessing"]
 omit = [
   "*/tests/*",
@@ -205,6 +206,7 @@ omit = [
   "advanced_alchemy/service/*",
 ]
 parallel = true
+relative_files = true
 
 [tool.coverage.report]
 exclude_lines = [
