@@ -22,7 +22,7 @@ from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def app() -> FastAPI:
     return FastAPI()
 
