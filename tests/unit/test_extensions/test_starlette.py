@@ -22,33 +22,33 @@ from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def app() -> FastAPI:
     return FastAPI()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def client(app: FastAPI) -> Generator[TestClient, None, None]:
     with TestClient(app=app, raise_server_exceptions=False) as client:
         yield client
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def sync_config() -> SQLAlchemySyncConfig:
     return SQLAlchemySyncConfig(connection_string="sqlite+pysqlite://")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def async_config() -> SQLAlchemyAsyncConfig:
     return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
 
 
-@pytest.fixture(scope="session", params=["sync_config", "async_config"])
+@pytest.fixture(params=["sync_config", "async_config"])
 def config(request: FixtureRequest) -> AnyConfig:
     return cast(AnyConfig, request.getfixturevalue(request.param))
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def alchemy(config: AnyConfig, app: FastAPI) -> StarletteAdvancedAlchemy:
     return StarletteAdvancedAlchemy(config, app=app)
 
