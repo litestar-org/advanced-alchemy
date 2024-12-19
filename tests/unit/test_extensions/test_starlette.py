@@ -43,7 +43,7 @@ def async_config() -> SQLAlchemyAsyncConfig:
     return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
 
 
-@pytest.fixture(params=["sync_config", "async_config"])
+@pytest.fixture(scope="session", params=["sync_config", "async_config"])
 def config(request: FixtureRequest) -> AnyConfig:
     return cast(AnyConfig, request.getfixturevalue(request.param))
 
