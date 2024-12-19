@@ -48,7 +48,7 @@ def config(request: FixtureRequest) -> AnyConfig:
     return cast(AnyConfig, request.getfixturevalue(request.param))
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def alchemy(config: AnyConfig, app: FastAPI) -> StarletteAdvancedAlchemy:
     return StarletteAdvancedAlchemy(config, app=app)
 
