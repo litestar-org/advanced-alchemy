@@ -27,7 +27,7 @@ def app() -> FastAPI:
     return FastAPI()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def client(app: FastAPI) -> Generator[TestClient, None, None]:
     with TestClient(app=app, raise_server_exceptions=False) as client:
         yield client
@@ -97,7 +97,7 @@ def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncCo
         alchemy.app
 
 
-def test_inject_engine(app: FastAPI) -> None:
+def test_inject_engine(app: FastAPI, client: TestClient) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
     alchemy = StarletteAdvancedAlchemy(config=config, app=app)
@@ -106,9 +106,8 @@ def test_inject_engine(app: FastAPI) -> None:
     def handler(engine: Annotated[Engine, Depends(alchemy.get_engine)]) -> None:
         mock(engine)
 
-    with TestClient(app=app) as client:
-        assert client.get("/").status_code == 200
-        assert mock.call_args[0][0] is config.engine_instance
+    assert client.get("/").status_code == 200
+    assert mock.call_args[0][0] is config.engine_instance
 
 
 def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client: TestClient) -> None:
@@ -234,7 +233,7 @@ def test_session_autocommit_close_on_exception(
     mock_close.assert_called_once()
 
 
-def test_multiple_instances(app: FastAPI) -> None:
+def test_multiple_instances(app: FastAPI, client: TestClient) -> None:
     mock = MagicMock()
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
     config_2 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite:///test.db")
@@ -253,14 +252,13 @@ def test_multiple_instances(app: FastAPI) -> None:
         mock(session=session_1, engine=engine_1)
         mock(session=session_2, engine=engine_2)
 
-    with TestClient(app=app) as client:
-        client.get("/")
+    client.get("/")
 
-        assert alchemy_1.engine_key != alchemy_2.engine_key
-        assert alchemy_1.sessionmaker_key != alchemy_2.sessionmaker_key
-        assert alchemy_1.session_key != alchemy_2.session_key
+    assert alchemy_1.engine_key != alchemy_2.engine_key
+    assert alchemy_1.sessionmaker_key != alchemy_2.sessionmaker_key
+    assert alchemy_1.session_key != alchemy_2.session_key
 
-        assert alchemy_1.get_engine() is not alchemy_2.get_engine()
-        assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
-        assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
-        assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
+    assert alchemy_1.get_engine() is not alchemy_2.get_engine()
+    assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
+    assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
+    assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
