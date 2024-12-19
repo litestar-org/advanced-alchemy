@@ -66,7 +66,7 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
     """Base Protocol"""
 
-    id_attribute: Any
+    id_attribute: str
     match_fields: list[str] | str | None = None
     statement: Select[tuple[ModelT]]
     session: Session | scoped_session[Session]
@@ -403,7 +403,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         :class:`~advanced_alchemy.repository._util.FilterableRepository`
     """
 
-    id_attribute: Any = "id"
+    id_attribute: str = "id"
     """Name of the unique identifier for the model."""
     loader_options: LoadSpec | None = None
     """Default loader options for the repository."""
