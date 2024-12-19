@@ -33,12 +33,12 @@ def client(app: FastAPI) -> Generator[TestClient, None, None]:
         yield client
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def sync_config() -> SQLAlchemySyncConfig:
     return SQLAlchemySyncConfig(connection_string="sqlite+pysqlite://")
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def async_config() -> SQLAlchemyAsyncConfig:
     return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
 
