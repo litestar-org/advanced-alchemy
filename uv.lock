@@ -45,11 +45,11 @@ dev = [
     { name = "asyncpg" },
     { name = "asyncpg-stubs" },
     { name = "auto-pytabs", extra = ["sphinx"] },
+    { name = "click" },
     { name = "coverage", version = "7.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "coverage", version = "7.6.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "duckdb" },
     { name = "duckdb-engine" },
-    { name = "eval-type-backport" },
     { name = "fastapi", extra = ["all"] },
     { name = "flask-sqlalchemy" },
     { name = "git-cliff" },
@@ -187,6 +187,8 @@ sqlite = [
     { name = "aiosqlite" },
 ]
 test = [
+    { name = "asgi-lifespan" },
+    { name = "click" },
     { name = "coverage", version = "7.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "coverage", version = "7.6.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "pytest" },
@@ -229,10 +231,10 @@ dev = [
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "asyncpg-stubs" },
     { name = "auto-pytabs", extras = ["sphinx"], specifier = ">=0.5.0" },
+    { name = "click" },
     { name = "coverage", specifier = ">=7.6.1" },
     { name = "duckdb", specifier = ">=1.1.2" },
     { name = "duckdb-engine", specifier = ">=0.13.4" },
-    { name = "eval-type-backport" },
     { name = "fastapi", extras = ["all"], specifier = ">=0.115.3" },
     { name = "flask-sqlalchemy", specifier = ">=3.1.1" },
     { name = "git-cliff", specifier = ">=2.6.1" },
@@ -343,6 +345,8 @@ sanic = [
 spanner = [{ name = "sqlalchemy-spanner", specifier = ">=1.7.0" }]
 sqlite = [{ name = "aiosqlite", specifier = ">=0.20.0" }]
 test = [
+    { name = "asgi-lifespan" },
+    { name = "click" },
     { name = "coverage", specifier = ">=7.6.1" },
     { name = "pytest", specifier = ">=7.4.4" },
     { name = "pytest-asyncio", specifier = ">=0.23.8" },

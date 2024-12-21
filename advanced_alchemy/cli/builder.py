@@ -14,9 +14,12 @@ if TYPE_CHECKING:
     from alembic.operations.ops import MigrationScript, UpgradeOps
 
 
-def add_migration_commands(database_group: Group) -> None:  # noqa: C901, PLR0915
+def add_migration_commands(database_group: Group | None = None) -> Group:  # noqa: C901, PLR0915
     """Add migration commands to the database group."""
     console = get_console()
+
+    if database_group is None:
+        database_group = Group(name="database")
 
     @database_group.command(
         name="show-current-revision",
@@ -317,3 +320,5 @@ def add_migration_commands(database_group: Group) -> None:  # noqa: C901, PLR091
                 console.rule("[green bold]Data dump complete", align="left")
 
         return run(_dump_tables)
+
+    return database_group
