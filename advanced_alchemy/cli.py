@@ -4,13 +4,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Sequence, cast
 
 from anyio import run
-from click import Context, Group, argument, group, option, pass_context
-from click import Path as ClickPath
-from rich import get_console
 
-from advanced_alchemy.utils import module_loader
+try:
+    import rich_click as click
+except ImportError:
+    import click  # type: ignore[no-redef]
+
 
 if TYPE_CHECKING:
+    import click  # type: ignore[no-redef] # noqa: TC004
+
     from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
@@ -18,17 +21,19 @@ if TYPE_CHECKING:
 __all__ = ("add_migration_commands", "alchemy_group")
 
 
-@group(name="alchemy")
-@option(
+@click.group(name="alchemy")
+@click.option(
     "--config",
-    help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config:sqlalchemy_config')",
+    help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config.alchemy_configs')",
     required=True,
     type=str,
 )
-@pass_context
-def alchemy_group(ctx: Context, config: str) -> None:
+@click.pass_context
+def alchemy_group(ctx: click.Context, config: str) -> None:
     """Advanced Alchemy CLI commands."""
     from rich import get_console
+
+    from advanced_alchemy.utils import module_loader
 
     console = get_console()
     ctx.ensure_object(dict)
@@ -43,8 +48,10 @@ def alchemy_group(ctx: Context, config: str) -> None:
         ctx.exit(1)
 
 
-def add_migration_commands(database_group: Group | None = None) -> Group:  # noqa: C901, PLR0915
+def add_migration_commands(database_group: click.Group | None = None) -> click.Group:  # noqa: C901, PLR0915
     """Add migration commands to the database group."""
+    from rich import get_console
+
     console = get_console()
 
     if database_group is None:
@@ -54,8 +61,9 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="show-current-revision",
         help="Shows the current revision for the database.",
     )
-    @option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
-    def show_database_revision(ctx: Context, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.pass_context
+    @click.option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
+    def show_database_revision(ctx: click.Context, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -68,14 +76,14 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="downgrade",
         help="Downgrade database to a specific revision.",
     )
-    @option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
-    @option(
+    @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
+    @click.option(
         "--tag",
         help="an arbitrary 'tag' that can be intercepted by custom env.py scripts via the .EnvironmentContext.get_tag_argument method.",
         type=str,
         default=None,
     )
-    @option(
+    @click.option(
         "--no-prompt",
         help="Do not prompt for confirmation before downgrading.",
         type=bool,
@@ -84,12 +92,13 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    @argument(
+    @click.argument(
         "revision",
         type=str,
         default="-1",
     )
-    def downgrade_database(ctx: Context, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.pass_context
+    def downgrade_database(ctx: click.Context, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Downgrade the database to the latest revision."""
         from rich.prompt import Confirm
 
@@ -110,14 +119,14 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="upgrade",
         help="Upgrade database to a specific revision.",
     )
-    @option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
-    @option(
+    @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
+    @click.option(
         "--tag",
         help="an arbitrary 'tag' that can be intercepted by custom env.py scripts via the .EnvironmentContext.get_tag_argument method.",
         type=str,
         default=None,
     )
-    @option(
+    @click.option(
         "--no-prompt",
         help="Do not prompt for confirmation before upgrading.",
         type=bool,
@@ -126,12 +135,13 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    @argument(
+    @click.argument(
         "revision",
         type=str,
         default="head",
     )
-    def upgrade_database(ctx: Context, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.pass_context
+    def upgrade_database(ctx: click.Context, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Upgrade the database to the latest revision."""
         from rich.prompt import Confirm
 
@@ -152,10 +162,10 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="init",
         help="Initialize migrations for the project.",
     )
-    @argument("directory", default=None)
-    @option("--multidb", is_flag=True, default=False, help="Support multiple databases")
-    @option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
-    @option(
+    @click.argument("directory", default=None)
+    @click.option("--multidb", is_flag=True, default=False, help="Support multiple databases")
+    @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
+    @click.option(
         "--no-prompt",
         help="Do not prompt for confirmation before initializing.",
         type=bool,
@@ -164,7 +174,8 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    def init_alembic(ctx: Context, directory: str | None, multidb: bool, package: bool, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.pass_context
+    def init_alembic(ctx: click.Context, directory: str | None, multidb: bool, package: bool, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Initialize the database migrations."""
         from rich.prompt import Confirm
 
@@ -186,17 +197,19 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="make-migrations",
         help="Create a new migration revision.",
     )
-    @option("-m", "--message", default=None, help="Revision message")
-    @option(
+    @click.option("-m", "--message", default=None, help="Revision message")
+    @click.option(
         "--autogenerate/--no-autogenerate", default=True, help="Automatically populate revision with detected changes"
     )
-    @option("--sql", is_flag=True, default=False, help="Export to `.sql` instead of writing to the database.")
-    @option("--head", default="head", help="Specify head revision to use as base for new revision.")
-    @option("--splice", is_flag=True, default=False, help='Allow a non-head revision as the "head" to splice onto')
-    @option("--branch-label", default=None, help="Specify a branch label to apply to the new revision")
-    @option("--version-path", default=None, help="Specify specific path from config for version file")
-    @option("--rev-id", default=None, help="Specify a ID to use for revision.")
-    @option(
+    @click.option("--sql", is_flag=True, default=False, help="Export to `.sql` instead of writing to the database.")
+    @click.option("--head", default="head", help="Specify head revision to use as base for new revision.")
+    @click.option(
+        "--splice", is_flag=True, default=False, help='Allow a non-head revision as the "head" to splice onto'
+    )
+    @click.option("--branch-label", default=None, help="Specify a branch label to apply to the new revision")
+    @click.option("--version-path", default=None, help="Specify specific path from config for version file")
+    @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
+    @click.option(
         "--no-prompt",
         help="Do not prompt for a migration message.",
         type=bool,
@@ -205,8 +218,9 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
+    @click.pass_context
     def create_revision(  # pyright: ignore[reportUnusedFunction]
-        ctx: Context,
+        ctx: click.Context,
         message: str | None,
         autogenerate: bool,
         sql: bool,
@@ -265,7 +279,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         )
 
     @database_group.command(name="drop-all", help="Drop all tables from the database.")
-    @option(
+    @click.option(
         "--no-prompt",
         help="Do not prompt for confirmation before upgrading.",
         type=bool,
@@ -274,7 +288,8 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    def drop_all(ctx: Context, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.pass_context
+    def drop_all(ctx: click.Context, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
         from rich.prompt import Confirm
 
@@ -297,7 +312,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             run(_drop_all, ctx.obj["configs"])
 
     @database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
-    @option(
+    @click.option(
         "--table",
         "table_names",
         help="Name of the table to dump. Multiple tables can be specified. Use '*' to dump all tables.",
@@ -305,15 +320,16 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         required=True,
         multiple=True,
     )
-    @option(
+    @click.option(
         "--dir",
         "dump_dir",
         help="Directory to save the JSON files. Defaults to WORKDIR/fixtures",
-        type=ClickPath(path_type=Path),
+        type=click.Path(path_type=Path),
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    def dump_table_data(ctx: Context, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.pass_context
+    def dump_table_data(ctx: click.Context, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
         from rich.prompt import Confirm
 

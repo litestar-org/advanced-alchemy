@@ -30,7 +30,6 @@ dependencies = [
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet; sys_platform == \"darwin\"",
-  "eval_type_backport; python_version <= \"3.9\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
@@ -59,6 +58,7 @@ Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
+cli = ["rich-click"]
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 
@@ -144,6 +144,7 @@ test = [
   "pytest-mock>=3.14.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
+  "pytest-click",
   "asgi-lifespan",
   "click",
   "time-machine>=2.15.0",

@@ -102,6 +102,9 @@ __all__ = (
 
 
 def __getattr__(attr_name: str) -> object:
+    if attr_name == "__path__":
+        return __file__
+
     _deprecated_attrs = {
         "SlugKey",
         "AuditColumns",

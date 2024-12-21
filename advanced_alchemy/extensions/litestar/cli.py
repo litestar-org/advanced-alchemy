@@ -3,7 +3,10 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from click import Context, group, pass_context
+try:
+    import rich_click as click
+except ImportError:
+    import click  # type: ignore[no-redef]
 from litestar.cli._utils import LitestarGroup
 
 from advanced_alchemy.cli import add_migration_commands
@@ -29,9 +32,9 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     raise ImproperConfigurationError(msg)
 
 
-@group(cls=LitestarGroup, name="database")
-@pass_context
-def database_group(ctx: Context) -> None:
+@click.group(cls=LitestarGroup, name="database")
+@click.pass_context
+def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
     ctx.obj = get_database_migration_plugin(ctx.obj.app).config
 
