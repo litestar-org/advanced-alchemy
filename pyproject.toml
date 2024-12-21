@@ -62,6 +62,9 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 
+[project.scripts]
+alchemy = "advanced_alchemy.__main__:run_cli"
+
 [dependency-groups]
 cockroachdb = [
   "asyncpg>=0.29.0",
@@ -70,8 +73,6 @@ cockroachdb = [
   "sqlalchemy-cockroachdb>=2.0.2",
 ]
 dev = [
-  "asgi-lifespan",
-  "eval-type-backport",
   { include-group = "lint" },
   { include-group = "doc" },
   { include-group = "test" },
@@ -143,6 +144,8 @@ test = [
   "pytest-mock>=3.14.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
+  "asgi-lifespan",
+  "click",
   "time-machine>=2.15.0",
 ]
 
