@@ -1,0 +1,6 @@
+from litestar.constants import HTTP_DISCONNECT, HTTP_RESPONSE_START, WEBSOCKET_CLOSE, WEBSOCKET_DISCONNECT
+
+SESSION_SCOPE_KEY = "_sqlalchemy_db_session"
+"""Session scope key."""
+SESSION_TERMINUS_ASGI_EVENTS = {HTTP_RESPONSE_START, HTTP_DISCONNECT, WEBSOCKET_DISCONNECT, WEBSOCKET_CLOSE}
+"""ASGI events that terminate a session scope."""
