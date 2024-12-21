@@ -73,8 +73,6 @@ cockroachdb = [
   "sqlalchemy-cockroachdb>=2.0.2",
 ]
 dev = [
-  "asgi-lifespan",
-  "eval-type-backport",
   { include-group = "lint" },
   { include-group = "doc" },
   { include-group = "test" },
@@ -146,6 +144,8 @@ test = [
   "pytest-mock>=3.14.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
+  "asgi-lifespan",
+  "click",
   "time-machine>=2.15.0",
 ]
 
