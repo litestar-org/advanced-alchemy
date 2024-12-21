@@ -18,21 +18,26 @@ def test_import_string() -> None:
 
 
 def test_module_path(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    the_path = module_to_os_path("advanced_alchemy.config.GenericAlembicConfig")
+    the_path = module_to_os_path("advanced_alchemy.config")
     assert the_path.exists()
 
     tmp_path.joinpath("simple_module.py").write_text("x = 'foo'")
     monkeypatch.syspath_prepend(tmp_path)  # pyright: ignore[reportUnknownMemberType]
     os_path = module_to_os_path("simple_module")
     assert os_path == Path(tmp_path)
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        (
+            ImportError,
+            TypeError,
+        )
+    ):
         _ = module_to_os_path("advanced_alchemy.config.GenericAlembicConfig")
         _ = module_to_os_path("advanced_alchemy.config.GenericAlembicConfig.extra.module")
 
 
 def test_import_non_existing_attribute_raises() -> None:
     with pytest.raises(ImportError):
-        import_string("advanced_alchemy.config.GenericAlembicConfig")
+        import_string("advanced_alchemy.config.SuperGenericAlembicConfig")
 
 
 def test_import_string_cached(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

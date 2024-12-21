@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from click import Context, group, pass_context
 from litestar.cli._utils import LitestarGroup
 
-from advanced_alchemy.cli.builder import add_migration_commands
+from advanced_alchemy.cli import add_migration_commands
 
 if TYPE_CHECKING:
     from litestar import Litestar

@@ -4,14 +4,43 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Sequence, cast
 
 from anyio import run
-from click import Context, Group, argument, option
+from click import Context, Group, argument, group, option, pass_context
 from click import Path as ClickPath
 from rich import get_console
+
+from advanced_alchemy.utils import module_loader
 
 if TYPE_CHECKING:
     from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
+
+__all__ = ("add_migration_commands", "alchemy_group")
+
+
+@group(name="alchemy")
+@option(
+    "--config",
+    help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config:sqlalchemy_config')",
+    required=True,
+    type=str,
+)
+@pass_context
+def alchemy_group(ctx: Context, config: str) -> None:
+    """Advanced Alchemy CLI commands."""
+    from rich import get_console
+
+    console = get_console()
+    ctx.ensure_object(dict)
+    try:
+        config_instance = module_loader.import_string(config)
+        if isinstance(config_instance, (list, tuple)):
+            ctx.obj["configs"] = config_instance
+        else:
+            ctx.obj["configs"] = [config_instance]
+    except ImportError as e:
+        console.print(f"[red]Error loading config: {e}[/]")
+        ctx.exit(1)
 
 
 def add_migration_commands(database_group: Group | None = None) -> Group:  # noqa: C901, PLR0915
@@ -19,7 +48,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     console = get_console()
 
     if database_group is None:
-        database_group = Group(name="database")
+        database_group = alchemy_group
 
     @database_group.command(
         name="show-current-revision",
