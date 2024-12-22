@@ -3,66 +3,81 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Sequence, cast
 
-from anyio import run
-
-try:
-    import rich_click as click
-except ImportError:
-    import click  # type: ignore[no-redef]
-
-
 if TYPE_CHECKING:
-    import click  # type: ignore[no-redef] # noqa: TC004
+    from click import Group
 
     from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
     from alembic.migration import MigrationContext
     from alembic.operations.ops import MigrationScript, UpgradeOps
 
-__all__ = ("add_migration_commands", "alchemy_group")
+__all__ = ("add_migration_commands", "get_alchemy_group")
 
 
-@click.group(name="alchemy")
-@click.option(
-    "--config",
-    help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config.alchemy_configs')",
-    required=True,
-    type=str,
-)
-@click.pass_context
-def alchemy_group(ctx: click.Context, config: str) -> None:
-    """Advanced Alchemy CLI commands."""
-    from rich import get_console
+def get_alchemy_group() -> Group:
+    """Get the Advanced Alchemy CLI group."""
+    from advanced_alchemy.exceptions import MissingDependencyError
 
-    from advanced_alchemy.utils import module_loader
-
-    console = get_console()
-    ctx.ensure_object(dict)
     try:
-        config_instance = module_loader.import_string(config)
-        if isinstance(config_instance, (list, tuple)):
-            ctx.obj["configs"] = config_instance
-        else:
-            ctx.obj["configs"] = [config_instance]
-    except ImportError as e:
-        console.print(f"[red]Error loading config: {e}[/]")
-        ctx.exit(1)
+        import rich_click as click
+    except ImportError:
+        try:
+            import click  # type: ignore[no-redef]
+        except ImportError as e:
+            raise MissingDependencyError(package="click", install_package="cli") from e
+
+    @click.group(name="alchemy")
+    @click.option(
+        "--config",
+        help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config.alchemy_configs')",
+        required=True,
+        type=str,
+    )
+    @click.pass_context
+    def alchemy_group(ctx: click.Context, config: str) -> None:
+        """Advanced Alchemy CLI commands."""
+        from rich import get_console
+
+        from advanced_alchemy.utils import module_loader
+
+        console = get_console()
+        ctx.ensure_object(dict)
+        try:
+            config_instance = module_loader.import_string(config)
+            if isinstance(config_instance, (list, tuple)):
+                ctx.obj["configs"] = config_instance
+            else:
+                ctx.obj["configs"] = [config_instance]
+        except ImportError as e:
+            console.print(f"[red]Error loading config: {e}[/]")
+            ctx.exit(1)
+
+    return alchemy_group
 
 
-def add_migration_commands(database_group: click.Group | None = None) -> click.Group:  # noqa: C901, PLR0915
+def add_migration_commands(database_group: Group | None = None) -> Group:  # noqa: C901, PLR0915
     """Add migration commands to the database group."""
+    from advanced_alchemy.exceptions import MissingDependencyError
+
+    try:
+        import rich_click as click
+    except ImportError:
+        try:
+            import click  # type: ignore[no-redef]
+        except ImportError as e:
+            raise MissingDependencyError(package="click", install_package="cli") from e
     from rich import get_console
 
     console = get_console()
 
     if database_group is None:
-        database_group = alchemy_group
+        database_group = get_alchemy_group()
 
     @database_group.command(
         name="show-current-revision",
         help="Shows the current revision for the database.",
     )
-    @click.pass_context
     @click.option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
+    @click.pass_context
     def show_database_revision(ctx: click.Context, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
@@ -291,6 +306,7 @@ def add_migration_commands(database_group: click.Group | None = None) -> click.G
     @click.pass_context
     def drop_all(ctx: click.Context, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
+        from anyio import run
         from rich.prompt import Confirm
 
         from advanced_alchemy.alembic.utils import drop_all
@@ -331,6 +347,7 @@ def add_migration_commands(database_group: click.Group | None = None) -> click.G
     @click.pass_context
     def dump_table_data(ctx: click.Context, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
+        from anyio import run
         from rich.prompt import Confirm
 
         from advanced_alchemy.alembic.utils import dump_tables
