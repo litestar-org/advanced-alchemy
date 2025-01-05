@@ -9,7 +9,6 @@ from typing import (
     Iterable,
     List,
     Literal,
-    Optional,
     Protocol,
     Sequence,
     Tuple,
@@ -66,7 +65,7 @@ POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
     """Base Protocol"""
 
-    id_attribute: Any
+    id_attribute: str
     match_fields: list[str] | str | None = None
     statement: Select[tuple[ModelT]]
     session: AsyncSession | async_scoped_session[AsyncSession]
@@ -403,10 +402,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         :class:`~advanced_alchemy.repository._util.FilterableRepository`
     """
 
-    id_attribute: Any = "id"
+    id_attribute: str = "id"
     """Name of the unique identifier for the model."""
     loader_options: LoadSpec | None = None
     """Default loader options for the repository."""
+    error_messages: ErrorMessages | None = None
+    """Default error messages for the repository."""
     inherit_lazy_relationships: bool = True
     """Optionally ignore the default ``lazy`` configuration for model relationships.  This is useful for when you want to
     replace instead of merge the model's loaded relationships with the ones specified in the ``load`` or ``default_loader_options`` configuration."""
@@ -457,7 +458,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.auto_commit = auto_commit
         self.order_by = order_by
         self.session = session
-        self.error_messages = self._get_error_messages(error_messages=error_messages)
+        self.error_messages = self._get_error_messages(
+            error_messages=error_messages, default_messages=self.error_messages
+        )
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
@@ -476,13 +479,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     ) -> ErrorMessages | None:
         if error_messages == Empty:
             error_messages = None
-        default_messages = cast(
-            "Optional[ErrorMessages]",
-            default_messages if default_messages != Empty else DEFAULT_ERROR_MESSAGE_TEMPLATES,
-        )
-        if error_messages is not None and default_messages is not None:
-            default_messages.update(cast("ErrorMessages", error_messages))
-        return default_messages
+        if default_messages == Empty:
+            default_messages = None
+        messages = DEFAULT_ERROR_MESSAGE_TEMPLATES
+        if default_messages and isinstance(default_messages, dict):
+            messages.update(default_messages)
+        if error_messages:
+            messages.update(cast("ErrorMessages", error_messages))
+        return messages
 
     @classmethod
     def get_id_attribute_value(

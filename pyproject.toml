@@ -30,7 +30,6 @@ dependencies = [
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet; sys_platform == \"darwin\"",
-  "eval_type_backport; python_version <= \"3.9\"",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
@@ -47,7 +46,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.26.0"
+version = "0.26.2"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -60,10 +59,15 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
 fsspec = ["fsspec"]
+cli = ["rich-click"]
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 
+[project.scripts]
+alchemy = "advanced_alchemy.__main__:run_cli"
+
 [dependency-groups]
+build = ["bump-my-version"]
 cockroachdb = [
   "asyncpg>=0.29.0",
   "psycopg2-binary>=2.9.10",
@@ -71,8 +75,7 @@ cockroachdb = [
   "sqlalchemy-cockroachdb>=2.0.2",
 ]
 dev = [
-  "asgi-lifespan",
-  "eval-type-backport",
+  { include-group = "build" },
   { include-group = "lint" },
   { include-group = "doc" },
   { include-group = "test" },
@@ -92,7 +95,7 @@ dev = [
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
   "git-cliff>=2.6.1",
-  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3-uv",
   "sphinx>=7.0.0; python_version <= \"3.9\"",
   "sphinx>=8.0.0; python_version >= \"3.10\"",
   "sphinx-autobuild>=2021.3.14",
@@ -145,8 +148,45 @@ test = [
   "pytest-mock>=3.14.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
+  "pytest-click",
+  "asgi-lifespan",
+  "click",
   "time-machine>=2.15.0",
 ]
+
+[tool.bumpversion]
+allow_dirty = true
+commit = true
+commit_args = "--no-verify"
+current_version = "0.26.2"
+ignore_missing_files = false
+ignore_missing_version = false
+message = "chore(release): bump to v{new_version}"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+regex = false
+replace = "{new_version}"
+search = "{current_version}"
+serialize = ["{major}.{minor}.{patch}"]
+sign_tags = false
+tag = false
+tag_message = "chore(release): v{new_version}"
+tag_name = "v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+replace = 'version = "{new_version}"'
+search = 'version = "{current_version}"'
+
+[[tool.bumpversion.files]]
+filename = "uv.lock"
+replace = """
+name = "advanced-alchemy"
+version = "{new_version}"
+"""
+search = """
+name = "advanced-alchemy"
+version = "{current_version}"
+"""
 
 [build-system]
 build-backend = "hatchling.build"
@@ -195,6 +235,7 @@ markers = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
+branch = true
 concurrency = ["multiprocessing"]
 omit = [
   "*/tests/*",
@@ -207,6 +248,7 @@ omit = [
   "advanced_alchemy/service/*",
 ]
 parallel = true
+relative_files = true
 
 [tool.coverage.report]
 exclude_lines = [

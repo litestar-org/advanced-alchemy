@@ -3,6 +3,7 @@ from __future__ import annotations
 from advanced_alchemy import (
     alembic,
     base,
+    cli,
     config,
     exceptions,
     extensions,
@@ -17,6 +18,7 @@ from advanced_alchemy import (
 __all__ = (
     "alembic",
     "base",
+    "cli",
     "config",
     "exceptions",
     "extensions",
@@ -24,7 +26,6 @@ __all__ = (
     "mixins",
     "operations",
     "service",
-    "types",
     "types",
     "utils",
 )
