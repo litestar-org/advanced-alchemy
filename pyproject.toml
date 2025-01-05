@@ -58,8 +58,8 @@ Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
-fsspec = ["fsspec"]
 cli = ["rich-click"]
+fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 
@@ -459,6 +459,7 @@ exclude = [
 include = ["advanced_alchemy"]
 pythonVersion = "3.8"
 reportMissingTypeStubs = true
+reportUnknownMemberType = false
 reportUnnecessaryTypeIgnoreComments = true
 strict = ["advanced_alchemy/**/*"]
 venv = ".venv"
