@@ -8,9 +8,16 @@ offering useful and easy-to-use features for your database projects.
 .. seealso:: It is built on:
 
     * `SQLAlchemy <https://www.sqlalchemy.org/>`_
-    * `msgspec <https://jcristharif.com/msgspec/>`_
     * `Alembic <https://alembic.sqlalchemy.org/en/latest/>`_
     * `Typing Extensions <https://typing-extensions.readthedocs.io/en/latest/>`_
+
+It works standalone or integrated with any WSGI or ASGI framework, and comes bundled with extensions for:
+
+* `Litestar <https://docs.litestar.dev/>`_
+* `FastAPI <https://fastapi.tiangolo.com/>`_
+* `Starlette <https://www.starlette.io/>`_
+* `Flask <https://flask.palletsprojects.com/>`_
+* `Sanic <https://sanicframework.org/>`_
 
 Installation
 ------------
