@@ -11,11 +11,11 @@ resolution-markers = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "0.26.2"
+version = "0.27.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
-    { name = "greenlet", marker = "sys_platform == 'darwin'" },
+    { name = "greenlet" },
     { name = "sqlalchemy" },
     { name = "typing-extensions" },
 ]
@@ -217,7 +217,7 @@ test = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.12.0" },
     { name = "fastnanoid", marker = "extra == 'nanoid'", specifier = ">=0.4.1" },
-    { name = "greenlet", marker = "sys_platform == 'darwin'" },
+    { name = "greenlet" },
     { name = "rich-click", marker = "extra == 'cli'" },
     { name = "sqlalchemy", specifier = ">=2.0.20" },
     { name = "typing-extensions", specifier = ">=4.0.0" },

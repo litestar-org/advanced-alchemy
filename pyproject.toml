@@ -25,12 +25,7 @@ classifiers = [
   "Topic :: Database",
   "Topic :: Database :: Database Engines/Servers",
 ]
-dependencies = [
-  "sqlalchemy>=2.0.20",
-  "alembic>=1.12.0",
-  "typing-extensions>=4.0.0",
-  "greenlet; sys_platform == \"darwin\"",
-]
+dependencies = ["sqlalchemy>=2.0.20", "alembic>=1.12.0", "typing-extensions>=4.0.0", "greenlet"]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = { text = "MIT" }
@@ -46,7 +41,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.26.2"
+version = "0.27.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
