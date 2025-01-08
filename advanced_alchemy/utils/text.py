@@ -20,7 +20,7 @@ def check_email(email: str) -> str:
 
 
 def slugify(value: str, allow_unicode: bool = False, separator: str | None = None) -> str:
-    """slugify.
+    """Slugify.
 
     Convert to ASCII if ``allow_unicode`` is ``False``. Convert spaces or repeated
     dashes to single dashes. Remove characters that aren't alphanumerics,

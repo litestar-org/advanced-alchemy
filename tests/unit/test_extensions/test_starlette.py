@@ -245,10 +245,10 @@ def test_multiple_instances(app: FastAPI) -> None:
 
     @app.get("/")
     def handler(
-        session_1: Session = Depends(alchemy_1.get_session),
-        session_2: Session = Depends(alchemy_2.get_session),
-        engine_1: Engine = Depends(alchemy_1.get_engine),
-        engine_2: Engine = Depends(alchemy_2.get_engine),
+        session_1: Annotated[Session, Depends(alchemy_1.get_session)],
+        session_2: Annotated[Session, Depends(alchemy_2.get_session)],
+        engine_1: Annotated[Engine, Depends(alchemy_1.get_engine)],
+        engine_2: Annotated[Engine, Depends(alchemy_2.get_engine)],
     ) -> None:
         mock(session=session_1, engine=engine_1)
         mock(session=session_2, engine=engine_2)
