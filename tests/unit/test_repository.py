@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from msgspec import Struct
+from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
 from sqlalchemy import String
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,6 +29,16 @@ from advanced_alchemy.filters import (
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
+)
+from advanced_alchemy.service.typing import (
+    is_msgspec_struct,
+    is_pydantic_model,
+    is_schema,
+    is_schema_or_dict,
+    is_schema_or_dict_with_field,
+    is_schema_or_dict_without_field,
+    is_schema_with_field,
+    is_schema_without_field,
 )
 from tests.helpers import maybe_async
 
@@ -833,3 +845,65 @@ def test_filter_on_datetime_field(
     statement = filter.append_to_statement(statement, MagicMock(return_value=before or after))  # type:ignore[assignment]
     mock_repo.model_type.updated_at = field_mock
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+class MyModel(BaseModel):
+    name: str
+    age: int
+
+
+class MyStruct(Struct):
+    name: str
+    age: int
+
+
+def test_is_pydantic_model() -> None:
+    pydantic_model = MyModel(name="Pydantic John", age=30)
+    msgspec_struct = MyStruct(name="Msgspec Joe", age=30)
+    old_dict = {"name": "Old Greg", "age": 30}
+    int_value = 1
+
+    assert is_pydantic_model(pydantic_model)
+    assert not is_pydantic_model(msgspec_struct)
+    assert not is_pydantic_model(old_dict)
+    assert not is_pydantic_model(int_value)
+
+
+def test_is_msgspec_struct() -> None:
+    pydantic_model = MyModel(name="Pydantic John", age=30)
+    msgspec_struct = MyStruct(name="Msgspec Joe", age=30)
+    old_dict = {"name": "Old Greg", "age": 30}
+
+    assert not is_msgspec_struct(pydantic_model)
+    assert is_msgspec_struct(msgspec_struct)
+    assert not is_msgspec_struct(old_dict)
+
+
+def test_is_schema() -> None:
+    pydantic_model = MyModel(name="Pydantic John", age=30)
+    msgspec_struct = MyStruct(name="Msgspec Joe", age=30)
+    old_dict = {"name": "Old Greg", "age": 30}
+    int_value = 1
+    assert is_schema(pydantic_model)
+    assert is_schema(msgspec_struct)
+    assert not is_schema(old_dict)
+    assert not is_schema(int_value)
+    assert is_schema_with_field(pydantic_model, "name")
+    assert not is_schema_with_field(msgspec_struct, "name2")
+    assert is_schema_without_field(pydantic_model, "name2")
+    assert not is_schema_without_field(msgspec_struct, "name")
+
+
+def test_is_schema_or_dict() -> None:
+    pydantic_model = MyModel(name="Pydantic John", age=30)
+    msgspec_struct = MyStruct(name="Msgspec Joe", age=30)
+    old_dict = {"name": "Old Greg", "age": 30}
+    int_value = 1
+    assert is_schema_or_dict(pydantic_model)
+    assert is_schema_or_dict(msgspec_struct)
+    assert is_schema_or_dict(old_dict)
+    assert not is_schema_or_dict(int_value)
+    assert is_schema_or_dict_with_field(pydantic_model, "name")
+    assert not is_schema_or_dict_with_field(msgspec_struct, "name2")
+    assert is_schema_or_dict_without_field(pydantic_model, "name2")
+    assert not is_schema_or_dict_without_field(msgspec_struct, "name")

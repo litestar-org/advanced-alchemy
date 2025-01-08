@@ -18,9 +18,9 @@ from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySync
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
 from advanced_alchemy.service.typing import (
-    is_msgspec_model,
-    is_msgspec_model_with_field,
-    is_msgspec_model_without_field,
+    is_msgspec_struct,
+    is_msgspec_struct_with_field,
+    is_msgspec_struct_without_field,
     is_pydantic_model,
     is_pydantic_model_with_field,
     is_pydantic_model_without_field,
@@ -174,9 +174,9 @@ def test_sync_fixture_and_query() -> None:
             schema_type=StateQueryStruct,
         )
         assert isinstance(_msgspec_obj, StateQueryStruct)
-        assert is_msgspec_model(_msgspec_obj)
-        assert is_msgspec_model_with_field(_msgspec_obj, "state_abbreviation")
-        assert not is_msgspec_model_without_field(_msgspec_obj, "state_abbreviation")
+        assert is_msgspec_struct(_msgspec_obj)
+        assert is_msgspec_struct_with_field(_msgspec_obj, "state_abbreviation")
+        assert not is_msgspec_struct_without_field(_msgspec_obj, "state_abbreviation")
 
         _get_one_or_none = query_service.repository.get_one_or_none(
             statement=select(StateQuery).filter_by(state_name="Nope"),
@@ -253,10 +253,10 @@ async def test_async_fixture_and_query() -> None:
             schema_type=StateQueryStruct,
         )
         assert isinstance(_msgspec_obj, StateQueryStruct)
-        assert is_msgspec_model(_msgspec_obj)
-        assert is_msgspec_model_with_field(_msgspec_obj, "state_abbreviation")
+        assert is_msgspec_struct(_msgspec_obj)
+        assert is_msgspec_struct_with_field(_msgspec_obj, "state_abbreviation")
         _get_one_or_none = await query_service.repository.get_one_or_none(
-            select(StateQuery).filter_by(state_name="Nope"),
+            select(StateQuery).filter_by(state_name="Nope")
         )
-        assert not is_msgspec_model_without_field(_msgspec_obj, "state_abbreviation")
+        assert not is_msgspec_struct_without_field(_msgspec_obj, "state_abbreviation")
         assert _get_one_or_none is None
