@@ -60,7 +60,6 @@ dev = [
     { name = "flask-sqlalchemy" },
     { name = "git-cliff" },
     { name = "litestar", extra = ["cli"] },
-    { name = "litestar-sphinx-theme" },
     { name = "mypy" },
     { name = "oracledb" },
     { name = "pre-commit", version = "3.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
@@ -84,6 +83,7 @@ dev = [
     { name = "ruff" },
     { name = "sanic", extra = ["ext"] },
     { name = "sanic-testing" },
+    { name = "shibuya" },
     { name = "slotscheck", version = "0.16.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.8.1'" },
     { name = "slotscheck", version = "0.19.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.8.1'" },
     { name = "sphinx", version = "7.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
@@ -118,7 +118,7 @@ dev = [
 doc = [
     { name = "auto-pytabs", extra = ["sphinx"] },
     { name = "git-cliff" },
-    { name = "litestar-sphinx-theme" },
+    { name = "shibuya" },
     { name = "sphinx", version = "7.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "sphinx", version = "7.4.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -249,7 +249,6 @@ dev = [
     { name = "flask-sqlalchemy", specifier = ">=3.1.1" },
     { name = "git-cliff", specifier = ">=2.6.1" },
     { name = "litestar", extras = ["cli"], specifier = ">=2.12.1" },
-    { name = "litestar-sphinx-theme", git = "https://github.com/litestar-org/litestar-sphinx-theme.git?rev=v3-uv" },
     { name = "mypy", specifier = ">=1.13.0" },
     { name = "oracledb", specifier = ">=2.4.1" },
     { name = "pre-commit", specifier = ">=3.5.0" },
@@ -270,6 +269,7 @@ dev = [
     { name = "ruff", specifier = ">=0.7.1" },
     { name = "sanic", extras = ["ext"], specifier = ">=24.6.0" },
     { name = "sanic-testing", specifier = ">=24.6.0" },
+    { name = "shibuya" },
     { name = "slotscheck", specifier = ">=0.16.5" },
     { name = "sphinx", marker = "python_full_version < '3.10'", specifier = ">=7.0.0" },
     { name = "sphinx", marker = "python_full_version >= '3.10'", specifier = ">=8.0.0" },
@@ -299,7 +299,7 @@ dev = [
 doc = [
     { name = "auto-pytabs", extras = ["sphinx"], specifier = ">=0.5.0" },
     { name = "git-cliff", specifier = ">=2.6.1" },
-    { name = "litestar-sphinx-theme", git = "https://github.com/litestar-org/litestar-sphinx-theme.git?rev=v3-uv" },
+    { name = "shibuya" },
     { name = "sphinx", marker = "python_full_version < '3.10'", specifier = ">=7.0.0" },
     { name = "sphinx", marker = "python_full_version >= '3.10'", specifier = ">=8.0.0" },
     { name = "sphinx-autobuild", specifier = ">=2021.3.14" },
@@ -2243,21 +2243,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c9/0c/06ab03ee497d207dd8cb7588d1940be0b373a8ffdc7be3ec6d7e91c17ae2/litestar_htmx-0.4.1.tar.gz", hash = "sha256:ba2537008eb8cc18bfc8bee5cecb280924c7818bb1c066d79eae4b221696ca08", size = 101877 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9d/99/3ea64a79a2f4fea5225ccd0128201a3b8eab5e216b8fba8b778b8c462f29/litestar_htmx-0.4.1-py3-none-any.whl", hash = "sha256:ba2a8ff1e210f21980735b9cde13d239a2b7c3627cb4aeb425d66f4a314d1a59", size = 9970 },
-]
-
-[[package]]
-name = "litestar-sphinx-theme"
-version = "0.3.1"
-source = { git = "https://github.com/litestar-org/litestar-sphinx-theme.git?rev=v3-uv#8c534e398f493247f9dd0df6b5b34aa07a52aa8d" }
-dependencies = [
-    { name = "shibuya" },
-    { name = "sphinx-autobuild", version = "2021.3.14", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "sphinx-autobuild", version = "2024.10.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-    { name = "sphinx-copybutton" },
-    { name = "sphinx-design", version = "0.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "sphinx-design", version = "0.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-    { name = "sphinx-togglebutton" },
-    { name = "sphinx-toolbox" },
 ]
 
 [[package]]

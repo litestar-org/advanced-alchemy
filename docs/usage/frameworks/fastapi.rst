@@ -15,6 +15,7 @@ Configure SQLAlchemy with FastAPI:
     from typing import AsyncGenerator
 
     from fastapi import FastAPI
+
     from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
     from advanced_alchemy.base import metadata_registry
     from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy

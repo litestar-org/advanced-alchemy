@@ -40,7 +40,8 @@ extensions = [
     "sphinx.ext.viewcode",
     # "sphinx_autodoc_typehints",
     "auto_pytabs.sphinx_ext",
-    "tools.sphinx_ext",
+    "tools.sphinx_ext.missing_references",
+    "tools.sphinx_ext.changelog",
     "sphinx_copybutton",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
@@ -156,22 +157,20 @@ autodoc_mock_imports = [
 
 autosectionlabel_prefix_document = True
 
-todo_include_todos = True
-
-templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Style configuration -----------------------------------------------------
-html_theme = "litestar_sphinx_theme"
+html_theme = "shibuya"
 html_title = "Advanced Alchemy"
-pygments_style = "lightbulb"
+html_short_title = "AA"
+pygments_style = "dracula"
 todo_include_todos = True
 
 html_static_path = ["_static"]
+html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
 html_js_files = ["versioning.js"]
-html_css_files = ["style.css"]
-
+html_css_files = ["custom.css"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 html_show_sourcelink = True
 html_copy_source = True
 
@@ -185,10 +184,13 @@ html_context = {
 
 html_theme_options = {
     "logo_target": "/",
-    "github_repo_name": "Advanced Alchemy",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
     "navigation_with_keys": True,
-    "nav_links": [  # TODO(provinzkraut): I need a guide on extra_navbar_items and its magic :P
+    "globaltoc_expand_depth": 1,
+    "light_logo": "_static/logo-default.png",
+    "dark_logo": "_static/logo-default.png",
+    "discussion_url": "https://discord.gg/dSDXd4mKhp",
+    "nav_links": [
         {"title": "Home", "url": "index"},
         {
             "title": "Community",
@@ -218,7 +220,7 @@ html_theme_options = {
             "children": [
                 {
                     "title": "Litestar Organization",
-                    "summary": "Details about the Litestar organization",
+                    "summary": "Details about the Litestar organization, the team behind Advanced Alchemy",
                     "url": "https://litestar.dev/about/organization",
                     "icon": "org",
                 },
@@ -246,7 +248,7 @@ html_theme_options = {
                 {
                     "title": "Discord Help Forum",
                     "summary": "Dedicated Discord help forum",
-                    "url": "https://discord.gg/litestar",
+                    "url": "https://discord.gg/dSDXd4mKhp",
                     "icon": "coc",
                 },
                 {
@@ -278,18 +280,6 @@ def update_html_context(
     context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
 
 
-def delayed_setup(app: Sphinx) -> None:
-    """When running linkcheck Shibuya causes a build failure, and checking
-    the builder in the initial `setup` function call is not possible, so the check
-    and extension setup has to be delayed until the builder is initialized.
-    """
-    if app.builder.name == "linkcheck":
-        return
-
-    app.setup_extension("shibuya")
-
-
 def setup(app: Sphinx) -> dict[str, bool]:
-    app.connect("builder-inited", delayed_setup, priority=0)
-    app.setup_extension("litestar_sphinx_theme")
+    app.setup_extension("shibuya")
     return {"parallel_read_safe": True, "parallel_write_safe": True}

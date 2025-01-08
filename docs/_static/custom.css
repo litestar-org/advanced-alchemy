@@ -1,0 +1,104 @@
+/* Theme color definitions */
+html.light {
+  --sl-color-primary: #202235;
+  --sl-color-secondary: #edb641;
+  --sl-color-accent: #ffd480;
+  --sl-color-text-1: var(--sl-color-primary);
+  --sl-color-text-2: var(--sl-color-secondary);
+  --sy-c-foot-background: #f0f0f0;
+  --yue-c-text: #000;
+}
+
+html.dark {
+  --sl-color-text-1: var(--sl-color-secondary);
+  --sy-c-foot-background: black;
+  --yue-c-text: #fff;
+}
+
+.title-with-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 5rem auto 4rem;
+  width: 100%;
+  padding: 0 2rem;
+}
+
+.light .title-with-logo .brand-text {
+  font-family: var(--sl-font-sans);
+  font-weight: 300;
+  font-size: 5rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--sl-color-text-1);
+  text-align: center;
+  line-height: 1.4;
+  max-width: 100%;
+  word-break: break-word;
+  hyphens: none;
+  transition: color var(--sl-transition);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .title-with-logo .brand-text {
+  color: var(--sl-color-text-2);
+  font-family: var(--sl-font-sans);
+  font-weight: 300;
+  font-size: 5rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 100%;
+  word-break: break-word;
+  hyphens: none;
+  transition: color var(--sl-transition);
+  text-shadow: 0 2px 8px rgba(237, 182, 65, 0.2);
+}
+
+/* Large screens */
+@media (min-width: 1200px) {
+  .title-with-logo .brand-text {
+    font-size: 6rem;
+  }
+}
+
+/* Medium screens */
+@media (max-width: 991px) {
+  .title-with-logo .brand-text {
+    font-size: 4rem;
+    letter-spacing: 0.2em;
+  }
+}
+
+/* Small screens */
+@media (max-width: 767px) {
+  .title-with-logo .brand-text {
+    font-size: 3rem;
+    letter-spacing: 0.15em;
+  }
+  .title-with-logo {
+    margin: 3rem auto 2rem;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .title-with-logo .brand-text {
+    font-size: 2.5rem;
+    letter-spacing: 0.12em;
+  }
+}
+
+/* Preserve existing layout styles */
+#badges img {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+#badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 3em;
+}
