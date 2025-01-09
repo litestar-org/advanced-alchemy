@@ -224,6 +224,7 @@ Finally, configure your Litestar application with the plugin and dependencies:
 .. code-block:: python
 
     from litestar import Litestar
+    from litestar.di import Provide
     from litestar.plugins.sqlalchemy.filters import FilterTypes, LimitOffset
     from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
@@ -259,6 +260,81 @@ Finally, configure your Litestar application with the plugin and dependencies:
         dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
     )
 
+Database Sessions
+-----------------
+
+Sessions in Controllers
+^^^^^^^^^^^^^^^^^^^^^^^
+
+You can access the database session from the controller by using the `db_session` parameter, which is automatically injected by the SQLAlchemy plugin. The session is automatically committed at the end of the request. If an exception occurs, the session is rolled back:
+
+.. code-block:: python
+
+    from litestar import Litestar, get
+    from advanced_alchemy.extensions.litestar import (
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+        SQLAlchemyPlugin,
+    )
+
+    session_config = AsyncSessionConfig(expire_on_commit=False)
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///test.sqlite",
+        before_send_handler="autocommit",
+        session_config=session_config,
+        create_all=True,
+    )  # Create 'db_session' dependency.
+    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+
+    @get("/my-endpoint")
+    async def my_controller(db_session: AsyncSession) -> str:
+        # Access the database session here.
+        return "Hello, World!"
+
+    app = Litestar(
+        route_handlers=[my_controller],
+        plugins=[alchemy],
+    )
+
+Sessions in Middleware
+^^^^^^^^^^^^^^^^^^^^^^
+
+Dependency injection is not available in middleware. Instead, you can create a new session using the `provide_session` method:
+
+.. code-block:: python
+
+    from litestar import Litestar
+    from litestar.types import ASGIApp, Scope, Receive, Send
+    from advanced_alchemy.extensions.litestar import (
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+        SQLAlchemyPlugin,
+    )
+
+    session_config = AsyncSessionConfig(expire_on_commit=False)
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///test.sqlite",
+        before_send_handler="autocommit",
+        session_config=session_config,
+        create_all=True,
+    )
+    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+
+    def middleware_factory(app: ASGIApp) -> ASGIApp:
+        async def my_middleware(scope: Scope, receive: Receive, send: Send) -> None:
+            # NOTE: You can also access the app state from `ASGIConnection`.
+            db_session = await alchemy.provide_session(scope["app"].state, scope)
+            # Access the database session here.
+            await db_session.close()
+            ...
+            await app(scope, receive, send)
+    return my_middleware
+
+    app = Litestar(
+        route_handlers=[...],
+        middleware=[middleware_factory],
+        plugins=[alchemy]
+    )
 
 Database Migrations
 -------------------
