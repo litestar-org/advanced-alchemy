@@ -1,6 +1,11 @@
-from litestar.constants import HTTP_DISCONNECT, HTTP_RESPONSE_START, WEBSOCKET_CLOSE, WEBSOCKET_DISCONNECT
+"""Common configuration for Flask SQLAlchemy integration."""
 
-SESSION_SCOPE_KEY = "_sqlalchemy_db_session"
-"""Session scope key."""
-SESSION_TERMINUS_ASGI_EVENTS = {HTTP_RESPONSE_START, HTTP_DISCONNECT, WEBSOCKET_DISCONNECT, WEBSOCKET_CLOSE}
-"""ASGI events that terminate a session scope."""
+from __future__ import annotations
+
+from typing import Final
+
+SESSION_SCOPE_KEY: Final = "aa_session"
+"""Key under which to store the SQLAlchemy session in the Flask application context."""
+
+SESSION_TERMINUS_EVENTS: Final = {"response_finished", "request_finished"}
+"""Events that signal the end of a request/response cycle."""
