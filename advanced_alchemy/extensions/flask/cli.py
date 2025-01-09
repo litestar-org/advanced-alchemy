@@ -10,10 +10,10 @@ from advanced_alchemy.cli.builder import add_migration_commands
 if TYPE_CHECKING:
     from flask import Flask
 
-    from advanced_alchemy.extensions.flask.extension import AdvancedAlchemyFlask
+    from advanced_alchemy.extensions.flask.extension import AdvancedAlchemy
 
 
-def get_database_extension(app: Flask) -> AdvancedAlchemyFlask:
+def get_database_extension(app: Flask) -> AdvancedAlchemy:
     """Retrieve the Advanced Alchemy extension from the Flask application.
 
     Args:

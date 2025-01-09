@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence, overload
+from typing import TYPE_CHECKING, Any, Sequence
 
 from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.cli import add_migration_commands
 
 if TYPE_CHECKING:
     from flask import Flask
-    from sqlalchemy.orm import Session
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
@@ -22,16 +21,18 @@ class AdvancedAlchemy:
 
     def __init__(
         self,
-        config: SQLAlchemySyncConfig | Sequence[SQLAlchemySyncConfig],
+        config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig | Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig],
         app: Flask | None = None,
     ) -> None:
-        self._config: Sequence[SQLAlchemySyncConfig] = [config] if not isinstance(config, Sequence) else config
+        self._config: Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig] = (
+            [config] if not isinstance(config, Sequence) else config
+        )
 
         if app is not None:
             self.init_app(app)
 
     @property
-    def config(self) -> Sequence[SQLAlchemySyncConfig]:
+    def config(self) -> Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig]:
         return self._config
 
     def init_app(self, app: Flask) -> None:
@@ -63,10 +64,10 @@ class AdvancedAlchemy:
         Returns:
             A new SQLAlchemy session
         """
-        for config in self.configs:
+        for config in self.config:
             if config.bind_key == bind_key:
                 return config.get_session()
-        return self.configs[0].get_session()
+        return self.config[0].get_session()
 
     def get_engine(self, bind_key: str | None = None) -> Engine | AsyncEngine:
         """Get the SQLAlchemy engine.
@@ -77,7 +78,7 @@ class AdvancedAlchemy:
         Returns:
             The configured SQLAlchemy engine
         """
-        for config in self.configs:
+        for config in self.config:
             if config.bind_key == bind_key:
                 return config.get_engine()
-        return self.configs[0].get_engine()
+        return self.config[0].get_engine()
