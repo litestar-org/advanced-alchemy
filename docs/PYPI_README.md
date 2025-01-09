@@ -10,6 +10,6 @@
 [project-discussions]: https://github.com/litestar-org/advanced-alchemy/discussions
 [project-docs]: https://docs.advanced-alchemy.litestar.dev
 [install-guide]: https://docs.advanced-alchemy.litestar.dev/latest/#installation
-[standalone-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/standalone.py
-[litestar-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/litestar.py
 [fastapi-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/fastapi.py
+[litestar-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/litestar.py
+[standalone-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/standalone.py
