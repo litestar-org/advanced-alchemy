@@ -21,7 +21,7 @@ First, configure the SQLAlchemy plugin with Litestar. The plugin handles databas
 .. code-block:: python
 
     from litestar import Litestar
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,

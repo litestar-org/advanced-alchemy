@@ -2,7 +2,7 @@
 mixins
 ======
 
-API Reference for the ``mixins`` module
+API Reference for the ``advanced_alchemy.mixins`` module
 
 .. note:: Private methods and attributes are not included in the API reference.
 

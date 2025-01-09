@@ -207,7 +207,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """Return the engine configuration as a dict.
 
         Returns:
-            A string keyed dict of config kwargs for the SQLAlchemy :func:`get_engine <sqlalchemy.get_engine>`
+            A string keyed dict of config kwargs for the SQLAlchemy :func:`sqlalchemy.get_engine`
             function.
         """
         return simple_asdict(self.engine_config, exclude_empty=True)
@@ -217,7 +217,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """Return the session configuration as a dict.
 
         Returns:
-            A string keyed dict of config kwargs for the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`
+            A string keyed dict of config kwargs for the SQLAlchemy :class:`sqlalchemy.orm.sessionmaker`
             class.
         """
         return simple_asdict(self.session_config, exclude_empty=True)

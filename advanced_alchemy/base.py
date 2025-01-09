@@ -163,16 +163,15 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
     """Merge Table Arguments.
 
-    When using mixins that include their own table args, it is difficult to append info into the model such as a comment.
-
-    This function helps you merge the args together.
+    This function helps merge table arguments when using mixins that include their own table args,
+    making it easier to append additional information such as comments or constraints to the model.
 
     Args:
-        cls: :class:`sqlalchemy.orm.DeclarativeBase` This is the model that will get the table args
-        table_args: :class:`TableArgsType` additional information to add to table_args
+        cls (type[:class:`sqlalchemy.orm.DeclarativeBase`]): The model that will get the table args.
+        table_args (:class:`TableArgsType`, optional): Additional information to add to table_args.
 
     Returns:
-        :class:`TableArgsType`
+        :class:`TableArgsType`: Merged table arguments.
     """
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
@@ -200,7 +199,13 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType 
 
 @runtime_checkable
 class ModelProtocol(Protocol):
-    """The base SQLAlchemy model protocol."""
+    """The base SQLAlchemy model protocol.
+
+    Attributes:
+        __table__ (:class:`sqlalchemy.sql.FromClause`): The table associated with the model.
+        __mapper__ (:class:`sqlalchemy.orm.Mapper`): The mapper for the model.
+        __name__ (str): The name of the model.
+    """
 
     if TYPE_CHECKING:
         __table__: FromClause
@@ -217,7 +222,13 @@ class ModelProtocol(Protocol):
 
 
 class BasicAttributes:
-    """Basic attributes for SQLALchemy tables and queries."""
+    """Basic attributes for SQLAlchemy tables and queries.
+
+    Provides a method to convert the model to a dictionary representation.
+
+    Methods:
+        to_dict: Converts the model to a dictionary, excluding specified fields. :no-index:
+    """
 
     if TYPE_CHECKING:
         __name__: str
@@ -239,10 +250,12 @@ class BasicAttributes:
 
 
 class CommonTableAttributes(BasicAttributes):
-    """Common attributes for SQLALchemy tables.
+    """Common attributes for SQLAlchemy tables.
 
-    .. seealso::
-        :class:`BasicAttributes`
+    Inherits from :class:`BasicAttributes` and provides a mechanism to infer table names from class names.
+
+    Attributes:
+        __tablename__ (str): The inferred table name.
     """
 
     if TYPE_CHECKING:
@@ -262,10 +275,10 @@ def create_registry(
     """Create a new SQLAlchemy registry.
 
     Args:
-        custom_annotation_map: :class:`dict` of custom type annotations to use for the registry
+        custom_annotation_map (dict, optional): Custom type annotations to use for the registry.
 
     Returns:
-        :class:`sqlalchemy.orm.registry`
+        :class:`sqlalchemy.orm.registry`: A new SQLAlchemy registry with the specified type annotations.
     """
     import uuid as core_uuid
 
@@ -305,7 +318,14 @@ orm_registry = create_registry()
 
 
 class MetadataRegistry:
-    """A registry for metadata."""
+    """A registry for metadata.
+
+    Provides methods to get and set metadata for different bind keys.
+
+    Methods:
+        get: Retrieves the metadata for a given bind key.
+        set: Sets the metadata for a given bind key.
+    """
 
     _instance: MetadataRegistry | None = None
     _registry: dict[str | None, MetaData] = {None: orm_registry.metadata}
@@ -342,8 +362,12 @@ metadata_registry = MetadataRegistry()
 class AdvancedDeclarativeBase(DeclarativeBase):
     """A subclass of declarative base that allows for overriding of the registry.
 
-    .. seealso::
-        :class:`sqlalchemy.orm.DeclarativeBase`
+    Inherits from :class:`sqlalchemy.orm.DeclarativeBase`.
+
+    Attributes:
+        registry (:class:`sqlalchemy.orm.registry`): The registry for the declarative base.
+        __metadata_registry__ (:class:`~advanced_alchemy.base.MetadataRegistry`): The metadata registry.
+        __bind_key__ (Optional[:class:`str`]): The bind key for the metadata.
     """
 
     registry = orm_registry
@@ -364,8 +388,8 @@ class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, 
     """Base for all SQLAlchemy declarative models with UUID v4 primary keys.
 
     .. seealso::
-        :class:`advanced_alchemy.mixins.UUIDPrimaryKey`
         :class:`CommonTableAttributes`
+        :class:`advanced_alchemy.mixins.UUIDPrimaryKey`
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`
     """
