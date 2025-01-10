@@ -140,6 +140,8 @@ sanic = ["sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
+  "pydantic-extra-types < 2.9.0; python_version < \"3.9\"",
+  "pydantic-extra-types; python_version >= \"3.9\"",
   "coverage>=7.6.1",
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
