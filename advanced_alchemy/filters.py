@@ -204,7 +204,7 @@ class OnBeforeAfter(StatementFilter):
     on_or_after : datetime | None
         Filter results where field is on or later than this value
 
-    Example
+    Example:
     -------
     >>> filter = OnBeforeAfter(
     ...     field_name="updated_at",
@@ -213,12 +213,12 @@ class OnBeforeAfter(StatementFilter):
     ... )
     >>> statement = filter.append_to_statement(select(Model), Model)
 
-    Note
+    Note:
     ----
     If either `on_or_before` or `on_or_after` is None, that boundary condition
     is not applied.
 
-    See Also
+    See Also:
     --------
     :class:`BeforeAfter` : Exclusive datetime range filtering
     """
