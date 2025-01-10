@@ -7,9 +7,9 @@ from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from pydantic import BaseModel as _BaseModel
-from sqlalchemy import ForeignKey, select
+from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
-from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing_extensions import Annotated
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase, metadata_registry

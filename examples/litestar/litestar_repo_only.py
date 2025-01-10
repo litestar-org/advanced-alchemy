@@ -12,8 +12,8 @@ from litestar.pagination import OffsetPagination
 from litestar.params import Parameter
 from pydantic import BaseModel as _BaseModel
 from pydantic import TypeAdapter
-from sqlalchemy import ForeignKey, select
-from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig

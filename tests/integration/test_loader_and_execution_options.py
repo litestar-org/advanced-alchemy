@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy import ForeignKey, String, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Mapped, Session, joinedload, mapped_column, noload, relationship, selectinload, sessionmaker
+from sqlalchemy.orm import Mapped, Session, mapped_column, noload, relationship, selectinload, sessionmaker
 
 from advanced_alchemy.base import BigIntBase, UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository

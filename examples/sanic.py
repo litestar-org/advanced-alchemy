@@ -6,9 +6,9 @@ from uuid import UUID  # noqa: TC003
 
 from sanic import Request, Sanic
 from sanic_ext import Extend
-from sqlalchemy import ForeignKey, select
+from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
