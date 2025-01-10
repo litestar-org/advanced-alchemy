@@ -252,12 +252,6 @@ html_theme_options = {
                     "url": "https://github.com/litestar-org/advanced-alchemy/discussions",
                     "icon": "coc",
                 },
-                {
-                    "title": "Stack Overflow",
-                    "summary": "We monitor the <code><b>litestar</b></code> tag on Stack Overflow",
-                    "url": "https://stackoverflow.com/questions/tagged/litestar",
-                    "icon": "coc",
-                },
             ],
         },
     ],

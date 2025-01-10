@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Type, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(name="config_cls", params=[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig])
-def _config_cls(request: Any) -> Type[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig]:
+def _config_cls(request: Any) -> Type[Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]]:  # noqa: UP007
     """Return SQLAlchemy config class."""
     return request.param  # type:ignore[no-any-return]
 
@@ -135,13 +135,9 @@ def test_create_session_instance_if_session_not_in_scope_state(
 def test_app_state(config_cls: Type[SQLAlchemySyncConfig], monkeypatch: MonkeyPatch) -> None:
     """Test app_state."""
     config = config_cls(connection_string="sqlite://")
-    with (
-        patch.object(config, "create_session_maker") as create_session_maker_mock,
-        patch.object(
-            config,
-            "get_engine",
-        ) as create_engine_mock,
-    ):
+    with patch.object(config, "create_session_maker") as create_session_maker_mock, patch.object(
+        config, "get_engine"
+    ) as create_engine_mock:
         assert config.create_app_state_items().keys() == {
             config.engine_app_state_key,
             config.session_maker_app_state_key,

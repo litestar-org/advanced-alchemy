@@ -1,5 +1,5 @@
-from collections.abc import Generator
-from typing import TYPE_CHECKING, Callable, Union, cast
+import sys
+from typing import TYPE_CHECKING, Callable, Generator, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -49,8 +49,9 @@ def config(request: FixtureRequest) -> AnyConfig:
 
 
 @pytest.fixture()
-def alchemy(config: AnyConfig, app: FastAPI) -> StarletteAdvancedAlchemy:
-    return StarletteAdvancedAlchemy(config, app=app)
+def alchemy(config: AnyConfig, app: FastAPI) -> Generator[StarletteAdvancedAlchemy, None, None]:
+    alchemy = StarletteAdvancedAlchemy(config, app=app)
+    yield alchemy
 
 
 @pytest.fixture()
@@ -74,6 +75,10 @@ def mock_rollback(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
     return mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_config: SQLAlchemySyncConfig) -> None:
     if TYPE_CHECKING:
         sync_alchemy = StarletteAdvancedAlchemy(config=sync_config)
@@ -91,12 +96,20 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
         assert_type(async_alchemy.get_session(request), AsyncSession)
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncConfig) -> None:
     alchemy = StarletteAdvancedAlchemy(config)
     with pytest.raises(ImproperConfigurationError):
         alchemy.app
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_inject_engine(app: FastAPI) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
@@ -111,6 +124,10 @@ def test_inject_engine(app: FastAPI) -> None:
         assert mock.call_args[0][0] is config.engine_instance
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client: TestClient) -> None:
     mock = MagicMock()
     SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
@@ -133,6 +150,10 @@ def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client:
     assert call_1_session is call_2_session
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_session_no_autocommit(
     app: FastAPI,
     alchemy: StarletteAdvancedAlchemy,
@@ -151,6 +172,10 @@ def test_session_no_autocommit(
     mock_close.assert_called_once()
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_session_autocommit_always(
     app: FastAPI,
     alchemy: StarletteAdvancedAlchemy,
@@ -169,6 +194,10 @@ def test_session_autocommit_always(
     mock_close.assert_called_once()
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 @pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
 def test_session_autocommit_match_status(
     app: FastAPI,
@@ -191,6 +220,10 @@ def test_session_autocommit_match_status(
     mock_rollback.assert_not_called()
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 @pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
 def test_session_autocommit_rollback_for_status(
     app: FastAPI,
@@ -213,6 +246,10 @@ def test_session_autocommit_rollback_for_status(
     mock_rollback.assert_called_once()
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 @pytest.mark.parametrize("autocommit_strategy", ["always", "match_status"])
 def test_session_autocommit_close_on_exception(
     app: FastAPI,
@@ -234,6 +271,10 @@ def test_session_autocommit_close_on_exception(
     mock_close.assert_called_once()
 
 
+@pytest.mark.xfail(
+    condition=sys.version_info < (3, 8),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
+)
 def test_multiple_instances(app: FastAPI) -> None:
     mock = MagicMock()
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
