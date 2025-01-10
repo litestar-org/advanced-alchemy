@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TC003
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
@@ -37,7 +37,7 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[date | None]
+    dob: Mapped[Optional[date]]  # noqa: UP007
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 

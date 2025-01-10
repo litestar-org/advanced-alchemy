@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncGenerator
+from datetime import date  # noqa: TC003
+from typing import TYPE_CHECKING, AsyncGenerator, Optional
+from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
 from litestar.controller import Controller
@@ -22,9 +24,6 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import OffsetPagination, SQLAlchemyAsyncRepositoryService
 
 if TYPE_CHECKING:
-    from datetime import date
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -40,7 +39,7 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[date | None]
+    dob: Mapped[Optional[date]]  # noqa: UP007
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
