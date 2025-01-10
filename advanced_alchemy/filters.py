@@ -4,12 +4,6 @@ This module provides a comprehensive collection of filter datastructures designe
 enhance SQLAlchemy query construction. It implements type-safe, reusable filter patterns
 for common database query operations.
 
-Args:
-    None
-
-Returns:
-    None
-
 Features:
     Type-safe filter construction, datetime range filtering, collection-based filtering,
     pagination support, search operations, and customizable ordering.
@@ -35,6 +29,7 @@ See Also:
     - :class:`sqlalchemy.sql.expression.Select`: Core SQLAlchemy select expression
     - :class:`sqlalchemy.orm.Query`: SQLAlchemy ORM query interface
     - :mod:`advanced_alchemy.base`: Base model definitions
+
 """
 
 from __future__ import annotations
@@ -94,24 +89,6 @@ class StatementFilter(ABC):
     This class defines the interface for all filter types in the system. Each filter
     implementation must provide a method to append its filtering logic to an existing
     SQLAlchemy statement.
-
-    Args:
-        None
-
-    Attributes:
-        None
-
-    Example:
-        Implementing a custom filter::
-
-            class CustomFilter(StatementFilter):
-                def append_to_statement(self, statement, model):
-                    return statement.where(model.column == "value")
-
-    See Also:
-        - :class:`.BeforeAfter`: DateTime range filtering implementation
-        - :class:`.CollectionFilter`: Collection-based filtering implementation
-        - :class:`sqlalchemy.sql.expression.Select`: SQLAlchemy select expression
     """
 
     @abstractmethod
@@ -175,22 +152,13 @@ class BeforeAfter(StatementFilter):
     after : datetime | None
         Filter results where field is later than this value
 
-    Example:
-    --------
-    >>> filter = BeforeAfter(
-    ...     field_name="created_at",
-    ...     before=datetime(2024, 1, 1),
-    ...     after=datetime(2023, 1, 1),
-    ... )
-    >>> statement = filter.append_to_statement(select(Model), Model)
-
     Note:
     -----
-    If either `before` or `after` is None, that boundary condition is not applied.
+        If either `before` or `after` is None, that boundary condition is not applied.
 
     See Also:
-    --------
-    :class:`OnBeforeAfter` : Inclusive datetime range filtering
+    ---------
+        :class:`OnBeforeAfter` : Inclusive datetime range filtering
     """
 
     field_name: str
@@ -237,7 +205,7 @@ class OnBeforeAfter(StatementFilter):
         Filter results where field is on or later than this value
 
     Example:
-    --------
+    -------
     >>> filter = OnBeforeAfter(
     ...     field_name="updated_at",
     ...     on_or_before=datetime(2024, 1, 1),
@@ -246,7 +214,7 @@ class OnBeforeAfter(StatementFilter):
     >>> statement = filter.append_to_statement(select(Model), Model)
 
     Note:
-    -----
+    ----
     If either `on_or_before` or `on_or_after` is None, that boundary condition
     is not applied.
 
@@ -286,11 +254,10 @@ class OnBeforeAfter(StatementFilter):
 
 
 class InAnyFilter(StatementFilter, ABC):
-    """Abstract base class for statement filters that support the `prefer_any` flag.
+    """Base class for filters using IN or ANY operators.
 
-    This class serves as a foundation for filters utilizing the ``prefer_any``
-    parameter to select between different comparisons (e.g., using SQLAlchemy's
-    any_ operator vs. in_ operator).
+    This abstract class provides common functionality for filters that check
+    membership in a collection using either the SQL IN operator or the ANY operator.
     """
 
 
@@ -300,20 +267,15 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     This filter restricts records based on a field's presence in a collection of values.
 
-    Parameters
-    ----------
-    field_name : str
-        Name of the model attribute to filter on
-    values : abc.Collection[T] | None
-        Values for the ``IN`` clause. If this is None, no filter is applied.
-        An empty list will force an empty result set (WHERE 1=-1).
+    The filter supports both ``IN`` and ``ANY`` operators for collection membership testing.
+    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
     """
 
     field_name: str
     """Name of the model attribute to filter on."""
     values: abc.Collection[T] | None
-    """Values for the IN clause. If None, this filter is not applied.
-    If an empty list, an empty result set is returned."""
+    """Values for the ``IN`` clause. If this is None, no filter is applied.
+        An empty list will force an empty result set (WHERE 1=-1)"""
 
     def append_to_statement(
         self,
@@ -321,7 +283,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         model: type[ModelT],
         prefer_any: bool = False,
     ) -> StatementTypeT:
-        """Apply a WHERE ... IN or WHERE ... ANY(...) clause to the statement.
+        """Apply a WHERE ... IN or WHERE ... ANY (...) clause to the statement.
 
         Parameters
         ----------
@@ -330,8 +292,8 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         model : type[ModelT]
             The SQLAlchemy model class
         prefer_any : bool, optional
-            If True, uses the SQLAlchemy any_ operator instead of in_
-            for the filter condition
+            If True, uses the SQLAlchemy :func:`any_` operator instead of
+            :func:`in_` for the filter condition
 
         Returns:
         --------
@@ -355,6 +317,9 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     This filter restricts records based on a field's absence in a collection of values.
 
+    The filter supports both ``NOT IN`` and ``!= ANY`` operators for collection exclusion.
+    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
+
     Parameters
     ----------
     field_name : str
@@ -362,12 +327,13 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
     values : abc.Collection[T] | None
         Values for the ``NOT IN`` clause. If this is None or empty,
         the filter is not applied.
+
     """
 
     field_name: str
     """Name of the model attribute to filter on."""
     values: abc.Collection[T] | None
-    """Values for the NOT IN clause. If None or empty, no filter is applied."""
+    """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
 
     def append_to_statement(
         self,
@@ -384,8 +350,8 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         model : type[ModelT]
             The SQLAlchemy model class
         prefer_any : bool, optional
-            If True, uses the SQLAlchemy any_ operator instead of notin_
-            for the filter condition
+            If True, uses the SQLAlchemy :func:`any_` operator instead of
+            :func:`notin_` for the filter condition
 
         Returns:
         --------
@@ -416,20 +382,6 @@ class LimitOffset(PaginationFilter):
     Implements traditional pagination using SQL LIMIT and OFFSET clauses.
     Only applies to SELECT statements; other statement types are returned unmodified.
 
-    Args:
-        limit: Maximum number of rows to return
-        offset: Number of rows to skip before returning results
-
-    Attributes:
-        limit: Maximum number of rows to return
-        offset: Number of rows to skip before returning results
-
-    Example:
-        Basic pagination usage::
-
-            filter = LimitOffset(limit=10, offset=20)
-            statement = filter.append_to_statement(select(Model), Model)
-
     Note:
         This filter only modifies SELECT statements. For other statement types
         (UPDATE, DELETE), the statement is returned unchanged.
@@ -440,7 +392,9 @@ class LimitOffset(PaginationFilter):
     """
 
     limit: int
+    """Maximum number of rows to return."""
     offset: int
+    """Number of rows to skip before returning results."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply LIMIT/OFFSET pagination to the statement.
@@ -470,25 +424,6 @@ class OrderBy(StatementFilter):
     Appends an ORDER BY clause to SELECT statements, sorting records by the
     specified field in ascending or descending order.
 
-    Args:
-        field_name: Name of the model attribute to sort on
-        sort_order: Sort direction ("asc" or "desc"), defaults to "asc"
-
-    Attributes:
-        field_name: Name of the model attribute to sort on
-        sort_order: Sort direction ("asc" or "desc")
-
-    Example:
-        Basic sorting usage::
-
-            # Ascending order (default)
-            filter = OrderBy(field_name="created_at")
-            statement = filter.append_to_statement(select(Model), Model)
-
-            # Descending order
-            filter = OrderBy(field_name="priority", sort_order="desc")
-            statement = filter.append_to_statement(select(Model), Model)
-
     Note:
         This filter only modifies SELECT statements. For other statement types,
         the statement is returned unchanged.
@@ -500,7 +435,9 @@ class OrderBy(StatementFilter):
     """
 
     field_name: str
+    """Name of the model attribute to sort on."""
     sort_order: Literal["asc", "desc"] = "asc"
+    """Sort direction ("asc" or "desc")."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Append an ORDER BY clause to the statement.
@@ -533,33 +470,6 @@ class SearchFilter(StatementFilter):
     Implements text search using SQL LIKE or ILIKE operators. Can search across
     multiple fields using OR conditions.
 
-    Args:
-        field_name: Name or set of names of model attributes to search on
-        value: Text to match within the field(s)
-        ignore_case: If True, uses ILIKE for case-insensitive matching
-
-    Attributes:
-        field_name: Name or set of names of model attributes to search on
-        value: Text to match within the field(s)
-        ignore_case: Whether to use case-insensitive matching
-
-    Example:
-        Single field search::
-
-            filter = SearchFilter(
-                field_name="name", value="john", ignore_case=True
-            )
-            statement = filter.append_to_statement(select(Model), Model)
-
-        Multi-field search::
-
-            filter = SearchFilter(
-                field_name={"name", "email"},
-                value="example",
-                ignore_case=True,
-            )
-            statement = filter.append_to_statement(select(Model), Model)
-
     Note:
         The search pattern automatically adds wildcards before and after the search
         value, equivalent to SQL pattern '%value%'.
@@ -571,8 +481,11 @@ class SearchFilter(StatementFilter):
     """
 
     field_name: str | set[str]
+    """Name or set of names of model attributes to search on."""
     value: str
+    """Text to match within the field(s)."""
     ignore_case: bool | None = False
+    """Whether to use case-insensitive matching."""
 
     @property
     def _operator(self) -> Callable[..., ColumnElement[bool]]:
@@ -655,23 +568,6 @@ class NotInSearchFilter(SearchFilter):
         field_name: Name or set of names of model attributes to search on
         value: Text to exclude from the field(s)
         ignore_case: If True, uses NOT ILIKE for case-insensitive matching
-
-    Example:
-        Single field exclusion::
-
-            filter = NotInSearchFilter(
-                field_name="name", value="test", ignore_case=True
-            )
-            statement = filter.append_to_statement(select(Model), Model)
-
-        Multi-field exclusion::
-
-            filter = NotInSearchFilter(
-                field_name={"name", "description"},
-                value="temp",
-                ignore_case=True,
-            )
-            statement = filter.append_to_statement(select(Model), Model)
 
     Note:
         Uses AND for multiple fields, meaning records matching any field will be excluded.
