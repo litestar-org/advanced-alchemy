@@ -143,27 +143,20 @@ class BeforeAfter(StatementFilter):
     This filter creates date/time range conditions using < and > operators,
     excluding the boundary values.
 
-    Parameters
-    ----------
-    field_name : str
-        Name of the model attribute to filter on
-    before : datetime | None
-        Filter results where field is earlier than this value
-    after : datetime | None
-        Filter results where field is later than this value
-
-    Note:
-    -----
-        If either `before` or `after` is None, that boundary condition is not applied.
+    If either `before` or `after` is None, that boundary condition is not applied.
 
     See Also:
     ---------
         :class:`OnBeforeAfter` : Inclusive datetime range filtering
+
     """
 
     field_name: str
+    """Name of the model attribute to filter on."""
     before: datetime | None
+    """Filter results where field is earlier than this value."""
     after: datetime | None
+    """Filter results where field is later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply datetime range conditions to statement.
@@ -195,32 +188,13 @@ class OnBeforeAfter(StatementFilter):
     This filter creates date/time range conditions using <= and >= operators,
     including the boundary values.
 
-    Parameters
-    ----------
-    field_name : str
-        Name of the model attribute to filter on
-    on_or_before : datetime | None
-        Filter results where field is on or earlier than this value
-    on_or_after : datetime | None
-        Filter results where field is on or later than this value
-
-    Example:
-    -------
-    >>> filter = OnBeforeAfter(
-    ...     field_name="updated_at",
-    ...     on_or_before=datetime(2024, 1, 1),
-    ...     on_or_after=datetime(2023, 1, 1),
-    ... )
-    >>> statement = filter.append_to_statement(select(Model), Model)
-
-    Note:
-    ----
     If either `on_or_before` or `on_or_after` is None, that boundary condition
     is not applied.
 
     See Also:
-    --------
-    :class:`BeforeAfter` : Exclusive datetime range filtering
+    ---------
+        :class:`BeforeAfter` : Exclusive datetime range filtering
+
     """
 
     field_name: str
