@@ -99,10 +99,10 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.Sl
         with contextlib.suppress(ImportError):
             import uuid_utils  # pyright: ignore[reportMissingImports]
 
-            signature_namespace_values.update({"uuid_utils.UUID": uuid_utils.UUID})
-            app_config.type_encoders = {uuid_utils.UUID: str, **(app_config.type_encoders or {})}
+            signature_namespace_values.update({"uuid_utils.UUID": uuid_utils.UUID})  # pyright: ignore[reportUnknownMemberType]
+            app_config.type_encoders = {uuid_utils.UUID: str, **(app_config.type_encoders or {})}  # pyright: ignore[reportUnknownMemberType]
             app_config.type_decoders = [
-                (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),
+                (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),  # pyright: ignore[reportUnknownMemberType]
                 *(app_config.type_decoders or []),
             ]
         configure_exception_handler = False
