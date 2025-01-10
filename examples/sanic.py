@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TC003
-from typing import Any
+from typing import Any, List
 from uuid import UUID  # noqa: TC003
 
 from sanic import Request, Sanic
@@ -24,7 +24,7 @@ class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[date | None]
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -64,10 +64,7 @@ async def provide_author_details_repo(
     db_session: AsyncSession,
 ) -> AuthorRepository:
     """This provides a simple example demonstrating how to override the join options for the repository."""
-    return AuthorRepository(
-        statement=select(AuthorModel).options(selectinload(AuthorModel.books)),
-        session=db_session,
-    )
+    return AuthorRepository(load=[AuthorModel.books], session=db_session)
 
 
 def provide_limit_offset_pagination(

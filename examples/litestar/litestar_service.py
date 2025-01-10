@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TC003
-from typing import TYPE_CHECKING, AsyncGenerator, Optional
+from typing import TYPE_CHECKING, AsyncGenerator, List, Optional
 from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
@@ -40,7 +40,7 @@ class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[date]]  # noqa: UP007
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2

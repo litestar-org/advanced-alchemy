@@ -38,7 +38,7 @@ class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[date]]  # noqa: UP007
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -85,10 +85,7 @@ async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
 # specific SQL options such as join details
 async def provide_author_details_repo(db_session: AsyncSession) -> AuthorRepository:
     """This provides a simple example demonstrating how to override the join options for the repository."""
-    return AuthorRepository(
-        statement=select(AuthorModel).options(selectinload(AuthorModel.books)),
-        session=db_session,
-    )
+    return AuthorRepository(load=[AuthorModel.books], session=db_session)
 
 
 def provide_limit_offset_pagination(

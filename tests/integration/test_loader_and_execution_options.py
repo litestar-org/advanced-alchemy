@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy import ForeignKey, String, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Mapped, Session, mapped_column, noload, relationship, selectinload, sessionmaker
+from sqlalchemy.orm import Mapped, Session, joinedload, mapped_column, noload, relationship, selectinload, sessionmaker
 
 from advanced_alchemy.base import BigIntBase, UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
@@ -289,7 +289,7 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
         assert len(usa_country_1.states) == 2
         usa_country_2 = si1_country_repo.get_one(
             name="United States of America",
-            load=UUIDCountryTest.states,
+            load="*",
             execution_options={"populate_existing": True},
         )
         assert len(usa_country_2.states) == 2
