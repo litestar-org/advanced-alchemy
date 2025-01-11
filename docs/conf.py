@@ -188,6 +188,7 @@ html_context = {
 
 html_theme_options = {
     "logo_target": "/",
+    "accent_color": "amber",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
