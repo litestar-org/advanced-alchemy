@@ -243,3 +243,54 @@ Here's how to use these models with the UniqueMixin:
         return post
 
 With this foundation in place, let's look at the repository pattern.
+
+Creating Custom Models
+---------------------
+
+You can create your own custom models by inheriting from any of the provided base classes. 
+
+Here's an example showing a class to generate his own UUID through database default for `postgres`:
+
+.. code-block:: python
+
+    from datetime import datetime
+    from uuid import UUID, uuid4
+
+    from advanced_alchemy.base import CommonTableAttributes, orm_registry
+    from sqlalchemy import text
+    from sqlalchemy.orm import (
+        DeclarativeBase,
+        Mapped,
+        declared_attr,
+        mapped_column,
+        orm_insert_sentinel,
+    )
+
+
+    class MyUUIDPrimaryKey:
+        """UUID Primary Key Field Mixin."""
+
+        id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True, server_default=text("gen_random_uuid()"))
+        """UUID Primary key column."""
+
+        # noinspection PyMethodParameters
+        @declared_attr
+        def _sentinel(cls) -> Mapped[int]:
+            return orm_insert_sentinel(name="sa_orm_sentinel")
+
+
+    class MyDatabaseModel(MyUUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+        """Base for all SQLAlchemy declarative models with the custom UUID primary key ."""
+
+        registry = orm_registry
+
+
+    # Using MyDatabaseModel
+    class User(MyDatabaseModel):
+        """User model with MyDatabaseModel."""
+
+        username: Mapped[str] = mapped_column(unique=True, index=True)
+        email: Mapped[str] = mapped_column(unique=True)
+        full_name: Mapped[str]
+        is_active: Mapped[bool] = mapped_column(default=True)
+        last_login: Mapped[datetime | None] = mapped_column(default=None)
