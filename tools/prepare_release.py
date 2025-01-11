@@ -8,6 +8,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Generator
@@ -342,12 +343,12 @@ def _get_gh_token() -> str:
         click.secho("GitHub CLI not installed", fg="yellow")
     else:
         click.secho("Using GitHub CLI to obtain GitHub token", fg="blue")
-        proc = subprocess.run([gh_executable, "auth", "token"], check=True, capture_output=True, text=True)
+        proc = subprocess.run([gh_executable, "auth", "token"], check=True, capture_output=True, text=True)  # noqa: S603
         if out := (proc.stdout or "").strip():
             return out
 
     click.secho("Could not find any GitHub token", fg="red")
-    quit(1)
+    sys.exit(1)
 
 
 def _get_latest_tag() -> str:
@@ -411,7 +412,7 @@ def cli(
 
     if not re.match(r"\d+\.\d+\.\d+", version):
         click.secho(f"Invalid version: {version!r}")
-        quit(1)
+        sys.exit(1)
 
     new_tag = f"v{version}"
 
