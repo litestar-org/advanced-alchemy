@@ -35,4 +35,9 @@ class SoftDeleteMixin:
         self.deleted_at = timestamp or datetime.now(timezone.utc)
 
     def restore(self) -> None:
+        """Restore a soft-deleted record by clearing the deleted_at timestamp.
+
+        This method undeletes a previously soft-deleted record by setting the deleted_at
+        field to None, making it visible in normal queries again.
+        """
         self.deleted_at = None
