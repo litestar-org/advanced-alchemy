@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Generic, Literal, cast
 
-from sqlalchemy import BinaryExpression, Delete, Select, Update, and_, any_, or_, text
+from sqlalchemy import BinaryExpression, Delete, Select, Update, and_, any_, exists, or_, select, text
 from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
@@ -58,9 +58,11 @@ if TYPE_CHECKING:
 __all__ = (
     "BeforeAfter",
     "CollectionFilter",
+    "ExistsFilter",
     "FilterTypes",
     "InAnyFilter",
     "LimitOffset",
+    "NotExistsFilter",
     "NotInCollectionFilter",
     "NotInSearchFilter",
     "OnBeforeAfter",
@@ -79,7 +81,7 @@ StatementTypeT = TypeVar(
     "StatementTypeT",
     bound="ReturningDelete[tuple[Any]] |  ReturningUpdate[tuple[Any]] | Select[tuple[Any]] | Select[Any] | Update | Delete",
 )
-FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter"
+FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter | ExistsFilter | NotExistsFilter"
 """Aggregate type alias of the types supported for collection filtering."""
 
 
@@ -576,3 +578,173 @@ class NotInSearchFilter(SearchFilter):
             - :meth:`sqlalchemy.sql.expression.ColumnOperators.notilike`: NOT ILIKE
         """
         return attrgetter("not_ilike" if self.ignore_case else "not_like")
+
+
+@dataclass
+class ExistsFilter(StatementFilter):
+    """Filter for EXISTS subqueries.
+
+    This filter creates an EXISTS condition using a list of column expressions.
+    The expressions can be combined using either AND or OR logic.
+
+    Args:
+        field_name: The field to narrow against in the EXISTS clause
+        values: List of SQLAlchemy column expressions to use in the EXISTS clause
+        operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
+
+    Example:
+        Basic usage with AND conditions::
+
+            from sqlalchemy import select
+            from advanced_alchemy.filters import ExistsFilter
+
+            filter = ExistsFilter(
+                field_name="User.is_active",
+                values=[User.email.like("%@example.com%")],
+            )
+            statement = filter.append_to_statement(
+                select(Organization), Organization
+            )
+
+        Using OR conditions::
+
+            filter = ExistsFilter(
+                field_name="User.role",
+                values=[User.role == "admin", User.role == "owner"],
+                operator="or",
+            )
+    """
+
+    values: list[ColumnElement[bool]]
+    """List of SQLAlchemy column expressions to use in the EXISTS clause."""
+    operator: Literal["and", "or"] = "and"
+    """If "and", combines conditions with AND, otherwise uses OR."""
+
+    @property
+    def _and(self) -> Callable[..., ColumnElement[bool]]:
+        """Return the SQL operator for combining multiple search clauses.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `and_` operator for AND conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.and_`: SQLAlchemy AND operator
+        """
+        return and_
+
+    @property
+    def _or(self) -> Callable[..., ColumnElement[bool]]:
+        """Return the SQL operator for combining multiple search clauses.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `or_` operator for OR conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.or_`: SQLAlchemy OR operator
+        """
+        return or_
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Apply EXISTS condition to the statement.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with EXISTS condition
+
+        Note:
+            The conditions are combined using AND or OR based on the operator parameter.
+        """
+        if not self.values:
+            return statement
+
+        if self.operator == "and":
+            exists_clause = select(model).where(self._and(*self.values)).exists()
+        exists_clause = select(model).where(self._or(*self.values)).exists()
+        return cast("StatementTypeT", statement.where(exists_clause))
+
+
+@dataclass
+class NotExistsFilter(StatementFilter):
+    """Filter for NOT EXISTS subqueries.
+
+    This filter creates a NOT EXISTS condition using a list of column expressions.
+    The expressions can be combined using either AND or OR logic.
+
+    Args:
+        field_name: The field to narrow against in the NOT EXISTS clause
+        values: List of SQLAlchemy column expressions to use in the NOT EXISTS clause
+        operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
+
+    Example:
+        Basic usage with AND conditions::
+
+            from sqlalchemy import select
+            from advanced_alchemy.filters import NotExistsFilter
+
+            filter = NotExistsFilter(
+                values=[User.email.like("%@example.com%")],
+            )
+            statement = filter.append_to_statement(
+                select(Organization), Organization
+            )
+
+        Using OR conditions::
+
+            filter = NotExistsFilter(
+                values=[User.role == "admin", User.role == "owner"],
+                operator="or",
+            )
+    """
+
+    values: list[ColumnElement[bool]]
+    """List of SQLAlchemy column expressions to use in the EXISTS clause."""
+    operator: Literal["and", "or"] = "and"
+    """If "and", combines conditions with AND, otherwise uses OR."""
+
+    @property
+    def _and(self) -> Callable[..., ColumnElement[bool]]:
+        """Return the SQL operator for combining multiple search clauses.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `and_` operator for AND conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.and_`: SQLAlchemy AND operator
+        """
+        return and_
+
+    @property
+    def _or(self) -> Callable[..., ColumnElement[bool]]:
+        """Return the SQL operator for combining multiple search clauses.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `or_` operator for OR conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.or_`: SQLAlchemy OR operator
+        """
+        return or_
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Apply NOT EXISTS condition to the statement.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with NOT EXISTS condition
+
+        Note:
+            The conditions are combined using AND or OR based on the operator parameter.
+        """
+        if not self.values:
+            return statement
+
+        if self.operator == "and":
+            exists_clause = select(model).where(self._and(*self.values)).exists()
+        exists_clause = select(model).where(self._or(*self.values)).exists()
+        return cast("StatementTypeT", statement.where(~exists_clause))
