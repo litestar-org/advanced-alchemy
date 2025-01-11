@@ -17,6 +17,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     modeling
     repositories
     services
+    types
     utilities
 
 .. toctree::
