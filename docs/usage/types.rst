@@ -12,7 +12,7 @@ A timezone-aware DateTime type that ensures UTC timezone handling in the databas
 .. code-block:: python
 
     from advanced_alchemy.types import DateTimeUTC
-    
+
     class MyModel:
         created_at = Column(DateTimeUTC)
 
@@ -36,7 +36,7 @@ For storing encrypted string values with configurable length.
 .. code-block:: python
 
     from advanced_alchemy.types import EncryptedString
-    
+
     class MyModel:
         secret = Column(EncryptedString(key="my-secret-key"))
 
@@ -48,7 +48,7 @@ For storing larger encrypted text content (CLOB).
 .. code-block:: python
 
     from advanced_alchemy.types import EncryptedText
-    
+
     class MyModel:
         large_secret = Column(EncryptedText(key="my-secret-key"))
 
@@ -73,7 +73,7 @@ A platform-independent GUID/UUID type that adapts to different database backends
 .. code-block:: python
 
     from advanced_alchemy.types import GUID
-    
+
     class MyModel:
         id = Column(GUID, primary_key=True)
 
@@ -85,7 +85,7 @@ A BigInteger type that automatically falls back to Integer for SQLite:
 .. code-block:: python
 
     from advanced_alchemy.types import BigIntIdentity
-    
+
     class MyModel:
         id = Column(BigIntIdentity, primary_key=True)
 
@@ -101,7 +101,7 @@ A JSON type that uses the most efficient JSON storage for each database:
 .. code-block:: python
 
     from advanced_alchemy.types import JsonB
-    
+
     class MyModel:
         data = Column(JsonB)
 
@@ -139,7 +139,7 @@ Here's a complete example using multiple types:
 Using Types with Alembic
 ------------------------
 
-When using these types with Alembic migrations, you need to properly configure your ``script.py.mako`` template. The key is to make the custom types available through the ``sa`` namespace that Alembic uses.
+If you are not using Advanced Alchemy's built-in `alembic` templates, you need to properly configure your ``script.py.mako`` template. The key is to make the custom types available through the ``sa`` namespace that Alembic uses.
 
 Type Aliasing
 ~~~~~~~~~~~~~
@@ -150,10 +150,10 @@ In your ``script.py.mako``, you'll need both the imports and the type aliasing:
 
     # Import the types
     from advanced_alchemy.types import (
-        EncryptedString, 
-        EncryptedText, 
-        GUID, 
-        ORA_JSONB, 
+        EncryptedString,
+        EncryptedText,
+        GUID,
+        ORA_JSONB,
         DateTimeUTC
     )
 
