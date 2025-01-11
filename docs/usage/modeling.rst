@@ -245,7 +245,7 @@ Here's how to use these models with the UniqueMixin:
 With this foundation in place, let's look at the repository pattern.
 
 Creating Custom Models
----------------------
+----------------------
 
 You can create your own custom models by inheriting from any of the provided base classes. 
 
