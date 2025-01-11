@@ -32,7 +32,7 @@ from advanced_alchemy.service.typing import (
     ModelDictT,
     is_dict,
     is_dto_data,
-    is_msgspec_model,
+    is_msgspec_struct,
     is_pydantic_model,
 )
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
@@ -95,6 +95,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     repository_type: type[SQLAlchemySyncRepositoryProtocol[ModelT] | SQLAlchemySyncSlugRepositoryProtocol[ModelT]]
     """Type of the repository to use."""
+    model_type: type[ModelT]
+    """Type of the model to use."""
     loader_options: LoadSpec | None = None
     """Default loader options for the repository."""
     execution_options: dict[str, Any] | None = None
@@ -143,6 +145,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             execution_options=execution_options,
             **repo_kwargs,
         )
+        self.model_type = self.repository.model_type
 
     def count(
         self,
@@ -335,7 +338,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
                 **data.model_dump(exclude_unset=True),
             )
 
-        if is_msgspec_model(data):
+        if is_msgspec_struct(data):
             from msgspec import UNSET
 
             return model_from_dict(
@@ -466,7 +469,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         )
 
 
-class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT]):
+class SQLAlchemySyncRepositoryService(SQLAlchemySyncRepositoryReadService[ModelT], Generic[ModelT]):
     """Service object that operates on a repository object."""
 
     def create(

@@ -8,9 +8,20 @@ offering useful and easy-to-use features for your database projects.
 .. seealso:: It is built on:
 
     * `SQLAlchemy <https://www.sqlalchemy.org/>`_
-    * `msgspec <https://jcristharif.com/msgspec/>`_
     * `Alembic <https://alembic.sqlalchemy.org/en/latest/>`_
     * `Typing Extensions <https://typing-extensions.readthedocs.io/en/latest/>`_
+
+It's designed to work on it's own, but it equally as well when integrated with your favorite web framework.
+
+We've built extensions for some of the most popular frameworks, so you can get the most out of Advanced Alchemy with minimal effort.
+
+* `Litestar <https://docs.litestar.dev/>`_
+* `FastAPI <https://fastapi.tiangolo.com/>`_
+* `Starlette <https://www.starlette.io/>`_
+* `Flask <https://flask.palletsprojects.com/>`_
+* `Sanic <https://sanicframework.org/>`_
+
+If your framework is not listed, don't worry! Advanced Alchemy is designed to be modular and easily integrated with any Python web framework.  Join our discord and we'll help you get started.
 
 Installation
 ------------

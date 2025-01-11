@@ -2,7 +2,7 @@ default_language_version:
   python: "3"
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.6.0
+    rev: v4.0.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
@@ -22,7 +22,7 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.8.2"
+    rev: "v0.9.0"
     hooks:
       # Run the linter.
     - id: ruff

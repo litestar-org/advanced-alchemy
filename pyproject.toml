@@ -29,8 +29,8 @@ dependencies = [
   "sqlalchemy>=2.0.20",
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
-  "greenlet; sys_platform == \"darwin\"",
-  "eval_type_backport; python_version <= \"3.9\"",
+  "greenlet",
+  "eval-type-backport ; python_full_version < '3.10'",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
@@ -47,7 +47,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.26.0"
+version = "0.27.1"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -59,10 +59,15 @@ Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
+cli = ["rich-click"]
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 
+[project.scripts]
+alchemy = "advanced_alchemy.__main__:run_cli"
+
 [dependency-groups]
+build = ["bump-my-version"]
 cockroachdb = [
   "asyncpg>=0.29.0",
   "psycopg2-binary>=2.9.10",
@@ -70,8 +75,7 @@ cockroachdb = [
   "sqlalchemy-cockroachdb>=2.0.2",
 ]
 dev = [
-  "asgi-lifespan",
-  "eval-type-backport",
+  { include-group = "build" },
   { include-group = "lint" },
   { include-group = "doc" },
   { include-group = "test" },
@@ -91,7 +95,7 @@ dev = [
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
   "git-cliff>=2.6.1",
-  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "shibuya",
   "sphinx>=7.0.0; python_version <= \"3.9\"",
   "sphinx>=8.0.0; python_version >= \"3.10\"",
   "sphinx-autobuild>=2021.3.14",
@@ -102,9 +106,11 @@ doc = [
   "sphinx-paramlinks>=0.6.0",
   "sphinx-togglebutton>=0.3.2",
   "sphinx-toolbox>=3.8.1",
+  "myst-parser",
+  "sphinx-autodoc-typehints",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
-fastapi = ["fastapi[all]>=0.115.3"]
+fastapi = ["fastapi[all]>=0.115.3", "starlette<0.45.0; python_version < '3.9'", "starlette; python_version >= '3.9'"]
 flask = ["flask-sqlalchemy>=3.1.1"]
 lint = [
   "mypy>=1.13.0",
@@ -130,10 +136,17 @@ mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
 postgres = ["asyncpg>=0.29.0", "psycopg2-binary>=2.9.10", "psycopg[binary,pool]>=3.2.3"]
-sanic = ["sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
+sanic = [
+  "sanic<24.12; python_version < '3.9'",
+  "sanic; python_version >= '3.9'",
+  "sanic-testing>=24.6.0",
+  "sanic[ext]>=24.6.0",
+]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
+  "pydantic-extra-types < 2.9.0; python_version < \"3.9\"",
+  "pydantic-extra-types; python_version >= \"3.9\"",
   "coverage>=7.6.1",
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
@@ -143,8 +156,45 @@ test = [
   "pytest-mock>=3.14.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
+  "pytest-click",
+  "asgi-lifespan",
+  "click",
   "time-machine>=2.15.0",
 ]
+
+[tool.bumpversion]
+allow_dirty = true
+commit = true
+commit_args = "--no-verify"
+current_version = "0.27.1"
+ignore_missing_files = false
+ignore_missing_version = false
+message = "chore(release): bump to v{new_version}"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+regex = false
+replace = "{new_version}"
+search = "{current_version}"
+serialize = ["{major}.{minor}.{patch}"]
+sign_tags = false
+tag = false
+tag_message = "chore(release): v{new_version}"
+tag_name = "v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+replace = 'version = "{new_version}"'
+search = 'version = "{current_version}"'
+
+[[tool.bumpversion.files]]
+filename = "uv.lock"
+replace = """
+name = "advanced-alchemy"
+version = "{new_version}"
+"""
+search = """
+name = "advanced-alchemy"
+version = "{current_version}"
+"""
 
 [build-system]
 build-backend = "hatchling.build"
@@ -193,6 +243,7 @@ markers = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
+branch = true
 concurrency = ["multiprocessing"]
 omit = [
   "*/tests/*",
@@ -205,6 +256,7 @@ omit = [
   "advanced_alchemy/service/*",
 ]
 parallel = true
+relative_files = true
 
 [tool.coverage.report]
 exclude_lines = [
@@ -227,11 +279,16 @@ line-length = 120
 src = ["advanced_alchemy", "tests", "docs", "tools"]
 target-version = "py38"
 
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 60
+
 [tool.ruff.lint]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 fixable = ["ALL"]
 ignore = [
   "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "A005",    # flake8-builtins - module {name} shadows a Python standard-library module
   "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
   "D100",    # pydocstyle - missing docstring in public module
   "D101",    # pydocstyle - missing docstring in public class

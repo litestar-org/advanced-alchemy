@@ -285,8 +285,9 @@ def wrap_sqlalchemy_exception(
         ...     with wrap_sqlalchemy_exception():
         ...         raise SQLAlchemyError("Original Exception")
         ... except RepositoryError as exc:
-        ...     print(f"caught repository exception from {type(exc.__context__)}")
-        ...
+        ...     print(
+        ...         f"caught repository exception from {type(exc.__context__)}"
+        ...     )
         caught repository exception from <class 'sqlalchemy.exc.SQLAlchemyError'>
     """
     try:

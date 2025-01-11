@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, Type
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -380,7 +380,7 @@ def test_autocommit_handler_maker_multi_async_and_sync(create_scope: Callable[..
         (NotFoundError, HTTP_404_NOT_FOUND),
     ],
 )
-def test_repository_exception_to_http_response(exc: type[RepositoryError], status: int) -> None:
+def test_repository_exception_to_http_response(exc: Type[RepositoryError], status: int) -> None:
     """Test default exception handler."""
 
     config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
@@ -409,7 +409,7 @@ def test_repository_exception_to_http_response(exc: type[RepositoryError], statu
         (NotFoundError, HTTP_404_NOT_FOUND),
     ],
 )
-def test_existing_repository_exception_to_http_response(exc: type[RepositoryError], status: int) -> None:
+def test_existing_repository_exception_to_http_response(exc: Type[RepositoryError], status: int) -> None:
     """Test default exception handler."""
 
     def handler(request: Request[Any, Any, Any], exc: RepositoryError) -> Response[Any]:
@@ -442,7 +442,7 @@ def test_existing_repository_exception_to_http_response(exc: type[RepositoryErro
         (NotFoundError, HTTP_404_NOT_FOUND),
     ],
 )
-def test_repository_disabled_exception_to_http_response(exc: type[RepositoryError], status: int) -> None:
+def test_repository_disabled_exception_to_http_response(exc: Type[RepositoryError], status: int) -> None:
     """Test default exception handler."""
 
     config1 = SQLAlchemySyncConfig(connection_string="sqlite://", set_default_exception_handler=False)

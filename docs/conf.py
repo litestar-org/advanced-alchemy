@@ -38,9 +38,11 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.githubpages",
     "sphinx.ext.viewcode",
-    # "sphinx_autodoc_typehints",
+    "tools.sphinx_ext.missing_references",
+    "tools.sphinx_ext.changelog",
+    "sphinx_autodoc_typehints",
+    "myst_parser",
     "auto_pytabs.sphinx_ext",
-    "tools.sphinx_ext",
     "sphinx_copybutton",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
@@ -133,6 +135,12 @@ autodoc_type_aliases = {
     "CommonTableAttributes": "advanced_alchemy.base.CommonTableAttributes",
     "AuditColumns": "advanced_alchemy.base.AuditColumns",
     "UUIDPrimaryKey": "advanced_alchemy.base.UUIDPrimaryKey",
+    "EngineConfig": "advanced_alchemy.config.EngineConfig",
+    "AsyncSessionConfig": "advanced_alchemy.config.AsyncSessionConfig",
+    "SyncSessionConfig": "advanced_alchemy.config.SyncSessionConfig",
+    "EmptyType": "advanced_alchemy.utils.dataclass.EmptyType",
+    "async_sessionmaker": "sqlalchemy.ext.asyncio.async_sessionmaker",
+    "sessionmaker": "sqlalchemy.orm.sessionmaker",
 }
 autodoc_mock_imports = [
     "alembic",
@@ -142,36 +150,31 @@ autodoc_mock_imports = [
     "_sa.create_engine._sphinx_paramlinks_creator",
     "sqlalchemy.Dialect",
     "sqlalchemy.orm.MetaData",
-    "sqlalchemy.orm.strategy_options._AbstractLoad",
-    "sqlalchemy.sql.base.ExecutableOption",
-    "sqlalchemy.Connection.in_transaction",
-    "sqlalchemy.orm.attributes.InstrumentedAttribute",
-    "sqlalchemy.orm.decl_base._TableArgsType",
-    "sqlalchemy.orm.DeclarativeBase",
-    "litestar.dto.data_structures.DTOData",
-    "sqlalchemy.sql.schema._NamingSchemaParameter",
-    "sqlalchemy.sql.FromClause",
+    # Add these new entries:
+    "advanced_alchemy.config.engine.EngineConfig",
+    "advanced_alchemy.config.asyncio.AsyncSessionConfig",
+    "advanced_alchemy.config.sync.SyncSessionConfig",
+    "advanced_alchemy.utils.dataclass.EmptyType",
+    "advanced_alchemy.extensions.litestar.plugins.init.config.engine.EngineConfig",
 ]
 
 
 autosectionlabel_prefix_document = True
 
-todo_include_todos = True
-
-templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Style configuration -----------------------------------------------------
-html_theme = "litestar_sphinx_theme"
+html_theme = "shibuya"
 html_title = "Advanced Alchemy"
-pygments_style = "lightbulb"
+html_short_title = "AA"
+pygments_style = "dracula"
 todo_include_todos = True
 
 html_static_path = ["_static"]
+html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
 html_js_files = ["versioning.js"]
-html_css_files = ["style.css"]
-
+html_css_files = ["custom.css"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md"]
 html_show_sourcelink = True
 html_copy_source = True
 
@@ -185,14 +188,35 @@ html_context = {
 
 html_theme_options = {
     "logo_target": "/",
-    "github_repo_name": "Advanced Alchemy",
+    "accent_color": "amber",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
     "navigation_with_keys": True,
-    "nav_links": [  # TODO(provinzkraut): I need a guide on extra_navbar_items and its magic :P
+    "globaltoc_expand_depth": 2,
+    "light_logo": "_static/logo-default.png",
+    "dark_logo": "_static/logo-default.png",
+    "discussion_url": "https://discord.gg/dSDXd4mKhp",
+    "nav_links": [
         {"title": "Home", "url": "index"},
         {
-            "title": "Community",
+            "title": "About",
             "children": [
+                {
+                    "title": "Changelog",
+                    "url": "changelog",
+                    "summary": "All changes for Advanced Alchemy",
+                },
+                {
+                    "title": "Litestar Organization",
+                    "summary": "Details about the Litestar organization, the team behind Advanced Alchemy",
+                    "url": "https://litestar.dev/about/organization",
+                    "icon": "org",
+                },
+                {
+                    "title": "Releases",
+                    "summary": "Explore the release process, versioning, and deprecation policy for Advanced Alchemy",
+                    "url": "releases",
+                    "icon": "releases",
+                },
                 {
                     "title": "Contributing",
                     "summary": "Learn how to contribute to the Advanced Alchemy project",
@@ -211,33 +235,7 @@ html_theme_options = {
                     "url": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
                     "icon": "coc",
                 },
-            ],
-        },
-        {
-            "title": "About",
-            "children": [
-                {
-                    "title": "Litestar Organization",
-                    "summary": "Details about the Litestar organization",
-                    "url": "https://litestar.dev/about/organization",
-                    "icon": "org",
-                },
-                {
-                    "title": "Releases",
-                    "summary": "Explore the release process, versioning, and deprecation policy for Advanced Alchemy",
-                    "url": "releases",
-                    "icon": "releases",
-                },
-            ],
-        },
-        {
-            "title": "Release notes",
-            "children": [
-                {
-                    "title": "Changelog",
-                    "url": "changelog",
-                    "summary": "All changes for Advanced Alchemy",
-                },
+                {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
             ],
         },
         {
@@ -246,7 +244,7 @@ html_theme_options = {
                 {
                     "title": "Discord Help Forum",
                     "summary": "Dedicated Discord help forum",
-                    "url": "https://discord.gg/litestar",
+                    "url": "https://discord.gg/dSDXd4mKhp",
                     "icon": "coc",
                 },
                 {
@@ -255,15 +253,8 @@ html_theme_options = {
                     "url": "https://github.com/litestar-org/advanced-alchemy/discussions",
                     "icon": "coc",
                 },
-                {
-                    "title": "Stack Overflow",
-                    "summary": "We monitor the <code><b>litestar</b></code> tag on Stack Overflow",
-                    "url": "https://stackoverflow.com/questions/tagged/litestar",
-                    "icon": "coc",
-                },
             ],
         },
-        {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
     ],
 }
 
@@ -278,18 +269,6 @@ def update_html_context(
     context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
 
 
-def delayed_setup(app: Sphinx) -> None:
-    """When running linkcheck Shibuya causes a build failure, and checking
-    the builder in the initial `setup` function call is not possible, so the check
-    and extension setup has to be delayed until the builder is initialized.
-    """
-    if app.builder.name == "linkcheck":
-        return
-
-    app.setup_extension("shibuya")
-
-
 def setup(app: Sphinx) -> dict[str, bool]:
-    app.connect("builder-inited", delayed_setup, priority=0)
-    app.setup_extension("litestar_sphinx_theme")
+    app.setup_extension("shibuya")
     return {"parallel_read_safe": True, "parallel_write_safe": True}
