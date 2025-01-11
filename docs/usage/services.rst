@@ -225,9 +225,9 @@ Services can handle complex business logic involving multiple repositories:
 
         async def to_model(self, data: ModelDictT[Post], operation: str | None = None) -> Post:
             """Convert a dictionary, Msgspec model, or Pydantic model to a Post model."""
-            if (is_msgspec_model(data) or is_pydantic_model(data)) and operation == "create" and data.slug is None:
+            if (is_msgspec_struct(data) or is_pydantic_model(data)) and operation == "create" and data.slug is None:
                 data.slug = await self.repository.get_available_slug(data.name)
-            if (is_msgspec_model(data) or is_pydantic_model(data)) and operation == "update" and data.slug is None:
+            if (is_msgspec_struct(data) or is_pydantic_model(data)) and operation == "update" and data.slug is None:
                 data.slug = await self.repository.get_available_slug(data.name)
             if is_dict(data) and "slug" not in data and operation == "create":
                 data["slug"] = await self.repository.get_available_slug(data["name"])
