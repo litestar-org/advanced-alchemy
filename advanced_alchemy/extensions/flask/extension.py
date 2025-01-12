@@ -1,22 +1,22 @@
+"""Flask extension for Advanced Alchemy."""
+
 from __future__ import annotations
 
-from contextlib import contextmanager
-from functools import partial
-from typing import TYPE_CHECKING, Any, Iterator, Sequence
+from contextlib import asynccontextmanager, contextmanager
+from inspect import isawaitable
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator, Sequence
 
-from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session
-
-from advanced_alchemy.cli import add_migration_commands
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
-from advanced_alchemy.extensions.flask.typing import BlockingPortal, BlockingPortalProvider
+from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig
 
 if TYPE_CHECKING:
     from flask import Flask
+    from sqlalchemy import Engine
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+    from sqlalchemy.orm import Session
 
-    from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.flask.config import SQLAlchemySyncConfig
 
 
 class AdvancedAlchemy:
@@ -45,22 +45,9 @@ class AdvancedAlchemy:
         self._config: Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig] = (
             [config] if not isinstance(config, Sequence) else config
         )
-        self._portal_provider: BlockingPortalProvider | None = None
         self._has_async_config = any(isinstance(cfg, SQLAlchemyAsyncConfig) for cfg in self._config)
         if app is not None:
             self.init_app(app)
-
-    @contextmanager
-    def with_portal(self) -> Iterator[BlockingPortal]:
-        """Context manager fdatabase_groupprovider."""
-        if self._portal_provider is None:
-            msg = (
-                "Please make sure that the `anyio` package is installed. "
-                "Portal provider is not initialized. Call init_app() first."
-            )
-            raise ImproperConfigurationError(msg)
-        with self._portal_provider as portal:
-            yield portal
 
     @property
     def config(self) -> Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig]:
@@ -78,14 +65,11 @@ class AdvancedAlchemy:
             app: The Flask app instance to initialize.
 
         Raises:
-            RuntimeError: If this extension is already registered on the given Flask instance.
+            ImproperConfigurationError: If this extension is already registered on the given Flask instance.
         """
         if "advanced_alchemy" in app.extensions:
             msg = "Advanced Alchemy extension is already registered on this Flask application."
             raise ImproperConfigurationError(msg)
-
-        app.extensions["alchemy"] = self
-        add_migration_commands(app.cli)
 
         # Initialize each config with the app if it's a Flask config
         for config in self.config:
@@ -127,3 +111,79 @@ class AdvancedAlchemy:
     def is_async_enabled(self) -> bool:
         """Return True if any of the database configs are async."""
         return self._has_async_config
+
+    def get_db(self, key: str | None = None) -> Any:
+        """Retrieve a session using the provided key.
+
+        Args:
+            key: Optional key to specify which database session to retrieve.
+
+        Returns:
+            A SQLAlchemy session corresponding to the key.
+        """
+        return self.get_session(bind_key=key)
+
+    @contextmanager
+    def session(self, bind_key: str | None = None) -> Iterator[Session]:
+        """Get a synchronous session context manager.
+
+        Args:
+            bind_key: Optional bind key to specify which database to use.
+
+        Returns:
+            A context manager yielding a SQLAlchemy session.
+
+        Example:
+            ```python
+            with alchemy.session() as session:
+                user = session.get(User, 1)
+                session.add(user)
+                session.commit()
+            ```
+        """
+        session = self.get_session(bind_key)
+        if isawaitable(session):
+            msg = f"Session for bind key {bind_key} is not an sync session"
+            raise ImproperConfigurationError(msg)
+        with session as session:
+            try:
+                yield session
+            except Exception as e:
+                session.rollback()
+                raise e from e
+            finally:
+                session.close()
+
+    @asynccontextmanager
+    async def async_session(self, bind_key: str | None = None) -> AsyncIterator[AsyncSession]:
+        """Get an asynchronous session context manager.
+
+        Args:
+            bind_key: Optional bind key to specify which database to use.
+
+        Returns:
+            An async context manager yielding a SQLAlchemy async session.
+
+        Example:
+            ```python
+            async with alchemy.async_session() as session:
+                user = await session.get(User, 1)
+                session.add(user)
+                await session.commit()
+            ```
+
+        Raises:
+            ImproperConfigurationError: If the session is not an async session.
+        """
+        session = self.get_session(bind_key)
+        if not isawaitable(session):
+            msg = f"Session for bind key {bind_key} is not an async session"
+            raise ImproperConfigurationError(msg)
+        async with await session as session:
+            try:
+                yield session
+            except Exception as e:
+                await session.rollback()
+                raise e from e
+            finally:
+                await session.close()

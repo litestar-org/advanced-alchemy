@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from click import Context, group, pass_context
+from flask import current_app
 
-from advanced_alchemy.cli.builder import add_migration_commands
+from advanced_alchemy.cli import add_migration_commands
+
+try:
+    import rich_click as click
+except ImportError:
+    import click  # type: ignore[no-redef]
+
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -28,17 +34,17 @@ def get_database_extension(app: Flask) -> AdvancedAlchemy:
     from advanced_alchemy.exceptions import ImproperConfigurationError
 
     with suppress(KeyError):
-        return app.extensions["advanced_alchemy"]
+        return cast("AdvancedAlchemy", app.extensions["advanced_alchemy"])
     msg = "Failed to initialize database migrations. The Advanced Alchemy extension is not properly configured."
     raise ImproperConfigurationError(msg)
 
 
-@group(name="database")
-@pass_context
-def database_group(ctx: Context) -> None:
+@click.group(name="database")
+@click.pass_context
+def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
     ctx.ensure_object(dict)
-    ctx.obj = get_database_extension(ctx.obj["app"]).config
+    ctx.obj["configs"] = get_database_extension(current_app).config
 
 
 add_migration_commands(database_group)

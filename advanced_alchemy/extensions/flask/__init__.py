@@ -1,10 +1,12 @@
-from advanced_alchemy.extensions.flask.cli import database_group
-from advanced_alchemy.extensions.flask.config import FlaskSQLAlchemyAsyncConfig, FlaskSQLAlchemySyncConfig
-from advanced_alchemy.extensions.flask.extension import AdvancedAlchemyFlask
+from advanced_alchemy.extensions.flask.config import EngineConfig, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.flask.extension import AdvancedAlchemy
+from advanced_alchemy.extensions.flask.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 
 __all__ = (
-    "AdvancedAlchemyFlask",
-    "FlaskSQLAlchemyAsyncConfig",
-    "FlaskSQLAlchemySyncConfig",
-    "database_group",
+    "AdvancedAlchemy",
+    "EngineConfig",
+    "SQLAlchemyAsyncConfig",
+    "SQLAlchemyAsyncRepositoryService",
+    "SQLAlchemySyncConfig",
+    "SQLAlchemySyncRepositoryService",
 )
