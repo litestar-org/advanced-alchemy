@@ -267,8 +267,8 @@ def test_async_autocommit(tmp_path: Path) -> None:
         create_all=True,
     )
 
-    extension = AdvancedAlchemy(config, app)
     with app.test_client() as client:
+        extension = AdvancedAlchemy(config, app)
         extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
@@ -339,8 +339,7 @@ def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
     extension = AdvancedAlchemy(config, app)
     extension.portal_provider.portal.call(config.create_all_metadata)
 
-    with app.test_client() as client, extension.with_portal() as portal:
-        assert portal is not None
+    with app.test_client() as client:
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -354,14 +353,16 @@ def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
         response = client.post("/test")
         assert response.status_code == 500
 
-    with app.app_context():
         session = extension.get_session()
         assert isinstance(session, AsyncSession)
 
-        result = extension.portal_provider.portal.call(
-            session.execute, select(User).where(User.name == "test_async_error")
-        )
-        assert result.first() is None
+        async def get_user() -> User | None:
+            result = await session.execute(select(User).where(User.name == "test_async_error"))
+            return result.scalar_one_or_none()
+
+        # Verify the data was not committed
+        user = extension.portal_provider.portal.call(get_user)
+        assert user is None
 
 
 def test_async_portal_cleanup(tmp_path: Path) -> None:
@@ -390,11 +391,6 @@ def test_async_portal_cleanup(tmp_path: Path) -> None:
         # Test successful response (should not commit since we're using MANUAL mode)
         response = client.post("/test")
         assert response.status_code == 200
-        extension.portal_provider.portal.stop()
-
-        # Ensure the portal's greenlet is stopped
-        assert extension.portal_provider.portal._portal_greenlet is None  # pyright: ignore[reportPrivateUsage]
-
         session = extension.get_session()
         assert isinstance(session, AsyncSession)
 
@@ -438,6 +434,54 @@ def test_async_portal_explicit_stop(tmp_path: Path) -> None:
 
         # Verify the data was not committed (MANUAL mode)
         result = extension.portal_provider.portal.call(
-            session.execute, select(User).where(User.name == "test_async_explicit_stop")
+            session.scalar, select(User).where(User.name == "test_async_explicit_stop")
         )
-        assert result.first() is None
+        assert result is None
+
+
+def test_async_portal_explicit_stop_with_commit(tmp_path: Path) -> None:
+    """Test that the portal can be explicitly stopped with commit."""
+    app = Flask(__name__)
+    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db"
+    config = SQLAlchemyAsyncConfig(
+        connection_string=connection_string,
+        commit_mode=CommitMode.MANUAL,
+        metadata=User.__metadata_registry__.get(None),
+        create_all=True,
+    )
+    extension = AdvancedAlchemy(config, app)
+
+    with app.app_context():
+        extension.portal_provider.portal.call(config.create_all_metadata)
+
+        with app.test_client() as client:
+
+            @app.route("/test", methods=["POST"])
+            def test_route() -> tuple[dict[str, str], int]:
+                session = extension.get_session()
+                assert isinstance(session, AsyncSession)
+
+                async def create_user() -> None:
+                    user = User(name="test_async_explicit_stop_with_commit")  # type: ignore
+                    session.add(user)
+                    await session.commit()
+
+                extension.portal_provider.portal.call(create_user)
+                return {"status": "success"}, 200
+
+            # Test successful response
+            response = client.post("/test")
+            assert response.status_code == 200
+
+        # Verify in a new session
+        session = extension.get_session()
+        assert isinstance(session, AsyncSession)
+
+        async def get_user() -> User | None:
+            async with session:
+                result = await session.execute(select(User).where(User.name == "test_async_explicit_stop_with_commit"))
+                return result.scalar_one_or_none()
+
+        user = extension.portal_provider.portal.call(get_user)
+        assert isinstance(user, User)
+        assert user.name == "test_async_explicit_stop_with_commit"

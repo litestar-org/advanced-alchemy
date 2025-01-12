@@ -23,6 +23,7 @@ Example:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import queue
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypeVar, cast
@@ -31,6 +32,8 @@ from greenlet import getcurrent, greenlet
 
 if TYPE_CHECKING:
     from types import TracebackType
+
+    from advanced_alchemy.extensions.flask.extension import AdvancedAlchemy
 
 R = TypeVar("R")
 
@@ -73,6 +76,7 @@ class GreenletBlockingPortal:
         portal.stop()
     """
 
+    _extension: Optional[AdvancedAlchemy] = field(default=None, init=True)  # noqa: UP007
     _task_queue: queue.Queue[Optional[tuple[greenlet, Callable[..., Any], tuple[Any, ...], dict[str, Any]]]] = field(  # noqa: UP007
         default_factory=queue.Queue, init=False
     )
@@ -108,10 +112,14 @@ class GreenletBlockingPortal:
             caller_greenlet, async_func, args, kwargs = item
             try:
                 result = self._loop.run_until_complete(async_func(*args, **kwargs))
-            except BaseException as exc:  # Raise back to the caller's greenlet  # noqa: BLE001
-                caller_greenlet.throw(exc)
+            except BaseException as exc:  # Raise back to the caller's greenlet
+                if getcurrent() is not caller_greenlet:
+                    caller_greenlet.throw(exc)
+                else:
+                    raise exc from exc
             else:
-                caller_greenlet.switch(result)
+                if getcurrent() is not caller_greenlet:
+                    caller_greenlet.switch(result)
 
         # Cleanly shut down the loop once we see the sentinel
         if self._loop is not None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -125,62 +133,70 @@ class GreenletBlockingPortal:
         """
         if self._portal_greenlet and not self._portal_greenlet.dead:
             return
-        self._stop_event.clear()  # Reset the stop event
+
         self._portal_greenlet = greenlet(self._loop_main)
+        # Switch to the portal greenlet to start the event loop
         self._portal_greenlet.switch()
 
     def stop(self) -> None:
         """Stop the portal's loop by sending 'None' to _task_queue and setting the stop event.
-        This tells the loop to exit its while-True block. If the portal is
-        already stopped, this call is a no-op.
+        If the portal is not running, this is a no-op.
         """
-        if not self._portal_greenlet or self._portal_greenlet.dead:
+        if self._portal_greenlet is None:
             return
-        self._stop_event.set()  # Signal the loop to stop
-        self._task_queue.put(None)  # mypy: ignore[arg-type]
-        try:
+
+        # First, cancel any active tasks
+        if self._active_tasks and self._loop is not None:
+            for task in self._active_tasks:
+                task.cancel()
+            with contextlib.suppress(Exception):
+                self._loop.run_until_complete(asyncio.gather(*self._active_tasks, return_exceptions=True))
+            self._active_tasks.clear()
+
+        # Then stop the event loop
+        self._stop_event.set()
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._task_queue.put, None)
+
+        # Wait for the greenlet to exit, but only if we're not in it
+        if getcurrent() is not self._portal_greenlet:
             self._portal_greenlet.switch()
-        except BaseException:  # noqa: BLE001, S110
-            # The greenlet may raise or just exit
-            pass
-        finally:
-            self._portal_greenlet = None
+        self._portal_greenlet = None
 
     def call(self, async_func: Callable[..., Awaitable[R]], *args: Any, **kwargs: Any) -> R:
         """Call an async function from sync code, blocking until it completes.
 
-        If called from the portal greenlet itself, we just run
-        ``run_until_complete()`` directly. Otherwise, we enqueue the job
-        and block (switch) until the portal returns a result.
-
         Args:
-            async_func: The async function to call
-            *args: Positional arguments
-            **kwargs: Keyword arguments
+            async_func: The async function to call.
+            *args: Positional arguments to pass to the function.
+            **kwargs: Keyword arguments to pass to the function.
 
         Returns:
-            Whatever the async function returns synchronously
+            The result of the async function.
         """
         if self._loop is None:
-            msg = "Event loop not started. Call start() first."
+            msg = "Portal is not running"
             raise RuntimeError(msg)
+
         if getcurrent() is self._portal_greenlet:
             # Already in the portal's greenlet
             return self._loop.run_until_complete(async_func(*args, **kwargs))
 
         caller = getcurrent()
         done_event = asyncio.Event()
+        result_container: list[R] = []
+        error_container: list[BaseException] = []
 
         async def task_wrapper() -> None:
             try:
                 result = await async_func(*args, **kwargs)
-                if self._loop is not None:
-                    self._loop.call_soon_threadsafe(caller.switch, result)
-            except BaseException as exc:  # Raise back to the caller's greenlet  # noqa: BLE001
-                if self._loop is not None:
-                    self._loop.call_soon_threadsafe(caller.throw, exc)
+                result_container.append(result)
+            except BaseException as exc:  # noqa: BLE001
+                error_container.append(exc)
             finally:
                 done_event.set()
+                if self._loop is not None:
+                    _ = self._loop.call_soon_threadsafe(caller.switch, None)
 
         async def schedule_task() -> None:
             assert self._loop is not None  # noqa: S101
@@ -189,8 +205,12 @@ class GreenletBlockingPortal:
             task.add_done_callback(self._active_tasks.discard)
             await done_event.wait()
 
-        _ = self._loop.call_soon_threadsafe(asyncio.create_task, schedule_task())
-        return cast("R", caller.switch())  # Wait for result from portal greenlet
+        self._loop.call_soon_threadsafe(asyncio.create_task, schedule_task())
+        caller.switch()  # Wait for task to complete
+
+        if error_container:
+            raise error_container[0]
+        return result_container[0]
 
     def start_task_soon(self, async_func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
         """Schedule an async function for concurrent execution in the loop,
@@ -260,7 +280,11 @@ class GreenletBlockingPortal:
 
     def __del__(self) -> None:
         """Finalizer to ensure the portal stops if it hasn't been explicitly stopped."""
-        self.stop()
+        with contextlib.suppress(Exception):
+            self.stop()
+            if self._extension is not None:
+                for config in self._extension.config:
+                    config.close_engines(self)
 
 
 @dataclass
@@ -281,6 +305,10 @@ class GreenletBlockingPortalProvider:
     def __exit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None: ...
+
+    def __del__(self) -> None:
+        """Finalizer to ensure the portal stops if it hasn't been explicitly stopped."""
+        self.portal.stop()
 
 
 GREENLET_INSTALLED = True

@@ -191,20 +191,3 @@ class AdvancedAlchemy:
     def is_async_enabled(self) -> bool:
         """Return True if any of the database configs are async."""
         return self._has_async_config
-
-    def __del__(self) -> None:
-        """Stop the background event loop when the extension is deallocated."""
-        if self._loop_thread is not None:
-            for config in self.config:
-                config.close_engines(self.portal_provider.portal)
-            self._loop_stop_event.set()
-            if self.portal_provider.portal._loop is not None:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                self.portal_provider.portal._loop.call_soon_threadsafe(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                    self.portal_provider.portal._loop.stop,  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                )
-                if self.portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                    self.portal_provider.portal.call(
-                        asyncio.wait,
-                        self.portal_provider.portal._active_tasks,  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                    )
-            self._loop_thread.join()

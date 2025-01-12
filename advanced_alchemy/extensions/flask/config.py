@@ -189,9 +189,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             msg = "Portal is required for asynchronous configurations"
             raise ImproperConfigurationError(msg)
         if self.create_all:
-            portal.call(self.create_all_metadata)
-        if self.commit_mode != CommitMode.MANUAL:
-            self._setup_session_handling(app, portal)
+            _ = portal.call(self.create_all_metadata)
+        self._setup_session_handling(app, portal)
 
     def _setup_session_handling(self, app: Flask, portal: BlockingPortal) -> None:
         """Set up the session handling for the Flask application.
@@ -212,14 +211,21 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 if (self.commit_mode == CommitMode.AUTOCOMMIT and 200 <= response.status_code < 300) or (  # noqa: PLR2004
                     self.commit_mode == CommitMode.AUTOCOMMIT_WITH_REDIRECT and 200 <= response.status_code < 400  # noqa: PLR2004
                 ):
-                    portal.start_task_soon(db_session.commit)
-                portal.start_task_soon(db_session.close)
+                    _ = portal.call(db_session.commit)
+                _ = portal.call(db_session.close)
             return response
+
+        @app.teardown_appcontext
+        def close_db_session(_: BaseException | None) -> None:  # pyright: ignore[reportUnusedFunction]
+            """Close the session at the end of the request."""
+            db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            if db_session is not None:
+                _ = portal.call(db_session.close)
 
     def close_engines(self, portal: BlockingPortal) -> None:
         """Close the engines."""
         if self.engine_instance is not None:
-            portal.call(self.engine_instance.dispose)
+            _ = portal.call(self.engine_instance.dispose)
 
     async def create_all_metadata(self) -> None:
         """Create all metadata"""
