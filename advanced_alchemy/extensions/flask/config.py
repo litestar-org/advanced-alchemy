@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
 from flask import g, has_request_context
 from litestar.cli._utils import console
@@ -18,18 +18,22 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 if TYPE_CHECKING:
     from typing import Any
 
-    from anyio.from_thread import BlockingPortal
     from flask import Flask, Response
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
+    from advanced_alchemy.extensions.flask.typing import GreenletBlockingPortal as BlockingPortal
+
+
 __all__ = ("CommitMode", "EngineConfig", "SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig")
+
+ConfigT = TypeVar("ConfigT", bound="Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]")
 
 
 class CommitMode(str, Enum):
     """Commit mode for database sessions."""
 
-    DEFAULT = "default"
+    MANUAL = "manual"
     """Default mode - no automatic commit."""
     AUTOCOMMIT = "autocommit"
     """Automatically commit on successful response."""
@@ -73,7 +77,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
     app: Flask | None = None
     """The Flask application instance."""
-    commit_mode: CommitMode = field(default=CommitMode.DEFAULT)
+    commit_mode: CommitMode = field(default=CommitMode.MANUAL)
     """The commit mode to use for database sessions."""
 
     def create_session_maker(self) -> Callable[[], Session]:
@@ -86,8 +90,10 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             return self.session_maker
 
         session_kws = self.session_config_dict
+        if self.engine_instance is None:
+            self.engine_instance = self.get_engine()
         if session_kws.get("bind") is None:
-            session_kws["bind"] = self.get_engine()
+            session_kws["bind"] = self.engine_instance
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
@@ -103,7 +109,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         self.bind_key = self.bind_key or "default"
         if self.create_all:
             self.create_all_metadata()
-        if self.commit_mode != CommitMode.DEFAULT:
+        if self.commit_mode != CommitMode.MANUAL:
             self._setup_session_handling(app)
 
     def _setup_session_handling(self, app: Flask) -> None:
@@ -128,9 +134,16 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 db_session.close()
             return response
 
+    def close_engines(self, portal: BlockingPortal) -> None:
+        """Close the engines."""
+        if self.engine_instance is not None:
+            self.engine_instance.dispose()
+
     def create_all_metadata(self) -> None:
         """Create all metadata"""
-        with self.get_engine().begin() as conn:
+        if self.engine_instance is None:
+            self.engine_instance = self.get_engine()
+        with self.engine_instance.begin() as conn:
             try:
                 metadata_registry.get(self.bind_key).create_all(conn)
             except OperationalError as exc:
@@ -143,7 +156,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
     app: Flask | None = None
     """The Flask application instance."""
-    commit_mode: CommitMode = field(default=CommitMode.DEFAULT)
+    commit_mode: CommitMode = field(default=CommitMode.MANUAL)
     """The commit mode to use for database sessions."""
 
     def create_session_maker(self) -> Callable[[], AsyncSession]:
@@ -156,8 +169,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             return self.session_maker
 
         session_kws = self.session_config_dict
+        if self.engine_instance is None:
+            self.engine_instance = self.get_engine()
         if session_kws.get("bind") is None:
-            session_kws["bind"] = self.get_engine()
+            session_kws["bind"] = self.engine_instance
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
@@ -175,7 +190,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             raise ImproperConfigurationError(msg)
         if self.create_all:
             portal.call(self.create_all_metadata)
-        if self.commit_mode != CommitMode.DEFAULT:
+        if self.commit_mode != CommitMode.MANUAL:
             self._setup_session_handling(app, portal)
 
     def _setup_session_handling(self, app: Flask, portal: BlockingPortal) -> None:
@@ -197,14 +212,22 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 if (self.commit_mode == CommitMode.AUTOCOMMIT and 200 <= response.status_code < 300) or (  # noqa: PLR2004
                     self.commit_mode == CommitMode.AUTOCOMMIT_WITH_REDIRECT and 200 <= response.status_code < 400  # noqa: PLR2004
                 ):
-                    portal.call(db_session.commit)
-                portal.call(db_session.close)
+                    portal.start_task_soon(db_session.commit)
+                portal.start_task_soon(db_session.close)
             return response
+
+    def close_engines(self, portal: BlockingPortal) -> None:
+        """Close the engines."""
+        if self.engine_instance is not None:
+            portal.call(self.engine_instance.dispose)
 
     async def create_all_metadata(self) -> None:
         """Create all metadata"""
-        async with self.get_engine().begin() as conn:
+        if self.engine_instance is None:
+            self.engine_instance = self.get_engine()
+        async with self.engine_instance.begin() as conn:
             try:
                 await conn.run_sync(metadata_registry.get(self.bind_key).create_all)
+                await conn.commit()
             except OperationalError as exc:
                 console.print(f"[bold red] * Could not create target metadata. Reason: {exc}")

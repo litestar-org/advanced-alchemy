@@ -2,20 +2,31 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Generator, Sequence, Union, cast
+
+from flask import g
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
-from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.flask.typing import BlockingPortal, BlockingPortalProvider
+from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.flask.typing import (
+    GreenletBlockingPortalProvider as BlockingPortalProvider,
+)
 
 if TYPE_CHECKING:
     from flask import Flask
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.extensions.flask.config import SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.flask.typing import (
+        GreenletBlockingPortal as BlockingPortal,
+    )
+
+# Global portal provider
+global_portal_provider = BlockingPortalProvider()
 
 
 class AdvancedAlchemy:
@@ -28,28 +39,43 @@ class AdvancedAlchemy:
     - Support for multiple database bindings
     """
 
-    __slots__ = ("_config", "_has_async_config", "_portal_provider", "_session_makers")
+    __slots__ = (
+        "_config",
+        "_has_async_config",
+        "_loop_stop_event",
+        "_loop_thread",
+        "_loop_thread_ready",
+        "_session_makers",
+        "portal_provider",
+    )
 
     def __init__(
         self,
         config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig | Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig],
         app: Flask | None = None,
+        *,
+        portal_provider: BlockingPortalProvider | None = None,
     ) -> None:
         """Initialize the extension.
 
         Args:
             config: SQLAlchemy configuration(s) for the extension
             app: Optional Flask application instance
+            portal_provider: Optional custom blocking portal provider
         """
-        self._portal_provider = BlockingPortalProvider()
-        self._config: Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig] = (
-            [config] if not isinstance(config, Sequence) else config
-        )
-        self._has_async_config = any(isinstance(cfg, SQLAlchemyAsyncConfig) for cfg in self._config)
+        self.portal_provider = portal_provider if portal_provider is not None else global_portal_provider
+        self._config = config if isinstance(config, Sequence) else [config]
+        self._has_async_config = any(isinstance(c, SQLAlchemyAsyncConfig) for c in self.config)
+
+        self._session_makers: dict[str, Callable[..., Union[AsyncSession, Session]]] = {}  # noqa: UP007
+
+        # Thread management
+        self._loop_thread: threading.Thread | None = None
+        self._loop_thread_ready = threading.Event()
+        self._loop_stop_event = threading.Event()
+
         if app is not None:
             self.init_app(app)
-
-        self._session_makers = {cfg.bind_key or "default": cfg.create_session_maker() for cfg in self._config}
 
     @property
     def config(self) -> Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig]:
@@ -64,7 +90,10 @@ class AdvancedAlchemy:
     def with_portal(self) -> Generator[BlockingPortal | None, None, None]:
         """Context manager for using the portal."""
         if self._has_async_config:
-            with self._portal_provider as portal:
+            if not self._loop_thread_ready.is_set():
+                msg = "Background event loop is not running."
+                raise RuntimeError(msg)
+            with self.portal_provider as portal:
                 yield portal
         else:
             yield None
@@ -82,15 +111,56 @@ class AdvancedAlchemy:
             msg = "Advanced Alchemy extension is already registered on this Flask application."
             raise ImproperConfigurationError(msg)
 
-        with self.with_portal() as portal:
-            # Initialize each config with the app if it's a Flask config
-            for config in self.config:
-                config.init_app(app, portal)
+        if self._has_async_config:
+            # Start the background event loop thread
+            self._loop_thread = threading.Thread(target=self._run_event_loop, daemon=True)
+            self._loop_thread.start()
+            self._loop_thread_ready.wait()  # Wait for the loop to be ready
+
+        # Initialize each config with the app if it's a Flask config
+        for config in self.config:
+            config.init_app(app, self.portal_provider.portal)
+            # Register session maker
+            bind_key = config.bind_key if config.bind_key is not None else "default"
+            session_maker = config.create_session_maker()
+            self._session_makers[bind_key] = session_maker
 
         app.extensions["advanced_alchemy"] = self
         app.cli.add_command(database_group)
 
-        self._register_teardown_handler(app)
+    def _create_session_maker_with_connection_callback(
+        self,
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig,
+    ) -> Callable[..., Union[AsyncSession, Session]]:  # noqa: UP007
+        """Create a session maker with a connection callback to set the `_session_portal` attribute."""
+        session_maker = config.create_session_maker()
+
+        def get_session_with_portal(*args: Any, **kwargs: Any) -> AsyncSession | Session:
+            session = session_maker(*args, **kwargs)
+            setattr(session, "_session_portal", self.portal_provider.portal)  # pyright: ignore[reportPrivateUsage]
+            return session
+
+        return get_session_with_portal
+
+    def _run_event_loop(self) -> None:
+        """Run the asyncio event loop in a separate thread."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        self.portal_provider.portal._loop = loop  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+        self.portal_provider.portal._active_tasks = set()  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+        self._loop_thread_ready.set()
+
+        try:
+            loop.run_forever()
+        finally:
+            if self.portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                for task in self.portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                    task.cancel()
+                loop.run_until_complete(
+                    asyncio.gather(*self.portal_provider.portal._active_tasks, return_exceptions=True)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                )
+            loop.close()
 
     def get_session(self, bind_key: str = "default") -> Session | AsyncSession:
         """Get a new session from the configured session factory.
@@ -102,34 +172,39 @@ class AdvancedAlchemy:
             A new SQLAlchemy session
         """
         # If no bind key is specified and there is only one config, use its bind key
-        if bind_key == "default" and len(self._config) == 1:
-            bind_key = self._config[0].bind_key or "default"
+        if bind_key == "default" and len(self.config) == 1:
+            bind_key = self.config[0].bind_key if self.config[0].bind_key is not None else "default"
 
+        if g.get(f"advanced_alchemy_session_{bind_key}") is not None:
+            return cast("Union[AsyncSession, Session]", g.get(f"advanced_alchemy_session_{bind_key}"))
         session_maker = self._session_makers.get(bind_key)
         if session_maker is None:
             msg = f'No session maker found for bind key "{bind_key}"'
             raise ValueError(msg)
-        return session_maker()
-
-    def _register_teardown_handler(self, app: Flask) -> None:
-        """Register a teardown handler to close sessions after each request.
-
-        Args:
-            app: The Flask app instance to register the handler on.
-        """
-
-        @app.teardown_appcontext
-        def close_sessions(error: Exception | None = None) -> None:
-            """Close all sessions after each request.
-
-            Args:
-                error: Optional exception that occurred during the request.
-            """
-            for session_maker in self._session_makers.values():
-                if hasattr(session_maker, "remove"):
-                    session_maker.remove()
+        session = session_maker()
+        if self._has_async_config:
+            setattr(session, "_session_portal", self.portal_provider.portal)  # pyright: ignore[reportPrivateUsage]
+        g.setdefault(f"advanced_alchemy_session_{bind_key}", session)
+        return session
 
     @property
     def is_async_enabled(self) -> bool:
         """Return True if any of the database configs are async."""
         return self._has_async_config
+
+    def __del__(self) -> None:
+        """Stop the background event loop when the extension is deallocated."""
+        if self._loop_thread is not None:
+            for config in self.config:
+                config.close_engines(self.portal_provider.portal)
+            self._loop_stop_event.set()
+            if self.portal_provider.portal._loop is not None:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                self.portal_provider.portal._loop.call_soon_threadsafe(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                    self.portal_provider.portal._loop.stop,  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                )
+                if self.portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                    self.portal_provider.portal.call(
+                        asyncio.wait,
+                        self.portal_provider.portal._active_tasks,  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                    )
+            self._loop_thread.join()

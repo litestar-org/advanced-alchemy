@@ -422,6 +422,7 @@ ignore_missing_imports = true
 module = [
   "asyncmy",
   "pyodbc",
+  "greenlet",
   "google.auth.*",
   "google.cloud.*",
   "google.protobuf.*",
@@ -468,6 +469,12 @@ disallow_untyped_decorators = false
 module = "advanced_alchemy.extensions.litestar.cli"
 
 [[tool.mypy.overrides]]
+disable_error_code = "arg-type,no-any-return,no-untyped-def"
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+module = "examples.flask.*"
+
+[[tool.mypy.overrides]]
 disable_error_code = "unreachable"
 module = "tests.integration.test_repository"
 
@@ -480,6 +487,7 @@ exclude = [
   "tests/unit/test_repository.py",
   "tests/helpers.py",
   "tests/docker_service_fixtures.py",
+  "examples/flask/flask_services.py",
 ]
 include = ["advanced_alchemy"]
 pythonVersion = "3.8"
