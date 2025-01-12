@@ -60,6 +60,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
 cli = ["rich-click"]
+flask = ["anyio"]
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 
@@ -111,7 +112,7 @@ doc = [
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
 fastapi = ["fastapi[all]>=0.115.3", "starlette<0.45.0; python_version < '3.9'", "starlette; python_version >= '3.9'"]
-flask = ["flask-sqlalchemy>=3.1.1"]
+flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 lint = [
   "mypy>=1.13.0",
   "pre-commit>=3.5.0",

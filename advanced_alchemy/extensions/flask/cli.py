@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.flask.extension import AdvancedAlchemy
 
 
-def get_database_extension(app: Flask) -> AdvancedAlchemy:
+def get_database_migration_plugin(app: Flask) -> AdvancedAlchemy:
     """Retrieve the Advanced Alchemy extension from the Flask application.
 
     Args:
@@ -44,7 +44,7 @@ def get_database_extension(app: Flask) -> AdvancedAlchemy:
 def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
     ctx.ensure_object(dict)
-    ctx.obj["configs"] = get_database_extension(current_app).config
+    ctx.obj["configs"] = get_database_migration_plugin(current_app).config
 
 
 add_migration_commands(database_group)
