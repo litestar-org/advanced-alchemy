@@ -12,21 +12,46 @@ from flask import g
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
 from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-from advanced_alchemy.extensions.flask.typing import (
-    GreenletBlockingPortalProvider as BlockingPortalProvider,
-)
+from advanced_alchemy.extensions.flask.portal import PortalProvider
 
 if TYPE_CHECKING:
     from flask import Flask
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.extensions.flask.typing import (
+    from advanced_alchemy.extensions.flask.portal import (
         GreenletBlockingPortal as BlockingPortal,
     )
 
+
 # Global portal provider
-global_portal_provider = BlockingPortalProvider()
+
+
+def run_global_event_loop(portal_provider: PortalProvider) -> None:
+    """Run the asyncio event loop in a separate thread."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    portal_provider.portal._loop = loop  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    portal_provider.portal._active_tasks = set()  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    _loop_thread_ready.set()
+
+    try:
+        loop.run_forever()
+    finally:
+        if portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+            for task in portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+                task.cancel()
+            loop.run_until_complete(
+                asyncio.gather(*portal_provider.portal._active_tasks, return_exceptions=True)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+            )
+        loop.close()
+
+
+GLOBAL_PORTAL_PROVIDER: PortalProvider = PortalProvider()
+_loop_thread: threading.Thread | None = None
+_loop_thread_ready = threading.Event()
+_loop_stop_event = threading.Event()
 
 
 class AdvancedAlchemy:
@@ -54,7 +79,7 @@ class AdvancedAlchemy:
         config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig | Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig],
         app: Flask | None = None,
         *,
-        portal_provider: BlockingPortalProvider | None = None,
+        portal_provider: PortalProvider | None = None,
     ) -> None:
         """Initialize the extension.
 
@@ -63,17 +88,10 @@ class AdvancedAlchemy:
             app: Optional Flask application instance
             portal_provider: Optional custom blocking portal provider
         """
-        self.portal_provider = portal_provider if portal_provider is not None else global_portal_provider
+        self.portal_provider = portal_provider if portal_provider is not None else GLOBAL_PORTAL_PROVIDER
         self._config = config if isinstance(config, Sequence) else [config]
         self._has_async_config = any(isinstance(c, SQLAlchemyAsyncConfig) for c in self.config)
-
         self._session_makers: dict[str, Callable[..., Union[AsyncSession, Session]]] = {}  # noqa: UP007
-
-        # Thread management
-        self._loop_thread: threading.Thread | None = None
-        self._loop_thread_ready = threading.Event()
-        self._loop_stop_event = threading.Event()
-
         if app is not None:
             self.init_app(app)
 
@@ -90,7 +108,7 @@ class AdvancedAlchemy:
     def with_portal(self) -> Generator[BlockingPortal | None, None, None]:
         """Context manager for using the portal."""
         if self._has_async_config:
-            if not self._loop_thread_ready.is_set():
+            if not _loop_thread_ready.is_set():
                 msg = "Background event loop is not running."
                 raise RuntimeError(msg)
             with self.portal_provider as portal:
@@ -113,9 +131,14 @@ class AdvancedAlchemy:
 
         if self._has_async_config:
             # Start the background event loop thread
-            self._loop_thread = threading.Thread(target=self._run_event_loop, daemon=True)
-            self._loop_thread.start()
-            self._loop_thread_ready.wait()  # Wait for the loop to be ready
+            global _loop_thread  # noqa: PLW0603
+            _loop_thread = threading.Thread(
+                target=run_global_event_loop,
+                kwargs={"portal_provider": self.portal_provider},
+                daemon=True,
+            )
+            _loop_thread.start()
+            _loop_thread_ready.wait()  # Wait for the loop to be ready
 
         # Initialize each config with the app if it's a Flask config
         for config in self.config:
@@ -141,26 +164,6 @@ class AdvancedAlchemy:
             return session
 
         return get_session_with_portal
-
-    def _run_event_loop(self) -> None:
-        """Run the asyncio event loop in a separate thread."""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        self.portal_provider.portal._loop = loop  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-        self.portal_provider.portal._active_tasks = set()  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-        self._loop_thread_ready.set()
-
-        try:
-            loop.run_forever()
-        finally:
-            if self.portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                for task in self.portal_provider.portal._active_tasks:  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                    task.cancel()
-                loop.run_until_complete(
-                    asyncio.gather(*self.portal_provider.portal._active_tasks, return_exceptions=True)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-                )
-            loop.close()
 
     def get_session(self, bind_key: str = "default") -> Session | AsyncSession:
         """Get a new session from the configured session factory.
@@ -191,3 +194,9 @@ class AdvancedAlchemy:
     def is_async_enabled(self) -> bool:
         """Return True if any of the database configs are async."""
         return self._has_async_config
+
+    def __del__(self) -> None:
+        """Stop the event loop thread."""
+        if _loop_thread is not None and _loop_thread.is_alive():
+            _loop_stop_event.set()
+            _loop_thread.join()

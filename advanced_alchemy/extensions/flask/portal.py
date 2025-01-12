@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import queue
-from dataclasses import dataclass, field
+from dataclasses import field
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, TypeVar, cast
 
 from greenlet import getcurrent, greenlet
@@ -38,26 +38,6 @@ if TYPE_CHECKING:
 R = TypeVar("R")
 
 
-def switch_to_greenlet(fn: Callable[..., R], *args: Any, **kwargs: Any) -> R:
-    """Switches execution to a new greenlet and runs the given function synchronously,
-    returning the result.
-
-    This helper is kept for backwards compatibility with older bridging code.
-    In most scenarios, you should use GreenletBlockingPortal instead.
-
-    Args:
-        fn: The function (sync or async) to run in a new greenlet.
-        *args: Positional arguments to pass to the function.
-        **kwargs: Keyword arguments to pass to the function.
-
-    Returns:
-        The result of the function call.
-    """
-    gl = greenlet(fn)
-    return cast("R", gl.switch(*args, **kwargs))
-
-
-@dataclass
 class GreenletBlockingPortal:
     """A portal that runs an asyncio event loop in a dedicated greenlet,
     exposing synchronous methods to call asynchronous functions.
@@ -76,10 +56,8 @@ class GreenletBlockingPortal:
         portal.stop()
     """
 
-    _extension: Optional[AdvancedAlchemy] = field(default=None, init=True)  # noqa: UP007
-    _task_queue: queue.Queue[Optional[tuple[greenlet, Callable[..., Any], tuple[Any, ...], dict[str, Any]]]] = field(  # noqa: UP007
-        default_factory=queue.Queue, init=False
-    )
+    _extension: Optional[AdvancedAlchemy]  # noqa: UP007
+    _task_queue: queue.Queue[Optional[tuple[greenlet, Callable[..., Any], tuple[Any, ...], dict[str, Any]]]]  # noqa: UP007
     _loop: Optional[asyncio.AbstractEventLoop] = None  # noqa: UP007
     _portal_greenlet: Optional[greenlet] = field(default=None, init=False)  # noqa: UP007
     _stop_event: asyncio.Event = field(default_factory=asyncio.Event, init=False)
@@ -287,8 +265,7 @@ class GreenletBlockingPortal:
                     config.close_engines(self)
 
 
-@dataclass
-class GreenletBlockingPortalProvider:
+class PortalProvider:
     """Provides a GreenletBlockingPortal instance for frameworks like Flask.
     Usage:
         provider = GreenletBlockingPortalProvider()
@@ -297,7 +274,14 @@ class GreenletBlockingPortalProvider:
             portal.call(my_async_func)
     """
 
-    portal: GreenletBlockingPortal = field(default_factory=GreenletBlockingPortal)
+    __slots__ = ("_portal",)
+
+    @property
+    def portal(self) -> GreenletBlockingPortal:
+        return self._portal
+
+    def __init__(self, portal: GreenletBlockingPortal | None = None) -> None:
+        self._portal = portal or GreenletBlockingPortal()
 
     def __enter__(self) -> GreenletBlockingPortal:
         return self.portal
@@ -311,12 +295,31 @@ class GreenletBlockingPortalProvider:
         self.portal.stop()
 
 
+def switch_to_greenlet(fn: Callable[..., R], *args: Any, **kwargs: Any) -> R:
+    """Switches execution to a new greenlet and runs the given function synchronously,
+    returning the result.
+
+    This helper is kept for backwards compatibility with older bridging code.
+    In most scenarios, you should use GreenletBlockingPortal instead.
+
+    Args:
+        fn: The function (sync or async) to run in a new greenlet.
+        *args: Positional arguments to pass to the function.
+        **kwargs: Keyword arguments to pass to the function.
+
+    Returns:
+        The result of the function call.
+    """
+    gl = greenlet(fn)
+    return cast("R", gl.switch(*args, **kwargs))
+
+
 GREENLET_INSTALLED = True
 """Flag indicating greenlet is installed."""
 
 __all__ = (
     "GREENLET_INSTALLED",
     "GreenletBlockingPortal",
-    "GreenletBlockingPortalProvider",
+    "PortalProvider",
     "switch_to_greenlet",
 )

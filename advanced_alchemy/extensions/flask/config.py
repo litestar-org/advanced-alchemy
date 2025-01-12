@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.extensions.flask.typing import GreenletBlockingPortal as BlockingPortal
+    from advanced_alchemy.extensions.flask.portal import GreenletBlockingPortal as BlockingPortal
 
 
 __all__ = ("CommitMode", "EngineConfig", "SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig")
@@ -208,11 +208,12 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
             db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
+                p = getattr(db_session, "_session_portal", None) or portal
                 if (self.commit_mode == CommitMode.AUTOCOMMIT and 200 <= response.status_code < 300) or (  # noqa: PLR2004
                     self.commit_mode == CommitMode.AUTOCOMMIT_WITH_REDIRECT and 200 <= response.status_code < 400  # noqa: PLR2004
                 ):
-                    _ = portal.call(db_session.commit)
-                _ = portal.call(db_session.close)
+                    _ = p.call(db_session.commit)
+                _ = p.call(db_session.close)
             return response
 
         @app.teardown_appcontext
@@ -220,7 +221,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             """Close the session at the end of the request."""
             db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
-                _ = portal.call(db_session.close)
+                p = getattr(db_session, "_session_portal", None) or portal
+                _ = p.call(db_session.close)
 
     def close_engines(self, portal: BlockingPortal) -> None:
         """Close the engines."""
