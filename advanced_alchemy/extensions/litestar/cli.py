@@ -32,10 +32,7 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
 @click.group(cls=LitestarGroup, name="database")
 def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
-    ctx.ensure_object(dict)
-    plugin = get_database_migration_plugin(ctx.obj["app"])
-    if "configs" not in ctx.obj:
-        ctx.obj["configs"] = plugin.config
+    ctx.obj = {"app": ctx.obj, "configs": get_database_migration_plugin(ctx.obj).config}
 
 
 add_migration_commands(database_group)
