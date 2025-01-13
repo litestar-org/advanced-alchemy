@@ -27,11 +27,30 @@ class User(BigIntBase):
 
 
 @pytest.fixture
-def app() -> Generator[Flask, None, None]:
+def app(tmp_path: Path) -> Generator[Flask, None, None]:
     """Create a Flask app for testing."""
     app = Flask(__name__)
     with app.app_context():
         yield app
+
+
+@pytest.fixture
+def async_config(tmp_path: Path) -> SQLAlchemyAsyncConfig:
+    """Create async SQLAlchemy config for testing."""
+    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test.db"
+    return SQLAlchemyAsyncConfig(
+        connection_string=connection_string,
+        metadata=User.__metadata_registry__.get(None),
+        create_all=True,
+    )
+
+
+@pytest.fixture
+def extension(app: Flask, async_config: SQLAlchemyAsyncConfig) -> AdvancedAlchemy:
+    """Create extension instance with async config."""
+    extension = AdvancedAlchemy(async_config, app)
+    extension.portal_provider.portal.call(async_config.create_all_metadata)
+    return extension
 
 
 def test_sync_extension_init(app: Flask) -> None:

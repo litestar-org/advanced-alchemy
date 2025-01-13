@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.extensions.flask.portal import GreenletBlockingPortal as BlockingPortal
+    from advanced_alchemy.utils.portals import Portal
 
 
 __all__ = ("CommitMode", "EngineConfig", "SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig")
@@ -97,7 +97,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    def init_app(self, app: Flask, portal: BlockingPortal | None = None) -> None:
+    def init_app(self, app: Flask, portal: Portal | None = None) -> None:
         """Initialize the Flask application with this configuration.
 
         Args:
@@ -134,7 +134,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 db_session.close()
             return response
 
-    def close_engines(self, portal: BlockingPortal) -> None:
+    def close_engines(self, portal: Portal) -> None:
         """Close the engines."""
         if self.engine_instance is not None:
             self.engine_instance.dispose()
@@ -176,7 +176,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    def init_app(self, app: Flask, portal: BlockingPortal | None = None) -> None:
+    def init_app(self, app: Flask, portal: Portal | None = None) -> None:
         """Initialize the Flask application with this configuration.
 
         Args:
@@ -192,7 +192,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             _ = portal.call(self.create_all_metadata)
         self._setup_session_handling(app, portal)
 
-    def _setup_session_handling(self, app: Flask, portal: BlockingPortal) -> None:
+    def _setup_session_handling(self, app: Flask, portal: Portal) -> None:
         """Set up the session handling for the Flask application.
 
         Args:
@@ -224,7 +224,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 p = getattr(db_session, "_session_portal", None) or portal
                 _ = p.call(db_session.close)
 
-    def close_engines(self, portal: BlockingPortal) -> None:
+    def close_engines(self, portal: Portal) -> None:
         """Close the engines."""
         if self.engine_instance is not None:
             _ = portal.call(self.engine_instance.dispose)
