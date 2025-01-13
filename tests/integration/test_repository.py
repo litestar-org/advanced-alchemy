@@ -272,7 +272,7 @@ def fx_raw_log_events_bigint() -> RawRecordData:
         {
             "id": 2025,
             "logged_at": "0001-01-01T00:00:00",
-            "payload": {"foo": "bar", "baz": datetime.now()},
+            "payload": {"foo": "bar", "baz": datetime.datetime.now()},
             "created_at": "0001-01-01T00:00:00",
             "updated_at": "0001-01-01T00:00:00",
         },
@@ -1332,7 +1332,7 @@ async def test_repo_add_method(
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
-    new_author = author_model(name="Testing", dob=datetime.now().date())
+    new_author = author_model(name="Testing", dob=datetime.datetime.now().date())
     obj = await maybe_async(author_repo.add(new_author))
     count = await maybe_async(author_repo.count())
     assert exp_count == count
@@ -1350,8 +1350,8 @@ async def test_repo_add_many_method(
     objs = await maybe_async(
         author_repo.add_many(
             [
-                author_model(name="Testing 2", dob=datetime.now().date()),
-                author_model(name="Cody", dob=datetime.now().date()),
+                author_model(name="Testing 2", dob=datetime.datetime.now().date()),
+                author_model(name="Cody", dob=datetime.datetime.now().date()),
             ],
         ),
     )
@@ -1460,7 +1460,7 @@ async def test_repo_get_or_upsert_method(author_repo: AnyAuthorRepository, first
 
 
 async def test_repo_get_or_upsert_match_filter(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", name="Agatha Christie", dob=now.date()),
     )
@@ -1473,7 +1473,7 @@ async def test_repo_get_or_upsert_match_filter_no_upsert(
     author_repo: AnyAuthorRepository,
     first_author_id: Any,
 ) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
     )
@@ -1491,7 +1491,7 @@ async def test_repo_get_and_update(author_repo: AnyAuthorRepository, first_autho
 
 
 async def test_repo_get_and_upsert_match_filter(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     with pytest.raises(NotFoundError):
         _ = await maybe_async(
             author_repo.get_and_update(match_fields="name", name="Agatha Christie123", dob=now.date()),
@@ -2146,7 +2146,7 @@ async def test_service_create_method(
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
-    new_author = author_model(name="Testing", dob=datetime.now().date())
+    new_author = author_model(name="Testing", dob=datetime.datetime.now().date())
     obj = await maybe_async(author_service.create(new_author))
     count = await maybe_async(author_service.count())
     assert exp_count == count
@@ -2164,8 +2164,8 @@ async def test_service_create_many_method(
     objs = await maybe_async(
         author_service.create_many(
             [
-                author_model(name="Testing 2", dob=datetime.now().date()),
-                author_model(name="Cody", dob=datetime.now().date()),
+                author_model(name="Testing 2", dob=datetime.datetime.now().date()),
+                author_model(name="Cody", dob=datetime.datetime.now().date()),
             ],
         ),
     )
