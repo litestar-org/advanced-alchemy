@@ -16,6 +16,8 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.flask.config import CommitMode
 
+pytestmark = pytest.mark.xdist_group("flask")
+
 
 class User(BigIntBase):
     """Test user model."""
@@ -309,7 +311,8 @@ def test_async_autocommit(tmp_path: Path) -> None:
         assert result.scalar_one().name == "test_async"
 
 
-def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
     """Test asynchronous autocommit with redirect functionality."""
     app = Flask(__name__)
     connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit_with_redirect.db"
@@ -344,7 +347,8 @@ def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
         assert result.scalar_one().name == "test_async_redirect"
 
 
-def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
     """Test that autocommit doesn't occur on error responses."""
     app = Flask(__name__)
     connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_no_autocommit_on_error.db"
@@ -384,7 +388,8 @@ def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
         assert user is None
 
 
-def test_async_portal_cleanup(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_async_portal_cleanup(tmp_path: Path) -> None:
     """Test that the portal is cleaned up properly when not explicitly stopped."""
     app = Flask(__name__)
     connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_cleanup.db"
@@ -420,7 +425,8 @@ def test_async_portal_cleanup(tmp_path: Path) -> None:
         assert result.first() is None
 
 
-def test_async_portal_explicit_stop(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
     """Test that the portal can be explicitly stopped."""
     app = Flask(__name__)
     connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db"
@@ -458,7 +464,8 @@ def test_async_portal_explicit_stop(tmp_path: Path) -> None:
         assert result is None
 
 
-def test_async_portal_explicit_stop_with_commit(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_async_portal_explicit_stop_with_commit(tmp_path: Path) -> None:
     """Test that the portal can be explicitly stopped with commit."""
     app = Flask(__name__)
     connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db"
