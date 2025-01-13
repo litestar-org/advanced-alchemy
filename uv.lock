@@ -85,6 +85,7 @@ dev = [
     { name = "pytest-sugar" },
     { name = "pytest-xdist" },
     { name = "pytz" },
+    { name = "rich-click" },
     { name = "ruff" },
     { name = "sanic", version = "24.6.0", source = { registry = "https://pypi.org/simple" }, extra = ["ext"], marker = "python_full_version < '3.9'" },
     { name = "sanic", version = "24.12.0", source = { registry = "https://pypi.org/simple" }, extra = ["ext"], marker = "python_full_version >= '3.9'" },
@@ -228,6 +229,7 @@ test = [
     { name = "pytest-mock" },
     { name = "pytest-sugar" },
     { name = "pytest-xdist" },
+    { name = "rich-click" },
     { name = "time-machine", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "time-machine", version = "2.16.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
 ]
@@ -289,6 +291,7 @@ dev = [
     { name = "pytest-sugar", specifier = ">=1.0.0" },
     { name = "pytest-xdist", specifier = ">=3.6.1" },
     { name = "pytz", specifier = ">=2024.2" },
+    { name = "rich-click" },
     { name = "ruff", specifier = ">=0.7.1" },
     { name = "sanic", marker = "python_full_version < '3.9'", specifier = "<24.12" },
     { name = "sanic", marker = "python_full_version >= '3.9'" },
@@ -406,6 +409,7 @@ test = [
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "pytest-sugar", specifier = ">=1.0.0" },
     { name = "pytest-xdist", specifier = ">=3.6.1" },
+    { name = "rich-click" },
     { name = "time-machine", specifier = ">=2.15.0" },
 ]
 
