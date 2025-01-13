@@ -50,7 +50,7 @@ Advanced Alchemy supports multiple database configurations:
 
     The ``bind_key`` option is used to specify the database to use for a given session.
 
-    When using multiple databases and you do not have at least one database with a ``bind_key`` of ``default``, and exception will be raied when calling ``db.get_session()`` without a bind key.
+    When using multiple databases and you do not have at least one database with a ``bind_key`` of ``default``, and exception will be raised when calling ``db.get_session()`` without a bind key.
 
     This only applies when using multiple configuration.  If you are using a single configuration, the engine will be returned even if the ``bind_key`` is not ``default``.
 
@@ -154,31 +154,6 @@ The ``commit_mode`` option controls how database sessions are committed:
 - ``CommitMode.AUTOCOMMIT``: Commit on successful responses (2xx status codes)
 - ``CommitMode.AUTOCOMMIT_WITH_REDIRECT``: Commit on successful responses and redirects (2xx and 3xx status codes)
 
-Database Migrations
--------------------
-
-Advanced Alchemy provides CLI commands for database migrations through Alembic:
-
-.. code-block:: bash
-
-    # Initialize migrations
-    flask database init
-
-    # Create a new migration
-    flask database revision --autogenerate -m "Add users table"
-
-    # Apply migrations
-    flask database upgrade
-
-    # Revert migrations
-    flask database downgrade
-
-    # Show migration history
-    flask database history
-
-    # Show all commands
-    flask database --help
-
 Services
 --------
 
@@ -201,3 +176,32 @@ The ``FlaskServiceMixin`` adds Flask-specific functionality to services:
         def get_user_response(self, user_id: int) -> Response:
             user = self.get(user_id)
             return self.jsonify(user.dict())
+
+The ``jsonify`` method is analogous to Flask's ``jsonify`` function.  However, this implementation will serialize with the configured Advanced Alchemy serialize (i.e. Msgspec or Orjson based on installation).
+
+Database Migrations
+-------------------
+
+When the extension is configured for Flask, database commands are automatically added to the Flask CLI.  These are the same commands available to you when running the ``alchemy`` standalone CLI.
+
+Here's an example of the commands available to Flask
+
+.. code-block:: bash
+
+    # Initialize migrations
+    flask database init
+
+    # Create a new migration
+    flask database revision --autogenerate -m "Add users table"
+
+    # Apply migrations
+    flask database upgrade
+
+    # Revert migrations
+    flask database downgrade
+
+    # Show migration history
+    flask database history
+
+    # Show all commands
+    flask database --help
