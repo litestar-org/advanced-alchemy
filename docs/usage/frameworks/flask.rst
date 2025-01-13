@@ -201,4 +201,3 @@ The ``FlaskServiceMixin`` adds Flask-specific functionality to services:
         def get_user_response(self, user_id: int) -> Response:
             user = self.get(user_id)
             return self.jsonify(user.dict())
-
