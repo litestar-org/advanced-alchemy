@@ -116,7 +116,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     )
     @bind_key_option
     @verbose_option
-    @click.pass_context
     def show_database_revision(ctx: click.Context, bind_key: str | None, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
@@ -144,7 +143,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default="-1",
     )
-    @click.pass_context
     def downgrade_database(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
     ) -> None:
@@ -182,7 +180,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default="head",
     )
-    @click.pass_context
     def upgrade_database(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
     ) -> None:
@@ -211,7 +208,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--multidb", is_flag=True, default=False, help="Support multiple databases")
     @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
     @no_prompt_option
-    @click.pass_context
     def init_alembic(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, directory: str | None, multidb: bool, package: bool, no_prompt: bool
     ) -> None:
@@ -251,7 +247,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--version-path", default=None, help="Specify specific path from config for version file")
     @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
     @no_prompt_option
-    @click.pass_context
     def create_revision(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context,
         bind_key: str | None,
@@ -315,7 +310,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @database_group.command(name="drop-all", help="Drop all tables from the database.")
     @bind_key_option
     @no_prompt_option
-    @click.pass_context
     def drop_all(ctx: click.Context, bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
         from anyio import run
@@ -358,7 +352,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    @click.pass_context
     def dump_table_data(ctx: click.Context, bind_key: str | None, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
         from anyio import run
