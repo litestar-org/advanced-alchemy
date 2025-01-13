@@ -25,6 +25,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     :caption: Framework Integration
 
     frameworks/litestar
+    frameworks/flask
     frameworks/fastapi
 
 The guide follows a practical approach:
