@@ -28,13 +28,14 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     raise ImproperConfigurationError(msg)
 
 
-@click.group(cls=LitestarGroup, name="db")
+@click.group(cls=LitestarGroup, name="database")
 @click.pass_context
 def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
-    # Store the plugin config in the context object for child commands to access
     ctx.ensure_object(dict)
-    ctx.obj["configs"] = get_database_migration_plugin(ctx.obj.app).config
+    plugin = get_database_migration_plugin(ctx.obj["app"])
+    if "configs" not in ctx.obj:
+        ctx.obj["configs"] = plugin.config
 
 
 add_migration_commands(database_group)
