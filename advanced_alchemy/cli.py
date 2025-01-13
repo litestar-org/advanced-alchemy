@@ -78,6 +78,22 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default=None,
     )
+    verbose_option = click.option(
+        "--verbose",
+        help="Enable verbose output.",
+        type=bool,
+        default=False,
+        is_flag=True,
+    )
+    no_prompt_option = click.option(
+        "--no-prompt",
+        help="Do not prompt for confirmation before executing the command.",
+        type=bool,
+        default=False,
+        required=False,
+        show_default=True,
+        is_flag=True,
+    )
 
     def get_config_by_bind_key(
         ctx: click.Context, bind_key: str | None
@@ -99,7 +115,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         help="Shows the current revision for the database.",
     )
     @bind_key_option
-    @click.option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
+    @verbose_option
     @click.pass_obj
     def show_database_revision(ctx: click.Context, bind_key: str | None, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
@@ -122,15 +138,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default=None,
     )
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before downgrading.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.argument(
         "revision",
         type=str,
@@ -168,15 +176,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default=None,
     )
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before upgrading.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.argument(
         "revision",
         type=str,
@@ -210,15 +210,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.argument("directory", default=None)
     @click.option("--multidb", is_flag=True, default=False, help="Support multiple databases")
     @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before initializing.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.pass_obj
     def init_alembic(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, directory: str | None, multidb: bool, package: bool, no_prompt: bool
@@ -258,15 +250,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--branch-label", default=None, help="Specify a branch label to apply to the new revision")
     @click.option("--version-path", default=None, help="Specify specific path from config for version file")
     @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for a migration message.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.pass_obj
     def create_revision(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context,
@@ -330,15 +314,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
 
     @database_group.command(name="drop-all", help="Drop all tables from the database.")
     @bind_key_option
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before upgrading.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.pass_obj
     def drop_all(ctx: click.Context, bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
