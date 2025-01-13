@@ -3,13 +3,13 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from advanced_alchemy.cli import add_migration_commands
+
 try:
     import rich_click as click
 except ImportError:
     import click  # type: ignore[no-redef]
 from litestar.cli._utils import LitestarGroup
-
-from advanced_alchemy.cli import add_migration_commands
 
 if TYPE_CHECKING:
     from litestar import Litestar
@@ -18,11 +18,7 @@ if TYPE_CHECKING:
 
 
 def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
-    """Retrieve a database migration plugin from the Litestar application's plugins.
-
-    This function attempts to find and return either the SQLAlchemyPlugin or SQLAlchemyInitPlugin.
-    If neither plugin is found, it raises an ImproperlyConfiguredException.
-    """
+    """Retrieve a database migration plugin from the Litestar application's plugins."""
     from advanced_alchemy.exceptions import ImproperConfigurationError
     from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
 
@@ -36,7 +32,9 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
 @click.pass_context
 def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
-    ctx.obj = get_database_migration_plugin(ctx.obj.app).config
+    # Store the plugin config in the context object for child commands to access
+    ctx.ensure_object(dict)
+    ctx.obj["configs"] = get_database_migration_plugin(ctx.obj.app).config
 
 
 add_migration_commands(database_group)
