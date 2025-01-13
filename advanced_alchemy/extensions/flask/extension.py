@@ -1,4 +1,4 @@
-# ruff: noqa: UP007, SLF001
+# ruff: noqa: UP007, SLF001, UP006, ARG001
 """Flask extension for Advanced Alchemy."""
 
 from __future__ import annotations
@@ -64,6 +64,14 @@ class AdvancedAlchemy:
                 if isinstance(cfg, SQLAlchemyAsyncConfig):
                     self.portal_provider.portal.call(cfg.create_all_metadata)
 
+            # Register shutdown handler for the portal
+            @app.teardown_appcontext
+            def shutdown_portal(exception: BaseException | None = None) -> None:  # pyright: ignore[reportUnusedFunction]
+                """Stop the portal when the application shuts down."""
+                if not app.debug:  # Don't stop portal in debug mode
+                    with contextlib.suppress(Exception):
+                        self.portal_provider.stop()
+
         # Initialize each config with the app
         for config in self.config:
             config.init_app(app, self.portal_provider.portal)
@@ -71,7 +79,7 @@ class AdvancedAlchemy:
             session_maker = config.create_session_maker()
             self._session_makers[bind_key] = session_maker
 
-        # Register teardown handlers
+        # Register session cleanup only
         app.teardown_appcontext(self._teardown_appcontext)
 
         app.extensions["advanced_alchemy"] = self
@@ -89,11 +97,6 @@ class AdvancedAlchemy:
                 else:
                     session.close()
                 delattr(g, key)
-
-        # Stop the portal provider after cleaning up sessions
-        if self._has_async_config:
-            with contextlib.suppress(Exception):
-                self.portal_provider.stop()
 
     def get_session(self, bind_key: str = "default") -> Session | AsyncSession:
         """Get a new session from the configured session factory."""
