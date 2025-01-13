@@ -100,7 +100,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     )
     @bind_key_option
     @click.option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
-    @click.pass_context
+    @click.pass_obj
     def show_database_revision(ctx: click.Context, bind_key: str | None, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
@@ -136,7 +136,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default="-1",
     )
-    @click.pass_context
+    @click.pass_obj
     def downgrade_database(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
     ) -> None:
@@ -182,7 +182,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default="head",
     )
-    @click.pass_context
+    @click.pass_obj
     def upgrade_database(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
     ) -> None:
@@ -219,7 +219,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    @click.pass_context
+    @click.pass_obj
     def init_alembic(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context, bind_key: str | None, directory: str | None, multidb: bool, package: bool, no_prompt: bool
     ) -> None:
@@ -267,7 +267,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    @click.pass_context
+    @click.pass_obj
     def create_revision(  # pyright: ignore[reportUnusedFunction]
         ctx: click.Context,
         bind_key: str | None,
@@ -339,7 +339,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         show_default=True,
         is_flag=True,
     )
-    @click.pass_context
+    @click.pass_obj
     def drop_all(ctx: click.Context, bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
         from anyio import run
@@ -382,7 +382,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    @click.pass_context
+    @click.pass_obj
     def dump_table_data(ctx: click.Context, bind_key: str | None, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
         from anyio import run
