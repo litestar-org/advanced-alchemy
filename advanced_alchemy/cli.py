@@ -252,7 +252,6 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
     @no_prompt_option
     def create_revision(  # pyright: ignore[reportUnusedFunction]
-        ctx: click.Context,
         bind_key: str | None,
         message: str | None,
         autogenerate: bool,

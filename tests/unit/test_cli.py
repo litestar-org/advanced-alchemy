@@ -44,7 +44,7 @@ def database_cli(mock_context: MagicMock) -> Generator[Group, None, None]:
     """Create the database CLI group."""
     cli_group = get_alchemy_group()
     cli_group = add_migration_commands()
-    cli_group.context = mock_context  # pyright: ignore[reportAttributeAccessIssue]
+    cli_group.ctx = mock_context  # pyright: ignore[reportAttributeAccessIssue]
     yield cli_group
 
 
