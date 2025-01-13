@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import datetime
 import sys
-from datetime import date, datetime
 from typing import TYPE_CHECKING, ClassVar, Dict, List, Type
 from uuid import UUID, uuid4
 
@@ -36,12 +36,12 @@ if TYPE_CHECKING:
 def fx_base() -> Type[DeclarativeBase]:
     class Base(DeclarativeBase):
         id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True)
-        created: Mapped[datetime] = mapped_column(
-            default=datetime.now,
+        created: Mapped[datetime.datetime] = mapped_column(
+            default=datetime.datetime.now,
             info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)},
         )
-        updated: Mapped[datetime] = mapped_column(
-            default=datetime.now,
+        updated: Mapped[datetime.datetime] = mapped_column(
+            default=datetime.datetime.now,
             info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)},
         )
 
@@ -58,7 +58,7 @@ def fx_base() -> Type[DeclarativeBase]:
 def fx_author_model(base: DeclarativeBase) -> Type[DeclarativeBase]:
     class Author(base):  # type: ignore
         name: Mapped[str]
-        dob: Mapped[date]
+        dob: Mapped[datetime.date]
 
     return Author
 
@@ -112,7 +112,7 @@ async def test_model_write_dto(
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": date(1890, 9, 15),
+            "dob": datetime.date(1890, 9, 15),
         },
     )
 
@@ -130,7 +130,7 @@ async def test_model_read_dto(
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": date(1890, 9, 15),
+            "dob": datetime.date(1890, 9, 15),
         },
     )
 
@@ -145,7 +145,7 @@ async def test_model_list_dto(author_model: Type[DeclarativeBase], asgi_connecti
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": date(1890, 9, 15),
+            "dob": datetime.date(1890, 9, 15),
         },
     )
 

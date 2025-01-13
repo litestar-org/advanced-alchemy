@@ -11,13 +11,13 @@ Features:
 Example:
     Basic usage with a datetime filter::
 
-        from datetime import datetime
+        import datetime
         from advanced_alchemy.filters import BeforeAfter
 
         filter = BeforeAfter(
             field_name="created_at",
-            before=datetime.now(),
-            after=datetime(2023, 1, 1),
+            before=datetime.datetime.now(),
+            after=datetime.datetime(2023, 1, 1),
         )
         statement = filter.append_to_statement(select(Model), Model)
 
@@ -34,10 +34,10 @@ See Also:
 
 from __future__ import annotations
 
+import datetime  # noqa: TC003
 from abc import ABC, abstractmethod
 from collections import abc  # noqa: TC003
 from dataclasses import dataclass
-from datetime import datetime  # noqa: TC003
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Generic, Literal, cast
 
@@ -153,9 +153,9 @@ class BeforeAfter(StatementFilter):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    before: datetime | None
+    before: datetime.datetime | None
     """Filter results where field is earlier than this value."""
-    after: datetime | None
+    after: datetime.datetime | None
     """Filter results where field is later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -199,9 +199,9 @@ class OnBeforeAfter(StatementFilter):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    on_or_before: datetime | None
+    on_or_before: datetime.datetime | None
     """Filter results where field is on or earlier than this value."""
-    on_or_after: datetime | None
+    on_or_after: datetime.datetime | None
     """Filter results where field is on or later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:

@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import contextlib
+import datetime
 import re
-from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Iterator, Optional, Protocol, cast, runtime_checkable
 from uuid import UUID
 
@@ -286,8 +286,8 @@ def create_registry(
     type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
-        datetime: DateTimeUTC,
-        date: Date,
+        datetime.datetime: DateTimeUTC,
+        datetime.date: Date,
         dict: JsonB,
         DataclassProtocol: JsonB,
     }

@@ -2,9 +2,9 @@
 # ruff: noqa: FIX002 PLR0911 ARG001 ERA001
 from __future__ import annotations
 
+import datetime
 import os
 import warnings
-from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 warnings.filterwarnings("ignore", category=SAWarning)
 
 # -- Project information -----------------------------------------------------
-current_year = datetime.now().year  # noqa: DTZ005
+current_year = datetime.datetime.now().year  # noqa: DTZ005
 project = __project__
 copyright = f"{current_year}, Litestar Organization"  # noqa: A001
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
