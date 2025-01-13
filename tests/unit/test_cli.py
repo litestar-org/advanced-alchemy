@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from advanced_alchemy.cli import add_migration_commands
+from advanced_alchemy.cli import add_migration_commands, get_alchemy_group
 
 if TYPE_CHECKING:
     from click import Group
@@ -42,6 +42,7 @@ def mock_context(mock_config: MagicMock) -> Generator[MagicMock, None, None]:
 @pytest.fixture
 def database_cli(mock_context: MagicMock) -> Generator[Group, None, None]:
     """Create the database CLI group."""
+    cli_group = get_alchemy_group()
     cli_group = add_migration_commands()
     cli_group.context = mock_context  # pyright: ignore[reportAttributeAccessIssue]
     yield cli_group
@@ -69,7 +70,7 @@ def test_downgrade_database(
         if no_prompt:
             args.append("--no-prompt")
 
-        result = cli_runner.invoke(database_cli, args, obj=mock_context.obj)
+        result = cli_runner.invoke(database_cli, args)
 
         if no_prompt:
             assert result.exit_code == 0
@@ -90,7 +91,7 @@ def test_upgrade_database(cli_runner: CliRunner, database_cli: Group, mock_conte
         if no_prompt:
             args.append("--no-prompt")
 
-        result = cli_runner.invoke(database_cli, args, obj=mock_context.obj)
+        result = cli_runner.invoke(database_cli, args)
 
         if no_prompt:
             assert result.exit_code == 0
@@ -108,7 +109,6 @@ def test_init_alembic(cli_runner: CliRunner, database_cli: Group, mock_context: 
         result = cli_runner.invoke(
             database_cli,
             ["--config", "tests.unit.fixtures.configs", "init", "--no-prompt", "migrations"],
-            obj=mock_context.obj,
         )
         assert result.exit_code == 0
         mock_alembic.assert_called_once()
@@ -121,7 +121,6 @@ def test_make_migrations(cli_runner: CliRunner, database_cli: Group, mock_contex
         result = cli_runner.invoke(
             database_cli,
             ["--config", "tests.unit.fixtures.configs", "make-migrations", "--no-prompt", "-m", "test migration"],
-            obj=mock_context.obj,
         )
         assert result.exit_code == 0
         mock_alembic.assert_called_once()
@@ -131,9 +130,7 @@ def test_make_migrations(cli_runner: CliRunner, database_cli: Group, mock_contex
 def test_drop_all(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
     """Test the drop-all command."""
 
-    result = cli_runner.invoke(
-        database_cli, ["--config", "tests.unit.fixtures.configs", "drop-all", "--no-prompt"], obj=mock_context.obj
-    )
+    result = cli_runner.invoke(database_cli, ["--config", "tests.unit.fixtures.configs", "drop-all", "--no-prompt"])
     assert result.exit_code == 0
 
 
@@ -143,7 +140,6 @@ def test_dump_data(cli_runner: CliRunner, database_cli: Group, mock_context: Mag
     result = cli_runner.invoke(
         database_cli,
         ["--config", "tests.unit.fixtures.configs", "dump-data", "--table", "test_table", "--dir", str(tmp_path)],
-        obj=mock_context.obj,
     )
 
     assert result.exit_code == 0
