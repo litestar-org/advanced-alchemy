@@ -9,7 +9,6 @@ try:
     import rich_click as click
 except ImportError:
     import click  # type: ignore[no-redef]
-from litestar.cli._utils import LitestarGroup
 
 if TYPE_CHECKING:
     from litestar import Litestar
@@ -28,7 +27,7 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     raise ImproperConfigurationError(msg)
 
 
-@click.group(cls=LitestarGroup, name="database")
+@click.group(name="database")
 @click.pass_context
 def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
