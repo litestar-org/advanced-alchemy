@@ -65,7 +65,7 @@ def list_authors():
     """List authors with pagination."""
     page, page_size = request.args.get("currentPage", 1, type=int), request.args.get("pageSize", 10, type=int)
     limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (page - 1))
-    service = AuthorService(session=alchemy.get_session())
+    service = AuthorService(session=alchemy.get_session())  # pyright: ignore[reportArgumentType]
     results, total = service.list_and_count(limit_offset)
     response = service.to_schema(results, total, filters=[limit_offset], schema_type=AuthorSchema)
     return service.jsonify(response)
@@ -74,7 +74,7 @@ def list_authors():
 @app.route("/authors", methods=["POST"])
 def create_author():
     """Create a new author."""
-    service = AuthorService(session=alchemy.get_session())
+    service = AuthorService(session=alchemy.get_session())  # pyright: ignore[reportArgumentType]
     obj = service.create(**request.get_json())
     return service.jsonify(obj)
 
@@ -82,7 +82,7 @@ def create_author():
 @app.route("/authors/<uuid:author_id>", methods=["GET"])
 def get_author(author_id: UUID):
     """Get an existing author."""
-    service = AuthorService(session=alchemy.get_session(), load=[Author.books])
+    service = AuthorService(session=alchemy.get_session(), load=[Author.books])  # pyright: ignore[reportArgumentType]
     obj = service.get(author_id)
     return service.jsonify(obj)
 
@@ -90,7 +90,7 @@ def get_author(author_id: UUID):
 @app.route("/authors/<uuid:author_id>", methods=["PATCH"])
 def update_author(author_id: UUID):
     """Update an author."""
-    service = AuthorService(session=alchemy.get_session(), load=[Author.books])
+    service = AuthorService(session=alchemy.get_session(), load=[Author.books])  # pyright: ignore[reportArgumentType]
     obj = service.update(**request.get_json(), item_id=author_id)
     return service.jsonify(obj)
 
@@ -98,7 +98,7 @@ def update_author(author_id: UUID):
 @app.route("/authors/<uuid:author_id>", methods=["DELETE"])
 def delete_author(author_id: UUID):
     """Delete an author."""
-    service = AuthorService(session=alchemy.get_session())
+    service = AuthorService(session=alchemy.get_session())  # pyright: ignore[reportArgumentType]
     service.delete(author_id)
     return "", 204
 

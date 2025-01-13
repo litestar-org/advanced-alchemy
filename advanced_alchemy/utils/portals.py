@@ -23,7 +23,7 @@ class PortalProviderSingleton(type):
     def __call__(cls, *args: Any, **kwargs: Any) -> PortalProvider:
         if cls not in cls._instances:
             cls._instances[cls] = super().__call__(*args, **kwargs)
-        return cls._instances[cls]
+        return cls._instances[cls]  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
 
 class PortalProvider(metaclass=PortalProviderSingleton):

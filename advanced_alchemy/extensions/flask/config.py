@@ -1,3 +1,9 @@
+"""Configuration classes for Flask integration.
+
+This module provides configuration classes for integrating SQLAlchemy with Flask applications,
+including both synchronous and asynchronous database configurations.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -31,7 +37,13 @@ ConfigT = TypeVar("ConfigT", bound="Union[SQLAlchemySyncConfig, SQLAlchemyAsyncC
 
 
 class CommitMode(str, Enum):
-    """Commit mode for database sessions."""
+    """Commit mode for database sessions.
+
+    Attributes:
+        MANUAL: Default mode - no automatic commit.
+        AUTOCOMMIT: Automatically commit on successful response.
+        AUTOCOMMIT_WITH_REDIRECT: Automatically commit on successful response, including redirects.
+    """
 
     MANUAL = "manual"
     """Default mode - no automatic commit."""
@@ -45,35 +57,43 @@ def serializer(value: Any) -> str:
     """Serialize JSON field values.
 
     Args:
-        value: Any json serializable value.
+        value: Any JSON serializable value.
 
     Returns:
-        JSON string.
+        str: JSON string representation of the value.
     """
     return encode_json(value).decode("utf-8")
 
 
 @dataclass
 class EngineConfig(_EngineConfig):
-    """Configuration for SQLAlchemy's :class:`Engine <sqlalchemy.engine.Engine>`.
+    """Configuration for SQLAlchemy's Engine.
+
+    This class extends the base EngineConfig with Flask-specific JSON serialization options.
 
     For details see: https://docs.sqlalchemy.org/en/20/core/engines.html
+
+    Attributes:
+        json_deserializer: Callable for converting JSON strings to Python objects.
+        json_serializer: Callable for converting Python objects to JSON strings.
     """
 
     json_deserializer: Callable[[str], Any] = decode_json
-    """For dialects that support the :class:`JSON <sqlalchemy.types.JSON>` datatype, this is a Python callable that will
+    """For dialects that support the :class:`~sqlalchemy.types.JSON` datatype, this is a Python callable that will
     convert a JSON string to a Python object. By default, this is set to Litestar's decode_json function."""
     json_serializer: Callable[[Any], str] = serializer
     """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON.
     By default, Litestar's encode_json function is used."""
 
 
-"""Flask-specific synchronous SQLAlchemy configuration."""
-
-
 @dataclass
 class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
-    """Flask-specific synchronous SQLAlchemy configuration."""
+    """Flask-specific synchronous SQLAlchemy configuration.
+
+    Attributes:
+        app: The Flask application instance.
+        commit_mode: The commit mode to use for database sessions.
+    """
 
     app: Flask | None = None
     """The Flask application instance."""
@@ -84,7 +104,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Get a session maker. If none exists yet, create one.
 
         Returns:
-            Session factory used by the plugin.
+            Callable[[], Session]: Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
@@ -102,8 +122,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
         Args:
             app: The Flask application instance.
-            portal: The portal to use for thread-safe communication. Unused in synchronous configurations, but here for
-                consistent API.
+            portal: The portal to use for thread-safe communication. Unused in synchronous configurations.
         """
         self.app = app
         self.bind_key = self.bind_key or "default"
@@ -135,12 +154,16 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             return response
 
     def close_engines(self, portal: Portal) -> None:
-        """Close the engines."""
+        """Close the engines.
+
+        Args:
+            portal: The portal to use for thread-safe communication.
+        """
         if self.engine_instance is not None:
             self.engine_instance.dispose()
 
     def create_all_metadata(self) -> None:
-        """Create all metadata"""
+        """Create all metadata tables in the database."""
         if self.engine_instance is None:
             self.engine_instance = self.get_engine()
         with self.engine_instance.begin() as conn:
@@ -152,7 +175,12 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
 @dataclass
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
-    """Flask-specific asynchronous SQLAlchemy configuration."""
+    """Flask-specific asynchronous SQLAlchemy configuration.
+
+    Attributes:
+        app: The Flask application instance.
+        commit_mode: The commit mode to use for database sessions.
+    """
 
     app: Flask | None = None
     """The Flask application instance."""
@@ -163,7 +191,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """Get a session maker. If none exists yet, create one.
 
         Returns:
-            Session factory used by the plugin.
+            Callable[[], AsyncSession]: Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
@@ -182,6 +210,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Args:
             app: The Flask application instance.
             portal: The portal to use for thread-safe communication.
+
+        Raises:
+            ImproperConfigurationError: If portal is not provided for async configuration.
         """
         self.app = app
         self.bind_key = self.bind_key or "default"
@@ -225,12 +256,16 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 _ = p.call(db_session.close)
 
     def close_engines(self, portal: Portal) -> None:
-        """Close the engines."""
+        """Close the engines.
+
+        Args:
+            portal: The portal to use for thread-safe communication.
+        """
         if self.engine_instance is not None:
             _ = portal.call(self.engine_instance.dispose)
 
     async def create_all_metadata(self) -> None:
-        """Create all metadata"""
+        """Create all metadata tables in the database."""
         if self.engine_instance is None:
             self.engine_instance = self.get_engine()
         async with self.engine_instance.begin() as conn:

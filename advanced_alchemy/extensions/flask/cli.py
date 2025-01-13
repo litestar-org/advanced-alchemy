@@ -1,3 +1,8 @@
+"""Command-line interface utilities for Flask integration.
+
+This module provides CLI commands for database management in Flask applications.
+"""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -23,13 +28,24 @@ def get_database_migration_plugin(app: Flask) -> AdvancedAlchemy:
     """Retrieve the Advanced Alchemy extension from the Flask application.
 
     Args:
-        app: The Flask application instance
+        app: The :class:`flask.Flask` application instance.
 
     Returns:
-        The Advanced Alchemy extension instance
+        :class:`AdvancedAlchemy`: The Advanced Alchemy extension instance.
 
     Raises:
-        ImproperConfigurationError: If the extension is not found in the application
+        :exc:`advanced_alchemy.exceptions.ImproperConfigurationError`: If the extension is not found.
+
+    Example:
+        ```python
+        from flask import Flask
+        from advanced_alchemy.extensions.flask import (
+            get_database_migration_plugin,
+        )
+
+        app = Flask(__name__)
+        db = get_database_migration_plugin(app)
+        ```
     """
     from advanced_alchemy.exceptions import ImproperConfigurationError
 
@@ -42,7 +58,10 @@ def get_database_migration_plugin(app: Flask) -> AdvancedAlchemy:
 @click.group(name="database")
 @click.pass_context
 def database_group(ctx: click.Context) -> None:
-    """Manage SQLAlchemy database components."""
+    """Manage SQLAlchemy database components.
+
+    This command group provides database management commands like migrations.
+    """
     ctx.ensure_object(dict)
     ctx.obj["configs"] = get_database_migration_plugin(current_app).config
 
