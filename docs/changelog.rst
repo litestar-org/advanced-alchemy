@@ -3,6 +3,18 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.28.0
+    :date: 2025-01-13
+
+    .. change:: add `bind-key` option to CLI
+        :type: feature
+        :pr: 339
+
+        Adds a `bind-key` option to the Advance Alchemy CLI groups.
+
+        When present, the Alembic configs will be injected with the corresponding key.
+
+
 .. changelog:: 0.27.1
     :date: 2025-01-11
 
