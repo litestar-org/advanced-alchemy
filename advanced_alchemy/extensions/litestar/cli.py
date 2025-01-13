@@ -3,6 +3,8 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from litestar.cli._utils import LitestarGroup
+
 from advanced_alchemy.cli import add_migration_commands
 
 try:
@@ -27,8 +29,7 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
     raise ImproperConfigurationError(msg)
 
 
-@click.group(name="database")
-@click.pass_context
+@click.group(cls=LitestarGroup, name="database")
 def database_group(ctx: click.Context) -> None:
     """Manage SQLAlchemy database components."""
     ctx.ensure_object(dict)
