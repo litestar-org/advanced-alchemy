@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-import contextlib
-from typing import TYPE_CHECKING, Callable, Sequence, Union, cast
+from contextlib import contextmanager, suppress
+from typing import TYPE_CHECKING, Callable, Generator, Sequence, Union, cast
 
 from flask import g
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,7 +81,7 @@ class AdvancedAlchemy:
             def shutdown_portal(exception: BaseException | None = None) -> None:  # pyright: ignore[reportUnusedFunction]
                 """Stop the portal when the application shuts down."""
                 if not app.debug:  # Don't stop portal in debug mode
-                    with contextlib.suppress(Exception):
+                    with suppress(Exception):
                         self.portal_provider.stop()
 
         # Initialize each config with the app
@@ -104,7 +104,7 @@ class AdvancedAlchemy:
                 session = getattr(g, key)
                 if isinstance(session, AsyncSession):
                     # Close async sessions through the portal
-                    with contextlib.suppress(ImproperConfigurationError):
+                    with suppress(ImproperConfigurationError):
                         self.portal_provider.portal.call(session.close)
                 else:
                     session.close()
@@ -142,3 +142,25 @@ class AdvancedAlchemy:
             setattr(session, "_session_portal", self.portal_provider.portal)
         setattr(g, session_key, session)
         return session
+
+    @contextmanager
+    def with_session(  # pragma: no cover (more on this later)
+        self, bind_key: str = "default"
+    ) -> Generator[Union[AsyncSession, Session], None, None]:
+        """Provide a transactional scope around a series of operations.
+
+        Args:
+            bind_key: The bind key to use for the session.
+
+        Yields:
+            A session.
+        """
+        session = self.get_session(bind_key)
+        try:
+            yield session
+        finally:
+            if isinstance(session, AsyncSession):
+                with suppress(ImproperConfigurationError):
+                    self.portal_provider.portal.call(session.close)
+            else:
+                session.close()
