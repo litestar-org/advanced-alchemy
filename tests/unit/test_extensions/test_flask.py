@@ -8,7 +8,7 @@ from typing import Generator, Sequence
 
 import pytest
 from flask import Flask
-from sqlalchemy import String, select
+from sqlalchemy import String, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
@@ -34,7 +34,12 @@ def setup_database(tmp_path: Path) -> Generator[Path, None, None]:
     # Create a new database for each test
     db_path = tmp_path / "test.db"
     config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}")
-    User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
+    config.create_all_metadata()
+    with config.get_session() as session:
+        assert isinstance(session, Session)
+        table_exists = session.execute(text("SELECT COUNT(*) FROM users_testing")).scalar_one()
+        session.commit()
+    assert table_exists == 0
     yield db_path
     # Clean up the database after each test
     if db_path.exists():
@@ -223,11 +228,7 @@ def test_sync_autocommit(setup_database: Path) -> None:
             create_all=True,
         )
 
-        User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
         extension = AdvancedAlchemy(config, app)
-
-        # Create tables before the test client starts
-        config.create_all_metadata()
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -258,9 +259,7 @@ def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
             create_all=True,
         )
 
-        User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
         extension = AdvancedAlchemy(config, app)
-        config.create_all_metadata()
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[str, int, dict[str, str]]:
@@ -288,10 +287,7 @@ def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
             connection_string=f"sqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT,
         )
-        # Create tables before initializing extension
-        User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
         extension = AdvancedAlchemy(config, app)
-        config.create_all_metadata()
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -323,7 +319,6 @@ async def test_async_autocommit(setup_database: Path) -> None:
             create_all=True,
         )
         extension = AdvancedAlchemy(config, app)
-        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -356,7 +351,6 @@ async def test_async_autocommit_with_redirect(setup_database: Path) -> None:
             create_all=True,
         )
         extension = AdvancedAlchemy(config, app)
-        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[str, int, dict[str, str]]:
@@ -391,7 +385,6 @@ async def test_async_no_autocommit_on_error(setup_database: Path) -> None:
         )
 
         extension = AdvancedAlchemy(config, app)
-        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -429,7 +422,6 @@ async def test_async_portal_cleanup(setup_database: Path) -> None:
             create_all=True,
         )
         extension = AdvancedAlchemy(config, app)
-        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -464,7 +456,6 @@ async def test_async_portal_explicit_stop(setup_database: Path) -> None:
             create_all=True,
         )
         extension = AdvancedAlchemy(config, app)
-        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -493,7 +484,20 @@ async def test_async_portal_explicit_stop(setup_database: Path) -> None:
 async def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     app = Flask(__name__)
 
-    with app.app_context():
+    @app.route("/test", methods=["POST"])
+    def test_route() -> tuple[dict[str, str], int]:
+        session = extension.get_session()
+        assert isinstance(session, AsyncSession)
+
+        async def create_user() -> None:
+            user = User(name="test_async_explicit_stop_with_commit")  # type: ignore
+            session.add(user)
+            await session.commit()
+
+        extension.portal_provider.portal.call(create_user)
+        return {"status": "success"}, 200
+
+    with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.MANUAL,
@@ -501,26 +505,10 @@ async def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> N
             create_all=True,
         )
         extension = AdvancedAlchemy(config, app)
-        extension.portal_provider.portal.call(config.create_all_metadata)
 
-        with app.test_client() as client:
-
-            @app.route("/test", methods=["POST"])
-            def test_route() -> tuple[dict[str, str], int]:
-                session = extension.get_session()
-                assert isinstance(session, AsyncSession)
-
-                async def create_user() -> None:
-                    user = User(name="test_async_explicit_stop_with_commit")  # type: ignore
-                    session.add(user)
-                    await session.commit()
-
-                extension.portal_provider.portal.call(create_user)
-                return {"status": "success"}, 200
-
-            # Test successful response
-            response = client.post("/test")
-            assert response.status_code == 200
+        # Test successful response
+        response = client.post("/test")
+        assert response.status_code == 200
 
         # Verify in a new session
         session = extension.get_session()
