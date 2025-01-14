@@ -492,7 +492,7 @@ async def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> N
         async def create_user() -> None:
             user = User(name="test_async_explicit_stop_with_commit")  # type: ignore
             session.add(user)
-            await session.commit()
+            await session.commit()  # type: ignore
 
         extension.portal_provider.portal.call(create_user)
         return {"status": "success"}, 200
