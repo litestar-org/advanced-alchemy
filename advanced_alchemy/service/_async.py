@@ -18,10 +18,7 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepositoryProtocol,
     SQLAlchemyAsyncSlugRepositoryProtocol,
 )
-from advanced_alchemy.repository._util import (
-    LoadSpec,
-    model_from_dict,
-)
+from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
@@ -94,14 +91,13 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
 
     repository_type: type[SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]]
     """Type of the repository to use."""
-    model_type: type[ModelT]
-    """Type of the model to use."""
     loader_options: LoadSpec | None = None
     """Default loader options for the repository."""
     execution_options: dict[str, Any] | None = None
     """Default execution options for the repository."""
     match_fields: list[str] | str | None = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
+    _repository: SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]
 
     def __init__(
         self,
@@ -132,7 +128,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         """
         load = load if load is not None else self.loader_options
         execution_options = execution_options if execution_options is not None else self.execution_options
-        self.repository = self.repository_type(
+        self._repository = self.repository_type(
             session=session,
             statement=statement,
             auto_expunge=auto_expunge,
@@ -144,7 +140,18 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             execution_options=execution_options,
             **repo_kwargs,
         )
-        self.model_type = self.repository.model_type
+
+    @property
+    def repository(
+        self,
+    ) -> SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]:
+        """Return the repository instance."""
+        return self._repository
+
+    @property
+    def model_type(self) -> type[ModelT]:
+        """Return the model type."""
+        return self._repository.model_type
 
     async def count(
         self,
@@ -860,8 +867,8 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
 
         Args:
             item_id: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
+            auto_expunge: Remove object from session before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
             error_messages: An optional dictionary of templates to use
