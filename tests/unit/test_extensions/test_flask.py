@@ -180,20 +180,21 @@ def test_mixed_binds(app: Flask) -> None:
 def test_sync_autocommit(tmp_path: Path) -> None:
     """Test synchronous autocommit functionality."""
     app = Flask(__name__)
-    config = SQLAlchemySyncConfig(
-        connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit.db",
-        commit_mode=CommitMode.AUTOCOMMIT,
-        create_all=True,
-    )
 
     # Register User model's metadata with the config's bind key
-    User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
-    extension = AdvancedAlchemy(config, app)
-
-    # Create tables before the test client starts
-    config.create_all_metadata()
 
     with app.test_client() as client:
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit.db",
+            commit_mode=CommitMode.AUTOCOMMIT,
+            create_all=True,
+        )
+
+        User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
+        extension = AdvancedAlchemy(config, app)
+
+        # Create tables before the test client starts
+        config.create_all_metadata()
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -214,18 +215,20 @@ def test_sync_autocommit(tmp_path: Path) -> None:
         assert result.scalar_one().name == "test"
 
 
-def test_sync_autocommit_with_redirect(app: Flask, tmp_path: Path) -> None:
+def test_sync_autocommit_with_redirect(tmp_path: Path) -> None:
     """Test synchronous autocommit with redirect functionality."""
-    config = SQLAlchemySyncConfig(
-        connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit_with_redirect.db",
-        commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
-        create_all=True,
-    )
-    # Create tables before initializing extension
-    User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
-    extension = AdvancedAlchemy(config, app)
+    app = Flask(__name__)
 
     with app.test_client() as client:
+        # Create tables before initializing extension
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit_with_redirect.db",
+            commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
+            create_all=True,
+        )
+
+        User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
+        extension = AdvancedAlchemy(config, app)
         config.create_all_metadata()
 
         @app.route("/test", methods=["POST"])
@@ -249,15 +252,15 @@ def test_sync_autocommit_with_redirect(app: Flask, tmp_path: Path) -> None:
 def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
     """Test that autocommit doesn't occur on error responses."""
     app = Flask(__name__)
-    config = SQLAlchemySyncConfig(
-        connection_string=f"sqlite:///{tmp_path}/test_sync_no_autocommit_on_error.db",
-        commit_mode=CommitMode.AUTOCOMMIT,
-    )
-    # Create tables before initializing extension
-    config.create_all_metadata()
-    extension = AdvancedAlchemy(config, app)
 
     with app.test_client() as client:
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{tmp_path}/test_sync_no_autocommit_on_error.db",
+            commit_mode=CommitMode.AUTOCOMMIT,
+        )
+        # Create tables before initializing extension
+        config.create_all_metadata()
+        extension = AdvancedAlchemy(config, app)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -281,14 +284,13 @@ def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
 def test_async_autocommit(tmp_path: Path) -> None:
     """Test asynchronous autocommit functionality."""
     app = Flask(__name__)
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit.db"
-    config = SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        commit_mode=CommitMode.AUTOCOMMIT,
-        create_all=True,
-    )
 
     with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit.db",
+            commit_mode=CommitMode.AUTOCOMMIT,
+            create_all=True,
+        )
         extension = AdvancedAlchemy(config, app)
         extension.portal_provider.portal.call(config.create_all_metadata)
 
@@ -315,16 +317,15 @@ def test_async_autocommit(tmp_path: Path) -> None:
 async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
     """Test asynchronous autocommit with redirect functionality."""
     app = Flask(__name__)
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit_with_redirect.db"
-    assert isinstance(connection_string, str)
-    config = SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
-        metadata=User.__metadata_registry__.get(None),
-        create_all=True,
-    )
-    extension = AdvancedAlchemy(config, app)
+
     with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit_with_redirect.db",
+            commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
+            metadata=User.__metadata_registry__.get(None),
+            create_all=True,
+        )
+        extension = AdvancedAlchemy(config, app)
         extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
@@ -351,18 +352,17 @@ async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
 async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
     """Test that autocommit doesn't occur on error responses."""
     app = Flask(__name__)
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_no_autocommit_on_error.db"
-    config = SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        commit_mode=CommitMode.AUTOCOMMIT,
-        metadata=User.__metadata_registry__.get(None),
-        create_all=True,
-    )
-
-    extension = AdvancedAlchemy(config, app)
-    extension.portal_provider.portal.call(config.create_all_metadata)
 
     with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_no_autocommit_on_error.db",
+            commit_mode=CommitMode.AUTOCOMMIT,
+            metadata=User.__metadata_registry__.get(None),
+            create_all=True,
+        )
+
+        extension = AdvancedAlchemy(config, app)
+        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -392,17 +392,16 @@ async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
 async def test_async_portal_cleanup(tmp_path: Path) -> None:
     """Test that the portal is cleaned up properly when not explicitly stopped."""
     app = Flask(__name__)
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_cleanup.db"
-    config = SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        commit_mode=CommitMode.MANUAL,
-        metadata=User.__metadata_registry__.get(None),
-        create_all=True,
-    )
-    extension = AdvancedAlchemy(config, app)
-    extension.portal_provider.portal.call(config.create_all_metadata)
 
     with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_cleanup.db",
+            commit_mode=CommitMode.MANUAL,
+            metadata=User.__metadata_registry__.get(None),
+            create_all=True,
+        )
+        extension = AdvancedAlchemy(config, app)
+        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -429,17 +428,16 @@ async def test_async_portal_cleanup(tmp_path: Path) -> None:
 async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
     """Test that the portal can be explicitly stopped."""
     app = Flask(__name__)
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db"
-    config = SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        commit_mode=CommitMode.MANUAL,
-        metadata=User.__metadata_registry__.get(None),
-        create_all=True,
-    )
-    extension = AdvancedAlchemy(config, app)
-    extension.portal_provider.portal.call(config.create_all_metadata)
 
     with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db",
+            commit_mode=CommitMode.MANUAL,
+            metadata=User.__metadata_registry__.get(None),
+            create_all=True,
+        )
+        extension = AdvancedAlchemy(config, app)
+        extension.portal_provider.portal.call(config.create_all_metadata)
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -468,16 +466,15 @@ async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
 async def test_async_portal_explicit_stop_with_commit(tmp_path: Path) -> None:
     """Test that the portal can be explicitly stopped with commit."""
     app = Flask(__name__)
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db"
-    config = SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        commit_mode=CommitMode.MANUAL,
-        metadata=User.__metadata_registry__.get(None),
-        create_all=True,
-    )
-    extension = AdvancedAlchemy(config, app)
 
     with app.app_context():
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db",
+            commit_mode=CommitMode.MANUAL,
+            metadata=User.__metadata_registry__.get(None),
+            create_all=True,
+        )
+        extension = AdvancedAlchemy(config, app)
         extension.portal_provider.portal.call(config.create_all_metadata)
 
         with app.test_client() as client:
