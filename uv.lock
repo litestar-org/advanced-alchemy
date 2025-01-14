@@ -4187,18 +4187,16 @@ resolution-markers = [
     "python_full_version == '3.9.*'",
 ]
 dependencies = [
-    { name = "aiofiles" },
-    { name = "html5tagger" },
-    { name = "httptools" },
-    { name = "multidict" },
-    { name = "sanic-routing" },
-    { name = "setuptools", version = "75.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "aiofiles", marker = "python_full_version >= '3.9'" },
+    { name = "html5tagger", marker = "python_full_version >= '3.9'" },
+    { name = "httptools", marker = "python_full_version >= '3.9'" },
+    { name = "multidict", marker = "python_full_version >= '3.9'" },
+    { name = "sanic-routing", marker = "python_full_version >= '3.9'" },
     { name = "setuptools", version = "75.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-    { name = "tracerite" },
-    { name = "typing-extensions" },
-    { name = "ujson", marker = "implementation_name == 'cpython' and sys_platform != 'win32'" },
-    { name = "uvloop", marker = "implementation_name == 'cpython' and sys_platform != 'win32'" },
-    { name = "websockets", version = "13.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "tracerite", marker = "python_full_version >= '3.9'" },
+    { name = "typing-extensions", marker = "python_full_version >= '3.9'" },
+    { name = "ujson", marker = "python_full_version >= '3.9' and implementation_name == 'cpython' and sys_platform != 'win32'" },
+    { name = "uvloop", marker = "python_full_version >= '3.9' and implementation_name == 'cpython' and sys_platform != 'win32'" },
     { name = "websockets", version = "14.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5c/d6/8761c9df89392c4330c123f1ecc85cfb3884522f3a58e86a7b1809b2d608/sanic-24.12.0.tar.gz", hash = "sha256:09c23aa917616c1e60e44c66dfd7582cb9fd6503f78298c309945909f5839836", size = 351866 }

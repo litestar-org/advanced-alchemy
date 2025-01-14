@@ -1,9 +1,10 @@
+# ruff: noqa: RUF029
 """Tests for the Flask extension."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Generator, Sequence
+from typing import Sequence
 
 import pytest
 from flask import Flask
@@ -28,160 +29,186 @@ class User(BigIntBase):
     name: Mapped[str] = mapped_column(String(50))
 
 
-@pytest.fixture
-def app(tmp_path: Path) -> Generator[Flask, None, None]:
-    """Create a Flask app for testing."""
+def test_sync_extension_init(tmp_path: Path) -> None:
     app = Flask(__name__)
+
     with app.app_context():
-        yield app
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{tmp_path}/test_sync_extension_init.db",
+        )
+        extension = AdvancedAlchemy(config, app)
+        assert "advanced_alchemy" in app.extensions
+        session = extension.get_session()
+        assert isinstance(session, Session)
 
 
-@pytest.fixture
-def async_config(tmp_path: Path) -> SQLAlchemyAsyncConfig:
-    """Create async SQLAlchemy config for testing."""
-    connection_string = f"sqlite+aiosqlite:///{tmp_path}/test.db"
-    return SQLAlchemyAsyncConfig(
-        connection_string=connection_string,
-        metadata=User.__metadata_registry__.get(None),
-        create_all=True,
-    )
+def test_sync_extension_init_with_app(tmp_path: Path) -> None:
+    app = Flask(__name__)
+
+    with app.app_context():
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{tmp_path}/test_sync_extension_init_with_app.db",
+        )
+        extension = AdvancedAlchemy(config, app)
+        assert "advanced_alchemy" in app.extensions
+        session = extension.get_session()
+        assert isinstance(session, Session)
 
 
-@pytest.fixture
-def extension(app: Flask, async_config: SQLAlchemyAsyncConfig) -> AdvancedAlchemy:
-    """Create extension instance with async config."""
-    extension = AdvancedAlchemy(async_config, app)
-    extension.portal_provider.portal.call(async_config.create_all_metadata)
-    return extension
+def test_sync_extension_multiple_init(tmp_path: Path) -> None:
+    app = Flask(__name__)
 
-
-def test_sync_extension_init(app: Flask) -> None:
-    """Test initializing the sync extension."""
-    config = SQLAlchemySyncConfig(connection_string="sqlite:///")
-    extension = AdvancedAlchemy(config, app)
-    assert "advanced_alchemy" in app.extensions
-    session = extension.get_session()
-    assert isinstance(session, Session)
-
-
-def test_sync_extension_init_with_app(app: Flask) -> None:
-    """Test initializing the sync extension with app."""
-    config = SQLAlchemySyncConfig(connection_string="sqlite:///")
-    extension = AdvancedAlchemy(config, app)
-    assert "advanced_alchemy" in app.extensions
-    session = extension.get_session()
-    assert isinstance(session, Session)
-
-
-def test_sync_extension_multiple_init(app: Flask) -> None:
-    """Test initializing the sync extension multiple times."""
-    with pytest.raises(ImproperConfigurationError, match="Advanced Alchemy extension is already registered"):
-        config = SQLAlchemySyncConfig(connection_string="sqlite:///")
+    with app.app_context(), pytest.raises(
+        ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
+    ):
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{tmp_path}/test_sync_extension_multiple_init.db",
+        )
         extension = AdvancedAlchemy(config, app)
         extension.init_app(app)
 
 
-def test_async_extension_init(app: Flask) -> None:
-    """Test initializing the async extension."""
-    config = SQLAlchemyAsyncConfig(bind_key="async", connection_string="sqlite+aiosqlite:///")
-    extension = AdvancedAlchemy(config, app)
-    assert "advanced_alchemy" in app.extensions
-    session = extension.get_session("async")
-    assert isinstance(session, AsyncSession)
+@pytest.mark.asyncio
+async def test_async_extension_init(tmp_path: Path) -> None:
+    app = Flask(__name__)
+
+    with app.app_context():
+        config = SQLAlchemyAsyncConfig(
+            bind_key="async",
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_init.db",
+        )
+        extension = AdvancedAlchemy(config, app)
+        assert "advanced_alchemy" in app.extensions
+        session = extension.get_session("async")
+        assert isinstance(session, AsyncSession)
 
 
-def test_async_extension_init_single_config_no_bind_key(app: Flask) -> None:
-    """Test initializing the async extension."""
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///")
-    extension = AdvancedAlchemy(config, app)
-    assert "advanced_alchemy" in app.extensions
-    session = extension.get_session()
-    assert isinstance(session, AsyncSession)
+@pytest.mark.asyncio
+async def test_async_extension_init_single_config_no_bind_key(tmp_path: Path) -> None:
+    app = Flask(__name__)
+
+    with app.app_context():
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_init_single_config_no_bind_key.db",
+        )
+        extension = AdvancedAlchemy(config, app)
+        assert "advanced_alchemy" in app.extensions
+        session = extension.get_session()
+        assert isinstance(session, AsyncSession)
 
 
-def test_async_extension_init_with_app(app: Flask) -> None:
-    """Test initializing the async extension with app."""
-    config = SQLAlchemyAsyncConfig(bind_key="async", connection_string="sqlite+aiosqlite:///")
-    extension = AdvancedAlchemy(config, app)
-    assert "advanced_alchemy" in app.extensions
-    session = extension.get_session("async")
-    assert isinstance(session, AsyncSession)
+@pytest.mark.asyncio
+async def test_async_extension_init_with_app(tmp_path: Path) -> None:
+    app = Flask(__name__)
+
+    with app.app_context():
+        config = SQLAlchemyAsyncConfig(
+            bind_key="async",
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_init_with_app.db",
+        )
+        extension = AdvancedAlchemy(config, app)
+        assert "advanced_alchemy" in app.extensions
+        session = extension.get_session("async")
+        assert isinstance(session, AsyncSession)
 
 
-def test_async_extension_multiple_init(app: Flask) -> None:
-    """Test initializing the async extension multiple times."""
-    with pytest.raises(ImproperConfigurationError, match="Advanced Alchemy extension is already registered"):
-        config = SQLAlchemyAsyncConfig(bind_key="async", connection_string="sqlite+aiosqlite:///")
+@pytest.mark.asyncio
+async def test_async_extension_multiple_init(tmp_path: Path) -> None:
+    app = Flask(__name__)
+
+    with app.app_context(), pytest.raises(
+        ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
+    ):
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_multiple_init.db",
+            bind_key="async",
+        )
         extension = AdvancedAlchemy(config, app)
         extension.init_app(app)
 
 
-def test_sync_and_async_extension_init(app: Flask) -> None:
-    """Test initializing the sync and async extension."""
+@pytest.mark.asyncio
+async def test_sync_and_async_extension_init(tmp_path: Path) -> None:
+    app = Flask(__name__)
 
-    extension = AdvancedAlchemy(
-        [
-            SQLAlchemySyncConfig(connection_string="sqlite:///"),
-            SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///", bind_key="async"),
-        ],
-        app,
-    )
-    assert "advanced_alchemy" in app.extensions
-    session = extension.get_session()
-    assert isinstance(session, Session)
-
-
-def test_multiple_binds(app: Flask) -> None:
-    """Test multiple database bindings."""
-
-    extension = AdvancedAlchemy(
-        [
-            SQLAlchemySyncConfig(connection_string="sqlite:///", bind_key="db1"),
-            SQLAlchemySyncConfig(connection_string="sqlite:///", bind_key="db2"),
-        ],
-        app,
-    )
-
-    session = extension.get_session("db1")
-    assert isinstance(session, Session)
-    session = extension.get_session("db2")
-    assert isinstance(session, Session)
+    with app.app_context():
+        extension = AdvancedAlchemy(
+            [
+                SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_sync_and_async_extension_init.db"),
+                SQLAlchemyAsyncConfig(
+                    connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_sync_and_async_extension_init.db",
+                    bind_key="async",
+                ),
+            ],
+            app,
+        )
+        assert "advanced_alchemy" in app.extensions
+        session = extension.get_session()
+        assert isinstance(session, Session)
 
 
-def test_multiple_binds_async(app: Flask) -> None:
-    """Test multiple database bindings with async config."""
+def test_multiple_binds(tmp_path: Path) -> None:
+    app = Flask(__name__)
 
-    configs: Sequence[SQLAlchemyAsyncConfig] = [
-        SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///", bind_key="db1"),
-        SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///", bind_key="db2"),
-    ]
-    extension = AdvancedAlchemy(configs, app)
+    with app.app_context():
+        extension = AdvancedAlchemy(
+            [
+                SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_multiple_binds.db", bind_key="db1"),
+                SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_multiple_binds.db", bind_key="db2"),
+            ],
+            app,
+        )
 
-    session = extension.get_session("db1")
-    assert isinstance(session, AsyncSession)
-    session = extension.get_session("db2")
-    assert isinstance(session, AsyncSession)
+        session = extension.get_session("db1")
+        assert isinstance(session, Session)
+        session = extension.get_session("db2")
+        assert isinstance(session, Session)
 
 
-def test_mixed_binds(app: Flask) -> None:
-    """Test mixed sync and async database bindings."""
-    configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = [
-        SQLAlchemySyncConfig(connection_string="sqlite:///", bind_key="sync"),
-        SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///", bind_key="async"),
-    ]
-    extension = AdvancedAlchemy(configs, app)
+@pytest.mark.asyncio
+async def test_multiple_binds_async(tmp_path: Path) -> None:
+    app = Flask(__name__)
 
-    session = extension.get_session("sync")
-    assert isinstance(session, Session)
-    session = extension.get_session("async")
-    assert isinstance(session, AsyncSession)
+    with app.app_context():
+        configs: Sequence[SQLAlchemyAsyncConfig] = [
+            SQLAlchemyAsyncConfig(
+                connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_multiple_binds_async.db", bind_key="db1"
+            ),
+            SQLAlchemyAsyncConfig(
+                connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_multiple_binds_async.db", bind_key="db2"
+            ),
+        ]
+        extension = AdvancedAlchemy(configs, app)
+
+        session = extension.get_session("db1")
+        assert isinstance(session, AsyncSession)
+        session = extension.get_session("db2")
+        assert isinstance(session, AsyncSession)
+
+
+@pytest.mark.asyncio
+async def test_mixed_binds(tmp_path: Path) -> None:
+    app = Flask(__name__)
+
+    with app.app_context():
+        configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = [
+            SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_mixed_binds.db", bind_key="sync"),
+            SQLAlchemyAsyncConfig(
+                connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_mixed_binds.db", bind_key="async"
+            ),
+        ]
+        extension = AdvancedAlchemy(configs, app)
+
+        session = extension.get_session("sync")
+        assert isinstance(session, Session)
+        session.close()
+        session = extension.get_session("async")
+        assert isinstance(session, AsyncSession)
+        await session.close()
 
 
 def test_sync_autocommit(tmp_path: Path) -> None:
-    """Test synchronous autocommit functionality."""
     app = Flask(__name__)
-
-    # Register User model's metadata with the config's bind key
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
@@ -216,11 +243,9 @@ def test_sync_autocommit(tmp_path: Path) -> None:
 
 
 def test_sync_autocommit_with_redirect(tmp_path: Path) -> None:
-    """Test synchronous autocommit with redirect functionality."""
     app = Flask(__name__)
 
     with app.test_client() as client:
-        # Create tables before initializing extension
         config = SQLAlchemySyncConfig(
             connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit_with_redirect.db",
             commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
@@ -250,7 +275,6 @@ def test_sync_autocommit_with_redirect(tmp_path: Path) -> None:
 
 
 def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
-    """Test that autocommit doesn't occur on error responses."""
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -259,8 +283,9 @@ def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
             commit_mode=CommitMode.AUTOCOMMIT,
         )
         # Create tables before initializing extension
-        config.create_all_metadata()
+        User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
         extension = AdvancedAlchemy(config, app)
+        config.create_all_metadata()
 
         @app.route("/test", methods=["POST"])
         def test_route() -> tuple[dict[str, str], int]:
@@ -283,7 +308,6 @@ def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_async_autocommit(tmp_path: Path) -> None:
-    """Test asynchronous autocommit functionality."""
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -316,7 +340,6 @@ async def test_async_autocommit(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
-    """Test asynchronous autocommit with redirect functionality."""
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -351,7 +374,6 @@ async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
-    """Test that autocommit doesn't occur on error responses."""
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -391,7 +413,6 @@ async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_async_portal_cleanup(tmp_path: Path) -> None:
-    """Test that the portal is cleaned up properly when not explicitly stopped."""
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -427,7 +448,6 @@ async def test_async_portal_cleanup(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
-    """Test that the portal can be explicitly stopped."""
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -465,7 +485,6 @@ async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_async_portal_explicit_stop_with_commit(tmp_path: Path) -> None:
-    """Test that the portal can be explicitly stopped with commit."""
     app = Flask(__name__)
 
     with app.app_context():

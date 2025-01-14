@@ -50,8 +50,20 @@ class AdvancedAlchemy:
         """Get the SQLAlchemy configuration(s)."""
         return self._config
 
+    @property
+    def is_async_enabled(self) -> bool:
+        """Return True if any of the database configs are async."""
+        return self._has_async_config
+
     def init_app(self, app: Flask) -> None:
-        """Initialize the Flask application."""
+        """Initialize the Flask application.
+
+        Args:
+            app: The Flask application to initialize.
+
+        Raises:
+            ImproperConfigurationError: If the extension is already registered on the Flask application.
+        """
         if "advanced_alchemy" in app.extensions:
             msg = "Advanced Alchemy extension is already registered on this Flask application."
             raise ImproperConfigurationError(msg)
@@ -99,7 +111,17 @@ class AdvancedAlchemy:
                 delattr(g, key)
 
     def get_session(self, bind_key: str = "default") -> Session | AsyncSession:
-        """Get a new session from the configured session factory."""
+        """Get a new session from the configured session factory.
+
+        Args:
+            bind_key: The bind key to use for the session.
+
+        Returns:
+            A new session from the configured session factory.
+
+        Raises:
+            ImproperConfigurationError: If no session maker is found for the bind key.
+        """
         if bind_key == "default" and len(self.config) == 1:
             bind_key = self.config[0].bind_key if self.config[0].bind_key is not None else "default"
 
@@ -110,7 +132,7 @@ class AdvancedAlchemy:
         session_maker = self._session_makers.get(bind_key)
         if session_maker is None:
             msg = f'No session maker found for bind key "{bind_key}"'
-            raise ValueError(msg)
+            raise ImproperConfigurationError(msg)
 
         session = session_maker()
         if self._has_async_config:
@@ -120,8 +142,3 @@ class AdvancedAlchemy:
             setattr(session, "_session_portal", self.portal_provider.portal)
         setattr(g, session_key, session)
         return session
-
-    @property
-    def is_async_enabled(self) -> bool:
-        """Return True if any of the database configs are async."""
-        return self._has_async_config
