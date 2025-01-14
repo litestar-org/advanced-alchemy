@@ -129,7 +129,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
         self._request_queue.put((func, args, kwargs, local_result_queue))
 
         # Trigger the execution in the event loop
-        self._loop.call_soon_threadsafe(self._process_request)
+        _handle = self._loop.call_soon_threadsafe(self._process_request)
 
         # Wait for the result from the background thread
         result, exception = local_result_queue.get()
