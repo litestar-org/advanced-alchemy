@@ -66,7 +66,7 @@ Let's start with a simple blog post model:
 
     from advanced_alchemy.base import BigIntAuditBase
     from sqlalchemy.orm import Mapped, mapped_column
-    from datetime import datetime
+    import datetime
     from typing import Optional
 
     class Post(BigIntAuditBase):
@@ -83,7 +83,7 @@ Let's start with a simple blog post model:
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
         published: Mapped[bool] = mapped_column(default=False)
-        published_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+        published_at: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
 
 Many-to-Many Relationships
 --------------------------
@@ -253,7 +253,7 @@ Here's an example showing a class to generate a server-side UUID primary key for
 
 .. code-block:: python
 
-    from datetime import datetime
+    import datetime
     from uuid import UUID, uuid4
 
     from advanced_alchemy.base import CommonTableAttributes, orm_registry
@@ -294,7 +294,7 @@ Here's an example showing a class to generate a server-side UUID primary key for
         email: Mapped[str] = mapped_column(unique=True)
         full_name: Mapped[str]
         is_active: Mapped[bool] = mapped_column(default=True)
-        last_login: Mapped[datetime | None] = mapped_column(default=None)
+        last_login: Mapped[datetime.datetime | None] = mapped_column(default=None)
 
 
 With this foundation in place, let's look at the repository pattern.

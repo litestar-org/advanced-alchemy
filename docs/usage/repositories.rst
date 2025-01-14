@@ -84,7 +84,7 @@ Advanced Alchemy provides powerful filtering capabilities:
 
 .. code-block:: python
 
-    from datetime import datetime, timedelta
+    import datetime
 
     async def get_recent_posts(session: AsyncSession) -> list[Post]:
         repository = PostRepository(session=session)
@@ -92,7 +92,7 @@ Advanced Alchemy provides powerful filtering capabilities:
         # Create filter for posts from last week
         return await repository.list(
             Post.published == True,
-            Post.created_at > (datetime.utcnow() - timedelta(days=7))
+            Post.created_at > (datetime.datetime.utcnow() - timedelta(days=7))
         )
 
 Pagination

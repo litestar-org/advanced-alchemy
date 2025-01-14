@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+import datetime
 from typing import List
 from uuid import UUID
 
@@ -26,7 +26,7 @@ class UUIDAuthor(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)  # pyright: ignore
-    dob: Mapped[date] = mapped_column(nullable=True)  # pyright: ignore
+    dob: Mapped[datetime.date] = mapped_column(nullable=True)  # pyright: ignore
     books: Mapped[List[UUIDBook]] = relationship(
         lazy="selectin",
         back_populates="author",
@@ -60,7 +60,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
 class UUIDEventLog(UUIDAuditBase):
     """The event log domain object."""
 
-    logged_at: Mapped[datetime] = mapped_column(default=datetime.now())  # pyright: ignore
+    logged_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now())  # pyright: ignore
     payload: Mapped[dict] = mapped_column(default={})  # pyright: ignore
 
 
@@ -83,7 +83,7 @@ class UUIDModelWithFetchedValue(UUIDv6Base):
     """The ModelWithFetchedValue UUIDBase."""
 
     val: Mapped[int]  # pyright: ignore
-    updated: Mapped[datetime] = mapped_column(  # pyright: ignore
+    updated: Mapped[datetime.datetime] = mapped_column(  # pyright: ignore
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
         server_onupdate=FetchedValue(),

@@ -45,7 +45,7 @@ Define your SQLAlchemy models and Pydantic schemas:
 
 .. code-block:: python
 
-    from datetime import date
+    import datetime
     from uuid import UUID
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -71,15 +71,15 @@ Define your SQLAlchemy models and Pydantic schemas:
     class Author(BaseModel):
         id: UUID | None
         name: str
-        dob: date | None = None
+        dob: datetime.date | None = None
 
     class AuthorCreate(BaseModel):
         name: str
-        dob: date | None = None
+        dob: datetime.date | None = None
 
     class AuthorUpdate(BaseModel):
         name: str | None = None
-        dob: date | None = None
+        dob: datetime.date | None = None
 
 Repository and Service
 ----------------------
