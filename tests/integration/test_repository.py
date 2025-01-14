@@ -1524,7 +1524,7 @@ async def test_repo_upsert_method(
     assert upsert2_insert_obj.name == "Another Author"
     _ = await maybe_async(author_repo.get_one(name="Leo Tolstoy"))
     # ensures that it still works even if the ID isn't set on an existing key
-    new_dob = datetime.strptime("2028-09-09", "%Y-%m-%d").date()
+    new_dob = datetime.datetime.strptime("2028-09-09", "%Y-%m-%d").date()
     upsert3_update_obj = await maybe_async(
         author_repo.upsert(
             author_model(name="Leo Tolstoy", dob=new_dob),
