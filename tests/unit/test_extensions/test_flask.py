@@ -281,7 +281,8 @@ def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
         assert result.first() is None
 
 
-def test_async_autocommit(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_async_autocommit(tmp_path: Path) -> None:
     """Test asynchronous autocommit functionality."""
     app = Flask(__name__)
 
