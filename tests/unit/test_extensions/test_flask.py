@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import Generator, Sequence
 
 import pytest
 from flask import Flask
@@ -29,12 +29,24 @@ class User(BigIntBase):
     name: Mapped[str] = mapped_column(String(50))
 
 
-def test_sync_extension_init(tmp_path: Path) -> None:
+@pytest.fixture(scope="function", autouse=True)
+def setup_database(tmp_path: Path) -> Generator[Path, None, None]:
+    # Create a new database for each test
+    db_path = tmp_path / "test.db"
+    config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}")
+    User.__metadata_registry__.get(config.bind_key).create_all(config.get_engine())
+    yield db_path
+    # Clean up the database after each test
+    if db_path.exists():
+        db_path.unlink()
+
+
+def test_sync_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{tmp_path}/test_sync_extension_init.db",
+            connection_string=f"sqlite:///{setup_database}",
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -42,12 +54,12 @@ def test_sync_extension_init(tmp_path: Path) -> None:
         assert isinstance(session, Session)
 
 
-def test_sync_extension_init_with_app(tmp_path: Path) -> None:
+def test_sync_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{tmp_path}/test_sync_extension_init_with_app.db",
+            connection_string=f"sqlite:///{setup_database}",
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -55,27 +67,27 @@ def test_sync_extension_init_with_app(tmp_path: Path) -> None:
         assert isinstance(session, Session)
 
 
-def test_sync_extension_multiple_init(tmp_path: Path) -> None:
+def test_sync_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context(), pytest.raises(
         ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
     ):
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{tmp_path}/test_sync_extension_multiple_init.db",
+            connection_string=f"sqlite:///{setup_database}",
         )
         extension = AdvancedAlchemy(config, app)
         extension.init_app(app)
 
 
 @pytest.mark.asyncio
-async def test_async_extension_init(tmp_path: Path) -> None:
+async def test_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
             bind_key="async",
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_init.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -84,12 +96,12 @@ async def test_async_extension_init(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_extension_init_single_config_no_bind_key(tmp_path: Path) -> None:
+async def test_async_extension_init_single_config_no_bind_key(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_init_single_config_no_bind_key.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -98,13 +110,13 @@ async def test_async_extension_init_single_config_no_bind_key(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_async_extension_init_with_app(tmp_path: Path) -> None:
+async def test_async_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
             bind_key="async",
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_init_with_app.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -113,14 +125,14 @@ async def test_async_extension_init_with_app(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_extension_multiple_init(tmp_path: Path) -> None:
+async def test_async_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context(), pytest.raises(
         ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
     ):
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_extension_multiple_init.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             bind_key="async",
         )
         extension = AdvancedAlchemy(config, app)
@@ -128,15 +140,15 @@ async def test_async_extension_multiple_init(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sync_and_async_extension_init(tmp_path: Path) -> None:
+async def test_sync_and_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         extension = AdvancedAlchemy(
             [
-                SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_sync_and_async_extension_init.db"),
+                SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}"),
                 SQLAlchemyAsyncConfig(
-                    connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_sync_and_async_extension_init.db",
+                    connection_string=f"sqlite+aiosqlite:///{setup_database}",
                     bind_key="async",
                 ),
             ],
@@ -147,14 +159,14 @@ async def test_sync_and_async_extension_init(tmp_path: Path) -> None:
         assert isinstance(session, Session)
 
 
-def test_multiple_binds(tmp_path: Path) -> None:
+def test_multiple_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         extension = AdvancedAlchemy(
             [
-                SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_multiple_binds.db", bind_key="db1"),
-                SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_multiple_binds.db", bind_key="db2"),
+                SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="db1"),
+                SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="db2"),
             ],
             app,
         )
@@ -166,17 +178,13 @@ def test_multiple_binds(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_multiple_binds_async(tmp_path: Path) -> None:
+async def test_multiple_binds_async(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         configs: Sequence[SQLAlchemyAsyncConfig] = [
-            SQLAlchemyAsyncConfig(
-                connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_multiple_binds_async.db", bind_key="db1"
-            ),
-            SQLAlchemyAsyncConfig(
-                connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_multiple_binds_async.db", bind_key="db2"
-            ),
+            SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="db1"),
+            SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="db2"),
         ]
         extension = AdvancedAlchemy(configs, app)
 
@@ -187,15 +195,13 @@ async def test_multiple_binds_async(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mixed_binds(tmp_path: Path) -> None:
+async def test_mixed_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = [
-            SQLAlchemySyncConfig(connection_string=f"sqlite:///{tmp_path}/test_mixed_binds.db", bind_key="sync"),
-            SQLAlchemyAsyncConfig(
-                connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_mixed_binds.db", bind_key="async"
-            ),
+            SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="sync"),
+            SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async"),
         ]
         extension = AdvancedAlchemy(configs, app)
 
@@ -207,12 +213,12 @@ async def test_mixed_binds(tmp_path: Path) -> None:
         await session.close()
 
 
-def test_sync_autocommit(tmp_path: Path) -> None:
+def test_sync_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit.db",
+            connection_string=f"sqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT,
             create_all=True,
         )
@@ -242,12 +248,12 @@ def test_sync_autocommit(tmp_path: Path) -> None:
         assert result.scalar_one().name == "test"
 
 
-def test_sync_autocommit_with_redirect(tmp_path: Path) -> None:
+def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{tmp_path}/test_sync_autocommit_with_redirect.db",
+            connection_string=f"sqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
             create_all=True,
         )
@@ -274,12 +280,12 @@ def test_sync_autocommit_with_redirect(tmp_path: Path) -> None:
         assert result.scalar_one().name == "test_redirect"
 
 
-def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
+def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{tmp_path}/test_sync_no_autocommit_on_error.db",
+            connection_string=f"sqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT,
         )
         # Create tables before initializing extension
@@ -307,12 +313,12 @@ def test_sync_no_autocommit_on_error(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_autocommit(tmp_path: Path) -> None:
+async def test_async_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT,
             create_all=True,
         )
@@ -339,12 +345,12 @@ async def test_async_autocommit(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
+async def test_async_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_autocommit_with_redirect.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
             metadata=User.__metadata_registry__.get(None),
             create_all=True,
@@ -373,12 +379,12 @@ async def test_async_autocommit_with_redirect(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
+async def test_async_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_no_autocommit_on_error.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.AUTOCOMMIT,
             metadata=User.__metadata_registry__.get(None),
             create_all=True,
@@ -412,12 +418,12 @@ async def test_async_no_autocommit_on_error(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_portal_cleanup(tmp_path: Path) -> None:
+async def test_async_portal_cleanup(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_cleanup.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.MANUAL,
             metadata=User.__metadata_registry__.get(None),
             create_all=True,
@@ -447,12 +453,12 @@ async def test_async_portal_cleanup(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
+async def test_async_portal_explicit_stop(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.MANUAL,
             metadata=User.__metadata_registry__.get(None),
             create_all=True,
@@ -484,12 +490,12 @@ async def test_async_portal_explicit_stop(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_portal_explicit_stop_with_commit(tmp_path: Path) -> None:
+async def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{tmp_path}/test_async_portal_explicit_stop.db",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode=CommitMode.MANUAL,
             metadata=User.__metadata_registry__.get(None),
             create_all=True,
