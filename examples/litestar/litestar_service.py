@@ -75,13 +75,9 @@ class AuthorUpdate(BaseModel):
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
     """Author repository."""
 
-    model_type = AuthorModel
 
-
-class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
+class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel, AuthorRepository]):
     """Author repository."""
-
-    repository_type = AuthorRepository
 
 
 async def provide_authors_service(db_session: AsyncSession) -> AsyncGenerator[AuthorService, None]:
@@ -130,31 +126,16 @@ class AuthorController(Controller):
     dependencies = {"authors_service": Provide(provide_authors_service)}
 
     @get(path="/authors")
-    async def list_authors(
-        self,
-        authors_service: AuthorService,
-        limit_offset: LimitOffset,
-    ) -> OffsetPagination[Author]:
+    async def list_authors(self, authors_service: AuthorService, limit_offset: LimitOffset) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_service.list_and_count(limit_offset)
-        return authors_service.to_schema(
-            data=results,
-            total=total,
-            filters=[limit_offset],
-            schema_type=Author,
-        )
+        return authors_service.to_schema(results, total, filters=[limit_offset], schema_type=Author)
 
     @post(path="/authors")
-    async def create_author(
-        self,
-        authors_service: AuthorService,
-        data: AuthorCreate,
-    ) -> Author:
+    async def create_author(self, authors_service: AuthorService, data: AuthorCreate) -> Author:
         """Create a new author."""
-        obj = await authors_service.create(
-            data.model_dump(exclude_unset=True, exclude_none=True),
-        )
-        return authors_service.to_schema(data=obj, schema_type=Author)
+        obj = await authors_service.create(data)
+        return authors_service.to_schema(obj, schema_type=Author)
 
     # we override the authors_repo to use the version that joins the Books in
     @get(path="/authors/{author_id:uuid}", dependencies={"authors_service": Provide(provide_author_details_service)})
@@ -168,7 +149,7 @@ class AuthorController(Controller):
     ) -> Author:
         """Get an existing author."""
         obj = await authors_service.get(author_id)
-        return authors_service.to_schema(data=obj, schema_type=Author)
+        return authors_service.to_schema(obj, schema_type=Author)
 
     @patch(
         path="/authors/{author_id:uuid}",
@@ -184,11 +165,7 @@ class AuthorController(Controller):
         ),
     ) -> Author:
         """Update an author."""
-        obj = await authors_service.update(
-            data.model_dump(exclude_unset=True, exclude_none=True),
-            item_id=author_id,
-            auto_commit=True,
-        )
+        obj = await authors_service.update(data, item_id=author_id, auto_commit=True)
         return authors_service.to_schema(obj, schema_type=Author)
 
     @delete(path="/authors/{author_id:uuid}")
@@ -210,7 +187,7 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     before_send_handler="autocommit",
     session_config=session_config,
     create_all=True,
-)  # Create 'db_session' dependency.
+)
 alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 

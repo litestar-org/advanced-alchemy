@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from advanced_alchemy import base
     from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
     from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
+    from advanced_alchemy.repository.memory._async import SQLAlchemyAsyncMockRepository
+    from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository
 
 __all__ = (
     "MISSING",
@@ -51,14 +53,17 @@ ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtoc
 
 :class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping`
 """
-SQLAlchemySyncRepositoryT = TypeVar("SQLAlchemySyncRepositoryT", bound="SQLAlchemySyncRepository[Any]")
+SQLAlchemySyncRepositoryT = TypeVar(
+    "SQLAlchemySyncRepositoryT",
+    bound="Union[SQLAlchemySyncRepository[Any], SQLAlchemySyncMockRepository[Any]]",
+)
 """Type variable for synchronous SQLAlchemy repositories.
 
 :class:`~advanced_alchemy.repository.SQLAlchemySyncRepository`
 """
 SQLAlchemyAsyncRepositoryT = TypeVar(
     "SQLAlchemyAsyncRepositoryT",
-    bound="SQLAlchemyAsyncRepository[Any]",
+    bound="Union[SQLAlchemyAsyncRepository[Any], SQLAlchemyAsyncMockRepository[Any]]",
 )
 """Type variable for asynchronous SQLAlchemy repositories.
 

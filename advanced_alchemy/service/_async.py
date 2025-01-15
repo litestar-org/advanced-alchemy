@@ -7,19 +7,18 @@ should be a SQLAlchemy model.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, AsyncIterator, Generic, Iterable, List, Sequence, cast
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, AsyncIterator, ClassVar, Generic, Iterable, List, Optional, Sequence, cast
 
 from sqlalchemy import Select
 from typing_extensions import Self
 
-from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, RepositoryError
+from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, ImproperConfigurationError, RepositoryError
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncQueryRepository,
-    SQLAlchemyAsyncRepositoryProtocol,
-    SQLAlchemyAsyncSlugRepositoryProtocol,
 )
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
-from advanced_alchemy.repository.typing import ModelT, OrderingPair
+from advanced_alchemy.repository.typing import ModelT, OrderingPair, SQLAlchemyAsyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     BulkModelDictT,
@@ -86,23 +85,25 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
                 yield cls(session=db_session)
 
 
-class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
+class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAlchemyAsyncRepositoryT]):
     """Service object that operates on a repository object."""
 
-    repository_type: type[SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]]
+    repository_type: type[SQLAlchemyAsyncRepositoryT]
     """Type of the repository to use."""
-    loader_options: LoadSpec | None = None
+    loader_options: ClassVar[LoadSpec | None] = None
     """Default loader options for the repository."""
     execution_options: dict[str, Any] | None = None
     """Default execution options for the repository."""
     match_fields: list[str] | str | None = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    _repository: SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]
+    _repository_instance: SQLAlchemyAsyncRepositoryT
+    _model_type: type[ModelT]
 
     def __init__(
         self,
         session: AsyncSession | async_scoped_session[AsyncSession],
-        statement: Select[tuple[ModelT]] | None = None,
+        *,
+        statement: Select[Any] | None = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -128,7 +129,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         """
         load = load if load is not None else self.loader_options
         execution_options = execution_options if execution_options is not None else self.execution_options
-        self._repository = self.repository_type(
+        self._repository_instance: SQLAlchemyAsyncRepositoryT = self.repository_type(  # type: ignore[assignment]
             session=session,
             statement=statement,
             auto_expunge=auto_expunge,
@@ -142,16 +143,19 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         )
 
     @property
-    def repository(
-        self,
-    ) -> SQLAlchemyAsyncRepositoryProtocol[ModelT] | SQLAlchemyAsyncSlugRepositoryProtocol[ModelT]:
+    def repository(self) -> SQLAlchemyAsyncRepositoryT:
         """Return the repository instance."""
-        return self._repository
+        if not self._repository_instance:
+            msg = "Repository not initialized"
+            raise ImproperConfigurationError(msg)
+        return self._repository_instance
 
-    @property
+    @cached_property
     def model_type(self) -> type[ModelT]:
         """Return the model type."""
-        return self._repository.model_type
+        if not self._model_type:
+            self._model_type = cast("type[ModelT]", self.repository.model_type)
+        return self._model_type
 
     async def count(
         self,
@@ -243,14 +247,17 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return await self.repository.get(
-            item_id=item_id,
-            auto_expunge=auto_expunge,
-            statement=statement,
-            id_attribute=id_attribute,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "ModelT",
+            await self.repository.get(
+                item_id=item_id,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def get_one(
@@ -278,14 +285,17 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return await self.repository.get_one(
-            *filters,
-            auto_expunge=auto_expunge,
-            statement=statement,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **kwargs,
+        return cast(
+            "ModelT",
+            await self.repository.get_one(
+                *filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **kwargs,
+            ),
         )
 
     async def get_one_or_none(
@@ -313,14 +323,17 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        return await self.repository.get_one_or_none(
-            *filters,
-            auto_expunge=auto_expunge,
-            statement=statement,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **kwargs,
+        return cast(
+            "Optional[ModelT]",
+            await self.repository.get_one_or_none(
+                *filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **kwargs,
+            ),
         )
 
     async def to_model(
@@ -337,10 +350,10 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             Representation of created instances.
         """
         if is_dict(data):
-            return model_from_dict(model=self.repository.model_type, **data)
+            return model_from_dict(model=self.model_type, **data)
         if is_pydantic_model(data):
             return model_from_dict(
-                model=self.repository.model_type,
+                model=self.model_type,
                 **data.model_dump(exclude_unset=True),
             )
 
@@ -348,7 +361,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
             from msgspec import UNSET
 
             return model_from_dict(
-                model=self.repository.model_type,
+                model=self.model_type,
                 **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
             )
 
@@ -385,16 +398,19 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         Returns:
             List of instances and count of total collection, ignoring pagination.
         """
-        return await self.repository.list_and_count(
-            *filters,
-            statement=statement,
-            auto_expunge=auto_expunge,
-            force_basic_query_mode=force_basic_query_mode,
-            order_by=order_by,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **kwargs,
+        return cast(
+            "tuple[Sequence[ModelT], int]",
+            await self.repository.list_and_count(
+                *filters,
+                statement=statement,
+                auto_expunge=auto_expunge,
+                force_basic_query_mode=force_basic_query_mode,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **kwargs,
+            ),
         )
 
     @classmethod
@@ -463,19 +479,25 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT]):
         Returns:
             The list of instances retrieved from the repository.
         """
-        return await self.repository.list(
-            *filters,
-            statement=statement,
-            auto_expunge=auto_expunge,
-            order_by=order_by,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **kwargs,
+        return cast(
+            "Sequence[ModelT]",
+            await self.repository.list(
+                *filters,
+                statement=statement,
+                auto_expunge=auto_expunge,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **kwargs,
+            ),
         )
 
 
-class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[ModelT], Generic[ModelT]):
+class SQLAlchemyAsyncRepositoryService(
+    SQLAlchemyAsyncRepositoryReadService[ModelT, SQLAlchemyAsyncRepositoryT],
+    Generic[ModelT, SQLAlchemyAsyncRepositoryT],
+):
     """Service object that operates on a repository object."""
 
     async def create(
@@ -501,12 +523,15 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             Representation of created instance.
         """
         data = await self.to_model(data, "create")
-        return await self.repository.add(
-            data=data,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            auto_refresh=auto_refresh,
-            error_messages=error_messages,
+        return cast(
+            "ModelT",
+            await self.repository.add(
+                data=data,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                error_messages=error_messages,
+            ),
         )
 
     async def create_many(
@@ -532,11 +557,14 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         if is_dto_data(data):
             data = data.create_instance()
         data = [(await self.to_model(datum, "create")) for datum in cast("ModelDictListT[ModelT]", data)]
-        return await self.repository.add_many(
-            data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            error_messages=error_messages,
+        return cast(
+            "Sequence[ModelT]",
+            await self.repository.add_many(
+                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                error_messages=error_messages,
+            ),
         )
 
     async def update(
@@ -593,17 +621,20 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
             raise RepositoryError(msg)
         if item_id is not None:
             data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
-        return await self.repository.update(
-            data=data,
-            attribute_names=attribute_names,
-            with_for_update=with_for_update,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            auto_refresh=auto_refresh,
-            id_attribute=id_attribute,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "ModelT",
+            await self.repository.update(
+                data=data,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def update_many(
@@ -633,13 +664,16 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         if is_dto_data(data):
             data = data.create_instance()
         data = [(await self.to_model(datum, "update")) for datum in cast("ModelDictListT[ModelT]", data)]
-        return await self.repository.update_many(
-            cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "Sequence[ModelT]",
+            await self.repository.update_many(
+                cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def upsert(
@@ -685,17 +719,20 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
         if item_id is not None:
             self.repository.set_id_attribute_value(item_id, data)  # pyright: ignore[reportUnknownMemberType]
-        return await self.repository.upsert(
-            data=data,
-            attribute_names=attribute_names,
-            with_for_update=with_for_update,
-            auto_expunge=auto_expunge,
-            auto_commit=auto_commit,
-            auto_refresh=auto_refresh,
-            match_fields=match_fields,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "ModelT",
+            await self.repository.upsert(
+                data=data,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+                auto_expunge=auto_expunge,
+                auto_commit=auto_commit,
+                auto_refresh=auto_refresh,
+                match_fields=match_fields,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def upsert_many(
@@ -730,15 +767,18 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         if is_dto_data(data):
             data = data.create_instance()
         data = [(await self.to_model(datum, "upsert")) for datum in cast("ModelDictListT[ModelT]", data)]
-        return await self.repository.upsert_many(
-            data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
-            auto_expunge=auto_expunge,
-            auto_commit=auto_commit,
-            no_merge=no_merge,
-            match_fields=match_fields,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "Sequence[ModelT]",
+            await self.repository.upsert_many(
+                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                auto_expunge=auto_expunge,
+                auto_commit=auto_commit,
+                no_merge=no_merge,
+                match_fields=match_fields,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def get_or_upsert(
@@ -784,19 +824,22 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """
         match_fields = match_fields or self.match_fields
         validated_model = await self.to_model(kwargs, "create")
-        return await self.repository.get_or_upsert(
-            *filters,
-            match_fields=match_fields,
-            upsert=upsert,
-            attribute_names=attribute_names,
-            with_for_update=with_for_update,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            auto_refresh=auto_refresh,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **validated_model.to_dict(),
+        return cast(
+            "tuple[ModelT, bool]",
+            await self.repository.get_or_upsert(
+                *filters,
+                match_fields=match_fields,
+                upsert=upsert,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **validated_model.to_dict(),
+            ),
         )
 
     async def get_and_update(
@@ -838,18 +881,21 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         """
         match_fields = match_fields or self.match_fields
         validated_model = await self.to_model(kwargs, "update")
-        return await self.repository.get_and_update(
-            *filters,
-            match_fields=match_fields,
-            attribute_names=attribute_names,
-            with_for_update=with_for_update,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            auto_refresh=auto_refresh,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            **validated_model.to_dict(),
+        return cast(
+            "tuple[ModelT, bool]",
+            await self.repository.get_and_update(
+                *filters,
+                match_fields=match_fields,
+                attribute_names=attribute_names,
+                with_for_update=with_for_update,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                **validated_model.to_dict(),
+            ),
         )
 
     async def delete(
@@ -879,14 +925,17 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Returns:
             Representation of the deleted instance.
         """
-        return await self.repository.delete(
-            item_id=item_id,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            id_attribute=id_attribute,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "ModelT",
+            await self.repository.delete(
+                item_id=item_id,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def delete_many(
@@ -919,15 +968,18 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Returns:
             Representation of removed instances.
         """
-        return await self.repository.delete_many(
-            item_ids=item_ids,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            id_attribute=id_attribute,
-            chunk_size=chunk_size,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
+        return cast(
+            "Sequence[ModelT]",
+            await self.repository.delete_many(
+                item_ids=item_ids,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                id_attribute=id_attribute,
+                chunk_size=chunk_size,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+            ),
         )
 
     async def delete_where(
@@ -957,13 +1009,16 @@ class SQLAlchemyAsyncRepositoryService(SQLAlchemyAsyncRepositoryReadService[Mode
         Returns:
             The list of instances deleted from the repository.
         """
-        return await self.repository.delete_where(
-            *filters,
-            auto_commit=auto_commit,
-            auto_expunge=auto_expunge,
-            error_messages=error_messages,
-            sanity_check=sanity_check,
-            load=load,
-            execution_options=execution_options,
-            **kwargs,
+        return cast(
+            "Sequence[ModelT]",
+            await self.repository.delete_where(
+                *filters,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                error_messages=error_messages,
+                sanity_check=sanity_check,
+                load=load,
+                execution_options=execution_options,
+                **kwargs,
+            ),
         )

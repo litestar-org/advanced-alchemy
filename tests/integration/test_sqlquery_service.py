@@ -63,11 +63,8 @@ class USStateSyncRepository(SQLAlchemySyncRepository[USState]):
     model_type = USState
 
 
-class USStateSyncService(SQLAlchemySyncRepositoryService[USState]):
+class USStateSyncService(SQLAlchemySyncRepositoryService[USState, USStateSyncRepository]):
     """US State repository."""
-
-    repository_type = USStateSyncRepository
-    model_type = USState
 
 
 class USStateAsyncRepository(SQLAlchemyAsyncRepository[USState]):
@@ -76,11 +73,8 @@ class USStateAsyncRepository(SQLAlchemyAsyncRepository[USState]):
     model_type = USState
 
 
-class USStateAsyncService(SQLAlchemyAsyncRepositoryService[USState]):
+class USStateAsyncService(SQLAlchemyAsyncRepositoryService[USState, USStateAsyncRepository]):
     """US State repository."""
-
-    repository_type = USStateAsyncRepository
-    model_type = USState
 
 
 class StateQuery(base.SQLQuery):
@@ -194,7 +188,7 @@ async def test_async_fixture_and_query() -> None:
         state_service = USStateAsyncService(session=session)
 
         query_service = SQLAlchemyAsyncQueryService(session=session)
-        fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
+        fixture = await open_fixture_async(fixture_path, USStateSyncRepository.model_type.__tablename__)
         _add_objs = await state_service.create_many(
             data=[USStateBaseModel(**raw_obj) for raw_obj in fixture],
         )
