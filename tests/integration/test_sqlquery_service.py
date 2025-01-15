@@ -66,6 +66,8 @@ class USStateSyncRepository(SQLAlchemySyncRepository[USState]):
 class USStateSyncService(SQLAlchemySyncRepositoryService[USState, USStateSyncRepository]):
     """US State repository."""
 
+    repository_type = USStateSyncRepository
+
 
 class USStateAsyncRepository(SQLAlchemyAsyncRepository[USState]):
     """US State repository."""
@@ -75,6 +77,8 @@ class USStateAsyncRepository(SQLAlchemyAsyncRepository[USState]):
 
 class USStateAsyncService(SQLAlchemyAsyncRepositoryService[USState, USStateAsyncRepository]):
     """US State repository."""
+
+    repository_type = USStateAsyncRepository
 
 
 class StateQuery(base.SQLQuery):
