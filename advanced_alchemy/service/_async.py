@@ -97,7 +97,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
     match_fields: list[str] | str | None = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     _repository_instance: SQLAlchemyAsyncRepositoryT
-    _model_type: type[ModelT]
 
     def __init__(
         self,
@@ -153,9 +152,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
     @cached_property
     def model_type(self) -> type[ModelT]:
         """Return the model type."""
-        if not self._model_type:
-            self._model_type = cast("type[ModelT]", self.repository.model_type)
-        return self._model_type
+        return cast("type[ModelT]", self.repository.model_type)
 
     async def count(
         self,
