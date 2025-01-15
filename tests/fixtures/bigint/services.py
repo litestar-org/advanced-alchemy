@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -218,7 +216,7 @@ class ItemSyncService(SQLAlchemySyncRepositoryService[BigIntItem, ItemSyncReposi
 # Slug book
 
 
-class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook, Any]):
+class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook]):
     """Book repository."""
 
     repository_type = SlugBookAsyncRepository
