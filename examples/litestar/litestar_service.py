@@ -75,9 +75,13 @@ class AuthorUpdate(BaseModel):
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
     """Author repository."""
 
+    model_type = AuthorModel
+
 
 class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel, AuthorRepository]):
     """Author repository."""
+
+    repository_type = AuthorRepository
 
 
 async def provide_authors_service(db_session: AsyncSession) -> AsyncGenerator[AuthorService, None]:
