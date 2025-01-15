@@ -457,6 +457,11 @@ warn_unused_ignores = false
 module = "advanced_alchemy.base"
 warn_unused_ignores = false
 
+[[tool.mypy.overrides]]
+disable_error_code = "unreachable"
+module = "tests.integration.test_repository"
+
+
 [tool.pyright]
 disableBytesTypePromotions = true
 exclude = [
@@ -520,6 +525,7 @@ SQLAlchemyAsyncQueryService = "SQLAlchemySyncQueryService"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
+"SQLAlchemyAsyncRepositoryT" = "SQLAlchemySyncRepositoryT"
 SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 "advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig" = "advanced_alchemy.config.sync.SQLAlchemySyncConfig"
 "advanced_alchemy.repository.SQLAlchemyAsyncQueryRepository" = "advanced_alchemy.repository.SQLAlchemySyncQueryRepository"
@@ -529,6 +535,7 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 "advanced_alchemy.repository.SQLAlchemyAsyncSlugRepositoryProtocol" = "advanced_alchemy.repository.SQLAlchemySyncSlugRepositoryProtocol"
 "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository"
 "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockSlugRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockSlugRepository"
+"advanced_alchemy.repository.typing.SQLAlchemyAsyncRepositoryT" = "advanced_alchemy.repository.typing.SQLAlchemySyncRepositoryT"
 "async_scoped_session" = "scoped_session"
 "collections.abc.AsyncIterator" = "collections.abc.Iterator"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"

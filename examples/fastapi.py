@@ -75,7 +75,7 @@ class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
     model_type = AuthorModel
 
 
-class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
+class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel, AuthorRepository]):
     """Author repository."""
 
     repository_type = AuthorRepository

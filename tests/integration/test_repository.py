@@ -76,7 +76,7 @@ SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBoo
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
 SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
-SecretService = SQLAlchemyAsyncRepositoryService[AnySecret]
+SecretService = SQLAlchemyAsyncRepositoryService[AnySecret, SecretRepository]
 SecretMockRepository = SQLAlchemyAsyncMockRepository[AnySecret]
 AnySecretRepository = Union[SecretRepository, SecretMockRepository]
 
@@ -84,32 +84,34 @@ AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
 AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
 AuthorMockRepository = SQLAlchemyAsyncMockRepository[AnyAuthor]
 AnyAuthorRepository = Union[AuthorRepository, AuthorMockRepository]
-AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor]
+AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor, AuthorRepository]
 
 AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
 RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
-RuleService = SQLAlchemyAsyncRepositoryService[AnyRule]
+RuleService = SQLAlchemyAsyncRepositoryService[AnyRule, RuleRepository]
 
 AnySlugBook = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
 SlugBookRepository = SQLAlchemyAsyncSlugRepository[AnySlugBook]
-SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook]
+SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook, SlugBookRepository]
 
 
 AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
 BookRepository = SQLAlchemyAsyncRepository[AnyBook]
-BookService = SQLAlchemyAsyncRepositoryService[AnyBook]
+BookService = SQLAlchemyAsyncRepositoryService[AnyBook, BookRepository]
 
 AnyTag = Union[models_uuid.UUIDTag, models_bigint.BigIntTag]
 TagRepository = SQLAlchemyAsyncRepository[AnyTag]
-TagService = SQLAlchemyAsyncRepositoryService[AnyTag]
+TagService = SQLAlchemyAsyncRepositoryService[AnyTag, TagRepository]
 
 AnyItem = Union[models_uuid.UUIDItem, models_bigint.BigIntItem]
 ItemRepository = SQLAlchemyAsyncRepository[AnyItem]
-ItemService = SQLAlchemyAsyncRepositoryService[AnyItem]
+ItemService = SQLAlchemyAsyncRepositoryService[AnyItem, ItemRepository]
 
 AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]
 ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
-ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
+ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
+    AnyModelWithFetchedValue, ModelWithFetchedValueRepository
+]
 
 
 RawRecordData = List[Dict[str, Any]]
@@ -2021,7 +2023,7 @@ async def test_service_count_method_with_filters(raw_authors: RawRecordData, aut
     Args:
         author_service: The author mock repository
     """
-    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):  # type: ignore[unreachable,unused-ignore]
         assert (
             await maybe_async(
                 author_service.count(
@@ -2067,7 +2069,7 @@ async def test_service_list_and_count_method_with_filters(
     """
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
-    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+    if isinstance(author_service.repository, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
         collection, count = await maybe_async(  # pyright: ignore
             author_service.list_and_count(**{author_service.repository.model_type.name.key: exp_name}),  # pyright: ignore
         )
