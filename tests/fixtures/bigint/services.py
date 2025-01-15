@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -216,17 +218,13 @@ class ItemSyncService(SQLAlchemySyncRepositoryService[BigIntItem, ItemSyncReposi
 # Slug book
 
 
-class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook, SlugBookAsyncRepository]):
+class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[BigIntSlugBook, Any]):
     """Book repository."""
 
     repository_type = SlugBookAsyncRepository
     match_fields = ["title"]
 
-    async def to_model(
-        self,
-        data: ModelDictT[BigIntSlugBook],
-        operation: str | None = None,
-    ) -> BigIntSlugBook:
+    async def to_model(self, data: ModelDictT[BigIntSlugBook], operation: str | None = None) -> BigIntSlugBook:
         data = schema_dump(data)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
