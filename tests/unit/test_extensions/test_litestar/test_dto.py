@@ -8,10 +8,10 @@ from uuid import UUID, uuid4
 import pytest
 import sqlalchemy
 from litestar import Request, get
-from litestar.contrib.pydantic import PydanticInitPlugin
 from litestar.dto import DTOField, Mark
 from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.enums import MediaType
+from litestar.plugins.pydantic import PydanticInitPlugin
 from litestar.serialization import encode_json
 from litestar.testing import RequestFactory
 from litestar.typing import FieldDefinition
@@ -197,7 +197,7 @@ async def test_dto_instrumented_attribute_key(
     class Model(base):  # type: ignore
         field: Mapped[UUID] = mapped_column(default=lambda: val)
 
-    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={Model.id, Model.created, Model.updated})]]  # pyright: ignore[reportAttributeAccessIssue]
+    dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig(exclude={Model.id, Model.created, Model.updated})]]  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType,reportUnknownArgumentType]
     model = await get_model_from_dto(dto_type, Model, asgi_connection, b'{"a":"b"}')
     assert_model_values(model, {"field": val})
 

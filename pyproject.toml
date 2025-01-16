@@ -216,12 +216,14 @@ asyncio_default_fixture_loop_scope = "function"
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
   "ignore::DeprecationWarning:pkg_resources",
   "ignore::DeprecationWarning:google.rpc",
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
   "ignore::DeprecationWarning:websockets.connection",
+  "ignore::DeprecationWarning:websockets.legacy",
 ]
 markers = [
   "integration: SQLAlchemy integration tests",

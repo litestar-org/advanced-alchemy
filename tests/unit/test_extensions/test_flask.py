@@ -62,7 +62,7 @@ def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Generator[Path
     yield tmp_path_factory.mktemp("test_extensions_flask")
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
     # Create a new database for each test
     db_path = tmp_path_session / "test.db"
@@ -76,7 +76,6 @@ def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
     yield db_path
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -90,7 +89,6 @@ def test_sync_extension_init(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -104,7 +102,6 @@ def test_sync_extension_init_with_app(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -118,7 +115,6 @@ def test_sync_extension_multiple_init(setup_database: Path) -> None:
         extension.init_app(app)
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -133,7 +129,6 @@ def test_async_extension_init(setup_database: Path) -> None:
         assert isinstance(session, AsyncSession)
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_extension_init_single_config_no_bind_key(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -147,7 +142,6 @@ def test_async_extension_init_single_config_no_bind_key(setup_database: Path) ->
         assert isinstance(session, AsyncSession)
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -162,7 +156,6 @@ def test_async_extension_init_with_app(setup_database: Path) -> None:
         assert isinstance(session, AsyncSession)
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -177,7 +170,6 @@ def test_async_extension_multiple_init(setup_database: Path) -> None:
         extension.init_app(app)
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_and_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -197,7 +189,6 @@ def test_sync_and_async_extension_init(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
-@pytest.mark.xdist_group("flask")
 def test_multiple_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -216,7 +207,6 @@ def test_multiple_binds(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
-@pytest.mark.xdist_group("flask")
 def test_multiple_binds_async(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -233,7 +223,6 @@ def test_multiple_binds_async(setup_database: Path) -> None:
         assert isinstance(session, AsyncSession)
 
 
-@pytest.mark.xdist_group("flask")
 def test_mixed_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -252,7 +241,6 @@ def test_mixed_binds(setup_database: Path) -> None:
         extension.portal_provider.portal.call(session.close)
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -280,7 +268,6 @@ def test_sync_autocommit(setup_database: Path) -> None:
         assert result.scalar_one().name == "test"
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -309,7 +296,6 @@ def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_redirect"
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -339,7 +325,6 @@ def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
         assert result.first() is None
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -368,7 +353,6 @@ def test_async_autocommit(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_async"
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -399,7 +383,6 @@ def test_async_autocommit_with_redirect(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_async_redirect"
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -435,7 +418,6 @@ def test_async_no_autocommit_on_error(setup_database: Path) -> None:
         assert user is None
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_portal_cleanup(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -467,7 +449,6 @@ def test_async_portal_cleanup(setup_database: Path) -> None:
         assert result.first() is None
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_portal_explicit_stop(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -501,7 +482,6 @@ def test_async_portal_explicit_stop(setup_database: Path) -> None:
         assert result is None
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -543,7 +523,6 @@ def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
         assert user.name == "test_async_explicit_stop_with_commit"
 
 
-@pytest.mark.xdist_group("flask")
 def test_sync_service_jsonify(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -569,7 +548,6 @@ def test_sync_service_jsonify(setup_database: Path) -> None:
         assert result.scalar_one().name == "service_test"
 
 
-@pytest.mark.xdist_group("flask")
 def test_async_service_jsonify(setup_database: Path) -> None:
     app = Flask(__name__)
 

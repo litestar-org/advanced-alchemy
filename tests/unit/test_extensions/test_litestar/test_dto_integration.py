@@ -31,7 +31,7 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDT
 
 
 class Base(DeclarativeBase):
-    id: Mapped[str] = mapped_column(primary_key=True, default=UUID)  # pyright: ignore
+    id: Mapped[str] = mapped_column(primary_key=True, default=UUID)
 
     # noinspection PyMethodParameters
     @declared_attr.directive
@@ -41,7 +41,7 @@ class Base(DeclarativeBase):
 
 
 class Tag(Base):
-    name: Mapped[str] = mapped_column(default="best seller")  # pyright: ignore
+    name: Mapped[str] = mapped_column(default="best seller")
 
 
 class TaggableMixin:
@@ -51,8 +51,8 @@ class TaggableMixin:
         return Table(
             f"{cls.__tablename__}_tag_association",  # type: ignore
             cls.metadata,  # type: ignore
-            Column("base_id", ForeignKey(f"{cls.__tablename__}.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
-            Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
+            Column("base_id", ForeignKey(f"{cls.__tablename__}.id", ondelete="CASCADE"), primary_key=True),  # type: ignore
+            Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # type: ignore
         )
 
     @declared_attr
@@ -70,29 +70,29 @@ class TaggableMixin:
         return association_proxy(
             "assigned_tags",
             "name",
-            creator=lambda name: Tag(name=name),  # pyright: ignore
+            creator=lambda name: Tag(name=name),  # pyright: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
             info={"__dto__": DTOField()},
         )
 
 
 class Author(Base):
-    name: Mapped[str] = mapped_column(default="Arthur")  # pyright: ignore
-    date_of_birth: Mapped[str] = mapped_column(nullable=True)  # pyright: ignore
+    name: Mapped[str] = mapped_column(default="Arthur")
+    date_of_birth: Mapped[str] = mapped_column(nullable=True)
 
 
 class BookReview(Base):
-    review: Mapped[str]  # pyright: ignore
-    book_id: Mapped[str] = mapped_column(ForeignKey("book.id"), default="000")  # pyright: ignore
+    review: Mapped[str]
+    book_id: Mapped[str] = mapped_column(ForeignKey("book.id"), default="000")
 
 
 class Book(Base):
-    title: Mapped[str] = mapped_column(String(length=250), default="Hi")  # pyright: ignore
-    author_id: Mapped[str] = mapped_column(ForeignKey("author.id"), default="123")  # pyright: ignore
-    first_author: Mapped[Author] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
-    reviews: Mapped[List[BookReview]] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
-    bar: Mapped[str] = mapped_column(default="Hello")  # pyright: ignore
-    SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
-    spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
+    title: Mapped[str] = mapped_column(String(length=250), default="Hi")
+    author_id: Mapped[str] = mapped_column(ForeignKey("author.id"), default="123")
+    first_author: Mapped[Author] = relationship(lazy="joined", innerjoin=True)
+    reviews: Mapped[List[BookReview]] = relationship(lazy="joined", innerjoin=True)
+    bar: Mapped[str] = mapped_column(default="Hello")
+    SPAM: Mapped[str] = mapped_column(default="Bye")
+    spam_bar: Mapped[str] = mapped_column(default="Goodbye")
     number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
@@ -236,7 +236,7 @@ def test_dto_with_association_proxy(create_module: Callable[[str], ModuleType]) 
         """
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Type, Final, List
+from typing import Dict, List, Set, Tuple, Type, Final, List, Generator
 
 from sqlalchemy import Column
 from sqlalchemy import ForeignKey
@@ -568,7 +568,7 @@ class ModelCreateDTO(SQLAlchemyDTO[Model]):
 
 ModelReturnDTO = SQLAlchemyDTO[Model]
 
-@post("/", dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 def post_handler(data: Model) -> Model:
     Base.metadata.create_all(engine)
 
@@ -758,7 +758,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
     Model.metadata.drop_all(engine)
 
 
-@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 def post_handler(data: DTOData[Model], service: ModelService) -> Model:
     return service.create(data, auto_commit=True)
 
@@ -809,7 +809,7 @@ async def provide_service( ) -> AsyncGenerator[ModelService, None]:
     async with engine.begin() as conn:
         await conn.run_sync(AModel.metadata.create_all)
 
-@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 async def post_handler(data: DTOData[AModel], service: ModelService) -> AModel:
     return await service.create(data, auto_commit=True)
 
@@ -864,7 +864,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
         yield service
     Model.metadata.drop_all(engine)
 
-@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 def post_handler(data: DTOData[Model], service: ModelService) -> Model:
     return service.create(data, auto_commit=True)
 
