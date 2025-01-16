@@ -11,9 +11,9 @@ from flask import Flask, Response
 from msgspec import Struct
 from sqlalchemy import String, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy.base import BigIntBase
+from advanced_alchemy import base, mixins
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask import (
     AdvancedAlchemy,
@@ -24,8 +24,16 @@ from advanced_alchemy.extensions.flask import (
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 
+metadata = base.metadata_registry.get("flask_testing")
 
-class User(BigIntBase):
+
+class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+    """Base model with a big integer primary key."""
+
+    __metadata__ = metadata
+
+
+class User(NewBigIntBase):
     """Test user model."""
 
     __tablename__ = "users_testing"
@@ -57,21 +65,21 @@ class AsyncUserService(SQLAlchemyAsyncRepositoryService[User], FlaskServiceMixin
     repository_type = Repo
 
 
-@pytest.fixture(scope="session", autouse=True)
-def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Generator[Path, None, None]:
-    yield tmp_path_factory.mktemp("test_extensions_flask")
+@pytest.fixture(scope="function")
+def tmp_path_function(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("test_extensions_flask")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
+@pytest.fixture(scope="function")
+def setup_database(tmp_path_function: Path) -> Generator[Path, None, None]:
     # Create a new database for each test
-    db_path = tmp_path_session / "test.db"
-    config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}")
-    config.create_all_metadata()
+    db_path = tmp_path_function / "test.db"
+    config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}", metadata=metadata)
+    engine = config.get_engine()
+    User._sa_registry.metadata.create_all(engine)
     with config.get_session() as session:
         assert isinstance(session, Session)
         table_exists = session.execute(text("SELECT COUNT(*) FROM users_testing")).scalar_one()
-        session.commit()
     assert table_exists >= 0
     yield db_path
 
