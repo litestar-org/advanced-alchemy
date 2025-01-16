@@ -380,12 +380,11 @@ Initializing a new project
 
 If you would like to initial set of alembic migrations, you can easily scaffold out new templates to setup a project.
 
-Assuming that you are using the default configuration for the SQLAlchemy configuration, you can run the following.
+Assuming that you are using the default configuration for the SQLAlchemy configuration, you can run the following to initialize the migrations directory.
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    # Initialize migrations directory
-    litestar database init ./migrations
+    $ litestar database init ./migrations
 
 If you use a different path than `./migrations`, be sure to also set this in your SQLAlchemy config.  For instance, if you'd like to use `./alembic`:
 
@@ -397,12 +396,11 @@ If you use a different path than `./migrations`, be sure to also set this in you
         ),
     )
 
-And then run the following:
+And then run the following to initialize the migrations directory:
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    # Initialize migrations directory
-    litestar database init ./alembic
+    $ litestar database init ./alembic
 
 You will now be configured to use the alternate directory for migrations.
 
@@ -411,10 +409,9 @@ Generate New Migrations
 
 Once configured, you can run the following command to auto-generate new alembic migrations:
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    # Create a new migration
-    litestar database make-migrations
+    $ litestar database make-migrations
 
 
 Upgrading a Database
@@ -422,6 +419,6 @@ Upgrading a Database
 
 You can upgrade a database to the latest version by running the following command:
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    litestar database upgrade
+    $ litestar database upgrade

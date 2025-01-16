@@ -141,6 +141,7 @@ autodoc_type_aliases = {
     "EmptyType": "advanced_alchemy.utils.dataclass.EmptyType",
     "async_sessionmaker": "sqlalchemy.ext.asyncio.async_sessionmaker",
     "sessionmaker": "sqlalchemy.orm.sessionmaker",
+    "UniqueMixin": "advanced_alchemy.mixins.unique.UniqueMixin",
 }
 autodoc_mock_imports = [
     "alembic",
@@ -161,6 +162,9 @@ autodoc_mock_imports = [
 
 autosectionlabel_prefix_document = True
 
+# Strip the dollar prompt when copying code
+# https://sphinx-copybutton.readthedocs.io/en/latest/use.html#strip-and-configure-input-prompts-for-code-cells
+copybutton_prompt_text = "$ "
 
 # -- Style configuration -----------------------------------------------------
 html_theme = "shibuya"
