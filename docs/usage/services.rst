@@ -27,7 +27,7 @@ Let's build upon our blog example by creating services for posts and tags:
 
     from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from pydantic import BaseModel
-    from datetime import datetime
+    import datetime
     from typing import Optional, List
     from uuid import UUID
 
@@ -47,9 +47,9 @@ Let's build upon our blog example by creating services for posts and tags:
         title: str
         content: str
         published: bool
-        published_at: Optional[datetime]
-        created_at: datetime
-        updated_at: datetime
+        published_at: Optional[datetime.datetime]
+        created_at: datetime.datetime
+        updated_at: datetime.datetime
         tags: List["TagResponse"]
 
         model_config = {"from_attributes": True}
@@ -200,7 +200,7 @@ Services can handle complex business logic involving multiple repositories:
             """Publish or unpublish a post with timestamp."""
             data = PostUpdate(
                 published=publish,
-                published_at=datetime.utcnow() if publish else None,
+                published_at=datetime.datetime.utcnow() if publish else None,
             )
             post = await self.post_service.update(
                 item_id=post_id,
@@ -217,7 +217,7 @@ Services can handle complex business logic involving multiple repositories:
             """Get trending posts based on view count and recency."""
             posts = await self.post_service.list(
                 Post.published == True,
-                Post.created_at > (datetime.utcnow() - timedelta(days=days)),
+                Post.created_at > (datetime.datetime.utcnow() - timedelta(days=days)),
                 Post.view_count >= min_views,
                 order_by=[Post.view_count.desc()],
             )
@@ -225,9 +225,9 @@ Services can handle complex business logic involving multiple repositories:
 
         async def to_model(self, data: ModelDictT[Post], operation: str | None = None) -> Post:
             """Convert a dictionary, Msgspec model, or Pydantic model to a Post model."""
-            if (is_msgspec_model(data) or is_pydantic_model(data)) and operation == "create" and data.slug is None:
+            if (is_msgspec_struct(data) or is_pydantic_model(data)) and operation == "create" and data.slug is None:
                 data.slug = await self.repository.get_available_slug(data.name)
-            if (is_msgspec_model(data) or is_pydantic_model(data)) and operation == "update" and data.slug is None:
+            if (is_msgspec_struct(data) or is_pydantic_model(data)) and operation == "update" and data.slug is None:
                 data.slug = await self.repository.get_available_slug(data.name)
             if is_dict(data) and "slug" not in data and operation == "create":
                 data["slug"] = await self.repository.get_available_slug(data["name"])

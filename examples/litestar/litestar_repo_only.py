@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003
-from typing import TYPE_CHECKING, List
+import datetime  # noqa: TC003
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
@@ -12,8 +12,8 @@ from litestar.pagination import OffsetPagination
 from litestar.params import Parameter
 from pydantic import BaseModel as _BaseModel
 from pydantic import TypeAdapter
-from sqlalchemy import ForeignKey, select
-from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig
@@ -37,8 +37,8 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[date | None]
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    dob: Mapped[Optional[datetime.date]]  # noqa: UP007
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -57,17 +57,17 @@ class BookModel(UUIDAuditBase):
 class Author(BaseModel):
     id: UUID | None
     name: str
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorUpdate(BaseModel):
     name: str | None = None
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
@@ -85,10 +85,7 @@ async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
 # specific SQL options such as join details
 async def provide_author_details_repo(db_session: AsyncSession) -> AuthorRepository:
     """This provides a simple example demonstrating how to override the join options for the repository."""
-    return AuthorRepository(
-        statement=select(AuthorModel).options(selectinload(AuthorModel.books)),
-        session=db_session,
-    )
+    return AuthorRepository(load=[AuthorModel.books], session=db_session)
 
 
 def provide_limit_offset_pagination(

@@ -168,7 +168,7 @@ class ResultConverter:
             filters = []
         if schema_type is None:
             if not isinstance(data, Sequence):
-                return cast("ModelOrRowMappingT", data)
+                return cast("ModelOrRowMappingT", data)  # type: ignore[unreachable,unused-ignore]
             limit_offset = find_filter(LimitOffset, filters=filters)
             total = total or len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
@@ -229,5 +229,10 @@ class ResultConverter:
                 offset=limit_offset.offset,
                 total=total,
             )
+
+        if not MSGSPEC_INSTALLED and not PYDANTIC_INSTALLED:
+            msg = "Either Msgspec or Pydantic must be installed to use schema conversion"
+            raise AdvancedAlchemyError(msg)
+
         msg = "`schema_type` should be a valid Pydantic or Msgspec schema"
         raise AdvancedAlchemyError(msg)

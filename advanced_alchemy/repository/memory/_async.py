@@ -40,9 +40,9 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
+    import datetime
     from collections import abc
     from collections.abc import Iterable
-    from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
@@ -231,14 +231,14 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self,
         result: list[ModelT],
         field_name: str,
-        before: datetime | None = None,
-        after: datetime | None = None,
-        on_or_before: datetime | None = None,
-        on_or_after: datetime | None = None,
+        before: datetime.datetime | None = None,
+        after: datetime.datetime | None = None,
+        on_or_before: datetime.datetime | None = None,
+        on_or_after: datetime.datetime | None = None,
     ) -> list[ModelT]:
         result_: list[ModelT] = []
         for item in result:
-            attr: datetime = getattr(item, field_name)
+            attr: datetime.datetime = getattr(item, field_name)
             if before is not None and attr < before:
                 result_.append(item)
             if after is not None and attr > after:

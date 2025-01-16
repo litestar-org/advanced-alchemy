@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 def setup(app: Sphinx) -> dict[str, bool]:
     ext_config = {}
-    ext_config.update(missing_references.setup(app))
+    ext_config.update(missing_references.setup(app))  # type: ignore[arg-type]
     ext_config.update(changelog.setup(app))  # type: ignore[arg-type]
 
-    return ext_config
+    return ext_config  # type: ignore[return-value]

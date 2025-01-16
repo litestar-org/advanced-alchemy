@@ -9,12 +9,16 @@ from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import UUID_UTILS_INSTALLED
 
 if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
-    from uuid_utils.compat import uuid4, uuid6, uuid7  # pyright: ignore[reportMissingImports]
+    from uuid_utils.compat import (  # type: ignore[no-redef,unused-ignore]  # pyright: ignore[reportMissingImports]
+        uuid4,
+        uuid6,
+        uuid7,
+    )
 else:
-    from uuid import uuid4
+    from uuid import uuid4  # type: ignore[no-redef,unused-ignore]
 
-    uuid6 = uuid4  # type: ignore[assignment]
-    uuid7 = uuid4  # type: ignore[assignment]
+    uuid6 = uuid4  # type: ignore[assignment, unused-ignore]
+    uuid7 = uuid4  # type: ignore[assignment, unused-ignore]
 
 
 @declarative_mixin

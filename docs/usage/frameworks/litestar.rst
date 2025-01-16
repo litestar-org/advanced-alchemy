@@ -21,7 +21,7 @@ First, configure the SQLAlchemy plugin with Litestar. The plugin handles databas
 .. code-block:: python
 
     from litestar import Litestar
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -44,7 +44,7 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
 
 .. code-block:: python
 
-    from datetime import date
+    import datetime
     from uuid import UUID
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,7 +54,7 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
     class AuthorModel(UUIDBase):
         __tablename__ = "author"
         name: Mapped[str]
-        dob: Mapped[date | None]
+        dob: Mapped[datetime.date | None]
         books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
     class BookModel(UUIDAuditBase):
@@ -70,7 +70,7 @@ Define Pydantic schemas for input validation and response serialization:
 
 .. code-block:: python
 
-    from datetime import date
+    import datetime
     from pydantic import BaseModel, ConfigDict
     from uuid import UUID
     from typing import Optional
@@ -83,17 +83,17 @@ Define Pydantic schemas for input validation and response serialization:
         """Author response schema."""
         id: UUID
         name: str
-        dob: Optional[date] = None
+        dob: Optional[datetime.date] = None
 
     class AuthorCreate(BaseSchema):
         """Schema for creating authors."""
         name: str
-        dob: Optional[date] = None
+        dob: Optional[datetime.date] = None
 
     class AuthorUpdate(BaseSchema):
         """Schema for updating authors."""
         name: Optional[str] = None
-        dob: Optional[date] = None
+        dob: Optional[datetime.date] = None
 
     class Book(BaseSchema):
         """Book response schema with author details."""

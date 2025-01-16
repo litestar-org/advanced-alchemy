@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import datetime  # noqa: TC003
 from contextlib import asynccontextmanager
-from datetime import date  # noqa: TC003
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List
 from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from pydantic import BaseModel as _BaseModel
-from sqlalchemy import ForeignKey, select
+from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
-from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing_extensions import Annotated
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase, metadata_registry
@@ -36,8 +36,8 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[date | None]
-    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+    dob: Mapped[datetime.date | None]
+    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -56,17 +56,17 @@ class BookModel(UUIDAuditBase):
 class Author(BaseModel):
     id: UUID | None
     name: str
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorUpdate(BaseModel):
     name: str | None = None
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
@@ -75,7 +75,7 @@ class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
     model_type = AuthorModel
 
 
-class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
+class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel, AuthorRepository]):
     """Author repository."""
 
     repository_type = AuthorRepository
@@ -95,9 +95,7 @@ async def provide_authors_service(
     db_session: Annotated[AsyncSession, Depends(provide_db_session)],
 ) -> AsyncGenerator[AuthorService, None]:
     """This provides the default Authors repository."""
-    async with AuthorService.new(
-        session=db_session,
-    ) as service:
+    async with AuthorService.new(session=db_session) as service:
         yield service
 
 
@@ -107,10 +105,7 @@ async def provide_author_details_service(
     db_session: Annotated[AsyncSession, Depends(provide_db_session)],
 ) -> AsyncGenerator[AuthorService, None]:
     """This provides a simple example demonstrating how to override the join options for the repository."""
-    async with AuthorService.new(
-        statement=select(AuthorModel).options(selectinload(AuthorModel.books)),
-        session=db_session,
-    ) as service:
+    async with AuthorService.new(load=[AuthorModel.books], session=db_session) as service:
         yield service
 
 

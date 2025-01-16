@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import datetime
 import sys
-from datetime import date, datetime
 from typing import TYPE_CHECKING, ClassVar, Dict, List, Type
 from uuid import UUID, uuid4
 
@@ -36,12 +36,12 @@ if TYPE_CHECKING:
 def fx_base() -> Type[DeclarativeBase]:
     class Base(DeclarativeBase):
         id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True)
-        created: Mapped[datetime] = mapped_column(
-            default=datetime.now,
+        created: Mapped[datetime.datetime] = mapped_column(
+            default=datetime.datetime.now,
             info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)},
         )
-        updated: Mapped[datetime] = mapped_column(
-            default=datetime.now,
+        updated: Mapped[datetime.datetime] = mapped_column(
+            default=datetime.datetime.now,
             info={DTO_FIELD_META_KEY: DTOField(mark=Mark.READ_ONLY)},
         )
 
@@ -58,7 +58,7 @@ def fx_base() -> Type[DeclarativeBase]:
 def fx_author_model(base: DeclarativeBase) -> Type[DeclarativeBase]:
     class Author(base):  # type: ignore
         name: Mapped[str]
-        dob: Mapped[date]
+        dob: Mapped[datetime.date]
 
     return Author
 
@@ -112,7 +112,7 @@ async def test_model_write_dto(
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": date(1890, 9, 15),
+            "dob": datetime.date(1890, 9, 15),
         },
     )
 
@@ -130,7 +130,7 @@ async def test_model_read_dto(
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": date(1890, 9, 15),
+            "dob": datetime.date(1890, 9, 15),
         },
     )
 
@@ -145,7 +145,7 @@ async def test_model_list_dto(author_model: Type[DeclarativeBase], asgi_connecti
         {
             "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
             "name": "Agatha Christie",
-            "dob": date(1890, 9, 15),
+            "dob": datetime.date(1890, 9, 15),
         },
     )
 
@@ -210,7 +210,7 @@ async def test_write_dto_for_model_field_unsupported_default(
     type."""
 
     class Model(base):  # type: ignore
-        field: Mapped[datetime] = mapped_column(default=func.now())
+        field: Mapped[datetime.datetime] = mapped_column(default=func.now())
 
     with pytest.raises(ValueError):
         await get_model_from_dto(SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]], Model, asgi_connection, b"")
@@ -221,7 +221,7 @@ async def test_dto_for_private_model_field(
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Model(base):  # type: ignore
-        field: Mapped[datetime] = mapped_column(
+        field: Mapped[datetime.datetime] = mapped_column(
             info={DTO_FIELD_META_KEY: DTOField(mark=Mark.PRIVATE)},
         )
 
@@ -233,9 +233,9 @@ async def test_dto_for_private_model_field(
     serializable = dto_instance.data_to_encodable_type(  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         Model(
             id=UUID("0956ca9e-5671-4d7d-a862-b98e6368ed2c"),
-            created=datetime.min,
-            updated=datetime.min,
-            field=datetime.min,
+            created=datetime.datetime.min,
+            updated=datetime.datetime.min,
+            field=datetime.datetime.min,
         ),
     )
     assert b"field" not in encode_json(serializable)
@@ -246,7 +246,7 @@ async def test_dto_for_non_mapped_model_field(
     asgi_connection: Request[Any, Any, Any],
 ) -> None:
     class Model(base):  # type: ignore
-        field: ClassVar[datetime]
+        field: ClassVar[datetime.datetime]
 
     dto_type = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
     raw = b'{"id": "97108ac1-ffcb-411d-8b1e-d9183399f63b","created":"0001-01-01T00:00:00","updated":"0001-01-01T00:00:00","field":"0001-01-01T00:00:00"}'

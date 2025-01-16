@@ -25,7 +25,13 @@ classifiers = [
   "Topic :: Database",
   "Topic :: Database :: Database Engines/Servers",
 ]
-dependencies = ["sqlalchemy>=2.0.20", "alembic>=1.12.0", "typing-extensions>=4.0.0", "greenlet"]
+dependencies = [
+  "sqlalchemy>=2.0.20",
+  "alembic>=1.12.0",
+  "typing-extensions>=4.0.0",
+  "greenlet",
+  "eval-type-backport ; python_full_version < '3.10'",
+]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
 license = { text = "MIT" }
@@ -41,7 +47,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.27.0"
+version = "0.28.0"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -100,9 +106,11 @@ doc = [
   "sphinx-paramlinks>=0.6.0",
   "sphinx-togglebutton>=0.3.2",
   "sphinx-toolbox>=3.8.1",
+  "myst-parser",
+  "sphinx-autodoc-typehints",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
-fastapi = ["fastapi[all]>=0.115.3"]
+fastapi = ["fastapi[all]>=0.115.3", "starlette<0.45.0; python_version < '3.9'", "starlette; python_version >= '3.9'"]
 flask = ["flask-sqlalchemy>=3.1.1"]
 lint = [
   "mypy>=1.13.0",
@@ -128,10 +136,18 @@ mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
 postgres = ["asyncpg>=0.29.0", "psycopg2-binary>=2.9.10", "psycopg[binary,pool]>=3.2.3"]
-sanic = ["sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
+sanic = [
+  "sanic<24.12; python_version < '3.9'",
+  "sanic; python_version >= '3.9'",
+  "sanic-testing>=24.6.0",
+  "sanic[ext]>=24.6.0",
+]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
+  "pydantic-extra-types < 2.9.0; python_version < \"3.9\"",
+  "pydantic-extra-types; python_version >= \"3.9\"",
+  "rich-click",
   "coverage>=7.6.1",
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
@@ -151,7 +167,7 @@ test = [
 allow_dirty = true
 commit = true
 commit_args = "--no-verify"
-current_version = "0.26.2"
+current_version = "0.28.0"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -273,6 +289,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 fixable = ["ALL"]
 ignore = [
   "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "A005",    # flake8-builtins - module {name} shadows a Python standard-library module
   "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
   "D100",    # pydocstyle - missing docstring in public module
   "D101",    # pydocstyle - missing docstring in public class
@@ -440,6 +457,11 @@ warn_unused_ignores = false
 module = "advanced_alchemy.base"
 warn_unused_ignores = false
 
+[[tool.mypy.overrides]]
+disable_error_code = "unreachable"
+module = "tests.integration.test_repository"
+
+
 [tool.pyright]
 disableBytesTypePromotions = true
 exclude = [
@@ -452,6 +474,7 @@ exclude = [
 include = ["advanced_alchemy"]
 pythonVersion = "3.8"
 reportUnnecessaryTypeIgnoreComments = true
+reportUnusedFunction = false
 strict = ["advanced_alchemy/**/*"]
 venv = ".venv"
 venvPath = "."
@@ -502,6 +525,7 @@ SQLAlchemyAsyncQueryService = "SQLAlchemySyncQueryService"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryReadService = "SQLAlchemySyncRepositoryReadService"
 SQLAlchemyAsyncRepositoryService = "SQLAlchemySyncRepositoryService"
+"SQLAlchemyAsyncRepositoryT" = "SQLAlchemySyncRepositoryT"
 SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 "advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig" = "advanced_alchemy.config.sync.SQLAlchemySyncConfig"
 "advanced_alchemy.repository.SQLAlchemyAsyncQueryRepository" = "advanced_alchemy.repository.SQLAlchemySyncQueryRepository"
@@ -511,6 +535,7 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 "advanced_alchemy.repository.SQLAlchemyAsyncSlugRepositoryProtocol" = "advanced_alchemy.repository.SQLAlchemySyncSlugRepositoryProtocol"
 "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository"
 "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockSlugRepository" = "advanced_alchemy.repository.memory.SQLAlchemySyncMockSlugRepository"
+"advanced_alchemy.repository.typing.SQLAlchemyAsyncRepositoryT" = "advanced_alchemy.repository.typing.SQLAlchemySyncRepositoryT"
 "async_scoped_session" = "scoped_session"
 "collections.abc.AsyncIterator" = "collections.abc.Iterator"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"

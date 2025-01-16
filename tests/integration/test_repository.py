@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import os
 from collections.abc import Generator, Iterator
-from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Literal, Type, Union, cast
 from unittest.mock import NonCallableMagicMock
 from uuid import UUID, uuid4
@@ -76,7 +76,7 @@ SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBoo
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
 SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
-SecretService = SQLAlchemyAsyncRepositoryService[AnySecret]
+SecretService = SQLAlchemyAsyncRepositoryService[AnySecret, SecretRepository]
 SecretMockRepository = SQLAlchemyAsyncMockRepository[AnySecret]
 AnySecretRepository = Union[SecretRepository, SecretMockRepository]
 
@@ -84,32 +84,34 @@ AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
 AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
 AuthorMockRepository = SQLAlchemyAsyncMockRepository[AnyAuthor]
 AnyAuthorRepository = Union[AuthorRepository, AuthorMockRepository]
-AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor]
+AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor, AuthorRepository]
 
 AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
 RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
-RuleService = SQLAlchemyAsyncRepositoryService[AnyRule]
+RuleService = SQLAlchemyAsyncRepositoryService[AnyRule, RuleRepository]
 
 AnySlugBook = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
 SlugBookRepository = SQLAlchemyAsyncSlugRepository[AnySlugBook]
-SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook]
+SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook, SlugBookRepository]
 
 
 AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
 BookRepository = SQLAlchemyAsyncRepository[AnyBook]
-BookService = SQLAlchemyAsyncRepositoryService[AnyBook]
+BookService = SQLAlchemyAsyncRepositoryService[AnyBook, BookRepository]
 
 AnyTag = Union[models_uuid.UUIDTag, models_bigint.BigIntTag]
 TagRepository = SQLAlchemyAsyncRepository[AnyTag]
-TagService = SQLAlchemyAsyncRepositoryService[AnyTag]
+TagService = SQLAlchemyAsyncRepositoryService[AnyTag, TagRepository]
 
 AnyItem = Union[models_uuid.UUIDItem, models_bigint.BigIntItem]
 ItemRepository = SQLAlchemyAsyncRepository[AnyItem]
-ItemService = SQLAlchemyAsyncRepositoryService[AnyItem]
+ItemService = SQLAlchemyAsyncRepositoryService[AnyItem, ItemRepository]
 
 AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]
 ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
-ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[AnyModelWithFetchedValue]
+ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
+    AnyModelWithFetchedValue, ModelWithFetchedValueRepository
+]
 
 
 RawRecordData = List[Dict[str, Any]]
@@ -180,7 +182,7 @@ def fx_raw_log_events_uuid() -> RawRecordData:
         {
             "id": "f34545b9-663c-4fce-915d-dd1ae9cea42a",
             "logged_at": "0001-01-01T00:00:00",
-            "payload": {"foo": "bar", "baz": datetime.now()},
+            "payload": {"foo": "bar", "baz": datetime.datetime.now()},
             "created_at": "0001-01-01T00:00:00",
             "updated_at": "0001-01-01T00:00:00",
         },
@@ -272,7 +274,7 @@ def fx_raw_log_events_bigint() -> RawRecordData:
         {
             "id": 2025,
             "logged_at": "0001-01-01T00:00:00",
-            "payload": {"foo": "bar", "baz": datetime.now()},
+            "payload": {"foo": "bar", "baz": datetime.datetime.now()},
             "created_at": "0001-01-01T00:00:00",
             "updated_at": "0001-01-01T00:00:00",
         },
@@ -787,19 +789,19 @@ async def seed_db_async(
     """Return an asynchronous session for the current engine"""
     # convert date/time strings to dt objects.
     for raw_author in raw_authors:
-        raw_author["dob"] = datetime.strptime(raw_author["dob"], "%Y-%m-%d").date()
-        raw_author["created_at"] = datetime.strptime(raw_author["created_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
-            timezone.utc,
+        raw_author["dob"] = datetime.datetime.strptime(raw_author["dob"], "%Y-%m-%d").date()
+        raw_author["created_at"] = datetime.datetime.strptime(raw_author["created_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
+            datetime.timezone.utc,
         )
-        raw_author["updated_at"] = datetime.strptime(raw_author["updated_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
-            timezone.utc,
+        raw_author["updated_at"] = datetime.datetime.strptime(raw_author["updated_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
+            datetime.timezone.utc,
         )
     for raw_author in raw_rules:
-        raw_author["created_at"] = datetime.strptime(raw_author["created_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
-            timezone.utc,
+        raw_author["created_at"] = datetime.datetime.strptime(raw_author["created_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
+            datetime.timezone.utc,
         )
-        raw_author["updated_at"] = datetime.strptime(raw_author["updated_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
-            timezone.utc,
+        raw_author["updated_at"] = datetime.datetime.strptime(raw_author["updated_at"], "%Y-%m-%dT%H:%M:%S").astimezone(
+            datetime.timezone.utc,
         )
 
     if isinstance(async_engine, NonCallableMagicMock):
@@ -1205,7 +1207,7 @@ async def test_repo_list_and_count_method_empty(book_repo: BookRepository) -> No
 
 @pytest.fixture()
 def frozen_datetime() -> Generator[Coordinates, None, None]:
-    with travel(datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated,reportCallIssue]
+    with travel(datetime.datetime.utcnow, tick=False) as frozen:  # pyright: ignore[reportDeprecated,reportCallIssue]
         yield frozen
 
 
@@ -1233,7 +1235,7 @@ async def test_repo_created_updated(
     original_update_dt = author.updated_at
     assert author.created_at is not None
     assert author.updated_at is not None
-    frozen_datetime.shift(delta=timedelta(seconds=5))
+    frozen_datetime.shift(delta=datetime.timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
@@ -1284,7 +1286,7 @@ async def test_repo_created_updated_no_listener(
     original_update_dt = author.updated_at
     assert author.created_at is not None
     assert author.updated_at is not None
-    frozen_datetime.shift(delta=timedelta(seconds=5))
+    frozen_datetime.shift(delta=datetime.timedelta(seconds=5))
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
@@ -1332,7 +1334,7 @@ async def test_repo_add_method(
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
-    new_author = author_model(name="Testing", dob=datetime.now().date())
+    new_author = author_model(name="Testing", dob=datetime.datetime.now().date())
     obj = await maybe_async(author_repo.add(new_author))
     count = await maybe_async(author_repo.count())
     assert exp_count == count
@@ -1350,8 +1352,8 @@ async def test_repo_add_many_method(
     objs = await maybe_async(
         author_repo.add_many(
             [
-                author_model(name="Testing 2", dob=datetime.now().date()),
-                author_model(name="Cody", dob=datetime.now().date()),
+                author_model(name="Testing 2", dob=datetime.datetime.now().date()),
+                author_model(name="Cody", dob=datetime.datetime.now().date()),
             ],
         ),
     )
@@ -1460,7 +1462,7 @@ async def test_repo_get_or_upsert_method(author_repo: AnyAuthorRepository, first
 
 
 async def test_repo_get_or_upsert_match_filter(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", name="Agatha Christie", dob=now.date()),
     )
@@ -1473,7 +1475,7 @@ async def test_repo_get_or_upsert_match_filter_no_upsert(
     author_repo: AnyAuthorRepository,
     first_author_id: Any,
 ) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     existing_obj, existing_created = await maybe_async(
         author_repo.get_or_upsert(match_fields="name", upsert=False, name="Agatha Christie", dob=now.date()),
     )
@@ -1491,7 +1493,7 @@ async def test_repo_get_and_update(author_repo: AnyAuthorRepository, first_autho
 
 
 async def test_repo_get_and_upsert_match_filter(author_repo: AnyAuthorRepository, first_author_id: Any) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     with pytest.raises(NotFoundError):
         _ = await maybe_async(
             author_repo.get_and_update(match_fields="name", name="Agatha Christie123", dob=now.date()),
@@ -1524,7 +1526,7 @@ async def test_repo_upsert_method(
     assert upsert2_insert_obj.name == "Another Author"
     _ = await maybe_async(author_repo.get_one(name="Leo Tolstoy"))
     # ensures that it still works even if the ID isn't set on an existing key
-    new_dob = datetime.strptime("2028-09-09", "%Y-%m-%d").date()
+    new_dob = datetime.datetime.strptime("2028-09-09", "%Y-%m-%d").date()
     upsert3_update_obj = await maybe_async(
         author_repo.upsert(
             author_model(name="Leo Tolstoy", dob=new_dob),
@@ -1643,7 +1645,7 @@ async def test_repo_upsert_many_method_match_not_on_input(
 async def test_repo_filter_before_after(author_repo: AnyAuthorRepository) -> None:
     before_filter = BeforeAfter(
         field_name="created_at",
-        before=datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc),
+        before=datetime.datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(datetime.timezone.utc),
         after=None,
     )
     existing_obj = await maybe_async(author_repo.list(before_filter))
@@ -1651,7 +1653,7 @@ async def test_repo_filter_before_after(author_repo: AnyAuthorRepository) -> Non
 
     after_filter = BeforeAfter(
         field_name="created_at",
-        after=datetime.strptime("2023-03-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc),
+        after=datetime.datetime.strptime("2023-03-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(datetime.timezone.utc),
         before=None,
     )
     existing_obj = await maybe_async(author_repo.list(after_filter))
@@ -1661,7 +1663,9 @@ async def test_repo_filter_before_after(author_repo: AnyAuthorRepository) -> Non
 async def test_repo_filter_on_before_after(author_repo: AnyAuthorRepository) -> None:
     before_filter = OnBeforeAfter(
         field_name="created_at",
-        on_or_before=datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc),
+        on_or_before=datetime.datetime.strptime("2023-05-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+            datetime.timezone.utc
+        ),
         on_or_after=None,
     )
     existing_obj = await maybe_async(
@@ -1671,7 +1675,9 @@ async def test_repo_filter_on_before_after(author_repo: AnyAuthorRepository) -> 
 
     after_filter = OnBeforeAfter(
         field_name="created_at",
-        on_or_after=datetime.strptime("2023-03-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc),
+        on_or_after=datetime.datetime.strptime("2023-03-01T00:00:00", "%Y-%m-%dT%H:%M:%S").astimezone(
+            datetime.timezone.utc
+        ),
         on_or_before=None,
     )
     existing_obj = await maybe_async(
@@ -2017,7 +2023,7 @@ async def test_service_count_method_with_filters(raw_authors: RawRecordData, aut
     Args:
         author_service: The author mock repository
     """
-    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):  # type: ignore[unreachable,unused-ignore]
         assert (
             await maybe_async(
                 author_service.count(
@@ -2063,7 +2069,7 @@ async def test_service_list_and_count_method_with_filters(
     """
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
-    if issubclass(author_service.repository_type, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
+    if isinstance(author_service.repository, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
         collection, count = await maybe_async(  # pyright: ignore
             author_service.list_and_count(**{author_service.repository.model_type.name.key: exp_name}),  # pyright: ignore
         )
@@ -2142,7 +2148,7 @@ async def test_service_create_method(
     author_model: AuthorModel,
 ) -> None:
     exp_count = len(raw_authors) + 1
-    new_author = author_model(name="Testing", dob=datetime.now().date())
+    new_author = author_model(name="Testing", dob=datetime.datetime.now().date())
     obj = await maybe_async(author_service.create(new_author))
     count = await maybe_async(author_service.count())
     assert exp_count == count
@@ -2160,8 +2166,8 @@ async def test_service_create_many_method(
     objs = await maybe_async(
         author_service.create_many(
             [
-                author_model(name="Testing 2", dob=datetime.now().date()),
-                author_model(name="Cody", dob=datetime.now().date()),
+                author_model(name="Testing 2", dob=datetime.datetime.now().date()),
+                author_model(name="Cody", dob=datetime.datetime.now().date()),
             ],
         ),
     )
@@ -2207,7 +2213,7 @@ async def test_service_update_method_no_item_id(author_service: AuthorService, f
 
 
 async def test_service_update_method_data_is_dict(author_service: AuthorService, first_author_id: Any) -> None:
-    new_date = datetime.date(datetime.now())
+    new_date = datetime.datetime.date(datetime.datetime.now())
     updated_obj = await maybe_async(
         author_service.update(item_id=first_author_id, data={"dob": new_date}),
     )
@@ -2221,7 +2227,7 @@ async def test_service_update_method_data_is_dict_with_none_value(
     first_author_id: Any,
 ) -> None:
     updated_obj = await maybe_async(author_service.update(item_id=first_author_id, data={"dob": None}))
-    assert cast(Union[date, None], updated_obj.dob) is None
+    assert cast(Union[datetime.date, None], updated_obj.dob) is None
     # ensure the other fields are not affected
     assert updated_obj.name == "Agatha Christie"
 

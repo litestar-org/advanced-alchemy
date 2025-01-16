@@ -8,9 +8,11 @@ from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import NANOID_INSTALLED
 
 if NANOID_INSTALLED and not TYPE_CHECKING:
-    from fastnanoid import generate as nanoid  # pyright: ignore[reportMissingImports]
+    from fastnanoid import (  # type: ignore[import-not-found,unused-ignore]  # pyright: ignore[reportMissingImports]
+        generate as nanoid,
+    )
 else:
-    from uuid import uuid4 as nanoid  # type: ignore[assignment]
+    from uuid import uuid4 as nanoid  # type: ignore[assignment,unused-ignore]
 
 
 @declarative_mixin

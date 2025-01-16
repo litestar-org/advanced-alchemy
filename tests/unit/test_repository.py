@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Collection
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, Generator, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -627,7 +627,7 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
     mocker.patch.object(BeforeAfter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.max, datetime.min)))
+    await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -644,7 +644,7 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
     mocker.patch.object(OnBeforeAfter, "append_to_statement", return_value=statement)
 
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.max, datetime.min)))
+    await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -820,14 +820,14 @@ def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyn
 @pytest.mark.parametrize(
     ("before", "after"),
     [
-        (datetime.max, datetime.min),
-        (None, datetime.min),
-        (datetime.max, None),
+        (datetime.datetime.max, datetime.datetime.min),
+        (None, datetime.datetime.min),
+        (datetime.datetime.max, None),
     ],
 )
 def test_filter_on_datetime_field(
-    before: datetime,
-    after: datetime,
+    before: datetime.datetime,
+    after: datetime.datetime,
     mock_repo: SQLAlchemyAsyncRepository[Any],
     mocker: MockerFixture,
     monkeypatch: MonkeyPatch,

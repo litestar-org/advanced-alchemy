@@ -66,7 +66,7 @@ Let's start with a simple blog post model:
 
     from advanced_alchemy.base import BigIntAuditBase
     from sqlalchemy.orm import Mapped, mapped_column
-    from datetime import datetime
+    import datetime
     from typing import Optional
 
     class Post(BigIntAuditBase):
@@ -83,7 +83,7 @@ Let's start with a simple blog post model:
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
         published: Mapped[bool] = mapped_column(default=False)
-        published_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+        published_at: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
 
 Many-to-Many Relationships
 --------------------------
@@ -241,5 +241,60 @@ Here's how to use these models with the UniqueMixin:
         session.merge(post)
         await session.flush()
         return post
+
+
+
+Customizing Declarative Base
+-----------------------------
+
+In case one of the built in declarative bases do not meet your needs (or you already have your own), Advanced Alchemy already supports customizing the ``DeclarativeBase`` class.
+
+Here's an example showing a class to generate a server-side UUID primary key for `postgres`:
+
+.. code-block:: python
+
+    import datetime
+    from uuid import UUID, uuid4
+
+    from advanced_alchemy.base import CommonTableAttributes, orm_registry
+    from sqlalchemy import text
+    from sqlalchemy.orm import (
+        DeclarativeBase,
+        Mapped,
+        declared_attr,
+        mapped_column,
+        orm_insert_sentinel,
+    )
+
+
+    class ServerSideUUIDPrimaryKey:
+        """UUID Primary Key Field Mixin."""
+
+        id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True, server_default=text("gen_random_uuid()"))
+        """UUID Primary key column."""
+
+        # noinspection PyMethodParameters
+        @declared_attr
+        def _sentinel(cls) -> Mapped[int]:
+            """Sentinel value required for SQLAlchemy bulk DML with UUIDs."""
+            return orm_insert_sentinel(name="sa_orm_sentinel")
+
+
+    class ServerSideUUIDBase(ServerSideUUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+        """Base for all SQLAlchemy declarative models with the custom UUID primary key ."""
+
+        registry = orm_registry
+
+
+    # Using ServerSideUUIDBase
+    class User(ServerSideUUIDBase):
+        """User model with ServerSideUUIDBase."""
+
+        username: Mapped[str] = mapped_column(unique=True, index=True)
+        email: Mapped[str] = mapped_column(unique=True)
+        full_name: Mapped[str]
+        is_active: Mapped[bool] = mapped_column(default=True)
+        last_login: Mapped[datetime.datetime | None] = mapped_column(default=None)
+
 
 With this foundation in place, let's look at the repository pattern.
