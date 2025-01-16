@@ -14,7 +14,6 @@ from advanced_alchemy.extensions.flask import (
     FlaskServiceMixin,
     SQLAlchemySyncConfig,
     base,
-    config,
     filters,
     repository,
     service,
@@ -57,7 +56,7 @@ class AuthorSchema(Struct):
 
 
 app = Flask(__name__)
-config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode=config.CommitMode.AUTOCOMMIT)
+config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode="autocommit")
 alchemy = AdvancedAlchemy(config, app)
 
 
