@@ -85,6 +85,8 @@ Let's start with a simple blog post model:
         published: Mapped[bool] = mapped_column(default=False)
         published_at: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
 
+.. _many_to_many_relationships:
+
 Many-to-Many Relationships
 --------------------------
 
@@ -160,20 +162,22 @@ If we want to interact with the models above, we might use something like the fo
         return post
 
 
-While not too difficult, there is definitely some additional logic required to handle the unique tags on this post.  Fortunately, we can remove some of this logic thanks to the ``UniqueMixin``.  Let's look at how we can do this.
+Fortunately, we can remove some of this logic thanks to :class:`UniqueMixin`.
 
-Using the UniqueMixin
----------------------
+.. _using_unique_mixin:
 
-The UniqueMixin provides automatic handling of unique constraints and merging of duplicate records. When using the mixin,
-you must implement two classmethods: ``unique_hash`` and ``unique_filter``. These methods enable:
+Using :class:`UniqueMixin`
+--------------------------
+
+:class:`UniqueMixin` provides automatic handling of unique constraints and merging of duplicate records. When using the mixin,
+you must implement two classmethods: :meth:`unique_hash <UniqueMixin.unique_hash>` and :meth:`unique_filter <UniqueMixin.unique_hash>`. These methods enable:
 
 - Automatic lookup of existing records
 - Safe merging of duplicates
 - Atomic get-or-create operations
 - Configurable uniqueness criteria
 
-Let's enhance our Tag model with UniqueMixin:
+Let's enhance our Tag model with :class:`UniqueMixin`:
 
 .. code-block:: python
 
@@ -217,6 +221,7 @@ Using the Models
 ----------------
 
 Here's how to use these models with the UniqueMixin:
+We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the logic.
 
 .. code-block:: python
 
@@ -227,13 +232,11 @@ Here's how to use these models with the UniqueMixin:
         post: Post,
         tag_names: list[str]
     ) -> Post:
-        """Add tags to a post, creating new tags if needed.
-
-        The UniqueMixin automatically handles:
-        1. Looking up existing tags
-        2. Creating new tags if needed
-        3. Merging duplicates
-        """
+        """Add tags to a post, creating new tags if needed."""
+        # The UniqueMixin automatically handles:
+        # 1. Looking up existing tags
+        # 2. Creating new tags if needed
+        # 3. Merging duplicates
         post.tags = [
           await Tag.as_unique_async(session, name=tag_text, slug=slugify(tag_text))
           for tag_text in tag_names

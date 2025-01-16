@@ -2,7 +2,7 @@
 FastAPI Integration
 ===================
 
-Advanced Alchemy provides integration with FastAPI through its repository and service patterns.
+Advanced Alchemy's repository and service patterns work well within FastAPI applications.
 
 Basic Setup
 -----------
