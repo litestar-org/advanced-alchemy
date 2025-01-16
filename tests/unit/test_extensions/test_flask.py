@@ -21,7 +21,6 @@ from advanced_alchemy.extensions.flask import (
     SQLAlchemyAsyncConfig,
     SQLAlchemySyncConfig,
 )
-from advanced_alchemy.extensions.flask.config import CommitMode
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 
@@ -258,9 +257,7 @@ def test_sync_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
-        config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT
-        )
+        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit")
 
         extension = AdvancedAlchemy(config, app)
 
@@ -289,7 +286,7 @@ def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT
+            connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit_with_redirect"
         )
 
         extension = AdvancedAlchemy(config, app)
@@ -319,7 +316,7 @@ def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
             connection_string=f"sqlite:///{setup_database}",
-            commit_mode=CommitMode.AUTOCOMMIT,
+            commit_mode="autocommit",
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -348,7 +345,7 @@ def test_async_autocommit(setup_database: Path) -> None:
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="autocommit"
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -378,7 +375,7 @@ def test_async_autocommit_with_redirect(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode=CommitMode.AUTOCOMMIT_WITH_REDIRECT,
+            commit_mode="autocommit_with_redirect",
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -409,7 +406,7 @@ def test_async_no_autocommit_on_error(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode=CommitMode.AUTOCOMMIT,
+            commit_mode="autocommit",
         )
 
         extension = AdvancedAlchemy(config, app)
@@ -445,7 +442,7 @@ def test_async_portal_cleanup(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode=CommitMode.MANUAL,
+            commit_mode="manual",
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -477,7 +474,7 @@ def test_async_portal_explicit_stop(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode=CommitMode.MANUAL,
+            commit_mode="manual",
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -524,7 +521,7 @@ def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode=CommitMode.MANUAL,
+            commit_mode="manual",
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -551,9 +548,7 @@ def test_sync_service_jsonify(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
-        config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT
-        )
+        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit")
 
         extension = AdvancedAlchemy(config, app)
 
@@ -580,7 +575,7 @@ def test_async_service_jsonify(setup_database: Path) -> None:
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="autocommit"
         )
         extension = AdvancedAlchemy(config, app)
 

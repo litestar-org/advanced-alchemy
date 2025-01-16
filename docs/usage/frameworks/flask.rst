@@ -28,7 +28,7 @@ Here's a basic example of using Advanced Alchemy with Flask:
         engine_config=EngineConfig(
             url="sqlite:///db.sqlite3",
         ),
-        commit_mode=CommitMode.AUTOCOMMIT,
+        commit_mode="autocommit",
     )
 
     db = AdvancedAlchemy(config=db_config)
@@ -141,18 +141,18 @@ Both sync and async configurations support these options:
      - Create tables on startup
      - ``False``
    * - ``commit_mode``
-     - ``CommitMode``
+     - ``"autocommit", "autocommit_with_redirect", "manual"``
      - Session commit behavior
-     - ``CommitMode.MANUAL``
+     - ``"manual"``
 
 Commit Modes
 ~~~~~~~~~~~~
 
 The ``commit_mode`` option controls how database sessions are committed:
 
-- ``CommitMode.MANUAL`` (default): No automatic commits
-- ``CommitMode.AUTOCOMMIT``: Commit on successful responses (2xx status codes)
-- ``CommitMode.AUTOCOMMIT_WITH_REDIRECT``: Commit on successful responses and redirects (2xx and 3xx status codes)
+- ``"manual"`` (default): No automatic commits
+- ``"autocommit"``: Commit on successful responses (2xx status codes)
+- ``"autocommit_with_redirect"``: Commit on successful responses and redirects (2xx and 3xx status codes)
 
 Services
 --------
