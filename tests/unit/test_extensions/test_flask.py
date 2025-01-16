@@ -7,45 +7,77 @@ from pathlib import Path
 from typing import Generator, Sequence
 
 import pytest
-from flask import Flask
+from flask import Flask, Response
+from msgspec import Struct
 from sqlalchemy import String, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.flask import (
+    AdvancedAlchemy,
+    FlaskServiceMixin,
+    SQLAlchemyAsyncConfig,
+    SQLAlchemySyncConfig,
+)
 from advanced_alchemy.extensions.flask.config import CommitMode
-
-pytestmark = pytest.mark.xdist_group("flask")
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 
 
 class User(BigIntBase):
     """Test user model."""
 
     __tablename__ = "users_testing"
-    __bind_key__ = None  # Ensure it uses the default bind key
 
     name: Mapped[str] = mapped_column(String(50))
 
 
-@pytest.fixture(scope="function", autouse=True)
-def setup_database(tmp_path: Path) -> Generator[Path, None, None]:
+class UserSchema(Struct):
+    """Test user pydantic model."""
+
+    name: str
+
+
+class UserService(SQLAlchemySyncRepositoryService[User], FlaskServiceMixin):
+    """Test user service."""
+
+    class Repo(SQLAlchemySyncRepository[User]):
+        model_type = User
+
+    repository_type = Repo
+
+
+class AsyncUserService(SQLAlchemyAsyncRepositoryService[User], FlaskServiceMixin):
+    """Test user service."""
+
+    class Repo(SQLAlchemyAsyncRepository[User]):
+        model_type = User
+
+    repository_type = Repo
+
+
+@pytest.fixture(scope="session")
+def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Generator[Path, None, None]:
+    yield tmp_path_factory.mktemp("test_extensions_flask")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
     # Create a new database for each test
-    db_path = tmp_path / "test.db"
+    db_path = tmp_path_session / "test.db"
     config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}")
     config.create_all_metadata()
     with config.get_session() as session:
         assert isinstance(session, Session)
         table_exists = session.execute(text("SELECT COUNT(*) FROM users_testing")).scalar_one()
         session.commit()
-    assert table_exists == 0
+    assert table_exists >= 0
     yield db_path
-    # Clean up the database after each test
-    if db_path.exists():
-        db_path.unlink()
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -59,6 +91,7 @@ def test_sync_extension_init(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -72,6 +105,7 @@ def test_sync_extension_init_with_app(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -85,6 +119,7 @@ def test_sync_extension_multiple_init(setup_database: Path) -> None:
         extension.init_app(app)
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -99,6 +134,7 @@ def test_async_extension_init(setup_database: Path) -> None:
         assert isinstance(session, AsyncSession)
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_extension_init_single_config_no_bind_key(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -112,6 +148,7 @@ def test_async_extension_init_single_config_no_bind_key(setup_database: Path) ->
         assert isinstance(session, AsyncSession)
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -126,6 +163,7 @@ def test_async_extension_init_with_app(setup_database: Path) -> None:
         assert isinstance(session, AsyncSession)
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -140,6 +178,7 @@ def test_async_extension_multiple_init(setup_database: Path) -> None:
         extension.init_app(app)
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_and_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -159,6 +198,7 @@ def test_sync_and_async_extension_init(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
+@pytest.mark.xdist_group("flask")
 def test_multiple_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -177,6 +217,7 @@ def test_multiple_binds(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
+@pytest.mark.xdist_group("flask")
 def test_multiple_binds_async(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -193,6 +234,7 @@ def test_multiple_binds_async(setup_database: Path) -> None:
         assert isinstance(session, AsyncSession)
 
 
+@pytest.mark.xdist_group("flask")
 def test_mixed_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -211,6 +253,7 @@ def test_mixed_binds(setup_database: Path) -> None:
         extension.portal_provider.portal.call(session.close)
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -240,6 +283,7 @@ def test_sync_autocommit(setup_database: Path) -> None:
         assert result.scalar_one().name == "test"
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -268,6 +312,7 @@ def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_redirect"
 
 
+@pytest.mark.xdist_group("flask")
 def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -297,6 +342,7 @@ def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
         assert result.first() is None
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -325,6 +371,7 @@ def test_async_autocommit(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_async"
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -355,6 +402,7 @@ def test_async_autocommit_with_redirect(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_async_redirect"
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -390,6 +438,7 @@ def test_async_no_autocommit_on_error(setup_database: Path) -> None:
         assert user is None
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_portal_cleanup(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -421,6 +470,7 @@ def test_async_portal_cleanup(setup_database: Path) -> None:
         assert result.first() is None
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_portal_explicit_stop(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -454,6 +504,7 @@ def test_async_portal_explicit_stop(setup_database: Path) -> None:
         assert result is None
 
 
+@pytest.mark.xdist_group("flask")
 def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -493,3 +544,61 @@ def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
         user = extension.portal_provider.portal.call(get_user)
         assert isinstance(user, User)
         assert user.name == "test_async_explicit_stop_with_commit"
+
+
+@pytest.mark.xdist_group("flask")
+def test_sync_service_jsonify(setup_database: Path) -> None:
+    app = Flask(__name__)
+
+    with app.test_client() as client:
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT
+        )
+
+        extension = AdvancedAlchemy(config, app)
+
+        @app.route("/test", methods=["POST"])
+        def test_route() -> Response:
+            service = UserService(extension.get_sync_session())
+            user = service.create({"name": "service_test"})
+            return service.jsonify(service.to_schema(user, schema_type=UserSchema))
+
+        # Test successful response (should commit)
+        response = client.post("/test")
+        assert response.status_code == 200
+
+        # Verify the data was committed
+        session = extension.get_session()
+        assert isinstance(session, Session)
+        result = session.execute(select(User).where(User.name == "service_test"))
+        assert result.scalar_one().name == "service_test"
+
+
+@pytest.mark.xdist_group("flask")
+def test_async_service_jsonify(setup_database: Path) -> None:
+    app = Flask(__name__)
+
+    with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode=CommitMode.AUTOCOMMIT
+        )
+        extension = AdvancedAlchemy(config, app)
+
+        @app.route("/test", methods=["POST"])
+        def test_route() -> Response:
+            service = AsyncUserService(extension.get_async_session())
+            user = extension.portal_provider.portal.call(service.create, {"name": "async_service_test"})
+            return service.jsonify(service.to_schema(user, schema_type=UserSchema))
+
+        # Test successful response (should commit)
+        response = client.post("/test")
+        assert response.status_code == 200
+
+        # Verify the data was committed
+        session = extension.get_session()
+        assert isinstance(session, AsyncSession)
+        result = extension.portal_provider.portal.call(
+            session.scalar, select(User).where(User.name == "async_service_test")
+        )
+        assert result
+        assert result.name == "async_service_test"

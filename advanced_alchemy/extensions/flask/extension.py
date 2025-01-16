@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable, Generator, Sequence, Union, cast
 
 from flask import g
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
@@ -16,7 +17,6 @@ from advanced_alchemy.utils.portals import PortalProvider
 
 if TYPE_CHECKING:
     from flask import Flask
-    from sqlalchemy.orm import Session
 
 
 class AdvancedAlchemy:
@@ -141,6 +141,22 @@ class AdvancedAlchemy:
                 self.portal_provider.start()
             setattr(session, "_session_portal", self.portal_provider.portal)
         setattr(g, session_key, session)
+        return session
+
+    def get_async_session(self, bind_key: str = "default") -> AsyncSession:
+        """Get an async session from the configured session factory."""
+        session = self.get_session(bind_key)
+        if not isinstance(session, AsyncSession):
+            msg = f"Expected async session for bind key {bind_key}, but got {type(session)}"
+            raise ImproperConfigurationError(msg)
+        return session
+
+    def get_sync_session(self, bind_key: str = "default") -> Session:
+        """Get a sync session from the configured session factory."""
+        session = self.get_session(bind_key)
+        if not isinstance(session, Session):
+            msg = f"Expected sync session for bind key {bind_key}, but got {type(session)}"
+            raise ImproperConfigurationError(msg)
         return session
 
     @contextmanager

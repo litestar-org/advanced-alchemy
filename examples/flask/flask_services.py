@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import datetime  # noqa: TC003
 import os
-from datetime import date  # noqa: TC003
 from uuid import UUID  # noqa: TC003
 
 from flask import Flask, request
-from pydantic import BaseModel
+from msgspec import Struct
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,7 @@ from advanced_alchemy.extensions.flask import (
     FlaskServiceMixin,
     SQLAlchemySyncConfig,
     base,
+    config,
     filters,
     repository,
     service,
@@ -24,7 +25,7 @@ class Author(base.UUIDBase):
     """Author model."""
 
     name: Mapped[str]
-    dob: Mapped[date | None]
+    dob: Mapped[datetime.date | None]
     books: Mapped[list[Book]] = relationship(back_populates="author", lazy="noload")
 
 
@@ -47,16 +48,16 @@ class AuthorService(service.SQLAlchemySyncRepositoryService[Author], FlaskServic
     repository_type = Repo
 
 
-class AuthorSchema(BaseModel):
+class AuthorSchema(Struct):
     """Author schema."""
 
-    id: UUID | None = None
     name: str
-    dob: date | None = None
+    id: UUID | None = None
+    dob: datetime.date | None = None
 
 
 app = Flask(__name__)
-config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode=config.CommitMode.AUTOCOMMIT)
 alchemy = AdvancedAlchemy(config, app)
 
 
@@ -65,7 +66,7 @@ def list_authors():
     """List authors with pagination."""
     page, page_size = request.args.get("currentPage", 1, type=int), request.args.get("pageSize", 10, type=int)
     limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (page - 1))
-    service = AuthorService(session=alchemy.get_session())  # pyright: ignore[reportArgumentType]
+    service = AuthorService(session=alchemy.get_sync_session())
     results, total = service.list_and_count(limit_offset)
     response = service.to_schema(results, total, filters=[limit_offset], schema_type=AuthorSchema)
     return service.jsonify(response)
@@ -74,7 +75,7 @@ def list_authors():
 @app.route("/authors", methods=["POST"])
 def create_author():
     """Create a new author."""
-    service = AuthorService(session=alchemy.get_session())  # pyright: ignore[reportArgumentType]
+    service = AuthorService(session=alchemy.get_sync_session())
     obj = service.create(**request.get_json())
     return service.jsonify(obj)
 
@@ -82,7 +83,7 @@ def create_author():
 @app.route("/authors/<uuid:author_id>", methods=["GET"])
 def get_author(author_id: UUID):
     """Get an existing author."""
-    service = AuthorService(session=alchemy.get_session(), load=[Author.books])  # pyright: ignore[reportArgumentType]
+    service = AuthorService(session=alchemy.get_sync_session(), load=[Author.books])
     obj = service.get(author_id)
     return service.jsonify(obj)
 
@@ -90,7 +91,7 @@ def get_author(author_id: UUID):
 @app.route("/authors/<uuid:author_id>", methods=["PATCH"])
 def update_author(author_id: UUID):
     """Update an author."""
-    service = AuthorService(session=alchemy.get_session(), load=[Author.books])  # pyright: ignore[reportArgumentType]
+    service = AuthorService(session=alchemy.get_sync_session(), load=[Author.books])
     obj = service.update(**request.get_json(), item_id=author_id)
     return service.jsonify(obj)
 
@@ -98,7 +99,7 @@ def update_author(author_id: UUID):
 @app.route("/authors/<uuid:author_id>", methods=["DELETE"])
 def delete_author(author_id: UUID):
     """Delete an author."""
-    service = AuthorService(session=alchemy.get_session())  # pyright: ignore[reportArgumentType]
+    service = AuthorService(session=alchemy.get_sync_session())
     service.delete(author_id)
     return "", 204
 

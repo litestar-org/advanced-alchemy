@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
+from click import echo
 from flask import g, has_request_context
-from litestar.cli._utils import console
 from litestar.serialization import decode_json, encode_json
 from sqlalchemy.exc import OperationalError
 
@@ -170,7 +170,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             try:
                 metadata_registry.get(self.bind_key).create_all(conn)
             except OperationalError as exc:
-                console.print(f"[bold red] * Could not create target metadata. Reason: {exc}")
+                echo(f" * Could not create target metadata. Reason: {exc}")
 
 
 @dataclass
@@ -273,4 +273,4 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await conn.run_sync(metadata_registry.get(self.bind_key).create_all)
                 await conn.commit()
             except OperationalError as exc:
-                console.print(f"[bold red] * Could not create target metadata. Reason: {exc}")
+                echo(f" * Could not create target metadata. Reason: {exc}")
