@@ -8,9 +8,10 @@ import subprocess
 import sys
 import timeit
 from collections.abc import Awaitable, Generator
+from inspect import isawaitable
 from pathlib import Path
 from types import TracebackType
-from typing import Any, AsyncGenerator, Callable, Iterable, Union
+from typing import Any, Callable, Iterable, Union
 
 import asyncmy
 import asyncpg
@@ -23,7 +24,7 @@ from google.cloud import spanner
 from oracledb.exceptions import DatabaseError, OperationalError
 from pytest_databases.helpers import simple_string_hash
 
-from tests.helpers import maybe_async
+from advanced_alchemy.utils.portals import Portal, PortalProvider
 
 
 async def wait_until_responsive(
@@ -31,7 +32,7 @@ async def wait_until_responsive(
     timeout: float,
     pause: float,
     **kwargs: Any,
-) -> int:
+) -> None:
     """Wait until a service is responsive.
 
     Args:
@@ -43,8 +44,14 @@ async def wait_until_responsive(
     ref = timeit.default_timer()
     now = ref
     while (now - ref) < timeout:  # sourcery skip
-        if await maybe_async(check(**kwargs)):
-            return 1
+        chk = check(**kwargs)
+        if isawaitable(chk):
+            if await chk:
+                return
+        else:
+            if chk:
+                return
+
         await asyncio.sleep(pause)
         now = timeit.default_timer()
 
@@ -56,6 +63,7 @@ TRUE_VALUES = {"True", "true", "1", "yes", "Y", "T"}
 SKIP_DOCKER_COMPOSE: bool = os.environ.get("SKIP_DOCKER_COMPOSE", "False") in TRUE_VALUES
 USE_LEGACY_DOCKER_COMPOSE: bool = os.environ.get("USE_LEGACY_DOCKER_COMPOSE", "False") in TRUE_VALUES
 COMPOSE_PROJECT_NAME: str = f"advanced-alchemy-{simple_string_hash(__file__)}"
+async_window = PortalProvider()
 
 
 class DockerServiceRegistry(contextlib.AbstractContextManager):
@@ -75,6 +83,15 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
             ],
         )
         self._before_start = list(before_start) if before_start else []
+        self._portal_provider = PortalProvider()
+
+    @property
+    def running_services(self) -> set[str]:
+        return self._running_services
+
+    @property
+    def portal(self) -> Portal:
+        return self._portal_provider.portal
 
     def __exit__(
         self,
@@ -111,6 +128,7 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
         pause: float = 0.1,
         **kwargs: Any,
     ) -> None:
+        self._portal_provider.start()
         for before_start in self._before_start:
             before_start()
 
@@ -121,11 +139,12 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
             self.run_command("up", "--force-recreate", "-d", name)
             self._running_services.add(name)
 
-        _ = await wait_until_responsive(
+        await wait_until_responsive(
             check=check,
             timeout=timeout,
             pause=pause,
             host=self.docker_ip,
+            portal=self.portal,
             **kwargs,
         )
 
@@ -137,19 +156,16 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
             self.run_command("down", "-t", "10", "--volumes")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(autouse=True)
 def docker_services(worker_id: str) -> Generator[DockerServiceRegistry, None, None]:
     if os.getenv("GITHUB_ACTIONS") == "true" and sys.platform != "linux":
         pytest.skip("Docker not available on this platform")
 
-    registry = DockerServiceRegistry(worker_id)
-    try:
+    with DockerServiceRegistry(worker_id) as registry:
         yield registry
-    finally:
-        registry.down()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def docker_ip(docker_services: DockerServiceRegistry) -> Generator[str, None, None]:
     yield docker_services.docker_ip
 
@@ -172,9 +188,8 @@ async def mysql_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def mysql_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def mysql_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("mysql", timeout=45, pause=1, check=mysql_responsive)
-    yield
 
 
 async def postgres_responsive(host: str) -> bool:
@@ -196,9 +211,8 @@ async def postgres_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def postgres_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def postgres_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("postgres", check=postgres_responsive)
-    yield
 
 
 async def postgres14_responsive(host: str) -> bool:
@@ -220,9 +234,8 @@ async def postgres14_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def postgres14_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def postgres14_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("postgres", check=postgres_responsive)
-    yield
 
 
 def oracle23c_responsive(host: str) -> bool:
@@ -243,9 +256,8 @@ def oracle23c_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def oracle23c_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def oracle23c_service(docker_services: DockerServiceRegistry, worker_id: str = "main") -> None:
     await docker_services.start("oracle23c", check=oracle23c_responsive, timeout=120)
-    yield
 
 
 def oracle18c_responsive(host: str) -> bool:
@@ -266,9 +278,8 @@ def oracle18c_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def oracle18c_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def oracle18c_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("oracle18c", check=oracle18c_responsive, timeout=120)
-    yield
 
 
 def spanner_responsive(host: str) -> bool:
@@ -292,10 +303,9 @@ def spanner_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def spanner_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def spanner_service(docker_services: DockerServiceRegistry) -> None:
     os.environ["SPANNER_EMULATOR_HOST"] = "localhost:9010"
     await docker_services.start("spanner", timeout=60, check=spanner_responsive)
-    yield
 
 
 async def mssql_responsive(host: str) -> bool:
@@ -317,9 +327,8 @@ async def mssql_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def mssql_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def mssql_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("mssql", timeout=60, pause=1, check=mssql_responsive)
-    yield
 
 
 async def cockroachdb_responsive(host: str) -> bool:
@@ -334,6 +343,5 @@ async def cockroachdb_responsive(host: str) -> bool:
 
 
 @pytest.fixture()
-async def cockroachdb_service(docker_services: DockerServiceRegistry) -> AsyncGenerator[None, None]:
+async def cockroachdb_service(docker_services: DockerServiceRegistry) -> None:
     await docker_services.start("cockroachdb", timeout=60, pause=1, check=cockroachdb_responsive)
-    yield
