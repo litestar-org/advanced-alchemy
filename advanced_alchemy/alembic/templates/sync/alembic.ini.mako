@@ -15,7 +15,7 @@ file_template = %%(year)d-%%(month).2d-%%(day).2d_%%(slug)s_%%(rev)s
 # within the migration file as well as the filename.
 # string value is passed to dateutil.tz.gettz()
 # leave blank for localtime
-timezone = UTC
+# timezone = UTC
 
 # max length of characters to apply to the
 # "slug" field
