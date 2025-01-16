@@ -144,7 +144,6 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
             timeout=timeout,
             pause=pause,
             host=self.docker_ip,
-            portal=self.portal,
             **kwargs,
         )
 
