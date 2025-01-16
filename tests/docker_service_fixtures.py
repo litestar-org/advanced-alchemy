@@ -8,7 +8,6 @@ import subprocess
 import sys
 import timeit
 from collections.abc import Awaitable, Generator
-from inspect import isawaitable
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Callable, Iterable, Union
@@ -25,10 +24,11 @@ from oracledb.exceptions import DatabaseError, OperationalError
 from pytest_databases.helpers import simple_string_hash
 
 from advanced_alchemy.utils.portals import Portal, PortalProvider
+from tests.helpers import wrap_sync
 
 
 async def wait_until_responsive(
-    check: Callable[..., Union[bool, Awaitable[bool]]],  # noqa: UP007
+    check: Callable[..., Awaitable],
     timeout: float,
     pause: float,
     **kwargs: Any,
@@ -44,13 +44,8 @@ async def wait_until_responsive(
     ref = timeit.default_timer()
     now = ref
     while (now - ref) < timeout:  # sourcery skip
-        chk = check(**kwargs)
-        if isawaitable(chk):
-            if await chk:
-                return
-        else:
-            if chk:
-                return
+        if await check(**kwargs):
+            return
 
         await asyncio.sleep(pause)
         now = timeit.default_timer()
@@ -140,7 +135,7 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
             self._running_services.add(name)
 
         await wait_until_responsive(
-            check=check,
+            check=wrap_sync(check),
             timeout=timeout,
             pause=pause,
             host=self.docker_ip,
@@ -155,7 +150,7 @@ class DockerServiceRegistry(contextlib.AbstractContextManager):
             self.run_command("down", "-t", "10", "--volumes")
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def docker_services(worker_id: str) -> Generator[DockerServiceRegistry, None, None]:
     if os.getenv("GITHUB_ACTIONS") == "true" and sys.platform != "linux":
         pytest.skip("Docker not available on this platform")
@@ -164,7 +159,7 @@ def docker_services(worker_id: str) -> Generator[DockerServiceRegistry, None, No
         yield registry
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def docker_ip(docker_services: DockerServiceRegistry) -> Generator[str, None, None]:
     yield docker_services.docker_ip
 
