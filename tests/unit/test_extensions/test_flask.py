@@ -65,15 +65,15 @@ class AsyncUserService(SQLAlchemyAsyncRepositoryService[User], FlaskServiceMixin
     repository_type = Repo
 
 
-@pytest.fixture(scope="function")
-def tmp_path_function(tmp_path_factory: pytest.TempPathFactory) -> Path:
+@pytest.fixture(scope="session")
+def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("test_extensions_flask")
 
 
-@pytest.fixture(scope="function")
-def setup_database(tmp_path_function: Path) -> Generator[Path, None, None]:
+@pytest.fixture(scope="session")
+def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
     # Create a new database for each test
-    db_path = tmp_path_function / "test.db"
+    db_path = tmp_path_session / "test.db"
     config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}", metadata=metadata)
     engine = config.get_engine()
     User._sa_registry.metadata.create_all(engine)
@@ -84,60 +84,45 @@ def setup_database(tmp_path_function: Path) -> Generator[Path, None, None]:
     yield db_path
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
-        config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}",
-        )
+        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session()
         assert isinstance(session, Session)
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
-        config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}",
-        )
+        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session()
         assert isinstance(session, Session)
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context(), pytest.raises(
         ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
     ):
-        config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}",
-        )
+        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
         extension.init_app(app)
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
-            bind_key="async",
-            connection_string=f"sqlite+aiosqlite:///{setup_database}",
+            bind_key="async", connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -146,15 +131,11 @@ def test_async_extension_init(setup_database: Path) -> None:
         extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_extension_init_single_config_no_bind_key(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
-        config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}",
-        )
+        config = SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session()
@@ -162,15 +143,12 @@ def test_async_extension_init_single_config_no_bind_key(setup_database: Path) ->
         extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
-            bind_key="async",
-            connection_string=f"sqlite+aiosqlite:///{setup_database}",
+            bind_key="async", connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -179,8 +157,6 @@ def test_async_extension_init_with_app(setup_database: Path) -> None:
         extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -188,15 +164,12 @@ def test_async_extension_multiple_init(setup_database: Path) -> None:
         ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
     ):
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            bind_key="async",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async", metadata=metadata
         )
         extension = AdvancedAlchemy(config, app)
         extension.init_app(app)
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_and_async_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -205,8 +178,7 @@ def test_sync_and_async_extension_init(setup_database: Path) -> None:
             [
                 SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}"),
                 SQLAlchemyAsyncConfig(
-                    connection_string=f"sqlite+aiosqlite:///{setup_database}",
-                    bind_key="async",
+                    connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async", metadata=metadata
                 ),
             ],
             app,
@@ -216,16 +188,18 @@ def test_sync_and_async_extension_init(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_multiple_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         extension = AdvancedAlchemy(
             [
-                SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="db1"),
-                SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="db2"),
+                SQLAlchemySyncConfig(
+                    connection_string=f"sqlite:///{setup_database}", bind_key="db1", metadata=metadata
+                ),
+                SQLAlchemySyncConfig(
+                    connection_string=f"sqlite:///{setup_database}", bind_key="db2", metadata=metadata
+                ),
             ],
             app,
         )
@@ -236,15 +210,17 @@ def test_multiple_binds(setup_database: Path) -> None:
         assert isinstance(session, Session)
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_multiple_binds_async(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         configs: Sequence[SQLAlchemyAsyncConfig] = [
-            SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="db1"),
-            SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="db2"),
+            SQLAlchemyAsyncConfig(
+                connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="db1", metadata=metadata
+            ),
+            SQLAlchemyAsyncConfig(
+                connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="db2", metadata=metadata
+            ),
         ]
         extension = AdvancedAlchemy(configs, app)
 
@@ -255,15 +231,15 @@ def test_multiple_binds_async(setup_database: Path) -> None:
         extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_mixed_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
         configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = [
-            SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="sync"),
-            SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async"),
+            SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="sync", metadata=metadata),
+            SQLAlchemyAsyncConfig(
+                connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async", metadata=metadata
+            ),
         ]
         extension = AdvancedAlchemy(configs, app)
 
@@ -276,13 +252,13 @@ def test_mixed_binds(setup_database: Path) -> None:
         extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
-        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit")
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit", metadata=metadata
+        )
 
         extension = AdvancedAlchemy(config, app)
 
@@ -305,14 +281,12 @@ def test_sync_autocommit(setup_database: Path) -> None:
         assert result.scalar_one().name == "test"
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit_with_redirect"
+            connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit_with_redirect", metadata=metadata
         )
 
         extension = AdvancedAlchemy(config, app)
@@ -335,15 +309,12 @@ def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
         assert result.scalar_one().name == "test_redirect"
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}",
-            commit_mode="autocommit",
+            connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit", metadata=metadata
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -366,14 +337,12 @@ def test_sync_no_autocommit_on_error(setup_database: Path) -> None:
         assert result.first() is None
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_autocommit(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="autocommit"
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="autocommit", metadata=metadata
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -397,8 +366,6 @@ def test_async_autocommit(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_autocommit_with_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -406,6 +373,7 @@ def test_async_autocommit_with_redirect(setup_database: Path) -> None:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
             commit_mode="autocommit_with_redirect",
+            metadata=metadata,
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -430,15 +398,12 @@ def test_async_autocommit_with_redirect(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_no_autocommit_on_error(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode="autocommit",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="autocommit", metadata=metadata
         )
 
         extension = AdvancedAlchemy(config, app)
@@ -468,15 +433,12 @@ def test_async_no_autocommit_on_error(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_portal_cleanup(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode="manual",
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="manual", metadata=metadata
         )
         extension = AdvancedAlchemy(config, app)
 
@@ -502,14 +464,13 @@ def test_async_portal_cleanup(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_portal_explicit_stop(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
+            metadata=metadata,
             commit_mode="manual",
         )
         extension = AdvancedAlchemy(config, app)
@@ -538,8 +499,6 @@ def test_async_portal_explicit_stop(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     app = Flask(__name__)
 
@@ -559,6 +518,7 @@ def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
+            metadata=metadata,
             commit_mode="manual",
         )
         extension = AdvancedAlchemy(config, app)
@@ -582,13 +542,13 @@ def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_sync_service_jsonify(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
-        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit")
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", metadata=metadata, commit_mode="autocommit"
+        )
 
         extension = AdvancedAlchemy(config, app)
 
@@ -609,14 +569,12 @@ def test_sync_service_jsonify(setup_database: Path) -> None:
         assert result.scalar_one().name == "service_test"
 
 
-@pytest.mark.flaky(reruns=5)  # these tests are oddly flaky when run in full suite with xdist
-@pytest.mark.xdist_group("flask")
 def test_async_service_jsonify(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
-            connection_string=f"sqlite+aiosqlite:///{setup_database}", commit_mode="autocommit"
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata, commit_mode="autocommit"
         )
         extension = AdvancedAlchemy(config, app)
 
