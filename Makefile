@@ -193,9 +193,9 @@ docs-clean:                                        ## Clean documentation build
 	@echo "${OK} Documentation assets cleaned"
 
 .PHONY: docs-serve
-docs-serve: docs-clean                             ## Serve documentation locally
+docs-serve:                              ## Serve documentation locally
 	@echo "${INFO} Starting documentation server... 📚"
-	@uv run sphinx-autobuild docs docs/_build/ -j auto --watch advanced_alchemy --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
+	@uv run sphinx-autobuild docs docs/_build/ -j auto --watch advanced_alchemy --watch docs --watch tests --watch CONTRIBUTING.rst --open-browser
 
 .PHONY: docs
 docs: docs-clean                                   ## Build documentation
