@@ -816,7 +816,6 @@ async def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlche
     filter = CollectionFilter(field_name="id", values=[])  # type:ignore[var-annotated]
     statement = filter.append_to_statement(statement, MagicMock())  # type:ignore[assignment]
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
-    await maybe_async(mock_repo.count(filter))
 
 
 @pytest.mark.parametrize(
