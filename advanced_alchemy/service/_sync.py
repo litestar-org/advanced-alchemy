@@ -410,8 +410,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             "delete": self.to_model_on_delete,
             "upsert": self.to_model_on_upsert,
         }
-        if operation and operation_map.get(operation):
-            data = operation_map[operation](data)
+        if operation and (op := operation_map.get(operation)):
+            data = op(data)
         if is_dict(data):
             return model_from_dict(model=self.model_type, **data)
         if is_pydantic_model(data):

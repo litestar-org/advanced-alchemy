@@ -396,8 +396,8 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             "delete": self.to_model_on_delete,
             "upsert": self.to_model_on_upsert,
         }
-        if operation and operation_map.get(operation):
-            data = await operation_map[operation](data)
+        if operation and (op := operation_map.get(operation)):
+            data = await op(data)
         if is_dict(data):
             return model_from_dict(model=self.model_type, **data)
         if is_pydantic_model(data):
