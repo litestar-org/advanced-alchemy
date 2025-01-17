@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import inspect
 import sys
@@ -9,7 +10,6 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Type, TypeVar, cast, overload
 
-import anyio
 from typing_extensions import ParamSpec
 
 if TYPE_CHECKING:
@@ -65,6 +65,6 @@ def wrap_sync(fn: Callable[P, T]) -> Callable[P, Awaitable[T]]:
         return fn
 
     async def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
-        return await anyio.to_thread.run_sync(partial(fn, *args, **kwargs))  # pyright: ignore
+        return await asyncio.get_running_loop().run_in_executor(None, partial(fn, *args, **kwargs))
 
     return wrapped

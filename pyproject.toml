@@ -111,7 +111,7 @@ doc = [
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
 fastapi = ["fastapi[all]>=0.115.3", "starlette<0.45.0; python_version < '3.9'", "starlette; python_version >= '3.9'"]
-flask = ["flask-sqlalchemy>=3.1.1"]
+flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 lint = [
   "mypy>=1.13.0",
   "pre-commit>=3.5.0",
@@ -152,8 +152,9 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases>=0.10.0",
+  "pytest-databases",
   "pytest-lazy-fixtures>=1.1.1",
+  "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
@@ -215,12 +216,14 @@ asyncio_default_fixture_loop_scope = "function"
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:pkg_resources.*",
+  "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
   "ignore::DeprecationWarning:pkg_resources",
   "ignore::DeprecationWarning:google.rpc",
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
   "ignore::DeprecationWarning:websockets.connection",
+  "ignore::DeprecationWarning:websockets.legacy",
 ]
 markers = [
   "integration: SQLAlchemy integration tests",
@@ -286,6 +289,7 @@ docstring-code-line-length = 60
 
 [tool.ruff.lint]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+extend-safe-fixes = ["TC"]
 fixable = ["ALL"]
 ignore = [
   "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
@@ -317,6 +321,7 @@ ignore = [
   "PLR0912",
   "ISC001",
   "COM812",
+  "CPY001",
 ]
 select = ["ALL"]
 
@@ -339,6 +344,8 @@ classmethod-decorators = [
 
 [tool.ruff.lint.per-file-ignores]
 "advanced_alchemy/repository/*.py" = ['C901']
+"examples/flask.py" = ["ANN"]
+"examples/flask/*.py" = ["ANN"]
 "tests/**/*.*" = [
   "A",
   "ARG",
@@ -365,6 +372,7 @@ classmethod-decorators = [
   "UP006",
   "SLF001",
 ]
+
 [tool.ruff.lint.flake8-tidy-imports]
 # Disallow all relative imports.
 ban-relative-imports = "all"
@@ -416,6 +424,7 @@ ignore_missing_imports = true
 module = [
   "asyncmy",
   "pyodbc",
+  "greenlet",
   "google.auth.*",
   "google.cloud.*",
   "google.protobuf.*",
@@ -458,6 +467,16 @@ module = "advanced_alchemy.base"
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
+disallow_untyped_decorators = false
+module = "advanced_alchemy.extensions.litestar.cli"
+
+[[tool.mypy.overrides]]
+disable_error_code = "arg-type,no-any-return,no-untyped-def"
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+module = "examples.flask.*"
+
+[[tool.mypy.overrides]]
 disable_error_code = "unreachable"
 module = "tests.integration.test_repository"
 
@@ -470,6 +489,7 @@ exclude = [
   "tests/unit/test_repository.py",
   "tests/helpers.py",
   "tests/docker_service_fixtures.py",
+  "examples/flask/flask_services.py",
 ]
 include = ["advanced_alchemy"]
 pythonVersion = "3.8"
