@@ -76,7 +76,7 @@ def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
     db_path = tmp_path_session / "test.db"
     config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}", metadata=metadata)
     engine = config.get_engine()
-    User._sa_registry.metadata.create_all(engine)
+    User._sa_registry.metadata.create_all(engine)  # pyright: ignore[reportPrivateUsage]
     with config.get_session() as session:
         assert isinstance(session, Session)
         table_exists = session.execute(text("SELECT COUNT(*) FROM users_testing")).scalar_one()

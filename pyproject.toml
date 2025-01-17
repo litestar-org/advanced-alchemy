@@ -153,7 +153,7 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases>=0.10.0",
+  "pytest-databases[mssql,mysql,oracle,postgres,redis]",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
