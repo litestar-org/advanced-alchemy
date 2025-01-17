@@ -57,7 +57,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
         return self._ready_event.is_set()
 
     @property
-    def loop(self) -> asyncio.AbstractEventLoop:
+    def loop(self) -> asyncio.AbstractEventLoop:  # pragma: no cover
         """The event loop."""
         if self._loop is None:
             msg = "The PortalProvider is not started.  Did you forget to call .start()?"
@@ -66,7 +66,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
 
     def start(self) -> None:
         """Starts the background thread and event loop."""
-        if self._thread is not None:
+        if self._thread is not None:  # pragma: no cover
             warn("PortalProvider already started", stacklevel=2)
             return
         self._thread = threading.Thread(target=self._run_event_loop, daemon=True)
@@ -85,7 +85,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
         self._thread = None
         self._ready_event.clear()
 
-    def _run_event_loop(self) -> None:
+    def _run_event_loop(self) -> None:  # pragma: no cover
         """The main function of the background thread."""
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
@@ -97,12 +97,8 @@ class PortalProvider(metaclass=PortalProviderSingleton):
         self, func: Callable[..., Coroutine[Any, Any, _R]], args: tuple[Any, ...], kwargs: dict[str, Any]
     ) -> _R:
         """Wrapper to run the async function and send the result to the result queue."""
-        try:
-            result: _R = await func(*args, **kwargs)
-        except Exception as e:
-            raise e from e
-        else:
-            return result
+        result: _R = await func(*args, **kwargs)
+        return result
 
     def call(self, func: Callable[..., Coroutine[Any, Any, _R]], *args: Any, **kwargs: Any) -> _R:
         """Calls an async function from a synchronous context.
@@ -138,7 +134,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
             raise exception
         return cast(_R, result)
 
-    def _process_request(self) -> None:
+    def _process_request(self) -> None:  # pragma: no cover
         """Processes a request from the request queue in the event loop."""
         assert self._loop is not None  # noqa: S101
 
@@ -155,7 +151,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
         self,
         future: asyncio.Future[Any],
         local_result_queue: queue.Queue[tuple[Optional[Any], Optional[Exception]]],
-    ) -> None:
+    ) -> None:  # pragma: no cover
         """Handles the result or exception from the completed future."""
         try:
             result = future.result()

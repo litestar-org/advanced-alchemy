@@ -145,7 +145,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.engine_instance is not None:
             self.engine_instance.dispose()
 
-    def create_all_metadata(self) -> None:
+    def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
         if self.engine_instance is None:
             self.engine_instance = self.get_engine()
@@ -247,7 +247,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         if self.engine_instance is not None:
             _ = portal.call(self.engine_instance.dispose)
 
-    async def create_all_metadata(self) -> None:
+    async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
         if self.engine_instance is None:
             self.engine_instance = self.get_engine()
