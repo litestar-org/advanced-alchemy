@@ -3,6 +3,25 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.29.1
+    :date: 2025-01-17
+
+    .. change:: add convenience hooks for `to_model` operations
+        :type: feature
+        :pr: 347
+
+        The service layer has always has a `to_model` function that accepts data and optionally an operation name.  It would return a SQLAlchemy model no matter the input you gave it.
+
+        It is possible to move business logic into this `to_model` layer for populating fields on insert.  (i.e. slug fields or tags, etc.).
+
+        When having logic for `insert`, `update`, `delete`, and `upsert`, that function can be a bit overwhelcoming.  Now, there are helper functions that you can use that is specific to each DML hook:
+
+        * `to_model_on_create`
+        * `to_model_on_update`
+        * `to_model_on_delete`
+        * `to_model_on_upsert`
+
+
 .. changelog:: 0.29.0
     :date: 2025-01-17
 
