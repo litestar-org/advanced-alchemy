@@ -333,6 +333,50 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             ),
         )
 
+    async def to_model_on_create(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+        """Convenience method to allow for custom behavior on create.
+
+        Args:
+            data: The data to be converted to a model.
+
+        Returns:
+            The data to be converted to a model.
+        """
+        return data
+
+    async def to_model_on_update(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+        """Convenience method to allow for custom behavior on update.
+
+        Args:
+            data: The data to be converted to a model.
+
+        Returns:
+            The data to be converted to a model.
+        """
+        return data
+
+    async def to_model_on_delete(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+        """Convenience method to allow for custom behavior on delete.
+
+        Args:
+            data: The data to be converted to a model.
+
+        Returns:
+            The data to be converted to a model.
+        """
+        return data
+
+    async def to_model_on_upsert(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+        """Convenience method to allow for custom behavior on upsert.
+
+        Args:
+            data: The data to be converted to a model.
+
+        Returns:
+            The data to be converted to a model.
+        """
+        return data
+
     async def to_model(
         self,
         data: ModelDictT[ModelT],
@@ -346,6 +390,14 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
             Representation of created instances.
         """
+        operation_map = {
+            "create": self.to_model_on_create,
+            "update": self.to_model_on_update,
+            "delete": self.to_model_on_delete,
+            "upsert": self.to_model_on_upsert,
+        }
+        if operation and (op := operation_map.get(operation)):
+            data = await op(data)
         if is_dict(data):
             return model_from_dict(model=self.model_type, **data)
         if is_pydantic_model(data):
