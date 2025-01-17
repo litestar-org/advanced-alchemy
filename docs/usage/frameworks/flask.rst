@@ -141,7 +141,7 @@ Both sync and async configurations support these options:
      - Create tables on startup
      - ``False``
    * - ``commit_mode``
-     - ``"autocommit", "autocommit_with_redirect", "manual"``
+     - ``"autocommit", "autocommit_include_redirect", "manual"``
      - Session commit behavior
      - ``"manual"``
 
@@ -152,7 +152,7 @@ The ``commit_mode`` option controls how database sessions are committed:
 
 - ``"manual"`` (default): No automatic commits
 - ``"autocommit"``: Commit on successful responses (2xx status codes)
-- ``"autocommit_with_redirect"``: Commit on successful responses and redirects (2xx and 3xx status codes)
+- ``"autocommit_include_redirect"``: Commit on successful responses and redirects (2xx and 3xx status codes)
 
 Services
 --------
