@@ -3,7 +3,7 @@ Modeling
 ========
 
 Advanced Alchemy enhances SQLAlchemy's modeling capabilities with production-ready base classes, mixins, and specialized types.
-This guide demonstrates building a complete blog system with posts and tags, showcasing key features and best practices.
+This guide demonstrates modeling for a blog system with posts and tags, showcasing key features and best practices.
 
 Base Classes
 ------------
@@ -64,10 +64,11 @@ Let's start with a simple blog post model:
 
 .. code-block:: python
 
-    from advanced_alchemy.base import BigIntAuditBase
-    from sqlalchemy.orm import Mapped, mapped_column
     import datetime
     from typing import Optional
+
+    from advanced_alchemy.base import BigIntAuditBase
+    from sqlalchemy.orm import Mapped, mapped_column
 
     class Post(BigIntAuditBase):
         """Blog post model with auto-incrementing ID and audit fields.
@@ -217,10 +218,6 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
             """SQL filter for finding existing records."""
             return cls.slug == slugify(name)
 
-Using the Models
-----------------
-
-Here's how to use these models with the UniqueMixin:
 We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the logic.
 
 .. code-block:: python

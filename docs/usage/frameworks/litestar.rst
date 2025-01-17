@@ -2,7 +2,13 @@
 Litestar Integration
 ====================
 
-Advanced Alchemy provides first-class integration with Litestar through its SQLAlchemy plugin, repository, and service patterns. This guide demonstrates building a complete CRUD API for a book management system.
+.. seealso::
+
+    :external+litestar:doc:`Litestar's documentation for SQLAlchemy integration <usage/databases/sqlalchemy/index>`
+
+Advanced Alchemy provides first-class integration with Litestar through its SQLAlchemy plugin, which re-exports many of the modules within Advanced Alchemy.
+
+This guide demonstrates building a complete CRUD API for a book management system.
 
 Key Features
 ------------
@@ -114,10 +120,11 @@ Create repository, service classes, and dependency injection provider function:
 
 .. code-block:: python
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from typing import AsyncGenerator
+
+    from litestar.plugins.sqlalchemy.repository import SQLAlchemyAsyncRepository
+    from litestar.plugins.sqlalchemy.service import SQLAlchemyAsyncRepositoryService
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
         """Author repository."""
@@ -271,7 +278,7 @@ You can access the database session from the controller by using the `db_session
 .. code-block:: python
 
     from litestar import Litestar, get
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -305,7 +312,7 @@ Dependency injection is not available in middleware. Instead, you can create a n
 
     from litestar import Litestar
     from litestar.types import ASGIApp, Scope, Receive, Send
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,

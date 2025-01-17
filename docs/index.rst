@@ -1,5 +1,5 @@
 :layout: landing
-:description: Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy, offering useful and easy-to-use features for your database projects.
+:description: Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy.
 
 .. container::
     :name: home-head
@@ -39,7 +39,11 @@
 .. rst-class:: lead
 
     Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for
-    :doc:`SQLAlchemy <sqlalchemy:index>`, offering useful and easy-to-use features for your database projects.
+    :doc:`SQLAlchemy <sqlalchemy:index>`.
+
+It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins/index>`, :doc:`custom column types <usage/types>`,
+and implementations of the :doc:`repository <usage/repositories>` and :doc:`service layer <usage/services>` patterns
+to simplify your database operations.
 
 .. container:: buttons
 

@@ -2,8 +2,11 @@
 Getting Started
 ===============
 
-Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy,
-offering useful and easy-to-use features for your database projects.
+Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for :doc:`SQLAlchemy <sqlalchemy:index>`.
+
+It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins/index>`, :doc:`custom column types <usage/types>`,
+and implementations of the :doc:`repository <usage/repositories>` and :doc:`service layer <usage/services>` patterns
+to simplify your database operations.
 
 .. seealso:: It is built on:
 
@@ -11,7 +14,7 @@ offering useful and easy-to-use features for your database projects.
     * `Alembic <https://alembic.sqlalchemy.org/en/latest/>`_
     * `Typing Extensions <https://typing-extensions.readthedocs.io/en/latest/>`_
 
-It's designed to work on it's own, but it equally as well when integrated with your favorite web framework.
+It's designed to work on its own or with your favorite web framework.
 
 We've built extensions for some of the most popular frameworks, so you can get the most out of Advanced Alchemy with minimal effort.
 
@@ -21,12 +24,13 @@ We've built extensions for some of the most popular frameworks, so you can get t
 * `Flask <https://flask.palletsprojects.com/>`_
 * `Sanic <https://sanicframework.org/>`_
 
-If your framework is not listed, don't worry! Advanced Alchemy is designed to be modular and easily integrated with any Python web framework.  Join our discord and we'll help you get started.
+If your framework is not listed, don't worry! Advanced Alchemy is designed to be modular and easily integrated with any Python web framework.
+`Join our Discord <https://discord.gg/dSDXd4mKhp>`_ and we'll help you get started.
 
 Installation
 ------------
 
-Installing ``advanced-alchemy`` is as easy as calling your favorite Python package manager:
+Install ``advanced-alchemy`` with your favorite Python package manager:
 
 .. tab-set::
 
