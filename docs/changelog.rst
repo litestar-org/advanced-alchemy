@@ -3,6 +3,49 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.29.0
+    :date: 2025-01-17
+    
+    .. change:: fully qualify all `datetime` module references
+        :type: bugfix
+        :pr: 341
+        
+        All date time references are now full qualified to prevent any forward resolution issues with
+        
+        `from datetime import datetime`
+        
+        and 
+        
+        `import datetime`
+    
+    .. change:: disabled `timezone` in alembic.ini
+        :type: bugfix
+        :pr: 344
+        
+        Disabled `timezone` in alembic.ini to fix `alembic.util.exc.CommandError: Can't locate timezone: UTC` error while applying migrations
+        
+        Reference:
+        https://alembic.sqlalchemy.org/en/latest/tutorial.html#editing-the-ini-file
+    
+    .. change:: various typing improvements for services
+        :type: feature
+        :pr: 342
+        :issue: 261
+        
+        Improved typing in the service layer and adds a additional type guards.
+    
+    .. change:: Auto extend Flask CLI and add session integration
+        :type: feature
+        :pr: 111
+        
+        The Advanced Alchemy alembic CLI is now auto-extended to your Flask application.
+        
+        The Flask extension now also has a session handling middleware for handling auto-commits.
+        
+        Last, but not least, there's an experimental async portal that integrates a long running asyncio loop for running async operations in Flask.  Using `foo = portal.call(<async function>)` you can get the result of an asynchronous function from a sync context.
+        
+    
+
 .. changelog:: 0.28.0
     :date: 2025-01-13
 
