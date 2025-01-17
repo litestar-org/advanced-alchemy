@@ -1,5 +1,5 @@
 # ruff: noqa: TC004
-"""Application ORM configuration."""
+"""Common base classes for SQLAlchemy declarative models."""
 
 from __future__ import annotations
 

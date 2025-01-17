@@ -2,12 +2,41 @@
 Types
 =====
 
-Advanced Alchemy provides several custom SQLAlchemy types to enhance your database interactions.
+Advanced Alchemy provides several custom SQLAlchemy types.
+
+All types include:
+
+- Proper Python type annotations for modern IDE support
+- Automatic dialect-specific implementations
+- Consistent behavior across different database backends
+- Integration with SQLAlchemy's type system
+
+Here's a short example using multiple types:
+
+.. code-block:: python
+
+    from sqlalchemy import Column
+    from advanced_alchemy.types import (
+        DateTimeUTC,
+        EncryptedString,
+        GUID,
+        JsonB,
+    )
+
+    class User:
+        id = Column(GUID, primary_key=True)
+        created_at = Column(DateTimeUTC)
+        password = Column(EncryptedString(key="secret-key"))
+        preferences = Column(JsonB)
+
 
 DateTimeUTC
 -----------
 
-A timezone-aware DateTime type that ensures UTC timezone handling in the database.
+- Ensures all datetime values are stored in UTC
+- Requires timezone information for input values
+- Automatically converts stored values to UTC timezone
+- Returns timezone-aware datetime objects
 
 .. code-block:: python
 
@@ -16,12 +45,6 @@ A timezone-aware DateTime type that ensures UTC timezone handling in the databas
     class MyModel:
         created_at = Column(DateTimeUTC)
 
-The ``DateTimeUTC`` type:
-
-- Ensures all datetime values are stored in UTC
-- Requires timezone information for input values
-- Automatically converts stored values to UTC timezone
-- Returns timezone-aware datetime objects
 
 Encrypted Types
 ---------------
@@ -57,8 +80,8 @@ Encryption Backends
 
 Two encryption backends are available:
 
-- ``FernetBackend``: Uses Python's cryptography library with Fernet encryption
-- ``PGCryptoBackend``: Uses PostgreSQL's pgcrypto extension (PostgreSQL only)
+- :class:`advanced_alchemy.types.FernetBackend`: Uses Python's cryptography library with Fernet encryption
+- :class:`advanced_alchemy.types.PGCryptoBackend`: Uses PostgreSQL's pgcrypto extension (PostgreSQL only)
 
 GUID
 ----
@@ -105,37 +128,6 @@ A JSON type that uses the most efficient JSON storage for each database:
     class MyModel:
         data = Column(JsonB)
 
-Type Features
--------------
-
-All types include:
-
-- Proper Python type annotations for modern IDE support
-- Automatic dialect-specific implementations
-- Consistent behavior across different database backends
-- Integration with SQLAlchemy's type system
-
-Usage Example
--------------
-
-Here's a complete example using multiple types:
-
-.. code-block:: python
-
-    from sqlalchemy import Column
-    from advanced_alchemy.types import (
-        DateTimeUTC,
-        EncryptedString,
-        GUID,
-        JsonB,
-    )
-
-    class User:
-        id = Column(GUID, primary_key=True)
-        created_at = Column(DateTimeUTC)
-        password = Column(EncryptedString(key="secret-key"))
-        preferences = Column(JsonB)
-
 Using Types with Alembic
 ------------------------
 
@@ -147,6 +139,17 @@ Type Aliasing
 In your ``script.py.mako``, you'll need both the imports and the type aliasing:
 
 .. code-block:: python
+    :caption: script.py.mako
+
+    """${message}
+
+    Revision ID: ${up_revision}
+    Revises: ${down_revision | comma,n}
+    Create Date: ${create_date}
+
+    """
+    import sqlalchemy as sa
+    # ...
 
     # Import the types
     from advanced_alchemy.types import (
@@ -163,17 +166,15 @@ In your ``script.py.mako``, you'll need both the imports and the type aliasing:
     sa.ORA_JSONB = ORA_JSONB
     sa.EncryptedString = EncryptedString
     sa.EncryptedText = EncryptedText
+    # ...
 
-These assignments are necessary because:
+.. note::
 
-1. Alembic uses the ``sa`` namespace when generating migrations
-2. Custom types need to be accessible through this namespace
-3. Without these aliases, Alembic might not properly detect or reference the custom types
+    These assignments are necessary because alembic uses the ``sa`` namespace when generating migrations.
+    Without these aliases, Alembic might not properly reference the custom types.
 
-Example Usage
-~~~~~~~~~~~~~
 
-This setup allows you to use the types in migrations like this:
+This allows you to use the types in migrations like this:
 
 .. code-block:: python
 

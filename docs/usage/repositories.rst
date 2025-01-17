@@ -3,7 +3,7 @@ Repositories
 ============
 
 Advanced Alchemy's repository pattern provides a clean, consistent interface for database operations.
-This pattern abstracts away the complexity of SQLAlchemy sessions and query building while providing
+This pattern abstracts away the complexity of SQLAlchemy sessions and query-building while providing
 type-safe operations.
 
 Understanding Repositories
@@ -59,6 +59,12 @@ Base Repository Types
 
 Basic Repository Usage
 ----------------------
+
+.. note::
+
+    The following examples assumes the existence of the
+    ``Post`` model defined in :ref:`many_to_many_relationships` and the
+    ``Tag`` model defined in :ref:`using_unique_mixin`.
 
 Let's implement a basic repository for our blog post model:
 
@@ -210,18 +216,20 @@ Transaction Management
 
             return post
 
+.. seealso::
 
-**Note:** This is just to illustrate the concept. In practice, the ``UniqueMixin`` should be used to handle this lookup even more easily.  We'll see how this works in the next section.
+    This is just to illustrate the concept. In practice, :class:`UniqueMixin`
+    should be used to handle this lookup even more easily.  See :ref:`using_unique_mixin`.
 
 Specialized Repositories
 ------------------------
 
-Advanced Alchemy provides specialized repositories for common patterns:
+Advanced Alchemy provides specialized repositories for common patterns.
 
 Slug Repository
----------------
+~~~~~~~~~~~~~~~
 
-For models using the ``SlugKey`` mixin, there is a specialized Slug repository that adds a ``get_by_slug`` method:
+For models using the :class:`SlugKey` mixin, there is a specialized Slug repository that adds a ``get_by_slug`` method:
 
 .. code-block:: python
 

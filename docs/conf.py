@@ -120,6 +120,7 @@ autodoc_type_aliases = {
     "BaseModel": "pydantic.BaseModel",
     "Struct": "msgspec.Struct",
     "TableArgsType": "sqlalchemy.orm.decl_base._TableArgsType",
+    "DateTimeUTC": "advanced_alchemy.types.DateTimeUTC",
     "TypeEngine": "sqlalchemy.types.TypeEngine",
     "DeclarativeBase": "sqlalchemy.orm.DeclarativeBase",
     "UUIDBase": "advanced_alchemy.base.UUIDBase",
@@ -141,6 +142,7 @@ autodoc_type_aliases = {
     "EmptyType": "advanced_alchemy.utils.dataclass.EmptyType",
     "async_sessionmaker": "sqlalchemy.ext.asyncio.async_sessionmaker",
     "sessionmaker": "sqlalchemy.orm.sessionmaker",
+    "SlugMixin": "advanced_alchemy.mixins.slug.SlugKey",
     "UniqueMixin": "advanced_alchemy.mixins.unique.UniqueMixin",
 }
 autodoc_mock_imports = [
