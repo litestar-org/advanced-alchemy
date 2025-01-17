@@ -80,7 +80,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
     app: Flask | None = None
     """The Flask application instance."""
-    commit_mode: Literal["manual", "autocommit", "autocommit_with_redirect"] = "manual"
+    commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
 
     def create_session_maker(self) -> Callable[[], Session]:
@@ -130,7 +130,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             db_session = cast("Optional[Session]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
                 if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
-                    self.commit_mode == "autocommit_with_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
+                    self.commit_mode == "autocommit_include_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
                 ):
                     db_session.commit()
                 db_session.close()
@@ -167,7 +167,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
     app: Flask | None = None
     """The Flask application instance."""
-    commit_mode: Literal["manual", "autocommit", "autocommit_with_redirect"] = "manual"
+    commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
 
     def create_session_maker(self) -> Callable[[], AsyncSession]:
@@ -224,7 +224,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             if db_session is not None:
                 p = getattr(db_session, "_session_portal", None) or portal
                 if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
-                    self.commit_mode == "autocommit_with_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
+                    self.commit_mode == "autocommit_include_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
                 ):
                     _ = p.call(db_session.commit)
                 _ = p.call(db_session.close)

@@ -281,12 +281,14 @@ def test_sync_autocommit(setup_database: Path) -> None:
         assert result.scalar_one().name == "test"
 
 
-def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
+def test_sync_autocommit_include_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemySyncConfig(
-            connection_string=f"sqlite:///{setup_database}", commit_mode="autocommit_with_redirect", metadata=metadata
+            connection_string=f"sqlite:///{setup_database}",
+            commit_mode="autocommit_include_redirect",
+            metadata=metadata,
         )
 
         extension = AdvancedAlchemy(config, app)
@@ -298,7 +300,7 @@ def test_sync_autocommit_with_redirect(setup_database: Path) -> None:
             session.add(User(name="test_redirect"))
             return "", 302, {"Location": "/redirected"}
 
-        # Test redirect response (should commit with AUTOCOMMIT_WITH_REDIRECT)
+        # Test redirect response (should commit with autocommit_include_redirect)
         response = client.post("/test")
         assert response.status_code == 302
 
@@ -366,13 +368,13 @@ def test_async_autocommit(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-def test_async_autocommit_with_redirect(setup_database: Path) -> None:
+def test_async_autocommit_include_redirect(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}",
-            commit_mode="autocommit_with_redirect",
+            commit_mode="autocommit_include_redirect",
             metadata=metadata,
         )
         extension = AdvancedAlchemy(config, app)
@@ -385,7 +387,7 @@ def test_async_autocommit_with_redirect(setup_database: Path) -> None:
             session.add(user)
             return "", 302, {"Location": "/redirected"}
 
-        # Test redirect response (should commit with AUTOCOMMIT_WITH_REDIRECT)
+        # Test redirect response (should commit with autocommit_include_redirect)
         response = client.post("/test")
         assert response.status_code == 302
         session = extension.get_session()
