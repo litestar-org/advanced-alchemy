@@ -1,4 +1,8 @@
-"""Alembic integration for Flask applications."""
+"""Flask application integration for Alembic database migrations.
+
+This module provides integration between Flask applications and Alembic
+for managing database schema migrations.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ if TYPE_CHECKING:
 
 
 def get_sqlalchemy_extension(app: Flask) -> AdvancedAlchemy:
-    """Retrieve Advanced Alchemy extension from the Flask application.
+    """Retrieve the Advanced Alchemy extension instance from a Flask application.
 
     Args:
         app: The :class:`flask.Flask` application instance.
