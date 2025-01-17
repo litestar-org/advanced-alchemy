@@ -9,6 +9,7 @@ from typing import Generator, Sequence
 import pytest
 from flask import Flask, Response
 from msgspec import Struct
+from pydantic import BaseModel
 from sqlalchemy import String, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -42,6 +43,12 @@ class User(NewBigIntBase):
 
 
 class UserSchema(Struct):
+    """Test user pydantic model."""
+
+    name: str
+
+
+class UserPydantic(BaseModel):
     """Test user pydantic model."""
 
     name: str
@@ -544,7 +551,7 @@ def test_async_portal_explicit_stop_with_commit(setup_database: Path) -> None:
     extension.portal_provider.stop()
 
 
-def test_sync_service_jsonify(setup_database: Path) -> None:
+def test_sync_service_jsonify_msgspec(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -571,7 +578,7 @@ def test_sync_service_jsonify(setup_database: Path) -> None:
         assert result.scalar_one().name == "service_test"
 
 
-def test_async_service_jsonify(setup_database: Path) -> None:
+def test_async_service_jsonify_msgspec(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.test_client() as client:
@@ -598,4 +605,62 @@ def test_async_service_jsonify(setup_database: Path) -> None:
         )
         assert result
         assert result.name == "async_service_test"
+    extension.portal_provider.stop()
+
+
+def test_sync_service_jsonify_pydantic(setup_database: Path) -> None:
+    app = Flask(__name__)
+
+    with app.test_client() as client:
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", metadata=metadata, commit_mode="autocommit"
+        )
+        extension = AdvancedAlchemy(config, app)
+
+        @app.route("/test", methods=["POST"])
+        def test_route() -> Response:
+            service = UserService(extension.get_sync_session())
+            user = service.create({"name": "test_sync_service_jsonify_pydantic"})
+            return service.jsonify(service.to_schema(user, schema_type=UserPydantic))
+
+        # Test successful response (should commit)
+        response = client.post("/test")
+        assert response.status_code == 200
+
+        # Verify the data was committed
+        session = extension.get_session()
+        assert isinstance(session, Session)
+        result = session.execute(select(User).where(User.name == "test_sync_service_jsonify_pydantic"))
+        assert result.scalar_one().name == "test_sync_service_jsonify_pydantic"
+
+
+def test_async_service_jsonify_pydantic(setup_database: Path) -> None:
+    app = Flask(__name__)
+
+    with app.test_client() as client:
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata, commit_mode="autocommit"
+        )
+        extension = AdvancedAlchemy(config, app)
+
+        @app.route("/test", methods=["POST"])
+        def test_route() -> Response:
+            service = AsyncUserService(extension.get_async_session())
+            user = extension.portal_provider.portal.call(
+                service.create, {"name": "test_async_service_jsonify_pydantic"}
+            )
+            return service.jsonify(service.to_schema(user, schema_type=UserPydantic))
+
+        # Test successful response (should commit)
+        response = client.post("/test")
+        assert response.status_code == 200
+
+        # Verify the data was committed
+        session = extension.get_session()
+        assert isinstance(session, AsyncSession)
+        result = extension.portal_provider.portal.call(
+            session.scalar, select(User).where(User.name == "test_async_service_jsonify_pydantic")
+        )
+        assert result
+        assert result.name == "test_async_service_jsonify_pydantic"
     extension.portal_provider.stop()
