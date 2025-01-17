@@ -25,10 +25,6 @@ dependencies = [
 cli = [
     { name = "rich-click" },
 ]
-flask = [
-    { name = "anyio", version = "4.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "anyio", version = "4.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-]
 nanoid = [
     { name = "fastnanoid" },
 ]
@@ -249,7 +245,6 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.12.0" },
-    { name = "anyio", marker = "extra == 'flask'" },
     { name = "eval-type-backport", marker = "python_full_version < '3.10'" },
     { name = "fastnanoid", marker = "extra == 'nanoid'", specifier = ">=0.4.1" },
     { name = "greenlet" },

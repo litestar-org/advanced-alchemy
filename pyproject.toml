@@ -60,7 +60,6 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
 cli = ["rich-click"]
-flask = ["anyio"]
 nanoid = ["fastnanoid>=0.4.1"]
 uuid = ["uuid-utils>=0.6.1"]
 

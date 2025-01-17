@@ -96,13 +96,13 @@ class DockerServiceRegistry:
             self.run_command("up", "-d", name)
             self._running_services.add(name)
 
-        await wait_until_responsive(
-            check=wrap_sync(check),
-            timeout=timeout,
-            pause=pause,
-            host=self.docker_ip,
-            **kwargs,
-        )
+            await wait_until_responsive(
+                check=wrap_sync(check),
+                timeout=timeout,
+                pause=pause,
+                host=self.docker_ip,
+                **kwargs,
+            )
 
     def stop(self, name: str) -> None:
         pass
