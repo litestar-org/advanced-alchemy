@@ -1,31 +1,35 @@
-import typer
-from click import Context
-from fastapi import FastAPI
+from __future__ import annotations
 
-from advanced_alchemy.extensions.starlette import AdvancedAlchemy
+from typing import TYPE_CHECKING, Optional, cast
 
-cli = typer.Typer()
+import click
+
+from advanced_alchemy.cli import add_migration_commands
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
+    from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 
 
-def get_advanced_alchemy_extension(app: FastAPI) -> AdvancedAlchemy:
+def get_database_migration_plugin(app: FastAPI) -> AdvancedAlchemy:
     """Retrieve the Advanced Alchemy extension from a FastAPI application instance."""
-    # Replace this with the actual logic to get the extension from the app
-    for state_key in app.state.__dict__:
-        if isinstance(app.state.__dict__[state_key], AdvancedAlchemy):
-            return app.state.__dict__[state_key]
-    raise RuntimeError("Advanced Alchemy extension not found in the application.")
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+
+    extension = cast("Optional[AdvancedAlchemy]", getattr(app.state, "advanced_alchemy", None))
+    if extension is None:
+        msg = "Failed to initialize database CLI. The Advanced Alchemy extension is not properly configured."
+        raise ImproperConfigurationError(msg)
+    return extension
 
 
-@cli.command()
-def database_migration(ctx: Context) -> None:
-    """Manage SQLAlchemy database migrations."""
-    app: FastAPI = ctx.obj["app"]
-    extension = get_advanced_alchemy_extension(app)
-    # ... (Implement migration commands using extension.configs)
-    # Example:
-    for config in extension.configs:
-        # ... (Perform migration operations using config)
-        pass
+def register_database_commands(app: FastAPI) -> click.Group:
+    @click.group(name="database")
+    @click.pass_context
+    def database_group(ctx: click.Context) -> None:
+        """Manage SQLAlchemy database components."""
+        ctx.ensure_object(dict)
+        ctx.obj["configs"] = get_database_migration_plugin(app).config
 
-
-# You can add more commands as needed
+    add_migration_commands(database_group)
+    return database_group
