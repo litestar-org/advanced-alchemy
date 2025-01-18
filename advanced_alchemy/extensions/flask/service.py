@@ -1,4 +1,8 @@
-"""Flask-specific service classes."""
+"""Flask-specific service classes.
+
+This module provides Flask-specific service mixins and utilities for integrating
+with the Advanced Alchemy service layer.
+"""
 
 from __future__ import annotations
 
@@ -10,31 +14,31 @@ from advanced_alchemy.extensions.flask.config import serializer
 
 
 class FlaskServiceMixin:
-    """Mixin to add Flask-specific functionality to services.
+    """A mixin class that adds Flask-specific functionality to services.
+
+    This mixin provides methods and utilities for handling Flask-specific operations
+    when working with service classes.
+
+    :param serializer: The serializer instance to use for data transformation
+    :type serializer: :class:`advanced_alchemy.extensions.flask.config.Serializer`
 
     Example:
-        .. code-block:: python
+    -------
 
-            from advanced_alchemy.service import (
-                SQLAlchemyAsyncRepositoryService,
-            )
-            from advanced_alchemy.extensions.flask import (
-                FlaskServiceMixin,
-            )
+    .. code-block:: python
+
+        from advanced_alchemy.service import (
+            SQLAlchemyAsyncRepositoryService,
+        )
+        from advanced_alchemy.extensions.flask import (
+            FlaskServiceMixin,
+        )
 
 
-            class UserService(
-                FlaskServiceMixin,
-                SQLAlchemyAsyncRepositoryService[User],
-            ):
-                class Repo(repository.SQLAlchemySyncRepository[User]):
-                    model_type = User
-
-                repository_type = Repo
-
-                def get_user_response(self, user_id: int) -> Response:
-                    user = self.get(user_id)
-                    return self.jsonify(user.dict())
+        class MyService(
+            FlaskServiceMixin, SQLAlchemyAsyncRepositoryService
+        ):
+            pass
     """
 
     def jsonify(

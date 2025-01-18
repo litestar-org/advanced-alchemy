@@ -11,15 +11,16 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
 from click import echo
 from flask import g, has_request_context
-from litestar.serialization import decode_json, encode_json
 from sqlalchemy.exc import OperationalError
 from typing_extensions import Literal
 
+from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
     from typing import Any
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.utils.portals import Portal
 
-
 __all__ = ("EngineConfig", "SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig")
 
 ConfigT = TypeVar("ConfigT", bound="Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]")
@@ -39,13 +39,16 @@ ConfigT = TypeVar("ConfigT", bound="Union[SQLAlchemySyncConfig, SQLAlchemyAsyncC
 def serializer(value: Any) -> str:
     """Serialize JSON field values.
 
+    Calls the `:func:schema_dump` function to convert the value to a built-in before encoding.
+
     Args:
         value: Any JSON serializable value.
 
     Returns:
         str: JSON string representation of the value.
     """
-    return encode_json(value).decode("utf-8")
+
+    return encode_json(schema_dump(value))
 
 
 @dataclass
@@ -63,10 +66,9 @@ class EngineConfig(_EngineConfig):
 
     json_deserializer: Callable[[str], Any] = decode_json
     """For dialects that support the :class:`~sqlalchemy.types.JSON` datatype, this is a Python callable that will
-    convert a JSON string to a Python object. By default, this is set to Litestar's decode_json function."""
+    convert a JSON string to a Python object."""
     json_serializer: Callable[[Any], str] = serializer
-    """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON.
-    By default, Litestar's encode_json function is used."""
+    """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON."""
 
 
 @dataclass
