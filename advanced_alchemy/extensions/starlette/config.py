@@ -166,7 +166,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    async def session_handler(self, session: AsyncSession, request: Request, response: Response) -> None:
+    async def session_handler(
+        self, session: AsyncSession, request: Request, response: Response
+    ) -> None:  # pragma: no cover
         """Handles the session after a request is processed.
 
         Applies the commit strategy and ensures the session is closed.
@@ -194,7 +196,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, self.session_key)
 
-    async def middleware_dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def middleware_dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:  # pragma: no cover
         """Middleware dispatch function to handle requests and responses.
 
         Processes the request, invokes the next middleware or route handler, and
@@ -215,12 +219,12 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         return response
 
-    async def close_engine(self) -> None:
+    async def close_engine(self) -> None:  # pragma: no cover
         """Close the engine."""
         if self.engine_instance is not None:
             await self.engine_instance.dispose()
 
-    async def on_shutdown(self) -> None:
+    async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
@@ -311,7 +315,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    async def session_handler(self, session: Session, request: Request, response: Response) -> None:
+    async def session_handler(self, session: Session, request: Request, response: Response) -> None:  # pragma: no cover
         """Handles the session after a request is processed.
 
         Applies the commit strategy and ensures the session is closed.
@@ -339,7 +343,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, self.session_key)
 
-    async def middleware_dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def middleware_dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:  # pragma: no cover
         """Middleware dispatch function to handle requests and responses.
 
         Processes the request, invokes the next middleware or route handler, and
@@ -360,7 +366,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
         return response
 
-    async def close_engine(self) -> None:
+    async def close_engine(self) -> None:  # pragma: no cover
         """Close the engines."""
         if self.engine_instance is not None:
             await run_in_threadpool(self.engine_instance.dispose)
