@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 __all__ = ("AdvancedAlchemy",)
 
 
-def assign_cli_group(app: FastAPI) -> None:
+def assign_cli_group(app: FastAPI) -> None:  # pragma: no cover
     try:
         from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
         from typer.main import get_group

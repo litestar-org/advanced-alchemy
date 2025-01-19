@@ -1,4 +1,13 @@
 # ruff: noqa: UP006, FA100
+"""This example demonstrates how to use the FastAPI CLI to manage the database."""
+
+# /// script
+# dependencies = [
+#   "advanced_alchemy",
+#   "fastapi[standard]",
+#   "orjson"
+# ]
+# ///
 import datetime
 from typing import AsyncGenerator, List, Optional
 from uuid import UUID
@@ -86,7 +95,7 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
 )
 app = FastAPI()
 alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
-DatabaseSession = Annotated[AsyncSession, Depends(alchemy.provide_async_session())]
+DatabaseSession = Annotated[AsyncSession, Depends(alchemy.provide_session())]
 
 # #######################
 # Dependencies
@@ -185,7 +194,7 @@ async def delete_author(
 app.include_router(author_router)
 
 if __name__ == "__main__":
-    """Launches the FastAPI CLI with the database commands rgistered"""
+    """Launches the FastAPI CLI with the database commands registered"""
     from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
     from typer.main import get_group
 

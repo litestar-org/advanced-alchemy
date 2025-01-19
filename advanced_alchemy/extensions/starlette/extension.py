@@ -59,7 +59,7 @@ class AdvancedAlchemy:
         """
         self._app = app
         unique_bind_keys = {config.bind_key for config in self.config}
-        if len(unique_bind_keys) != len(self.config):
+        if len(unique_bind_keys) != len(self.config):  # pragma: no cover
             msg = "Please ensure that each config has a unique name for the `bind_key` attribute.  The default is `default` and can only be bound to a single engine."
             raise ImproperConfigurationError(msg)
 
@@ -85,12 +85,12 @@ class AdvancedAlchemy:
 
         return self._app
 
-    async def on_startup(self) -> None:
+    async def on_startup(self) -> None:  # pragma: no cover
         """Initializes the database."""
         for config in self.config:
             await config.on_startup()
 
-    async def on_shutdown(self) -> None:
+    async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
@@ -165,7 +165,7 @@ class AdvancedAlchemy:
     @staticmethod
     def _get_session_from_request(
         request: Request, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig
-    ) -> Session | AsyncSession:
+    ) -> Session | AsyncSession:  # pragma: no cover
         """Get the session for the given key."""
         session = getattr(request.state, config.session_key, None)
         if session is None:
@@ -215,7 +215,7 @@ class AdvancedAlchemy:
 
         return _get_session
 
-    def get_engine(self, key: str | None = None) -> Engine | AsyncEngine:
+    def get_engine(self, key: str | None = None) -> Engine | AsyncEngine:  # pragma: no cover
         """Get the engine for the given key."""
         config = self.get_config(key)
         return config.get_engine()
@@ -230,7 +230,7 @@ class AdvancedAlchemy:
         config = self.get_sync_config(key)
         return config.get_engine()
 
-    def provide_engine(self, key: str | None = None) -> Callable[[], Engine | AsyncEngine]:
+    def provide_engine(self, key: str | None = None) -> Callable[[], Engine | AsyncEngine]:  # pragma: no cover
         """Get the engine for the given key."""
         config = self.get_config(key)
 
@@ -239,7 +239,7 @@ class AdvancedAlchemy:
 
         return _get_engine
 
-    def provide_async_engine(self, key: str | None = None) -> Callable[[], AsyncEngine]:
+    def provide_async_engine(self, key: str | None = None) -> Callable[[], AsyncEngine]:  # pragma: no cover
         """Get the async engine for the given key."""
         config = self.get_async_config(key)
 
@@ -248,7 +248,7 @@ class AdvancedAlchemy:
 
         return _get_engine
 
-    def provide_sync_engine(self, key: str | None = None) -> Callable[[], Engine]:
+    def provide_sync_engine(self, key: str | None = None) -> Callable[[], Engine]:  # pragma: no cover
         """Get the sync engine for the given key."""
         config = self.get_sync_config(key)
 

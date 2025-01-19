@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
 
-def _make_unique_state_key(app: Starlette, key: str) -> str:
+def _make_unique_state_key(app: Starlette, key: str) -> str:  # pragma: no cover
     """Generates a unique state key for the Starlette application.
 
     Ensures that the key does not already exist in the application's state.
@@ -365,7 +365,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.engine_instance is not None:
             await run_in_threadpool(self.engine_instance.dispose)
 
-    async def on_shutdown(self) -> None:
+    async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.

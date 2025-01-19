@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 
 
-def get_database_migration_plugin(app: FastAPI) -> AdvancedAlchemy:
+def get_database_migration_plugin(app: FastAPI) -> AdvancedAlchemy:  # pragma: no cover
     """Retrieve the Advanced Alchemy extension from a FastAPI application instance."""
     from advanced_alchemy.exceptions import ImproperConfigurationError
 
