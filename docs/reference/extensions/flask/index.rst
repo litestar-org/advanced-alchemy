@@ -28,4 +28,4 @@ API Reference for the ``Flask`` extensions module
         SQLAlchemyAsyncConfig
         SQLAlchemySyncConfig
         SyncSessionConfig
-
+    :noindex:

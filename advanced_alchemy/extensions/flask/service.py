@@ -14,31 +14,9 @@ from advanced_alchemy.extensions.flask.config import serializer
 
 
 class FlaskServiceMixin:
-    """A mixin class that adds Flask-specific functionality to services.
+    """Flask service mixin.
 
-    This mixin provides methods and utilities for handling Flask-specific operations
-    when working with service classes.
-
-    :param serializer: The serializer instance to use for data transformation
-    :type serializer: :class:`advanced_alchemy.extensions.flask.config.Serializer`
-
-    Example:
-    -------
-
-    .. code-block:: python
-
-        from advanced_alchemy.service import (
-            SQLAlchemyAsyncRepositoryService,
-        )
-        from advanced_alchemy.extensions.flask import (
-            FlaskServiceMixin,
-        )
-
-
-        class MyService(
-            FlaskServiceMixin, SQLAlchemyAsyncRepositoryService
-        ):
-            pass
+    This mixin provides Flask-specific functionality for services.
     """
 
     def jsonify(

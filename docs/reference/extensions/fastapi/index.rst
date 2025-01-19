@@ -23,5 +23,5 @@ API Reference for the ``FastAPI`` extensions module
         advanced_alchemy.extensions.starlette.EngineConfig
         advanced_alchemy.extensions.starlette.SQLAlchemyAsyncConfig
         advanced_alchemy.extensions.starlette.SQLAlchemySyncConfig
-
-
+    :members:
+    :noindex:

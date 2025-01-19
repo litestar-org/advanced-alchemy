@@ -28,4 +28,4 @@ API Reference for the ``Sanic`` extensions module
         SQLAlchemyAsyncConfig
         SQLAlchemySyncConfig
         SyncSessionConfig
-
+    :noindex:

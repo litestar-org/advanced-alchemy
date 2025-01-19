@@ -144,6 +144,9 @@ autodoc_type_aliases = {
     "sessionmaker": "sqlalchemy.orm.sessionmaker",
     "SlugMixin": "advanced_alchemy.mixins.slug.SlugKey",
     "UniqueMixin": "advanced_alchemy.mixins.unique.UniqueMixin",
+    "AsyncEngine": "sqlalchemy.ext.asyncio.AsyncEngine",
+    "Engine": "sqlalchemy.engine.Engine",
+    "sqlalchemy": "sqlalchemy",
 }
 autodoc_mock_imports = [
     "alembic",
@@ -159,6 +162,9 @@ autodoc_mock_imports = [
     "advanced_alchemy.config.sync.SyncSessionConfig",
     "advanced_alchemy.utils.dataclass.EmptyType",
     "advanced_alchemy.extensions.litestar.plugins.init.config.engine.EngineConfig",
+    "sqlalchemy.ext.asyncio",
+    "sqlalchemy.engine",
+    "sqlalchemy.orm",
 ]
 
 

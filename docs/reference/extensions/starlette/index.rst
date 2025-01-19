@@ -28,4 +28,4 @@ API Reference for the ``Starlette`` extensions module
         SQLAlchemyAsyncConfig
         SQLAlchemySyncConfig
         SyncSessionConfig
-
+    :noindex:
