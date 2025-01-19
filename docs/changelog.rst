@@ -3,6 +3,36 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.30.0
+    :date: 2025-01-19
+    
+    .. change:: standardize on `autocommit_include_redirect`
+        :type: bugfix
+        :pr: 349
+        
+        The flask plugin incorrectly used the term `autocommit_with_redirect` instead of the existing `autocommit_include_redirect`.  
+        
+        This changes makes the name consistent before we bump to a `1.x` release
+    
+    .. change:: implement default schema serializer
+        :type: bugfix
+        :pr: 350
+        
+        This corrects an issue that caused the Flask extension to use the incorrect serializer for encoding JSON
+    
+    .. change:: refactored integration with CLI support
+        :type: feature
+        :pr: 352
+        
+        Refactored the Starlette and FastAPI integration to support multiple configurations and sessions.  Additionally, FastAPI will now have the database commands automatically registered with the FastAPI CLI.
+    
+    .. change:: reorganize Sanic extension
+        :type: feature
+        :pr: 353
+        
+        The Sanic integration now aligns with the structure and idioms used in the other integrations.
+    
+
 .. changelog:: 0.29.1
     :date: 2025-01-17
 
