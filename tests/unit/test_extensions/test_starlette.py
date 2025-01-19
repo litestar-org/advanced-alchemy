@@ -1,46 +1,56 @@
+from __future__ import annotations
+
 import sys
 from typing import TYPE_CHECKING, Callable, Generator, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import Depends, FastAPI, Response
-from fastapi.testclient import TestClient
 from pytest import FixtureRequest
-from pytest_mock import MockerFixture
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
+from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from typing_extensions import Annotated, assert_type
+from starlette.responses import Response
+from starlette.routing import Route
+from starlette.testclient import TestClient
+from typing_extensions import Literal, assert_type
 
-from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
-from advanced_alchemy.config.sync import SQLAlchemySyncConfig
-from advanced_alchemy.config.types import CommitStrategy
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
+from advanced_alchemy.extensions.starlette import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+
+if TYPE_CHECKING:
+    from pytest import FixtureRequest
+    from pytest_mock import MockerFixture
+
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
+pytestmark = pytest.mark.xfail(
+    condition=sys.version_info < (3, 9),
+    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Marking 3.8 as an acceptable failure for now.",
+)
 
 
 @pytest.fixture()
-def app() -> FastAPI:
-    return FastAPI()
+def app() -> Starlette:
+    return Starlette()
 
 
 @pytest.fixture()
-def client(app: FastAPI) -> Generator[TestClient, None, None]:
+def client(app: Starlette) -> Generator[TestClient, None, None]:
     with TestClient(app=app, raise_server_exceptions=False) as client:
         yield client
 
 
 @pytest.fixture()
 def sync_config() -> SQLAlchemySyncConfig:
-    return SQLAlchemySyncConfig(connection_string="sqlite+pysqlite://")
+    return SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:")
 
 
 @pytest.fixture()
 def async_config() -> SQLAlchemyAsyncConfig:
-    return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
+    return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
 
 
 @pytest.fixture(params=["sync_config", "async_config"])
@@ -49,259 +59,420 @@ def config(request: FixtureRequest) -> AnyConfig:
 
 
 @pytest.fixture()
-def alchemy(config: AnyConfig, app: FastAPI) -> Generator[StarletteAdvancedAlchemy, None, None]:
-    alchemy = StarletteAdvancedAlchemy(config, app=app)
+def alchemy(config: AnyConfig, app: Starlette) -> Generator[AdvancedAlchemy, None, None]:
+    alchemy = AdvancedAlchemy(config, app=app)
     yield alchemy
 
 
 @pytest.fixture()
-def mock_close(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
-    if isinstance(config, SQLAlchemySyncConfig):
-        return mocker.patch("sqlalchemy.orm.Session.close")
-    return mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+def multi_alchemy(app: Starlette) -> Generator[AdvancedAlchemy, None, None]:
+    alchemy = AdvancedAlchemy(
+        [
+            SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", bind_key="sync"),
+            SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        ],
+        app=app,
+    )
+    yield alchemy
 
 
-@pytest.fixture()
-def mock_commit(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
-    if isinstance(config, SQLAlchemySyncConfig):
-        return mocker.patch("sqlalchemy.orm.Session.commit")
-    return mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
-
-
-@pytest.fixture()
-def mock_rollback(mocker: MockerFixture, config: AnyConfig) -> MagicMock:
-    if isinstance(config, SQLAlchemySyncConfig):
-        return mocker.patch("sqlalchemy.orm.Session.rollback")
-    return mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
-
-
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
-def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_config: SQLAlchemySyncConfig) -> None:
+async def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_config: SQLAlchemySyncConfig) -> None:
     if TYPE_CHECKING:
-        sync_alchemy = StarletteAdvancedAlchemy(config=sync_config)
-        async_alchemy = StarletteAdvancedAlchemy(config=async_config)
+        sync_alchemy = AdvancedAlchemy([sync_config])
+        async_alchemy = AdvancedAlchemy([async_config])
 
-        assert_type(sync_alchemy.get_engine(), Engine)
-        assert_type(async_alchemy.get_engine(), AsyncEngine)
+        assert_type(sync_alchemy.get_sync_engine(), Engine)
+        assert_type(async_alchemy.get_async_engine(), AsyncEngine)
 
-        assert_type(sync_alchemy.get_sessionmaker(), Callable[[], Session])
-        assert_type(async_alchemy.get_sessionmaker(), Callable[[], AsyncSession])
+        assert_type(sync_alchemy.get_sync_config().create_session_maker(), Callable[[], Session])
+        assert_type(async_alchemy.get_async_config().create_session_maker(), Callable[[], AsyncSession])
 
-        request = Request(scope={})
+        with sync_alchemy.with_sync_session() as session:
+            assert_type(session, Session)
+        async with async_alchemy.with_async_session() as session:
+            assert_type(session, AsyncSession)
 
-        assert_type(sync_alchemy.get_session(request), Session)
-        assert_type(async_alchemy.get_session(request), AsyncSession)
 
-
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
 def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncConfig) -> None:
-    alchemy = StarletteAdvancedAlchemy(config)
+    alchemy = AdvancedAlchemy(config)
     with pytest.raises(ImproperConfigurationError):
         alchemy.app
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
-def test_inject_engine(app: FastAPI) -> None:
+def test_inject_engine(app: Starlette) -> None:
     mock = MagicMock()
     config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
-    alchemy = StarletteAdvancedAlchemy(config=config, app=app)
+    alchemy = AdvancedAlchemy(config=config, app=app)
 
-    @app.get("/")
-    def handler(engine: Annotated[Engine, Depends(alchemy.get_engine)]) -> None:
+    async def handler(request: Request) -> Response:
+        engine = alchemy.get_engine()
         mock(engine)
+        return Response(status_code=200)
+
+    app.router.routes.append(Route("/", endpoint=handler))
 
     with TestClient(app=app) as client:
         assert client.get("/").status_code == 200
         assert mock.call_args[0][0] is config.engine_instance
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
-def test_inject_session(app: FastAPI, alchemy: StarletteAdvancedAlchemy, client: TestClient) -> None:
+def test_inject_session(app: Starlette, alchemy: AdvancedAlchemy, client: TestClient) -> None:
     mock = MagicMock()
-    SessionDependency = Annotated[Session, Depends(alchemy.get_session)]
 
-    def some_dependency(session: SessionDependency) -> None:  # pyright: ignore[reportInvalidTypeForm]
+    async def handler(request: Request) -> Response:
+        session = alchemy.get_session(request)
         mock(session)
+        return Response(status_code=200)
 
-    @app.get("/")
-    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:  # pyright: ignore[reportInvalidTypeForm]
-        mock(session)
+    app.router.routes.append(Route("/", endpoint=handler))
 
-    assert client.get("/").status_code == 200
-    assert mock.call_count == 2
+    call = client.get("/")
+    assert call.status_code == 200
+    assert mock.call_count == 1
     call_1_session = mock.call_args_list[0].args[0]
-    call_2_session = mock.call_args_list[1].args[0]
     assert isinstance(
         call_1_session,
-        AsyncSession if isinstance(alchemy.config, SQLAlchemyAsyncConfig) else Session,
+        AsyncSession if isinstance(alchemy.config[0], SQLAlchemyAsyncConfig) else Session,
     )
-    assert call_1_session is call_2_session
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
 def test_session_no_autocommit(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
+    app: Starlette,
+    alchemy: AdvancedAlchemy,
     client: TestClient,
-    mock_commit: MagicMock,
-    mock_close: MagicMock,
+    mocker: MockerFixture,
 ) -> None:
-    alchemy.autocommit_strategy = None
+    if isinstance(alchemy.config[0], SQLAlchemyAsyncConfig):
+        mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+        mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    else:
+        mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
+        mock_close = mocker.patch("sqlalchemy.orm.Session.close")
 
-    @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> None:
-        pass
+    app.middleware_stack = app.build_middleware_stack()
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=200)
+
+    app.router.routes.append(Route("/", endpoint=handler))
 
     assert client.get("/").status_code == 200
     mock_commit.assert_not_called()
     mock_close.assert_called_once()
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
-def test_session_autocommit_always(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
-    mock_commit: MagicMock,
-    mock_close: MagicMock,
-) -> None:
-    alchemy.autocommit_strategy = "always"
-
-    @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> None:
-        pass
-
-    assert client.get("/").status_code == 200
-    mock_commit.assert_called_once()
-    mock_close.assert_called_once()
-
-
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
 @pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
-def test_session_autocommit_match_status(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
-    mock_commit: MagicMock,
-    mock_close: MagicMock,
-    mock_rollback: MagicMock,
+def test_sync_session_autocommit_success_status(
+    mocker: MockerFixture,
     status_code: int,
 ) -> None:
-    alchemy.autocommit_strategy = "match_status"
+    mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
+    mock_close = mocker.patch("sqlalchemy.orm.Session.close")
+    mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
+    app = Starlette()
+    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
 
-    @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> Response:
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
         return Response(status_code=status_code)
 
-    client.get("/")
-    mock_commit.assert_called_once()
-    mock_close.assert_called_once()
-    mock_rollback.assert_not_called()
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        _ = client.get("/")
+        mock_commit.assert_called_once()
+        mock_close.assert_called_once()
+        mock_rollback.assert_not_called()
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
+@pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
+def test_sync_session_autocommit_include_redirect_success_status(
+    mocker: MockerFixture,
+    status_code: int,
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
+    mock_close = mocker.patch("sqlalchemy.orm.Session.close")
+    mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
+    app = Starlette()
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit_include_redirect"
+    )
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=status_code)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        _ = client.get("/")
+        mock_commit.assert_called_once()
+        mock_close.assert_called_once()
+        mock_rollback.assert_not_called()
+
+
+@pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
+def test_async_session_autocommit_success_status(
+    mocker: MockerFixture,
+    status_code: int,
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    app = Starlette()
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=status_code)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        _ = client.get("/")
+        mock_commit.assert_called_once()
+        mock_close.assert_called_once()
+        mock_rollback.assert_not_called()
+
+
+@pytest.mark.parametrize("status_code", [200, 201, 202, 204, 206])
+def test_async_session_autocommit_include_redirect_success_status(
+    mocker: MockerFixture,
+    status_code: int,
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    app = Starlette()
+    config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit_include_redirect"
+    )
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=status_code)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        _ = client.get("/")
+        mock_commit.assert_called_once()
+        mock_close.assert_called_once()
+        mock_rollback.assert_not_called()
+
+
 @pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
-def test_session_autocommit_rollback_for_status(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
-    mock_commit: MagicMock,
-    mock_close: MagicMock,
-    mock_rollback: MagicMock,
+def test_sync_session_autocommit_rollback_for_status(
     status_code: int,
+    mocker: MockerFixture,
 ) -> None:
-    alchemy.autocommit_strategy = "match_status"
+    mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
+    mock_close = mocker.patch("sqlalchemy.orm.Session.close")
+    mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
+    app = Starlette()
+    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
 
-    @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> Response:
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
         return Response(status_code=status_code)
 
-    client.get("/")
-    mock_commit.assert_not_called()
-    mock_close.assert_called_once()
-    mock_rollback.assert_called_once()
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        response = client.get("/")
+        assert response.status_code == status_code
+        if status_code >= 300:
+            assert mock_commit.call_count == 0
+            assert mock_rollback.call_count == 1
+            assert mock_close.call_count == 1
+        else:
+            assert mock_commit.call_count == 1
+            assert mock_close.call_count == 1
+            assert mock_rollback.call_count == 0
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
-@pytest.mark.parametrize("autocommit_strategy", ["always", "match_status"])
-def test_session_autocommit_close_on_exception(
-    app: FastAPI,
-    alchemy: StarletteAdvancedAlchemy,
-    client: TestClient,
-    mock_commit: MagicMock,
-    mock_close: MagicMock,
-    autocommit_strategy: CommitStrategy,
+@pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
+def test_sync_session_autocommit_include_redirect_rollback_for_status(
+    status_code: int,
+    mocker: MockerFixture,
 ) -> None:
-    alchemy.autocommit_strategy = autocommit_strategy
-    mock_commit.side_effect = ValueError
+    mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
+    mock_close = mocker.patch("sqlalchemy.orm.Session.close")
+    mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
+    app = Starlette()
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit_include_redirect"
+    )
+    alchemy = AdvancedAlchemy(config, app=app)
 
-    @app.get("/")
-    def handler(session: Annotated[Session, Depends(alchemy.get_session)]) -> None:
-        pass
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=status_code)
 
-    client.get("/")
-    mock_commit.assert_called_once()
-    mock_close.assert_called_once()
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        response = client.get("/")
+        assert response.status_code == status_code
+        if status_code < 400:
+            assert mock_commit.call_count == 1
+            assert mock_rollback.call_count == 0
+            assert mock_close.call_count == 1
+        else:
+            assert mock_commit.call_count == 0
+            assert mock_rollback.call_count == 1
+            assert mock_close.call_count == 1
 
 
-@pytest.mark.xfail(
-    condition=sys.version_info < (3, 8),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Skipping on 3.8 for now until this is resolved.",
-)
-def test_multiple_instances(app: FastAPI) -> None:
+@pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
+def test_async_session_autocommit_rollback_for_status(
+    status_code: int,
+    mocker: MockerFixture,
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    app = Starlette()
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=status_code)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        response = client.get("/")
+        assert response.status_code == status_code
+        if status_code >= 300:
+            assert mock_commit.call_count == 0
+            assert mock_rollback.call_count == 1
+            assert mock_close.call_count == 1
+        else:
+            assert mock_commit.call_count == 1
+            assert mock_close.call_count == 1
+            assert mock_rollback.call_count == 0
+
+
+@pytest.mark.parametrize("status_code", [300, 301, 305, 307, 308, 400, 401, 404, 450, 500, 900])
+def test_async_session_autocommit_include_redirect_rollback_for_status(
+    status_code: int,
+    mocker: MockerFixture,
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    app = Starlette()
+    config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit_include_redirect"
+    )
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=status_code)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        response = client.get("/")
+        assert response.status_code == status_code
+        if status_code >= 400:
+            assert mock_commit.call_count == 0
+            assert mock_rollback.call_count == 1
+            assert mock_close.call_count == 1
+        else:
+            assert mock_commit.call_count == 1
+            assert mock_rollback.call_count == 0
+            assert mock_close.call_count == 1
+
+
+@pytest.mark.parametrize("autocommit_strategy", ["autocommit", "autocommit_include_redirect"])
+def test_sync_session_autocommit_close_on_exception(
+    mocker: MockerFixture,
+    autocommit_strategy: Literal["autocommit", "autocommit_include_redirect"],
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
+    mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
+    mock_close = mocker.patch("sqlalchemy.orm.Session.close")
+
+    async def http_exception(request: Request, exc: HTTPException) -> Response:
+        return Response(status_code=exc.status_code)
+
+    app = Starlette(exception_handlers={HTTPException: http_exception})  # type: ignore
+    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode=autocommit_strategy)
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> None:
+        _session = alchemy.get_session(request)
+        raise HTTPException(status_code=500, detail="Intentional error for testing")
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        client.get("/")
+        mock_commit.assert_not_called()
+        mock_rollback.assert_called_once()
+        mock_close.assert_called_once()
+
+
+@pytest.mark.parametrize("autocommit_strategy", ["autocommit", "autocommit_include_redirect"])
+async def test_async_session_autocommit_close_on_exception(
+    mocker: MockerFixture,
+    autocommit_strategy: Literal["autocommit", "autocommit_include_redirect"],
+) -> None:
+    mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+
+    async def http_exception(request: Request, exc: HTTPException) -> Response:
+        return Response(status_code=exc.status_code)
+
+    app = Starlette(exception_handlers={HTTPException: http_exception})  # type: ignore
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode=autocommit_strategy)
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> None:
+        _session = alchemy.get_session(request)
+        raise HTTPException(status_code=500, detail="Intentional error for testing")
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app) as client:
+        client.get("/")
+        mock_commit.assert_not_called()
+        mock_rollback.assert_called_once()
+        mock_close.assert_called_once()
+
+
+def test_multiple_instances(app: Starlette) -> None:
     mock = MagicMock()
-    config_1 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite://")
-    config_2 = SQLAlchemySyncConfig(connection_string="sqlite+aiosqlite:///test.db")
+    config_1 = SQLAlchemySyncConfig(connection_string="sqlite:///other.db")
+    config_2 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.db", bind_key="other")
 
-    alchemy_1 = StarletteAdvancedAlchemy(config_1, app=app)
+    alchemy_1 = AdvancedAlchemy([config_1, config_2], app=app)
 
-    alchemy_2 = StarletteAdvancedAlchemy(config_2, app=app)
-
-    @app.get("/")
-    def handler(
-        session_1: Annotated[Session, Depends(alchemy_1.get_session)],
-        session_2: Annotated[Session, Depends(alchemy_2.get_session)],
-        engine_1: Annotated[Engine, Depends(alchemy_1.get_engine)],
-        engine_2: Annotated[Engine, Depends(alchemy_2.get_engine)],
-    ) -> None:
+    async def handler(request: Request) -> Response:
+        session_1 = alchemy_1.get_sync_session(request)
+        engine_1 = alchemy_1.get_sync_engine()
+        session_2 = alchemy_1.get_async_session(request, key="other")
+        engine_2 = alchemy_1.get_async_engine(key="other")
+        assert session_1 is not session_2  # type: ignore
+        assert engine_1 is not engine_2
         mock(session=session_1, engine=engine_1)
         mock(session=session_2, engine=engine_2)
+        return Response(status_code=200)
+
+    app.router.routes.append(Route("/", endpoint=handler))
 
     with TestClient(app=app) as client:
         client.get("/")
 
-        assert alchemy_1.engine_key != alchemy_2.engine_key
-        assert alchemy_1.sessionmaker_key != alchemy_2.sessionmaker_key
-        assert alchemy_1.session_key != alchemy_2.session_key
-
-        assert alchemy_1.get_engine() is not alchemy_2.get_engine()
-        assert alchemy_1.get_sessionmaker() is not alchemy_2.get_sessionmaker()
-        assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
-        assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
+        assert alchemy_1.get_sync_engine() is not alchemy_1.get_async_engine("other")
