@@ -74,35 +74,31 @@ operations on your SQLAlchemy models.
 <!-- markdownlint-restore -->
 
 ```python
-from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemySyncRepository
+from advanced_alchemy import base, repository, config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped, sessionmaker
 
 
-class User(UUIDBase):
+class User(base.UUIDBase):
     # you can optionally override the generated table name by manually setting it.
     __tablename__ = "user_account"  # type: ignore[assignment]
     email: Mapped[str]
     name: Mapped[str]
 
 
-class UserRepository(SQLAlchemySyncRepository[User]):
+class UserRepository(repository.SQLAlchemySyncRepository[User]):
     """User repository."""
 
     model_type = User
 
 
-# use any compatible sqlalchemy engine.
-engine = create_engine("duckdb:///:memory:")
-session_factory = sessionmaker(engine, expire_on_commit=False)
+db = config.SQLAlchemySyncConfig(connection_string="duckdb:///:memory:", session_config=config.SyncSessionConfig(expire_on_commit=False))
 
 # Initializes the database.
-with engine.begin() as conn:
+with db.get_engine().begin() as conn:
     User.metadata.create_all(conn)
 
-with session_factory() as db_session:
+with db.get_session() as db_session:
     repo = UserRepository(session=db_session)
     # 1) Create multiple users with `add_many`
     bulk_users = [
@@ -143,41 +139,33 @@ and it will handle the type conversions for you.
 <!-- markdownlint-restore -->
 
 ```python
-from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy import SQLAlchemySyncRepository, SQLAlchemySyncRepositoryService
+from advanced_alchemy import base, repository, filters, service, config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped, sessionmaker
 
 
-class User(UUIDBase):
+class User(base.UUIDBase):
     # you can optionally override the generated table name by manually setting it.
     __tablename__ = "user_account"  # type: ignore[assignment]
     email: Mapped[str]
     name: Mapped[str]
 
-
-class UserRepository(SQLAlchemySyncRepository[User]):
+class UserService(service.SQLAlchemySyncRepositoryService[User]):
     """User repository."""
+    class Repo(repository.SQLAlchemySyncRepository[User]):
+        """User repository."""
 
-    model_type = User
+        model_type = User
 
+    repository_type = Repo
 
-class UserService(SQLAlchemySyncRepositoryService[User]):
-    """User repository."""
-
-    repository_type = UserRepository
-
-
-# use any compatible sqlalchemy engine.
-engine = create_engine("duckdb:///:memory:")
-session_factory = sessionmaker(engine, expire_on_commit=False)
+db = config.SQLAlchemySyncConfig(connection_string="duckdb:///:memory:", session_config=config.SyncSessionConfig(expire_on_commit=False))
 
 # Initializes the database.
-with engine.begin() as conn:
+with db.get_engine().begin() as conn:
     User.metadata.create_all(conn)
 
-with session_factory() as db_session:
+with db.get_session() as db_session:
     service = UserService(session=db_session)
     # 1) Create multiple users with `add_many`
     objs = service.create_many([
@@ -225,8 +213,7 @@ it can also be installed as a Litestar extra with `pip install litestar[sqlalche
 from litestar import Litestar
 from litestar.plugins.sqlalchemy import SQLAlchemyPlugin, SQLAlchemyAsyncConfig
 # alternately...
-# from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
-# from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
+# from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 
 alchemy = SQLAlchemyPlugin(
   config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
@@ -238,6 +225,27 @@ app = Litestar(plugins=[alchemy])
 
 For a full Litestar example, check [here][litestar-example]
 
+#### Flask
+
+<!-- markdownlint-disable -->
+<details>
+<summary>Flask Example</summary>
+<!-- markdownlint-restore -->
+
+```python
+from flask import Flask
+from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemySyncConfig
+
+app = Flask(__name__)
+alchemy = AdvancedAlchemy(
+    config=SQLAlchemySyncConfig(connection_string="duckdb:///:memory:"), app=app,
+)
+```
+
+</details>
+
+For a full Flask example, see [here][flask-example]
+
 #### FastAPI
 
 <!-- markdownlint-disable -->
@@ -246,20 +254,18 @@ For a full Litestar example, check [here][litestar-example]
 <!-- markdownlint-restore -->
 
 ```python
+from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig
 from fastapi import FastAPI
 
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
-
 app = FastAPI()
-alchemy = StarletteAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
 
 </details>
 
-For a full FastAPI example, see [here][fastapi-example]
+For a full FastAPI example with optional CLI integration, see [here][fastapi-example]
 
 #### Starlette
 
@@ -269,13 +275,11 @@ For a full FastAPI example, see [here][fastapi-example]
 <!-- markdownlint-restore -->
 
 ```python
+from advanced_alchemy.extensions.starlette import AdvancedAlchemy, SQLAlchemyAsyncConfig
 from starlette.applications import Starlette
 
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
-
 app = Starlette()
-alchemy = StarletteAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
@@ -293,11 +297,10 @@ alchemy = StarletteAdvancedAlchemy(
 from sanic import Sanic
 from sanic_ext import Extend
 
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
+from advanced_alchemy.extensions.sanic import AdvancedAlchemy, SQLAlchemyAsyncConfig
 
 app = Sanic("AlchemySanicApp")
-alchemy = SanicAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     sqlalchemy_config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
 )
 Extend.register(alchemy)
@@ -331,5 +334,6 @@ or the [project-specific GitHub discussions page][project-discussions].
 [project-docs]: https://docs.advanced-alchemy.litestar.dev
 [install-guide]: https://docs.advanced-alchemy.litestar.dev/latest/#installation
 [fastapi-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/fastapi.py
+[flask-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/flask/flask_services.py
 [litestar-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/litestar.py
 [standalone-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/standalone.py

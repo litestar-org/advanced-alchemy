@@ -35,17 +35,6 @@ def get_database_migration_plugin(app: Flask) -> AdvancedAlchemy:
 
     Raises:
         :exc:`advanced_alchemy.exceptions.ImproperConfigurationError`: If the extension is not found.
-
-    Example:
-        ```python
-        from flask import Flask
-        from advanced_alchemy.extensions.flask import (
-            get_database_migration_plugin,
-        )
-
-        app = Flask(__name__)
-        db = get_database_migration_plugin(app)
-        ```
     """
     from advanced_alchemy.exceptions import ImproperConfigurationError
 

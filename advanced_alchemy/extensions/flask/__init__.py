@@ -2,57 +2,9 @@
 
 This module provides Flask integration for Advanced Alchemy, including session management,
 database migrations, and service utilities.
-
-Example:
-    Basic usage with synchronous SQLAlchemy:
-
-    .. code-block:: python
-
-        from flask import Flask
-        from advanced_alchemy.extensions.flask import (
-            AdvancedAlchemy,
-            SQLAlchemySyncConfig,
-            EngineConfig,
-        )
-
-        app = Flask(__name__)
-
-        db_config = SQLAlchemySyncConfig(
-            engine_config=EngineConfig(url="sqlite:///db.sqlite3"),
-            create_all=True,  # Create tables on startup
-        )
-
-        db = AdvancedAlchemy(config=db_config)
-        db.init_app(app)
-
-
-        # Get a session in your route
-        @app.route("/")
-        def index():
-            session = db.get_session()
-            # Use session...
-
-    Using async SQLAlchemy:
-
-    .. code-block:: python
-
-        from advanced_alchemy.extensions.flask import (
-            AdvancedAlchemy,
-            SQLAlchemyAsyncConfig,
-        )
-
-        app = Flask(__name__)
-
-        db_config = SQLAlchemyAsyncConfig(
-            engine_config=EngineConfig(
-                url="postgresql+asyncpg://user:pass@localhost/db"
-            ),
-            create_all=True,
-        )
-
-        db = AdvancedAlchemy(config=db_config)
-        db.init_app(app)
 """
+
+from __future__ import annotations
 
 from advanced_alchemy import base, exceptions, filters, mixins, operations, repository, service, types, utils
 from advanced_alchemy.alembic.commands import AlembicCommands

@@ -10,16 +10,19 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from advanced_alchemy.base import UUIDAuditBase, UUIDBase
-from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.extensions.sanic import (
+    AdvancedAlchemy,
+    AsyncSessionConfig,
+    SQLAlchemyAsyncConfig,
+    base,
+    filters,
+    repository,
+)
 
 
 # the SQLAlchemy base includes a declarative model for you to use in your models.
 # The `Base` class includes a `UUID` based primary key (`id`)
-class AuthorModel(UUIDBase):
+class AuthorModel(base.UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
@@ -30,14 +33,14 @@ class AuthorModel(UUIDBase):
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
 # additional columns: `created` and `updated`. `created` is a timestamp of when the
 # record created, and `updated` is the last time the record was modified.
-class BookModel(UUIDAuditBase):
+class BookModel(base.UUIDAuditBase):
     __tablename__ = "book"
     title: Mapped[str]
     author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
     author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
 
 
-class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
+class AuthorRepository(repository.SQLAlchemyAsyncRepository[AuthorModel]):
     """Author repository."""
 
     model_type = AuthorModel
@@ -70,7 +73,7 @@ async def provide_author_details_repo(
 def provide_limit_offset_pagination(
     current_page: int = 1,
     page_size: int = 10,
-) -> LimitOffset:
+) -> filters.LimitOffset:
     """Add offset/limit pagination.
 
     Return type consumed by `Repository.apply_limit_offset_pagination()`.
@@ -82,7 +85,7 @@ def provide_limit_offset_pagination(
     page_size : int
         OFFSET to apply to select.
     """
-    return LimitOffset(page_size, page_size * (current_page - 1))
+    return filters.LimitOffset(page_size, page_size * (current_page - 1))
 
 
 # #######################
@@ -95,13 +98,13 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     session_config=session_config,
 )  # Create 'db_session' dependency.
 app = Sanic("AlchemySanicApp")
-alchemy = SanicAdvancedAlchemy(sqlalchemy_config=sqlalchemy_config)
+alchemy = AdvancedAlchemy(sqlalchemy_config=sqlalchemy_config)
 Extend.register(alchemy)
 app.ext.add_dependency(AsyncSession, provide_db_session)
 
 
 @app.before_server_start
-async def on_startup(app: Sanic, _: Any) -> None:  # noqa: ARG001
+async def on_startup(app: Sanic[Any, Any], _: Any) -> None:  # noqa: ARG001
     """Initializes the database."""
     async with sqlalchemy_config.get_engine().begin() as conn:
-        await conn.run_sync(UUIDBase.metadata.create_all)
+        await conn.run_sync(base.UUIDBase.metadata.create_all)

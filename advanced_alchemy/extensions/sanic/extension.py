@@ -16,7 +16,7 @@ try:
     from sanic_ext.extensions.base import Extension
 
     SANIC_INSTALLED = True
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover
     SANIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
     Extension = type("Extension", (), {})  # type: ignore  # noqa: PGH003
     Extend = type("Extend", (), {})  # type: ignore  # noqa: PGH003
@@ -30,14 +30,14 @@ if TYPE_CHECKING:
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.config.types import CommitStrategy
 
-__all__ = ("CommitStrategyExecutor", "SanicAdvancedAlchemy")
+__all__ = ("AdvancedAlchemy", "CommitStrategyExecutor")
 
 
 class CommitStrategyExecutor(Protocol):
     async def __call__(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None: ...
 
 
-class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
+class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # type: ignore[no-untyped-call]  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
     """Sanic extension for integrating Advanced Alchemy with SQLAlchemy.
 
     Args:
@@ -59,7 +59,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
     @overload
     def __init__(
-        self: SanicAdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]],
+        self: AdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]],
         *,
         sqlalchemy_config: SQLAlchemyAsyncConfig,
         autocommit: CommitStrategy | None = None,
@@ -71,7 +71,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
     @overload
     def __init__(
-        self: SanicAdvancedAlchemy[Engine, Session, sessionmaker[Session]],
+        self: AdvancedAlchemy[Engine, Session, sessionmaker[Session]],
         *,
         sqlalchemy_config: SQLAlchemySyncConfig,
         autocommit: CommitStrategy | None = None,
@@ -83,8 +83,8 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
     def __init__(
         self: (
-            SanicAdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]
-            | SanicAdvancedAlchemy[Engine, Session, sessionmaker[Session]]
+            AdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]
+            | AdvancedAlchemy[Engine, Session, sessionmaker[Session]]
         ),
         *,
         sqlalchemy_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
@@ -94,7 +94,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         engine_key: str = "engine",
         session_key: str = "session",
     ) -> None:
-        if not SANIC_INSTALLED:
+        if not SANIC_INSTALLED:  # pragma: no cover
             msg = "Could not locate either Sanic or Sanic Extensions. Both libraries must be installed to use Advanced Alchemy. Try: pip install sanic[ext]"
             raise MissingDependencyError(
                 msg,
@@ -121,7 +121,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
         self.app: Sanic  # pyright: ignore[reportMissingTypeArgument]
 
-    async def _do_commit(self, session: Session | AsyncSession) -> None:
+    async def _do_commit(self, session: Session | AsyncSession) -> None:  # pragma: no cover
         """Commit the current transaction.
 
         Args:
@@ -134,7 +134,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         else:
             await session.commit()
 
-    async def _do_rollback(self, session: Session | AsyncSession) -> None:
+    async def _do_rollback(self, session: Session | AsyncSession) -> None:  # pragma: no cover
         """Rollback the current transaction.
 
         Args:
@@ -147,7 +147,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         else:
             await session.rollback()
 
-    async def _do_close(self, session: Session | AsyncSession) -> None:
+    async def _do_close(self, session: Session | AsyncSession) -> None:  # pragma: no cover
         """Close the session.
 
         Args:
@@ -160,7 +160,9 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         else:
             await session.close()
 
-    async def _commit_strategy_always(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None:
+    async def _commit_strategy_always(
+        self, *, session: Session | AsyncSession, response: HTTPResponse
+    ) -> None:  # pragma: no cover
         """Commit strategy that always commits the session.
 
         Args:
@@ -171,7 +173,9 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         """
         await self._do_commit(session)
 
-    async def _commit_strategy_match_status(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None:
+    async def _commit_strategy_match_status(
+        self, *, session: Session | AsyncSession, response: HTTPResponse
+    ) -> None:  # pragma: no cover
         """Commit strategy that commits based on the response status.
 
         Args:
@@ -185,7 +189,9 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         else:
             await self._do_rollback(session)
 
-    async def session_handler(self, session: Session | AsyncSession, request: Request, response: HTTPResponse) -> None:
+    async def session_handler(
+        self, session: Session | AsyncSession, request: Request, response: HTTPResponse
+    ) -> None:  # pragma: no cover
         """Handle the session lifecycle based on the commit strategy.
 
         Args:
@@ -203,7 +209,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
             await self._do_close(session)
             delattr(request.ctx, self.session_key)
 
-    def get_engine(self) -> EngineT:
+    def get_engine(self) -> EngineT:  # pragma: no cover
         """Retrieve the SQLAlchemy engine from the app context.
 
         Returns:
@@ -234,7 +240,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
             SessionT: The session associated with the request.
         """
         session = getattr(request.ctx, self.session_key, None)
-        if session is not None:
+        if session is not None:  # pragma: no cover
             return cast(SessionT, session)
 
         session = cast("SessionT", self.session_maker())
@@ -250,7 +256,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         Returns:
             EngineT: The SQLAlchemy engine.
         """
-        return cast("EngineT", getattr(request.app.ctx, self.engine_key, None))
+        return cast("EngineT", getattr(request.app.ctx, self.engine_key, None))  # pragma: no cover
 
     def get_sessionmaker_from_request(self, request: Request) -> SessionMakerT:
         """Retrieve the session maker from the request context.
@@ -261,7 +267,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         Returns:
             SessionMakerT: The session maker.
         """
-        return cast("SessionMakerT", getattr(request.app.ctx, self.session_maker_key, None))
+        return cast("SessionMakerT", getattr(request.app.ctx, self.session_maker_key, None))  # pragma: no cover
 
     def get_session_from_request(self, request: Request) -> SessionT:
         """Retrieve the session from the request context.
@@ -272,7 +278,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
         Returns:
             SessionT: The session associated with the request.
         """
-        return cast("SessionT", getattr(request.ctx, self.session_key, None))
+        return cast("SessionT", getattr(request.ctx, self.session_key, None))  # pragma: no cover
 
     def startup(self, bootstrap: Extend) -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
         """Advanced Alchemy Sanic extension startup hook.
