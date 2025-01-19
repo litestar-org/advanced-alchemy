@@ -1,5 +1,5 @@
 ==========
-extensions
+Extensions
 ==========
 
 API Reference for the ``Extensions`` module
@@ -13,5 +13,7 @@ Available API References
     :titlesonly:
 
     litestar/index
-    sanic
-    starlette
+    flask/index
+    sanic/index
+    starlette/index
+    fastapi/index
