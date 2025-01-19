@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Sequence
 
-from fastapi_cli.cli import app as fastapi_cli_app
-
 from advanced_alchemy.extensions.fastapi.cli import register_database_commands
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy as StarletteAdvancedAlchemy
 
@@ -14,11 +12,14 @@ if TYPE_CHECKING:
 
 __all__ = ("AdvancedAlchemy",)
 
+_ENABLE_CLI = False
+
 
 def assign_cli_group(app: FastAPI) -> None:
+    from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
     from typer.main import get_group
 
-    click_app = get_group(fastapi_cli_app)
+    click_app = get_group(fastapi_cli_app)  # pyright: ignore[reportUnknownArgumentType]
     click_app.add_command(register_database_commands(app))
 
 
@@ -45,9 +46,5 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
             app (fastapi.FastAPI): The FastAPI application instance.
         """
         super().init_app(app)
-        assign_cli_group(app)
-        app.state.advanced_alchemy = self
-
-    async def on_shutdown(self) -> None:
-        await super().on_shutdown()
-        delattr(self.app.state, "advanced_alchemy")
+        if _ENABLE_CLI:
+            assign_cli_group(app)

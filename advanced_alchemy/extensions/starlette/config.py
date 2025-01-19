@@ -6,12 +6,14 @@ including both synchronous and asynchronous database configurations.
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
 
 from click import echo
 from sqlalchemy.exc import OperationalError
+from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import BaseHTTPMiddleware
 from typing_extensions import Literal
 
 from advanced_alchemy._serialization import decode_json, encode_json
@@ -114,10 +116,14 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.engine_instance = self.get_engine()
         async with self.engine_instance.begin() as conn:
             try:
-                await conn.run_sync(metadata_registry.get(self.bind_key).create_all)
+                await conn.run_sync(
+                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all
+                )
                 await conn.commit()
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
+            else:
+                echo(" * Created target metadata.")
 
     def init_app(self, app: Starlette) -> None:
         """Initialize the Starlette application with this configuration.
@@ -127,8 +133,21 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         self.app = app
         self.bind_key = self.bind_key or "default"
-        self.engine_key = _make_unique_state_key(app, self.engine_key)
-        self.session_maker_key = _make_unique_state_key(app, self.session_maker_key)
+        _ = self.create_session_maker()
+        self.session_key = _make_unique_state_key(app, f"advanced_alchemy_async_session_{self.session_key}")
+        self.engine_key = _make_unique_state_key(app, f"advanced_alchemy_async_engine_{self.engine_key}")
+        self.session_maker_key = _make_unique_state_key(
+            app, f"advanced_alchemy_async_session_maker_{self.session_maker_key}"
+        )
+
+        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
+        app.add_event_handler("startup", self.on_startup)  # pyright: ignore[reportUnknownMemberType]
+        app.add_event_handler("shutdown", self.on_shutdown)  # pyright: ignore[reportUnknownMemberType]
+
+    async def on_startup(self) -> None:
+        """Initialize the Starlette application with this configuration."""
+        if self.create_all:
+            await self.create_all_metadata()
 
     def create_session_maker(self) -> Callable[[], AsyncSession]:
         """Get a session maker. If none exists yet, create one.
@@ -172,7 +191,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await session.rollback()
         finally:
             await session.close()
-            delattr(request.state, self.session_key)
+            with contextlib.suppress(AttributeError, KeyError):
+                delattr(request.state, self.session_key)
 
     async def middleware_dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Middleware dispatch function to handle requests and responses.
@@ -210,8 +230,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         await self.close_engine()
         if self.app is not None:
-            delattr(self.app.state, self.engine_key)
-            delattr(self.app.state, self.session_maker_key)
+            with contextlib.suppress(AttributeError, KeyError):
+                delattr(self.app.state, self.engine_key)
+                delattr(self.app.state, self.session_maker_key)
+                delattr(self.app.state, self.session_key)
 
 
 @dataclass
@@ -243,8 +265,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             self.engine_instance = self.get_engine()
         with self.engine_instance.begin() as conn:
             try:
-                await asyncio.get_running_loop().run_in_executor(
-                    None, metadata_registry.get(self.bind_key).create_all, conn
+                await run_in_threadpool(
+                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all, conn
                 )
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
@@ -257,8 +279,20 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
         self.app = app
         self.bind_key = self.bind_key or "default"
-        self.engine_key = _make_unique_state_key(app, self.engine_key)
-        self.session_maker_key = _make_unique_state_key(app, self.session_maker_key)
+        self.session_key = _make_unique_state_key(app, f"advanced_alchemy_sync_session_{self.session_key}")
+        self.engine_key = _make_unique_state_key(app, f"advanced_alchemy_sync_engine_{self.engine_key}")
+        self.session_maker_key = _make_unique_state_key(
+            app, f"advanced_alchemy_sync_session_maker_{self.session_maker_key}"
+        )
+        _ = self.create_session_maker()
+        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
+        app.add_event_handler("startup", self.on_startup)  # pyright: ignore[reportUnknownMemberType]
+        app.add_event_handler("shutdown", self.on_shutdown)  # pyright: ignore[reportUnknownMemberType]
+
+    async def on_startup(self) -> None:
+        """Initialize the Starlette application with this configuration."""
+        if self.create_all:
+            await self.create_all_metadata()
 
     def create_session_maker(self) -> Callable[[], Session]:
         """Get a session maker. If none exists yet, create one.
@@ -297,12 +331,13 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
                 self.commit_mode == "autocommit_include_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
             ):
-                await asyncio.get_running_loop().run_in_executor(None, session.commit)
+                await run_in_threadpool(session.commit)
             else:
-                await asyncio.get_running_loop().run_in_executor(None, session.rollback)
+                await run_in_threadpool(session.rollback)
         finally:
-            await asyncio.get_running_loop().run_in_executor(None, session.close)
-            delattr(request.state, self.session_key)
+            await run_in_threadpool(session.close)
+            with contextlib.suppress(AttributeError, KeyError):
+                delattr(request.state, self.session_key)
 
     async def middleware_dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Middleware dispatch function to handle requests and responses.
@@ -328,7 +363,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     async def close_engine(self) -> None:
         """Close the engines."""
         if self.engine_instance is not None:
-            await asyncio.get_running_loop().run_in_executor(None, self.engine_instance.dispose)
+            await run_in_threadpool(self.engine_instance.dispose)
 
     async def on_shutdown(self) -> None:
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -340,5 +375,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
         await self.close_engine()
         if self.app is not None:
-            delattr(self.app.state, self.engine_key)
-            delattr(self.app.state, self.session_maker_key)
+            with contextlib.suppress(AttributeError, KeyError):
+                delattr(self.app.state, self.engine_key)
+                delattr(self.app.state, self.session_key)
+                delattr(self.app.state, self.session_maker_key)

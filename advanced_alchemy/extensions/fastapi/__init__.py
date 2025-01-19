@@ -8,9 +8,9 @@ database migrations, and service utilities.
 from advanced_alchemy import base, exceptions, filters, mixins, operations, repository, service, types, utils
 from advanced_alchemy.alembic.commands import AlembicCommands
 from advanced_alchemy.config import AlembicAsyncConfig, AlembicSyncConfig, AsyncSessionConfig, SyncSessionConfig
+from advanced_alchemy.extensions.fastapi.cli import get_database_migration_plugin
 from advanced_alchemy.extensions.fastapi.config import EngineConfig, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
-from advanced_alchemy.extensions.flask.cli import get_database_migration_plugin
+from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy, assign_cli_group
 
 __all__ = (
     "AdvancedAlchemy",
@@ -22,6 +22,7 @@ __all__ = (
     "SQLAlchemyAsyncConfig",
     "SQLAlchemySyncConfig",
     "SyncSessionConfig",
+    "assign_cli_group",
     "base",
     "exceptions",
     "filters",
