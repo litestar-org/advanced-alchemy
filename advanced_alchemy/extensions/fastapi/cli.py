@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, cast
 
-import click
+try:
+    import rich_click as click
+except ImportError:
+    import click  # type: ignore[no-redef]
 
 from advanced_alchemy.cli import add_migration_commands
 

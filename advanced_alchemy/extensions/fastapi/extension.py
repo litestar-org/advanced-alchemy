@@ -12,13 +12,14 @@ if TYPE_CHECKING:
 
 __all__ = ("AdvancedAlchemy",)
 
-_ENABLE_CLI = False
-
 
 def assign_cli_group(app: FastAPI) -> None:
-    from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
-    from typer.main import get_group
-
+    try:
+        from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
+        from typer.main import get_group
+    except ImportError:
+        print("FastAPI CLI is not installed.  Skipping CLI registration.")  # noqa: T201
+        return
     click_app = get_group(fastapi_cli_app)  # pyright: ignore[reportUnknownArgumentType]
     click_app.add_command(register_database_commands(app))
 
@@ -36,15 +37,3 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         app: FastAPI | None = None,
     ) -> None:
         super().__init__(config, app)
-
-    def init_app(self, app: FastAPI) -> None:  # type: ignore[override]
-        """Initializes the FastAPI application with SQLAlchemy engine and sessionmaker.
-
-        Sets up middleware and shutdown handlers for managing the database engine.
-
-        Args:
-            app (fastapi.FastAPI): The FastAPI application instance.
-        """
-        super().init_app(app)
-        if _ENABLE_CLI:
-            assign_cli_group(app)

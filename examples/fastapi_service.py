@@ -3,7 +3,7 @@ import datetime
 from typing import AsyncGenerator, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI
 from pydantic import BaseModel
 from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,18 +76,24 @@ class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
 
 
 # #######################
+# Application
+# #######################
+
+sqlalchemy_config = SQLAlchemyAsyncConfig(
+    connection_string="sqlite+aiosqlite:///test.sqlite",
+    session_config=AsyncSessionConfig(expire_on_commit=False),
+    create_all=True,
+)
+app = FastAPI()
+alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
+DatabaseSession = Annotated[AsyncSession, Depends(alchemy.provide_async_session())]
+
+# #######################
 # Dependencies
 # #######################
 
 
-async def provide_db_session(request: Request) -> AsyncSession:
-    """Provide a DB session."""
-    return alchemy.get_async_session(request)
-
-
-async def provide_authors_service(
-    db_session: Annotated[AsyncSession, Depends(provide_db_session)],
-) -> AsyncGenerator[AuthorService, None]:
+async def provide_authors_service(db_session: DatabaseSession) -> AsyncGenerator[AuthorService, None]:
     """This provides the default Authors repository."""
     async with AuthorService.new(session=db_session) as service:
         yield service
@@ -95,9 +101,7 @@ async def provide_authors_service(
 
 # we can optionally override the default `select` used for the repository to pass in
 # specific SQL options such as join details
-async def provide_author_details_service(
-    db_session: Annotated[AsyncSession, Depends(provide_db_session)],
-) -> AsyncGenerator[AuthorService, None]:
+async def provide_author_details_service(db_session: DatabaseSession) -> AsyncGenerator[AuthorService, None]:
     """This provides a simple example demonstrating how to override the join options for the repository."""
     async with AuthorService.new(load=[AuthorModel.books], session=db_session) as service:
         yield service
@@ -117,18 +121,6 @@ def provide_limit_offset_pagination(current_page: int = 1, page_size: int = 10) 
     """
     return filters.LimitOffset(page_size, page_size * (current_page - 1))
 
-
-# #######################
-# Application
-# #######################
-
-sqlalchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
-    session_config=AsyncSessionConfig(expire_on_commit=False),
-    create_all=True,
-)
-app = FastAPI()
-alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
 
 # #######################
 # Routes
@@ -191,3 +183,14 @@ async def delete_author(
 
 
 app.include_router(author_router)
+
+if __name__ == "__main__":
+    """Launches the FastAPI CLI with the database commands rgistered"""
+    from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
+    from typer.main import get_group
+
+    from advanced_alchemy.extensions.fastapi.cli import register_database_commands
+
+    click_app = get_group(fastapi_cli_app)  # pyright: ignore[reportUnknownArgumentType]
+    click_app.add_command(register_database_commands(app))
+    click_app()
