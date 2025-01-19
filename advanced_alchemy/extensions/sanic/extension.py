@@ -30,14 +30,14 @@ if TYPE_CHECKING:
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
     from advanced_alchemy.config.types import CommitStrategy
 
-__all__ = ("CommitStrategyExecutor", "SanicAdvancedAlchemy")
+__all__ = ("AdvancedAlchemy", "CommitStrategyExecutor")
 
 
 class CommitStrategyExecutor(Protocol):
     async def __call__(self, *, session: Session | AsyncSession, response: HTTPResponse) -> None: ...
 
 
-class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
+class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # type: ignore[no-untyped-call]  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
     """Sanic extension for integrating Advanced Alchemy with SQLAlchemy.
 
     Args:
@@ -59,7 +59,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
     @overload
     def __init__(
-        self: SanicAdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]],
+        self: AdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]],
         *,
         sqlalchemy_config: SQLAlchemyAsyncConfig,
         autocommit: CommitStrategy | None = None,
@@ -71,7 +71,7 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
     @overload
     def __init__(
-        self: SanicAdvancedAlchemy[Engine, Session, sessionmaker[Session]],
+        self: AdvancedAlchemy[Engine, Session, sessionmaker[Session]],
         *,
         sqlalchemy_config: SQLAlchemySyncConfig,
         autocommit: CommitStrategy | None = None,
@@ -83,8 +83,8 @@ class SanicAdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension)
 
     def __init__(
         self: (
-            SanicAdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]
-            | SanicAdvancedAlchemy[Engine, Session, sessionmaker[Session]]
+            AdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]
+            | AdvancedAlchemy[Engine, Session, sessionmaker[Session]]
         ),
         *,
         sqlalchemy_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,

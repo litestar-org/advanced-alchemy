@@ -294,10 +294,10 @@ from sanic import Sanic
 from sanic_ext import Extend
 
 from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
+from advanced_alchemy.extensions.sanic import AdvancedAlchemy
 
 app = Sanic("AlchemySanicApp")
-alchemy = SanicAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     sqlalchemy_config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
 )
 Extend.register(alchemy)
