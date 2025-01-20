@@ -3,6 +3,17 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.30.1
+    :date: 2025-01-20
+
+    .. change:: Using init db CLI command creates migrations directory in unexpected place
+        :type: bugfix
+        :pr: 354
+        :issue: 351
+
+        When initializing migrations with the CLI, if no directory is specified, the directory from the configuration will be used.
+
+
 .. changelog:: 0.30.0
     :date: 2025-01-19
 
