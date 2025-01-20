@@ -153,9 +153,11 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             self.engine_instance = self.get_engine()
         with self.engine_instance.begin() as conn:
             try:
-                metadata_registry.get(self.bind_key).create_all(conn)
+                metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all(conn)
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
+            else:
+                echo(" * Created target metadata.")
 
 
 @dataclass
@@ -255,7 +257,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.engine_instance = self.get_engine()
         async with self.engine_instance.begin() as conn:
             try:
-                await conn.run_sync(metadata_registry.get(self.bind_key).create_all)
+                await conn.run_sync(
+                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all
+                )
                 await conn.commit()
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
+            else:
+                echo(" * Created target metadata.")
