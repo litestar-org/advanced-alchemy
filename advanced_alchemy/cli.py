@@ -207,7 +207,11 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         help="Initialize migrations for the project.",
     )
     @bind_key_option
-    @click.argument("directory", default=None)
+    @click.argument(
+        "directory",
+        default=None,
+        required=False,
+    )
     @click.option("--multidb", is_flag=True, default=False, help="Support multiple databases")
     @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
     @no_prompt_option
@@ -222,9 +226,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         ctx = click.get_current_context()
         console.rule("[yellow]Initializing database migrations.", align="left")
         input_confirmed = (
-            True
-            if no_prompt
-            else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
+            True if no_prompt else Confirm.ask("[bold]Are you sure you want initialize migrations for the project?[/]")
         )
         if input_confirmed:
             configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]

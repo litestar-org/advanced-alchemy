@@ -56,7 +56,7 @@ class AuthorSchema(Struct):
 
 
 app = Flask(__name__)
-config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode="autocommit")
+config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
 alchemy = AdvancedAlchemy(config, app)
 
 

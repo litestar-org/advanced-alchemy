@@ -8,7 +8,7 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 
-from flask import current_app
+from flask.cli import with_appcontext
 
 from advanced_alchemy.cli import add_migration_commands
 
@@ -45,14 +45,16 @@ def get_database_migration_plugin(app: Flask) -> AdvancedAlchemy:
 
 
 @click.group(name="database")
-@click.pass_context
-def database_group(ctx: click.Context) -> None:
+@with_appcontext
+def database_group() -> None:
     """Manage SQLAlchemy database components.
 
     This command group provides database management commands like migrations.
     """
-    ctx.ensure_object(dict)
-    ctx.obj["configs"] = get_database_migration_plugin(current_app).config
+
+    ctx = click.get_current_context()
+    app = ctx.obj.load_app()
+    ctx.obj = {"app": app, "configs": get_database_migration_plugin(app).config}
 
 
 add_migration_commands(database_group)

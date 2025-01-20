@@ -12,7 +12,7 @@ from advanced_alchemy.config import AlembicAsyncConfig, AlembicSyncConfig, Async
 from advanced_alchemy.extensions.flask.cli import get_database_migration_plugin
 from advanced_alchemy.extensions.flask.config import EngineConfig, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.flask.extension import AdvancedAlchemy
-from advanced_alchemy.extensions.flask.service import FlaskServiceMixin
+from advanced_alchemy.extensions.flask.utils import FlaskServiceMixin
 
 __all__ = (
     "AdvancedAlchemy",

@@ -81,10 +81,10 @@ class EngineConfig(_EngineConfig):
 
     json_deserializer: Callable[[str], Any] = decode_json
     """For dialects that support the :class:`~sqlalchemy.types.JSON` datatype, this is a Python callable that will
-    convert a JSON string to a Python object. By default, this is set to Litestar's decode_json function."""
+    convert a JSON string to a Python object.  But default, this uses the built-in serializers."""
     json_serializer: Callable[[Any], str] = serializer
     """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON.
-    By default, Litestar's encode_json function is used."""
+    By default, By default, the built-in serializer is used."""
 
 
 @dataclass
@@ -100,8 +100,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     session_key: str = "db_session"
     """Key to use for the dependency injection of database sessions."""
     session_maker_key: str = "session_maker_class"
-    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application
-    :class:`State <litestar.datastructures.State>` instance.
+    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance.
     """
 
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -253,8 +252,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     session_key: str = "db_session"
     """Key to use for the dependency injection of database sessions."""
     session_maker_key: str = "session_maker_class"
-    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application
-    :class:`State <litestar.datastructures.State>` instance.
+    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance.
     """
 
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
