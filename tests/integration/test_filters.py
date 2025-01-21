@@ -83,32 +83,35 @@ def test_not_in_collection_filter(db_session: Session) -> None:
 
 
 def test_exists_filter_basic(db_session: Session) -> None:
-    exists_filter_1 = ExistsFilter(values=[Movie.genre == "Action"])
+    exists_filter_1 = ExistsFilter(field_name="genre", values=[Movie.genre == "Action"])
     statement = exists_filter_1.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 1
 
-    exists_filter_2 = ExistsFilter(values=[Movie.genre.startswith("Action"), Movie.genre.startswith("Drama")])
+    exists_filter_2 = ExistsFilter(
+        field_name="genre", values=[Movie.genre.startswith("Action"), Movie.genre.startswith("Drama")]
+    )
     statement = exists_filter_2.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
 def test_exists_filter(db_session: Session) -> None:
-    exists_filter_1 = ExistsFilter(values=[Movie.title.startswith("The")])
+    exists_filter_1 = ExistsFilter(field_name="title", values=[Movie.title.startswith("The")])
     statement = exists_filter_1.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 3
 
     exists_filter_2 = ExistsFilter(
+        field_name="title",
         values=[Movie.title.startswith("Shawshank Redemption"), Movie.title.startswith("The")],
-        operator="and",
     )
     statement = exists_filter_2.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 0
 
     exists_filter_3 = ExistsFilter(
+        field_name="title",
         values=[Movie.title.startswith("The"), Movie.title.startswith("Shawshank")],
         operator="or",
     )
@@ -118,7 +121,7 @@ def test_exists_filter(db_session: Session) -> None:
 
 
 def test_not_exists_filter(db_session: Session) -> None:
-    not_exists_filter = NotExistsFilter(values=[Movie.title.like("%Hangover%")])
+    not_exists_filter = NotExistsFilter(field_name="title", values=[Movie.title.like("%Hangover%")])
     statement = not_exists_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 2
