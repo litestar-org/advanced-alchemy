@@ -204,7 +204,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             event.listen(Session, "before_flush", touch_updated_timestamp)
 
     def __hash__(self) -> int:
-        return hash((uuid3(NAMESPACE_DNS, str(self)), self.__class__.__name__, self.metadata))
+        return hash((uuid3(NAMESPACE_DNS, str(self)), self.__class__.__name__, self.metadata, self.bind_key))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, type(self)):
