@@ -55,6 +55,12 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
     The configuration options are documented in the Alembic documentation.
     """
 
+    def __hash__(self) -> int:
+        return super().__hash__()
+
+    def __eq__(self, other: object) -> bool:
+        return super().__eq__(other)
+
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
         """Get a session context manager.

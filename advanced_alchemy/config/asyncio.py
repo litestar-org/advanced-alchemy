@@ -71,6 +71,12 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     The configuration options are documented in the Alembic documentation.
     """
 
+    def __hash__(self) -> int:
+        return super().__hash__()
+
+    def __eq__(self, other: object) -> bool:
+        return super().__eq__(other)
+
     @asynccontextmanager
     async def get_session(
         self,
