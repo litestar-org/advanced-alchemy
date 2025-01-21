@@ -41,7 +41,20 @@ from dataclasses import dataclass
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Generic, Literal, cast
 
-from sqlalchemy import BinaryExpression, Delete, Select, Update, and_, any_, exists, or_, select, text
+from sqlalchemy import (
+    BinaryExpression,
+    Delete,
+    Select,
+    Update,
+    and_,
+    any_,
+    exists,
+    false,
+    not_,
+    or_,
+    select,
+    text,
+)
 from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
@@ -615,6 +628,8 @@ class ExistsFilter(StatementFilter):
             )
     """
 
+    field_name: str
+    """Name of model attribute to search on."""
     values: list[ColumnElement[bool]]
     """List of SQLAlchemy column expressions to use in the EXISTS clause."""
     operator: Literal["and", "or"] = "and"
@@ -644,6 +659,35 @@ class ExistsFilter(StatementFilter):
         """
         return or_
 
+    def get_exists_clause(self, model: type[ModelT]) -> ColumnElement[bool]:
+        """Generate the EXISTS clause for the statement.
+
+        Args:
+            model: The SQLAlchemy model class
+
+        Returns:
+            ColumnElement[bool]: EXISTS clause
+        """
+        field = self._get_instrumented_attr(model, self.field_name)
+
+        # Get the underlying column name of the field
+        field_column = getattr(field, "comparator", None)
+        if not field_column:
+            return false()  # Handle cases where the field might not be directly comparable, ie. relations
+        field_column_name = field_column.key
+
+        # Construct a subquery using select()
+        subquery = select(field).where(
+            *(
+                [getattr(model, field_column_name) == getattr(model, field_column_name), self._and(*self.values)]
+                if self.operator == "and"
+                else [getattr(model, field_column_name) == getattr(model, field_column_name), self._or(*self.values)]
+            )
+        )
+
+        # Use the subquery in the exists() clause
+        return exists(subquery)
+
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply EXISTS condition to the statement.
 
@@ -659,10 +703,7 @@ class ExistsFilter(StatementFilter):
         """
         if not self.values:
             return statement
-
-        if self.operator == "and":
-            exists_clause = select(model).where(self._and(*self.values)).exists()
-        exists_clause = select(model).where(self._or(*self.values)).exists()
+        exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
 
 
@@ -685,6 +726,7 @@ class NotExistsFilter(StatementFilter):
             from advanced_alchemy.filters import NotExistsFilter
 
             filter = NotExistsFilter(
+                field_name="User.is_active",
                 values=[User.email.like("%@example.com%")],
             )
             statement = filter.append_to_statement(
@@ -694,13 +736,16 @@ class NotExistsFilter(StatementFilter):
         Using OR conditions::
 
             filter = NotExistsFilter(
+                field_name="User.role",
                 values=[User.role == "admin", User.role == "owner"],
                 operator="or",
             )
     """
 
+    field_name: str
+    """Name of model attribute to search on."""
     values: list[ColumnElement[bool]]
-    """List of SQLAlchemy column expressions to use in the EXISTS clause."""
+    """List of SQLAlchemy column expressions to use in the NOT EXISTS clause."""
     operator: Literal["and", "or"] = "and"
     """If "and", combines conditions with AND, otherwise uses OR."""
 
@@ -728,6 +773,37 @@ class NotExistsFilter(StatementFilter):
         """
         return or_
 
+    def get_exists_clause(self, model: type[ModelT]) -> ColumnElement[bool]:
+        """Generate the NOT EXISTS clause for the statement.
+
+        Args:
+            model: The SQLAlchemy model class
+
+        Returns:
+            ColumnElement[bool]: NOT EXISTS clause
+        """
+        field = self._get_instrumented_attr(model, self.field_name)
+
+        # Get the underlying column name of the field
+        field_column = getattr(field, "comparator", None)
+        if not field_column:
+            return false()  # Handle cases where the field might not be directly comparable, ie. relations
+        field_column_name = field_column.key
+
+        # Construct a subquery using select()
+        subquery = select(field).where(
+            *(
+                [getattr(model, field_column_name) == getattr(model, field_column_name), self._and(*self.values)]
+                if self.operator == "and"
+                else [
+                    getattr(model, field_column_name) == getattr(model, field_column_name),
+                    self._or(*self.values),
+                ]
+            )
+        )
+        # Use the subquery in the exists() clause and negate it with not_()
+        return not_(exists(subquery))
+
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply NOT EXISTS condition to the statement.
 
@@ -743,8 +819,5 @@ class NotExistsFilter(StatementFilter):
         """
         if not self.values:
             return statement
-
-        if self.operator == "and":
-            exists_clause = select(model).where(self._and(*self.values)).exists()
-        exists_clause = select(model).where(self._or(*self.values)).exists()
-        return cast("StatementTypeT", statement.where(~exists_clause))
+        exists_clause = self.get_exists_clause(model)
+        return cast("StatementTypeT", statement.where(exists_clause))
