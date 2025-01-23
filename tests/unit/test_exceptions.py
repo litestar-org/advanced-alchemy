@@ -99,6 +99,14 @@ def test_wrap_sqlalchemy_exception_attribute_error() -> None:
 def test_wrap_sqlalchemy_exception_no_wrap() -> None:
     with pytest.raises(SQLAlchemyError), wrap_sqlalchemy_exception(wrap_exceptions=False):
         raise SQLAlchemyError("original")
+    with pytest.raises(SQLAlchemyIntegrityError), wrap_sqlalchemy_exception(wrap_exceptions=False):
+        raise SQLAlchemyIntegrityError(statement="select 1", params=None, orig=BaseException())
+    with pytest.raises(MultipleResultsFound), wrap_sqlalchemy_exception(wrap_exceptions=False):
+        raise MultipleResultsFound()
+    with pytest.raises(SQLAlchemyInvalidRequestError), wrap_sqlalchemy_exception(wrap_exceptions=False):
+        raise SQLAlchemyInvalidRequestError()
+    with pytest.raises(AttributeError), wrap_sqlalchemy_exception(wrap_exceptions=False):
+        raise AttributeError()
 
 
 def test_wrap_sqlalchemy_exception_custom_error_message() -> None:
