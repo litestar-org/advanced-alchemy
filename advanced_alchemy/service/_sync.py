@@ -122,6 +122,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         auto_commit: bool = False,
         order_by: list[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
+        wrap_exceptions: bool = True,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **repo_kwargs: Any,
@@ -136,6 +137,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             auto_commit: Commit objects before returning.
             order_by: Set default order options for queries.
             error_messages: A set of custom error messages to use for operations
+            wrap_exceptions: Wrap exceptions in a RepositoryError
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             **repo_kwargs: passed as keyword args to repo instantiation.
@@ -150,6 +152,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             auto_commit=auto_commit,
             order_by=order_by,
             error_messages=error_messages,
+            wrap_exceptions=wrap_exceptions,
             load=load,
             execution_options=execution_options,
             **repo_kwargs,

@@ -274,12 +274,18 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 
 
 @contextmanager
-def wrap_sqlalchemy_exception(
+def wrap_sqlalchemy_exception(  # noqa: C901
     error_messages: ErrorMessages | None = None,
     dialect_name: str | None = None,
+    wrap_exceptions: bool = True,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
+
+    Args:
+        error_messages: Error messages to use for the exception.
+        dialect_name: The name of the dialect to use for the exception.
+        wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
 
         >>> try:
         ...     with wrap_sqlalchemy_exception():
@@ -294,12 +300,16 @@ def wrap_sqlalchemy_exception(
         yield
 
     except MultipleResultsFound as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="multiple_rows", exc=exc)
         else:
             msg = "Multiple rows matched the specified data"
         raise MultipleResultsFoundError(detail=msg) from exc
     except SQLAlchemyIntegrityError as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None and dialect_name is not None:
             _keys_to_regex = {
                 "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
@@ -319,18 +329,26 @@ def wrap_sqlalchemy_exception(
             ) from exc
         raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
     except SQLAlchemyInvalidRequestError as exc:
+        if wrap_exceptions is False:
+            raise
         raise InvalidRequestError(detail="An invalid request was made.") from exc
     except StatementError as exc:
+        if wrap_exceptions is False:
+            raise
         raise IntegrityError(
             detail=cast(str, getattr(exc.orig, "detail", "There was an issue processing the statement."))
         ) from exc
     except SQLAlchemyError as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
         else:
             msg = f"An exception occurred: {exc}"
         raise RepositoryError(detail=msg) from exc
     except AttributeError as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
         else:
