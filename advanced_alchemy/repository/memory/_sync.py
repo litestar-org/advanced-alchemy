@@ -82,6 +82,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         "order_by",
         "load",
         "error_messages",
+        "wrap_exceptions",
     }
 
     def __init__(
@@ -94,6 +95,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         auto_commit: bool = False,
         order_by: list[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
+        wrap_exceptions: bool = True,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
         **kwargs: Any,
@@ -104,6 +106,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
         self.error_messages = self._get_error_messages(error_messages=error_messages)
+        self.wrap_exceptions = wrap_exceptions
         self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"

@@ -75,6 +75,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     auto_commit: bool
     order_by: list[OrderingPair] | OrderingPair | None = None
     error_messages: ErrorMessages | None = None
+    wrap_exceptions: bool = True
 
     def __init__(
         self,
@@ -88,6 +89,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         execution_options: dict[str, Any] | None = None,
         order_by: list[OrderingPair] | OrderingPair | None = None,
         error_messages: ErrorMessages | None | EmptyType = Empty,
+        wrap_exceptions: bool = True,
         **kwargs: Any,
     ) -> None: ...
 
@@ -409,6 +411,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     """Default loader options for the repository."""
     error_messages: ErrorMessages | None = None
     """Default error messages for the repository."""
+    wrap_exceptions: bool = True
+    """Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised."""
     inherit_lazy_relationships: bool = True
     """Optionally ignore the default ``lazy`` configuration for model relationships.  This is useful for when you want to
     replace instead of merge the model's loaded relationships with the ones specified in the ``load`` or ``default_loader_options`` configuration."""
@@ -437,6 +441,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: ErrorMessages | None | EmptyType = Empty,
         load: LoadSpec | None = None,
         execution_options: dict[str, Any] | None = None,
+        wrap_exceptions: bool = True,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -451,6 +456,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             error_messages: A set of custom error messages to use for operations
+            wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
             **kwargs: Additional arguments.
 
         """
@@ -462,6 +468,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.error_messages = self._get_error_messages(
             error_messages=error_messages, default_messages=self.error_messages
         )
+        self.wrap_exceptions = wrap_exceptions
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
