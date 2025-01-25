@@ -3,7 +3,16 @@ from __future__ import annotations
 
 import contextlib
 from contextlib import asynccontextmanager, contextmanager
-from typing import TYPE_CHECKING, AsyncGenerator, Callable, Generator, Sequence, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
+    Callable,
+    Generator,
+    Sequence,
+    Union,
+    overload,
+)
 
 from starlette.applications import Starlette
 from starlette.requests import Request  # noqa: TC002
@@ -67,21 +76,18 @@ class AdvancedAlchemy:
             config.init_app(app)
 
         app.state.advanced_alchemy = self
-        existing_lifespan = getattr(app, "lifespan", None)
 
-        if existing_lifespan is not None:
+        original_lifespan = app.router.lifespan_context
 
-            @asynccontextmanager
-            async def wrapped_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
-                async with self.lifespan(app), existing_lifespan(app):  # type: ignore[misc]
-                    yield
+        @asynccontextmanager
+        async def wrapped_lifespan(app: Starlette) -> AsyncGenerator[Any, None]:
+            async with self.lifespan(app), original_lifespan(app) as state:
+                yield state
 
-            app.lifespan = wrapped_lifespan  # type: ignore[attr-defined]
-        else:
-            app.lifespan = self.lifespan  # type: ignore[attr-defined]
+        app.router.lifespan_context = wrapped_lifespan
 
     @asynccontextmanager
-    async def lifespan(self, app: Starlette) -> AsyncGenerator[None, None]:
+    async def lifespan(self, app: Starlette) -> AsyncGenerator[Any, None]:
         """Context manager for lifespan events.
 
         Args:
@@ -90,9 +96,9 @@ class AdvancedAlchemy:
         Yields:
             None
         """
-        await self.startup()
+        await self.on_startup()
         yield
-        await self.shutdown()
+        await self.on_shutdown()
 
     @property
     def app(self) -> Starlette:
@@ -111,12 +117,12 @@ class AdvancedAlchemy:
 
         return self._app
 
-    async def startup(self) -> None:  # pragma: no cover
+    async def on_startup(self) -> None:  # pragma: no cover
         """Initializes the database."""
         for config in self.config:
             await config.on_startup()
 
-    async def shutdown(self) -> None:  # pragma: no cover
+    async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
