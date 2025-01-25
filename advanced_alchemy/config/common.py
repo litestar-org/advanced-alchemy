@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Union, cast
-from uuid import NAMESPACE_DNS, uuid3
 
 from typing_extensions import TypeVar
 
@@ -204,11 +203,9 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             event.listen(Session, "before_flush", touch_updated_timestamp)
 
     def __hash__(self) -> int:
-        return hash((uuid3(NAMESPACE_DNS, str(self)), self.__class__.__name__, self.metadata, self.bind_key))
+        return hash((self.__class__.__qualname__, self.bind_key))
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, type(self)):
-            return False
         return self.__hash__() == other.__hash__()
 
     @property
