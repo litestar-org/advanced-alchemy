@@ -67,6 +67,32 @@ class AdvancedAlchemy:
             config.init_app(app)
 
         app.state.advanced_alchemy = self
+        existing_lifespan = getattr(app, "lifespan", None)
+
+        if existing_lifespan is not None:
+
+            @asynccontextmanager
+            async def wrapped_lifespan(app: Starlette) -> AsyncGenerator[None, None]:
+                async with self.lifespan(app), existing_lifespan(app):  # type: ignore[misc]
+                    yield
+
+            app.lifespan = wrapped_lifespan  # type: ignore[attr-defined]
+        else:
+            app.lifespan = self.lifespan  # type: ignore[attr-defined]
+
+    @asynccontextmanager
+    async def lifespan(self, app: Starlette) -> AsyncGenerator[None, None]:
+        """Context manager for lifespan events.
+
+        Args:
+            app: The starlette application.
+
+        Yields:
+            None
+        """
+        await self.startup()
+        yield
+        await self.shutdown()
 
     @property
     def app(self) -> Starlette:
@@ -85,12 +111,12 @@ class AdvancedAlchemy:
 
         return self._app
 
-    async def on_startup(self) -> None:  # pragma: no cover
+    async def startup(self) -> None:  # pragma: no cover
         """Initializes the database."""
         for config in self.config:
             await config.on_startup()
 
-    async def on_shutdown(self) -> None:  # pragma: no cover
+    async def shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.

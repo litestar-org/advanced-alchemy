@@ -203,7 +203,14 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             event.listen(Session, "before_flush", touch_updated_timestamp)
 
     def __hash__(self) -> int:
-        return hash((self.__class__.__qualname__, self.bind_key))
+        return hash(
+            (
+                self.__class__.__qualname__,
+                self.connection_string,
+                self.engine_config.__class__.__qualname__,
+                self.bind_key,
+            )
+        )
 
     def __eq__(self, other: object) -> bool:
         return self.__hash__() == other.__hash__()
