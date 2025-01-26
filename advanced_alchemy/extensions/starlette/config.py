@@ -140,8 +140,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         )
 
         app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
-        app.add_event_handler("startup", self.on_startup)  # pyright: ignore[reportUnknownMemberType]
-        app.add_event_handler("shutdown", self.on_shutdown)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
@@ -288,8 +286,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         )
         _ = self.create_session_maker()
         app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
-        app.add_event_handler("startup", self.on_startup)  # pyright: ignore[reportUnknownMemberType]
-        app.add_event_handler("shutdown", self.on_shutdown)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
@@ -381,5 +377,5 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.app is not None:
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(self.app.state, self.engine_key)
-                delattr(self.app.state, self.session_key)
                 delattr(self.app.state, self.session_maker_key)
+                delattr(self.app.state, self.session_key)
