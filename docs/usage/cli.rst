@@ -53,13 +53,11 @@ The CLI is installed with Advanced Alchemy with the extra ``cli``:
 Basic Usage
 -----------
 
-The CLI can be invoked using Python's module syntax:
+The CLI can be invoked using the ``alchemy`` command:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy --help
-    # or with uv
-    uv run -m advanced_alchemy --help
+    alchemy --help
 
 Global Options
 --------------
@@ -81,7 +79,7 @@ Show the current revision of the database:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy show-current-revision --config path.to.config
+    alchemy show-current-revision --config path.to.config
 
 downgrade
 ~~~~~~~~~
@@ -90,7 +88,7 @@ Downgrade database to a specific revision:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy downgrade --config path.to.config [REVISION]
+    alchemy downgrade --config path.to.config [REVISION]
 
 Options:
   --sql              Generate SQL output for offline migrations
@@ -104,7 +102,7 @@ Upgrade database to a specific revision:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy upgrade --config path.to.config [REVISION]
+    alchemy upgrade --config path.to.config [REVISION]
 
 Options:
   --sql              Generate SQL output for offline migrations
@@ -118,7 +116,7 @@ Initialize migrations for the project:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy init --config path.to.config [DIRECTORY]
+    alchemy init --config path.to.config [DIRECTORY]
 
 Options:
   --multidb          Support multiple databases
@@ -132,7 +130,7 @@ Create a new migration revision:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy make-migrations --config path.to.config
+    alchemy make-migrations --config path.to.config
 
 Options:
   -m, --message TEXT       Revision message
@@ -151,7 +149,7 @@ Drop all tables from the database:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy drop-all --config path.to.config
+    alchemy drop-all --config path.to.config
 
 dump-data
 ~~~~~~~~~
@@ -160,7 +158,7 @@ Dump specified tables from the database to JSON files:
 
 .. code-block:: bash
 
-    python -m advanced_alchemy dump-data --config path.to.config --table TABLE_NAME
+    alchemy dump-data --config path.to.config --table TABLE_NAME
 
 Options:
   --table TEXT       Name of table to dump (use '*' for all tables)
@@ -209,7 +207,7 @@ For detailed debugging, use the ``--verbose`` flag:
 
 .. code-block:: bash
 
-    aa --verbose db create
+    alchemy --verbose db create
 
 Extending the CLI
 -----------------
