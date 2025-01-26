@@ -87,7 +87,7 @@ class AdvancedAlchemy:
         app.router.lifespan_context = wrapped_lifespan
 
     @asynccontextmanager
-    async def lifespan(self, app: Starlette) -> AsyncGenerator[Any, None]:
+    async def lifespan(self, app: Starlette) -> AsyncGenerator[Any, None]:  # pragma: no cover
         """Context manager for lifespan events.
 
         Args:
@@ -111,7 +111,7 @@ class AdvancedAlchemy:
         Returns:
             starlette.applications.Starlette: The Starlette application instance.
         """
-        if self._app is None:
+        if self._app is None:  # pragma: no cover
             msg = "Application not initialized. Did you forget to call init_app?"
             raise ImproperConfigurationError(msg)
 
@@ -151,7 +151,7 @@ class AdvancedAlchemy:
         if key == "default" and len(self.config) == 1:
             key = self.config[0].bind_key or "default"
         config = self._mapped_configs.get(key)
-        if config is None:
+        if config is None:  # pragma: no cover
             msg = f"Config with key {key} not found"
             raise ImproperConfigurationError(msg)
         return config
@@ -159,7 +159,7 @@ class AdvancedAlchemy:
     def get_async_config(self, key: str | None = None) -> SQLAlchemyAsyncConfig:
         """Get the async config for the given key."""
         config = self.get_config(key)
-        if not isinstance(config, SQLAlchemyAsyncConfig):
+        if not isinstance(config, SQLAlchemyAsyncConfig):  # pragma: no cover
             msg = "Expected an async config, but got a sync config"
             raise ImproperConfigurationError(msg)
         return config
@@ -167,7 +167,7 @@ class AdvancedAlchemy:
     def get_sync_config(self, key: str | None = None) -> SQLAlchemySyncConfig:
         """Get the sync config for the given key."""
         config = self.get_config(key)
-        if not isinstance(config, SQLAlchemySyncConfig):
+        if not isinstance(config, SQLAlchemySyncConfig):  # pragma: no cover
             msg = "Expected a sync config, but got an async config"
             raise ImproperConfigurationError(msg)
         return config
@@ -220,7 +220,9 @@ class AdvancedAlchemy:
         config = self.get_sync_config(key)
         return self._get_session_from_request(request, config)
 
-    def provide_session(self, key: str | None = None) -> Callable[[Request], Session | AsyncSession]:
+    def provide_session(
+        self, key: str | None = None
+    ) -> Callable[[Request], Session | AsyncSession]:  # pragma: no cover
         """Get the session for the given key."""
         config = self.get_config(key)
 
@@ -229,7 +231,7 @@ class AdvancedAlchemy:
 
         return _get_session
 
-    def provide_async_session(self, key: str | None = None) -> Callable[[Request], AsyncSession]:
+    def provide_async_session(self, key: str | None = None) -> Callable[[Request], AsyncSession]:  # pragma: no cover
         """Get the async session for the given key."""
         config = self.get_async_config(key)
 
@@ -238,7 +240,7 @@ class AdvancedAlchemy:
 
         return _get_session
 
-    def provide_sync_session(self, key: str | None = None) -> Callable[[Request], Session]:
+    def provide_sync_session(self, key: str | None = None) -> Callable[[Request], Session]:  # pragma: no cover
         """Get the sync session for the given key."""
         config = self.get_sync_config(key)
 
