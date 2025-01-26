@@ -61,6 +61,16 @@ The CLI can be invoked using Python's module syntax:
     # or with uv
     uv run -m advanced_alchemy --help
 
+Global Options
+--------------
+
+The following options are available for all commands:
+
+--config TEXT        Required. Dotted path to SQLAlchemy config(s)
+--bind-key TEXT     Optional. Specify which SQLAlchemy config to use
+--no-prompt         Optional. Skip confirmation prompts
+--verbose          Optional. Enable verbose output
+
 Available Commands
 ------------------
 
@@ -73,10 +83,6 @@ Show the current revision of the database:
 
     python -m advanced_alchemy show-current-revision --config path.to.config
 
-Options:
-  --bind-key TEXT     Specify which SQLAlchemy config to use by bind key
-  --verbose          Enable verbose output
-
 downgrade
 ~~~~~~~~~
 
@@ -87,10 +93,8 @@ Downgrade database to a specific revision:
     python -m advanced_alchemy downgrade --config path.to.config [REVISION]
 
 Options:
-  --bind-key TEXT     Specify which SQLAlchemy config to use by bind key
   --sql              Generate SQL output for offline migrations
   --tag TEXT         Arbitrary tag for custom env.py scripts
-  --no-prompt        Skip confirmation prompt
   REVISION           Target revision (default: "-1")
 
 upgrade
@@ -103,10 +107,8 @@ Upgrade database to a specific revision:
     python -m advanced_alchemy upgrade --config path.to.config [REVISION]
 
 Options:
-  --bind-key TEXT     Specify which SQLAlchemy config to use by bind key
   --sql              Generate SQL output for offline migrations
   --tag TEXT         Arbitrary tag for custom env.py scripts
-  --no-prompt        Skip confirmation prompt
   REVISION           Target revision (default: "head")
 
 init
@@ -119,10 +121,8 @@ Initialize migrations for the project:
     python -m advanced_alchemy init --config path.to.config [DIRECTORY]
 
 Options:
-  --bind-key TEXT     Specify which SQLAlchemy config to use by bind key
   --multidb          Support multiple databases
   --package          Create __init__.py for created folder (default: True)
-  --no-prompt        Skip confirmation prompt
   DIRECTORY          Directory for migration files (optional)
 
 make-migrations
@@ -135,7 +135,6 @@ Create a new migration revision:
     python -m advanced_alchemy make-migrations --config path.to.config
 
 Options:
-  --bind-key TEXT           Specify which SQLAlchemy config to use by bind key
   -m, --message TEXT       Revision message
   --autogenerate/--no-autogenerate  Automatically detect changes (default: True)
   --sql                    Export to .sql instead of writing to database
@@ -144,7 +143,6 @@ Options:
   --branch-label TEXT      Branch label for new revision
   --version-path TEXT      Specific path for version file
   --rev-id TEXT           Specific revision ID
-  --no-prompt             Skip confirmation prompt
 
 drop-all
 ~~~~~~~~
@@ -154,10 +152,6 @@ Drop all tables from the database:
 .. code-block:: bash
 
     python -m advanced_alchemy drop-all --config path.to.config
-
-Options:
-  --bind-key TEXT     Specify which SQLAlchemy config to use by bind key
-  --no-prompt        Skip confirmation prompt
 
 dump-data
 ~~~~~~~~~
@@ -169,18 +163,8 @@ Dump specified tables from the database to JSON files:
     python -m advanced_alchemy dump-data --config path.to.config --table TABLE_NAME
 
 Options:
-  --bind-key TEXT     Specify which SQLAlchemy config to use by bind key
   --table TEXT       Name of table to dump (use '*' for all tables)
   --dir PATH         Directory to save JSON files (default: ./fixtures)
-
-Common Options
-~~~~~~~~~~~~~~
-
-Most commands support these common options:
-
-- ``--config``: Required. Dotted path to SQLAlchemy config(s)
-- ``--bind-key``: Optional. Specify which SQLAlchemy config to use
-- ``--no-prompt``: Optional. Skip confirmation prompts
 
 Configuration
 -------------
@@ -228,7 +212,7 @@ For detailed debugging, use the ``--verbose`` flag:
     aa --verbose db create
 
 Extending the CLI
-----------------
+-----------------
 
 If you're using Click in your project, you can extend Advanced Alchemy's CLI with your own commands. The CLI provides two main functions for integration:
 
@@ -259,7 +243,7 @@ Here's how to extend the CLI with your own commands:
     add_migration_commands(alchemy_group)
 
 Custom Group Integration
-~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can also integrate Advanced Alchemy's commands into your existing Click group:
 
@@ -285,7 +269,7 @@ You can also integrate Advanced Alchemy's commands into your existing Click grou
         cli()
 
 Configuration Access
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 When extending the CLI, you can access the SQLAlchemy configuration from the Click context:
 
@@ -321,7 +305,7 @@ When extending the CLI:
 5. Handle errors gracefully and provide clear error messages
 
 Example with All Features
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Here's a more complete example showing various features:
 
