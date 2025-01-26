@@ -97,8 +97,10 @@ class AdvancedAlchemy:
             None
         """
         await self.on_startup()
-        yield
-        await self.on_shutdown()
+        try:
+            yield
+        finally:
+            await self.on_shutdown()
 
     @property
     def app(self) -> Starlette:
