@@ -140,8 +140,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         )
 
         app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
-        app.add_event_handler("startup", self.on_startup)  # pyright: ignore[reportUnknownMemberType]
-        app.add_event_handler("shutdown", self.on_shutdown)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
