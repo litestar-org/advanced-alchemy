@@ -377,5 +377,5 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.app is not None:
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(self.app.state, self.engine_key)
-                delattr(self.app.state, self.session_key)
                 delattr(self.app.state, self.session_maker_key)
+                delattr(self.app.state, self.session_key)
