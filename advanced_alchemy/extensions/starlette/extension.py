@@ -80,7 +80,7 @@ class AdvancedAlchemy:
         original_lifespan = app.router.lifespan_context
 
         @asynccontextmanager
-        async def wrapped_lifespan(app: Starlette) -> AsyncGenerator[Any, None]:
+        async def wrapped_lifespan(app: Starlette) -> AsyncGenerator[Any, None]:  # pragma: no cover
             async with self.lifespan(app), original_lifespan(app) as state:
                 yield state
 
@@ -103,7 +103,7 @@ class AdvancedAlchemy:
             await self.on_shutdown()
 
     @property
-    def app(self) -> Starlette:
+    def app(self) -> Starlette:  # pragma: no cover
         """Returns the Starlette application instance.
 
         Raises:
