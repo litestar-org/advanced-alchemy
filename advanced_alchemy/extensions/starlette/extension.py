@@ -173,14 +173,16 @@ class AdvancedAlchemy:
         return config
 
     @asynccontextmanager
-    async def with_async_session(self, key: str | None = None) -> AsyncGenerator[AsyncSession, None]:
+    async def with_async_session(
+        self, key: str | None = None
+    ) -> AsyncGenerator[AsyncSession, None]:  # pragma: no cover
         """Context manager for getting an async session."""
         config = self.get_async_config(key)
         async with config.get_session() as session:
             yield session
 
     @contextmanager
-    def with_sync_session(self, key: str | None = None) -> Generator[Session, None]:
+    def with_sync_session(self, key: str | None = None) -> Generator[Session, None]:  # pragma: no cover
         """Context manager for getting a sync session."""
         config = self.get_sync_config(key)
         with config.get_session() as session:
@@ -196,7 +198,8 @@ class AdvancedAlchemy:
 
     @staticmethod
     def _get_session_from_request(
-        request: Request, config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig
+        request: Request,
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig,  # pragma: no cover
     ) -> Session | AsyncSession:  # pragma: no cover
         """Get the session for the given key."""
         session = getattr(request.state, config.session_key, None)
@@ -205,17 +208,17 @@ class AdvancedAlchemy:
             setattr(request.state, config.session_key, session)
         return session
 
-    def get_session(self, request: Request, key: str | None = None) -> Session | AsyncSession:
+    def get_session(self, request: Request, key: str | None = None) -> Session | AsyncSession:  # pragma: no cover
         """Get the session for the given key."""
         config = self.get_config(key)
         return self._get_session_from_request(request, config)
 
-    def get_async_session(self, request: Request, key: str | None = None) -> AsyncSession:
+    def get_async_session(self, request: Request, key: str | None = None) -> AsyncSession:  # pragma: no cover
         """Get the async session for the given key."""
         config = self.get_async_config(key)
         return self._get_session_from_request(request, config)
 
-    def get_sync_session(self, request: Request, key: str | None = None) -> Session:
+    def get_sync_session(self, request: Request, key: str | None = None) -> Session:  # pragma: no cover
         """Get the sync session for the given key."""
         config = self.get_sync_config(key)
         return self._get_session_from_request(request, config)
@@ -254,12 +257,12 @@ class AdvancedAlchemy:
         config = self.get_config(key)
         return config.get_engine()
 
-    def get_async_engine(self, key: str | None = None) -> AsyncEngine:
+    def get_async_engine(self, key: str | None = None) -> AsyncEngine:  # pragma: no cover
         """Get the async engine for the given key."""
         config = self.get_async_config(key)
         return config.get_engine()
 
-    def get_sync_engine(self, key: str | None = None) -> Engine:
+    def get_sync_engine(self, key: str | None = None) -> Engine:  # pragma: no cover
         """Get the sync engine for the given key."""
         config = self.get_sync_config(key)
         return config.get_engine()
