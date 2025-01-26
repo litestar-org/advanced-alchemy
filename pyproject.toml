@@ -47,7 +47,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.30.2"
+version = "0.30.3"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -168,7 +168,7 @@ test = [
 allow_dirty = true
 commit = true
 commit_args = "--no-verify"
-current_version = "0.30.2"
+current_version = "0.30.3"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"

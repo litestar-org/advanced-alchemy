@@ -3,6 +3,32 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.30.3
+    :date: 2025-01-26
+
+    .. change:: add `wrap_exceptions` option to exception handler.
+        :type: feature
+        :pr: 363
+        :issue: 356
+
+        When `wrap_exceptions` is `False`, the original SQLAlchemy error message will be raised instead of the wrapped Repository error
+
+        Fixes #356 (Bug: `wrap_sqlalchemy_exception` masks db errors)
+
+    .. change:: simplify configuration hash
+        :type: feature
+        :pr: 366
+
+        The hashing method on the SQLAlchemy configs can be simplified.  This should be enough to define a unique configuration.
+
+    .. change:: use `lifespan` context manager in Starlette and FastAPI
+        :type: bugfix
+        :pr: 368
+        :issue: 367
+
+        Modifies the Starlette and FastAPI integrations to use the `lifespan` context manager instead of the `startup`\`shutdown` hooks.  If the application already has a lifespan set, it is wrapped so that both execute.
+
+
 .. changelog:: 0.30.2
     :date: 2025-01-21
 
