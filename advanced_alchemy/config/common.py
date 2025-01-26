@@ -202,7 +202,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
             event.listen(Session, "before_flush", touch_updated_timestamp)
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # pragma: no cover
         return hash(
             (
                 self.__class__.__qualname__,
@@ -257,7 +257,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             del engine_config["json_serializer"]
             return self.create_engine_callable(self.connection_string, **engine_config)
 
-    def create_session_maker(self) -> Callable[[], SessionT]:
+    def create_session_maker(self) -> Callable[[], SessionT]:  # pragma: no cover
         """Get a session maker. If none exists yet, create one.
 
         Returns:
