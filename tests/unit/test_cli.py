@@ -156,3 +156,5 @@ def test_cli_group_creation() -> None:
     assert "make-migrations" in cli_group.commands
     assert "drop-all" in cli_group.commands
     assert "dump-data" in cli_group.commands
+    assert "create" in cli_group.commands
+    assert "drop" in cli_group.commands
