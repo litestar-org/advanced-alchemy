@@ -109,8 +109,7 @@ async def create_database_async(engine: AsyncEngine, database: str | None, encod
             pass
     else:
         async with engine.begin() as conn:
-            sql = f"CREATE DATABASE {database}"
-            await conn.execute(text(sql))
+            await conn.execute(text(f"CREATE DATABASE {database}"))
 
     await engine.dispose()
 
@@ -165,14 +164,10 @@ async def drop_database_async(engine: AsyncEngine, database: str | None) -> None
             version = conn.dialect.server_version_info
             sql = _disconnect_users_sql(version, database)
             await conn.execute(text(sql))
-
-            # Drop the database.
-            sql = f"DROP DATABASE {database}"
-            await conn.execute(text(sql))
+            await conn.execute(text(f"DROP DATABASE {database}"))
     else:
         async with engine.begin() as conn:
-            sql = f"DROP DATABASE {database}"
-            await conn.execute(text(sql))
+            await conn.execute(text(f"DROP DATABASE {database}"))
 
     await engine.dispose()
 
@@ -188,13 +183,9 @@ def drop_database_sync(engine: Engine, database: str | None) -> None:
             version = conn.dialect.server_version_info
             sql = _disconnect_users_sql(version, database)
             conn.execute(text(sql))
-
-            # Drop the database.
-            sql = f"DROP DATABASE {database}"
-            conn.execute(text(sql))
+            conn.execute(text(f"DROP DATABASE {database}"))
     else:
         with engine.begin() as conn:
-            sql = f"DROP DATABASE {database}"
-            conn.execute(text(sql))
+            conn.execute(text(f"DROP DATABASE {database}"))
 
     engine.dispose()
