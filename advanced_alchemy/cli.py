@@ -402,8 +402,17 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @database_group.command(name="create", help="Create a new database.")
     @bind_key_option
     @no_prompt_option
-    def create_database(bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.option(
+        "--encoding",
+        "encoding",
+        help="Set the encoding for the created database",
+        type=str,
+        required=False,
+        default="utf8",
+    )
+    def create_database(bind_key: str | None, no_prompt: bool, encoding: str) -> None:  # pyright: ignore[reportUnusedFunction]
         from rich.prompt import Confirm
+
         from advanced_alchemy.utils.databases import create_database as _create_database
 
         ctx = click.get_current_context()
@@ -416,10 +425,26 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             True if no_prompt else Confirm.ask(f"[bold]Are you sure you want to create a new database `{db_name}`?[/]")
         )
         if input_confirmed:
-            _create_database(sqlalchemy_config)
+            _create_database(sqlalchemy_config, encoding)
 
     @database_group.command(name="drop", help="Drop the current database.")
-    def drop_database() -> None:  # pyright: ignore[reportUnusedFunction]
-        raise NotImplementedError
+    @bind_key_option
+    @no_prompt_option
+    def drop_database(bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+        from rich.prompt import Confirm
+
+        from advanced_alchemy.utils.databases import drop_database as _drop_database
+
+        ctx = click.get_current_context()
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+
+        db_name = sqlalchemy_config.get_engine().url.database
+
+        console.rule("[yellow]Starting database deletion process[/]", align="left")
+        input_confirmed = (
+            True if no_prompt else Confirm.ask(f"[bold]Are you sure you want to drop database `{db_name}`?[/]")
+        )
+        if input_confirmed:
+            _drop_database(sqlalchemy_config)
 
     return database_group
