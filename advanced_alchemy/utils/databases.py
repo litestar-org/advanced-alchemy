@@ -73,12 +73,13 @@ def create_database_sync(engine: Engine, database: str | None, encoding: str = "
             sql = f"CREATE DATABASE {database} CHARACTER SET = '{encoding}'"
             conn.execute(text(sql))
 
-    elif dialect_name == "sqlite" and database != ":memory:":
-        if database:
+    elif dialect_name == "sqlite":
+        if database and database != ":memory:":
             with engine.begin() as conn:
                 conn.execute(text("CREATE TABLE DB(id int)"))
                 conn.execute(text("DROP TABLE DB"))
-
+        else:
+            pass
     else:
         with engine.begin() as conn:
             sql = f"CREATE DATABASE {database}"
@@ -99,12 +100,13 @@ async def create_database_async(engine: AsyncEngine, database: str | None, encod
             sql = f"CREATE DATABASE {database} CHARACTER SET = '{encoding}'"
             await conn.execute(text(sql))
 
-    elif dialect_name == "sqlite" and database != ":memory:":
-        if database:
+    elif dialect_name == "sqlite":
+        if database and database != ":memory:":
             async with engine.begin() as conn:
                 await conn.execute(text("CREATE TABLE DB(id int)"))
                 await conn.execute(text("DROP TABLE DB"))
-
+        else:
+            pass
     else:
         async with engine.begin() as conn:
             sql = f"CREATE DATABASE {database}"
@@ -154,8 +156,8 @@ def _disconnect_users_sql(version: tuple[int, int] | None, database: str | None)
 
 async def drop_database_async(engine: AsyncEngine, database: str | None) -> None:
     dialect_name = engine.url.get_dialect().name
-    if dialect_name == "sqlite" and database != ":memory:":
-        if database:
+    if dialect_name == "sqlite":
+        if database and database != ":memory:":
             Path(database).unlink()
     elif dialect_name == "postgresql":
         async with engine.begin() as conn:
@@ -177,8 +179,8 @@ async def drop_database_async(engine: AsyncEngine, database: str | None) -> None
 
 def drop_database_sync(engine: Engine, database: str | None) -> None:
     dialect_name = engine.url.get_dialect().name
-    if dialect_name == "sqlite" and database != ":memory:":
-        if database:
+    if dialect_name == "sqlite":
+        if database and database != ":memory:":
             Path(database).unlink()
     elif dialect_name == "postgresql":
         with engine.begin() as conn:

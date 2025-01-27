@@ -145,6 +145,26 @@ def test_dump_data(cli_runner: CliRunner, database_cli: Group, mock_context: Mag
     assert result.exit_code == 0
 
 
+def test_create(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock, tmp_path: Path) -> None:
+    """Test create the database."""
+
+    result = cli_runner.invoke(
+        database_cli,
+        ["--config", "tests.unit.fixtures.configs", "create", "--encoding", "latin1", "--no-prompt"],
+    )
+    assert result.exit_code == 0
+
+
+def test_drop(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock, tmp_path: Path) -> None:
+    """Test drop the database."""
+
+    result = cli_runner.invoke(
+        database_cli,
+        ["--config", "tests.unit.fixtures.configs", "drop", "--no-prompt"],
+    )
+    assert result.exit_code == 0
+
+
 def test_cli_group_creation() -> None:
     """Test that the CLI group is created correctly."""
     cli_group = add_migration_commands()
