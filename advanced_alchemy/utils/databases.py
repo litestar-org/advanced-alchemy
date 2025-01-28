@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from copy import copy
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,12 +17,7 @@ if TYPE_CHECKING:
 
 
 def _set_engine_database_url(url: URL, database: str | None) -> URL:
-    if hasattr(url, "_replace"):
-        new_url = url._replace(database=database)
-    else:  # SQLAlchemy <1.4
-        new_url = copy(url)
-        new_url.database = database  # type: ignore  # noqa: PGH003
-    return new_url
+    return url._replace(database=database)
 
 
 def get_masterdb_url(url: URL) -> URL:
@@ -41,7 +35,7 @@ def get_masterdb_url(url: URL) -> URL:
     return url
 
 
-def create_database(config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig, encoding: str = "utf8") -> None:
+async def create_database(config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig, encoding: str = "utf8") -> None:
     url = config.get_engine().url
     database = url.database
     dialect_name = url.get_dialect().name
@@ -56,7 +50,7 @@ def create_database(config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig, encodi
 
     engine = config.create_engine_callable(str(url))
     if isinstance(engine, AsyncEngine):
-        asyncio.run(create_database_async(engine, database, encoding))
+        await create_database_async(engine, database, encoding)
     else:
         create_database_sync(engine, database, encoding)
 

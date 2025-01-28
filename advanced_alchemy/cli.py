@@ -411,6 +411,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default="utf8",
     )
     def create_database(bind_key: str | None, no_prompt: bool, encoding: str) -> None:  # pyright: ignore[reportUnusedFunction]
+        from anyio import run
         from rich.prompt import Confirm
 
         from advanced_alchemy.utils.databases import create_database as _create_database
@@ -425,7 +426,11 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             True if no_prompt else Confirm.ask(f"[bold]Are you sure you want to create a new database `{db_name}`?[/]")
         )
         if input_confirmed:
-            _create_database(sqlalchemy_config, encoding)
+
+            async def _create_database_wrapper() -> None:
+                await _create_database(sqlalchemy_config, encoding)
+
+            run(_create_database_wrapper)
 
     @database_group.command(name="drop", help="Drop the current database.")
     @bind_key_option
