@@ -202,6 +202,7 @@ html_theme_options = {
     "logo_target": "/",
     "accent_color": "amber",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
+    "discord_url": "https://discord.gg/dSDXd4mKhp",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
     "light_logo": "_static/logo-default.png",
