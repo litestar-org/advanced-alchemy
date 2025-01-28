@@ -64,10 +64,20 @@ Global Options
 
 The following options are available for all commands:
 
---config TEXT        Required. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemyConfig`` (sync or async)
---bind-key TEXT     Optional. Specify which SQLAlchemy config to use
---no-prompt         Optional. Skip confirmation prompts
---verbose          Optional. Enable verbose output
+.. list-table:: Global options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--config`` TEXT
+     - **Required**. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemyConfig`` (sync or async). Example: ``--config path.to.alchemy-config.config``
+   * - ``--bind-key`` TEXT
+     - Optional. Specify which SQLAlchemy config to use
+   * - ``--no-prompt``
+     - Optional. Skip confirmation prompts
+   * - ``--verbose``
+     - Optional. Enable verbose output
 
 
 Config
@@ -75,7 +85,7 @@ Config
 
 Here is an example of what **config** would looks like.
 
-If the file is named ``alchemy-config.py``, you would need to use it like this ``--config alchemy-config.config``
+If the file is named ``alchemy-config.py``, you would need to use it like this ``--config path.to.alchemy-config.config``
 
 .. code-block:: python
     :caption: alchemy-config.py
@@ -99,7 +109,7 @@ Show the current revision of the database:
 
 .. code-block:: bash
 
-    alchemy show-current-revision --config path.to.config
+    alchemy show-current-revision --config path.to.alchemy-config.config
 
 downgrade
 ~~~~~~~~~
@@ -108,13 +118,20 @@ Downgrade database to a specific revision:
 
 .. code-block:: bash
 
-    alchemy downgrade --config path.to.config [REVISION]
+    alchemy downgrade --config path.to.alchemy-config.config [REVISION]
 
-Options:
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
 
---sql              Generate SQL output for offline migrations
---tag TEXT         Arbitrary tag for custom env.py scripts
-REVISION           Target revision (default: "-1")
+   * - Option
+     - Explanation
+   * - ``--sql``
+     - Generate SQL output for offline migrations
+   * - ``--tag`` TEXT
+     - Arbitrary tag for custom env.py scripts
+   * - ``REVISION``
+     - Target revision (default: "-1")
 
 
 upgrade
@@ -124,13 +141,20 @@ Upgrade database to a specific revision:
 
 .. code-block:: bash
 
-    alchemy upgrade --config path.to.config [REVISION]
+    alchemy upgrade --config path.to.alchemy-config.config [REVISION]
 
-Options:
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
 
---sql              Generate SQL output for offline migrations
---tag TEXT         Arbitrary tag for custom env.py scripts
-REVISION           Target revision (default: "head")
+   * - Option
+     - Explanation
+   * - ``--sql``
+     - Generate SQL output for offline migrations
+   * - ``--tag`` TEXT
+     - Arbitrary tag for custom env.py scripts
+   * - ``REVISION``
+     - Target revision (default: "head")
 
 
 init
@@ -140,13 +164,20 @@ Initialize migrations for the project:
 
 .. code-block:: bash
 
-    alchemy init --config path.to.config [DIRECTORY]
+    alchemy init --config path.to.alchemy-config.config [DIRECTORY]
 
-Options:
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
 
---multidb          Support multiple databases
---package          Create __init__.py for created folder (default: True)
-DIRECTORY          Directory for migration files (optional)
+   * - Option
+     - Explanation
+   * - ``--multidb``
+     - Support multiple databases
+   * - ``--package``
+     - Create __init__.py for created folder (default: True)
+   * - ``DIRECTORY``
+     - Directory for migration files (optional)
 
 
 make-migrations
@@ -156,18 +187,30 @@ Create a new migration revision:
 
 .. code-block:: bash
 
-    alchemy make-migrations --config path.to.config
+    alchemy make-migrations --config path.to.alchemy-config.config
 
-Options:
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 30 70
 
--m, --message TEXT                  Revision message
---autogenerate, --no-autogenerate   Automatically detect changes (default: True)
---sql                               Export to .sql instead of writing to database
---head TEXT                         Base revision for new revision (default: "head")
---splice                            Allow non-head revision as the "head"
---branch-label TEXT                 Branch label for new revision
---version-path TEXT                 Specific path for version file
---rev-id TEXT                       Specific revision ID
+   * - Option
+     - Explanation
+   * - ``-m``, ``--message`` TEXT
+     - Revision message
+   * - ``--autogenerate``/ ``--no-autogenerate``
+     - Automatically detect changes (default: True)
+   * - ``--sql``
+     - Export to .sql instead of writing to database
+   * - ``--head`` TEXT
+     - Base revision for new revision (default: "head")
+   * - ``--splice``
+     - Allow non-head revision as the "head"
+   * - ``--branch-label`` TEXT
+     - Branch label for new revision
+   * - ``--version-path`` TEXT
+     - Specific path for version file
+   * - ``--rev-id`` TEXT
+     - Specific revision ID
 
 
 drop-all
@@ -177,7 +220,7 @@ Drop all tables from the database:
 
 .. code-block:: bash
 
-    alchemy drop-all --config path.to.config
+    alchemy drop-all --config path.to.alchemy-config.config
 
 dump-data
 ~~~~~~~~~
@@ -186,12 +229,18 @@ Dump specified tables from the database to JSON files:
 
 .. code-block:: bash
 
-    alchemy dump-data --config path.to.config --table TABLE_NAME
+    alchemy dump-data --config path.to.alchemy-config.config --table TABLE_NAME
 
-Options:
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
 
---table TEXT       Name of table to dump (use '*' for all tables)
---dir PATH         Directory to save JSON files (default: ./fixtures)
+   * - Option
+     - Explanation
+   * - ``--table`` TEXT
+     - Name of table to dump (use '*' for all tables)
+   * - ``--dir`` PATH
+     - Directory to save JSON files (default: ./fixtures)
 
 
 Extending the CLI
