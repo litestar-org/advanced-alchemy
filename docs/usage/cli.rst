@@ -83,7 +83,7 @@ The following options are available for all commands:
 Config
 ------
 
-Here is an example of what **config** would looks like.
+Here is an example of what **config** looks like.
 
 If the file is named ``alchemy-config.py``, you would need to use it like this ``--config path.to.alchemy-config.config``
 
