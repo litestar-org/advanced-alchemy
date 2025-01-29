@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Callable, Generator, Union, cast
 from unittest.mock import MagicMock
 
@@ -476,3 +478,43 @@ def test_multiple_instances(app: Starlette) -> None:
         client.get("/")
 
         assert alchemy_1.get_sync_engine() is not alchemy_1.get_async_engine("other")
+
+
+async def test_lifespan_startup_shutdown_called_starlette(
+    mocker: MockerFixture, app: Starlette, config: AnyConfig
+) -> None:
+    mock_startup = mocker.patch.object(AdvancedAlchemy, "on_startup")
+    mock_shutdown = mocker.patch.object(AdvancedAlchemy, "on_shutdown")
+    _alchemy = AdvancedAlchemy(config, app=app)
+
+    with TestClient(app=app) as _client:  # TestClient context manager triggers lifespan events
+        pass  # App starts up and shuts down within this context
+
+    mock_startup.assert_called_once()
+    mock_shutdown.assert_called_once()
+
+
+async def test_lifespan_with_custom_lifespan_starlette(
+    mocker: MockerFixture, app: Starlette, config: AnyConfig
+) -> None:
+    mock_aa_startup = mocker.patch.object(AdvancedAlchemy, "on_startup")
+    mock_aa_shutdown = mocker.patch.object(AdvancedAlchemy, "on_shutdown")
+    mock_custom_startup = mocker.MagicMock()
+    mock_custom_shutdown = mocker.MagicMock()
+
+    @asynccontextmanager
+    async def custom_lifespan(app_in: Starlette) -> AsyncGenerator[None, None]:
+        mock_custom_startup()
+        yield
+        mock_custom_shutdown()
+
+    app.router.lifespan_context = custom_lifespan  # type: ignore[assignment] # Set a custom lifespan on the app
+    _alchemy = AdvancedAlchemy(config, app=app)
+
+    with TestClient(app=app) as _client:  # TestClient context manager triggers lifespan events
+        pass  # App starts up and shuts down within this context
+
+    mock_aa_startup.assert_called_once()
+    mock_aa_shutdown.assert_called_once()
+    mock_custom_startup.assert_called_once()
+    mock_custom_shutdown.assert_called_once()

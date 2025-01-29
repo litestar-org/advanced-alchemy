@@ -1,5 +1,6 @@
 import sys
-from typing import TYPE_CHECKING, Callable, Generator, Literal, Union, cast
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, Generator, Literal, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -356,3 +357,41 @@ def test_multiple_sync_instances(app: FastAPI) -> None:
         )
         assert mock.call_args_list[0].kwargs["session"] is not mock.call_args_list[1].kwargs["session"]
         assert mock.call_args_list[0].kwargs["engine"] is not mock.call_args_list[1].kwargs["engine"]
+
+
+async def test_lifespan_startup_shutdown_called_fastapi(mocker: MockerFixture, app: FastAPI, config: AnyConfig) -> None:
+    mock_startup = mocker.patch.object(AdvancedAlchemy, "on_startup")
+    mock_shutdown = mocker.patch.object(AdvancedAlchemy, "on_shutdown")
+    _alchemy = AdvancedAlchemy(config, app=app)
+
+    with TestClient(app=app) as _client:  # TestClient context manager triggers lifespan events
+        pass  # App starts up and shuts down within this context
+
+    mock_startup.assert_called_once()
+    mock_shutdown.assert_called_once()
+
+
+async def test_lifespan_with_custom_lifespan_fastapi(mocker: MockerFixture, app: FastAPI, config: AnyConfig) -> None:
+    mock_aa_startup = mocker.patch.object(AdvancedAlchemy, "on_startup")
+    mock_aa_shutdown = mocker.patch.object(AdvancedAlchemy, "on_shutdown")
+    mock_custom_startup = mocker.MagicMock()
+    mock_custom_shutdown = mocker.MagicMock()
+
+    @asynccontextmanager
+    async def custom_lifespan(app_in: FastAPI) -> AsyncGenerator[None, None]:
+        mock_custom_startup()
+        yield
+        mock_custom_shutdown()
+
+    app.router.lifespan_context = custom_lifespan  # type: ignore[assignment] # Set a custom lifespan on the app
+    _alchemy = AdvancedAlchemy(config, app=app)
+
+    with TestClient(app=app) as _client:  # TestClient context manager triggers lifespan events
+        pass  # App starts up and shuts down within this context
+
+    mock_aa_startup.assert_called_once()
+    mock_aa_shutdown.assert_called_once()
+    mock_custom_startup.assert_called_once()
+    mock_custom_shutdown.assert_called_once()
+
+    # Optionally assert the order of calls if needed, e.g., using mocker.call_order
