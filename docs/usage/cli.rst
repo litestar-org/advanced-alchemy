@@ -273,3 +273,58 @@ Here's how to extend the CLI with your own commands:
 
     # Add migration commands to your group
     add_migration_commands(alchemy_group)
+
+Typer integration
+-----------------
+
+You can integrate Advanced Alchemy's CLI commands into your existing ``Typer`` application. Here's how:
+
+
+.. code-block:: python
+    :caption: cli.py
+
+    import typer
+    from advanced_alchemy.cli import get_alchemy_group, add_migration_commands
+
+    app = typer.Typer()
+
+    @app.command()
+    def hello(name: str) -> None:
+        """Says hello to the world."""
+        typer.echo(f"Hello {name}")
+
+    @app.callback()
+    def callback():
+        """
+        Typer app, including Click subapp
+        """
+        pass
+
+    def create_cli() -> typer.Typer:
+        """Create the CLI application with both Typer and Click commands."""
+        # Get the Click group from advanced_alchemy
+        alchemy_group = get_alchemy_group()
+
+        # Convert our Typer app to a Click command object
+        typer_click_object = typer.main.get_command(app)
+
+        # Add all migration commands from the alchemy group to our CLI
+        typer_click_object.add_command(add_migration_commands(alchemy_group))
+
+        return typer_click_object
+
+    if __name__ == "__main__":
+        cli = create_cli()
+        cli()
+
+
+After setting up the integration, you can use both your ``Typer`` commands and Advanced Alchemy commands:
+
+.. code-block:: bash
+
+    # Use your Typer commands
+    python cli.py hello Cody
+
+    # Use Advanced Alchemy commands
+    python cli.py alchemy upgrade --config path.to.config
+    python cli.py alchemy make-migrations --config path.to.config
