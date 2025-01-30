@@ -19,6 +19,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     services
     types
     utilities
+    cli
 
 .. toctree::
     :maxdepth: 2
