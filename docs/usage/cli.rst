@@ -274,6 +274,32 @@ Here's how to extend the CLI with your own commands:
     # Add migration commands to your group
     add_migration_commands(alchemy_group)
 
+Custom Group Integration
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can also integrate Advanced Alchemy's commands into your existing Click group:
+
+.. code-block:: python
+
+    import click
+    from advanced_alchemy.cli import add_migration_commands
+
+    @click.group()
+    def cli():
+        """My application CLI."""
+        pass
+
+    # Add migration commands to your CLI group
+    add_migration_commands(cli)
+
+    @cli.command()
+    def my_command():
+        """Custom command in your CLI."""
+        pass
+
+    if __name__ == "__main__":
+        cli()
+
 Typer integration
 -----------------
 
