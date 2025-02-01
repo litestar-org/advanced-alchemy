@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import AsyncGenerator, Generator, cast
+from typing import AsyncGenerator, Generator
 
 import pytest
-from pytest import FixtureRequest
-from sqlalchemy import Engine, NullPool, create_engine, select, text
+from sqlalchemy import URL, Engine, NullPool, create_engine, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -46,24 +45,37 @@ async def aiosqlite_engine_cd(tmp_path: Path) -> AsyncGenerator[AsyncEngine, Non
         await engine.dispose()
 
 
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "sqlite_engine_cd",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-            ],
-        )
-    ]
-)
-def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig, None, None]:
-    engine = cast(Engine, request.getfixturevalue(request.param))
-    orm_registry = base.create_registry()
-    yield SQLAlchemySyncConfig(
-        engine_instance=engine,
-        session_maker=sessionmaker(bind=engine, expire_on_commit=False),
-        metadata=orm_registry.metadata,
+@pytest.fixture()
+async def asyncpg_engine_cd(docker_ip: str, postgres_service: None) -> AsyncGenerator[AsyncEngine, None]:
+    """Postgresql instance for end-to-end testing."""
+    yield create_async_engine(
+        URL(
+            drivername="postgresql+asyncpg",
+            username="postgres",
+            password="super-secret",
+            host=docker_ip,
+            port=5423,
+            database="testing_create_delete",
+            query={},  # type:ignore[arg-type]
+        ),
+        poolclass=NullPool,
+    )
+
+
+@pytest.fixture()
+def psycopg_engine_cd(docker_ip: str, postgres_service: None) -> Generator[Engine, None, None]:
+    """Postgresql instance for end-to-end testing."""
+    yield create_engine(
+        URL(
+            drivername="postgresql+psycopg",
+            username="postgres",
+            password="super-secret",
+            host=docker_ip,
+            port=5423,
+            database="postgres",
+            query={},  # type:ignore[arg-type]
+        ),
+        poolclass=NullPool,
     )
 
 
@@ -111,3 +123,37 @@ async def test_create_and_drop_sqlite_async(aiosqlite_engine_cd: AsyncEngine, tm
         # always clean up
         if Path(file_path).exists():
             Path(file_path).unlink()
+
+
+async def test_create_and_drop_postgres_async(asyncpg_engine_cd: AsyncEngine, asyncpg_engine: AsyncEngine) -> None:
+    orm_registry = base.create_registry()
+    cfg = SQLAlchemyAsyncConfig(
+        engine_instance=asyncpg_engine_cd,
+        session_maker=async_sessionmaker(bind=asyncpg_engine_cd, expire_on_commit=False),
+        metadata=orm_registry.metadata,
+    )
+
+    dbname = asyncpg_engine_cd.url.database
+    exists_sql = f"""
+        select exists(
+            SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower('{dbname}')
+        );
+        """
+
+    # ensure database does not exist
+    async with asyncpg_engine.begin() as conn:
+        result = await conn.execute(text(exists_sql))
+        assert not result.scalar_one()
+
+    await create_database(cfg)
+    async with asyncpg_engine.begin() as conn:
+        result = await conn.execute(text(exists_sql))
+        assert result.scalar_one()
+
+    await drop_database(cfg)
+
+    async with asyncpg_engine.begin() as conn:
+        result = await conn.execute(text(exists_sql))
+        assert not result.scalar_one()
+
+    await asyncpg_engine.dispose()
