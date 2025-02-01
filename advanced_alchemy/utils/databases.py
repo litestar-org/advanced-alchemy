@@ -137,14 +137,13 @@ ADAPTERS = {"sqlite": SQLiteAdapter, "postgresql": PostgresAdapter}
 
 def get_adapter(config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig, encoding: str = "utf8") -> Adapter:
     dialect_name = config.get_engine().url.get_dialect().name
-    driver = config.get_engine().url.get_dialect().driver
-
     adapter_class = ADAPTERS.get(dialect_name)
 
     if not adapter_class:
         msg = f"No adapter available for {dialect_name}"
         raise ValueError(msg)
 
+    driver = config.get_engine().url.get_dialect().driver
     if driver not in adapter_class.supported_drivers:
         msg = f"{dialect_name} adapter does not support the {driver} driver"
         raise ValueError(msg)
@@ -154,8 +153,7 @@ def get_adapter(config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig, encoding: 
 
 async def create_database(config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, encoding: str = "utf8") -> None:
     adapter = get_adapter(config, encoding)
-    engine = config.get_engine()
-    if isinstance(engine, AsyncEngine):
+    if isinstance(config.get_engine(), AsyncEngine):
         await adapter.create_async()
     else:
         adapter.create()
@@ -163,8 +161,7 @@ async def create_database(config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, 
 
 async def drop_database(config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig) -> None:
     adapter = get_adapter(config)
-    engine = config.get_engine()
-    if isinstance(engine, AsyncEngine):
+    if isinstance(config.get_engine(), AsyncEngine):
         await adapter.drop_async()
     else:
         adapter.drop()

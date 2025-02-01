@@ -436,6 +436,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @bind_key_option
     @no_prompt_option
     def drop_database(bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+        from anyio import run
         from rich.prompt import Confirm
 
         from advanced_alchemy.utils.databases import drop_database as _drop_database
@@ -450,6 +451,10 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             True if no_prompt else Confirm.ask(f"[bold]Are you sure you want to drop database `{db_name}`?[/]")
         )
         if input_confirmed:
-            _drop_database(sqlalchemy_config)
+
+            async def _drop_database_wrapper() -> None:
+                await _drop_database(sqlalchemy_config)
+
+            run(_drop_database_wrapper)
 
     return database_group
