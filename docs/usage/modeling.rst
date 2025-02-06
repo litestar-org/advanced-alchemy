@@ -32,9 +32,9 @@ Advanced Alchemy provides several base classes optimized for different use cases
      - UUIDv6 primary keys, Automatic created_at/updated_at timestamps
    * - ``UUIDv7AuditBase``
      - Time-sortable UUIDv7 primary keys, Automatic created_at/updated_at timestamps
-   * - ``NanoidBase``
+   * - ``NanoIDBase``
      - URL-friendly unique identifiers, Shorter than UUIDs, collision resistant
-   * - ``NanoidAuditBase``
+   * - ``NanoIDAuditBase``
      - URL-friendly IDs with audit timestamps, Combines Nanoid benefits with audit trails
 
 Mixins
