@@ -4,11 +4,8 @@ from dataclasses import asdict, dataclass, field, replace
 from functools import singledispatchmethod
 from typing import (
     TYPE_CHECKING,
-    AbstractSet,
     Any,
     ClassVar,
-    Collection,
-    Generator,
     Generic,
     Literal,
     Optional,
@@ -45,6 +42,9 @@ from typing_extensions import TypeVar
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
+    from collections.abc import Collection, Generator
+    from collections.abc import Set as AbstractSet
+
     from typing_extensions import TypeAlias
 
 __all__ = ("SQLAlchemyDTO",)

@@ -1,15 +1,17 @@
-# ruff: noqa: UP007
 from __future__ import annotations
 
 import re
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, TypedDict, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError, StatementError
 
 from advanced_alchemy.utils.deprecation import deprecated
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 __all__ = (
     "AdvancedAlchemyError",
@@ -258,16 +260,16 @@ class InvalidRequestError(RepositoryError):
 
 
 class ErrorMessages(TypedDict, total=False):
-    duplicate_key: Union[str, Callable[[Exception], str]]
-    integrity: Union[str, Callable[[Exception], str]]
-    foreign_key: Union[str, Callable[[Exception], str]]
-    multiple_rows: Union[str, Callable[[Exception], str]]
-    check_constraint: Union[str, Callable[[Exception], str]]
-    other: Union[str, Callable[[Exception], str]]
+    duplicate_key: str | Callable[[Exception], str]
+    integrity: str | Callable[[Exception], str]
+    foreign_key: str | Callable[[Exception], str]
+    multiple_rows: str | Callable[[Exception], str]
+    check_constraint: str | Callable[[Exception], str]
+    other: str | Callable[[Exception], str]
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
-    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
+    template: str | Callable[[Exception], str] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import Field, fields, is_dataclass
 from inspect import isclass
-from typing import TYPE_CHECKING, AbstractSet, Any, ClassVar, Iterable, Protocol, Type, final, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, final, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from collections.abc import Set as AbstractSet
+
     from typing_extensions import TypeAlias, TypeGuard
 
 __all__ = (
@@ -24,7 +27,7 @@ class Empty:
     """A sentinel class used as placeholder."""
 
 
-EmptyType: TypeAlias = Type[Empty]
+EmptyType: TypeAlias = type[Empty]
 """Type alias for the :class:`~advanced_alchemy.utils.dataclass.Empty` sentinel class."""
 
 

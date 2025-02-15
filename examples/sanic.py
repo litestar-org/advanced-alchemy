@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime  # noqa: TC003
-from typing import Any, List
+from typing import Any
 from uuid import UUID  # noqa: TC003
 
 from sanic import Request, Sanic
@@ -27,7 +27,7 @@ class AuthorModel(base.UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[datetime.date | None]
-    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
+    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2

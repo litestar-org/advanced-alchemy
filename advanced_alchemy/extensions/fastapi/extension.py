@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from advanced_alchemy.extensions.fastapi.cli import register_database_commands
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy as StarletteAdvancedAlchemy
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from fastapi import FastAPI
 
     from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig

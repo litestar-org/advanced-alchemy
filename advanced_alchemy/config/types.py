@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from typing_extensions import TypeAlias
 
 
@@ -14,7 +16,7 @@ TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"
 Maps types to their encoder functions.
 """
 
-TypeDecodersSequence: TypeAlias = "Sequence[Tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
+TypeDecodersSequence: TypeAlias = "Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
 """Type alias for a sequence of type decoders.
 
 Each tuple contains a type check predicate and its corresponding decoder function.

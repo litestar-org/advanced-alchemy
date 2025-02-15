@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Callable
 from uuid import UUID
 
 import pytest
@@ -25,7 +25,6 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
 )
-from typing_extensions import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -56,7 +55,7 @@ class TaggableMixin:
         )
 
     @declared_attr
-    def assigned_tags(cls) -> Mapped[List[Tag]]:
+    def assigned_tags(cls) -> Mapped[list[Tag]]:
         return relationship(
             "Tag",
             secondary=lambda: cls.tag_association_table,
@@ -66,7 +65,7 @@ class TaggableMixin:
         )
 
     @declared_attr
-    def tags(cls) -> AssociationProxy[List[str]]:
+    def tags(cls) -> AssociationProxy[list[str]]:
         return association_proxy(
             "assigned_tags",
             "name",
@@ -89,11 +88,11 @@ class Book(Base):
     title: Mapped[str] = mapped_column(String(length=250), default="Hi")
     author_id: Mapped[str] = mapped_column(ForeignKey("author.id"), default="123")
     first_author: Mapped[Author] = relationship(lazy="joined", innerjoin=True)
-    reviews: Mapped[List[BookReview]] = relationship(lazy="joined", innerjoin=True)
+    reviews: Mapped[list[BookReview]] = relationship(lazy="joined", innerjoin=True)
     bar: Mapped[str] = mapped_column(default="Hello")
     SPAM: Mapped[str] = mapped_column(default="Bye")
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")
-    number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
+    number_of_reviews: Mapped[int | None] = column_property(
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
@@ -127,9 +126,9 @@ class BookAuthorTestData:
 
 
 @pytest.fixture
-def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dict[str, Any], Book]]:
-    def _generate(rename_strategy: RenameStrategy, test_data: BookAuthorTestData) -> Tuple[Dict[str, Any], Book]:
-        data: Dict[str, Any] = {
+def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], tuple[dict[str, Any], Book]]:
+    def _generate(rename_strategy: RenameStrategy, test_data: BookAuthorTestData) -> tuple[dict[str, Any], Book]:
+        data: dict[str, Any] = {
             _rename_field(name="id", strategy=rename_strategy): test_data.book_id,
             _rename_field(name="title", strategy=rename_strategy): test_data.book_title,
             _rename_field(name="author_id", strategy=rename_strategy): test_data.book_author_id,
@@ -177,7 +176,7 @@ def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dic
 )
 def test_fields_alias_generator_sqlalchemy(
     rename_strategy: RenameStrategy,
-    book_json_data: Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dict[str, Any], Book]],
+    book_json_data: Callable[[RenameStrategy, BookAuthorTestData], tuple[dict[str, Any], Book]],
 ) -> None:
     test_data = BookAuthorTestData()
     json_data, instance = book_json_data(rename_strategy, test_data)
@@ -212,7 +211,7 @@ model_with_func_query = select(ConcreteBase, func_result_query.label("func_resul
 
 class ModelWithFunc(Base):
     __table__ = model_with_func_query
-    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)  # noqa: UP007
+    func_result: Mapped[int | None] = column_property(model_with_func_query.c.func_result)
 
 
 def test_model_using_func() -> None:

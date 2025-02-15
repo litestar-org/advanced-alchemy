@@ -1,10 +1,11 @@
-# ruff: noqa: UP007, SLF001, UP006, ARG001
+# ruff: noqa: SLF001, ARG001
 """Flask extension for Advanced Alchemy."""
 
 from __future__ import annotations
 
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager, suppress
-from typing import TYPE_CHECKING, Callable, Generator, Sequence, Union, cast
+from typing import TYPE_CHECKING, Callable, Union, cast
 
 from flask import g
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +41,7 @@ class AdvancedAlchemy:
         self.portal_provider = portal_provider if portal_provider is not None else PortalProvider()
         self._config = config if isinstance(config, Sequence) else [config]
         self._has_async_config = any(isinstance(c, SQLAlchemyAsyncConfig) for c in self.config)
-        self._session_makers: dict[str, Callable[..., Union[AsyncSession, Session]]] = {}
+        self._session_makers: dict[str, Callable[..., AsyncSession | Session]] = {}
 
         if app is not None:
             self.init_app(app)
@@ -162,7 +163,7 @@ class AdvancedAlchemy:
     @contextmanager
     def with_session(  # pragma: no cover (more on this later)
         self, bind_key: str = "default"
-    ) -> Generator[Union[AsyncSession, Session], None, None]:
+    ) -> Generator[AsyncSession | Session, None, None]:
         """Provide a transactional scope around a series of operations.
 
         Args:

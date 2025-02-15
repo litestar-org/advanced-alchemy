@@ -43,9 +43,12 @@ def test_wrap_sqlalchemy_exception_integrity_error_duplicate_key(dialect_name: s
         "sqlite": "UNIQUE constraint failed: %(table_name)s.%(column_0_name)s",
         "mysql": "1062 (23000): Duplicate entry '%(value)s' for key '%(table_name)s.%(column_0_name)s'",
     }
-    with pytest.raises(DuplicateKeyError), wrap_sqlalchemy_exception(
-        dialect_name=dialect_name,
-        error_messages={"duplicate_key": error_message[dialect_name]},
+    with (
+        pytest.raises(DuplicateKeyError),
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={"duplicate_key": error_message[dialect_name]},
+        ),
     ):
         if dialect_name == "postgresql":
             exception = SQLAlchemyIntegrityError(
@@ -113,8 +116,11 @@ def test_wrap_sqlalchemy_exception_custom_error_message() -> None:
     def custom_message(exc: Exception) -> str:
         return f"Custom: {exc}"
 
-    with pytest.raises(RepositoryError) as excinfo, wrap_sqlalchemy_exception(
-        error_messages={"other": custom_message},
+    with (
+        pytest.raises(RepositoryError) as excinfo,
+        wrap_sqlalchemy_exception(
+            error_messages={"other": custom_message},
+        ),
     ):
         raise SQLAlchemyError("original")
 
@@ -129,9 +135,12 @@ def test_wrap_sqlalchemy_exception_no_error_messages() -> None:
 
 
 def test_wrap_sqlalchemy_exception_no_match() -> None:
-    with pytest.raises(IntegrityError) as excinfo, wrap_sqlalchemy_exception(
-        dialect_name="postgresql",
-        error_messages={"integrity": "Integrity error"},
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="postgresql",
+            error_messages={"integrity": "Integrity error"},
+        ),
     ):
         raise SQLAlchemyIntegrityError("original", {}, Exception("original"))
 

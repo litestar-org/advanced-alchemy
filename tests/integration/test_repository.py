@@ -7,8 +7,8 @@ import asyncio
 import contextlib
 import datetime
 import os
-from collections.abc import Generator, Iterator
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Literal, Type, Union, cast
+from collections.abc import AsyncGenerator, Generator, Iterator
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 from unittest.mock import NonCallableMagicMock
 from uuid import UUID, uuid4
 
@@ -65,13 +65,13 @@ xfail = pytest.mark.xfail
 
 
 RepositoryPKType = Literal["uuid", "bigint"]
-SecretModel = Type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
-AuthorModel = Type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
-RuleModel = Type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
-ModelWithFetchedValue = Type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
-ItemModel = Type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
-TagModel = Type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
-SlugBookModel = Type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
+SecretModel = type[Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]]
+AuthorModel = type[Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]]
+RuleModel = type[Union[models_uuid.UUIDRule, models_bigint.BigIntRule]]
+ModelWithFetchedValue = type[Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]]
+ItemModel = type[Union[models_uuid.UUIDItem, models_bigint.BigIntItem]]
+TagModel = type[Union[models_uuid.UUIDTag, models_bigint.BigIntTag]]
+SlugBookModel = type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]]
 
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
@@ -114,7 +114,7 @@ ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
 ]
 
 
-RawRecordData = List[Dict[str, Any]]
+RawRecordData = list[dict[str, Any]]
 
 mock_engines = {"mock_async_engine", "mock_sync_engine"}
 
@@ -361,7 +361,7 @@ def tag_model(repository_pk_type: RepositoryPKType) -> TagModel:
 
 
 @pytest.fixture()
-def book_model(repository_pk_type: RepositoryPKType) -> Type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
+def book_model(repository_pk_type: RepositoryPKType) -> type[models_uuid.UUIDBook | models_bigint.BigIntBook]:
     """Return the ``Book`` model matching the current repository PK type"""
     if repository_pk_type == "uuid":
         return models_uuid.UUIDBook
@@ -612,7 +612,7 @@ def _seed_spanner(
     raw_authors_uuid: RawRecordData,
     raw_rules_uuid: RawRecordData,
     raw_slug_books_uuid: RawRecordData,
-) -> List[Table]:
+) -> list[Table]:
     update_raw_records(raw_authors=raw_authors_uuid, raw_rules=raw_rules_uuid)
 
     with engine.begin() as txn:
@@ -1214,7 +1214,7 @@ def frozen_datetime() -> Generator[Coordinates, None, None]:
 async def test_repo_created_updated(
     frozen_datetime: Coordinates,
     author_repo: AnyAuthorRepository,
-    book_model: Type[AnyBook],
+    book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
@@ -1239,10 +1239,10 @@ async def test_repo_created_updated(
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
-        book_model = cast("Type[models_uuid.UUIDBook]", book_model)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
     else:
         author = cast(models_bigint.BigIntAuthor, author)
-        book_model = cast("Type[models_bigint.BigIntBook]", book_model)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
     author.name = "Altered"
     author = await maybe_async(author_repo.update(author))
     assert author.updated_at > original_update_dt
@@ -1258,7 +1258,7 @@ async def test_repo_created_updated(
 async def test_repo_created_updated_no_listener(
     frozen_datetime: Coordinates,
     author_repo: AuthorRepository,
-    book_model: Type[AnyBook],
+    book_model: type[AnyBook],
     repository_pk_type: RepositoryPKType,
 ) -> None:
     from sqlalchemy import event
@@ -1290,10 +1290,10 @@ async def test_repo_created_updated_no_listener(
     # looks odd, but we want to get correct type checking here
     if repository_pk_type == "uuid":
         author = cast(models_uuid.UUIDAuthor, author)
-        book_model = cast("Type[models_uuid.UUIDBook]", book_model)
+        book_model = cast("type[models_uuid.UUIDBook]", book_model)
     else:
         author = cast(models_bigint.BigIntAuthor, author)
-        book_model = cast("Type[models_bigint.BigIntBook]", book_model)
+        book_model = cast("type[models_bigint.BigIntBook]", book_model)
     author.books.append(book_model(title="Testing"))  # type: ignore[arg-type]
     author = await maybe_async(author_repo.update(author))
     assert author.updated_at == original_update_dt

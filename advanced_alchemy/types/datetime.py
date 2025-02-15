@@ -1,6 +1,6 @@
 # ruff: noqa: FA100
 import datetime
-from typing import Optional, Type
+from typing import Optional
 
 from sqlalchemy import DateTime
 from sqlalchemy.engine import Dialect
@@ -19,7 +19,7 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
     cache_ok = True
 
     @property
-    def python_type(self) -> Type[datetime.datetime]:
+    def python_type(self) -> type[datetime.datetime]:
         return datetime.datetime
 
     def process_bind_param(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:

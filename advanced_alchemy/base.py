@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import datetime
 import re
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -45,6 +45,8 @@ from advanced_alchemy.utils.dataclass import DataclassProtocol
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from sqlalchemy.sql import FromClause
     from sqlalchemy.sql.schema import (
         _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
@@ -373,7 +375,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     registry = orm_registry
     __abstract__ = True
     __metadata_registry__: MetadataRegistry = MetadataRegistry()
-    __bind_key__: Optional[str] = None  # noqa: UP007
+    __bind_key__: str | None = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)

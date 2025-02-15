@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import Column, ForeignKey, String, Table, create_engine, select
@@ -35,7 +35,7 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
     class Tag(NewUUIDBase):
         name: Mapped[str] = mapped_column(index=True)
-        products: Mapped[List[Product]] = relationship(
+        products: Mapped[list[Product]] = relationship(
             secondary=lambda: product_tag_table,
             back_populates="product_tags",
             cascade="all, delete",
@@ -45,14 +45,14 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
     class Product(NewUUIDBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        product_tags: Mapped[List[Tag]] = relationship(
+        product_tags: Mapped[list[Tag]] = relationship(
             secondary=lambda: product_tag_table,
             back_populates="products",
             cascade="all, delete",
             passive_deletes=True,
             lazy="joined",
         )
-        tags: AssociationProxy[List[str]] = association_proxy(
+        tags: AssociationProxy[list[str]] = association_proxy(
             "product_tags",
             "name",
             creator=lambda name: Tag(name=name),  # pyright: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
@@ -109,7 +109,7 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
     class Tag(NewUUIDBase):
         name: Mapped[str] = mapped_column(index=True)
-        products: Mapped[List[Product]] = relationship(
+        products: Mapped[list[Product]] = relationship(
             secondary=lambda: product_tag_table,
             back_populates="product_tags",
             cascade="all, delete",
@@ -119,14 +119,14 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
     class Product(NewUUIDBase):
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        product_tags: Mapped[List[Tag]] = relationship(
+        product_tags: Mapped[list[Tag]] = relationship(
             secondary=lambda: product_tag_table,
             back_populates="products",
             cascade="all, delete",
             passive_deletes=True,
             lazy="joined",
         )
-        tags: AssociationProxy[List[str]] = association_proxy(
+        tags: AssociationProxy[list[str]] = association_proxy(
             "product_tags",
             "name",
             creator=lambda name: Tag(name=name),  # pyright: ignore[reportUnknownArgumentType,reportUnknownLambdaType]

@@ -11,7 +11,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
   "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -40,13 +39,11 @@ maintainers = [
   { name = "Cody Fincher", email = "cody@litestar.dev" },
   { name = "Jacob Coffee", email = "jacob@litestar.dev" },
   { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
-  { name = "Peter Schutt", email = "peter@litestar.dev" },
-  { name = "Visakh Unnikrishnan", email = "guacs@litestar.dev" },
-  { name = "Alc", email = "alc@litestar.dev" },
+  { name = "Julien Courtes", email = "julien@litestar.dev" },
 ]
 name = "advanced_alchemy"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 version = "0.30.3"
 
 [project.urls]
@@ -110,7 +107,7 @@ doc = [
   "sphinx-autodoc-typehints",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
-fastapi = ["fastapi[all]>=0.115.3", "starlette<0.45.0; python_version < '3.9'", "starlette; python_version >= '3.9'"]
+fastapi = ["fastapi[all]>=0.115.3", "starlette"]
 flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 lint = [
   "mypy>=1.13.0",
@@ -136,17 +133,11 @@ mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
 postgres = ["asyncpg>=0.29.0", "psycopg2-binary>=2.9.10", "psycopg[binary,pool]>=3.2.3"]
-sanic = [
-  "sanic<24.12; python_version < '3.9'",
-  "sanic; python_version >= '3.9'",
-  "sanic-testing>=24.6.0",
-  "sanic[ext]>=24.6.0",
-]
+sanic = ["sanic", "sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
-  "pydantic-extra-types < 2.9.0; python_version < \"3.9\"",
-  "pydantic-extra-types; python_version >= \"3.9\"",
+  "pydantic-extra-types",
   "rich-click",
   "coverage>=7.6.1",
   "pytest>=7.4.4",
@@ -281,7 +272,7 @@ line-length = 120
 exclude = [".venv", "node_modules"]
 line-length = 120
 src = ["advanced_alchemy", "tests", "docs", "tools"]
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -369,7 +360,6 @@ classmethod-decorators = [
   "SIM",
   "TC",
   "TRY",
-  "UP006",
   "SLF001",
 ]
 
@@ -404,7 +394,7 @@ disallow_any_generics = false
 disallow_untyped_decorators = true
 implicit_reexport = false
 packages = ["advanced_alchemy", "tests", "docs", "examples"]
-python_version = "3.8"
+python_version = "3.9"
 show_error_codes = true
 strict = true
 warn_redundant_casts = true
@@ -492,7 +482,7 @@ exclude = [
   "examples/flask/flask_services.py",
 ]
 include = ["advanced_alchemy"]
-pythonVersion = "3.8"
+pythonVersion = "3.9"
 reportUnnecessaryTypeIgnoreComments = true
 reportUnusedFunction = false
 strict = ["advanced_alchemy/**/*"]
@@ -564,92 +554,3 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 [tool.codespell]
 ignore-words-list = "selectin"
 skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
-
-[tool.git-cliff.changelog]
-header = """
-=========
-Changelog
-=========\n
-All commits to this project will be documented in this file.\n
-"""
-trim = true
-# TODO: Fix footers for co-authors
-body = """
-{% if version %}\
-    `Release [v{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }} <https://github.com/litestar-org/advanced-alchemy/releases/tag/v{{ version | trim_start_matches(pat="v") }}>`_
-    ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    * `See All commits in v{{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/commits/v{{ version | trim_start_matches(pat="v") }}>`_
-{% else %}\
-    [unreleased]
-    ------------
-    {% if previous %}\
-        {% if previous.commit_id %}
-            `{{ previous.commit_id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ is the last commit in the changelog before unreleased changes.
-        {% endif %}\
-    {% else %}
-        `Initial commit`
-    {% endif %}
-{% endif %}\
-{% if previous %}\
-    {% if previous.commit_id and version %}
-        `{{ previous.commit_id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ previous.commit_id }}>`_ ... \
-            `{{ commit_id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit_id }}>`_ \
-            | `See diff for {{ version | trim_start_matches(pat="v") }} <https://github.com/litestar-org/advanced-alchemy/compare/{{ previous.commit_id }}...{{ commit_id }}>`_
-    {% endif %}\
-{% endif %}\
-{% for group, commits in commits | group_by(attribute="group") %}
-    {{ group | upper_first }}
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    {% for commit in commits %}
-        * (`{{ commit.id | default(value='') | truncate(length=7, end='') }} <https://github.com/litestar-org/advanced-alchemy/commit/{{ commit.id }}>`_) {% if commit.breaking %}[**breaking**] {% endif %} - {{ commit.message | upper_first }} {% if commit.github.username %} by `@{{ commit.github.username }} <https://github.com/{{ commit.github.username }}>`_ {%- endif %}\
-          {% if commit.github.pr_number %} in `#{{ commit.github.pr_number }} <https://github.com/litestar-org/advanced-alchemy/pull/{{ commit.github.pr_number }}>`_ {%- endif %}\
-    {% endfor %}
-{% endfor %}\n
-"""
-footer = """
-Advanced Alchemy Changelog
-"""
-
-[tool.git-cliff.git]
-commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactor" },
-  { message = "^style", group = "Styling" },
-  { message = "^test", group = "Testing" },
-  { message = "^chore\\(release\\): prepare for", skip = true },
-  { message = "^chore", group = "Miscellaneous Tasks" },
-  { body = ".*security", group = "Security" },
-]
-commit_preprocessors = [
-  # Matches a single backtick that is not preceded by another backtick (negative lookbehind)
-  # and not followed by another backtick (negative lookahead).. but these aren't supported
-  # in git cliff regexes. So we have to do it in 3 steps:
-  # Step 1: Replace pairs of backticks with a placeholder (e.g., "DOUBLEBACKTICK")
-  { pattern = "``", replace = "DOUBLEBACKTICK" },
-  # Step 2: Replace single backticks with double backticks
-  { pattern = "`", replace = "``" },
-  # Step 3: Replace the placeholder back to double backticks
-  { pattern = "DOUBLEBACKTICK", replace = "``" },
-  # TODO: Fix Co-authored commits
-]
-conventional_commits = true
-filter_commits = false
-filter_unconventional = true
-ignore_tags = ""
-link_parsers = [
-  # TODO: Supposedly matches on #1234 but doesn't work?
-  { pattern = "\\(#(\\d+)\\)", href = "https://github.com/litestar-org/advanced-alchemy/issues/$1" },
-]
-protect_breaking_commits = false
-skip_tags = "v0.1.0-beta.1"
-sort_commits = "oldest"
-split_commits = false
-tag_pattern = "v[0-9]*"
-topo_order = false
-
-[tool.git-cliff.remote.github]
-owner = "litestar-org"
-repo = "advanced-alchemy"
