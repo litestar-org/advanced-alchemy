@@ -21,7 +21,7 @@ class PortalProviderSingleton(type):
     _instances: dict[type, PortalProvider] = {}
 
     def __call__(cls, *args: Any, **kwargs: Any) -> PortalProvider:
-        if cls not in cls._instances:
+        if cls not in cls._instances:  # pyright: ignore[reportUnnecessaryContains]
             cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 

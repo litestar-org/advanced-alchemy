@@ -89,8 +89,8 @@ class UUIDModelWithFetchedValue(UUIDv6Base):
 uuid_item_tag = Table(
     "uuid_item_tag",
     UUIDBase.metadata,
-    Column("item_id", ForeignKey("uuid_item.id"), primary_key=True), # pyright: ignore[reportUnknownArgumentType]
-    Column("tag_id", ForeignKey("uuid_tag.id"), primary_key=True), # pyright: ignore[reportUnknownArgumentType]
+    Column("item_id", ForeignKey("uuid_item.id"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
+    Column("tag_id", ForeignKey("uuid_tag.id"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
 )
 
 
@@ -111,7 +111,7 @@ class UUIDRule(UUIDAuditBase):
     """The rule domain object."""
 
     name: Mapped[str] = mapped_column(String(length=250))
-    config: Mapped[dict] = mapped_column(default=lambda: {}) # type: ignore
+    config: Mapped[dict] = mapped_column(default=lambda: {})  # type: ignore
 
 
 class UUIDFileDocument(UUIDv7Base):

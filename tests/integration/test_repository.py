@@ -1155,7 +1155,7 @@ def fx_raw_file_documents(repository_pk_type: str) -> RawRecordData:
                 "size": 13,
                 "checksum": "abc123",
                 "content_type": "text/plain",
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.datetime.now(datetime.timezone.utc),
             },
         },
     ]
@@ -1231,7 +1231,7 @@ async def test_file_object_validation(
                 size=0,
                 checksum="abc",
                 content_type="text/plain",
-                uploaded_at=datetime.now(timezone.utc),
+                uploaded_at=datetime.datetime.now(datetime.timezone.utc),
             ),
         )
 

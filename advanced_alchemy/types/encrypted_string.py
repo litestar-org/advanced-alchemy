@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
 

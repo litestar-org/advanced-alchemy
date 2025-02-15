@@ -85,7 +85,7 @@ class MutableList(Mutable, List[T]):
 
     def __delitem__(self, index: Any) -> None:
         """Detect list del events and emit change events."""
-        old_value = self[index] if isinstance(index, slice) else self[index]
+        old_value = self[index]
         super().__delitem__(index)  # pyright: ignore[reportUnknownArgumentType]
         self.changed()
         self._removed.extend(old_value)

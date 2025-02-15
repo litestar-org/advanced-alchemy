@@ -18,9 +18,9 @@ try:
     SANIC_INSTALLED = True
 except ModuleNotFoundError:  # pragma: no cover
     SANIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
-    Extension = type("Extension", (), {})  # type: ignore  # noqa: PGH003
-    Extend = type("Extend", (), {})  # type: ignore  # noqa: PGH003
-    Default = type("Default", (), {})  # type: ignore  # noqa: PGH003
+    Extension = type("Extension", (), {})  # type: ignore
+    Extend = type("Extend", (), {})  # type: ignore
+    Default = type("Default", (), {})  # type: ignore
     _default = Default()
 
 if TYPE_CHECKING:

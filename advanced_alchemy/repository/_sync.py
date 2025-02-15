@@ -838,7 +838,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 )
                 result = self.session.execute(statement)
                 row_count = getattr(result, "rowcount", -2)
-                if sanity_check and row_count >= 0 and len(instances) != row_count:  # pyright: ignore  # noqa: PGH003
+                if sanity_check and row_count >= 0 and len(instances) != row_count:  # pyright: ignore
                     # backends will return a -1 if they can't determine impacted rowcount
                     # only compare length of selected instances to results if it's >= 0
                     self.session.rollback()
@@ -2103,7 +2103,7 @@ class SQLAlchemySyncQueryRepository:
             )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             results = self.execute(statement)
-            return results.scalar_one()  # type: ignore  # noqa: PGH003
+            return results.scalar_one()  # type: ignore
 
     def list_and_count(
         self,

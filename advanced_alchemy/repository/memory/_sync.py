@@ -335,11 +335,11 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
                 )
 
             elif isinstance(filter_, NotInCollectionFilter):
-                if filter_.values is not None:  # pyright: ignore  # noqa: PGH003
-                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore  # noqa: PGH003
+                if filter_.values is not None:  # pyright: ignore
+                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
             elif isinstance(filter_, CollectionFilter):
-                if filter_.values is not None:  # pyright: ignore  # noqa: PGH003
-                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore  # noqa: PGH003
+                if filter_.values is not None:  # pyright: ignore
+                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
             elif isinstance(filter_, OrderBy):
                 result = self._order_by(
                     result,

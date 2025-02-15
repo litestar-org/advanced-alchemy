@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from docutils import nodes
 from docutils.parsers.rst import directives
-from sphinx.domains.std import StandardDomain
+from sphinx.domains.std import StandardDomain  # type: ignore
 from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import clean_astext
 
@@ -93,7 +93,7 @@ class ChangelogDirective(SphinxDirective):
 
         self.state.nested_parse(self.content, self.content_offset, changelog_node)
 
-        domain = cast(StandardDomain, self.env.get_domain("std"))
+        domain = cast(StandardDomain, self.env.get_domain("std"))  # type: ignore
 
         change_group_lists = {
             "feature": nodes.definition_list(),
@@ -144,8 +144,8 @@ class ChangelogDirective(SphinxDirective):
 
             change_group_lists[change_type] += list_item
 
-        for node in nodes_to_remove:
-            changelog_node.remove(node)
+        for node in nodes_to_remove:  # type: ignore
+            changelog_node.remove(node)  # type: ignore # noqa: PGH003
 
         for change_group_type, change_group_list in change_group_lists.items():
             if not change_group_list.children:
@@ -165,7 +165,7 @@ class ChangelogDirective(SphinxDirective):
         return [section_target, changelog_node]
 
 
-def setup(app: Sphinx) -> dict[str, str]:
+def setup(app: Sphinx) -> dict[str, str | bool]:
     app.add_directive("changelog", ChangelogDirective)
     app.add_directive("change", ChangeDirective)
 
