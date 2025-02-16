@@ -1,17 +1,14 @@
-from __future__ import annotations
-
+from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union, cast
 
 from docutils import nodes
 from docutils.parsers.rst import directives
+from sphinx.application import Sphinx
 from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import clean_astext
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from sphinx.application import Sphinx
     from sphinx.domains.std import StandardDomain
 
 _GH_BASE_URL = "https://github.com/litestar-org/advanced-alchemy"
@@ -31,7 +28,7 @@ class ChangeDirective(SphinxDirective):
     required_arguments = 1
     has_content = True
     final_argument_whitespace = True
-    option_spec: ClassVar[dict[str, Callable[[str], Any]] | None] = {
+    option_spec: ClassVar[Optional[dict[str, Callable[[str], Any]]]] = {
         "type": partial(directives.choice, values=("feature", "bugfix", "misc")),
         "breaking": directives.flag,
         "issue": directives.unchanged,
@@ -100,7 +97,7 @@ class ChangelogDirective(SphinxDirective):
             changelog_node += nodes.strong("", "Released: ")
             changelog_node += nodes.Text(release_date)
 
-        self.state.nested_parse(self.content, self.content_offset, changelog_node)
+        self.state.nested_parse(self.content, self.content_offset, changelog_node)  # pyright: ignore[reportUnknownMemberType]
 
         domain = cast("StandardDomain", self.env.get_domain("std"))
 
@@ -149,12 +146,12 @@ class ChangelogDirective(SphinxDirective):
 
             list_item += nodes.definition("", change_node.children[0])
 
-            nodes_to_remove.append(change_node)
+            nodes_to_remove.append(change_node)  # pyright: ignore[reportUnknownMemberType]
 
             change_group_lists[change_type] += list_item
 
-        for node in nodes_to_remove:
-            changelog_node.remove(node)
+        for node in nodes_to_remove:  # pyright: ignore[reportUnknownVariableType]
+            changelog_node.remove(node)  # pyright: ignore[reportUnknownArgumentType]
 
         for change_group_type, change_group_list in change_group_lists.items():
             if not change_group_list.children:
@@ -174,7 +171,7 @@ class ChangelogDirective(SphinxDirective):
         return [section_target, changelog_node]
 
 
-def setup(app: Sphinx) -> dict[str, str]:
+def setup(app: Sphinx) -> dict[str, Union[str, bool]]:
     app.add_directive("changelog", ChangelogDirective)
     app.add_directive("change", ChangeDirective)
 

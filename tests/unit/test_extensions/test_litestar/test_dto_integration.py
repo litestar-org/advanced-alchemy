@@ -723,7 +723,7 @@ def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None
         """
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING, Generator
+from typing import Dict, List, Set, Tuple, Type, Generator
 
 from litestar import post
 from litestar.di import Provide
