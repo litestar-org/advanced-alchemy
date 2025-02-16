@@ -12,7 +12,7 @@ from sphinx.util.nodes import clean_astext
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
-_GH_BASE_URL = "https://github.com/litestar-org/litestar"
+_GH_BASE_URL = "https://github.com/litestar-org/advanced-alchemy"
 
 
 def _parse_gh_reference(raw: str, type_: Literal["issues", "pull"]) -> list[str]:
