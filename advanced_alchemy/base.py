@@ -1,12 +1,11 @@
 # ruff: noqa: TC004
 """Common base classes for SQLAlchemy declarative models."""
 
-from __future__ import annotations
-
 import contextlib
 import datetime
 import re
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Protocol, cast, runtime_checkable
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -20,6 +19,7 @@ from sqlalchemy.orm import (
     registry as SQLAlchemyRegistry,  # noqa: N812
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.types import TypeEngine
 from typing_extensions import Self, TypeVar
 
 from advanced_alchemy.mixins import (
@@ -45,13 +45,12 @@ from advanced_alchemy.utils.dataclass import DataclassProtocol
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
+    # these should stay here since they are deprecated.  They are imported in the __getattr__ function
     from sqlalchemy.sql import FromClause
     from sqlalchemy.sql.schema import (
         _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
     )
-    from sqlalchemy.types import TypeEngine
 
-    # these should stay here since they are deprecated.  They are imported in the __getattr__ function
     from advanced_alchemy.mixins import (
         AuditColumns,
         BigIntPrimaryKey,
@@ -148,7 +147,7 @@ UUIDv7BaseT = TypeVar("UUIDv7BaseT", bound="UUIDv7Base")
 NanoIDBaseT = TypeVar("NanoIDBaseT", bound="NanoIDBase")
 """Type variable for :class:`NanoIDBase`."""
 
-convention: NamingSchemaParameter = {
+convention: "NamingSchemaParameter" = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
@@ -160,7 +159,7 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
+def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[TableArgsType] = None) -> TableArgsType:
     """Merge Table Arguments.
 
     This function helps merge table arguments when using mixins that include their own table args,
@@ -212,7 +211,7 @@ class ModelProtocol(Protocol):
         __mapper__: Mapper[Any]
         __name__: str
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -235,7 +234,7 @@ class BasicAttributes:
         __table__: FromClause
         __mapper__: Mapper[Any]
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -270,7 +269,7 @@ class CommonTableAttributes(BasicAttributes):
 
 
 def create_registry(
-    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+    custom_annotation_map: Optional[dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]]] = None,
 ) -> SQLAlchemyRegistry:
     """Create a new SQLAlchemy registry.
 
@@ -283,7 +282,7 @@ def create_registry(
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
+    type_annotation_map: dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
         datetime.datetime: DateTimeUTC,
@@ -327,32 +326,32 @@ class MetadataRegistry:
         set: Sets the metadata for a given bind key.
     """
 
-    _instance: MetadataRegistry | None = None
-    _registry: dict[str | None, MetaData] = {None: orm_registry.metadata}
+    _instance: Optional["MetadataRegistry"] = None
+    _registry: dict[Union[str, None], MetaData] = {None: orm_registry.metadata}
 
     def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cast(Self, cls._instance)
 
-    def get(self, bind_key: str | None = None) -> MetaData:
+    def get(self, bind_key: Optional[str] = None) -> MetaData:
         """Get the metadata for the given bind key."""
         return self._registry.setdefault(bind_key, MetaData(naming_convention=convention))
 
-    def set(self, bind_key: str | None, metadata: MetaData) -> None:
+    def set(self, bind_key: Optional[str], metadata: MetaData) -> None:
         """Set the metadata for the given bind key."""
         self._registry[bind_key] = metadata
 
-    def __iter__(self) -> Iterator[str | None]:
+    def __iter__(self) -> Iterator[Union[str, None]]:
         return iter(self._registry)
 
-    def __getitem__(self, bind_key: str | None) -> MetaData:
+    def __getitem__(self, bind_key: Union[str, None]) -> MetaData:
         return self._registry[bind_key]
 
-    def __setitem__(self, bind_key: str | None, metadata: MetaData) -> None:
+    def __setitem__(self, bind_key: Union[str, None], metadata: MetaData) -> None:
         self._registry[bind_key] = metadata
 
-    def __contains__(self, bind_key: str | None) -> bool:
+    def __contains__(self, bind_key: Union[str, None]) -> bool:
         return bind_key in self._registry
 
 
@@ -373,7 +372,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     registry = orm_registry
     __abstract__ = True
     __metadata_registry__: MetadataRegistry = MetadataRegistry()
-    __bind_key__: Optional[str] = None  # noqa: UP007
+    __bind_key__: Optional[str] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)

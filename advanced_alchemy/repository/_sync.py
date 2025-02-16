@@ -8,12 +8,8 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
-    Iterable,
-    List,
     Literal,
     Protocol,
-    Sequence,
-    Tuple,
     cast,
     runtime_checkable,
 )
@@ -50,6 +46,8 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.orm.scoping import scoped_session
     from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
@@ -1072,7 +1070,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
-                "Result[Tuple[ModelT]]",
+                "Result[tuple[ModelT]]",
                 (self._execute(statement, uniquify=loader_options_have_wildcard)),
             ).scalar_one_or_none()
             if instance:
@@ -1901,7 +1899,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("List[ModelT]", instances)
+            return cast("list[ModelT]", instances)
 
     @classmethod
     def check_health(cls, session: Session | scoped_session[Session]) -> bool:

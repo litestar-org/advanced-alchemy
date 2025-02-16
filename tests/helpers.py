@@ -8,7 +8,7 @@ from collections.abc import Awaitable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, List, Type, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Callable, TypeVar, cast, overload
 
 from typing_extensions import ParamSpec
 
@@ -19,7 +19,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-def purge_module(module_names: List[str], path: str | Path) -> None:
+def purge_module(module_names: list[str], path: str | Path) -> None:
     for name in module_names:
         if name in sys.modules:
             del sys.modules[name]
@@ -35,7 +35,7 @@ class _ContextManagerWrapper:
 
     async def __aexit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool | None:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Callable, Generator, Union, cast
+from typing import TYPE_CHECKING, Callable, Union, cast
 from unittest.mock import MagicMock
 
 import pytest

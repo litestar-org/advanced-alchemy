@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-from typing import List
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
@@ -21,7 +20,7 @@ class BigIntAuthor(BigIntAuditBase):
     name: Mapped[str] = mapped_column(String(length=100))
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)
     dob: Mapped[datetime.date] = mapped_column(nullable=True)
-    books: Mapped[List[BigIntBook]] = relationship(
+    books: Mapped[list[BigIntBook]] = relationship(
         lazy="selectin",
         back_populates="author",
         cascade="all, delete",
@@ -84,14 +83,14 @@ bigint_item_tag = Table(
 class BigIntItem(BigIntBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
-    tags: Mapped[List[BigIntTag]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
+    tags: Mapped[list[BigIntTag]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
 
 
 class BigIntTag(BigIntBase):
     """The event log domain object."""
 
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-    items: Mapped[List[BigIntItem]] = relationship(secondary=lambda: bigint_item_tag, back_populates="tags")
+    items: Mapped[list[BigIntItem]] = relationship(secondary=lambda: bigint_item_tag, back_populates="tags")
 
 
 class BigIntRule(BigIntAuditBase):

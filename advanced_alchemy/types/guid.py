@@ -1,7 +1,7 @@
 # ruff: noqa: FA100
 from base64 import b64decode
 from importlib.util import find_spec
-from typing import Any, Optional, Type, Union, cast
+from typing import Any, Optional, Union, cast
 from uuid import UUID
 
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
@@ -34,7 +34,7 @@ class GUID(TypeDecorator[UUID]):
     cache_ok = True
 
     @property
-    def python_type(self) -> Type[UUID]:
+    def python_type(self) -> type[UUID]:
         return UUID
 
     def __init__(self, *args: Any, binary: bool = True, **kwargs: Any) -> None:

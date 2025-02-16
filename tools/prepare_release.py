@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import datetime
@@ -10,8 +8,9 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
+from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Generator
+from typing import Optional
 
 import click
 import httpx
@@ -27,8 +26,8 @@ class PullRequest(msgspec.Struct, kw_only=True):
     number: int
     body: str
     created_at: str
-    user: RepoUser
-    merge_commit_sha: str | None = None
+    user: "RepoUser"
+    merge_commit_sha: Optional[str] = None
 
 
 class Comp(msgspec.Struct):
@@ -73,7 +72,7 @@ class ReleaseInfo:
         return f"https://github.com/litestar-org/advanced-alchemy/compare/{self.base}...{self.release_tag}"
 
 
-def _pr_number_from_commit(comp: Comp) -> int:
+def _pr_number_from_commit(comp: Comp) -> Optional[int]:
     # this is an ugly hack, but it appears to actually be the most reliably way to
     # extract the most "reliable" way to extract the info we want from GH ¯\_(ツ)_/¯
     message_head = comp.commit.message.split("\n\n")[0]
@@ -129,7 +128,7 @@ class _Thing:
             for edge in data["data"]["repository"]["pullRequest"]["closingIssuesReferences"]["edges"]
         ]
 
-    async def _get_pr_info_for_pr(self, number: int) -> PRInfo | None:
+    async def _get_pr_info_for_pr(self, number: int) -> Optional[PRInfo]:
         res = await self._api_client.get(f"/pulls/{number}")
         if res.is_client_error:
             click.secho(
@@ -168,7 +167,7 @@ class _Thing:
         pr_numbers = list(filter(None, (_pr_number_from_commit(c) for c in compares)))
         pulls = await asyncio.gather(*map(self._get_pr_info_for_pr, pr_numbers))
 
-        prs = defaultdict(list)
+        prs: dict[str, list[PRInfo]] = defaultdict(list)
         for pr in pulls:
             if not pr:
                 continue
@@ -268,7 +267,7 @@ class ChangelogEntryWriter:
                 self.add_line(line)
 
     @contextlib.contextmanager
-    def directive(self, name: str, arg: str | None = None, **options: str) -> Generator[None, None, None]:
+    def directive(self, name: str, arg: Optional[str] = None, **options: str) -> Generator[None, None, None]:
         self.add_line(f".. {name}:: {arg or ''}")
         self._level += 1
         for key, value in options.items():
@@ -403,7 +402,12 @@ def update_pyproject_version(new_version: str) -> None:
 )
 @click.option("-c", "--create-draft-release", is_flag=True, help="Create draft release on GitHub")
 def cli(
-    base: str | None, branch: str, version: str, gh_token: str | None, interactive: bool, create_draft_release: bool
+    base: Optional[str],
+    branch: str,
+    version: str,
+    gh_token: Optional[str],
+    interactive: bool,
+    create_draft_release: bool,
 ) -> None:
     if gh_token is None:
         gh_token = _get_gh_token()

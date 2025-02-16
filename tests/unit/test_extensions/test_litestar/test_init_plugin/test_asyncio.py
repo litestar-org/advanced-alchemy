@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -35,7 +35,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict
+    from typing import Any, Callable
 
     from litestar.types import Scope
 
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 def test_default_before_send_handler() -> None:
     """Test default_before_send_handler."""
 
-    captured_scope_state: Dict[str, Any] | None = None
+    captured_scope_state: dict[str, Any] | None = None
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     plugin = SQLAlchemyInitPlugin(config=config)
 
@@ -62,7 +62,7 @@ def test_default_before_send_handler() -> None:
 def test_default_before_send_handle_multi() -> None:
     """Test default_before_send_handler."""
 
-    captured_scope_state: Dict[str, Any] | None = None
+    captured_scope_state: dict[str, Any] | None = None
     config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",

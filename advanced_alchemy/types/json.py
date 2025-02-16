@@ -1,5 +1,5 @@
 # ruff: noqa: FA100
-from typing import Any, Dict, Optional, Type, Union, cast
+from typing import Any, Optional, Union, cast
 
 from sqlalchemy import text, util
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
@@ -13,7 +13,7 @@ from advanced_alchemy._serialization import decode_json, encode_json
 __all__ = ("ORA_JSONB",)
 
 
-class ORA_JSONB(TypeDecorator[Dict[str, Any]], SchemaType):  # noqa: N801
+class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
     """Oracle Binary JSON type.
 
     JsonB = _JSON().with_variant(PG_JSONB, "postgresql").with_variant(ORA_JSONB, "oracle")
@@ -24,7 +24,7 @@ class ORA_JSONB(TypeDecorator[Dict[str, Any]], SchemaType):  # noqa: N801
     cache_ok = True
 
     @property
-    def python_type(self) -> Type[Dict[str, Any]]:
+    def python_type(self) -> type[dict[str, Any]]:
         return dict
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -49,7 +49,7 @@ class ORA_JSONB(TypeDecorator[Dict[str, Any]], SchemaType):  # noqa: N801
     def _should_create_constraint(self, compiler: Any, **kw: Any) -> bool:
         return cast("bool", compiler.dialect.name == "oracle")
 
-    def _variant_mapping_for_set_table(self, column: Any) -> Optional[Dict[str, Any]]:
+    def _variant_mapping_for_set_table(self, column: Any) -> Optional[dict[str, Any]]:
         if column.type._variant_mapping:  # noqa: SLF001
             variant_mapping = dict(column.type._variant_mapping)  # noqa: SLF001
             variant_mapping["_default"] = column.type

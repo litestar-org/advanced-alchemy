@@ -6,20 +6,19 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
-    Dict,
-    List,
-    Sequence,
     TypeVar,
     Union,
     cast,
     overload,
 )
 
-from typing_extensions import Annotated, TypeAlias, TypeGuard
+from typing_extensions import TypeAlias, TypeGuard
 
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service._typing import (
@@ -64,13 +63,13 @@ PydanticOrMsgspecT = SupportedSchemaModel
 
 :class:`msgspec.Struct` or :class:`pydantic.BaseModel`
 """
-ModelDictT: TypeAlias = Union[Dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT]]
+ModelDictT: TypeAlias = Union[dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT]]
 """Type alias for model dictionaries.
 
 Represents:
 - :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` |  :class:`pydantic.BaseModel` | :class:`litestar.dto.data_structures.DTOData` | :class:`~advanced_alchemy.base.ModelProtocol`
 """
-ModelDictListT: TypeAlias = Sequence[Union[Dict[str, Any], ModelT, SupportedSchemaModel]]
+ModelDictListT: TypeAlias = Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]]
 """Type alias for model dictionary lists.
 
 A list or sequence of any of the following:
@@ -78,8 +77,8 @@ A list or sequence of any of the following:
 
 """
 BulkModelDictT: TypeAlias = Union[
-    Sequence[Union[Dict[str, Any], ModelT, SupportedSchemaModel]],
-    DTOData[List[ModelT]],
+    Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]],
+    DTOData[list[ModelT]],
 ]
 """Type alias for bulk model dictionaries.
 

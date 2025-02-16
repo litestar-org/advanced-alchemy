@@ -6,9 +6,10 @@ should be a SQLAlchemy model.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import partial
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, Callable, List, Sequence, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, cast, overload
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
@@ -200,7 +201,7 @@ class ResultConverter:
             return OffsetPagination[ModelDTOT](
                 items=convert(
                     obj=data,
-                    type=List[schema_type],  # type: ignore[valid-type]
+                    type=list[schema_type],  # type: ignore[valid-type]
                     from_attributes=True,
                     dec_hook=partial(
                         _default_msgspec_deserializer,
@@ -224,7 +225,7 @@ class ResultConverter:
             total = total if total else len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
             return OffsetPagination[ModelDTOT](
-                items=get_type_adapter(List[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
+                items=get_type_adapter(list[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
                 limit=limit_offset.limit,
                 offset=limit_offset.offset,
                 total=total,

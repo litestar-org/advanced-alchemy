@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import TypeAlias, TypeVar
@@ -38,7 +38,7 @@ SelectT = TypeVar("SelectT", bound="Select[Any]")
 
 :class:`~sqlalchemy.sql.Select`
 """
-RowT = TypeVar("RowT", bound=Tuple[Any, ...])
+RowT = TypeVar("RowT", bound=tuple[Any, ...])
 """Type variable for rows.
 
 :class:`~sqlalchemy.engine.Row`
@@ -71,7 +71,7 @@ SQLAlchemyAsyncRepositoryT = TypeVar(
 
 :class:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository`
 """
-OrderingPair: TypeAlias = Tuple[Union[str, InstrumentedAttribute[Any]], bool]
+OrderingPair: TypeAlias = tuple[Union[str, InstrumentedAttribute[Any]], bool]
 """Type alias for ordering pairs.
 
 A tuple of (column, ascending) where:

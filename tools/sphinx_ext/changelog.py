@@ -1,16 +1,15 @@
-from __future__ import annotations
-
+from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union, cast
 
 from docutils import nodes
 from docutils.parsers.rst import directives
-from sphinx.domains.std import StandardDomain
+from sphinx.application import Sphinx
 from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import clean_astext
 
 if TYPE_CHECKING:
-    from sphinx.application import Sphinx
+    from sphinx.domains.std import StandardDomain
 
 _GH_BASE_URL = "https://github.com/litestar-org/advanced-alchemy"
 
@@ -20,14 +19,16 @@ def _parse_gh_reference(raw: str, type_: Literal["issues", "pull"]) -> list[str]
 
 
 class Change(nodes.General, nodes.Element):
-    pass
+    """A change node for the changelog."""
 
 
 class ChangeDirective(SphinxDirective):
+    """A directive for the changelog."""
+
     required_arguments = 1
     has_content = True
     final_argument_whitespace = True
-    option_spec = {
+    option_spec: ClassVar[Optional[dict[str, Callable[[str], Any]]]] = {
         "type": partial(directives.choice, values=("feature", "bugfix", "misc")),
         "breaking": directives.flag,
         "issue": directives.unchanged,
@@ -35,6 +36,11 @@ class ChangeDirective(SphinxDirective):
     }
 
     def run(self) -> list[nodes.Node]:
+        """Run the directive.
+
+        Returns:
+            A list of nodes.
+        """
         self.assert_has_content()
 
         change_type = self.options.get("type", "misc").lower()
@@ -43,7 +49,7 @@ class ChangeDirective(SphinxDirective):
         change_node = nodes.container("\n".join(self.content))
         change_node.attributes["classes"].append("changelog-change")
 
-        self.state.nested_parse(self.content, self.content_offset, change_node)
+        self.state.nested_parse(self.content, self.content_offset, change_node)  # pyright: ignore[reportUnknownMemberType]
 
         reference_links = [
             *_parse_gh_reference(self.options.get("issue", ""), "issues"),
@@ -68,7 +74,7 @@ class ChangeDirective(SphinxDirective):
                 title=self.state.inliner.parse(title, 0, self.state.memo, change_node)[0],
                 change_type=change_type,
                 breaking="breaking" in self.options,
-            )
+            ),
         ]
 
 
@@ -91,9 +97,9 @@ class ChangelogDirective(SphinxDirective):
             changelog_node += nodes.strong("", "Released: ")
             changelog_node += nodes.Text(release_date)
 
-        self.state.nested_parse(self.content, self.content_offset, changelog_node)
+        self.state.nested_parse(self.content, self.content_offset, changelog_node)  # pyright: ignore[reportUnknownMemberType]
 
-        domain = cast(StandardDomain, self.env.get_domain("std"))
+        domain = cast("StandardDomain", self.env.get_domain("std"))
 
         change_group_lists = {
             "feature": nodes.definition_list(),
@@ -140,12 +146,12 @@ class ChangelogDirective(SphinxDirective):
 
             list_item += nodes.definition("", change_node.children[0])
 
-            nodes_to_remove.append(change_node)
+            nodes_to_remove.append(change_node)  # pyright: ignore[reportUnknownMemberType]
 
             change_group_lists[change_type] += list_item
 
-        for node in nodes_to_remove:
-            changelog_node.remove(node)
+        for node in nodes_to_remove:  # pyright: ignore[reportUnknownVariableType]
+            changelog_node.remove(node)  # pyright: ignore[reportUnknownArgumentType]
 
         for change_group_type, change_group_list in change_group_lists.items():
             if not change_group_list.children:
@@ -165,7 +171,7 @@ class ChangelogDirective(SphinxDirective):
         return [section_target, changelog_node]
 
 
-def setup(app: Sphinx) -> dict[str, str]:
+def setup(app: Sphinx) -> dict[str, Union[str, bool]]:
     app.add_directive("changelog", ChangelogDirective)
     app.add_directive("change", ChangeDirective)
 

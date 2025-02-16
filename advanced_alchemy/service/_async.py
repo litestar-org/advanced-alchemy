@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, AsyncIterator, ClassVar, Generic, Iterable, List, Optional, Sequence, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Optional, cast
 
 from sqlalchemy import Select
 from typing_extensions import Self
@@ -32,6 +32,8 @@ from advanced_alchemy.service.typing import (
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Iterable, Sequence
+
     from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
@@ -612,7 +614,7 @@ class SQLAlchemyAsyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             await self.repository.add_many(
-                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -719,7 +721,7 @@ class SQLAlchemyAsyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             await self.repository.update_many(
-                cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -822,7 +824,7 @@ class SQLAlchemyAsyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             await self.repository.upsert_many(
-                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_expunge=auto_expunge,
                 auto_commit=auto_commit,
                 no_merge=no_merge,
