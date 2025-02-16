@@ -21,6 +21,7 @@ from typing import (
 from sqlalchemy import (
     Delete,
     Result,
+    Row,
     RowMapping,
     Select,
     TextClause,
@@ -2181,7 +2182,7 @@ class SQLAlchemySyncQueryRepository:
                 instances.append(instance)
             return instances, count
 
-    def list(self, statement: Select[Any], **kwargs: Any) -> list[RowMapping]:
+    def list(self, statement: Select[Any], **kwargs: Any) -> list[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -2194,7 +2195,7 @@ class SQLAlchemySyncQueryRepository:
         with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = self.execute(statement)
-            return list(result.scalars())
+            return list(result.all())
 
     def _filter_statement_by_kwargs(
         self,
