@@ -1,16 +1,12 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Dict, List, TypeVar, no_type_check
+from typing import Any, TypeVar, no_type_check
 
 from sqlalchemy.ext.mutable import Mutable
-
-if TYPE_CHECKING:
-    from typing_extensions import Self
+from typing_extensions import Self
 
 T = TypeVar("T", bound=Any)
 
 
-class MutableDict(Mutable, Dict[str, Any]):
+class MutableDict(Mutable, dict[str, Any]):
     @classmethod
     def coerce(cls, key: Any, value: Any) -> Any:
         """Convert plain dictionaries to MutableDict."""
@@ -36,7 +32,7 @@ class MutableDict(Mutable, Dict[str, Any]):
         self.changed()
 
 
-class MutableList(Mutable, List[T]):
+class MutableList(Mutable, list[T]):
     """A list type that implements :class:`Mutable`.
 
     The :class:`MutableList` object implements a list that will
@@ -64,12 +60,12 @@ class MutableList(Mutable, List[T]):
         return value  # pyright: ignore[reportUnknownVariableType]
 
     @no_type_check
-    def __reduce_ex__(self, proto: Any) -> tuple[type[MutableList[T]], tuple[list[T]]]:
+    def __reduce_ex__(self, proto: Any) -> "tuple[type[MutableList[T]], tuple[list[T]]]":
         return self.__class__, (list(self),)
 
     # needed for backwards compatibility with
     # older pickles
-    def __getstate__(self) -> tuple[list[T], list[T]]:
+    def __getstate__(self) -> "tuple[list[T], list[T]]":
         return list(self), self._removed
 
     def __setstate__(self, state: Any) -> None:

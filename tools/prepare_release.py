@@ -163,7 +163,7 @@ class _Thing:
     async def get_prs(self) -> dict[str, list[PRInfo]]:
         res = await self._api_client.get(f"/compare/{self._base}...{self._release_branch}")
         res.raise_for_status()
-        compares = msgspec.convert(res.json()["commits"], List[Comp])
+        compares = msgspec.convert(res.json()["commits"], list[Comp])
         pr_numbers = list(filter(None, (_pr_number_from_commit(c) for c in compares)))
         pulls = await asyncio.gather(*map(self._get_pr_info_for_pr, pr_numbers))
 

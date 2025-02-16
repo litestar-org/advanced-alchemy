@@ -115,7 +115,7 @@ ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
 ]
 
 
-FileDocumentModel = Type[Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]]
+FileDocumentModel = type[Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]]
 AnyFileDocument = Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]
 FileDocumentRepository = SQLAlchemyAsyncRepository[AnyFileDocument]
 FileDocumentService = SQLAlchemyAsyncRepositoryService[AnyFileDocument]
