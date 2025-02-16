@@ -37,7 +37,7 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[Optional[datetime.date]]  # noqa: UP007
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
