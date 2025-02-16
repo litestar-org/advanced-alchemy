@@ -396,7 +396,7 @@ async def test_dto_mapped_union_type(
         """
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Type, Union
+from typing import Dict, List, Set, Tuple, Type, Union, Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -409,7 +409,7 @@ class Base(DeclarativeBase):
 
 class A(Base):
     __tablename__ = "a"
-    a: Mapped[str | None]
+    a: Mapped[Optional[str]]
 
 dto_type = SQLAlchemyDTO[A]
     """,

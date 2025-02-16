@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any, Callable, Optional
 from uuid import UUID
 
 import pytest
@@ -92,7 +92,7 @@ class Book(Base):
     bar: Mapped[str] = mapped_column(default="Hello")
     SPAM: Mapped[str] = mapped_column(default="Bye")
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")
-    number_of_reviews: Mapped[int | None] = column_property(
+    number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
@@ -211,7 +211,7 @@ model_with_func_query = select(ConcreteBase, func_result_query.label("func_resul
 
 class ModelWithFunc(Base):
     __table__ = model_with_func_query
-    func_result: Mapped[int | None] = column_property(model_with_func_query.c.func_result)
+    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)  # noqa: UP007
 
 
 def test_model_using_func() -> None:
