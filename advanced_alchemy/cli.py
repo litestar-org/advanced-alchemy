@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence, Union, cast
+from typing import TYPE_CHECKING, Union, cast
 
 if TYPE_CHECKING:
     from click import Group

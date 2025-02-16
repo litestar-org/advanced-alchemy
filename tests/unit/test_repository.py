@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import datetime
-from collections.abc import Collection
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Generator, Union, cast
+from collections.abc import AsyncGenerator, Collection, Generator
+from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 

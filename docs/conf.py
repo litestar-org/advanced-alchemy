@@ -147,6 +147,7 @@ autodoc_type_aliases = {
     "AsyncEngine": "sqlalchemy.ext.asyncio.AsyncEngine",
     "Engine": "sqlalchemy.engine.Engine",
     "sqlalchemy": "sqlalchemy",
+    "RenameStrategy": "litestar.dto.types.RenameStrategy",
 }
 autodoc_mock_imports = [
     "alembic",

@@ -1,4 +1,4 @@
-# ruff: noqa: UP006, FA100
+# ruff: noqa: FA100
 """This example demonstrates how to use the FastAPI CLI to manage the database."""
 
 # /// script
@@ -9,7 +9,8 @@
 # ]
 # ///
 import datetime
-from typing import AsyncGenerator, List, Optional
+from collections.abc import AsyncGenerator
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -17,7 +18,6 @@ from pydantic import BaseModel
 from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing_extensions import Annotated
 
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
@@ -47,7 +47,7 @@ class AuthorModel(base.UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[datetime.date]]
-    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="selectin")
+    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2

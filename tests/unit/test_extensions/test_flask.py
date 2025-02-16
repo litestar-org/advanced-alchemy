@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator, Sequence
 from pathlib import Path
-from typing import Generator, Sequence
 
 import pytest
 from flask import Flask, Response
@@ -116,8 +116,9 @@ def test_sync_extension_init_with_app(setup_database: Path) -> None:
 def test_sync_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
-    with app.app_context(), pytest.raises(
-        ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
+    with (
+        app.app_context(),
+        pytest.raises(ImproperConfigurationError, match="Advanced Alchemy extension is already registered"),
     ):
         config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
@@ -167,8 +168,9 @@ def test_async_extension_init_with_app(setup_database: Path) -> None:
 def test_async_extension_multiple_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
-    with app.app_context(), pytest.raises(
-        ImproperConfigurationError, match="Advanced Alchemy extension is already registered"
+    with (
+        app.app_context(),
+        pytest.raises(ImproperConfigurationError, match="Advanced Alchemy extension is already registered"),
     ):
         config = SQLAlchemyAsyncConfig(
             connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async", metadata=metadata

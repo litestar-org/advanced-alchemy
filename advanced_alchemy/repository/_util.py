@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Protocol, Sequence, Union, cast, overload
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Protocol, Union, cast, overload
 
 from sqlalchemy import (
     Select,

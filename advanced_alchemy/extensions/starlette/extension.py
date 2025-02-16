@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import contextlib
+from collections.abc import AsyncGenerator, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
 from typing import (
     TYPE_CHECKING,
     Any,
-    AsyncGenerator,
     Callable,
-    Generator,
-    Sequence,
-    Union,
     overload,
 )
 
@@ -46,7 +43,7 @@ class AdvancedAlchemy:
         app: Starlette | None = None,
     ) -> None:
         self._config = config if isinstance(config, Sequence) else [config]
-        self._mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = self.map_configs()  # noqa: UP007
+        self._mapped_configs: dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = self.map_configs()
         self._app: Starlette | None = None
 
         if app is not None:
@@ -137,16 +134,16 @@ class AdvancedAlchemy:
         with contextlib.suppress(AttributeError, KeyError):
             delattr(self.app.state, "advanced_alchemy")
 
-    def map_configs(self) -> dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]:  # noqa: UP007
+    def map_configs(self) -> dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
         """Maps the configs to the session bind keys."""
-        mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = {}  # noqa: UP007
+        mapped_configs: dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = {}
         for config in self.config:
             if config.bind_key is None:
                 config.bind_key = "default"
             mapped_configs[config.bind_key] = config
         return mapped_configs
 
-    def get_config(self, key: str | None = None) -> Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]:  # noqa: UP007
+    def get_config(self, key: str | None = None) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig:
         """Get the config for the given key."""
         if key is None:
             key = "default"

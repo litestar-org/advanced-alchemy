@@ -5,11 +5,11 @@ import os
 import random
 import string
 import sys
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Sequence
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Sequence, Tuple, cast
+from typing import Any, Callable, cast
 from unittest.mock import ANY
 
 import pytest
@@ -65,7 +65,7 @@ def int_factory() -> Generator[Callable[[], int], None, None]:
 
 
 @pytest.fixture
-def expected_field_defs(int_factory: Callable[[], int]) -> Generator[List[DTOFieldDefinition], None, None]:
+def expected_field_defs(int_factory: Callable[[], int]) -> Generator[list[DTOFieldDefinition], None, None]:
     yield [
         DTOFieldDefinition.from_field_definition(
             field_definition=FieldDefinition.from_kwarg(
@@ -184,22 +184,22 @@ def create_scope() -> Generator[Callable[..., Scope], None, None]:
         app: Litestar | None = None,
         asgi: ASGIVersion | None = None,
         auth: Any = None,
-        client: Tuple[str, int] | None = ("testclient", 50000),
-        extensions: Dict[str, Dict[object, object]] | None = None,
+        client: tuple[str, int] | None = ("testclient", 50000),
+        extensions: dict[str, dict[object, object]] | None = None,
         http_version: str = "1.1",
         path: str = "/",
-        path_params: Dict[str, str] | None = None,
+        path_params: dict[str, str] | None = None,
         query_string: str = "",
         root_path: str = "",
         route_handler: RouteHandlerType | None = None,
         scheme: str = "http",
-        server: Tuple[str, int | None] | None = ("testserver", 80),
+        server: tuple[str, int | None] | None = ("testserver", 80),
         session: ScopeSession | None = None,  # pyright: ignore[reportUnknownParameterType]
-        state: Dict[str, Any] | None = None,
+        state: dict[str, Any] | None = None,
         user: Any = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: dict[str, Any],
     ) -> Scope:
-        scope: Dict[str, Any] = {
+        scope: dict[str, Any] = {
             "app": app,
             "asgi": asgi or {"spec_version": "2.0", "version": "3.0"},
             "auth": auth,

@@ -6,12 +6,8 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
-    Iterable,
-    List,
     Literal,
     Protocol,
-    Sequence,
-    Tuple,
     cast,
     runtime_checkable,
 )
@@ -19,6 +15,7 @@ from typing import (
 from sqlalchemy import (
     Delete,
     Result,
+    Row,
     RowMapping,
     Select,
     TextClause,
@@ -47,6 +44,8 @@ from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
@@ -1070,7 +1069,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             instance = cast(
-                "Result[Tuple[ModelT]]",
+                "Result[tuple[ModelT]]",
                 (await self._execute(statement, uniquify=loader_options_have_wildcard)),
             ).scalar_one_or_none()
             if instance:
@@ -1901,7 +1900,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("List[ModelT]", instances)
+            return cast("list[ModelT]", instances)
 
     @classmethod
     async def check_health(cls, session: AsyncSession | async_scoped_session[AsyncSession]) -> bool:
@@ -2184,7 +2183,7 @@ class SQLAlchemyAsyncQueryRepository:
                 instances.append(instance)
             return instances, count
 
-    async def list(self, statement: Select[Any], **kwargs: Any) -> list[RowMapping]:
+    async def list(self, statement: Select[Any], **kwargs: Any) -> list[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -2197,7 +2196,7 @@ class SQLAlchemyAsyncQueryRepository:
         with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
-            return list(result.scalars())
+            return list(result.all())
 
     def _filter_statement_by_kwargs(
         self,

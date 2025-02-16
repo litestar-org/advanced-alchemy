@@ -10,18 +10,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from functools import cached_property
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Generic,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Optional, cast
 
 from sqlalchemy import Select
 from typing_extensions import Self
@@ -47,6 +36,8 @@ from advanced_alchemy.service.typing import (
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
+
     from sqlalchemy import Select
     from sqlalchemy.orm import InstrumentedAttribute, Session
     from sqlalchemy.orm.scoping import scoped_session
@@ -626,7 +617,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.add_many(
-                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -733,7 +724,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.update_many(
-                cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -836,7 +827,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.upsert_many(
-                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_expunge=auto_expunge,
                 auto_commit=auto_commit,
                 no_merge=no_merge,
