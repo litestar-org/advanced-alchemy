@@ -6,7 +6,7 @@ including both synchronous and asynchronous database configurations.
 
 import contextlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from click import echo
 from sqlalchemy.exc import OperationalError
@@ -142,7 +142,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         if self.create_all:
             await self.create_all_metadata()
 
-    def create_session_maker(self) -> "Callable[[], AsyncSession]":
+    def create_session_maker(self) -> Callable[[], "AsyncSession"]:
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -206,7 +206,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             starlette.responses.Response: The HTTP response.
         """
         response = await call_next(request)
-        session: Optional[AsyncSession] = getattr(request.state, self.session_key, None)
+        session = cast("Optional[AsyncSession]", getattr(request.state, self.session_key, None))
         if session is not None:
             await self.session_handler(session=session, request=request, response=response)
 
@@ -288,7 +288,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.create_all:
             await self.create_all_metadata()
 
-    def create_session_maker(self) -> "Callable[[], Session]":
+    def create_session_maker(self) -> Callable[[], "Session"]:
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -352,7 +352,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             starlette.responses.Response: The HTTP response.
         """
         response = await call_next(request)
-        session: Optional[Session] = getattr(request.state, self.session_key, None)
+        session = cast("Optional[Session]", getattr(request.state, self.session_key, None))
         if session is not None:
             await self.session_handler(session=session, request=request, response=response)
 

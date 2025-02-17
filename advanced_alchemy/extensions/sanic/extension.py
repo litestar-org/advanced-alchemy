@@ -1,8 +1,9 @@
 import asyncio
 from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, Protocol, Union, cast, overload
 
+from sanic import HTTPResponse, Request, Sanic
 from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from advanced_alchemy.config.common import EngineT, SessionMakerT, SessionT
 from advanced_alchemy.exceptions import MissingDependencyError
@@ -21,7 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover
     _default = Default()
 
 if TYPE_CHECKING:
-    from sanic import HTTPResponse, Request, Sanic
+    from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
     from sqlalchemy.orm import Session, sessionmaker
 
     from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
@@ -32,7 +33,7 @@ __all__ = ("AdvancedAlchemy", "CommitStrategyExecutor")
 
 
 class CommitStrategyExecutor(Protocol):
-    async def __call__(self, *, session: "Union[Session, AsyncSession]", response: "HTTPResponse") -> None: ...
+    async def __call__(self, *, session: Union["Session", "AsyncSession"], response: HTTPResponse) -> None: ...
 
 
 class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # type: ignore[no-untyped-call]  # pyright: ignore[reportGeneralTypeIssues,reportUntypedBaseClass]
@@ -57,11 +58,11 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
 
     @overload
     def __init__(
-        self: "AdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]]",
+        self: "AdvancedAlchemy['AsyncEngine', 'AsyncSession', 'async_sessionmaker[AsyncSession]']",
         *,
         sqlalchemy_config: "SQLAlchemyAsyncConfig",
-        autocommit: "Optional[CommitStrategy]" = None,
-        counters: "Union[Default, bool]" = _default,  # pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]
+        autocommit: Optional["CommitStrategy"] = None,
+        counters: Union[Default, bool] = _default,  # pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
@@ -69,11 +70,11 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
 
     @overload
     def __init__(
-        self: "AdvancedAlchemy[Engine, Session, sessionmaker[Session]]",
+        self: "AdvancedAlchemy['Engine', 'Session', 'sessionmaker[Session]']",
         *,
         sqlalchemy_config: "SQLAlchemySyncConfig",
-        autocommit: "Optional[CommitStrategy]" = None,
-        counters: "Union[Default, bool]" = _default,  # pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]
+        autocommit: Optional["CommitStrategy"] = None,
+        counters: Union[Default, bool] = _default,  # pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
@@ -81,19 +82,24 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
 
     def __init__(
         self: (
-            "Union[AdvancedAlchemy[AsyncEngine, AsyncSession, async_sessionmaker[AsyncSession]], AdvancedAlchemy[Engine, Session, sessionmaker[Session]]]"
+            Union[
+                "AdvancedAlchemy['AsyncEngine', 'AsyncSession', 'async_sessionmaker[AsyncSession]']",
+                "AdvancedAlchemy['Engine', 'Session', 'sessionmaker[Session]']",
+            ]
         ),
         *,
-        sqlalchemy_config: "Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]",
-        autocommit: "Optional[CommitStrategy]" = None,
-        counters: "Union[Default, bool]" = _default,  # pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]
+        sqlalchemy_config: Union["SQLAlchemySyncConfig", "SQLAlchemyAsyncConfig"],
+        autocommit: Optional["CommitStrategy"] = None,
+        counters: Union[Default, bool] = _default,  # pyright: ignore[reportInvalidTypeForm,reportUnknownParameterType]
         session_maker_key: str = "sessionmaker",
         engine_key: str = "engine",
         session_key: str = "session",
     ) -> None:
         if not SANIC_INSTALLED:  # pragma: no cover
             msg = "Could not locate either Sanic or Sanic Extensions. Both libraries must be installed to use Advanced Alchemy. Try: pip install sanic[ext]"
-            raise MissingDependencyError(msg)
+            raise MissingDependencyError(
+                msg,
+            )
         self.sqlalchemy_config = sqlalchemy_config
         self.engine_key = engine_key
         self.session_maker_key = session_maker_key
@@ -116,7 +122,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
 
         self.app: Sanic  # pyright: ignore[reportMissingTypeArgument]
 
-    async def _do_commit(self, session: "Union[Session, AsyncSession]") -> None:  # pragma: no cover
+    async def _do_commit(self, session: Union["Session", "AsyncSession"]) -> None:  # pragma: no cover
         """Commit the current transaction.
 
         Args:
@@ -129,7 +135,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         else:
             await session.commit()
 
-    async def _do_rollback(self, session: "Union[Session, AsyncSession]") -> None:  # pragma: no cover
+    async def _do_rollback(self, session: Union["Session", "AsyncSession"]) -> None:  # pragma: no cover
         """Rollback the current transaction.
 
         Args:
@@ -142,7 +148,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         else:
             await session.rollback()
 
-    async def _do_close(self, session: "Union[Session, AsyncSession]") -> None:  # pragma: no cover
+    async def _do_close(self, session: Union["Session", "AsyncSession"]) -> None:  # pragma: no cover
         """Close the session.
 
         Args:
@@ -156,7 +162,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
             await session.close()
 
     async def _commit_strategy_always(
-        self, *, session: "Union[Session, AsyncSession]", response: "HTTPResponse"
+        self, *, session: Union["Session", "AsyncSession"], response: HTTPResponse
     ) -> None:  # pragma: no cover
         """Commit strategy that always commits the session.
 
@@ -169,7 +175,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         await self._do_commit(session)
 
     async def _commit_strategy_match_status(
-        self, *, session: "Union[Session, AsyncSession]", response: "HTTPResponse"
+        self, *, session: Union["Session", "AsyncSession"], response: HTTPResponse
     ) -> None:  # pragma: no cover
         """Commit strategy that commits based on the response status.
 
@@ -185,7 +191,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
             await self._do_rollback(session)
 
     async def session_handler(
-        self, session: "Union[Session, AsyncSession]", request: "Request", response: "HTTPResponse"
+        self, session: Union["Session", "AsyncSession"], request: Request, response: HTTPResponse
     ) -> None:  # pragma: no cover
         """Handle the session lifecycle based on the commit strategy.
 
@@ -204,7 +210,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
             await self._do_close(session)
             delattr(request.ctx, self.session_key)
 
-    def get_engine(self) -> "EngineT":  # pragma: no cover
+    def get_engine(self) -> EngineT:  # pragma: no cover
         """Retrieve the SQLAlchemy engine from the app context.
 
         Returns:
@@ -212,20 +218,20 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         """
         engine = getattr(self.app.ctx, self.engine_key, None)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         if engine is not None:
-            return cast("EngineT", engine)
-        engine = cast("EngineT", self.engine)
+            return cast(EngineT, engine)
+        engine = cast(EngineT, self.engine)
         setattr(self.app.ctx, self.engine_key, engine)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         return engine
 
-    def get_sessionmaker(self) -> "Callable[[], SessionT]":
+    def get_sessionmaker(self) -> Callable[[], SessionT]:
         """Retrieve the session maker.
 
         Returns:
             Callable[[], SessionT]: A callable that returns a new session.
         """
-        return cast("Callable[[], SessionT]", self.session_maker)
+        return cast(Callable[[], SessionT], self.session_maker)
 
-    def get_session(self, request: "Request") -> "SessionT":
+    def get_session(self, request: Request) -> SessionT:
         """Retrieve or create a session for the current request.
 
         Args:
@@ -236,13 +242,13 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         """
         session = getattr(request.ctx, self.session_key, None)
         if session is not None:  # pragma: no cover
-            return cast("SessionT", session)
+            return cast(SessionT, session)
 
         session = cast("SessionT", self.session_maker())
         setattr(request.ctx, self.session_key, session)
         return session
 
-    def get_engine_from_request(self, request: "Request") -> "EngineT":
+    def get_engine_from_request(self, request: Request) -> EngineT:
         """Retrieve the engine from the request context.
 
         Args:
@@ -253,7 +259,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         """
         return cast("EngineT", getattr(request.app.ctx, self.engine_key, None))  # pragma: no cover
 
-    def get_sessionmaker_from_request(self, request: "Request") -> "SessionMakerT":
+    def get_sessionmaker_from_request(self, request: Request) -> SessionMakerT:
         """Retrieve the session maker from the request context.
 
         Args:
@@ -264,7 +270,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         """
         return cast("SessionMakerT", getattr(request.app.ctx, self.session_maker_key, None))  # pragma: no cover
 
-    def get_session_from_request(self, request: "Request") -> "SessionT":
+    def get_session_from_request(self, request: Request) -> SessionT:
         """Retrieve the session from the request context.
 
         Args:
@@ -275,7 +281,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         """
         return cast("SessionT", getattr(request.ctx, self.session_key, None))  # pragma: no cover
 
-    def startup(self, bootstrap: "Extend") -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
+    def startup(self, bootstrap: Extend) -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
         """Advanced Alchemy Sanic extension startup hook.
 
         Args:
@@ -312,14 +318,14 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
                 delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
 
         @self.app.middleware("request")  # pyright: ignore[reportUnknownMemberType]
-        async def on_request(request: "Request") -> None:  # pyright: ignore[reportUnusedFunction]
-            session: Optional[Union[Session, AsyncSession]] = getattr(request.ctx, self.session_key, None)
+        async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
+            session = cast("Optional[Union['Session', 'AsyncSession']]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 session = self.get_session(request)
                 setattr(request.ctx, self.session_key, session)
 
         @self.app.middleware("response")  # type: ignore[arg-type]
-        async def on_response(request: "Request", response: "HTTPResponse") -> None:  # pyright: ignore[reportUnusedFunction]
-            session: Optional[Union[Session, AsyncSession]] = getattr(request.ctx, self.session_key, None)
+        async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
+            session = cast("Optional[Union['Session', 'AsyncSession']]", getattr(request.ctx, self.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
