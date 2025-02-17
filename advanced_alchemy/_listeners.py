@@ -1,7 +1,5 @@
 """Application ORM configuration."""
 
-from __future__ import annotations
-
 import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -9,7 +7,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
-def touch_updated_timestamp(session: Session, *_: Any) -> None:
+def touch_updated_timestamp(session: "Session", *_: Any) -> None:
     """Set timestamp on update.
 
     Called from SQLAlchemy's

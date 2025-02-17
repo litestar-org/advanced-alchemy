@@ -11,14 +11,14 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlc
 
 
 async def test_sync_db_session(sync_sqlalchemy_plugin: SQLAlchemyPlugin) -> None:
-    config = cast("SQLAlchemySyncConfig", sync_sqlalchemy_plugin.config)
+    config = cast("SQLAlchemySyncConfig", sync_sqlalchemy_plugin.config[0])
 
     with config.get_session() as session:
         assert isinstance(session, Session)
 
 
 async def test_async_db_session(async_sqlalchemy_plugin: SQLAlchemyPlugin) -> None:
-    config = cast("SQLAlchemyAsyncConfig", async_sqlalchemy_plugin.config)
+    config = cast("SQLAlchemyAsyncConfig", async_sqlalchemy_plugin.config[0])
 
     async with config.get_session() as session:
         assert isinstance(session, AsyncSession)
