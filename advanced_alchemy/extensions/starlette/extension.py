@@ -1,5 +1,5 @@
 # ruff: noqa: ARG001
-from __future__ import annotations
+
 
 import contextlib
 from collections.abc import AsyncGenerator, Generator, Sequence
@@ -8,11 +8,15 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Optional,
+    Union,
     overload,
 )
 
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import Session
 from starlette.applications import Starlette
-from starlette.requests import Request  # noqa: TC002
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.starlette.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -22,6 +26,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import Session
     from starlette.applications import Starlette
+    from starlette.requests import Request
 
 
 class AdvancedAlchemy:
@@ -39,23 +44,23 @@ class AdvancedAlchemy:
 
     def __init__(
         self,
-        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
-        app: Starlette | None = None,
+        config: "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig, Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]]",
+        app: "Optional[Starlette]" = None,
     ) -> None:
         self._config = config if isinstance(config, Sequence) else [config]
-        self._mapped_configs: dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = self.map_configs()
-        self._app: Starlette | None = None
+        self._mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = self.map_configs()
+        self._app: Optional[Starlette] = None
 
         if app is not None:
             self.init_app(app)
 
     @property
-    def config(self) -> Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
+    def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
         """Current Advanced Alchemy configuration."""
 
         return self._config
 
-    def init_app(self, app: Starlette) -> None:
+    def init_app(self, app: "Starlette") -> None:
         """Initializes the Starlette application with SQLAlchemy engine and sessionmaker.
 
         Sets up middleware and shutdown handlers for managing the database engine.
@@ -77,14 +82,14 @@ class AdvancedAlchemy:
         original_lifespan = app.router.lifespan_context
 
         @asynccontextmanager
-        async def wrapped_lifespan(app: Starlette) -> AsyncGenerator[Any, None]:  # pragma: no cover
+        async def wrapped_lifespan(app: "Starlette") -> "AsyncGenerator[Any, None]":  # pragma: no cover
             async with self.lifespan(app), original_lifespan(app) as state:
                 yield state
 
         app.router.lifespan_context = wrapped_lifespan
 
     @asynccontextmanager
-    async def lifespan(self, app: Starlette) -> AsyncGenerator[Any, None]:  # pragma: no cover
+    async def lifespan(self, app: "Starlette") -> "AsyncGenerator[Any, None]":  # pragma: no cover
         """Context manager for lifespan events.
 
         Args:
@@ -100,7 +105,7 @@ class AdvancedAlchemy:
             await self.on_shutdown()
 
     @property
-    def app(self) -> Starlette:  # pragma: no cover
+    def app(self) -> "Starlette":  # pragma: no cover
         """Returns the Starlette application instance.
 
         Raises:
@@ -134,16 +139,16 @@ class AdvancedAlchemy:
         with contextlib.suppress(AttributeError, KeyError):
             delattr(self.app.state, "advanced_alchemy")
 
-    def map_configs(self) -> dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
+    def map_configs(self) -> "dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
         """Maps the configs to the session bind keys."""
-        mapped_configs: dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = {}
+        mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = {}
         for config in self.config:
             if config.bind_key is None:
                 config.bind_key = "default"
             mapped_configs[config.bind_key] = config
         return mapped_configs
 
-    def get_config(self, key: str | None = None) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig:
+    def get_config(self, key: "Optional[str]" = None) -> "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]":
         """Get the config for the given key."""
         if key is None:
             key = "default"
@@ -155,7 +160,7 @@ class AdvancedAlchemy:
             raise ImproperConfigurationError(msg)
         return config
 
-    def get_async_config(self, key: str | None = None) -> SQLAlchemyAsyncConfig:
+    def get_async_config(self, key: "Optional[str]" = None) -> "SQLAlchemyAsyncConfig":
         """Get the async config for the given key."""
         config = self.get_config(key)
         if not isinstance(config, SQLAlchemyAsyncConfig):  # pragma: no cover
@@ -163,7 +168,7 @@ class AdvancedAlchemy:
             raise ImproperConfigurationError(msg)
         return config
 
-    def get_sync_config(self, key: str | None = None) -> SQLAlchemySyncConfig:
+    def get_sync_config(self, key: "Optional[str]" = None) -> "SQLAlchemySyncConfig":
         """Get the sync config for the given key."""
         config = self.get_config(key)
         if not isinstance(config, SQLAlchemySyncConfig):  # pragma: no cover
@@ -173,15 +178,15 @@ class AdvancedAlchemy:
 
     @asynccontextmanager
     async def with_async_session(
-        self, key: str | None = None
-    ) -> AsyncGenerator[AsyncSession, None]:  # pragma: no cover
+        self, key: "Optional[str]" = None
+    ) -> "AsyncGenerator[AsyncSession, None]":  # pragma: no cover
         """Context manager for getting an async session."""
         config = self.get_async_config(key)
         async with config.get_session() as session:
             yield session
 
     @contextmanager
-    def with_sync_session(self, key: str | None = None) -> Generator[Session, None]:  # pragma: no cover
+    def with_sync_session(self, key: "Optional[str]" = None) -> "Generator[Session, None]":  # pragma: no cover
         """Context manager for getting a sync session."""
         config = self.get_sync_config(key)
         with config.get_session() as session:
@@ -189,17 +194,17 @@ class AdvancedAlchemy:
 
     @overload
     @staticmethod
-    def _get_session_from_request(request: Request, config: SQLAlchemyAsyncConfig) -> AsyncSession: ...
+    def _get_session_from_request(request: "Request", config: "SQLAlchemyAsyncConfig") -> "AsyncSession": ...
 
     @overload
     @staticmethod
-    def _get_session_from_request(request: Request, config: SQLAlchemySyncConfig) -> Session: ...
+    def _get_session_from_request(request: "Request", config: "SQLAlchemySyncConfig") -> "Session": ...
 
     @staticmethod
     def _get_session_from_request(
-        request: Request,
-        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig,  # pragma: no cover
-    ) -> Session | AsyncSession:  # pragma: no cover
+        request: "Request",
+        config: "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]",  # pragma: no cover
+    ) -> "Union[Session, AsyncSession]":  # pragma: no cover
         """Get the session for the given key."""
         session = getattr(request.state, config.session_key, None)
         if session is None:
@@ -207,88 +212,94 @@ class AdvancedAlchemy:
             setattr(request.state, config.session_key, session)
         return session
 
-    def get_session(self, request: Request, key: str | None = None) -> Session | AsyncSession:  # pragma: no cover
+    def get_session(
+        self, request: "Request", key: "Optional[str]" = None
+    ) -> "Union[Session, AsyncSession]":  # pragma: no cover
         """Get the session for the given key."""
         config = self.get_config(key)
         return self._get_session_from_request(request, config)
 
-    def get_async_session(self, request: Request, key: str | None = None) -> AsyncSession:  # pragma: no cover
+    def get_async_session(self, request: "Request", key: "Optional[str]" = None) -> "AsyncSession":  # pragma: no cover
         """Get the async session for the given key."""
         config = self.get_async_config(key)
         return self._get_session_from_request(request, config)
 
-    def get_sync_session(self, request: Request, key: str | None = None) -> Session:  # pragma: no cover
+    def get_sync_session(self, request: "Request", key: "Optional[str]" = None) -> "Session":  # pragma: no cover
         """Get the sync session for the given key."""
         config = self.get_sync_config(key)
         return self._get_session_from_request(request, config)
 
     def provide_session(
-        self, key: str | None = None
-    ) -> Callable[[Request], Session | AsyncSession]:  # pragma: no cover
+        self, key: "Optional[str]" = None
+    ) -> "Callable[[Request], Union[Session, AsyncSession]]":  # pragma: no cover
         """Get the session for the given key."""
         config = self.get_config(key)
 
-        def _get_session(request: Request) -> Session | AsyncSession:
+        def _get_session(request: "Request") -> "Union[Session, AsyncSession]":
             return self._get_session_from_request(request, config)
 
         return _get_session
 
-    def provide_async_session(self, key: str | None = None) -> Callable[[Request], AsyncSession]:  # pragma: no cover
+    def provide_async_session(
+        self, key: "Optional[str]" = None
+    ) -> "Callable[[Request], AsyncSession]":  # pragma: no cover
         """Get the async session for the given key."""
         config = self.get_async_config(key)
 
-        def _get_session(request: Request) -> AsyncSession:
+        def _get_session(request: "Request") -> "AsyncSession":
             return self._get_session_from_request(request, config)
 
         return _get_session
 
-    def provide_sync_session(self, key: str | None = None) -> Callable[[Request], Session]:  # pragma: no cover
+    def provide_sync_session(self, key: "Optional[str]" = None) -> "Callable[[Request], Session]":  # pragma: no cover
         """Get the sync session for the given key."""
         config = self.get_sync_config(key)
 
-        def _get_session(request: Request) -> Session:
+        def _get_session(request: "Request") -> "Session":
             return self._get_session_from_request(request, config)
 
         return _get_session
 
-    def get_engine(self, key: str | None = None) -> Engine | AsyncEngine:  # pragma: no cover
+    def get_engine(self, key: "Optional[str]" = None) -> "Union[Engine, AsyncEngine]":  # pragma: no cover
         """Get the engine for the given key."""
         config = self.get_config(key)
         return config.get_engine()
 
-    def get_async_engine(self, key: str | None = None) -> AsyncEngine:  # pragma: no cover
+    def get_async_engine(self, key: "Optional[str]" = None) -> "AsyncEngine":  # pragma: no cover
         """Get the async engine for the given key."""
         config = self.get_async_config(key)
         return config.get_engine()
 
-    def get_sync_engine(self, key: str | None = None) -> Engine:  # pragma: no cover
+    def get_sync_engine(self, key: "Optional[str]" = None) -> "Engine":  # pragma: no cover
         """Get the sync engine for the given key."""
         config = self.get_sync_config(key)
         return config.get_engine()
 
-    def provide_engine(self, key: str | None = None) -> Callable[[], Engine | AsyncEngine]:  # pragma: no cover
+    def provide_engine(
+        self, key: "Optional[str]" = None
+    ) -> "Callable[[], Union[Engine, AsyncEngine]]":  # pragma: no cover
         """Get the engine for the given key."""
         config = self.get_config(key)
 
-        def _get_engine() -> Engine | AsyncEngine:
+        def _get_engine() -> "Union[Engine, AsyncEngine]":
             return config.get_engine()
 
         return _get_engine
 
-    def provide_async_engine(self, key: str | None = None) -> Callable[[], AsyncEngine]:  # pragma: no cover
+    def provide_async_engine(self, key: "Optional[str]" = None) -> "Callable[[], AsyncEngine]":  # pragma: no cover
         """Get the async engine for the given key."""
         config = self.get_async_config(key)
 
-        def _get_engine() -> AsyncEngine:
+        def _get_engine() -> "AsyncEngine":
             return config.get_engine()
 
         return _get_engine
 
-    def provide_sync_engine(self, key: str | None = None) -> Callable[[], Engine]:  # pragma: no cover
+    def provide_sync_engine(self, key: "Optional[str]" = None) -> "Callable[[], Engine]":  # pragma: no cover
         """Get the sync engine for the given key."""
         config = self.get_sync_config(key)
 
-        def _get_engine() -> Engine:
+        def _get_engine() -> "Engine":
             return config.get_engine()
 
         return _get_engine

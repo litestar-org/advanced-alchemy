@@ -1,23 +1,20 @@
-from __future__ import annotations
-
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Union
 
 from litestar.cli._utils import console
 from sqlalchemy import Engine, MetaData, Table
 from typing_extensions import TypeIs
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import DeclarativeBase, Session
 
 __all__ = ("drop_all", "dump_tables")
 
 
-async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metadata: MetaData) -> None:
-    def _is_sync(engine: Engine | AsyncEngine) -> TypeIs[Engine]:
+async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str, metadata: MetaData) -> None:
+    def _is_sync(engine: "Union[Engine, AsyncEngine]") -> "TypeIs[Engine]":
         return isinstance(engine, Engine)
 
     def _drop_tables_sync(engine: Engine) -> None:
@@ -29,7 +26,7 @@ async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metada
             Table(version_table_name, metadata).drop(db, checkfirst=True)
         console.rule("[bold yellow]Successfully dropped all objects", align="left")
 
-    async def _drop_tables_async(engine: AsyncEngine) -> None:
+    async def _drop_tables_async(engine: "AsyncEngine") -> None:
         console.rule("[bold red]Connecting to database backend.", align="left")
         async with engine.begin() as db:
             console.rule("[bold red]Dropping the db", align="left")
@@ -45,19 +42,19 @@ async def drop_all(engine: AsyncEngine | Engine, version_table_name: str, metada
 
 async def dump_tables(
     dump_dir: Path,
-    session: AbstractContextManager[Session] | AbstractAsyncContextManager[AsyncSession],
-    models: list[type[DeclarativeBase]],
+    session: "Union[AbstractContextManager[Session], AbstractAsyncContextManager[AsyncSession]]",
+    models: "list[type[DeclarativeBase]]",
 ) -> None:
     from types import new_class
 
     from advanced_alchemy._serialization import encode_json
 
     def _is_sync(
-        session: AbstractAsyncContextManager[AsyncSession] | AbstractContextManager[Session],
-    ) -> TypeIs[AbstractContextManager[Session]]:
+        session: "Union[AbstractAsyncContextManager[AsyncSession], AbstractContextManager[Session]]",
+    ) -> "TypeIs[AbstractContextManager[Session]]":
         return isinstance(session, AbstractContextManager)
 
-    def _dump_table_sync(session: AbstractContextManager[Session]) -> None:
+    def _dump_table_sync(session: "AbstractContextManager[Session]") -> None:
         from advanced_alchemy.repository import SQLAlchemySyncRepository
 
         with session as _session:
@@ -75,7 +72,7 @@ async def dump_tables(
                 )
                 json_path.write_text(encode_json([row.to_dict() for row in repo(session=_session).list()]))
 
-    async def _dump_table_async(session: AbstractAsyncContextManager[AsyncSession]) -> None:
+    async def _dump_table_async(session: "AbstractAsyncContextManager[AsyncSession]") -> None:
         from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
         async with session as _session:

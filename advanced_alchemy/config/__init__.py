@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from advanced_alchemy.config.asyncio import AlembicAsyncConfig, AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.config.common import (
     ConnectionT,

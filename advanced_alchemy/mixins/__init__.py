@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from advanced_alchemy.mixins.audit import AuditColumns
 from advanced_alchemy.mixins.bigint import BigIntPrimaryKey
 from advanced_alchemy.mixins.nanoid import NanoIDPrimaryKey
