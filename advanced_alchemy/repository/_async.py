@@ -436,6 +436,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         wrap_exceptions: bool = True,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -451,6 +452,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options: Set default execution options
             error_messages: A set of custom error messages to use for operations
             wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Additional arguments.
 
         """
@@ -463,6 +465,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
+        self.uniquify = self._get_uniquify(uniquify)
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
@@ -473,6 +476,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+
+    def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
+        return bool(uniquify) if uniquify is not None else self.uniquify
 
     @staticmethod
     def _get_error_messages(
@@ -562,11 +568,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     ) -> Union[tuple[list[_AbstractLoad], bool], tuple[None, bool]]:
         if loader_options is None:
             # use the defaults set at initialization
-            return self._default_loader_options, self._loader_options_have_wildcards
+            return self._default_loader_options, self._loader_options_have_wildcards or self.uniquify
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
-            default_options_have_wildcards=self._loader_options_have_wildcards,
+            default_options_have_wildcards=self._loader_options_have_wildcards or self.uniquify,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
         )
@@ -643,6 +649,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
 
@@ -656,6 +663,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The deleted instance.
@@ -663,6 +671,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -691,6 +700,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> Sequence[ModelT]:
         """Delete instance identified by `item_id`.
 
@@ -706,11 +716,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The deleted instances.
 
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -784,6 +796,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         sanity_check: bool = True,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Delete instances specified by referenced kwargs and filters.
@@ -797,11 +810,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             sanity_check: When true, the length of selected instances is compared to the deleted row count
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Arguments to apply to a delete
         Returns:
             The deleted instances.
 
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -849,6 +864,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
@@ -859,6 +875,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -936,6 +953,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -949,6 +967,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The retrieved instance.
@@ -956,6 +975,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -984,6 +1004,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -996,6 +1017,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1004,6 +1026,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1032,6 +1055,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -1044,11 +1068,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             The retrieved instance or None
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1085,6 +1111,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
@@ -1107,6 +1134,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1114,6 +1142,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1171,6 +1200,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
@@ -1191,6 +1221,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1202,6 +1233,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1240,6 +1272,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> int:
         """Get the count of records returned by a query.
@@ -1251,11 +1284,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1292,6 +1327,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -1312,6 +1348,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated instance.
@@ -1319,6 +1356,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1351,6 +1389,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> list[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
@@ -1367,6 +1406,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated instances.
@@ -1374,6 +1414,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1433,6 +1474,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1447,11 +1489,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1649,6 +1693,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Update or create instance.
 
@@ -1672,6 +1717,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated or created instance.
@@ -1679,6 +1725,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1728,6 +1775,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> list[ModelT]:
         """Update or create instance.
 
@@ -1750,6 +1798,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated or created instance.
@@ -1757,6 +1806,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1856,6 +1906,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
@@ -1869,11 +1920,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances, after filtering applied.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1972,6 +2025,7 @@ class SQLAlchemyAsyncSlugRepository(
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Select record by slug value."""
@@ -1980,6 +2034,7 @@ class SQLAlchemyAsyncSlugRepository(
             load=load,
             execution_options=execution_options,
             error_messages=error_messages,
+            uniquify=uniquify,
         )
 
     async def get_available_slug(
