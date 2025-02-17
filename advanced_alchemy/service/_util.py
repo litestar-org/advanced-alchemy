@@ -4,6 +4,7 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
+import datetime
 from collections.abc import Sequence
 from functools import partial
 from pathlib import Path, PurePath
@@ -60,8 +61,11 @@ def _default_msgspec_deserializer(
     if issubclass(target_type, (Path, PurePath, UUID)):
         return target_type(value)
 
-    msg = f"Unsupported type: {type(value)!r}"
-    raise TypeError(msg)
+    try:
+        return target_type(value)
+    except Exception as e:
+        msg = f"Unsupported type: {type(value)!r}"
+        raise TypeError(msg) from e
 
 
 def find_filter(
@@ -78,7 +82,7 @@ def find_filter(
         The match filter instance or None
     """
     return next(
-        (cast("FilterTypeT | None", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
+        (cast("Optional[FilterTypeT]", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
         None,
     )
 
@@ -183,6 +187,9 @@ class ResultConverter:
                             _default_msgspec_deserializer,
                             type_decoders=[
                                 (lambda x: x is UUID, lambda t, v: t(v.hex)),
+                                (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),
+                                (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),
+                                (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),
                             ],
                         ),
                     ),
@@ -199,6 +206,9 @@ class ResultConverter:
                         _default_msgspec_deserializer,
                         type_decoders=[
                             (lambda x: x is UUID, lambda t, v: t(v.hex)),
+                            (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),
+                            (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),
+                            (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),
                         ],
                     ),
                 ),

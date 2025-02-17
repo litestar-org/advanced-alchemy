@@ -288,6 +288,8 @@ def create_registry(
         datetime.datetime: DateTimeUTC,
         datetime.date: Date,
         dict: JsonB,
+        dict[str, Any]: JsonB,
+        dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
     }
     with contextlib.suppress(ImportError):
