@@ -1,17 +1,13 @@
-from __future__ import annotations
-
 import re
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
+from typing import Any, Callable, Optional, TypedDict, Union, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError, StatementError
 
 from advanced_alchemy.utils.deprecation import deprecated
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 __all__ = (
     "AdvancedAlchemyError",
@@ -138,7 +134,7 @@ class MissingDependencyError(AdvancedAlchemyError, ImportError):
         install_package: Optional alternative package name to install.
     """
 
-    def __init__(self, package: str, install_package: str | None = None) -> None:
+    def __init__(self, package: str, install_package: Optional[str] = None) -> None:
         super().__init__(
             f"Package {package!r} is not installed but required. You can install it by running "
             f"'pip install advanced_alchemy[{install_package or package}]' to install advanced_alchemy with the required extra "
@@ -260,16 +256,16 @@ class InvalidRequestError(RepositoryError):
 
 
 class ErrorMessages(TypedDict, total=False):
-    duplicate_key: str | Callable[[Exception], str]
-    integrity: str | Callable[[Exception], str]
-    foreign_key: str | Callable[[Exception], str]
-    multiple_rows: str | Callable[[Exception], str]
-    check_constraint: str | Callable[[Exception], str]
-    other: str | Callable[[Exception], str]
+    duplicate_key: Union[str, Callable[[Exception], str]]
+    integrity: Union[str, Callable[[Exception], str]]
+    foreign_key: Union[str, Callable[[Exception], str]]
+    multiple_rows: Union[str, Callable[[Exception], str]]
+    check_constraint: Union[str, Callable[[Exception], str]]
+    other: Union[str, Callable[[Exception], str]]
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
-    template: str | Callable[[Exception], str] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
+    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]
@@ -277,8 +273,8 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 
 @contextmanager
 def wrap_sqlalchemy_exception(  # noqa: C901
-    error_messages: ErrorMessages | None = None,
-    dialect_name: str | None = None,
+    error_messages: Optional[ErrorMessages] = None,
+    dialect_name: Optional[str] = None,
     wrap_exceptions: bool = True,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained

@@ -4,8 +4,6 @@ This module provides Flask integration for Advanced Alchemy, including session m
 database migrations, and service utilities.
 """
 
-from __future__ import annotations
-
 from advanced_alchemy import base, exceptions, filters, mixins, operations, repository, service, types, utils
 from advanced_alchemy.alembic.commands import AlembicCommands
 from advanced_alchemy.config import AlembicAsyncConfig, AlembicSyncConfig, AsyncSessionConfig, SyncSessionConfig

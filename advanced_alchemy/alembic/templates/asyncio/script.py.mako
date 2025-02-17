@@ -6,7 +6,6 @@ Revises: ${down_revision | comma,n}
 Create Date: ${create_date}
 
 """
-from __future__ import annotations
 
 import warnings
 from typing import TYPE_CHECKING

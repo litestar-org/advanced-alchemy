@@ -148,6 +148,11 @@ autodoc_type_aliases = {
     "Engine": "sqlalchemy.engine.Engine",
     "sqlalchemy": "sqlalchemy",
     "RenameStrategy": "litestar.dto.types.RenameStrategy",
+    "Union": "typing.Union",
+    "Callable": "typing.Callable",
+    "Any": "typing.Any",
+    "Optional": "typing.Optional",
+    "_EchoFlagType": "advanced_alchemy.config._EchoFlagType",
 }
 autodoc_mock_imports = [
     "alembic",

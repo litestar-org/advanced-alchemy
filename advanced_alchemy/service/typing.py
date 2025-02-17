@@ -4,9 +4,6 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
-from __future__ import annotations
-
-from collections.abc import Sequence
 from functools import lru_cache
 from typing import (
     TYPE_CHECKING,
@@ -35,6 +32,8 @@ from advanced_alchemy.service._typing import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from advanced_alchemy.filters import StatementFilter
 
 PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
@@ -63,23 +62,22 @@ PydanticOrMsgspecT = SupportedSchemaModel
 
 :class:`msgspec.Struct` or :class:`pydantic.BaseModel`
 """
-ModelDictT: TypeAlias = Union[dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT]]
+ModelDictT: TypeAlias = "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT]]"
 """Type alias for model dictionaries.
 
 Represents:
 - :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` |  :class:`pydantic.BaseModel` | :class:`litestar.dto.data_structures.DTOData` | :class:`~advanced_alchemy.base.ModelProtocol`
 """
-ModelDictListT: TypeAlias = Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]]
+ModelDictListT: TypeAlias = "Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]]"
 """Type alias for model dictionary lists.
 
 A list or sequence of any of the following:
 - :type:`Sequence`[:type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`]
 
 """
-BulkModelDictT: TypeAlias = Union[
-    Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]],
-    DTOData[list[ModelT]],
-]
+BulkModelDictT: TypeAlias = (
+    "Union[Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]], DTOData[list[ModelT]]]"
+)
 """Type alias for bulk model dictionaries.
 
 :type:`Sequence`[ :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` :class:`pydantic.BaseModel`] | :class:`litestar.dto.data_structures.DTOData`
@@ -231,7 +229,7 @@ def is_msgspec_struct_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
     return is_msgspec_struct(v) and hasattr(v, field_name)
 
 
-def is_msgspec_struct_without_field(v: Any, field_name: str) -> TypeGuard[Struct]:
+def is_msgspec_struct_without_field(v: Any, field_name: str) -> "TypeGuard[Struct]":
     """Check if a msgspec struct does not have a specific field.
 
     Args:
@@ -244,7 +242,7 @@ def is_msgspec_struct_without_field(v: Any, field_name: str) -> TypeGuard[Struct
     return is_msgspec_struct(v) and not hasattr(v, field_name)
 
 
-def is_schema(v: Any) -> TypeGuard[SupportedSchemaModel]:
+def is_schema(v: Any) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct or Pydantic model.
 
     Args:
@@ -256,7 +254,7 @@ def is_schema(v: Any) -> TypeGuard[SupportedSchemaModel]:
     return is_msgspec_struct(v) or is_pydantic_model(v)
 
 
-def is_schema_or_dict(v: Any) -> TypeGuard[SupportedSchemaModel | dict[str, Any]]:
+def is_schema_or_dict(v: Any) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
     """Check if a value is a msgspec Struct, Pydantic model, or dict.
 
     Args:
@@ -268,7 +266,7 @@ def is_schema_or_dict(v: Any) -> TypeGuard[SupportedSchemaModel | dict[str, Any]
     return is_schema(v) or is_dict(v)
 
 
-def is_schema_with_field(v: Any, field_name: str) -> TypeGuard[SupportedSchemaModel]:
+def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct or Pydantic model with a specific field.
 
     Args:
@@ -281,7 +279,7 @@ def is_schema_with_field(v: Any, field_name: str) -> TypeGuard[SupportedSchemaMo
     return is_msgspec_struct_with_field(v, field_name) or is_pydantic_model_with_field(v, field_name)
 
 
-def is_schema_without_field(v: Any, field_name: str) -> TypeGuard[SupportedSchemaModel]:
+def is_schema_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct or Pydantic model without a specific field.
 
     Args:
@@ -294,7 +292,7 @@ def is_schema_without_field(v: Any, field_name: str) -> TypeGuard[SupportedSchem
     return not is_schema_with_field(v, field_name)
 
 
-def is_schema_or_dict_with_field(v: Any, field_name: str) -> TypeGuard[SupportedSchemaModel | dict[str, Any]]:
+def is_schema_or_dict_with_field(v: Any, field_name: str) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
     """Check if a value is a msgspec Struct, Pydantic model, or dict with a specific field.
 
     Args:
@@ -307,7 +305,9 @@ def is_schema_or_dict_with_field(v: Any, field_name: str) -> TypeGuard[Supported
     return is_schema_with_field(v, field_name) or is_dict_with_field(v, field_name)
 
 
-def is_schema_or_dict_without_field(v: Any, field_name: str) -> TypeGuard[SupportedSchemaModel | dict[str, Any]]:
+def is_schema_or_dict_without_field(
+    v: Any, field_name: str
+) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
     """Check if a value is a msgspec Struct, Pydantic model, or dict without a specific field.
 
     Args:
@@ -322,8 +322,8 @@ def is_schema_or_dict_without_field(v: Any, field_name: str) -> TypeGuard[Suppor
 
 @overload
 def schema_dump(
-    data: dict[str, Any] | SupportedSchemaModel | DTOData[ModelT], exclude_unset: bool = True
-) -> dict[str, Any]: ...
+    data: "Union[dict[str, Any], SupportedSchemaModel, DTOData[ModelT]]", exclude_unset: bool = True
+) -> "Union[dict[str, Any], ModelT]": ...
 
 
 @overload
@@ -331,8 +331,8 @@ def schema_dump(data: ModelT, exclude_unset: bool = True) -> ModelT: ...
 
 
 def schema_dump(  # noqa: PLR0911
-    data: dict[str, Any] | ModelT | SupportedSchemaModel | DTOData[ModelT], exclude_unset: bool = True
-) -> dict[str, Any] | ModelT:
+    data: "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT]]", exclude_unset: bool = True
+) -> "Union[dict[str, Any], ModelT]":
     """Dump a data object to a dictionary.
 
     Args:
