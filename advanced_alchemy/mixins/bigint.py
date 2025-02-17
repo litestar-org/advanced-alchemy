@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from sqlalchemy import Sequence
 from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
 

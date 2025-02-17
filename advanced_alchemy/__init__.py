@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from advanced_alchemy import (
     alembic,
     base,

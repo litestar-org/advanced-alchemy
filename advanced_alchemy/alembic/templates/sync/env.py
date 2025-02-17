@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import Column, Engine, engine_from_config, pool
@@ -20,13 +18,13 @@ __all__ = ["do_run_migrations", "run_migrations_offline", "run_migrations_online
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
-config: AlembicCommandConfig = context.config  # type: ignore  # noqa: PGH003
+config: "AlembicCommandConfig" = context.config  # type: ignore  # noqa: PGH003
 writer = rewriter.Rewriter()
 
 
 @writer.rewrites(ops.CreateTableOp)
 def order_columns(
-    context: EnvironmentContext,  # noqa: ARG001
+    context: "EnvironmentContext",  # noqa: ARG001
     revision: tuple[str, ...],  # noqa: ARG001
     op: ops.CreateTableOp,
 ) -> ops.CreateTableOp:
@@ -78,7 +76,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection: Connection) -> None:
+def do_run_migrations(connection: "Connection") -> None:
     """Run migrations."""
     context.configure(
         connection=connection,

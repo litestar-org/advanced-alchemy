@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from dataclasses import Field, fields, is_dataclass
 from inspect import isclass
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, final, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol, final, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -27,7 +25,7 @@ class Empty:
     """A sentinel class used as placeholder."""
 
 
-EmptyType: TypeAlias = type[Empty]
+EmptyType: "TypeAlias" = type[Empty]
 """Type alias for the :class:`~advanced_alchemy.utils.dataclass.Empty` sentinel class."""
 
 
@@ -35,16 +33,16 @@ EmptyType: TypeAlias = type[Empty]
 class DataclassProtocol(Protocol):
     """Protocol for instance checking dataclasses"""
 
-    __dataclass_fields__: ClassVar[dict[str, Any]]
+    __dataclass_fields__: "ClassVar[dict[str, Any]]"
 
 
 def extract_dataclass_fields(
-    dt: DataclassProtocol,
+    dt: "DataclassProtocol",
     exclude_none: bool = False,
     exclude_empty: bool = False,
-    include: AbstractSet[str] | None = None,
-    exclude: AbstractSet[str] | None = None,
-) -> tuple[Field[Any], ...]:
+    include: "Optional[AbstractSet[str]]" = None,
+    exclude: "Optional[AbstractSet[str]]" = None,
+) -> "tuple[Field[Any], ...]":
     """Extract dataclass fields.
 
     Args:
@@ -79,11 +77,11 @@ def extract_dataclass_fields(
 
 
 def extract_dataclass_items(
-    dt: DataclassProtocol,
+    dt: "DataclassProtocol",
     exclude_none: bool = False,
     exclude_empty: bool = False,
-    include: AbstractSet[str] | None = None,
-    exclude: AbstractSet[str] | None = None,
+    include: "Optional[AbstractSet[str]]" = None,
+    exclude: "Optional[AbstractSet[str]]" = None,
 ) -> tuple[tuple[str, Any], ...]:
     """Extract dataclass name, value pairs.
 
@@ -104,12 +102,12 @@ def extract_dataclass_items(
 
 
 def simple_asdict(
-    obj: DataclassProtocol,
+    obj: "DataclassProtocol",
     exclude_none: bool = False,
     exclude_empty: bool = False,
     convert_nested: bool = True,
-    exclude: set[str] | None = None,
-) -> dict[str, Any]:
+    exclude: "Optional[AbstractSet[str]]" = None,
+) -> "dict[str, Any]":
     """Convert a dataclass to a dictionary.
 
     This method has important differences to the standard library version:
@@ -136,7 +134,7 @@ def simple_asdict(
     return ret
 
 
-def is_dataclass_instance(obj: Any) -> TypeGuard[DataclassProtocol]:
+def is_dataclass_instance(obj: Any) -> "TypeGuard[DataclassProtocol]":
     """Check if an object is a dataclass instance.
 
     Args:
@@ -148,7 +146,7 @@ def is_dataclass_instance(obj: Any) -> TypeGuard[DataclassProtocol]:
     return hasattr(type(obj), "__dataclass_fields__")  # pyright: ignore[reportUnknownArgumentType]
 
 
-def is_dataclass_class(annotation: Any) -> TypeGuard[type[DataclassProtocol]]:
+def is_dataclass_class(annotation: Any) -> "TypeGuard[type[DataclassProtocol]]":
     """Wrap :func:`is_dataclass <dataclasses.is_dataclass>` in a :data:`typing.TypeGuard`.
 
     Args:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Optional, cast
 
 try:
@@ -15,7 +13,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 
 
-def get_database_migration_plugin(app: FastAPI) -> AdvancedAlchemy:  # pragma: no cover
+def get_database_migration_plugin(app: "FastAPI") -> "AdvancedAlchemy":  # pragma: no cover
     """Retrieve the Advanced Alchemy extension from a FastAPI application instance."""
     from advanced_alchemy.exceptions import ImproperConfigurationError
 
@@ -26,7 +24,7 @@ def get_database_migration_plugin(app: FastAPI) -> AdvancedAlchemy:  # pragma: n
     return extension
 
 
-def register_database_commands(app: FastAPI) -> click.Group:  # pragma: no cover
+def register_database_commands(app: "FastAPI") -> click.Group:  # pragma: no cover
     @click.group(name="database")
     @click.pass_context
     def database_group(ctx: click.Context) -> None:

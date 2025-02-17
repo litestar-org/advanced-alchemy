@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, orm_insert_sentinel
 
 

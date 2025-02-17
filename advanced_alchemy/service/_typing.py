@@ -3,11 +3,10 @@
 This is used to ensure compatibility when one or more of the libraries are installed.
 """
 
-from __future__ import annotations
-
 from typing import (
     Any,
     ClassVar,
+    Optional,
     Protocol,
     cast,
     runtime_checkable,
@@ -28,9 +27,9 @@ except ImportError:
     class BaseModel(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
-        model_fields: ClassVar[dict[str, Any]]
+        model_fields: "ClassVar[dict[str, Any]]"
 
-        def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        def model_dump(self, *args: Any, **kwargs: Any) -> "dict[str, Any]":
             """Placeholder"""
             return {}
 
@@ -42,9 +41,9 @@ except ImportError:
             self,
             type: Any,  # noqa: A002
             *,
-            config: Any | None = None,
+            config: "Optional[Any]" = None,
             _parent_depth: int = 2,
-            module: str | None = None,
+            module: "Optional[str]" = None,
         ) -> None:
             """Init"""
 
@@ -53,9 +52,9 @@ except ImportError:
             object: Any,  # noqa: A002
             /,
             *,
-            strict: bool | None = None,
-            from_attributes: bool | None = None,
-            context: dict[str, Any] | None = None,
+            strict: "Optional[bool]" = None,
+            from_attributes: "Optional[bool]" = None,
+            context: "Optional[dict[str, Any]]" = None,
         ) -> T_co:
             """Stub"""
             return cast("T_co", object)
@@ -86,7 +85,7 @@ except ImportError:
     class Struct(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation"""
 
-        __struct_fields__: ClassVar[tuple[str, ...]]
+        __struct_fields__: "ClassVar[tuple[str, ...]]"
 
     def convert(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
         """Placeholder implementation"""

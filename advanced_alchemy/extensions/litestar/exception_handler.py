@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 
 from litestar.connection import Request
@@ -39,7 +37,7 @@ class ConflictError(ClientException):
     status_code: int = HTTP_409_CONFLICT
 
 
-def exception_to_http_response(request: Request[UserT, AuthT, StateT], exc: RepositoryError) -> Response[Any]:
+def exception_to_http_response(request: "Request[UserT, AuthT, StateT]", exc: "RepositoryError") -> "Response[Any]":
     """Handler for all exceptions subclassed from HTTPException."""
     if isinstance(exc, NotFoundError):
         http_exc: type[HTTPException] = NotFoundException

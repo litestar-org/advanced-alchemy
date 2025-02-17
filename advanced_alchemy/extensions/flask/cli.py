@@ -3,8 +3,6 @@
 This module provides CLI commands for database management in Flask applications.
 """
 
-from __future__ import annotations
-
 from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 
@@ -24,7 +22,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.flask.extension import AdvancedAlchemy
 
 
-def get_database_migration_plugin(app: Flask) -> AdvancedAlchemy:
+def get_database_migration_plugin(app: "Flask") -> "AdvancedAlchemy":
     """Retrieve the Advanced Alchemy extension from the Flask application.
 
     Args:

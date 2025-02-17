@@ -1,12 +1,10 @@
 """General utility functions."""
 
-from __future__ import annotations
-
 import sys
 from importlib import import_module
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -60,7 +58,7 @@ def import_string(dotted_path: str) -> Any:
         object: The imported object.
     """
 
-    def _is_loaded(module: ModuleType | None) -> bool:
+    def _is_loaded(module: "Optional[ModuleType]") -> bool:
         spec = getattr(module, "__spec__", None)
         initializing = getattr(spec, "_initializing", False)
         return bool(module and spec and not initializing)

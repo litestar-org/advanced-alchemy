@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Union
 
 from advanced_alchemy.extensions.fastapi.cli import register_database_commands
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy as StarletteAdvancedAlchemy
@@ -15,7 +13,7 @@ if TYPE_CHECKING:
 __all__ = ("AdvancedAlchemy",)
 
 
-def assign_cli_group(app: FastAPI) -> None:  # pragma: no cover
+def assign_cli_group(app: "FastAPI") -> None:  # pragma: no cover
     try:
         from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
         from typer.main import get_group
@@ -35,7 +33,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
 
     def __init__(
         self,
-        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
-        app: FastAPI | None = None,
+        config: "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig, Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]]",
+        app: "Optional[FastAPI]" = None,
     ) -> None:
         super().__init__(config, app)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from advanced_alchemy.cli import add_migration_commands as build_cli_interface
 
 

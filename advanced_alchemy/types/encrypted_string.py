@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 import abc
 import base64
 import contextlib
 import os
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
@@ -34,7 +32,7 @@ class EncryptionBackend(abc.ABC):
         passphrase (bytes): The encryption passphrase used by the backend.
     """
 
-    def mount_vault(self, key: str | bytes) -> None:
+    def mount_vault(self, key: "Union[str, bytes]") -> None:
         """Mounts the vault with the provided encryption key.
 
         Args:
@@ -44,7 +42,7 @@ class EncryptionBackend(abc.ABC):
             key = key.encode()
 
     @abc.abstractmethod
-    def init_engine(self, key: bytes | str) -> None:  # pragma: nocover
+    def init_engine(self, key: "Union[bytes, str]") -> None:  # pragma: nocover
         """Initializes the encryption engine with the provided key.
 
         Args:
@@ -93,7 +91,7 @@ class PGCryptoBackend(EncryptionBackend):
         passphrase (bytes): The base64-encoded passphrase used for encryption and decryption.
     """
 
-    def init_engine(self, key: bytes | str) -> None:
+    def init_engine(self, key: "Union[bytes, str]") -> None:
         """Initializes the pgcrypto engine with the provided key.
 
         Args:
@@ -149,7 +147,7 @@ class FernetBackend(EncryptionBackend):
         fernet (cryptography.fernet.Fernet): The Fernet instance used for encryption/decryption.
     """
 
-    def mount_vault(self, key: str | bytes) -> None:
+    def mount_vault(self, key: "Union[str, bytes]") -> None:
         """Mounts the vault with the provided encryption key.
 
         This method hashes the key using SHA256 before initializing the engine.
@@ -164,7 +162,7 @@ class FernetBackend(EncryptionBackend):
         engine_key = digest.finalize()
         self.init_engine(engine_key)
 
-    def init_engine(self, key: bytes | str) -> None:
+    def init_engine(self, key: "Union[bytes, str]") -> None:
         """Initializes the Fernet engine with the provided key.
 
         Args:
@@ -209,10 +207,13 @@ class FernetBackend(EncryptionBackend):
         """
         if not isinstance(value, str):  # pragma: nocover
             value = str(value)
-        decrypted: str | bytes = self.fernet.decrypt(value.encode())
+        decrypted: Union[str, bytes] = self.fernet.decrypt(value.encode())
         if not isinstance(decrypted, str):
             decrypted = decrypted.decode("utf-8")  # pyright: ignore[reportAttributeAccessIssue]
         return decrypted
+
+
+DEFAULT_ENCRYPTION_KEY = os.urandom(32)
 
 
 class EncryptedString(TypeDecorator[str]):
@@ -238,9 +239,9 @@ class EncryptedString(TypeDecorator[str]):
 
     def __init__(
         self,
-        key: str | bytes | Callable[[], str | bytes] = os.urandom(32),
-        backend: type[EncryptionBackend] = FernetBackend,
-        length: int | None = None,
+        key: "Union[str, bytes, Callable[[], Union[str, bytes]]]" = DEFAULT_ENCRYPTION_KEY,
+        backend: "type[EncryptionBackend]" = FernetBackend,
+        length: "Optional[int]" = None,
         **kwargs: Any,
     ) -> None:
         """Initializes the EncryptedString TypeDecorator.
@@ -265,7 +266,7 @@ class EncryptedString(TypeDecorator[str]):
         """
         return str
 
-    def load_dialect_impl(self, dialect: Dialect) -> Any:
+    def load_dialect_impl(self, dialect: "Dialect") -> Any:
         """Loads the appropriate dialect implementation based on the database dialect.
 
         Note: The actual column length will be larger than the specified length due to encryption overhead.
@@ -285,7 +286,7 @@ class EncryptedString(TypeDecorator[str]):
             return dialect.type_descriptor(String(length=4000))
         return dialect.type_descriptor(String())
 
-    def process_bind_param(self, value: Any, dialect: Dialect) -> str | None:
+    def process_bind_param(self, value: Any, dialect: "Dialect") -> "Union[str, None]":
         """Processes the value before binding it to the SQL statement.
 
         This method encrypts the value using the specified backend and validates length if specified.
@@ -311,7 +312,7 @@ class EncryptedString(TypeDecorator[str]):
         self.mount_vault()
         return self.backend.encrypt(value)
 
-    def process_result_value(self, value: Any, dialect: Dialect) -> str | None:
+    def process_result_value(self, value: Any, dialect: "Dialect") -> "Union[str, None]":
         """Processes the value after retrieving it from the database.
 
         This method decrypts the value using the specified backend.
@@ -353,7 +354,7 @@ class EncryptedText(EncryptedString):
     impl = Text
     cache_ok = True
 
-    def load_dialect_impl(self, dialect: Dialect) -> Any:
+    def load_dialect_impl(self, dialect: "Dialect") -> Any:
         """Loads the appropriate dialect implementation for Text type.
 
         Args:

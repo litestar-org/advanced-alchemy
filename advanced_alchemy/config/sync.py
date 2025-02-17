@@ -1,7 +1,5 @@
 """Sync SQLAlchemy configuration module."""
 
-from __future__ import annotations
-
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -44,7 +42,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         The alembic configuration options are documented in the Alembic documentation.
     """
 
-    create_engine_callable: Callable[[str], Engine] = create_engine
+    create_engine_callable: "Callable[[str], Engine]" = create_engine
     """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass."""
     session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
@@ -63,7 +61,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         return super().__eq__(other)
 
     @contextmanager
-    def get_session(self) -> Generator[Session, None, None]:
+    def get_session(self) -> "Generator[Session, None, None]":
         """Get a session context manager.
 
         Yields:

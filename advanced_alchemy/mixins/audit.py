@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import datetime
 
 from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column, validates

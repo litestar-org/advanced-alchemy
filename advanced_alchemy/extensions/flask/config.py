@@ -4,8 +4,6 @@ This module provides configuration classes for integrating SQLAlchemy with Flask
 including both synchronous and asynchronous database configurations.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
@@ -23,8 +21,6 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from flask import Flask, Response
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
@@ -36,7 +32,7 @@ __all__ = ("EngineConfig", "SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig")
 ConfigT = TypeVar("ConfigT", bound="Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]")
 
 
-def serializer(value: Any) -> str:
+def serializer(value: "Any") -> str:
     """Serialize JSON field values.
 
     Calls the `:func:schema_dump` function to convert the value to a built-in before encoding.
@@ -64,10 +60,10 @@ class EngineConfig(_EngineConfig):
         json_serializer: Callable for converting Python objects to JSON strings.
     """
 
-    json_deserializer: Callable[[str], Any] = decode_json
+    json_deserializer: "Callable[[str], Any]" = decode_json
     """For dialects that support the :class:`~sqlalchemy.types.JSON` datatype, this is a Python callable that will
     convert a JSON string to a Python object."""
-    json_serializer: Callable[[Any], str] = serializer
+    json_serializer: "Callable[[Any], str]" = serializer
     """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON."""
 
 
@@ -80,12 +76,12 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         commit_mode: The commit mode to use for database sessions.
     """
 
-    app: Flask | None = None
+    app: "Optional[Flask]" = None
     """The Flask application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
 
-    def create_session_maker(self) -> Callable[[], Session]:
+    def create_session_maker(self) -> "Callable[[], Session]":
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -102,7 +98,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    def init_app(self, app: Flask, portal: Portal | None = None) -> None:
+    def init_app(self, app: "Flask", portal: "Optional[Portal]" = None) -> None:
         """Initialize the Flask application with this configuration.
 
         Args:
@@ -116,7 +112,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.commit_mode != "manual":
             self._setup_session_handling(app)
 
-    def _setup_session_handling(self, app: Flask) -> None:
+    def _setup_session_handling(self, app: "Flask") -> None:
         """Set up the session handling for the Flask application.
 
         Args:
@@ -124,7 +120,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
 
         @app.after_request
-        def handle_db_session(response: Response) -> Response:  # pyright: ignore[reportUnusedFunction]
+        def handle_db_session(response: "Response") -> "Response":  # pyright: ignore[reportUnusedFunction]
             """Commit the session if the response meets the commit criteria."""
             if not has_request_context():
                 return response
@@ -138,7 +134,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 db_session.close()
             return response
 
-    def close_engines(self, portal: Portal) -> None:
+    def close_engines(self, portal: "Portal") -> None:
         """Close the engines.
 
         Args:
@@ -169,12 +165,12 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         commit_mode: The commit mode to use for database sessions.
     """
 
-    app: Flask | None = None
+    app: "Optional[Flask]" = None
     """The Flask application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
 
-    def create_session_maker(self) -> Callable[[], AsyncSession]:
+    def create_session_maker(self) -> "Callable[[], AsyncSession]":
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -191,7 +187,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    def init_app(self, app: Flask, portal: Portal | None = None) -> None:
+    def init_app(self, app: "Flask", portal: "Optional[Portal]" = None) -> None:
         """Initialize the Flask application with this configuration.
 
         Args:
@@ -210,7 +206,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             _ = portal.call(self.create_all_metadata)
         self._setup_session_handling(app, portal)
 
-    def _setup_session_handling(self, app: Flask, portal: Portal) -> None:
+    def _setup_session_handling(self, app: "Flask", portal: "Portal") -> None:
         """Set up the session handling for the Flask application.
 
         Args:
@@ -219,7 +215,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
 
         @app.after_request
-        def handle_db_session(response: Response) -> Response:  # pyright: ignore[reportUnusedFunction]
+        def handle_db_session(response: "Response") -> "Response":  # pyright: ignore[reportUnusedFunction]
             """Commit the session if the response meets the commit criteria."""
             if not has_request_context():
                 return response
@@ -235,14 +231,14 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             return response
 
         @app.teardown_appcontext
-        def close_db_session(_: BaseException | None) -> None:  # pyright: ignore[reportUnusedFunction]
+        def close_db_session(_: "Optional[BaseException]" = None) -> None:  # pyright: ignore[reportUnusedFunction]
             """Close the session at the end of the request."""
             db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
                 p = getattr(db_session, "_session_portal", None) or portal
                 _ = p.call(db_session.close)
 
-    def close_engines(self, portal: Portal) -> None:
+    def close_engines(self, portal: "Portal") -> None:
         """Close the engines.
 
         Args:

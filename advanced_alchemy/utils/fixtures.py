@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 from advanced_alchemy._serialization import decode_json
 from advanced_alchemy.exceptions import MissingDependencyError
@@ -13,7 +11,7 @@ if TYPE_CHECKING:
 __all__ = ("open_fixture", "open_fixture_async")
 
 
-def open_fixture(fixtures_path: Path | AsyncPath, fixture_name: str) -> Any:
+def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
     """Loads JSON file with the specified fixture name
 
     Args:
@@ -37,7 +35,7 @@ def open_fixture(fixtures_path: Path | AsyncPath, fixture_name: str) -> Any:
     raise FileNotFoundError(msg)
 
 
-async def open_fixture_async(fixtures_path: Path | AsyncPath, fixture_name: str) -> Any:
+async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
     """Loads JSON file with the specified fixture name
 
     Args:

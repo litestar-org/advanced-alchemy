@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Union, cast
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 if TYPE_CHECKING:
     from click import Group
@@ -14,7 +12,7 @@ if TYPE_CHECKING:
 __all__ = ("add_migration_commands", "get_alchemy_group")
 
 
-def get_alchemy_group() -> Group:
+def get_alchemy_group() -> "Group":
     """Get the Advanced Alchemy CLI group."""
     from advanced_alchemy.exceptions import MissingDependencyError
 
@@ -34,7 +32,7 @@ def get_alchemy_group() -> Group:
         type=str,
     )
     @click.pass_context
-    def alchemy_group(ctx: click.Context, config: str) -> None:
+    def alchemy_group(ctx: "click.Context", config: str) -> None:
         """Advanced Alchemy CLI commands."""
         from rich import get_console
 
@@ -55,7 +53,7 @@ def get_alchemy_group() -> Group:
     return alchemy_group
 
 
-def add_migration_commands(database_group: Group | None = None) -> Group:  # noqa: C901, PLR0915
+def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":  # noqa: C901, PLR0915
     """Add migration commands to the database group."""
     from advanced_alchemy.exceptions import MissingDependencyError
 
@@ -97,8 +95,8 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     )
 
     def get_config_by_bind_key(
-        ctx: click.Context, bind_key: str | None
-    ) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig:
+        ctx: "click.Context", bind_key: Optional[str]
+    ) -> "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]":
         """Get the SQLAlchemy config for the specified bind key."""
         configs = ctx.obj["configs"]
         if bind_key is None:
@@ -117,7 +115,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     )
     @bind_key_option
     @verbose_option
-    def show_database_revision(bind_key: str | None, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def show_database_revision(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -146,7 +144,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default="-1",
     )
     def downgrade_database(  # pyright: ignore[reportUnusedFunction]
-        bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
+        bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], no_prompt: bool
     ) -> None:
         """Downgrade the database to the latest revision."""
         from rich.prompt import Confirm
@@ -184,7 +182,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default="head",
     )
     def upgrade_database(  # pyright: ignore[reportUnusedFunction]
-        bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
+        bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], no_prompt: bool
     ) -> None:
         """Upgrade the database to the latest revision."""
         from rich.prompt import Confirm
@@ -217,7 +215,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
     @no_prompt_option
     def init_alembic(  # pyright: ignore[reportUnusedFunction]
-        bind_key: str | None, directory: str | None, multidb: bool, package: bool, no_prompt: bool
+        bind_key: Optional[str], directory: Optional[str], multidb: bool, package: bool, no_prompt: bool
     ) -> None:
         """Initialize the database migrations."""
         from rich.prompt import Confirm
@@ -255,15 +253,15 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
     @no_prompt_option
     def create_revision(  # pyright: ignore[reportUnusedFunction]
-        bind_key: str | None,
-        message: str | None,
+        bind_key: Optional[str],
+        message: Optional[str],
         autogenerate: bool,
         sql: bool,
         head: str,
         splice: bool,
-        branch_label: str | None,
-        version_path: str | None,
-        rev_id: str | None,
+        branch_label: Optional[str],
+        version_path: Optional[str],
+        rev_id: Optional[str],
         no_prompt: bool,
     ) -> None:
         """Create a new database revision."""
@@ -272,9 +270,9 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         def process_revision_directives(
-            context: MigrationContext,  # noqa: ARG001
+            context: "MigrationContext",  # noqa: ARG001
             revision: tuple[str],  # noqa: ARG001
-            directives: list[MigrationScript],
+            directives: list["MigrationScript"],
         ) -> None:
             """Handle revision directives."""
             if autogenerate and cast("UpgradeOps", directives[0].upgrade_ops).is_empty():
@@ -317,7 +315,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @database_group.command(name="drop-all", help="Drop all tables from the database.")
     @bind_key_option
     @no_prompt_option
-    def drop_all(bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def drop_all(bind_key: Optional[str], no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
         from anyio import run
         from rich.prompt import Confirm
@@ -332,7 +330,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         )
 
         async def _drop_all(
-            configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+            configs: "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]",
         ) -> None:
             for config in configs:
                 engine = config.get_engine()
@@ -360,7 +358,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    def dump_table_data(bind_key: str | None, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
+    def dump_table_data(bind_key: Optional[str], table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
         from anyio import run
         from rich.prompt import Confirm

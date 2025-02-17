@@ -1,15 +1,9 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import Any, Callable
 
 from litestar.serialization import decode_json, encode_json
 
 from advanced_alchemy.config import EngineConfig as _EngineConfig
-
-if TYPE_CHECKING:
-    from typing import Any
-
 
 __all__ = ("EngineConfig",)
 

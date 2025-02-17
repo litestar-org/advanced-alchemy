@@ -85,12 +85,12 @@ class GUID(TypeDecorator[UUID]):
     @staticmethod
     def to_uuid(value: Any) -> Optional[UUID]:
         if value.__class__.__name__ == "UUID" or value is None:
-            return cast("UUID | None", value)
+            return cast("Optional[UUID]", value)
         try:
             value = UUID(hex=value)
         except (TypeError, ValueError):
             value = UUID(bytes=value)
-        return cast("UUID | None", value)
+        return cast("Optional[UUID]", value)
 
     def compare_values(self, x: Any, y: Any) -> bool:
         """Compare two values for equality."""

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -18,7 +16,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
 
 
-def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
+def get_database_migration_plugin(app: "Litestar") -> "SQLAlchemyInitPlugin":
     """Retrieve a database migration plugin from the Litestar application's plugins."""
     from advanced_alchemy.exceptions import ImproperConfigurationError
     from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
@@ -30,7 +28,7 @@ def get_database_migration_plugin(app: Litestar) -> SQLAlchemyInitPlugin:
 
 
 @click.group(cls=LitestarGroup, name="database")
-def database_group(ctx: click.Context) -> None:
+def database_group(ctx: "click.Context") -> None:
     """Manage SQLAlchemy database components."""
     ctx.obj = {"app": ctx.obj, "configs": get_database_migration_plugin(ctx.obj.app).config}
 

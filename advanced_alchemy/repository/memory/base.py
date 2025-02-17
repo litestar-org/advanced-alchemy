@@ -1,12 +1,11 @@
 # ruff: noqa: PD011
 
-from __future__ import annotations
 
 import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Generic, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Union, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
@@ -69,9 +68,9 @@ class InMemoryStore(Generic[T]):
     def get(self, key: Any, default: type[_NotSet] = _NotSet) -> T: ...
 
     @overload
-    def get(self, key: Any, default: AnyObject) -> T | AnyObject: ...
+    def get(self, key: Any, default: AnyObject) -> "Union[T, AnyObject]": ...
 
-    def get(self, key: Any, default: AnyObject | type[_NotSet] = _NotSet) -> T | AnyObject:
+    def get(self, key: Any, default: "Union[AnyObject, type[_NotSet]]" = _NotSet) -> "Union[T, AnyObject]":
         """Get the object identified by `key`, or return `default` if set or raise a `KeyError` otherwise
 
         Args:
@@ -92,7 +91,7 @@ class InMemoryStore(Generic[T]):
             raise KeyError from error
         return self._store[key]
 
-    def get_or_none(self, key: Any, default: Any = _NotSet) -> T | None:
+    def get_or_none(self, key: Any, default: Any = _NotSet) -> "Union[T, None]":
         return self.get(key) if default is _NotSet else self.get(key, default)
 
     def remove(self, key: Any) -> T:
@@ -117,14 +116,14 @@ class InMemoryStore(Generic[T]):
 
 
 class MultiStore(Generic[T]):
-    def __init__(self, store_type: type[InMemoryStore[T]]) -> None:
+    def __init__(self, store_type: "type[InMemoryStore[T]]") -> None:
         self.store_type = store_type
         self._store: defaultdict[Any, InMemoryStore[T]] = defaultdict(store_type)
 
     def add(self, identity: Any, obj: T) -> T:
         return self._store[identity].add(obj)
 
-    def store(self, identity: Any) -> InMemoryStore[T]:
+    def store(self, identity: Any) -> "InMemoryStore[T]":
         return self._store[identity]
 
     def identity(self, obj: T) -> Any:
@@ -235,7 +234,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                     continue
                 setattr(data, elem.key, default_value)
 
-    def changed_attrs(self, data: ModelT) -> Iterable[str]:
+    def changed_attrs(self, data: ModelT) -> "Iterable[str]":
         res: list[str] = []
         mapper = inspect(data)
         if mapper is None:
@@ -265,7 +264,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
 
 
 class SQLAlchemyMultiStore(MultiStore[ModelT]):
-    def _new_instances(self, instance: ModelT) -> Iterable[ModelT]:
+    def _new_instances(self, instance: ModelT) -> "Iterable[ModelT]":
         session = Session()
         session.add(instance)
         relations = list(session.new)

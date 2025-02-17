@@ -1,7 +1,5 @@
 """Metadata for the Project."""
 
-from __future__ import annotations
-
 import importlib.metadata
 
 __all__ = ("__project__", "__version__")

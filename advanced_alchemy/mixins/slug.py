@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Index, String, UniqueConstraint
@@ -31,7 +29,7 @@ class SlugKey:
 
     @declared_attr.directive
     @classmethod
-    def __table_args__(cls) -> TableArgsType:
+    def __table_args__(cls) -> "TableArgsType":
         return (
             UniqueConstraint(
                 cls.slug,
