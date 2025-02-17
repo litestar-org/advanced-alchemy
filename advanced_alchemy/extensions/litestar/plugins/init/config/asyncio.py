@@ -1,8 +1,7 @@
-from __future__ import annotations
-
+from collections.abc import AsyncGenerator, Coroutine
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Literal, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, cast
 
 from litestar.cli._utils import console
 from litestar.constants import HTTP_RESPONSE_START
@@ -24,7 +23,6 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.engine import Engi
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine
-    from typing import Any
 
     from litestar import Litestar
     from litestar.datastructures.state import State
@@ -44,7 +42,7 @@ __all__ = (
 
 def default_handler_maker(
     session_scope_key: str = SESSION_SCOPE_KEY,
-) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
+) -> "Callable[[Message, Scope], Coroutine[Any, Any, None]]":
     """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
         session_scope_key: The key to use within the application state
@@ -53,7 +51,7 @@ def default_handler_maker(
         The handler callable
     """
 
-    async def handler(message: Message, scope: Scope) -> None:
+    async def handler(message: "Message", scope: "Scope") -> None:
         """Handle commit/rollback, closing and cleaning up sessions before sending.
 
         Args:
@@ -63,7 +61,7 @@ def default_handler_maker(
         Returns:
             None
         """
-        session = cast("AsyncSession | None", get_aa_scope_state(scope, session_scope_key))
+        session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, session_scope_key))
         if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
             await session.close()
             delete_aa_scope_state(scope, session_scope_key)
@@ -76,10 +74,10 @@ default_before_send_handler = default_handler_maker()
 
 def autocommit_handler_maker(
     commit_on_redirect: bool = False,
-    extra_commit_statuses: set[int] | None = None,
-    extra_rollback_statuses: set[int] | None = None,
+    extra_commit_statuses: Optional[set[int]] = None,
+    extra_rollback_statuses: Optional[set[int]] = None,
     session_scope_key: str = SESSION_SCOPE_KEY,
-) -> Callable[[Message, Scope], Coroutine[Any, Any, None]]:
+) -> "Callable[[Message, Scope], Coroutine[Any, Any, None]]":
     """Set up the handler to issue a transaction commit or rollback based on specified status codes
     Args:
         commit_on_redirect: Issue a commit when the response status is a redirect (``3XX``)
@@ -102,7 +100,7 @@ def autocommit_handler_maker(
 
     commit_range = range(200, 400 if commit_on_redirect else 300)
 
-    async def handler(message: Message, scope: Scope) -> None:
+    async def handler(message: "Message", scope: "Scope") -> None:
         """Handle commit/rollback, closing and cleaning up sessions before sending.
 
         Args:
@@ -112,7 +110,7 @@ def autocommit_handler_maker(
         Returns:
             None
         """
-        session = cast("AsyncSession | None", get_aa_scope_state(scope, session_scope_key))
+        session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, session_scope_key))
         try:
             if session is not None and message["type"] == HTTP_RESPONSE_START:
                 if (message["status"] in commit_range or message["status"] in extra_commit_statuses) and message[
@@ -136,9 +134,9 @@ autocommit_before_send_handler = autocommit_handler_maker()
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """Litestar Async SQLAlchemy Configuration."""
 
-    before_send_handler: BeforeMessageSendHookHandler | None | Literal["autocommit", "autocommit_include_redirects"] = (
-        None
-    )
+    before_send_handler: Optional[
+        Union["BeforeMessageSendHookHandler", Literal["autocommit", "autocommit_include_redirects"]]
+    ] = None
     """Handler to call before the ASGI message is sent.
 
     The handler should handle closing the session stored in the ASGI scope, if it's still open, and committing and
@@ -166,7 +164,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     set_default_exception_handler: bool = True
     """Sets the default exception handler on application start."""
 
-    def _ensure_unique(self, registry_name: str, key: str, new_key: str | None = None, _iter: int = 0) -> str:
+    def _ensure_unique(self, registry_name: str, key: str, new_key: Optional[str] = None, _iter: int = 0) -> str:
         new_key = new_key if new_key is not None else key
         if new_key in getattr(self.__class__, registry_name, {}):
             _iter += 1
@@ -194,7 +192,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             )
         super().__post_init__()
 
-    def create_session_maker(self) -> Callable[[], AsyncSession]:
+    def create_session_maker(self) -> "Callable[[], AsyncSession]":
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -211,8 +209,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     @asynccontextmanager
     async def lifespan(
         self,
-        app: Litestar,
-    ) -> AsyncGenerator[None, None]:
+        app: "Litestar",
+    ) -> "AsyncGenerator[None, None]":
         deps = self.create_app_state_items()
         app.state.update(deps)
         try:
@@ -225,7 +223,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 if hasattr(engine, "dispose"):
                     await cast("AsyncEngine", engine).dispose()
 
-    def provide_engine(self, state: State) -> AsyncEngine:
+    def provide_engine(self, state: "State") -> "AsyncEngine":
         """Create an engine instance.
 
         Args:
@@ -236,7 +234,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         return cast("AsyncEngine", state.get(self.engine_app_state_key))
 
-    def provide_session(self, state: State, scope: Scope) -> AsyncSession:
+    def provide_session(self, state: "State", scope: "Scope") -> "AsyncSession":
         """Create a session instance.
 
         Args:
@@ -246,7 +244,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             A session instance.
         """
-        session = cast("AsyncSession | None", get_aa_scope_state(scope, self.session_scope_key))
+        session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, self.session_scope_key))
         if session is None:
             session_maker = cast("Callable[[], AsyncSession]", state[self.session_maker_app_state_key])
             session = session_maker()
@@ -262,7 +260,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         return {"AsyncEngine": AsyncEngine, "AsyncSession": AsyncSession}
 
-    async def create_all_metadata(self, app: Litestar) -> None:
+    async def create_all_metadata(self, app: "Litestar") -> None:
         """Create all metadata
 
         Args:
@@ -281,7 +279,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.session_maker_app_state_key: self.create_session_maker(),
         }
 
-    def update_app_state(self, app: Litestar) -> None:
+    def update_app_state(self, app: "Litestar") -> None:
         """Set the app state with engine and session.
 
         Args:

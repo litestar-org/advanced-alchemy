@@ -4,8 +4,6 @@ This module provides Flask-specific service mixins and utilities for integrating
 with the Advanced Alchemy service layer.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from flask import Response, current_app

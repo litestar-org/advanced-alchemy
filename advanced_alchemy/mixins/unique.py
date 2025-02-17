@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy import ColumnElement, select
 from sqlalchemy.orm import declarative_mixin
+from typing_extensions import Self
 
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio.scoping import async_scoped_session
     from sqlalchemy.orm import Session
     from sqlalchemy.orm.scoping import scoped_session
-    from typing_extensions import Self
 
 __all__ = ("UniqueMixin",)
 
@@ -32,20 +30,20 @@ class UniqueMixin:
     @contextmanager
     def _prevent_autoflush(
         cls,
-        session: AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session],
-    ) -> Iterator[None]:
+        session: "Union[AsyncSession, async_scoped_session[AsyncSession], Session, scoped_session[Session]]",
+    ) -> "Iterator[None]":
         with session.no_autoflush, wrap_sqlalchemy_exception():
             yield
 
     @classmethod
     def _check_uniqueness(
         cls,
-        cache: dict[tuple[type[Self], Hashable], Self] | None,
-        session: AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session],
-        key: tuple[type[Self], Hashable],
+        cache: "Optional[dict[tuple[type[Self], Hashable], Self]]",
+        session: "Union[AsyncSession, async_scoped_session[AsyncSession], Session, scoped_session[Session]]",
+        key: "tuple[type[Self], Hashable]",
         *args: Any,
         **kwargs: Any,
-    ) -> tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Self | None]:
+    ) -> "tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Optional[Self]]":
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)
@@ -55,7 +53,7 @@ class UniqueMixin:
     @classmethod
     async def as_unique_async(
         cls,
-        session: AsyncSession | async_scoped_session[AsyncSession],
+        session: "Union[AsyncSession, async_scoped_session[AsyncSession]]",
         *args: Any,
         **kwargs: Any,
     ) -> Self:
@@ -90,7 +88,7 @@ class UniqueMixin:
     @classmethod
     def as_unique_sync(
         cls,
-        session: Session | scoped_session[Session],
+        session: "Union[Session, scoped_session[Session]]",
         *args: Any,
         **kwargs: Any,
     ) -> Self:
@@ -123,7 +121,7 @@ class UniqueMixin:
         return obj
 
     @classmethod
-    def unique_hash(cls, *args: Any, **kwargs: Any) -> Hashable:
+    def unique_hash(cls, *args: Any, **kwargs: Any) -> "Hashable":
         """Generate a unique key based on the provided arguments.
 
         This method should be implemented in the subclass.
@@ -143,7 +141,7 @@ class UniqueMixin:
         raise NotImplementedError(msg)
 
     @classmethod
-    def unique_filter(cls, *args: Any, **kwargs: Any) -> ColumnElement[bool]:
+    def unique_filter(cls, *args: Any, **kwargs: Any) -> "ColumnElement[bool]":
         """Generate a filter condition for ensuring uniqueness.
 
         This method should be implemented in the subclass.

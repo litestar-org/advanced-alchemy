@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -14,7 +12,7 @@ __all__ = (
 _SCOPE_NAMESPACE = "_aa_connection_state"
 
 
-def get_aa_scope_state(scope: Scope, key: str, default: Any = None, pop: bool = False) -> Any:
+def get_aa_scope_state(scope: "Scope", key: str, default: Any = None, pop: bool = False) -> Any:
     """Get an internal value from connection scope state.
 
     Note:
@@ -37,7 +35,7 @@ def get_aa_scope_state(scope: Scope, key: str, default: Any = None, pop: bool = 
     return namespace.pop(key, default) if pop else namespace.get(key, default)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
 
-def set_aa_scope_state(scope: Scope, key: str, value: Any) -> None:
+def set_aa_scope_state(scope: "Scope", key: str, value: Any) -> None:
     """Set an internal value in connection scope state.
 
     Args:
@@ -48,7 +46,7 @@ def set_aa_scope_state(scope: Scope, key: str, value: Any) -> None:
     scope.setdefault(_SCOPE_NAMESPACE, {})[key] = value  # type: ignore[misc]
 
 
-def delete_aa_scope_state(scope: Scope, key: str) -> None:
+def delete_aa_scope_state(scope: "Scope", key: str) -> None:
     """Delete an internal value from connection scope state.
 
     Args:

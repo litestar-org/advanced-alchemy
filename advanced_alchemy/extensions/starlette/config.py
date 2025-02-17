@@ -4,11 +4,9 @@ This module provides configuration classes for integrating SQLAlchemy with Starl
 including both synchronous and asynchronous database configurations.
 """
 
-from __future__ import annotations
-
 import contextlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from click import echo
 from sqlalchemy.exc import OperationalError
@@ -24,8 +22,6 @@ from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySync
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
     from starlette.applications import Starlette
@@ -34,7 +30,7 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
 
-def _make_unique_state_key(app: Starlette, key: str) -> str:  # pragma: no cover
+def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cover
     """Generates a unique state key for the Starlette application.
 
     Ensures that the key does not already exist in the application's state.
@@ -91,7 +87,7 @@ class EngineConfig(_EngineConfig):
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """SQLAlchemy Async config for Starlette."""
 
-    app: Starlette | None = None
+    app: "Optional[Starlette]" = None
     """The Starlette application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -124,7 +120,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             else:
                 echo(" * Created target metadata.")
 
-    def init_app(self, app: Starlette) -> None:
+    def init_app(self, app: "Starlette") -> None:
         """Initialize the Starlette application with this configuration.
 
         Args:
@@ -146,7 +142,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         if self.create_all:
             await self.create_all_metadata()
 
-    def create_session_maker(self) -> Callable[[], AsyncSession]:
+    def create_session_maker(self) -> Callable[[], "AsyncSession"]:
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -164,7 +160,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         return self.session_maker
 
     async def session_handler(
-        self, session: AsyncSession, request: Request, response: Response
+        self, session: "AsyncSession", request: "Request", response: "Response"
     ) -> None:  # pragma: no cover
         """Handles the session after a request is processed.
 
@@ -194,8 +190,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 delattr(request.state, self.session_key)
 
     async def middleware_dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:  # pragma: no cover
+        self, request: "Request", call_next: "RequestResponseEndpoint"
+    ) -> "Response":  # pragma: no cover
         """Middleware dispatch function to handle requests and responses.
 
         Processes the request, invokes the next middleware or route handler, and
@@ -210,7 +206,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             starlette.responses.Response: The HTTP response.
         """
         response = await call_next(request)
-        session: AsyncSession | None = getattr(request.state, self.session_key, None)
+        session = cast("Optional[AsyncSession]", getattr(request.state, self.session_key, None))
         if session is not None:
             await self.session_handler(session=session, request=request, response=response)
 
@@ -241,7 +237,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     """SQLAlchemy Sync config for Starlette."""
 
-    app: Starlette | None = None
+    app: "Optional[Starlette]" = None
     """The Starlette application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -271,7 +267,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
 
-    def init_app(self, app: Starlette) -> None:
+    def init_app(self, app: "Starlette") -> None:
         """Initialize the Starlette application with this configuration.
 
         Args:
@@ -292,7 +288,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         if self.create_all:
             await self.create_all_metadata()
 
-    def create_session_maker(self) -> Callable[[], Session]:
+    def create_session_maker(self) -> Callable[[], "Session"]:
         """Get a session maker. If none exists yet, create one.
 
         Returns:
@@ -309,7 +305,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         self.session_maker = self.session_maker_class(**session_kws)
         return self.session_maker
 
-    async def session_handler(self, session: Session, request: Request, response: Response) -> None:  # pragma: no cover
+    async def session_handler(
+        self, session: "Session", request: "Request", response: "Response"
+    ) -> None:  # pragma: no cover
         """Handles the session after a request is processed.
 
         Applies the commit strategy and ensures the session is closed.
@@ -338,8 +336,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 delattr(request.state, self.session_key)
 
     async def middleware_dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:  # pragma: no cover
+        self, request: "Request", call_next: "RequestResponseEndpoint"
+    ) -> "Response":  # pragma: no cover
         """Middleware dispatch function to handle requests and responses.
 
         Processes the request, invokes the next middleware or route handler, and
@@ -354,7 +352,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             starlette.responses.Response: The HTTP response.
         """
         response = await call_next(request)
-        session: Session | None = getattr(request.state, self.session_key, None)
+        session = cast("Optional[Session]", getattr(request.state, self.session_key, None))
         if session is not None:
             await self.session_handler(session=session, request=request, response=response)
 
