@@ -552,7 +552,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Union[ErrorMessages, None, EmptyType] = Empty,
-        uniquify: Optional[bool] = None,
     ) -> ModelT:
         try:
             self.__database__.add(self.model_type, data)
@@ -568,7 +567,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Union[ErrorMessages, None, EmptyType] = Empty,
-        uniquify: Optional[bool] = None,
     ) -> list[ModelT]:
         for obj in data:
             await self.add(obj)  # pyright: ignore[reportCallIssue]

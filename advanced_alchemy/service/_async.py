@@ -91,7 +91,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
     """Default execution options for the repository."""
     match_fields: ClassVar[Optional[Union[list[str], str]]] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    uniquify: ClassVar[Optional[bool]] = None
+    uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
     _repository_instance: SQLAlchemyAsyncRepositoryT
 
@@ -127,7 +127,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         load = load if load is not None else self.loader_options
         execution_options = execution_options if execution_options is not None else self.execution_options
         self._repository_instance: SQLAlchemyAsyncRepositoryT = self.repository_type(  # type: ignore[assignment]
@@ -141,9 +140,12 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             wrap_exceptions=wrap_exceptions,
             load=load,
             execution_options=execution_options,
-            uniquify=uniquify,
+            uniquify=self._get_uniquify(uniquify),
             **repo_kwargs,
         )
+
+    def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
+        return bool(uniquify or self.uniquify)
 
     @property
     def repository(self) -> SQLAlchemyAsyncRepositoryT:
@@ -183,14 +185,13 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
            A count of the collection, filtered, but ignoring pagination.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         return await self.repository.count(
             *filters,
             statement=statement,
             error_messages=error_messages,
             load=load,
             execution_options=execution_options,
-            uniquify=uniquify,
+            uniquify=self._get_uniquify(uniquify),
             **kwargs,
         )
 
@@ -217,13 +218,12 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         return await self.repository.exists(
             *filters,
             error_messages=error_messages,
             load=load,
             execution_options=execution_options,
-            uniquify=uniquify,
+            uniquify=self._get_uniquify(uniquify),
             **kwargs,
         )
 
@@ -256,7 +256,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         return cast(
             "ModelT",
             await self.repository.get(
@@ -267,7 +266,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -298,7 +297,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         return cast(
             "ModelT",
             await self.repository.get_one(
@@ -308,7 +306,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **kwargs,
             ),
         )
@@ -340,7 +338,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
             Representation of instance with identifier `item_id`.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         return cast(
             "Optional[ModelT]",
             await self.repository.get_one_or_none(
@@ -350,7 +347,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **kwargs,
             ),
         )
@@ -471,7 +468,6 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         Returns:
             List of instances and count of total collection, ignoring pagination.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         return cast(
             "tuple[Sequence[ModelT], int]",
             await self.repository.list_and_count(
@@ -483,7 +479,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **kwargs,
             ),
         )
@@ -569,7 +565,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **kwargs,
             ),
         )
@@ -631,6 +627,7 @@ class SQLAlchemyAsyncRepositoryService(
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             Representation of created instances.
@@ -688,7 +685,6 @@ class SQLAlchemyAsyncRepositoryService(
         Returns:
             Updated representation.
         """
-        uniquify = uniquify if uniquify is not None else self.uniquify
         data = await self.to_model(data, "update")
         if (
             item_id is None
@@ -718,7 +714,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -760,7 +756,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -822,7 +818,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -871,7 +867,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -934,7 +930,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **validated_model.to_dict(),
             ),
         )
@@ -993,7 +989,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **validated_model.to_dict(),
             ),
         )
@@ -1037,7 +1033,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -1084,7 +1080,7 @@ class SQLAlchemyAsyncRepositoryService(
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
             ),
         )
 
@@ -1127,7 +1123,7 @@ class SQLAlchemyAsyncRepositoryService(
                 sanity_check=sanity_check,
                 load=load,
                 execution_options=execution_options,
-                uniquify=uniquify,
+                uniquify=self._get_uniquify(uniquify),
                 **kwargs,
             ),
         )

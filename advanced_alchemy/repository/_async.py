@@ -465,7 +465,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
@@ -476,6 +476,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+
+    def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
+        return bool(uniquify) if uniquify is not None else self.uniquify
 
     @staticmethod
     def _get_error_messages(
@@ -668,7 +671,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -719,7 +722,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The deleted instances.
 
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -813,7 +816,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The deleted instances.
 
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -972,7 +975,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1023,7 +1026,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1071,7 +1074,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The retrieved instance or None
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1139,7 +1142,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1230,7 +1233,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1287,7 +1290,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1353,7 +1356,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1411,7 +1414,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1492,7 +1495,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1722,7 +1725,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1803,7 +1806,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1923,7 +1926,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The list of instances, after filtering applied.
         """
-        self.uniquify = uniquify if uniquify is not None else self.uniquify
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
