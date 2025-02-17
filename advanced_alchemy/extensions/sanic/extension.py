@@ -99,7 +99,7 @@ class AdvancedAlchemy(Generic[EngineT, SessionT, SessionMakerT], Extension):  # 
         self.session_maker_key = session_maker_key
         self.session_key = session_key
         self.autocommit_strategy = autocommit
-        self._commit_strategies: "dict[CommitStrategy, CommitStrategyExecutor]" = {  # pyright: ignore[reportAttributeAccessIssue]
+        self._commit_strategies: dict[CommitStrategy, CommitStrategyExecutor] = {  # pyright: ignore[reportAttributeAccessIssue]
             "always": self._commit_strategy_always,
             "match_status": self._commit_strategy_match_status,
         }

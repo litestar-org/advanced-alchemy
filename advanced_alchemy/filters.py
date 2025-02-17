@@ -457,7 +457,7 @@ class SearchFilter(StatementFilter):
     """Whether to use case-insensitive matching."""
 
     @property
-    def _operator(self) -> Callable[..., ColumnElement[bool]]:
+    def _operator(self) -> "Callable[..., ColumnElement[bool]]":
         """Return the SQL operator for combining multiple search clauses.
 
         Returns:
@@ -469,7 +469,7 @@ class SearchFilter(StatementFilter):
         return or_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate LIKE or ILIKE operator as a function.
 
         Returns:
@@ -490,7 +490,7 @@ class SearchFilter(StatementFilter):
         """
         return {self.field_name} if isinstance(self.field_name, str) else self.field_name
 
-    def get_search_clauses(self, model: type[ModelT]) -> list[BinaryExpression[bool]]:
+    def get_search_clauses(self, model: type[ModelT]) -> list["BinaryExpression[bool]"]:
         """Generate the LIKE/ILIKE clauses for all specified fields.
 
         Args:
@@ -560,7 +560,7 @@ class NotInSearchFilter(SearchFilter):
         return and_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate NOT LIKE or NOT ILIKE operator as a function.
 
         Returns:

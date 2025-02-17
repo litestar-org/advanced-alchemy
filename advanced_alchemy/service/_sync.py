@@ -330,7 +330,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             ),
         )
 
-    def to_model_on_create(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+    def to_model_on_create(self, data: "ModelDictT[ModelT]") -> "ModelDictT[ModelT]":
         """Convenience method to allow for custom behavior on create.
 
         Args:
@@ -341,7 +341,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         """
         return data
 
-    def to_model_on_update(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+    def to_model_on_update(self, data: "ModelDictT[ModelT]") -> "ModelDictT[ModelT]":
         """Convenience method to allow for custom behavior on update.
 
         Args:
@@ -352,7 +352,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         """
         return data
 
-    def to_model_on_delete(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+    def to_model_on_delete(self, data: "ModelDictT[ModelT]") -> "ModelDictT[ModelT]":
         """Convenience method to allow for custom behavior on delete.
 
         Args:
@@ -363,7 +363,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         """
         return data
 
-    def to_model_on_upsert(self, data: ModelDictT[ModelT]) -> ModelDictT[ModelT]:
+    def to_model_on_upsert(self, data: "ModelDictT[ModelT]") -> "ModelDictT[ModelT]":
         """Convenience method to allow for custom behavior on upsert.
 
         Args:
@@ -376,7 +376,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def to_model(
         self,
-        data: ModelDictT[ModelT],
+        data: "ModelDictT[ModelT]",
         operation: Optional[str] = None,
     ) -> ModelT:
         """Parse and Convert input into a model.
@@ -548,7 +548,7 @@ class SQLAlchemySyncRepositoryService(
 
     def create(
         self,
-        data: ModelDictT[ModelT],
+        data: "ModelDictT[ModelT]",
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -582,7 +582,7 @@ class SQLAlchemySyncRepositoryService(
 
     def create_many(
         self,
-        data: BulkModelDictT[ModelT],
+        data: "BulkModelDictT[ModelT]",
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -615,7 +615,7 @@ class SQLAlchemySyncRepositoryService(
 
     def update(
         self,
-        data: ModelDictT[ModelT],
+        data: "ModelDictT[ModelT]",
         item_id: Optional[Any] = None,
         *,
         attribute_names: Optional[Iterable[str]] = None,
@@ -685,7 +685,7 @@ class SQLAlchemySyncRepositoryService(
 
     def update_many(
         self,
-        data: BulkModelDictT[ModelT],
+        data: "BulkModelDictT[ModelT]",
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -724,7 +724,7 @@ class SQLAlchemySyncRepositoryService(
 
     def upsert(
         self,
-        data: ModelDictT[ModelT],
+        data: "ModelDictT[ModelT]",
         item_id: Optional[Any] = None,
         *,
         attribute_names: Optional[Iterable[str]] = None,
@@ -783,7 +783,7 @@ class SQLAlchemySyncRepositoryService(
 
     def upsert_many(
         self,
-        data: BulkModelDictT[ModelT],
+        data: "BulkModelDictT[ModelT]",
         *,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
