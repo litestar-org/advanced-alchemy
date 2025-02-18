@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, metadata, version
 
 __all__ = ("__project__", "__version__")
 
-try:
+try:  # pragma: no cover
     __version__ = version("advanced_alchemy")
     """Version of the project."""
     __project__ = metadata("advanced_alchemy")["Name"]
@@ -12,5 +12,5 @@ try:
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "0.0.1"
     __project__ = "Advanced Alchemy"
-finally:
+finally:  # pragma: no cover
     del version, PackageNotFoundError, metadata

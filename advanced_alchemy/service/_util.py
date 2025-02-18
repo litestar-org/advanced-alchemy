@@ -33,6 +33,13 @@ if TYPE_CHECKING:
 
 __all__ = ("ResultConverter", "find_filter")
 
+DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
+    (lambda x: x is UUID, lambda t, v: t(v.hex)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+]
+
 
 def _default_msgspec_deserializer(
     target_type: Any,
@@ -185,12 +192,7 @@ class ResultConverter:
                         from_attributes=True,
                         dec_hook=partial(
                             _default_msgspec_deserializer,
-                            type_decoders=[
-                                (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                                (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),
-                                (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),
-                                (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),
-                            ],
+                            type_decoders=DEFAULT_TYPE_DECODERS,
                         ),
                     ),
                 )
@@ -204,12 +206,7 @@ class ResultConverter:
                     from_attributes=True,
                     dec_hook=partial(
                         _default_msgspec_deserializer,
-                        type_decoders=[
-                            (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                            (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),
-                            (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),
-                            (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),
-                        ],
+                        type_decoders=DEFAULT_TYPE_DECODERS,
                     ),
                 ),
                 limit=limit_offset.limit,
