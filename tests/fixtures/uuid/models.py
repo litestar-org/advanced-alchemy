@@ -17,7 +17,7 @@ from advanced_alchemy.base import (
     merge_table_arguments,
 )
 from advanced_alchemy.mixins import SlugKey
-from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptedText
+from advanced_alchemy.types import EncryptedString, EncryptedText, ObjectStore, StoredObject
 
 
 class UUIDAuthor(UUIDAuditBase):
@@ -36,16 +36,16 @@ class UUIDAuthor(UUIDAuditBase):
 class UUIDBook(UUIDBase):
     """The Book domain object."""
 
-    title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id"))  # pyright: ignore
-    author: Mapped[UUIDAuthor] = relationship(lazy="joined", innerjoin=True, back_populates="books")  # pyright: ignore
+    title: Mapped[str] = mapped_column(String(length=250))
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_author.id"))
+    author: Mapped[UUIDAuthor] = relationship(lazy="joined", innerjoin=True, back_populates="books")
 
 
 class UUIDSlugBook(UUIDBase, SlugKey):
     """The Book domain object with a slug key."""
 
-    title: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    author_id: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
+    title: Mapped[str] = mapped_column(String(length=250))
+    author_id: Mapped[str] = mapped_column(String(length=250))
 
     @declared_attr.directive
     @classmethod
@@ -72,17 +72,13 @@ class UUIDSecret(UUIDv7Base):
     long_secret: Mapped[str] = mapped_column(
         EncryptedText(key="super_secret"),
     )
-    length_validated_secret: Mapped[str] = mapped_column(
-        EncryptedString(key="super_secret", length=10),
-        nullable=True,
-    )
 
 
 class UUIDModelWithFetchedValue(UUIDv6Base):
     """The ModelWithFetchedValue UUIDBase."""
 
-    val: Mapped[int]  # pyright: ignore
-    updated: Mapped[datetime.datetime] = mapped_column(  # pyright: ignore
+    val: Mapped[int]
+    updated: Mapped[datetime.datetime] = mapped_column(
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
         server_onupdate=FetchedValue(),
@@ -92,8 +88,8 @@ class UUIDModelWithFetchedValue(UUIDv6Base):
 uuid_item_tag = Table(
     "uuid_item_tag",
     UUIDBase.metadata,
-    Column("item_id", ForeignKey("uuid_item.id"), primary_key=True),  # pyright: ignore
-    Column("tag_id", ForeignKey("uuid_tag.id"), primary_key=True),  # pyright: ignore
+    Column("item_id", ForeignKey("uuid_item.id"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
+    Column("tag_id", ForeignKey("uuid_tag.id"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
 )
 
 
@@ -113,5 +109,18 @@ class UUIDTag(UUIDAuditBase):
 class UUIDRule(UUIDAuditBase):
     """The rule domain object."""
 
-    name: Mapped[str] = mapped_column(String(length=250))  # pyright: ignore
-    config: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
+    name: Mapped[str] = mapped_column(String(length=250))
+    config: Mapped[dict] = mapped_column(default=lambda: {})  # type: ignore
+
+
+class UUIDFileDocument(UUIDv7Base):
+    """The file document domain model."""
+
+    title: Mapped[str] = mapped_column(String(length=100))
+    file: Mapped[StoredObject] = mapped_column(
+        ObjectStore(backend="memory", base_path="test-files"),
+        nullable=True,
+    )
+    required_file: Mapped[StoredObject] = mapped_column(
+        ObjectStore(backend="memory", base_path="test-files"),
+    )
