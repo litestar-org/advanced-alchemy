@@ -1,8 +1,8 @@
 """Metadata for the Project."""
 
-from importlib.metadata import PackageNotFoundError, metadata, version
+from importlib.metadata import PackageNotFoundError, metadata, version  # pragma: no cover
 
-__all__ = ("__project__", "__version__")
+__all__ = ("__project__", "__version__")  # pragma: no cover
 
 try:  # pragma: no cover
     __version__ = version("advanced_alchemy")
