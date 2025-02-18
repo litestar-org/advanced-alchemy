@@ -3,6 +3,49 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.31.0
+    :date: 2025-02-18
+
+    .. change:: Fix reference in `changelog.py`
+        :type: bugfix
+        :pr: 383
+
+        Should link to the AA repo, not litestar :)
+
+    .. change:: Query repository list method for custom queries
+        :type: bugfix
+        :pr: 379
+        :issue: 338
+
+        Fix query repositories list method according to [documentation](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories.html#query-repository).
+
+        Now its return a list of tuples with values instead of first column of the query.
+
+    .. change:: remove 3.8 support
+        :type: misc
+        :pr: 386
+
+        Removes 3.8 support and removes future annotations in a few places for better compatibility
+
+    .. change:: remove future annotations
+        :type: feature
+        :pr: 387
+
+        This removes the usage of future annotations.
+
+    .. change:: add `uniquify` to service and repo
+        :type: feature
+        :pr: 389
+
+        Exposes the `uniquify` flag in all functions on the repository and add to the service
+
+    .. change:: improved default serializer
+        :type: feature
+        :pr: 390
+
+        Improves the default serializer so that it handles various types a bit better
+
+
 .. changelog:: 0.30.3
     :date: 2025-01-26
 
@@ -37,26 +80,7 @@
         :pr: 358
         :issue: 357
 
-        <!--
-        By submitting this pull request, you agree to:
-        - follow [Litestar's Code of Conduct](https://github.com/litestar-org/.github/blob/main/CODE_OF_CONDUCT.md)
-        - follow [Litestar's contribution guidelines](https://github.com/litestar-org/.github/blob/main/CONTRIBUTING.md)
-        - follow the [PSFs's Code of Conduct](https://www.python.org/psf/conduct/)
-        -->
-        ## Description
-
         Adds hash function to `SQLAlchemySyncConfig` and `SQLAlchemyAsyncConfig` classes.
-
-
-        <!--
-        Please add in issue numbers this pull request will close, if applicable
-        Examples: Fixes #4321 or Closes #1234
-
-        Ensure you are using a supported keyword to properly link an issue:
-        https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword
-        -->
-        ## Closes
-        Closes #357
 
 
 .. changelog:: 0.30.1
