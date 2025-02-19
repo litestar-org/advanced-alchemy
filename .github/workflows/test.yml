@@ -64,11 +64,11 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.coverage }}
-        run: uv run pytest --dist "loadgroup" -m "" -k ${{ inputs.pytest-select }} tests -n 2
+        run: uv run pytest --dist "loadgroup" -m "" -k "${{ inputs.pytest-select }}" tests -n 2
 
       - name: Test with coverage
         if: ${{ inputs.coverage }}
-        run: uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy -k ${{ inputs.pytest-select }} --cov-report=xml -n 2
+        run: uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy -k "${{ inputs.pytest-select }}" --cov-report=xml -n 2
 
       - uses: actions/upload-artifact@v4
         if: ${{ inputs.coverage }}
