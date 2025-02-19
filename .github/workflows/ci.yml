@@ -105,7 +105,7 @@ jobs:
           - "mysql or mssql"
     uses: ./.github/workflows/test.yml
     with:
-      coverage: ${{ matrix.python-version == '3.12' }}
+      coverage: false
       python-version: ${{ matrix.python-version }}
       pytest-select: ${{ matrix.pytest-select }}
   sonar:
