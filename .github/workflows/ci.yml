@@ -98,11 +98,9 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
         pytest-select:
-          - "unit or mock"
-          - "sqlite or duckdb"
-          - "pg or cockroach"
-          - "oracle or spanner"
-          - "mysql or mssql"
+          - "not oracle and not pg"
+          - "pg"
+          - "oracle"
     uses: ./.github/workflows/test.yml
     with:
       coverage: false
