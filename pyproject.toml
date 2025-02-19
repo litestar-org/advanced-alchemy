@@ -88,6 +88,7 @@ dev = [
   { include-group = "spanner" },
   { include-group = "cockroachdb" },
   { include-group = "postgres" },
+  "pytest-cdist>=0.3.1",
 ]
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
