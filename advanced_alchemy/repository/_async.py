@@ -1678,7 +1678,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]],
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
-        return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
+        return (
+            statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True)
+            .limit(None)
+            .offset(None)
+            .order_by(None)
+        )
 
     async def upsert(
         self,
@@ -1695,7 +1700,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
     ) -> ModelT:
-        """Update or create instance.
+        """Modify or create instance.
 
         Updates instance with the attribute values present on `data`, or creates a new instance if
         one doesn't exist.
@@ -1777,7 +1782,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
     ) -> list[ModelT]:
-        """Update or create instance.
+        """Modify or create multiple instances.
 
         Update instances with the attribute values present on `data`, or create a new instance if
         one doesn't exist.
