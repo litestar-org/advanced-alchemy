@@ -15,7 +15,7 @@ from advanced_alchemy.__metadata__ import __project__, __version__
 if TYPE_CHECKING:
     from typing import Any
 
-    from sphinx.addnodes import document
+    from sphinx.addnodes import document  # type: ignore[attr-defined,unused-ignore]
     from sphinx.application import Sphinx
 
 # -- Environmental Data ------------------------------------------------------
