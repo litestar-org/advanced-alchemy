@@ -92,6 +92,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
+    count_with_window_function: ClassVar[bool] = True
+    """Use an analytical window function to count results.  This allows the count to be performed in a single query."""
     _repository_instance: SQLAlchemySyncRepositoryT
 
     def __init__(
@@ -108,6 +110,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -124,10 +127,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         load = load if load is not None else self.loader_options
         execution_options = execution_options if execution_options is not None else self.execution_options
+        count_with_window_function = (
+            count_with_window_function if count_with_window_function is not None else self.count_with_window_function
+        )
         self._repository_instance: SQLAlchemySyncRepositoryT = self.repository_type(  # type: ignore[assignment]
             session=session,
             statement=statement,
@@ -140,6 +147,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load=load,
             execution_options=execution_options,
             uniquify=self._get_uniquify(uniquify),
+            count_with_window_function=count_with_window_function,
             **repo_kwargs,
         )
 
@@ -441,7 +449,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
-        force_basic_query_mode: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Union[ErrorMessages, None, EmptyType] = Empty,
         load: Optional[LoadSpec] = None,
@@ -455,7 +463,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
             auto_expunge: Remove object from session before returning.
-            force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
@@ -473,7 +481,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 *filters,
                 statement=statement,
                 auto_expunge=auto_expunge,
-                force_basic_query_mode=force_basic_query_mode,
+                count_with_window_function=count_with_window_function,
                 order_by=order_by,
                 error_messages=error_messages,
                 load=load,
@@ -494,6 +502,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
     ) -> Iterator[Self]:
         """Context manager that returns instance of service object.
 
@@ -513,6 +522,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=uniquify,
+                count_with_window_function=count_with_window_function,
             )
         elif config:
             with config.get_session() as db_session:
@@ -523,6 +533,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                     load=load,
                     execution_options=execution_options,
                     uniquify=uniquify,
+                    count_with_window_function=count_with_window_function,
                 )
 
     def list(
