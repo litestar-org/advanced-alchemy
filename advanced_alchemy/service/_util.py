@@ -6,11 +6,11 @@ should be a SQLAlchemy model.
 
 import datetime
 from collections.abc import Sequence
+from enum import Enum
 from functools import partial
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
 from uuid import UUID
-from enum import Enum
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
