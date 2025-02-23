@@ -21,7 +21,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
-from advanced_alchemy.service import OffsetPagination
+from advanced_alchemy.service import ModelDictListT, ModelDictT, ModelDTOT, ModelOrRowMappingT, ModelT, OffsetPagination
 
 if TYPE_CHECKING:
     from click import Group
@@ -47,6 +47,11 @@ signature_namespace_values: dict[str, Any] = {
     "Dependency": Dependency,
     "DTOData": DTOData,
     "Sequence": Sequence,
+    "ModelT": ModelT,
+    "ModelDictT": ModelDictT,
+    "ModelDTOT": ModelDTOT,
+    "ModelDictListT": ModelDictListT,
+    "ModelOrRowMappingT": ModelOrRowMappingT,
 }
 
 

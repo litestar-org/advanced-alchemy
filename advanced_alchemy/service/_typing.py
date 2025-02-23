@@ -18,7 +18,7 @@ T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
 try:
-    from pydantic import BaseModel, FailFast, TypeAdapter
+    from pydantic import BaseModel, FailFast, TypeAdapter  # pyright: ignore[reportGeneralTypeIssues]
 
     PYDANTIC_INSTALLED = True
 except ImportError:
@@ -72,8 +72,8 @@ try:
     from msgspec import (
         UNSET,
         Struct,
-        UnsetType,  # pyright: ignore[reportAssignmentType]
-        convert,
+        UnsetType,  # pyright: ignore[reportAssignmentType,reportGeneralTypeIssues]
+        convert,  # pyright: ignore[reportGeneralTypeIssues]
     )
 
     MSGSPEC_INSTALLED: bool = True
