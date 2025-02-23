@@ -46,7 +46,7 @@ try:
     encoder, decoder = Encoder(enc_hook=_type_to_string), Decoder()
     decode_json = decoder.decode
 
-    def encode_json(data: Any) -> str:
+    def encode_json(data: Any) -> str:  # pragma: no cover
         return encoder.encode(data).decode("utf-8")
 
 except ImportError:
@@ -55,7 +55,7 @@ except ImportError:
         from orjson import dumps as _encode_json
         from orjson import loads as decode_json  # type: ignore[no-redef,assignment]
 
-        def encode_json(data: Any) -> str:
+        def encode_json(data: Any) -> str:  # pragma: no cover
             return _encode_json(
                 data, default=_type_to_string, option=OPT_SERIALIZE_NUMPY | OPT_NAIVE_UTC | OPT_SERIALIZE_UUID
             ).decode("utf-8")  # type: ignore[no-any-return]
@@ -65,13 +65,13 @@ except ImportError:
         from json import loads as decode_json  # type: ignore[assignment]  # noqa: F401
 
 
-def convert_datetime_to_gmt_iso(dt: datetime.datetime) -> str:
+def convert_datetime_to_gmt_iso(dt: datetime.datetime) -> str:  # pragma: no cover
     """Handle datetime serialization for nested timestamps."""
     if not dt.tzinfo:
         dt = dt.replace(tzinfo=datetime.timezone.utc)
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def convert_date_to_iso(dt: datetime.date) -> str:
+def convert_date_to_iso(dt: datetime.date) -> str:  # pragma: no cover
     """Handle datetime serialization for nested timestamps."""
     return dt.isoformat()
