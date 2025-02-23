@@ -1,5 +1,6 @@
 import datetime
 import enum
+from typing import Any
 
 from typing_extensions import runtime_checkable
 
@@ -8,7 +9,7 @@ try:
 
     PYDANTIC_INSTALLED = True
 except ImportError:
-    from typing import Any, ClassVar, Protocol
+    from typing import ClassVar, Protocol
 
     @runtime_checkable
     class BaseModel(Protocol):  # type: ignore[no-redef]
