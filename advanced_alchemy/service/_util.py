@@ -6,6 +6,7 @@ should be a SQLAlchemy model.
 
 import datetime
 from collections.abc import Sequence
+from enum import Enum
 from functools import partial
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
@@ -38,6 +39,7 @@ DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
     (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
     (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
     (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is Enum, lambda t, v: t(v.value)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
 ]
 
 

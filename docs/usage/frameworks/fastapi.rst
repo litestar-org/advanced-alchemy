@@ -11,32 +11,21 @@ Configure SQLAlchemy with FastAPI:
 
 .. code-block:: python
 
-    from contextlib import asynccontextmanager
     from typing import AsyncGenerator
 
     from fastapi import FastAPI
 
-    from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
-    from advanced_alchemy.base import metadata_registry
-    from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
+    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, AsyncSessionConfig, SQLAlchemyAsyncConfig
 
-    session_config = AsyncSessionConfig(expire_on_commit=False)
     sqlalchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
-        session_config=session_config
+        session_config=AsyncSessionConfig(expire_on_commit=False),
+        create_all=True,
+        commit_mode="autocommit",
     )
 
-    @asynccontextmanager
-    async def on_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-        """Initializes the database."""
-        metadata = metadata_registry.get(sqlalchemy_config.bind_key)
-        if sqlalchemy_config.create_all:
-            async with sqlalchemy_config.get_engine().begin() as conn:
-                await conn.run_sync(metadata.create_all)
-        yield
-
-    app = FastAPI(lifespan=on_lifespan)
-    alchemy = StarletteAdvancedAlchemy(config=sqlalchemy_config, app=app)
+    app = FastAPI()
+    alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
 
 Models and Schemas
 ------------------
@@ -88,38 +77,40 @@ Create repository and service classes:
 
 .. code-block:: python
 
+    from typing import Annotated, AsyncGenerator, Optional
+
+    from advanced_alchemy.extensions.fastapi import repository, service
+    from fastapi import Depends
     from sqlalchemy.ext.asyncio import AsyncSession
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-    from typing import AsyncGenerator
 
-    class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
-        """Author repository."""
-        model_type = AuthorModel
 
-    class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
+    class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
         """Author service."""
-        repository_type = AuthorRepository
 
-    async def provide_authors_service(
-        db_session: Annotated[AsyncSession, Depends(provide_db_session)],
-    ) -> AsyncGenerator[AuthorService, None]:
-        """This provides the default Authors repository."""
-        async with AuthorService.new(session=db_session) as service:
-            yield service
+        class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
+            """Author repository."""
+            model_type = AuthorModel
+
+        repository_type = Repo
+
 
 Dependency Injection
 --------------------
 
-Set up dependency injection for the database session:
+Set up dependency injected into the request context.
 
 .. code-block:: python
 
     from fastapi import Request
 
-    async def provide_db_session(request: Request) -> AsyncSession:
-        """Provide a DB session."""
-        return alchemy.get_session(request) # this is the `StarletteAdvancedAlchemy` object
+    DatabaseSession = Annotated[AsyncSession, Depends(alchemy.provide_session())]
+    Authors = Annotated[AuthorService, Depends(provide_authors_service)]
+
+    async def provide_authors_service(db_session: DatabaseSession) -> AsyncGenerator[AuthorService, None]:
+        """This provides the default Authors repository."""
+        async with AuthorService.new(session=db_session) as service:
+            yield service
+
 
 Controllers
 -----------
@@ -130,32 +121,31 @@ Create controllers using the service:
 
     from fastapi import APIRouter, Depends
     from uuid import UUID
-    from advanced_alchemy.filters import LimitOffset
-    from advanced_alchemy.service import OffsetPagination
+    from advanced_alchemy.extensions.fastapi import filters
 
     author_router = APIRouter()
 
-    @author_router.get(path="/authors", response_model=OffsetPagination[Author])
+    @author_router.get(path="/authors", response_model=filters.OffsetPagination[Author])
     async def list_authors(
-        authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
-        limit_offset: Annotated[LimitOffset, Depends(provide_limit_offset_pagination)],
-    ) -> OffsetPagination[AuthorModel]:
+        authors_service: Authors,
+        limit_offset: Annotated[filters.LimitOffset, Depends(provide_limit_offset_pagination)],
+    ) -> filters.OffsetPagination[AuthorModel]:
         """List authors."""
         results, total = await authors_service.list_and_count(limit_offset)
         return authors_service.to_schema(results, total, filters=[limit_offset])
 
     @author_router.post(path="/authors", response_model=Author)
     async def create_author(
-        authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
+        authors_service: Authors,
         data: AuthorCreate,
     ) -> AuthorModel:
         """Create a new author."""
-        obj = await authors_service.create(data.model_dump(exclude_unset=True, exclude_none=True), auto_commit=True)
+        obj = await authors_service.create(data)
         return authors_service.to_schema(obj)
 
     @author_router.get(path="/authors/{author_id}", response_model=Author)
     async def get_author(
-        authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
+        authors_service: Authors,
         author_id: UUID,
     ) -> AuthorModel:
         """Get an existing author."""
@@ -164,25 +154,21 @@ Create controllers using the service:
 
     @author_router.patch(path="/authors/{author_id}", response_model=Author)
     async def update_author(
-        authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
+        authors_service: Authors,
         data: AuthorUpdate,
         author_id: UUID,
     ) -> AuthorModel:
         """Update an author."""
-        obj = await authors_service.update(
-            data.model_dump(exclude_unset=True, exclude_none=True),
-            item_id=author_id,
-            auto_commit=True,
-        )
+        obj = await authors_service.update(data, item_id=author_id)
         return authors_service.to_schema(obj)
 
     @author_router.delete(path="/authors/{author_id}")
     async def delete_author(
-        authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
+        authors_service: Authors,
         author_id: UUID,
     ) -> None:
         """Delete an author from the system."""
-        _ = await authors_service.delete(author_id, auto_commit=True)
+        _ = await authors_service.delete(author_id)
 
 Application Configuration
 -------------------------
