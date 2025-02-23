@@ -3,6 +3,29 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.32.0
+    :date: 2025-02-23
+
+    .. change:: remove `limit` and `offset` from count statement
+        :type: bugfix
+        :pr: 395
+
+        Remove `limit` and `offset` from count statement
+
+    .. change:: rename `force_basic_query_mode`
+        :type: misc
+        :pr: 396
+
+        Renames `force_basic_query_mode` to `count_with_window_function`.  This is also exposed as a class/init parameter for the service and repository.
+
+    .. change:: add Enum to default type decoders
+        :type: feature
+        :pr: 397
+
+        Extends the default `msgspec` type decoders to handle Enum types by converting them to their underlying value during serialization
+
+
+
 .. changelog:: 0.31.0
     :date: 2025-02-18
 
