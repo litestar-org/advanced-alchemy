@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Union, cast
 from litestar.di import Provide
 from litestar.dto import DTOData
 from litestar.params import Dependency, Parameter
-from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+from litestar.plugins import CLIPlugin, InitPluginProtocol
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryError
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
@@ -55,7 +55,7 @@ signature_namespace_values: dict[str, Any] = {
 }
 
 
-class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.SlotsBase):
+class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase):
     """SQLAlchemy application lifecycle configuration."""
 
     def __init__(
