@@ -38,13 +38,13 @@ maintainers = [
   { name = "Litestar Developers", email = "hello@litestar.dev" },
   { name = "Cody Fincher", email = "cody@litestar.dev" },
   { name = "Jacob Coffee", email = "jacob@litestar.dev" },
-  { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
+  { name = "Janek Nouvertné", email = "janek@litestar.dev" },
   { name = "Julien Courtes", email = "julien@litestar.dev" },
 ]
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.32.0"
+version = "0.32.1"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"

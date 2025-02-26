@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.9"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -10,7 +9,7 @@ resolution-markers = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "0.32.0"
+version = "0.32.1"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -227,7 +226,6 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uuid-utils", marker = "extra == 'uuid'", specifier = ">=0.6.1" },
 ]
-provides-extras = ["cli", "nanoid", "uuid"]
 
 [package.metadata.requires-dev]
 build = [{ name = "bump-my-version" }]
