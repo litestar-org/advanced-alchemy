@@ -10,7 +10,7 @@ resolution-markers = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "0.32.1"
+version = "0.32.2"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
