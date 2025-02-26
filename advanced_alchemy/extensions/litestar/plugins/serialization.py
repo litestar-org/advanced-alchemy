@@ -1,6 +1,6 @@
 from typing import Any
 
-from litestar.plugins import SerializationPluginProtocol
+from litestar.plugins import SerializationPlugin
 from litestar.typing import FieldDefinition
 from sqlalchemy.orm import DeclarativeBase
 
@@ -8,7 +8,7 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
 
 
-class SQLAlchemySerializationPlugin(SerializationPluginProtocol, _slots_base.SlotsBase):
+class SQLAlchemySerializationPlugin(SerializationPlugin, _slots_base.SlotsBase):
     def __init__(self) -> None:
         self._type_dto_map: dict[type[DeclarativeBase], type[SQLAlchemyDTO[Any]]] = {}
 

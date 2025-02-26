@@ -128,7 +128,7 @@ lint = [
   "types-pytz",
   "types-ujson",
 ]
-litestar = ["litestar[cli]>=2.12.1"]
+litestar = ["litestar[cli]>=2.15.0"]
 mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
