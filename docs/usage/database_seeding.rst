@@ -95,7 +95,7 @@ Asynchronous Loading
         await async_session.commit()
 
 Integration with Web Frameworks
-------------------------------- 
+-------------------------------
 
 Litestar
 ~~~~~~~~
