@@ -9,7 +9,7 @@ Creating Fixtures
 
 Fixtures in Advanced Alchemy are simple JSON files that contain the data you want to seed. Each fixture file should:
 
-1. Contain a JSON array of objects, where each object represents a row in your database table
+1. Contain a JSON object or a JSON array of objects, where each object represents a row in your database table
 2. Include all required fields for your model
 
 **Example Fixture:**
@@ -54,13 +54,13 @@ Synchronous Loading
     def seed_database(session):
         # Create repository
         product_repo = SQLAlchemySyncRepository[Product](session=session, model_type=Product)
-        
+
         # Load fixture
         fixture_data = open_fixture(fixtures_path, "products")
-        
+
         # Create objects from fixture data
         products = [Product(**item) for item in fixture_data]
-        
+
         # Add to database
         product_repo.add_many(products)
         session.commit()
@@ -83,24 +83,19 @@ Asynchronous Loading
     async def seed_database(async_session):
         # Create repository
         product_repo = SQLAlchemyAsyncRepository[Product](session=async_session, model_type=Product)
-        
+
         # Load fixture asynchronously
         fixture_data = await open_fixture_async(fixtures_path, "products")
-        
+
         # Create objects from fixture data
         products = [Product(**item) for item in fixture_data]
-        
+
         # Add to database
         await product_repo.add_many(products)
         await async_session.commit()
 
 Integration with Web Frameworks
--------------------------------
-
-.. note::
-
-    You can use ``upsert_many`` to update data instead of ``add_many`` in the examples below.
-    
+------------------------------- 
 
 Litestar
 ~~~~~~~~
@@ -119,17 +114,17 @@ Litestar
         """Seed the database during application startup."""
         async with app.state.db_plugin.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        
+
         async with app.state.db_plugin.get_session() as session:
             from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-            
+
             # Create repositories for each model you want to seed
             product_repo = SQLAlchemyAsyncRepository[Product](session=session, model_type=Product)
-            
+
             # Load and add data for each model
             product_data = await open_fixture_async(fixtures_path, "products")
             await product_repo.add_many([Product(**item) for item in product_data])
-            
+
             await session.commit()
 
     app = Litestar(
@@ -169,15 +164,15 @@ FastAPI
         # Create tables
         async with alchemy.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        
+
         # Seed data
         async with alchemy.get_session() as session:
             from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-            
+
             # Check if data already exists to avoid duplicates
             product_repo = SQLAlchemyAsyncRepository[Product](session=session, model_type=Product)
             count = await product_repo.count()
-            
+
             if count == 0:  # Only seed if no data exists
                 product_data = await open_fixture_async(fixtures_path, "products")
                 await product_repo.add_many([Product(**item) for item in product_data])
@@ -207,20 +202,20 @@ Flask
     def seed_database():
         # Create tables
         Base.metadata.create_all(alchemy.engine)
-        
+
         # Seed data
         with alchemy.get_session() as session:
             from advanced_alchemy.repository import SQLAlchemySyncRepository
-            
+
             # Check if data already exists to avoid duplicates
             product_repo = SQLAlchemySyncRepository[Product](session=session, model_type=Product)
             count = product_repo.count()
-            
+
             if count == 0:  # Only seed if no data exists
                 product_data = open_fixture(fixtures_path, "products")
                 product_repo.add_many([Product(**item) for item in product_data])
                 session.commit()
-    
+
 
 Best Practices
 --------------
@@ -236,9 +231,9 @@ Best Practices
 Tips for Efficient Seeding
 --------------------------
 
-- Use ``add_many()`` instead of adding objects one by one for better performance.
-- Use ``upsert_many()`` to update your data if you are updating prices for example.
+- Use :func:`add_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepositoryProtocol.add_many>` / :func:`add_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepositoryProtocol.add_many>` instead of adding objects one by one for better performance.
+- Use :func:`upsert_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepositoryProtocol.upsert_many>` / :func:`upsert_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepositoryProtocol.upsert_many>` to update your data if you are updating prices for example.
 - You can use the database seeding from your cli, app startup or any route.
 - For large datasets, consider chunking the data into smaller batches.
 - When dealing with relationships, seed parent records before child records.
-- Consider using factory libraries like Polyfactory for generating test data.
+- Consider using factory libraries like `Polyfactory <https://github.com/litestar-org/polyfactory>`__ for generating test data.
