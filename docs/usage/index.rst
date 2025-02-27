@@ -18,7 +18,6 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     repositories
     services
     types
-    utilities
     cli
 
 .. toctree::
