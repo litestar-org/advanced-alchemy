@@ -313,7 +313,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        force_basic_query_mode: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -423,6 +423,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
     """
+    count_with_window_function: bool = True
+    """Use an analytical window function to count results.  This allows the count to be performed in a single query.
+    """
 
     def __init__(
         self,
@@ -437,6 +440,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         wrap_exceptions: bool = True,
+        uniquify: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -452,6 +457,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             error_messages: A set of custom error messages to use for operations
             wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
             **kwargs: Additional arguments.
 
         """
@@ -464,6 +471,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
+        self.uniquify = self._get_uniquify(uniquify)
+        self.count_with_window_function = (
+            count_with_window_function if count_with_window_function is not None else self.count_with_window_function
+        )
         self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
@@ -474,6 +485,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+
+    def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
+        return bool(uniquify) if uniquify is not None else self.uniquify
 
     @staticmethod
     def _get_error_messages(
@@ -563,11 +577,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     ) -> Union[tuple[list[_AbstractLoad], bool], tuple[None, bool]]:
         if loader_options is None:
             # use the defaults set at initialization
-            return self._default_loader_options, self._loader_options_have_wildcards
+            return self._default_loader_options, self._loader_options_have_wildcards or self.uniquify
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
-            default_options_have_wildcards=self._loader_options_have_wildcards,
+            default_options_have_wildcards=self._loader_options_have_wildcards or self.uniquify,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
         )
@@ -644,6 +658,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
 
@@ -657,6 +672,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The deleted instance.
@@ -664,6 +680,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by ``item_id``.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -692,6 +709,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> Sequence[ModelT]:
         """Delete instance identified by `item_id`.
 
@@ -707,11 +725,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The deleted instances.
 
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -785,6 +805,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         sanity_check: bool = True,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Delete instances specified by referenced kwargs and filters.
@@ -798,11 +819,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             sanity_check: When true, the length of selected instances is compared to the deleted row count
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Arguments to apply to a delete
         Returns:
             The deleted instances.
 
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -850,6 +873,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
@@ -860,6 +884,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -937,6 +962,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -950,6 +976,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The retrieved instance.
@@ -957,6 +984,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -985,6 +1013,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -997,6 +1026,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1005,6 +1035,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1033,6 +1064,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -1045,11 +1077,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             The retrieved instance or None
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1086,6 +1120,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
@@ -1108,6 +1143,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1115,6 +1151,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1172,6 +1209,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
@@ -1192,6 +1230,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1203,6 +1242,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found identified by `item_id`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1241,6 +1281,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> int:
         """Get the count of records returned by a query.
@@ -1252,11 +1293,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1293,6 +1336,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -1313,6 +1357,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated instance.
@@ -1320,6 +1365,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1352,6 +1398,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> list[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
@@ -1368,6 +1415,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated instances.
@@ -1375,6 +1423,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1429,11 +1478,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
-        force_basic_query_mode: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1442,22 +1492,27 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
             auto_expunge: Remove object from session before returning.
-            force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
+        self.count_with_window_function = (
+            count_with_window_function if count_with_window_function is not None else self.count_with_window_function
+        )
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
+        if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
             return self._list_and_count_basic(
                 *filters,
                 auto_expunge=auto_expunge,
@@ -1633,7 +1688,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]],
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
-        return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)
+        return (
+            statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True)
+            .limit(None)
+            .offset(None)
+            .order_by(None)
+        )
 
     def upsert(
         self,
@@ -1648,8 +1708,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> ModelT:
-        """Update or create instance.
+        """Modify or create instance.
 
         Updates instance with the attribute values present on `data`, or creates a new instance if
         one doesn't exist.
@@ -1671,6 +1732,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated or created instance.
@@ -1678,6 +1740,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as `data`.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1727,8 +1790,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
     ) -> list[ModelT]:
-        """Update or create instance.
+        """Modify or create multiple instances.
 
         Update instances with the attribute values present on `data`, or create a new instance if
         one doesn't exist.
@@ -1749,6 +1813,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             The updated or created instance.
@@ -1756,6 +1821,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Raises:
             NotFoundError: If no instance found with same identifier as ``data``.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1855,6 +1921,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
@@ -1868,11 +1935,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances, after filtering applied.
         """
+        self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1969,6 +2038,7 @@ class SQLAlchemySyncSlugRepository(
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Select record by slug value."""
@@ -1977,6 +2047,7 @@ class SQLAlchemySyncSlugRepository(
             load=load,
             execution_options=execution_options,
             error_messages=error_messages,
+            uniquify=uniquify,
         )
 
     def get_available_slug(
@@ -2103,20 +2174,20 @@ class SQLAlchemySyncQueryRepository:
     def list_and_count(
         self,
         statement: Select[Any],
-        force_basic_query_mode: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
 
         Args:
             statement: To facilitate customization of the underlying select query.
-            force_basic_query_mode: Force list and count to use two queries instead of an analytical window function.
+            count_with_window_function: Force list and count to use two queries instead of an analytical window function.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        if self._dialect.name in {"spanner", "spanner+spanner"} or force_basic_query_mode:
+        if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
             return self._list_and_count_basic(statement=statement, **kwargs)
         return self._list_and_count_window(statement=statement, **kwargs)
 

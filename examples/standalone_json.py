@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class Item(UUIDBase):
     name: Mapped[str]
     # using ``Mapped[dict]`` with an AA provided base will map it to ``JSONB``
-    data: Mapped[dict]
+    data: Mapped[dict[str, Any]]
 
 
 class ItemRepository(SQLAlchemyAsyncRepository[Item]):

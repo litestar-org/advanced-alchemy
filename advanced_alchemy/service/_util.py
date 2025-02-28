@@ -4,7 +4,9 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
+import datetime
 from collections.abc import Sequence
+from enum import Enum
 from functools import partial
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
@@ -31,6 +33,14 @@ if TYPE_CHECKING:
     from advanced_alchemy.base import ModelProtocol
 
 __all__ = ("ResultConverter", "find_filter")
+
+DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
+    (lambda x: x is UUID, lambda t, v: t(v.hex)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is Enum, lambda t, v: t(v.value)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+]
 
 
 def _default_msgspec_deserializer(
@@ -60,8 +70,11 @@ def _default_msgspec_deserializer(
     if issubclass(target_type, (Path, PurePath, UUID)):
         return target_type(value)
 
-    msg = f"Unsupported type: {type(value)!r}"
-    raise TypeError(msg)
+    try:
+        return target_type(value)
+    except Exception as e:
+        msg = f"Unsupported type: {type(value)!r}"
+        raise TypeError(msg) from e
 
 
 def find_filter(
@@ -78,7 +91,7 @@ def find_filter(
         The match filter instance or None
     """
     return next(
-        (cast("FilterTypeT | None", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
+        (cast("Optional[FilterTypeT]", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
         None,
     )
 
@@ -181,9 +194,7 @@ class ResultConverter:
                         from_attributes=True,
                         dec_hook=partial(
                             _default_msgspec_deserializer,
-                            type_decoders=[
-                                (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                            ],
+                            type_decoders=DEFAULT_TYPE_DECODERS,
                         ),
                     ),
                 )
@@ -197,9 +208,7 @@ class ResultConverter:
                     from_attributes=True,
                     dec_hook=partial(
                         _default_msgspec_deserializer,
-                        type_decoders=[
-                            (lambda x: x is UUID, lambda t, v: t(v.hex)),
-                        ],
+                        type_decoders=DEFAULT_TYPE_DECODERS,
                     ),
                 ),
                 limit=limit_offset.limit,
