@@ -291,7 +291,7 @@ def create_registry(
         dict[str, Any]: JsonB,
         dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
-      StoredObject: ObjectStore,
+        StoredObject: ObjectStore,
     }
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, IPvAnyAddress, IPvAnyInterface, IPvAnyNetwork, Json
