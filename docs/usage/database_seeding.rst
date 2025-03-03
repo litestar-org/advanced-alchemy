@@ -18,18 +18,36 @@ Fixtures in Advanced Alchemy are simple JSON files that contain the data you wan
     :caption: fixtures/products.json
 
     [
-      {
-        "name": "Product 1",
-        "description": "Description for product 1",
-        "price": 19.99,
-        "in_stock": true
-      },
-      {
-        "name": "Product 2",
-        "description": "Description for product 2",
-        "price": 29.99,
-        "in_stock": false
-      }
+        {
+            "name": "Laptop",
+            "description": "High-performance laptop with 16GB RAM and 1TB SSD",
+            "price": 999.99,
+            "in_stock": true
+        },
+        {
+            "name": "Smartphone",
+            "description": "Latest smartphone model with 5G and advanced camera",
+            "price": 699.99,
+            "in_stock": true
+        },
+        {
+            "name": "Headphones",
+            "description": "Noise-cancelling wireless headphones with 30-hour battery life",
+            "price": 199.99,
+            "in_stock": true
+        },
+        {
+            "name": "Smartwatch",
+            "description": "Fitness tracker with heart rate monitor and GPS",
+            "price": 149.99,
+            "in_stock": false
+        },
+        {
+            "name": "Tablet",
+            "description": "10-inch tablet with high-resolution display",
+            "price": 349.99,
+            "in_stock": true
+        }
     ]
 
 Loading Fixtures
@@ -43,27 +61,77 @@ Synchronous Loading
 .. code-block:: python
 
     from pathlib import Path
-    from advanced_alchemy.utils.fixtures import open_fixture
+    from typing import Optional
+
+    from sqlalchemy import String, create_engine
+    from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
+
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.repository import SQLAlchemySyncRepository
-    from your_app.models import Product
+    from advanced_alchemy.utils.fixtures import open_fixture
 
-    # Define the path where your fixtures are stored
-    fixtures_path = Path("path/to/fixtures")
+    # Database connection string
+    DATABASE_URL = "sqlite:///db.sqlite3"
 
-    # Inside a session context
-    def seed_database(session):
-        # Create repository
-        product_repo = SQLAlchemySyncRepository[Product](session=session, model_type=Product)
+    # Create engine and session maker
+    engine = create_engine(DATABASE_URL)
+    session_maker = sessionmaker(engine, expire_on_commit=False)
 
-        # Load fixture
-        fixture_data = open_fixture(fixtures_path, "products")
 
-        # Create objects from fixture data
-        products = [Product(**item) for item in fixture_data]
+    class Product(UUIDBase):
+        """Product model."""
+        __tablename__ = "products"
 
-        # Add to database
-        product_repo.add_many(products)
-        session.commit()
+        name: Mapped[str] = mapped_column(String(length=100))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
+        price: Mapped[float]
+        in_stock: Mapped[bool] = mapped_column(default=True)
+
+
+    # Repository
+    class ProductRepository(SQLAlchemySyncRepository[Product]):
+        """Product repository."""
+        model_type = Product
+
+
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
+
+
+    def initialize_database():
+        """Initialize the database and create tables."""
+        print("Creating database tables...")
+        UUIDBase.metadata.create_all(engine)
+        print("Tables created successfully")
+
+
+    def seed_database():
+        """Seed the database with fixture data."""
+        print("Seeding database...")
+
+        # Create a session
+        with session_maker() as session:
+            # Create repository for product model
+            product_repo = ProductRepository(session=session)
+
+            # Load and add product data
+            try:
+                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
+                product_data = open_fixture(fixtures_path, "product")
+                print(f"Loaded {len(product_data)} products from fixture")
+                product_repo.add_many([Product(**item) for item in product_data])
+                session.commit()
+            except FileNotFoundError:
+                print(f"Could not find fixture file at {fixtures_path}/product.json")
+
+
+    if __name__ == "__main__":
+        # Initialize the database
+        initialize_database()
+        
+        # Seed the database
+        seed_database()
+
 
 Asynchronous Loading
 ~~~~~~~~~~~~~~~~~~~~
@@ -72,27 +140,87 @@ Asynchronous Loading
 
     import asyncio
     from pathlib import Path
-    from advanced_alchemy.utils.fixtures import open_fixture_async
+    from typing import List, Optional
+
+    from sqlalchemy import String
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from your_app.models import Product
+    from advanced_alchemy.utils.fixtures import open_fixture_async
 
-    # Define the path where your fixtures are stored
-    fixtures_path = Path("path/to/fixtures")
+    # Database connection string
+    DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    # Inside an async session context
-    async def seed_database(async_session):
-        # Create repository
-        product_repo = SQLAlchemyAsyncRepository[Product](session=async_session, model_type=Product)
+    # Create engine and session maker
+    engine = create_async_engine(DATABASE_URL)
+    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
-        # Load fixture asynchronously
-        fixture_data = await open_fixture_async(fixtures_path, "products")
 
-        # Create objects from fixture data
-        products = [Product(**item) for item in fixture_data]
+    class Product(UUIDBase):
+        """Product model."""
+        __tablename__ = "products"
 
-        # Add to database
-        await product_repo.add_many(products)
-        await async_session.commit()
+        name: Mapped[str] = mapped_column(String(length=100))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
+        price: Mapped[float]
+        in_stock: Mapped[bool] = mapped_column(default=True)
+
+
+    # Repository
+    class ProductRepository(SQLAlchemyAsyncRepository[Product]):
+        """Product repository."""
+        model_type = Product
+
+
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
+
+
+    async def initialize_database():
+        """Initialize the database and create tables."""
+        print("Creating database tables...")
+        async with engine.begin() as conn:
+            await conn.run_sync(UUIDBase.metadata.create_all)
+        print("Tables created successfully")
+
+
+    async def seed_database():
+        """Seed the database with fixture data."""
+        print("Seeding database...")
+        
+        # Create a session
+        async with async_session_maker() as session:
+            # Create repository for product model
+            product_repo = ProductRepository(session=session)
+            
+            # Load and add product data
+            try:
+                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
+                product_data = await open_fixture_async(fixtures_path, "product")
+                print(f"Loaded {len(product_data)} products from fixture")
+                await product_repo.add_many([Product(**item) for item in product_data])
+                await session.commit()
+            except FileNotFoundError:
+                print(f"Could not find fixture file at {fixtures_path}/product.json")
+
+
+
+    async def main():
+        """Main async function to run the example."""
+        # Initialize the database
+        await initialize_database()
+
+        # Seed the database
+        await seed_database()
+
+
+
+    if __name__ == "__main__":
+        # Run the async main function
+        asyncio.run(main())
+
 
 Integration with Web Frameworks
 -------------------------------
@@ -103,118 +231,302 @@ Litestar
 .. code-block:: python
 
     from pathlib import Path
+    from typing import Optional
+
+    import uvicorn
     from litestar import Litestar
-    from litestar.plugins.sqlalchemy import SQLAlchemyPlugin, SQLAlchemyAsyncConfig
+    from litestar.contrib.sqlalchemy.base import UUIDBase
+    from litestar.di import Provide
+    from sqlalchemy import String
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture_async
-    from your_app.models import Product, Base
 
-    fixtures_path = Path("fixtures")
+    # Database connection string
+    DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    async def on_startup(app: Litestar) -> None:
+    # Create engine and session maker
+    engine = create_async_engine(DATABASE_URL)
+    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
+
+
+    class Product(UUIDBase):
+        """Product model."""
+        __tablename__ = "products"
+
+        name: Mapped[str] = mapped_column(String(length=100))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
+        price: Mapped[float]
+        in_stock: Mapped[bool] = mapped_column(default=True)
+
+
+    # Repository
+    class ProductRepository(SQLAlchemyAsyncRepository[Product]):
+        """Product repository."""
+        model_type = Product
+
+
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
+
+
+    # Dependency provider
+    async def provide_db_session() -> AsyncSession: # type: ignore
+        """Provide a database session."""
+        async with async_session_maker() as session:
+            yield session
+
+
+    # Startup function to seed the database
+    async def on_startup() -> None:
         """Seed the database during application startup."""
-        async with app.state.db_plugin.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        print("Running startup routine...")
 
-        async with app.state.db_plugin.get_session() as session:
-            from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+        # Create tables
+        print("Creating database tables...")
+        async with engine.begin() as conn:
+            # Create all tables
+            await conn.run_sync(UUIDBase.metadata.create_all)
 
-            # Create repositories for each model you want to seed
-            product_repo = SQLAlchemyAsyncRepository[Product](session=session, model_type=Product)
+        print("Tables created successfully")
 
-            # Load and add data for each model
-            product_data = await open_fixture_async(fixtures_path, "products")
-            await product_repo.add_many([Product(**item) for item in product_data])
+        # Create a session and seed data
+        async with async_session_maker() as session:
+            # Create repository for product model
+            product_repo = ProductRepository(session=session)
+            # Load and add product data
+            try:
+                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
+                product_data = await open_fixture_async(fixtures_path, "product")
+                print(f"Loaded {len(product_data)} products from fixture")
+                await product_repo.add_many([Product(**item) for item in product_data])
+                await session.commit()
+            except FileNotFoundError:
+                print(f"Could not find fixture file at {fixtures_path}/product.json")
 
-            await session.commit()
+            # Verify data was added
+            products = await product_repo.list()
+            print(f"Database seeded with {len(products)} products")
 
+
+    # Create the Litestar application
     app = Litestar(
         on_startup=[on_startup],
-        plugins=[
-            SQLAlchemyPlugin(
-                config=SQLAlchemyAsyncConfig(
-                    connection_string="sqlite+aiosqlite:///db.sqlite3"
-                )
-            )
-        ]
+        dependencies={"db_session": Provide(provide_db_session)},
     )
+
+    if __name__ == "__main__":
+        uvicorn.run(app, host="0.0.0.0", port=8000)
 
 FastAPI
 ~~~~~~~
 
 .. code-block:: python
 
-    from fastapi import FastAPI, Depends
     from pathlib import Path
-    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig
+    from typing import Optional, AsyncGenerator
+    from contextlib import asynccontextmanager
+
+    import uvicorn
+    from fastapi import FastAPI, Depends
+    from sqlalchemy import String
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture_async
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from your_app.models import Product, Base
 
-    app = FastAPI()
-    fixtures_path = Path("fixtures")
+    # Database connection string
+    DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    # Setup database
-    alchemy = AdvancedAlchemy(
-        config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///db.sqlite3"),
-        app=app,
-    )
+    # Create engine and session maker
+    engine = create_async_engine(DATABASE_URL)
+    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
-    @app.on_event("startup")
-    async def seed_database():
+
+    class Product(UUIDBase):
+        """Product model."""
+        __tablename__ = "products"
+
+        name: Mapped[str] = mapped_column(String(length=100))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
+        price: Mapped[float]
+        in_stock: Mapped[bool] = mapped_column(default=True)
+
+
+    # Repository
+    class ProductRepository(SQLAlchemyAsyncRepository[Product]):
+        """Product repository."""
+        model_type = Product
+
+
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
+
+
+    # Dependency provider
+    async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+        """Provide a database session."""
+        async with async_session_maker() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+
+
+    # Lifespan context manager
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Handle startup and shutdown events."""
+        # Startup: Initialize database and seed data
+        print("Running startup routine...")
+
         # Create tables
-        async with alchemy.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        print("Creating database tables...")
+        async with engine.begin() as conn:
+            # Create all tables
+            await conn.run_sync(UUIDBase.metadata.create_all)
 
-        # Seed data
-        async with alchemy.get_session() as session:
-            from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+        print("Tables created successfully")
 
-            # Check if data already exists to avoid duplicates
-            product_repo = SQLAlchemyAsyncRepository[Product](session=session, model_type=Product)
-            count = await product_repo.count()
-
-            if count == 0:  # Only seed if no data exists
-                product_data = await open_fixture_async(fixtures_path, "products")
+        # Create a session and seed data
+        async with async_session_maker() as session:
+            # Create repository for product model
+            product_repo = ProductRepository(session=session)
+            # Load and add product data
+            try:
+                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
+                product_data = await open_fixture_async(fixtures_path, "product")
+                print(f"Loaded {len(product_data)} products from fixture")
                 await product_repo.add_many([Product(**item) for item in product_data])
                 await session.commit()
+            except FileNotFoundError:
+                print(f"Could not find fixture file at {fixtures_path}/product.json")
+
+            # Verify data was added
+            products = await product_repo.list()
+            print(f"Database seeded with {len(products)} products")
+        
+        # Yield control back to FastAPI
+        yield
+        
+        # Shutdown: Clean up resources if needed
+        # This section runs when the application is shutting down
+        print("Shutting down...")
+
+
+    # Create the FastAPI application with lifespan
+    app = FastAPI(lifespan=lifespan)
+
+
+    if __name__ == "__main__":
+        uvicorn.run(app, host="0.0.0.0", port=8000) 
 
 Flask
 ~~~~~
 
 .. code-block:: python
 
-    from flask import Flask
     from pathlib import Path
-    from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemySyncConfig
+    from typing import Generator, Optional
+
+    from flask import Flask
+    from sqlalchemy import String, create_engine
+    from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
+
+    from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.repository import SQLAlchemySyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture
-    from your_app.models import Product, Base
 
-    app = Flask(__name__)
-    fixtures_path = Path("fixtures")
+    # Database connection string
+    DATABASE_URL = "sqlite:///db.sqlite3"
 
-    # Setup database
-    alchemy = AdvancedAlchemy(
-        config=SQLAlchemySyncConfig(connection_string="sqlite:///db.sqlite3"),
-        app=app,
-    )
+    # Create engine and session maker
+    engine = create_engine(DATABASE_URL)
+    session_maker = sessionmaker(engine, expire_on_commit=False)
 
-    @app.before_first_request
-    def seed_database():
+
+    class Product(UUIDBase):
+        """Product model."""
+        __tablename__ = "products"
+
+        name: Mapped[str] = mapped_column(String(length=100))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
+        price: Mapped[float]
+        in_stock: Mapped[bool] = mapped_column(default=True)
+
+
+    # Repository
+    class ProductRepository(SQLAlchemySyncRepository[Product]):
+        """Product repository."""
+        model_type = Product
+
+
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
+
+
+    # Dependency provider
+    def get_db_session() -> Generator[Session, None, None]:
+        """Provide a database session."""
+        session = session_maker()
+        try:
+            yield session
+        finally:
+            session.close()
+
+
+    # Initialize database and seed data
+    def init_db() -> None:
+        """Initialize the database and seed it with data."""
+        print("Running database initialization...")
+
         # Create tables
-        Base.metadata.create_all(alchemy.engine)
+        print("Creating database tables...")
+        UUIDBase.metadata.create_all(engine)
+        print("Tables created successfully")
 
-        # Seed data
-        with alchemy.get_session() as session:
-            from advanced_alchemy.repository import SQLAlchemySyncRepository
-
-            # Check if data already exists to avoid duplicates
-            product_repo = SQLAlchemySyncRepository[Product](session=session, model_type=Product)
-            count = product_repo.count()
-
-            if count == 0:  # Only seed if no data exists
-                product_data = open_fixture(fixtures_path, "products")
+        # Create a session and seed data
+        with session_maker() as session:
+            # Create repository for product model
+            product_repo = ProductRepository(session=session)
+            
+            # Load and add product data
+            try:
+                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
+                product_data = open_fixture(fixtures_path, "product")
+                print(f"Loaded {len(product_data)} products from fixture")
                 product_repo.add_many([Product(**item) for item in product_data])
                 session.commit()
+            except FileNotFoundError:
+                print(f"Could not find fixture file at {fixtures_path}/product.json")
+
+            # Verify data was added
+            products = product_repo.list()
+            print(f"Database seeded with {len(products)} products")
+
+
+    # Create the Flask application with app factory pattern
+    def create_app():
+        """Create and configure the Flask application."""
+        app = Flask(__name__)
+        
+        # Initialize the database when the app is created
+        with app.app_context():
+            init_db()
+        
+        return app
+
+
+    # Create the app instance
+    app = create_app()
+
+    if __name__ == "__main__":
+        app.run(host="0.0.0.0", port=5000, debug=True) 
 
 
 Best Practices
