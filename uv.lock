@@ -10,7 +10,7 @@ resolution-markers = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "0.32.0"
+version = "0.32.2"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -254,7 +254,7 @@ dev = [
     { name = "flask", extras = ["async"] },
     { name = "flask-sqlalchemy", specifier = ">=3.1.1" },
     { name = "git-cliff", specifier = ">=2.6.1" },
-    { name = "litestar", extras = ["cli"], specifier = ">=2.12.1" },
+    { name = "litestar", extras = ["cli"], specifier = ">=2.15.0" },
     { name = "mypy", specifier = ">=1.13.0" },
     { name = "myst-parser" },
     { name = "oracledb", specifier = ">=2.4.1" },
@@ -358,7 +358,7 @@ lint = [
     { name = "types-pyyaml" },
     { name = "types-ujson" },
 ]
-litestar = [{ name = "litestar", extras = ["cli"], specifier = ">=2.12.1" }]
+litestar = [{ name = "litestar", extras = ["cli"], specifier = ">=2.15.0" }]
 mssql = [
     { name = "aioodbc", specifier = ">=0.5.0" },
     { name = "pyodbc", specifier = ">=5.2.0" },
@@ -1904,7 +1904,7 @@ wheels = [
 
 [[package]]
 name = "litestar"
-version = "2.14.0"
+version = "2.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1922,9 +1922,9 @@ dependencies = [
     { name = "rich-click" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d7/8f/e91ea2b8518bf909c51c9b286173feebe3c9b03c389854b82345c92e1c70/litestar-2.14.0.tar.gz", hash = "sha256:ac154e46fb74ec4bbce7660f6f437adb7d413ea9bad52cd7954dc1d25e243716", size = 394285 }
+sdist = { url = "https://files.pythonhosted.org/packages/54/89/95d146d505061f479cd52bb09b8f0f1b4901d4d308a598e00cab29be045d/litestar-2.15.0.tar.gz", hash = "sha256:81291b6f791775267740aa0587a41b082ae1520907bc7125ff41c39c4360e8b8", size = 397205 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/e7/c5b5ccb7a7d61733320a3c228faed338542e667a547d9f0cf3d5512b0c78/litestar-2.14.0-py3-none-any.whl", hash = "sha256:5602065e263e453ee742aafe38681ba4aa9f5e3df21326cfd2082d1a766ca4fb", size = 567643 },
+    { url = "https://files.pythonhosted.org/packages/aa/8c/01add4611e68b05b3aa23054cbb6e368dfec8ae12f88c7d0d1febdb85701/litestar-2.15.0-py3-none-any.whl", hash = "sha256:e36851a0a076fa38569dee8eb21b483887fc98618b631a0eb265630f101c29ab", size = 570802 },
 ]
 
 [package.optional-dependencies]

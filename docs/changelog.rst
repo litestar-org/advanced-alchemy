@@ -3,6 +3,27 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.32.2
+    :date: 2025-02-26
+
+    .. change:: Litestar extension: Use ``SerializationPlugin`` instead of ``SerializationPluginProtocol``
+        :type: misc
+        :pr: 401
+
+        Use ``SerializationPlugin`` instead of ``SerializationPluginProtocol``
+
+
+.. changelog:: 0.32.1
+    :date: 2025-02-26
+
+    .. change:: Litestar extension: Use ``CLIPlugin`` instead of ``CLIPluginProtocol``
+        :type: misc
+        :pr: 399
+
+        Internal change migrating from using Litestar's ``CLIPluginProtocol`` to
+        ``CLIPlugin``.
+
+
 .. changelog:: 0.32.0
     :date: 2025-02-23
 
