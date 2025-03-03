@@ -5,7 +5,7 @@ from typing import Any
 from typing_extensions import runtime_checkable
 
 try:
-    from pydantic import BaseModel  # type: ignore # noqa: PGH003
+    from pydantic import BaseModel  # type: ignore
 
     PYDANTIC_INSTALLED = True
 except ImportError:

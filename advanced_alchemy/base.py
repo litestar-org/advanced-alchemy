@@ -40,7 +40,7 @@ from advanced_alchemy.mixins import (
 from advanced_alchemy.mixins import (
     UUIDv7PrimaryKey as _UUIDv7PrimaryKey,
 )
-from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, DateTimeUTC, JsonB, ObjectStore, StoredObject
 from advanced_alchemy.utils.dataclass import DataclassProtocol
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
@@ -291,6 +291,7 @@ def create_registry(
         dict[str, Any]: JsonB,
         dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
+        StoredObject: ObjectStore,
     }
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, IPvAnyAddress, IPvAnyInterface, IPvAnyNetwork, Json
