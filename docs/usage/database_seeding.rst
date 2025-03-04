@@ -128,7 +128,7 @@ Synchronous Loading
     if __name__ == "__main__":
         # Initialize the database
         initialize_database()
-        
+
         # Seed the database
         seed_database()
 
@@ -189,12 +189,12 @@ Asynchronous Loading
     async def seed_database():
         """Seed the database with fixture data."""
         print("Seeding database...")
-        
+
         # Create a session
         async with async_session_maker() as session:
             # Create repository for product model
             product_repo = ProductRepository(session=session)
-            
+
             # Load and add product data
             try:
                 print(f"Attempting to load fixtures from {fixtures_path}/product.json")
@@ -410,10 +410,10 @@ FastAPI
             # Verify data was added
             products = await product_repo.list()
             print(f"Database seeded with {len(products)} products")
-        
+
         # Yield control back to FastAPI
         yield
-        
+
         # Shutdown: Clean up resources if needed
         # This section runs when the application is shutting down
         print("Shutting down...")
@@ -424,7 +424,7 @@ FastAPI
 
 
     if __name__ == "__main__":
-        uvicorn.run(app, host="0.0.0.0", port=8000) 
+        uvicorn.run(app, host="0.0.0.0", port=8000)
 
 Flask
 ~~~~~
@@ -494,7 +494,7 @@ Flask
         with session_maker() as session:
             # Create repository for product model
             product_repo = ProductRepository(session=session)
-            
+
             # Load and add product data
             try:
                 print(f"Attempting to load fixtures from {fixtures_path}/product.json")
@@ -514,11 +514,11 @@ Flask
     def create_app():
         """Create and configure the Flask application."""
         app = Flask(__name__)
-        
+
         # Initialize the database when the app is created
         with app.app_context():
             init_db()
-        
+
         return app
 
 
@@ -526,7 +526,7 @@ Flask
     app = create_app()
 
     if __name__ == "__main__":
-        app.run(host="0.0.0.0", port=5000, debug=True) 
+        app.run(host="0.0.0.0", port=5000, debug=True)
 
 
 Best Practices
