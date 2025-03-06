@@ -77,8 +77,6 @@ class DependencyDefaults:
     """Key for the order by dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
-    DEFAULT_IDENTITY_FIELD: str = "id"
-    """Default identity field on SQLAlchemy models."""
     DEFAULT_PAGINATION_SIZE: int = 20
     """Default pagination size."""
 
