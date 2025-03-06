@@ -235,22 +235,33 @@ Litestar
 
     import uvicorn
     from litestar import Litestar
-    from litestar.contrib.sqlalchemy.base import UUIDBase
-    from litestar.di import Provide
     from sqlalchemy import String
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.extensions.litestar import (
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+        SQLAlchemyPlugin,
+    )
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
     # Database connection string
     DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    # Create engine and session maker
-    engine = create_async_engine(DATABASE_URL)
-    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
+
+    session_config = AsyncSessionConfig(expire_on_commit=False)
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string=DATABASE_URL,
+        before_send_handler="autocommit",
+        session_config=session_config,
+        create_all=True,
+    )
+    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
     class Product(UUIDBase):
@@ -269,15 +280,9 @@ Litestar
         model_type = Product
 
 
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-
-    # Dependency provider
-    async def provide_db_session() -> AsyncSession: # type: ignore
-        """Provide a database session."""
-        async with async_session_maker() as session:
-            yield session
+    class ProductsService(SQLAlchemyAsyncRepositoryService[Product, ProductRepository]):
+        """Products service."""
+        repository_type = ProductRepository
 
 
     # Startup function to seed the database
@@ -285,16 +290,8 @@ Litestar
         """Seed the database during application startup."""
         print("Running startup routine...")
 
-        # Create tables
-        print("Creating database tables...")
-        async with engine.begin() as conn:
-            # Create all tables
-            await conn.run_sync(UUIDBase.metadata.create_all)
-
-        print("Tables created successfully")
-
         # Create a session and seed data
-        async with async_session_maker() as session:
+        async with sqlalchemy_config.get_session() as session:
             # Create repository for product model
             product_repo = ProductRepository(session=session)
             # Load and add product data
@@ -315,7 +312,7 @@ Litestar
     # Create the Litestar application
     app = Litestar(
         on_startup=[on_startup],
-        dependencies={"db_session": Provide(provide_db_session)},
+        plugins=[alchemy],
     )
 
     if __name__ == "__main__":
@@ -326,26 +323,30 @@ FastAPI
 
 .. code-block:: python
 
-    from pathlib import Path
-    from typing import Optional, AsyncGenerator
     from contextlib import asynccontextmanager
+    from pathlib import Path
+    from typing import Optional
 
     import uvicorn
-    from fastapi import FastAPI, Depends
+    from fastapi import FastAPI
     from sqlalchemy import String
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.extensions.fastapi import (
+        AdvancedAlchemy,
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+    )
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
     # Database connection string
     DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    # Create engine and session maker
-    engine = create_async_engine(DATABASE_URL)
-    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
 
 
     class Product(UUIDBase):
@@ -364,19 +365,9 @@ FastAPI
         model_type = Product
 
 
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-
-    # Dependency provider
-    async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-        """Provide a database session."""
-        async with async_session_maker() as session:
-            try:
-                yield session
-            finally:
-                await session.close()
-
+    class ProductsService(SQLAlchemyAsyncRepositoryService[Product, ProductRepository]):
+        """Products service."""
+        repository_type = ProductRepository
 
     # Lifespan context manager
     @asynccontextmanager
@@ -385,16 +376,8 @@ FastAPI
         # Startup: Initialize database and seed data
         print("Running startup routine...")
 
-        # Create tables
-        print("Creating database tables...")
-        async with engine.begin() as conn:
-            # Create all tables
-            await conn.run_sync(UUIDBase.metadata.create_all)
-
-        print("Tables created successfully")
-
         # Create a session and seed data
-        async with async_session_maker() as session:
+        async with sqlalchemy_config.get_session() as session:
             # Create repository for product model
             product_repo = ProductRepository(session=session)
             # Load and add product data
@@ -419,9 +402,18 @@ FastAPI
         print("Shutting down...")
 
 
+    session_config = AsyncSessionConfig(expire_on_commit=False)
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string=DATABASE_URL,
+        commit_mode="autocommit",
+        session_config=session_config,
+        create_all=True,
+    )
+
     # Create the FastAPI application with lifespan
     app = FastAPI(lifespan=lifespan)
 
+    alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
 
     if __name__ == "__main__":
         uvicorn.run(app, host="0.0.0.0", port=8000)
@@ -432,23 +424,27 @@ Flask
 .. code-block:: python
 
     from pathlib import Path
-    from typing import Generator, Optional
+    from typing import Optional
 
     from flask import Flask
-    from sqlalchemy import String, create_engine
-    from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
+    from sqlalchemy import String
+    from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.extensions.flask import (
+        AdvancedAlchemy,
+        SQLAlchemySyncConfig,
+        SyncSessionConfig,
+    )
     from advanced_alchemy.repository import SQLAlchemySyncRepository
+    from advanced_alchemy.service import SQLAlchemySyncRepositoryService
     from advanced_alchemy.utils.fixtures import open_fixture
 
     # Database connection string
     DATABASE_URL = "sqlite:///db.sqlite3"
 
-    # Create engine and session maker
-    engine = create_engine(DATABASE_URL)
-    session_maker = sessionmaker(engine, expire_on_commit=False)
-
+    # Set up fixtures path
+    fixtures_path = Path(__file__).parent / "fixtures"
 
     class Product(UUIDBase):
         """Product model."""
@@ -466,35 +462,29 @@ Flask
         model_type = Product
 
 
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
+    class ProductsService(SQLAlchemySyncRepositoryService[Product, ProductRepository]):
+        """Products service."""
+        repository_type = ProductRepository
 
 
-    # Dependency provider
-    def get_db_session() -> Generator[Session, None, None]:
-        """Provide a database session."""
-        session = session_maker()
-        try:
-            yield session
-        finally:
-            session.close()
+    app = Flask(__name__)
 
+    sqlalchemy_config = SQLAlchemySyncConfig(
+        connection_string=DATABASE_URL,
+        commit_mode="autocommit",
+        session_config=SyncSessionConfig(
+            expire_on_commit=False,
+        ),
+        create_all=True
+    )
 
-    # Initialize database and seed data
-    def init_db() -> None:
-        """Initialize the database and seed it with data."""
-        print("Running database initialization...")
+    db = AdvancedAlchemy(config=sqlalchemy_config)
+    db.init_app(app)
 
-        # Create tables
-        print("Creating database tables...")
-        UUIDBase.metadata.create_all(engine)
-        print("Tables created successfully")
-
-        # Create a session and seed data
-        with session_maker() as session:
-            # Create repository for product model
+    with app.app_context():  # noqa: SIM117
+        # Seed data
+        with db.get_session() as session:
             product_repo = ProductRepository(session=session)
-
             # Load and add product data
             try:
                 print(f"Attempting to load fixtures from {fixtures_path}/product.json")
@@ -509,24 +499,8 @@ Flask
             products = product_repo.list()
             print(f"Database seeded with {len(products)} products")
 
-
-    # Create the Flask application with app factory pattern
-    def create_app():
-        """Create and configure the Flask application."""
-        app = Flask(__name__)
-
-        # Initialize the database when the app is created
-        with app.app_context():
-            init_db()
-
-        return app
-
-
-    # Create the app instance
-    app = create_app()
-
     if __name__ == "__main__":
-        app.run(host="0.0.0.0", port=5000, debug=True)
+        app.run(host="0.0.0.0", port=5000)
 
 
 Best Practices
