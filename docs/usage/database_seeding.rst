@@ -61,29 +61,29 @@ Synchronous Loading
 .. code-block:: python
 
     from pathlib import Path
-    from typing import Optional
 
     from sqlalchemy import String, create_engine
-    from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
+    from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
     from advanced_alchemy.repository import SQLAlchemySyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture
 
     # Database connection string
     DATABASE_URL = "sqlite:///db.sqlite3"
 
-    # Create engine and session maker
-    engine = create_engine(DATABASE_URL)
-    session_maker = sessionmaker(engine, expire_on_commit=False)
-
+    config = SQLAlchemySyncConfig(
+        engine_instance=create_engine(DATABASE_URL), 
+        session_config=SyncSessionConfig(expire_on_commit=False)
+    )
 
     class Product(UUIDBase):
         """Product model."""
         __tablename__ = "products"
 
         name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[Optional[str]] = mapped_column(String(length=500))
+        description: Mapped[str | None] = mapped_column(String(length=500))
         price: Mapped[float]
         in_stock: Mapped[bool] = mapped_column(default=True)
 
@@ -101,7 +101,8 @@ Synchronous Loading
     def initialize_database():
         """Initialize the database and create tables."""
         print("Creating database tables...")
-        UUIDBase.metadata.create_all(engine)
+        with config.get_engine().begin() as conn:
+            UUIDBase.metadata.create_all(conn)
         print("Tables created successfully")
 
 
@@ -110,7 +111,7 @@ Synchronous Loading
         print("Seeding database...")
 
         # Create a session
-        with session_maker() as session:
+        with config.get_session() as session:
             # Create repository for product model
             product_repo = ProductRepository(session=session)
 
@@ -140,23 +141,24 @@ Asynchronous Loading
 
     import asyncio
     from pathlib import Path
-    from typing import List, Optional
+    from typing import Optional
 
     from sqlalchemy import String
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
+    from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
     # Database connection string
     DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    # Create engine and session maker
-    engine = create_async_engine(DATABASE_URL)
-    async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
-
+    config = SQLAlchemyAsyncConfig(
+        engine_instance=create_async_engine(DATABASE_URL),
+        session_config=AsyncSessionConfig(expire_on_commit=False)
+    )
 
     class Product(UUIDBase):
         """Product model."""
@@ -181,7 +183,7 @@ Asynchronous Loading
     async def initialize_database():
         """Initialize the database and create tables."""
         print("Creating database tables...")
-        async with engine.begin() as conn:
+        async with config.get_engine().begin() as conn:
             await conn.run_sync(UUIDBase.metadata.create_all)
         print("Tables created successfully")
 
@@ -191,7 +193,7 @@ Asynchronous Loading
         print("Seeding database...")
 
         # Create a session
-        async with async_session_maker() as session:
+        async with config.get_session() as session:
             # Create repository for product model
             product_repo = ProductRepository(session=session)
 
@@ -245,7 +247,6 @@ Litestar
         SQLAlchemyPlugin,
     )
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
     # Database connection string
@@ -278,11 +279,6 @@ Litestar
     class ProductRepository(SQLAlchemyAsyncRepository[Product]):
         """Product repository."""
         model_type = Product
-
-
-    class ProductsService(SQLAlchemyAsyncRepositoryService[Product, ProductRepository]):
-        """Products service."""
-        repository_type = ProductRepository
 
 
     # Startup function to seed the database
@@ -339,7 +335,6 @@ FastAPI
         SQLAlchemyAsyncConfig,
     )
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
     # Database connection string
@@ -364,10 +359,6 @@ FastAPI
         """Product repository."""
         model_type = Product
 
-
-    class ProductsService(SQLAlchemyAsyncRepositoryService[Product, ProductRepository]):
-        """Products service."""
-        repository_type = ProductRepository
 
     # Lifespan context manager
     @asynccontextmanager
@@ -437,7 +428,6 @@ Flask
         SyncSessionConfig,
     )
     from advanced_alchemy.repository import SQLAlchemySyncRepository
-    from advanced_alchemy.service import SQLAlchemySyncRepositoryService
     from advanced_alchemy.utils.fixtures import open_fixture
 
     # Database connection string
@@ -460,11 +450,6 @@ Flask
     class ProductRepository(SQLAlchemySyncRepository[Product]):
         """Product repository."""
         model_type = Product
-
-
-    class ProductsService(SQLAlchemySyncRepositoryService[Product, ProductRepository]):
-        """Products service."""
-        repository_type = ProductRepository
 
 
     app = Flask(__name__)
