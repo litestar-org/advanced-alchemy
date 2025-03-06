@@ -18,6 +18,7 @@ from tests.fixtures.uuid.models import (
     UUIDAuthor,
     UUIDBook,
     UUIDEventLog,
+    UUIDFileDocument,
     UUIDItem,
     UUIDModelWithFetchedValue,
     UUIDRule,
@@ -215,3 +216,27 @@ class ItemSyncRepository(SQLAlchemySyncRepository[UUIDItem]):
     """Item repository."""
 
     model_type = UUIDItem
+
+
+class FileDocumentAsyncRepository(SQLAlchemyAsyncRepository[UUIDFileDocument]):
+    """FileDocument repository."""
+
+    model_type = UUIDFileDocument
+
+
+class FileDocumentSyncRepository(SQLAlchemySyncRepository[UUIDFileDocument]):
+    """FileDocument repository."""
+
+    model_type = UUIDFileDocument
+
+
+class FileDocumentAsyncMockRepository(SQLAlchemyAsyncMockRepository[UUIDFileDocument]):
+    """FileDocument repository."""
+
+    model_type = UUIDFileDocument
+
+
+class FileDocumentSyncMockRepository(SQLAlchemySyncMockRepository[UUIDFileDocument]):
+    """FileDocument repository."""
+
+    model_type = UUIDFileDocument
