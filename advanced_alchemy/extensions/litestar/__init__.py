@@ -1,6 +1,7 @@
 from advanced_alchemy import base, exceptions, filters, mixins, operations, repository, service, types, utils
 from advanced_alchemy.alembic.commands import AlembicCommands
 from advanced_alchemy.config import AlembicAsyncConfig, AlembicSyncConfig, AsyncSessionConfig, SyncSessionConfig
+from advanced_alchemy.extensions.litestar import providers
 from advanced_alchemy.extensions.litestar.cli import get_database_migration_plugin
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 from advanced_alchemy.extensions.litestar.plugins import (
@@ -60,6 +61,7 @@ __all__ = (
     "get_database_migration_plugin",
     "mixins",
     "operations",
+    "providers",
     "repository",
     "service",
     "sync_autocommit_before_send_handler",
