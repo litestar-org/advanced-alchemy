@@ -79,6 +79,9 @@ nitpicky = True
 nitpick_ignore: list[str] = []
 nitpick_ignore_regex: list[str] = []
 
+auto_pytabs_min_version = (3, 9)
+auto_pytabs_max_version = (3, 13)
+
 napoleon_google_docstring = True
 napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_examples = True
