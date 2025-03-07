@@ -103,7 +103,7 @@ jobs:
           - "oracle"
     uses: ./.github/workflows/test.yml
     with:
-      coverage: ${{ matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest' }}
+      coverage: ${{ matrix.python-version == '3.13'}}
       python-version: ${{ matrix.python-version }}
       pytest-select: ${{ matrix.pytest-select }}
   process_coverage:
