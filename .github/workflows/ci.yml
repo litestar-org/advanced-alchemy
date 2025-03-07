@@ -131,8 +131,8 @@ jobs:
         run: |
           uv venv
           uv pip install coverage covdefaults
-          uv run python coverage combine coverage.xml coverage/
-          uv run python coverage xml -i
+          uv run python -m coverage combine coverage.xml coverage/
+          uv run python -m coverage xml -i
 
       - name: Fix coverage file name
         run: sed -i "s/home\/runner\/work\/advanced-alchemy\/advanced-alchemy/github\/workspace/g" coverage.xml
