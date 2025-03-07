@@ -74,7 +74,7 @@ Synchronous Loading
     DATABASE_URL = "sqlite:///db.sqlite3"
 
     config = SQLAlchemySyncConfig(
-        engine_instance=create_engine(DATABASE_URL), 
+        engine_instance=create_engine(DATABASE_URL),
         session_config=SyncSessionConfig(expire_on_commit=False)
     )
 
