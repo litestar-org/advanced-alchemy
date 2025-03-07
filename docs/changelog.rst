@@ -3,6 +3,16 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.33.1
+    :date: 2025-03-07
+
+    .. change:: add session to namespace signature
+        :type: feature
+        :pr: 412
+
+        The new filter providers expect that the sessions are in the signature namespace.  This ensures there are no issues when configuring the plugin.
+
+
 .. changelog:: 0.33.0
     :date: 2025-03-07
 
