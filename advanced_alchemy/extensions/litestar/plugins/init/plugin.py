@@ -6,6 +6,8 @@ from litestar.di import Provide
 from litestar.dto import DTOData
 from litestar.params import Dependency, Parameter
 from litestar.plugins import CLIPlugin, InitPluginProtocol
+from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
+from sqlalchemy.orm import Session, scoped_session
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryError
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
@@ -52,6 +54,10 @@ signature_namespace_values: dict[str, Any] = {
     "ModelDTOT": ModelDTOT,
     "ModelDictListT": ModelDictListT,
     "ModelOrRowMappingT": ModelOrRowMappingT,
+    "Session": Session,
+    "scoped_session": scoped_session,
+    "AsyncSession": AsyncSession,
+    "async_scoped_session": async_scoped_session,
 }
 
 
