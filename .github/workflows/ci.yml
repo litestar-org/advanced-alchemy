@@ -131,7 +131,7 @@ jobs:
         run: |
           uv venv
           uv pip install coverage covdefaults
-          uv run python -m coverage combine coverage.xml coverage/
+          uv run python -m coverage combine coverage/
           uv run python -m coverage xml -i
 
       - name: Fix coverage file name
