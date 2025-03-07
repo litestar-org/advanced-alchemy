@@ -71,17 +71,18 @@ jobs:
         run: uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy -k "${{ inputs.pytest-select }}" --cov-report=xml -n 2
 
       - uses: rlespinasse/slugify-value@v1.x
-        if ${{ inputs.coverage }}
+        id: slugify-value
+        if: ${{ inputs.coverage }}
         with:
           key: pytest_select_slug
           value: ${{ inputs.pytest-select }}
 
       - name: Rename coverage file
         if: ${{ inputs.coverage }}
-        run: mv coverage.xml coverage-${{ pytest_select_slug }}.xml
+        run: mv coverage.xml coverage-${{ steps.slugify-value.outputs.slug }}.xml
 
       - uses: actions/upload-artifact@v4
         if: ${{ inputs.coverage }}
         with:
-          name: coverage-xml-${{ steps.slugify-value.outputs.pytest_select_slug }}
-          path: coverage-${{ steps.slugify-value.outputs.pytest_select_slug }}.xml
+          name: coverage-xml-${{ steps.slugify-value.outputs.slug }}
+          path: coverage-${{ steps.slugify-value.outputs.slug }}.xml
