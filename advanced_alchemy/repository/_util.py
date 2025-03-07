@@ -185,15 +185,10 @@ class FilterableRepositoryProtocol(Protocol[ModelT]):
 
     This protocol defines the required attributes and methods that any
     filterable repository implementation must provide.
-
-    Type Parameters:
-        ModelT: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model type this repository handles.
-
-    Attributes:
-        model_type: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model class this repository manages.
     """
 
     model_type: type[ModelT]
+    """The SQLAlchemy model class this repository manages."""
 
 
 class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
@@ -201,9 +196,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
     Provides core filtering, ordering and pagination functionality for
     SQLAlchemy models.
-
-    Type Parameters:
-        ModelT: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model type this repository handles.
     """
 
     model_type: type[ModelT]

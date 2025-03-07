@@ -502,8 +502,8 @@ Best Practices
 Tips for Efficient Seeding
 --------------------------
 
-- Use :func:`add_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepositoryProtocol.add_many>` / :func:`add_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepositoryProtocol.add_many>` instead of adding objects one by one for better performance.
-- Use :func:`upsert_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepositoryProtocol.upsert_many>` / :func:`upsert_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepositoryProtocol.upsert_many>` to update your data if you are updating prices for example.
+- Use :func:`add_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepository.add_many>` / :func:`add_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepository.add_many>` instead of adding objects one by one for better performance.
+- Use :func:`upsert_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepository.upsert_many>` / :func:`upsert_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepository.upsert_many>` to update your data if you are updating prices for example.
 - You can use the database seeding from your cli, app startup or any route.
 - For large datasets, consider chunking the data into smaller batches.
 - When dealing with relationships, seed parent records before child records.
