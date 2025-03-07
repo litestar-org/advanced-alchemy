@@ -19,6 +19,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     services
     types
     cli
+    database_seeding
 
 .. toctree::
     :maxdepth: 2
