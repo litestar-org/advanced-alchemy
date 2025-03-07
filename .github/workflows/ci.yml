@@ -129,6 +129,7 @@ jobs:
 
       - name: Combine coverage files
         run: |
+          uv venv
           uv pip install coverage covdefaults
           uv run python coverage combine coverage.xml coverage/
           uv run python coverage xml -i
