@@ -6,8 +6,9 @@ from litestar.di import Provide
 from litestar.dto import DTOData
 from litestar.params import Dependency, Parameter
 from litestar.plugins import CLIPlugin, InitPluginProtocol
-from sqlalchemy.orm import Session, scoped_session
 from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
+from sqlalchemy.orm import Session, scoped_session
+
 from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryError
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
