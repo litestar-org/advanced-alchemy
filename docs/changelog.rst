@@ -3,6 +3,20 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.33.2
+    :date: 2025-03-09
+
+    .. change:: simplify session type hints in service providers
+        :type: bugfix
+        :pr: 414
+
+        Remove unnecessary scoped session type hints from service provider functions.
+
+        Prevents the following exception from being incorrectly raised:
+
+        `TypeError: Type unions may not contain more than one custom type - type typing.Union[sqlalchemy.ext.asyncio.session.AsyncSession, sqlalchemy.ext.asyncio.scoping.async_scoped_session[sqlalchemy.ext.asyncio.session.AsyncSession], NoneType] is not supported.`
+
+
 .. changelog:: 0.33.1
     :date: 2025-03-07
 
