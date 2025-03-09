@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import datetime  # noqa: TC003
-from typing import Any
 from uuid import UUID  # noqa: TC003
 
-from sanic import Request, Sanic
-from sanic_ext import Extend
+from sanic import Sanic
 from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,6 +15,7 @@ from advanced_alchemy.extensions.sanic import (
     base,
     filters,
     repository,
+    service,
 )
 
 
@@ -40,10 +39,15 @@ class BookModel(base.UUIDAuditBase):
     author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
 
 
-class AuthorRepository(repository.SQLAlchemyAsyncRepository[AuthorModel]):
-    """Author repository."""
+class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
+    """Author service."""
 
-    model_type = AuthorModel
+    class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
+        """Author repository."""
+
+        model_type = AuthorModel
+
+    repository_type = Repo
 
 
 # #######################
@@ -51,23 +55,18 @@ class AuthorRepository(repository.SQLAlchemyAsyncRepository[AuthorModel]):
 # #######################
 
 
-async def provide_db_session(request: Request) -> AsyncSession:
-    """Provide a DB session."""
-    return alchemy.get_session(request)
-
-
-async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
+async def provide_authors_service(db_session: AsyncSession) -> AuthorService:
     """This provides the default Authors repository."""
-    return AuthorRepository(session=db_session)
+    return AuthorService(session=db_session)
 
 
 # we can optionally override the default `select` used for the repository to pass in
 # specific SQL options such as join details
-async def provide_author_details_repo(
+async def provide_author_details_service(
     db_session: AsyncSession,
-) -> AuthorRepository:
+) -> AuthorService:
     """This provides a simple example demonstrating how to override the join options for the repository."""
-    return AuthorRepository(load=[AuthorModel.books], session=db_session)
+    return AuthorService(load=[AuthorModel.books], session=db_session)
 
 
 def provide_limit_offset_pagination(
@@ -99,12 +98,5 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
 )  # Create 'db_session' dependency.
 app = Sanic("AlchemySanicApp")
 alchemy = AdvancedAlchemy(sqlalchemy_config=sqlalchemy_config)
-Extend.register(alchemy)
-app.ext.add_dependency(AsyncSession, provide_db_session)
-
-
-@app.before_server_start
-async def on_startup(app: Sanic[Any, Any], _: Any) -> None:  # noqa: ARG001
-    """Initializes the database."""
-    async with sqlalchemy_config.get_engine().begin() as conn:
-        await conn.run_sync(base.UUIDBase.metadata.create_all)
+alchemy.register(app)
+alchemy.add_session_dependency(AsyncSession)
