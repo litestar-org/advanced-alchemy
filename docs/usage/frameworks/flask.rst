@@ -16,6 +16,7 @@ Here's a basic example of using Advanced Alchemy with Flask:
 .. code-block:: python
 
     from flask import Flask
+    from sqlalchemy import select
     from advanced_alchemy.extensions.flask import (
         AdvancedAlchemy,
         SQLAlchemySyncConfig,
@@ -23,23 +24,15 @@ Here's a basic example of using Advanced Alchemy with Flask:
     )
 
     app = Flask(__name__)
+    db_config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
+    alchemy = AdvancedAlchemy(db_config, app)
 
-    db_config = SQLAlchemySyncConfig(
-        engine_config=EngineConfig(
-            url="sqlite:///db.sqlite3",
-        ),
-        commit_mode="autocommit",
-    )
-
-    db = AdvancedAlchemy(config=db_config)
-    db.init_app(app)
-
-    # Use in your routes
+    # Use standard SQLAlchemy session in your routes
     @app.route("/users")
     def list_users():
-        session = db.get_session()
-        users = session.query(User).all()
-        return {"users": [user.dict() for user in users]}
+        session = alchemy.get_sync_session()
+        users = session.execute(select(User))
+        return {"users": [user.dict() for user in users.scalars()]}
 
 Multiple Databases
 ------------------
@@ -57,22 +50,15 @@ Advanced Alchemy supports multiple database configurations:
 .. code-block:: python
 
     configs = [
-        SQLAlchemySyncConfig(
-            engine_config=EngineConfig(url="sqlite:///users.db"),
-            bind_key="users",
-        ),
-        SQLAlchemySyncConfig(
-            engine_config=EngineConfig(url="sqlite:///products.db"),
-            bind_key="products",
-        ),
+        SQLAlchemySyncConfig(connection_string="sqlite:///users.db", bind_key="users"),
+        SQLAlchemySyncConfig(connection_string="sqlite:///products.db", bind_key="products"),
     ]
 
-    db = AdvancedAlchemy(config=configs)
-    db.init_app(app)
+    alchemy = AdvancedAlchemy(configs, app)
 
     # Get session for specific database
-    users_session = db.get_session("users")
-    products_session = db.get_session("products")
+    users_session = alchemy.get_sync_session("users")
+    products_session = alchemy.get_sync_session("products")
 
 Async Support
 -------------
@@ -85,31 +71,30 @@ Advanced Alchemy supports async SQLAlchemy with Flask:
         AdvancedAlchemy,
         SQLAlchemyAsyncConfig,
     )
+    from sqlalchemy import select
 
-    db_config = SQLAlchemyAsyncConfig(
-        engine_config=EngineConfig(
-            url="postgresql+asyncpg://user:pass@localhost/db",
-        ),
-        create_all=True,
-    )
-
-    db = AdvancedAlchemy(config=db_config)
-    db.init_app(app)
+    app = Flask(__name__)
+    db_config = SQLAlchemyAsyncConfig(connection_string="postgresql+asyncpg://user:pass@localhost/db", create_all=True)
+    alchemy = AdvancedAlchemy(db_config, app)
 
     # Use async session in your routes
     @app.route("/users")
     async def list_users():
-        session = db.get_session()
+        session = alchemy.get_async_session()
         users = await session.execute(select(User))
         return {"users": [user.dict() for user in users.scalars()]}
 
-You can also safely use an AsyncSession in your routes within a sync context:
+You can also safely use an AsyncSession in your routes within a sync context.
+
+.. warning::
+
+    This is experimental and may change in the future.
 
 .. code-block:: python
 
     @app.route("/users")
     def list_users():
-        session = db.get_session()
+        session = alchemy.get_sync_session()
         users = session.execute(select(User))
         return {"users": [user.dict() for user in users.scalars()]}
 
@@ -159,23 +144,92 @@ Services
 
 The ``FlaskServiceMixin`` adds Flask-specific functionality to services:
 
+Here's an example of a service that uses the ``FlaskServiceMixin`` with all CRUD operations, route pagination, and msgspec serialization for JSON
+
 .. code-block:: python
 
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-    from advanced_alchemy.extensions.flask import FlaskServiceMixin
+    import datetime
+    from typing import Optional
+    from uuid import UUID
 
-    class UserService(
+    from msgspec import Struct
+    from flask import Flask
+    from sqlalchemy.orm import Mapped, mapped_column
+    from advanced_alchemy.extensions.flask import (
+        AdvancedAlchemy,
         FlaskServiceMixin,
-        SQLAlchemyAsyncRepositoryService[User],
-    ):
-        class Repo(repository.SQLAlchemySyncRepository[User]):
-            model_type = User
+        service,
+        repository,
+        SQLAlchemySyncConfig,
+        base,
+    )
+
+    class Author(base.UUIDBase):
+        """Author model."""
+
+        name: Mapped[str]
+        dob: Mapped[Optional[datetime.date]]
+
+    class AuthorSchema(Struct):
+        """Author schema."""
+
+        name: str
+        id: Optional[UUID] = None
+        dob: Optional[datetime.date] = None
+
+
+    class AuthorService(FlaskServiceMixin, service.SQLAlchemySyncRepositoryService[Author]):
+        class Repo(repository.SQLAlchemySyncRepository[Author]):
+            model_type = Author
 
         repository_type = Repo
 
-        def get_user_response(self, user_id: int) -> Response:
-            user = self.get(user_id)
-            return self.jsonify(user.dict())
+    app = Flask(__name__)
+    config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
+    alchemy = AdvancedAlchemy(config, app)
+
+
+    @app.route("/authors", methods=["GET"])
+    def list_authors():
+        """List authors with pagination."""
+        page, page_size = request.args.get("currentPage", 1, type=int), request.args.get("pageSize", 10, type=int)
+        limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (page - 1))
+        service = AuthorService(session=alchemy.get_sync_session())
+        results, total = service.list_and_count(limit_offset)
+        response = service.to_schema(results, total, filters=[limit_offset], schema_type=AuthorSchema)
+        return service.jsonify(response)
+
+
+    @app.route("/authors", methods=["POST"])
+    def create_author():
+        """Create a new author."""
+        service = AuthorService(session=alchemy.get_sync_session())
+        obj = service.create(**request.get_json())
+        return service.jsonify(obj)
+
+
+    @app.route("/authors/<uuid:author_id>", methods=["GET"])
+    def get_author(author_id: UUID):
+        """Get an existing author."""
+        service = AuthorService(session=alchemy.get_sync_session(), load=[Author.books])
+        obj = service.get(author_id)
+        return service.jsonify(obj)
+
+
+    @app.route("/authors/<uuid:author_id>", methods=["PATCH"])
+    def update_author(author_id: UUID):
+        """Update an author."""
+        service = AuthorService(session=alchemy.get_sync_session(), load=[Author.books])
+        obj = service.update(**request.get_json(), item_id=author_id)
+        return service.jsonify(obj)
+
+
+    @app.route("/authors/<uuid:author_id>", methods=["DELETE"])
+    def delete_author(author_id: UUID):
+        """Delete an author."""
+        service = AuthorService(session=alchemy.get_sync_session())
+        service.delete(author_id)
+        return "", 204
 
 The ``jsonify`` method is analogous to Flask's ``jsonify`` function.  However, this implementation will serialize with the configured Advanced Alchemy serialize (i.e. Msgspec or Orjson based on installation).
 
