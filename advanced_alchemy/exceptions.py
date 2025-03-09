@@ -262,6 +262,7 @@ class ErrorMessages(TypedDict, total=False):
     multiple_rows: Union[str, Callable[[Exception], str]]
     check_constraint: Union[str, Callable[[Exception], str]]
     other: Union[str, Callable[[Exception], str]]
+    not_found: Union[str, Callable[[Exception], str]]
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
@@ -272,7 +273,7 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 
 
 @contextmanager
-def wrap_sqlalchemy_exception(  # noqa: C901
+def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     error_messages: Optional[ErrorMessages] = None,
     dialect_name: Optional[str] = None,
     wrap_exceptions: bool = True,
@@ -297,6 +298,14 @@ def wrap_sqlalchemy_exception(  # noqa: C901
     try:
         yield
 
+    except NotFoundError as exc:
+        if wrap_exceptions is False:
+            raise
+        if error_messages is not None:
+            msg = _get_error_message(error_messages=error_messages, key="not_found", exc=exc)
+        else:
+            msg = "No rows matched the specified data"
+        raise NotFoundError(detail=msg) from exc
     except MultipleResultsFound as exc:
         if wrap_exceptions is False:
             raise

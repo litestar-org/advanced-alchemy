@@ -62,6 +62,7 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
     "duplicate_key": "A record matching the supplied data already exists.",
     "other": "There was an error during data processing",
     "check_constraint": "The data failed a check constraint during processing",
+    "not_found": "The requested resource was not found",
 }
 """Default error messages for repository errors."""
 
