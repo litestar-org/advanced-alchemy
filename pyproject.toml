@@ -279,7 +279,6 @@ docstring-code-format = true
 docstring-code-line-length = 60
 
 [tool.ruff.lint]
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 extend-safe-fixes = ["TC"]
 fixable = ["ALL"]
 ignore = [
