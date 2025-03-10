@@ -46,8 +46,8 @@ from advanced_alchemy.service import (
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
-    from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
-    from sqlalchemy.orm import Session, scoped_session
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Session
 
     from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
@@ -179,7 +179,7 @@ def create_service_provider(
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
 
         async def provide_async_service(
-            db_session: "Optional[Union[AsyncSession, async_scoped_session[AsyncSession]]]" = None,
+            db_session: "Optional[AsyncSession]" = None,
         ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
             async with service_class.new(  # type: ignore[union-attr,unused-ignore]
                 session=db_session,  # type: ignore[arg-type, unused-ignore]
@@ -196,7 +196,7 @@ def create_service_provider(
         return provide_async_service
 
     def provide_sync_service(
-        db_session: "Optional[Union[Session, scoped_session[Session]]]" = None,
+        db_session: "Optional[Session]" = None,
     ) -> "Generator[SyncServiceT_co, None, None]":
         with service_class.new(
             session=db_session,  # type: ignore[arg-type, unused-ignore]

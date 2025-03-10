@@ -3,6 +3,46 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.33.2
+    :date: 2025-03-09
+
+    .. change:: simplify session type hints in service providers
+        :type: bugfix
+        :pr: 414
+
+        Remove unnecessary scoped session type hints from service provider functions.
+
+        Prevents the following exception from being incorrectly raised:
+
+        `TypeError: Type unions may not contain more than one custom type - type typing.Union[sqlalchemy.ext.asyncio.session.AsyncSession, sqlalchemy.ext.asyncio.scoping.async_scoped_session[sqlalchemy.ext.asyncio.session.AsyncSession], NoneType] is not supported.`
+
+
+.. changelog:: 0.33.1
+    :date: 2025-03-07
+
+    .. change:: add session to namespace signature
+        :type: feature
+        :pr: 412
+
+        The new filter providers expect that the sessions are in the signature namespace.  This ensures there are no issues when configuring the plugin.
+
+
+.. changelog:: 0.33.0
+    :date: 2025-03-07
+
+    .. change:: Add dependency factory utilities
+        :type: feature
+        :pr: 405
+
+        Introduces a new module `advanced_alchemy.extensions.litestar.providers` with comprehensive dependency injection utilities for SQLAlchemy services in Litestar. The module provides:
+
+        - Dynamic filter configuration generation
+        - Dependency caching mechanism
+        - Flexible filter and pagination support
+        - Singleton metaclass for dependency management
+        - Configurable filter and search dependencies
+
+
 .. changelog:: 0.32.2
     :date: 2025-02-26
 
