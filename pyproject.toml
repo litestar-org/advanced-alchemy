@@ -88,6 +88,7 @@ dev = [
   { include-group = "spanner" },
   { include-group = "cockroachdb" },
   { include-group = "postgres" },
+  "pytest-cdist>=0.3.1",
 ]
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
@@ -140,6 +141,7 @@ test = [
   "pydantic-extra-types",
   "rich-click",
   "coverage>=7.6.1",
+  "covdefaults",
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
