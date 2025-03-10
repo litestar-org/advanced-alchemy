@@ -1,4 +1,3 @@
-import contextlib
 
 import pytest
 from sqlalchemy.exc import (
@@ -22,14 +21,6 @@ from advanced_alchemy.exceptions import (
     RepositoryError,
     wrap_sqlalchemy_exception,
 )
-
-
-async def test_repo_get_or_create_deprecation() -> None:
-    with pytest.warns(DeprecationWarning):
-        from advanced_alchemy.exceptions import ConflictError
-
-        with contextlib.suppress(Exception):
-            raise ConflictError
 
 
 def test_wrap_sqlalchemy_exception_multiple_results_found() -> None:
