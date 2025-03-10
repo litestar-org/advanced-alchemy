@@ -1,4 +1,3 @@
-
 import pytest
 from sqlalchemy.exc import (
     IntegrityError as SQLAlchemyIntegrityError,
