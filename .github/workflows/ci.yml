@@ -123,15 +123,15 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: coverage
-          pattern: coverage-xml*
+          path: coverage-data
+          pattern: coverage-data-*
           merge-multiple: true
 
       - name: Combine coverage files
         run: |
           uv venv
           uv pip install coverage covdefaults
-          uv run python -m coverage combine coverage/
+          uv run python -m coverage combine coverage-data/
           uv run python -m coverage xml -i
 
       - name: Fix coverage file name

@@ -79,10 +79,10 @@ jobs:
 
       - name: Rename coverage file
         if: ${{ inputs.coverage }}
-        run: mv coverage.xml coverage-${{ steps.slugify-value.outputs.slug }}.xml
+        run: mv .coverage coverage-data-${{ steps.slugify-value.outputs.slug }}.dat
 
       - uses: actions/upload-artifact@v4
         if: ${{ inputs.coverage }}
         with:
-          name: coverage-xml-${{ steps.slugify-value.outputs.slug }}
-          path: coverage-${{ steps.slugify-value.outputs.slug }}.xml
+          name: coverage-data-${{ steps.slugify-value.outputs.slug }}
+          path: coverage-data-${{ steps.slugify-value.outputs.slug }}.dat

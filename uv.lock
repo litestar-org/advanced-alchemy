@@ -51,6 +51,7 @@ dev = [
     { name = "auto-pytabs", extra = ["sphinx"] },
     { name = "bump-my-version" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage" },
     { name = "duckdb" },
     { name = "duckdb-engine" },
@@ -201,6 +202,7 @@ sqlite = [
 test = [
     { name = "asgi-lifespan" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage" },
     { name = "pydantic-extra-types" },
     { name = "pytest" },
@@ -248,6 +250,7 @@ dev = [
     { name = "auto-pytabs", extras = ["sphinx"], specifier = ">=0.5.0" },
     { name = "bump-my-version" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage", specifier = ">=7.6.1" },
     { name = "duckdb", specifier = ">=1.1.2" },
     { name = "duckdb-engine", specifier = ">=0.13.4" },
@@ -382,6 +385,7 @@ sqlite = [{ name = "aiosqlite", specifier = ">=0.20.0" }]
 test = [
     { name = "asgi-lifespan" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage", specifier = ">=7.6.1" },
     { name = "pydantic-extra-types" },
     { name = "pytest", specifier = ">=7.4.4" },
@@ -970,6 +974,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335 },
+]
+
+[[package]]
+name = "covdefaults"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "coverage" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/ee/9a6f2611f72e4c5657ae5542a510cf4164d2c673687c0ea73bb1cbd85b4d/covdefaults-2.3.0.tar.gz", hash = "sha256:4e99f679f12d792bc62e5510fa3eb59546ed47bd569e36e4fddc4081c9c3ebf7", size = 4835 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/4c/823bc951445aa97e5a1b7e337690db3abf85212c8d138e170922e7916ac8/covdefaults-2.3.0-py2.py3-none-any.whl", hash = "sha256:2832961f6ffcfe4b57c338bc3418a3526f495c26fb9c54565409c5532f7c41be", size = 5144 },
 ]
 
 [[package]]
@@ -3281,16 +3297,16 @@ wheels = [
 
 [[package]]
 name = "rich-click"
-version = "1.8.7"
+version = "1.8.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/de/20/be68db605c37ad2f96fa4e43590cf3f35e53c1740906a992103c62c657be/rich_click-1.8.7.tar.gz", hash = "sha256:075aa0140a3f796768e1e650174d4e12828de87f3a0aed49fe48fb897fcaa627", size = 38344 }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/7a/4b78c5997f2a799a8c5c07f3b2145bbcda40115c4d35c76fbadd418a3c89/rich_click-1.8.8.tar.gz", hash = "sha256:547c618dea916620af05d4a6456da797fbde904c97901f44d2f32f89d85d6c84", size = 39066 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/fb/dc3a3c7c7355a20c4c5cb97b20728f8bfd9bf2933bd90bd589b7528d72e3/rich_click-1.8.7-py3-none-any.whl", hash = "sha256:b089453e8e6079815b2689c903bd782c0408a062ad763e708023becd85b8f5d9", size = 35156 },
+    { url = "https://files.pythonhosted.org/packages/fa/69/963f0bf44a654f6465bdb66fb5a91051b0d7af9f742b5bd7202607165036/rich_click-1.8.8-py3-none-any.whl", hash = "sha256:205aabd5a98e64ab2c105dee9e368be27480ba004c7dfa2accd0ed44f9f1550e", size = 35747 },
 ]
 
 [[package]]
