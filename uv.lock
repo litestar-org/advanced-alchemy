@@ -3267,16 +3267,16 @@ wheels = [
 
 [[package]]
 name = "rich-click"
-version = "1.8.7"
+version = "1.8.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/de/20/be68db605c37ad2f96fa4e43590cf3f35e53c1740906a992103c62c657be/rich_click-1.8.7.tar.gz", hash = "sha256:075aa0140a3f796768e1e650174d4e12828de87f3a0aed49fe48fb897fcaa627", size = 38344 }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/7a/4b78c5997f2a799a8c5c07f3b2145bbcda40115c4d35c76fbadd418a3c89/rich_click-1.8.8.tar.gz", hash = "sha256:547c618dea916620af05d4a6456da797fbde904c97901f44d2f32f89d85d6c84", size = 39066 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/fb/dc3a3c7c7355a20c4c5cb97b20728f8bfd9bf2933bd90bd589b7528d72e3/rich_click-1.8.7-py3-none-any.whl", hash = "sha256:b089453e8e6079815b2689c903bd782c0408a062ad763e708023becd85b8f5d9", size = 35156 },
+    { url = "https://files.pythonhosted.org/packages/fa/69/963f0bf44a654f6465bdb66fb5a91051b0d7af9f742b5bd7202607165036/rich_click-1.8.8-py3-none-any.whl", hash = "sha256:205aabd5a98e64ab2c105dee9e368be27480ba004c7dfa2accd0ed44f9f1550e", size = 35747 },
 ]
 
 [[package]]

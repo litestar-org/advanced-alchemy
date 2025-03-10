@@ -7,11 +7,8 @@ from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError, StatementError
 
-from advanced_alchemy.utils.deprecation import deprecated
-
 __all__ = (
     "AdvancedAlchemyError",
-    "ConflictError",
     "DuplicateKeyError",
     "ErrorMessages",
     "ForeignKeyError",
@@ -171,28 +168,6 @@ class RepositoryError(AdvancedAlchemyError):
         *args: Variable length argument list passed to parent class.
         detail: Detailed error message.
     """
-
-
-class ConflictError(RepositoryError):
-    """Data integrity error.
-
-    Args:
-        *args: Variable length argument list passed to parent class.
-        detail: Detailed error message.
-
-    Note:
-        This class is deprecated in favor of :class:`advanced_alchemy.exceptions.IntegrityError`.
-    """
-
-    @deprecated(
-        version="0.7.1",
-        alternative="advanced_alchemy.exceptions.IntegrityError",
-        kind="method",
-        removal_in="1.0.0",
-        info="`ConflictError` has been renamed to `IntegrityError`",
-    )
-    def __init__(self, *args: Any, detail: str = "") -> None:
-        super().__init__(*args, detail=detail)
 
 
 class IntegrityError(RepositoryError):
