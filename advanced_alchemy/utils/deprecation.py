@@ -78,8 +78,8 @@ def deprecated(
     """Create a decorator wrapping a function, method or property with a warning call about a (pending) deprecation.
 
     Args:
-        version: Litestar version where the deprecation will occur
-        removal_in: Litestar version where the deprecated function will be removed
+        version: Advanced Alchemy version where the deprecation will occur
+        removal_in: Advanced Alchemy version where the deprecated function will be removed
         alternative: Name of a function that should be used instead
         info: Additional information
         pending: Use :class:`warnings.PendingDeprecationWarning` instead of :class:`warnings.DeprecationWarning`
