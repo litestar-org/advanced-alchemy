@@ -3,6 +3,37 @@
 0.x Changelog
 =============
 
+.. changelog:: 0.34.0
+    :date: 2025-03-10
+
+    .. change:: allow custom `not_found` error messages
+        :type: feature
+        :pr: 417
+        :issue: 391
+
+        Enhance the SQLAlchemy exception wrapper to handle NotFoundError with custom error messages and improved error handling. This includes:
+
+        - Adding a 'not_found' key to ErrorMessages type
+        - Extending wrap_sqlalchemy_exception to catch and handle NotFoundError
+        - Updating default error message templates with a not_found message
+        - Adding unit tests for custom NotFoundError handling
+
+    .. change:: Refactor Sanic extension for multi-config support
+        :type: feature
+        :pr: 415
+        :issue: 375
+
+        This commit refactors the Sanic extension for Advanced Alchemy:
+
+        - Refactored configuration handling with support for multiple database configurations
+        - Added methods for retrieving async and sync sessions, engines, and configs
+        - Improved dependency injection with new provider methods
+        - Simplified extension initialization and registration
+        - Updated example and test files to reflect new extension structure
+        - Removed deprecated methods and simplified the extension interface
+
+
+
 .. changelog:: 0.33.2
     :date: 2025-03-09
 
