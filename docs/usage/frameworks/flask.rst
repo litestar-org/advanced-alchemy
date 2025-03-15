@@ -86,6 +86,7 @@ Advanced Alchemy supports async SQLAlchemy with Flask:
 
 You can also safely use an AsyncSession in your routes within a sync context.
 
+
 .. warning::
 
     This is experimental and may change in the future.
@@ -94,8 +95,8 @@ You can also safely use an AsyncSession in your routes within a sync context.
 
     @app.route("/users")
     def list_users():
-        session = alchemy.get_sync_session()
-        users = session.execute(select(User))
+        session = alchemy.get_async_session()
+        users = alchemy.portal.call(session.execute, select(User))
         return {"users": [user.dict() for user in users.scalars()]}
 
 Configuration
