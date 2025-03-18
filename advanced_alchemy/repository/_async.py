@@ -1503,7 +1503,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        self.count_with_window_function = (
+        count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
         self.uniquify = self._get_uniquify(uniquify)
@@ -1511,7 +1511,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
+        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
             return await self._list_and_count_basic(
                 *filters,
                 auto_expunge=auto_expunge,
