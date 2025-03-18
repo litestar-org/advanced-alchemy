@@ -89,8 +89,8 @@ release:                                           ## Bump version and create re
 	@make docs
 	@make clean
 	@make build
-	@uv lock --upgrade-package advanced-alchemy >/dev/null 2>&1
 	@uv run bump-my-version bump $(bump)
+	@uv lock --upgrade-package advanced-alchemy
 	@echo "${OK} Release complete 🎉"
 
 # =============================================================================

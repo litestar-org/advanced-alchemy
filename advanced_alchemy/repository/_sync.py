@@ -1321,7 +1321,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 ),
                 uniquify=loader_options_have_wildcard,
             )
-            return cast(int, results.scalar_one())
+            return cast("int", results.scalar_one())
 
     def update(
         self,

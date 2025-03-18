@@ -318,7 +318,7 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
         if wrap_exceptions is False:
             raise
         raise IntegrityError(
-            detail=cast(str, getattr(exc.orig, "detail", "There was an issue processing the statement."))
+            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
         ) from exc
     except SQLAlchemyError as exc:
         if wrap_exceptions is False:

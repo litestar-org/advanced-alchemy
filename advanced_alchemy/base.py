@@ -269,7 +269,7 @@ class MetadataRegistry:
     def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cast(Self, cls._instance)
+        return cast("Self", cls._instance)
 
     def get(self, bind_key: Optional[str] = None) -> MetaData:
         """Get the metadata for the given bind key."""

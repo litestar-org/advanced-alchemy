@@ -156,7 +156,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         session = getattr(request.ctx, config.session_key, None)
         if session is None:
             setattr(request.ctx, config.session_key, config.get_session())
-        return cast(Union["Session", "AsyncSession"], session)
+        return cast("Union[Session, AsyncSession]", session)
 
     def get_session(
         self, request: "Request", key: Optional[str] = None
