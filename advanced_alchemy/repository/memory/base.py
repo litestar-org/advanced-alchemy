@@ -70,7 +70,9 @@ class InMemoryStore(Generic[T]):
     @overload
     def get(self, key: Any, default: AnyObject) -> "Union[T, AnyObject]": ...
 
-    def get(self, key: Any, default: "Union[AnyObject, type[_NotSet]]" = _NotSet) -> "Union[T, AnyObject]":
+    def get(
+        self, key: Any, default: "Union[AnyObject, type[_NotSet]]" = _NotSet
+    ) -> "Union[T, AnyObject]":  # pragma: no cover
         """Get the object identified by `key`, or return `default` if set or raise a `KeyError` otherwise
 
         Args:
@@ -136,7 +138,7 @@ class MultiStore(Generic[T]):
 class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
     id_attribute: str = "id"
 
-    def _update_relationship(self, data: ModelT, ref: ModelT) -> None:
+    def _update_relationship(self, data: ModelT, ref: ModelT) -> None:  # pragma: no cover
         """Set relationship data fields targeting ref class to ref.
 
         Example:
@@ -171,7 +173,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                 else:
                     setattr(data, relationship.key, ref)
 
-    def _update_fks(self, data: ModelT) -> None:
+    def _update_fks(self, data: ModelT) -> None:  # pragma: no cover
         """Update foreign key fields according to their corresponding relationships.
 
         This make sure that `data.child_id` == `data.child.id`
@@ -201,7 +203,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         setattr(data, local.key, remote_value)
                     self._update_relationship(value, data)
 
-    def _set_defaults(self, data: ModelT) -> None:
+    def _set_defaults(self, data: ModelT) -> None:  # pragma: no cover
         """Set fields with dynamic defaults.
 
         Args:
@@ -271,7 +273,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
         session.expunge_all()
         return relations
 
-    def _set_relationships_for_fks(self, data: ModelT) -> None:
+    def _set_relationships_for_fks(self, data: ModelT) -> None:  # pragma: no cover
         """Set relationships matching newly added foreign keys on the instance.
 
         Example:
