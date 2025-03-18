@@ -269,7 +269,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             SessionMakerT: The session maker.
         """
         return cast(
-            async_sessionmaker[AsyncSession], getattr(request.app.ctx, self.session_maker_key, None)
+            "async_sessionmaker[AsyncSession]", getattr(request.app.ctx, self.session_maker_key, None)
         )  # pragma: no cover
 
     def get_session_from_request(self, request: Request) -> AsyncSession:
@@ -477,7 +477,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             SessionMakerT: The session maker.
         """
-        return cast(sessionmaker[Session], getattr(request.app.ctx, self.session_maker_key, None))  # pragma: no cover
+        return cast("sessionmaker[Session]", getattr(request.app.ctx, self.session_maker_key, None))  # pragma: no cover
 
     def get_session_from_request(self, request: Request) -> "Session":
         """Retrieve the session from the request context.

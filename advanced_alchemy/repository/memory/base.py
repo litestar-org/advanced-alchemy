@@ -87,7 +87,7 @@ class InMemoryStore(Generic[T]):
             key = self._resolve_key(key)
         except KeyError as error:
             if isclass(default) and not issubclass(default, _NotSet):  # pyright: ignore[reportUnnecessaryIsInstance]
-                return cast(AnyObject, default)
+                return cast("AnyObject", default)
             raise KeyError from error
         return self._store[key]
 
