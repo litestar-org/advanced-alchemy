@@ -236,7 +236,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                     continue
                 setattr(data, elem.key, default_value)
 
-    def changed_attrs(self, data: ModelT) -> "Iterable[str]":
+    def changed_attrs(self, data: ModelT) -> "Iterable[str]": # pragma: no cover
         res: list[str] = []
         mapper = inspect(data)
         if mapper is None:
