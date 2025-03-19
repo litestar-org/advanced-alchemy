@@ -32,6 +32,7 @@ from sqlalchemy.orm import (
     MappedColumn,
     NotExtension,
     QueryableAttribute,
+    Relationship,
     RelationshipDirection,
     RelationshipProperty,
     WriteOnlyMapped,
@@ -164,7 +165,12 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         default, default_factory = _detect_defaults(elem)
 
         try:
-            if (field_definition := model_type_hints[key]).origin in {Mapped, WriteOnlyMapped, DynamicMapped}:
+            if (field_definition := model_type_hints[key]).origin in {
+                Mapped,
+                WriteOnlyMapped,
+                DynamicMapped,
+                Relationship,
+            }:
                 (field_definition,) = field_definition.inner_types
             else:
                 msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"
