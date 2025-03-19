@@ -112,12 +112,72 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: ModelOrRowMappingT,
+        data: "ModelOrRowMappingT",
+        *,
+        schema_type: None = None,
+    ) -> "ModelOrRowMappingT": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[ModelProtocol, RowMapping]",
+        *,
+        schema_type: "type[ModelDTOT]",
+    ) -> "ModelDTOT": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "ModelOrRowMappingT",
+        total: "Optional[int]" = None,
+        *,
+        schema_type: None = None,
+    ) -> "ModelOrRowMappingT": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[ModelProtocol, RowMapping]",
+        total: "Optional[int]" = None,
+        *,
+        schema_type: "type[ModelDTOT]",
+    ) -> "ModelDTOT": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "ModelOrRowMappingT",
         total: "Optional[int]" = None,
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
         *,
         schema_type: None = None,
-    ) -> ModelOrRowMappingT: ...
+    ) -> "ModelOrRowMappingT": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[ModelProtocol, RowMapping]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: "type[ModelDTOT]",
+    ) -> "ModelDTOT": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Sequence[ModelOrRowMappingT]",
+        *,
+        schema_type: None = None,
+    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping]]",
+        *,
+        schema_type: "type[ModelDTOT]",
+    ) -> "OffsetPagination[ModelDTOT]": ...
 
     @overload
     def to_schema(
@@ -127,17 +187,7 @@ class ResultConverter:
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
         *,
         schema_type: None = None,
-    ) -> OffsetPagination[ModelOrRowMappingT]: ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "Union[ModelProtocol, RowMapping]",
-        total: "Optional[int]" = None,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
-        *,
-        schema_type: type[ModelDTOT],
-    ) -> ModelDTOT: ...
+    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
 
     @overload
     def to_schema(
@@ -146,7 +196,7 @@ class ResultConverter:
         total: "Optional[int]" = None,
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
         *,
-        schema_type: type[ModelDTOT],
+        schema_type: "type[ModelDTOT]",
     ) -> "OffsetPagination[ModelDTOT]": ...
 
     def to_schema(

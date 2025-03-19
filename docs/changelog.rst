@@ -3,6 +3,22 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.0.0
+    :date: 2025-03-18
+
+    .. change:: remove deprecated packages removed in `v1.0.0`
+        :type: misc
+        :pr: 419
+
+        Removes deprecated packages and prepares for 1.0 release.
+
+    .. change:: logic correction for window function
+        :type: bugfix
+        :pr: 421
+
+        Corrects the logic for using a count with a window function.
+
+
 .. changelog:: 0.34.0
     :date: 2025-03-10
 
