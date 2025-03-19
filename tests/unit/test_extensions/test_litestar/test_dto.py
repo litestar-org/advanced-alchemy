@@ -313,6 +313,51 @@ dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
     assert all(isinstance(val, module.A) for val in model.a)
 
 
+async def test_to_mapped_model_with_relationship_type_hint(
+    base: type[DeclarativeBase],
+    create_module: Callable[[str], ModuleType],
+    asgi_connection: Request[Any, Any, Any],
+) -> None:
+    """Test building a DTO with collection relationship, and parsing data."""
+
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import Dict, List, Set, Tuple, Type, List
+
+from sqlalchemy import ForeignKey, Integer
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Relationship
+from typing_extensions import Annotated
+
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+class A(Base):
+    __tablename__ = "a"
+    b_id: Mapped[int] = mapped_column(ForeignKey("b.id"))
+
+class B(Base):
+    __tablename__ = "b"
+    a: Relationship[List[A]] = relationship("A")
+
+dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
+""",
+    )
+
+    model = await get_model_from_dto(
+        module.dto_type,
+        module.B,
+        asgi_connection,
+        b'{"id": 1, "a": [{"id": 2, "b_id": 1}, {"id": 3, "b_id": 1}]}',
+    )
+    assert isinstance(model, module.B)
+    assert len(model.a) == 2
+    assert all(isinstance(val, module.A) for val in model.a)
+
+
 async def test_to_mapped_model_with_scalar_relationship(
     create_module: Callable[[str], ModuleType],
     asgi_connection: Request[Any, Any, Any],
