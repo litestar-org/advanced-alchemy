@@ -1321,7 +1321,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 ),
                 uniquify=loader_options_have_wildcard,
             )
-            return cast(int, results.scalar_one())
+            return cast("int", results.scalar_one())
 
     def update(
         self,
@@ -1504,7 +1504,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        self.count_with_window_function = (
+        count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
         self.uniquify = self._get_uniquify(uniquify)
@@ -1512,7 +1512,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
+        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
             return self._list_and_count_basic(
                 *filters,
                 auto_expunge=auto_expunge,

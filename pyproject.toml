@@ -44,7 +44,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.32.2"
+version = "1.0.1"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -92,7 +92,6 @@ dev = [
 ]
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
-  "git-cliff>=2.6.1",
   "shibuya",
   "sphinx>=7.0.0; python_version <= \"3.9\"",
   "sphinx>=8.0.0; python_version >= \"3.10\"",
@@ -159,9 +158,9 @@ test = [
 
 [tool.bumpversion]
 allow_dirty = true
-commit = true
+commit = false
 commit_args = "--no-verify"
-current_version = "0.32.0"
+current_version = "1.0.1"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -180,16 +179,6 @@ filename = "pyproject.toml"
 replace = 'version = "{new_version}"'
 search = 'version = "{current_version}"'
 
-[[tool.bumpversion.files]]
-filename = "uv.lock"
-replace = """
-name = "advanced-alchemy"
-version = "{new_version}"
-"""
-search = """
-name = "advanced-alchemy"
-version = "{current_version}"
-"""
 
 [build-system]
 build-backend = "hatchling.build"
@@ -281,7 +270,6 @@ docstring-code-format = true
 docstring-code-line-length = 60
 
 [tool.ruff.lint]
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 extend-safe-fixes = ["TC"]
 fixable = ["ALL"]
 ignore = [

@@ -3,6 +3,103 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.0.1
+    :date: 2025-03-19
+
+    .. change:: properly serialize `Relationship` type hints
+        :type: bugfix
+        :pr: 422
+
+        Adds `sqlalchemy.orm.Relationship` to the supported type hints for the `SQLAlchemyDTO`
+
+
+.. changelog:: 1.0.0
+    :date: 2025-03-18
+
+    .. change:: remove deprecated packages removed in `v1.0.0`
+        :type: misc
+        :pr: 419
+
+        Removes deprecated packages and prepares for 1.0 release.
+
+    .. change:: logic correction for window function
+        :type: bugfix
+        :pr: 421
+
+        Corrects the logic for using a count with a window function.
+
+
+.. changelog:: 0.34.0
+    :date: 2025-03-10
+
+    .. change:: allow custom `not_found` error messages
+        :type: feature
+        :pr: 417
+        :issue: 391
+
+        Enhance the SQLAlchemy exception wrapper to handle NotFoundError with custom error messages and improved error handling. This includes:
+
+        - Adding a 'not_found' key to ErrorMessages type
+        - Extending wrap_sqlalchemy_exception to catch and handle NotFoundError
+        - Updating default error message templates with a not_found message
+        - Adding unit tests for custom NotFoundError handling
+
+    .. change:: Refactor Sanic extension for multi-config support
+        :type: feature
+        :pr: 415
+        :issue: 375
+
+        This commit refactors the Sanic extension for Advanced Alchemy:
+
+        - Refactored configuration handling with support for multiple database configurations
+        - Added methods for retrieving async and sync sessions, engines, and configs
+        - Improved dependency injection with new provider methods
+        - Simplified extension initialization and registration
+        - Updated example and test files to reflect new extension structure
+        - Removed deprecated methods and simplified the extension interface
+
+
+
+.. changelog:: 0.33.2
+    :date: 2025-03-09
+
+    .. change:: simplify session type hints in service providers
+        :type: bugfix
+        :pr: 414
+
+        Remove unnecessary scoped session type hints from service provider functions.
+
+        Prevents the following exception from being incorrectly raised:
+
+        `TypeError: Type unions may not contain more than one custom type - type typing.Union[sqlalchemy.ext.asyncio.session.AsyncSession, sqlalchemy.ext.asyncio.scoping.async_scoped_session[sqlalchemy.ext.asyncio.session.AsyncSession], NoneType] is not supported.`
+
+
+.. changelog:: 0.33.1
+    :date: 2025-03-07
+
+    .. change:: add session to namespace signature
+        :type: feature
+        :pr: 412
+
+        The new filter providers expect that the sessions are in the signature namespace.  This ensures there are no issues when configuring the plugin.
+
+
+.. changelog:: 0.33.0
+    :date: 2025-03-07
+
+    .. change:: Add dependency factory utilities
+        :type: feature
+        :pr: 405
+
+        Introduces a new module `advanced_alchemy.extensions.litestar.providers` with comprehensive dependency injection utilities for SQLAlchemy services in Litestar. The module provides:
+
+        - Dynamic filter configuration generation
+        - Dependency caching mechanism
+        - Flexible filter and pagination support
+        - Singleton metaclass for dependency management
+        - Configurable filter and search dependencies
+
+
 .. changelog:: 0.32.2
     :date: 2025-02-26
 

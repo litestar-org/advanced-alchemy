@@ -1,5 +1,3 @@
-import contextlib
-
 import pytest
 from sqlalchemy.exc import (
     IntegrityError as SQLAlchemyIntegrityError,
@@ -18,17 +16,10 @@ from advanced_alchemy.exceptions import (
     IntegrityError,
     InvalidRequestError,
     MultipleResultsFoundError,
+    NotFoundError,
     RepositoryError,
     wrap_sqlalchemy_exception,
 )
-
-
-async def test_repo_get_or_create_deprecation() -> None:
-    with pytest.warns(DeprecationWarning):
-        from advanced_alchemy.exceptions import ConflictError
-
-        with contextlib.suppress(Exception):
-            raise ConflictError
 
 
 def test_wrap_sqlalchemy_exception_multiple_results_found() -> None:
@@ -99,6 +90,11 @@ def test_wrap_sqlalchemy_exception_attribute_error() -> None:
         raise AttributeError("original")
 
 
+def test_wrap_sqlalchemy_exception_not_found_error() -> None:
+    with pytest.raises(NotFoundError, match="No rows matched the specified data"), wrap_sqlalchemy_exception():
+        raise NotFoundError("No item found when one was expected")
+
+
 def test_wrap_sqlalchemy_exception_no_wrap() -> None:
     with pytest.raises(SQLAlchemyError), wrap_sqlalchemy_exception(wrap_exceptions=False):
         raise SQLAlchemyError("original")
@@ -110,6 +106,19 @@ def test_wrap_sqlalchemy_exception_no_wrap() -> None:
         raise SQLAlchemyInvalidRequestError()
     with pytest.raises(AttributeError), wrap_sqlalchemy_exception(wrap_exceptions=False):
         raise AttributeError()
+    with (
+        pytest.raises(NotFoundError, match="No item found when one was expected"),
+        wrap_sqlalchemy_exception(wrap_exceptions=False),
+    ):
+        raise NotFoundError("No item found when one was expected")
+
+
+def test_custom_not_found_error_message() -> None:
+    with (
+        pytest.raises(NotFoundError, match="Custom Error"),
+        wrap_sqlalchemy_exception(error_messages={"not_found": "Custom Error"}),
+    ):
+        raise NotFoundError("original")
 
 
 def test_wrap_sqlalchemy_exception_custom_error_message() -> None:

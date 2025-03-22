@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
 from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-from advanced_alchemy.utils.portals import PortalProvider
+from advanced_alchemy.utils.portals import Portal, PortalProvider
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -43,6 +43,11 @@ class AdvancedAlchemy:
 
         if app is not None:
             self.init_app(app)
+
+    @property
+    def portal(self) -> "Portal":
+        """Get the portal."""
+        return self.portal_provider.portal
 
     @property
     def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":

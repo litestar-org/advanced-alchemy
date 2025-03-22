@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Union, cast
+from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
 from pytest import FixtureRequest
 from pytest_mock import MockerFixture
 from sanic import HTTPResponse, Request, Sanic
-from sanic_ext import Extend
 from sanic_testing.testing import SanicTestClient  # type: ignore[import-untyped]
 from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncEngine
 from typing_extensions import assert_type
 
 from advanced_alchemy.extensions.sanic import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -20,12 +18,12 @@ AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 
 
 @pytest.fixture()
-def app() -> Sanic:
+def app() -> Sanic[Any, Any]:
     return Sanic("TestSanic")
 
 
 @pytest.fixture()
-def client(app: Sanic) -> SanicTestClient:
+def client(app: Sanic[Any, Any]) -> SanicTestClient:
     return SanicTestClient(app=app)
 
 
@@ -45,9 +43,9 @@ def config(request: FixtureRequest) -> AnyConfig:
 
 
 @pytest.fixture()
-def alchemy(config: AnyConfig, app: Sanic) -> AdvancedAlchemy:
+def alchemy(config: AnyConfig, app: Sanic[Any, Any]) -> AdvancedAlchemy:
     alchemy = AdvancedAlchemy(sqlalchemy_config=config)
-    Extend.register(alchemy)
+    alchemy.register(app)
     return alchemy
 
 
@@ -77,21 +75,18 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
         sync_alchemy = AdvancedAlchemy(sqlalchemy_config=sync_config)
         async_alchemy = AdvancedAlchemy(sqlalchemy_config=async_config)
 
-        assert_type(sync_alchemy.get_engine(), Engine)
-        assert_type(async_alchemy.get_engine(), AsyncEngine)
-
-        assert_type(sync_alchemy.get_sessionmaker(), Callable[[], Session])
-        assert_type(async_alchemy.get_sessionmaker(), Callable[[], AsyncSession])
+        assert_type(sync_alchemy.get_sync_engine(), Engine)
+        assert_type(async_alchemy.get_async_engine(), AsyncEngine)
 
 
-def test_inject_engine(app: Sanic, alchemy: AdvancedAlchemy) -> None:
+def test_inject_engine(app: Sanic[Any, Any], alchemy: AdvancedAlchemy) -> None:
     @app.get("/")
     async def handler(request: Request) -> HTTPResponse:
-        assert isinstance(getattr(request.app.ctx, alchemy.engine_key), (Engine, AsyncEngine))
+        assert isinstance(getattr(request.app.ctx, alchemy.get_config().engine_key), (Engine, AsyncEngine))
         return HTTPResponse(status=200)
 
     client = SanicTestClient(app=app)
-    assert client.get("/")[1].status == 200  # pyright: ignore[reportOptionalMemberAccess]
+    assert client.get("/")[1].status == 200  # pyright: ignore[reportOptionalMemberAccess,reportUnknownMemberType]
 
 
 """
