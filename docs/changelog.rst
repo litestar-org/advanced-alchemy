@@ -3,6 +3,16 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.0.1
+    :date: 2025-03-19
+
+    .. change:: properly serialize `Relationship` type hints
+        :type: bugfix
+        :pr: 422
+
+        Adds `sqlalchemy.orm.Relationship` to the supported type hints for the `SQLAlchemyDTO`
+
+
 .. changelog:: 1.0.0
     :date: 2025-03-18
 

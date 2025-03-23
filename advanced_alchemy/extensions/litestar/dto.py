@@ -32,6 +32,7 @@ from sqlalchemy.orm import (
     MappedColumn,
     NotExtension,
     QueryableAttribute,
+    Relationship,
     RelationshipDirection,
     RelationshipProperty,
     WriteOnlyMapped,
@@ -145,28 +146,39 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         model_type_hints: dict[str, FieldDefinition],
         model_name: str,
     ) -> list[DTOFieldDefinition]:
-        if not isinstance(orm_descriptor, QueryableAttribute):
+        if not isinstance(orm_descriptor, QueryableAttribute):  # pragma: no cover
             msg = f"Unexpected descriptor type for '{extension_type}': '{orm_descriptor}'"
             raise NotImplementedError(msg)
 
         elem: ElementType
-        if isinstance(orm_descriptor.property, ColumnProperty):  # pyright: ignore[reportUnknownMemberType]
-            if not isinstance(orm_descriptor.property.expression, (Column, ColumnClause, Label)):  # pyright: ignore[reportUnknownMemberType]
+        if isinstance(
+            orm_descriptor.property,  # pyright: ignore[reportUnknownMemberType]
+            ColumnProperty,  # pragma: no cover
+        ):
+            if not isinstance(
+                orm_descriptor.property.expression,  # pyright: ignore[reportUnknownMemberType]
+                (Column, ColumnClause, Label),
+            ):
                 msg = f"Expected 'Column', got: '{orm_descriptor.property.expression}, {type(orm_descriptor.property.expression)}'"  # pyright: ignore[reportUnknownMemberType]
                 raise NotImplementedError(msg)
             elem = orm_descriptor.property.expression  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         elif isinstance(orm_descriptor.property, (RelationshipProperty, CompositeProperty)):  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
             elem = orm_descriptor.property  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-        else:
+        else:  # pragma: no cover
             msg = f"Unhandled property type: '{orm_descriptor.property}'"  # pyright: ignore[reportUnknownMemberType]
             raise NotImplementedError(msg)
 
         default, default_factory = _detect_defaults(elem)
 
         try:
-            if (field_definition := model_type_hints[key]).origin in {Mapped, WriteOnlyMapped, DynamicMapped}:
+            if (field_definition := model_type_hints[key]).origin in {
+                Mapped,
+                WriteOnlyMapped,
+                DynamicMapped,
+                Relationship,
+            }:
                 (field_definition,) = field_definition.inner_types
-            else:
+            else:  # pragma: no cover
                 msg = f"Expected 'Mapped' origin, got: '{field_definition.origin}'"
                 raise NotImplementedError(msg)
         except KeyError:
@@ -201,13 +213,13 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         model_type_hints: dict[str, FieldDefinition],
         model_name: str,
     ) -> list[DTOFieldDefinition]:
-        if not isinstance(orm_descriptor, AssociationProxy):
+        if not isinstance(orm_descriptor, AssociationProxy):  # pragma: no cover
             msg = f"Unexpected descriptor type '{orm_descriptor}' for '{extension_type}'"
             raise NotImplementedError(msg)
 
         if (field_definition := model_type_hints[key]).origin is AssociationProxy:
             (field_definition,) = field_definition.inner_types
-        else:
+        else:  # pragma: no cover
             msg = f"Expected 'AssociationProxy' origin, got: '{field_definition.origin}'"
             raise NotImplementedError(msg)
 
@@ -299,7 +311,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         # for each method name it is bound to. We only need to see it once, so track views of it here.
         seen_hybrid_descriptors: set[hybrid_property] = set()  # pyright: ignore[reportUnknownVariableType,reportMissingTypeArgument]
         skipped_descriptors: set[str] = set()
-        for composite_property in mapper.composites:
+        for composite_property in mapper.composites:  # pragma: no cover
             for attr in composite_property.attrs:
                 if isinstance(attr, (MappedColumn, Column)):
                     skipped_descriptors.add(attr.name)
