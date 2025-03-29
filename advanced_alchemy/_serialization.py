@@ -18,7 +18,11 @@ except ImportError:
         model_fields: ClassVar[dict[str, Any]]
 
         def model_dump_json(self, *args: Any, **kwargs: Any) -> str:
-            """Placeholder"""
+            """Placeholder for pydantic.BaseModel.model_dump_json
+
+            Returns:
+                The JSON representation of the model.
+            """
             return ""
 
     PYDANTIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]

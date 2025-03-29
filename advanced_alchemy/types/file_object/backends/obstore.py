@@ -9,7 +9,7 @@ from typing import Any, Optional, Union, cast
 
 from obstore import sign as obstore_sign
 from obstore import sign_async as obstore_sign_async
-from obstore._scheme import parse_scheme  # noqa: PLC2701 # pyright: ignore[reportMissingModuleSource]
+from obstore._scheme import parse_scheme  # pyright: ignore[reportMissingModuleSource]
 from obstore.store import ObjectStore
 from typing_extensions import Self
 

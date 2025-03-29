@@ -308,6 +308,8 @@ ignore = [
   "FA100",
   "PLC0415", # import should be at the top of the file
   "PLR0904", # too many public methods
+  "PLR0917",
+  "PGH003",
 ]
 select = ["ALL"]
 

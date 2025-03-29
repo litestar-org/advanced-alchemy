@@ -47,7 +47,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
     validators: list[FileValidator]
     processors: list[FileProcessor]
 
-    def __init__(  # noqa: PLR0917
+    def __init__(
         self,
         backend: "StorageBackendT",
         compute_checksum: bool = True,
@@ -79,7 +79,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         self.validators = validators or []  # New
         self.processors = processors or []  # New
 
-    def process_bind_param(  # noqa: PLR6301
+    def process_bind_param(
         self, value: "Optional[Union[FileInfo[StorageBackendT], dict[str, Any]]]", dialect: Any
     ) -> "Optional[dict[str, Any]]":
         """Convert FileInfo object/dict to database JSON format.

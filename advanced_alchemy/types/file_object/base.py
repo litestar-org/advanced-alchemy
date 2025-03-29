@@ -1,7 +1,8 @@
 """Base classes and protocols for file object types."""
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Protocol, Sequence, Union
+from typing import Any, Optional, Protocol, Union
 
 from typing_extensions import TypeAlias
 

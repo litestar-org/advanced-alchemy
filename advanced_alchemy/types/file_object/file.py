@@ -1,7 +1,8 @@
 """File object implementation for handling file metadata and operations."""
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 from advanced_alchemy.types.file_object.base import PathLike, StorageBackend
 from advanced_alchemy.types.mutables import FreezableFileBase
@@ -36,7 +37,7 @@ class MaxSizeValidator(FileValidator):
 class FileProcessor:
     """Processor for file objects."""
 
-    def process(self, file: "FileObject", file_data: Optional[bytes] = None, key: str = "") -> Optional[bytes]:  # noqa: PLR6301
+    def process(self, file: "FileObject", file_data: Optional[bytes] = None, key: str = "") -> Optional[bytes]:
         """Process the file object. Can optionally use and return modified raw file data."""
         return file_data  # Default: return data unmodified
 
@@ -112,20 +113,22 @@ class FileObject(FreezableFileBase):
             **kwargs: Additional keyword arguments to store in the object
         """
         super().__init__()
-        self.update({
-            "filename": filename,
-            "content_type": content_type,
-            "size": size,
-            "path": path,
-            "backend": backend,
-            "protocol": protocol,
-            "last_modified": last_modified,
-            "checksum": checksum,
-            "etag": etag,
-            "version_id": version_id,
-            "metadata": metadata or {},
-            **kwargs,
-        })
+        self.update(
+            {
+                "filename": filename,
+                "content_type": content_type,
+                "size": size,
+                "path": path,
+                "backend": backend,
+                "protocol": protocol,
+                "last_modified": last_modified,
+                "checksum": checksum,
+                "etag": etag,
+                "version_id": version_id,
+                "metadata": metadata or {},
+                **kwargs,
+            }
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FileObject":

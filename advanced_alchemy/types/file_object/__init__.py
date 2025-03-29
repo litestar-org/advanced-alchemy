@@ -10,11 +10,11 @@ from advanced_alchemy.types.file_object.file import (
 )
 
 __all__ = [
+    "FileExtensionProcessor",
     "FileObject",
+    "FileProcessor",
     "FileValidator",
     "MaxSizeValidator",
-    "FileProcessor",
-    "FileExtensionProcessor",
     "PathLike",
     "StorageBackend",
 ]

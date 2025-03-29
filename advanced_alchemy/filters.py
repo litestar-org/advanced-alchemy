@@ -34,7 +34,7 @@ See Also:
 
 import datetime
 from abc import ABC, abstractmethod
-from collections import abc
+from collections.abc import Collection
 from dataclasses import dataclass
 from operator import attrgetter
 from typing import Any, Callable, Generic, Literal, Optional, Union, cast
@@ -44,7 +44,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from typing_extensions import TypeAlias, TypeVar
 
-from advanced_alchemy import base
+from advanced_alchemy.base import ModelProtocol
 
 __all__ = (
     "BeforeAfter",
@@ -64,7 +64,7 @@ __all__ = (
 )
 
 T = TypeVar("T")
-ModelT = TypeVar("ModelT", bound=base.ModelProtocol)
+ModelT = TypeVar("ModelT", bound=ModelProtocol)
 StatementFilterT = TypeVar("StatementFilterT", bound="StatementFilter")
 StatementTypeT = TypeVar(
     "StatementTypeT",
@@ -240,7 +240,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    values: Union[abc.Collection[T], None]
+    values: Union[Collection[T], None]
     """Values for the ``IN`` clause. If this is None, no filter is applied.
         An empty list will force an empty result set (WHERE 1=-1)"""
 
@@ -299,7 +299,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    values: Union[abc.Collection[T], None]
+    values: Union[Collection[T], None]
     """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
 
     def append_to_statement(
@@ -467,7 +467,7 @@ class SearchFilter(StatementFilter):
         return or_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate LIKE or ILIKE operator as a function.
 
         Returns:
@@ -488,7 +488,7 @@ class SearchFilter(StatementFilter):
         """
         return {self.field_name} if isinstance(self.field_name, str) else self.field_name
 
-    def get_search_clauses(self, model: type[ModelT]) -> list["BinaryExpression[bool]"]:
+    def get_search_clauses(self, model: type[ModelT]) -> list[BinaryExpression[bool]]:
         """Generate the LIKE/ILIKE clauses for all specified fields.
 
         Args:

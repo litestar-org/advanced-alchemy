@@ -556,7 +556,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             item_or_none: Item (:class:`T <T>`) to be tested for existence.
 
         Raises:
-            NotFoundError: If ``item_or_none`` is ``None
+            NotFoundError: If ``item_or_none`` is ``None``
 
         Returns:
             The item, if it exists.
@@ -912,8 +912,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         )
         return existing > 0
 
+    @staticmethod
     def _get_base_stmt(
-        self,
         *,
         statement: StatementTypeT,
         loader_options: Optional[list[_AbstractLoad]],
@@ -988,9 +988,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Returns:
             The retrieved instance.
-
-        Raises:
-            NotFoundError: If no instance found identified by `item_id`.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1040,8 +1037,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The retrieved instance.
 
-        Raises:
-            NotFoundError: If no instance found identified by `item_id`.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1681,11 +1676,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 instances.append(instance)
             return instances, count
 
+    @staticmethod
     def _get_count_stmt(
-        self,
         statement: Select[tuple[ModelT]],
-        loader_options: Optional[list[_AbstractLoad]],
-        execution_options: Optional[dict[str, Any]],
+        loader_options: Optional[list[_AbstractLoad]],  # noqa: ARG004
+        execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
         return (
@@ -1898,7 +1893,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if match_fields is None:
             match_fields = [self.id_attribute]
         for existing_datum in existing_data:
-            for _row_id, datum in enumerate(data):
+            for datum in data:
                 match = all(
                     getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
                 )
@@ -2219,7 +2214,8 @@ class SQLAlchemyAsyncQueryRepository:
                     count = count_value
             return instances, count
 
-    def _get_count_stmt(self, statement: Select[Any]) -> Select[Any]:
+    @staticmethod
+    def _get_count_stmt(statement: Select[Any]) -> Select[Any]:
         return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)  # pyright: ignore[reportUnknownVariable]
 
     async def _list_and_count_basic(

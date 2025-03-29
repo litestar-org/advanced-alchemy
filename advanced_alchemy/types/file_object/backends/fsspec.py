@@ -5,9 +5,8 @@
 import os
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import IO, Any, Optional, Union, cast
+from typing import IO, TYPE_CHECKING, Any, Optional, Union, cast
 
-from fsspec import AbstractFileSystem
 from fsspec.asyn import AsyncFileSystem
 from typing_extensions import Self
 
@@ -18,6 +17,9 @@ from advanced_alchemy.types.file_object.base import (
     PathLike,
     StorageBackend,
 )
+
+if TYPE_CHECKING:
+    from fsspec import AbstractFileSystem
 
 
 class FSSpecBackend(StorageBackend):
