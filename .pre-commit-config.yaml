@@ -25,19 +25,16 @@ repos:
     rev: "v0.11.2"
     hooks:
       # Run the linter.
-    - id: ruff
-      types_or: [ python, pyi ]
-      args: [ --fix ]
-    # Run the formatter.
-    - id: ruff-format
-      types_or: [ python, pyi ]
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+      - id: ruff
+        types_or: [python, pyi]
+        args: [--fix]
+      # Run the formatter.
+      - id: ruff-format
+        types_or: [python, pyi]
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.30.3
     hooks:
-      - id: codespell
-        exclude: "uv.lock|examples/us_state_lookup.json"
-        additional_dependencies:
-          - tomli
+      - id: typos
   - repo: https://github.com/sphinx-contrib/sphinx-lint
     rev: "v1.0.0"
     hooks:
