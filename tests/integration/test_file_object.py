@@ -10,14 +10,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from advanced_alchemy.types.file_object.fsspec import FSSpecBackend
-from advanced_alchemy.types.file_object.obstore import ObstoreBackend
-from advanced_alchemy.types.file_object.store import (
-    AsyncStoredObject,
-    ObjectStore,
-    StoredObjectBase,
-    SyncStoredObject,
-)
+from advanced_alchemy.types.file_object import FileObject
+from advanced_alchemy.types.file_object.backends.fsspec import FSSpecBackend
+from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 
 
 class Base(DeclarativeBase):
@@ -207,7 +202,7 @@ def test_stored_object_base() -> None:
     assert data["metadata"] == {"key": "value"}
 
     # Test from_dict
-    new_obj = StoredObjectBase.from_dict(data)
+    new_obj = FileObject.from_dict(data)
     assert new_obj.filename == obj.filename
     assert new_obj.path == obj.path
     assert new_obj.backend == obj.backend
@@ -229,7 +224,7 @@ def test_object_store_type(db_engine: Any, fsspec_backend: FSSpecBackend) -> Non
     with Session(db_engine) as session:
         # Create a new file model
         file_model = FileModel()
-        file_model.file = cast(StoredObjectBase, fsspec_backend.save_file(filename, file_data, content_type))
+        file_model.file = cast(FileObject, fsspec_backend.save_file(filename, file_data, content_type))
         session.add(file_model)
         session.commit()
 

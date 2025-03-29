@@ -70,8 +70,13 @@ class StorageBucket(TypeDecorator[FileObject]):
             *args: Additional positional arguments for TypeDecorator
             **kwargs: Additional keyword arguments for TypeDecorator
 
+        Raises:
+            ValueError: If backend is invalid or required parameters are missing
         """
         super().__init__(*args, **kwargs)
+        if not backend:
+            msg = "backend is required"
+            raise ValueError(msg)
         if isinstance(backend, str):
             self.backend = storages.get_backend(backend)
         else:
@@ -80,8 +85,8 @@ class StorageBucket(TypeDecorator[FileObject]):
         self.compute_checksum = compute_checksum
         self.checksum_handler = checksum_handler or default_checksum_handler
         self.default_expires_in = default_expires_in or self.default_expires_in
-        self.validators = validators or []  # New
-        self.processors = processors or []  # New
+        self.validators = validators or []
+        self.processors = processors or []
 
     def process_bind_param(
         self, value: "Optional[Union[FileObject, dict[str, Any]]]", dialect: Any
@@ -90,6 +95,10 @@ class StorageBucket(TypeDecorator[FileObject]):
 
         Note: This method expects an already processed FileInfo or its dict representation.
               Use handle_upload() or handle_upload_async() for processing raw uploads.
+
+        Args:
+            value: The value to process
+            dialect: The SQLAlchemy dialect
 
         Returns:
             A dictionary representing the file metadata, or None if the input value is None.
@@ -104,6 +113,10 @@ class StorageBucket(TypeDecorator[FileObject]):
     def process_result_value(self, value: "Optional[dict[str, Any]]", dialect: Any) -> "Optional[FileObject]":
         """Convert database JSON format back to FileInfo object.
 
+        Args:
+            value: The value to process
+            dialect: The SQLAlchemy dialect
+
         Returns:
             FileInfo object or None.
         """
@@ -113,8 +126,6 @@ class StorageBucket(TypeDecorator[FileObject]):
         # Inject the backend into the file info - crucial for functionality
         value["backend"] = self.backend
         return FileObject.from_dict(value)
-
-    # --- New Upload Handling Methods ---
 
     def handle_upload(
         self,
@@ -137,59 +148,54 @@ class StorageBucket(TypeDecorator[FileObject]):
         Returns:
             FileInfo object representing the stored file.
 
+        Raises:
+            ValueError: If validation fails or required parameters are missing
         """
-        # 1. Create a temporary FileObject (or just use a dict internally)
-        #    FileObject is currently dictionary-like, so we can use it.
-        #    We pass file_data separately to validators/processors for now.
+        if not filename:
+            msg = "filename is required"
+            raise ValueError(msg)
+        if not content_type:
+            msg = "content_type is required"
+            raise ValueError(msg)
+        if not file_data:
+            msg = "file_data is required"
+            raise ValueError(msg)
+
+        # Create initial file object
         file_object = FileObject(
             filename=filename,
             content_type=content_type,
             size=len(file_data),
-            # Can add initial metadata here if needed
+            metadata=metadata or {},
         )
-        processed_data = file_data  # Start with original data
 
-        # 2. Run Validators
+        # Run validators
         for validator in self.validators:
-            # Assuming validate might need raw data, pass it. Adjust if not needed.
-            validator.validate(file_object)  # Pass data if method signature requires it
+            validator.validate(file_object, file_data=file_data)
 
-        # 3. Run Processors
+        # Run processors
+        processed_data = file_data
         for processor in self.processors:
-            # Processors might modify file_object metadata or potentially the data itself
-            # Adjust signature if processor needs to return modified data
-            processor.process(file_object)  # Pass/return data if method signature requires it
-            # Example if processor modifies data: processed_data = processor.process(file_object, processed_data)
+            processed_data = processor.process(file_object, file_data=processed_data) or processed_data
 
-        # 4. Compute Checksum (on potentially processed data)
-        file_checksum = self.checksum_handler(processed_data) if self.compute_checksum else None
+        # Compute checksum if enabled
+        if self.compute_checksum:
+            file_object["checksum"] = self.checksum_handler(processed_data)
 
-        # 5. Determine storage path
-        final_storage_path = storage_path if storage_path is not None else file_object.get("filename", filename)
+        # Determine storage path
+        final_storage_path = storage_path if storage_path is not None else filename
 
-        # 6. Merge metadata
-        final_metadata = {**file_object.get("metadata", {}), **(metadata or {})}
-        if file_checksum:
-            final_metadata["checksum"] = file_checksum  # Add checksum to metadata if computed
-
-        # 7. Call Backend Storage (Sync)
-        # Use the potentially updated filename/content_type from file_object
-        file_info = self.backend.put(
+        # Store the file
+        return self.backend.put(
             path=final_storage_path,
             data=processed_data,
-            content_type=file_object.get("content_type", content_type),
-            metadata=final_metadata,
+            content_type=content_type,
+            metadata=file_object.metadata,
         )
-
-        # Ensure checksum is in the final FileInfo if computed
-        if file_checksum and not file_info.checksum:
-            file_info.checksum = file_checksum
-
-        return file_info
 
     async def handle_upload_async(
         self,
-        file_data: AsyncDataLike,  # Accepts various async data types
+        file_data: AsyncDataLike,
         filename: str,
         content_type: str,
         metadata: Optional[dict[str, Any]] = None,
@@ -208,20 +214,21 @@ class StorageBucket(TypeDecorator[FileObject]):
         Returns:
             FileInfo object representing the stored file.
 
+        Raises:
+            ValueError: If validation fails or required parameters are missing
         """
-        # Note: Checksum calculation on async streams might require reading
-        # the entire stream into memory or a temporary file first, unless
-        # the backend calculates it during upload (like S3).
-        # For simplicity, we'll assume checksum is handled by the backend or
-        # we read the stream if needed, but this can be complex.
+        if not filename:
+            msg = "filename is required"
+            raise ValueError(msg)
+        if not content_type:
+            msg = "content_type is required"
+            raise ValueError(msg)
+        if not file_data:
+            msg = "file_data is required"
+            raise ValueError(msg)
 
-        # Currently, validators and processors are sync. If they become async,
-        # you'd need to await them here, possibly using asyncio.gather.
-        # For now, we assume they run quickly or we handle potential blocking.
-
-        # If data is bytes, we can handle it synchronously before async put
+        # Handle bytes synchronously
         if isinstance(file_data, bytes):
-            # Run sync validation/processing directly on bytes
             return self.handle_upload(
                 file_data=file_data,
                 filename=filename,
@@ -230,93 +237,111 @@ class StorageBucket(TypeDecorator[FileObject]):
                 storage_path=storage_path,
             )
 
-        # --- Handling for async streams/iterables ---
-        # Create FileObject - Size might be unknown for streams initially
+        # Create initial file object
         file_object = FileObject(
             filename=filename,
             content_type=content_type,
-            size=0,  # Size might be unknown for streams
+            size=0,  # Size will be determined by backend
+            metadata=metadata or {},
         )
 
-        # Run Validators (Sync for now) - They likely won't have access to full stream data easily
+        # Run validators
         for validator in self.validators:
-            # Note: Validators like MaxSizeValidator won't work well on streams
-            # without reading the whole stream first.
             await async_(validator.validate)(file_object)
 
-        # Run Processors (Sync for now)
+        # Run processors
         for processor in self.processors:
             await async_(processor.process)(file_object)
 
         # Determine storage path
-        final_storage_path = storage_path if storage_path is not None else file_object.get("filename", filename)
+        final_storage_path = storage_path if storage_path is not None else filename
 
-        # Merge metadata
-        final_metadata = {**file_object.get("metadata", {}), **(metadata or {})}
-
-        # Call Backend Storage (Async)
-        # Checksum handling for async streams is omitted for brevity - depends on backend/strategy.
+        # Store the file
         return await self.backend.put_async(
             path=final_storage_path,
-            data=file_data,  # Pass the async data directly
-            content_type=file_object.get("content_type", content_type),
-            metadata=final_metadata,
+            data=file_data,
+            content_type=content_type,
+            metadata=file_object.metadata,
         )
-        # Note: FileInfo size might be updated by the backend after upload
 
     def put_file(
         self, file_data: bytes, filename: str, content_type: str, metadata: "Optional[dict[str, Any]]" = None
     ) -> "FileObject":
-        """Simple wrapper for handle_upload for backward compatibility or direct use.
+        """Store a file synchronously.
 
         Args:
-            file_data: Raw file data as bytes.
-            filename: Original filename.
-            content_type: MIME type.
-            metadata: Additional metadata.
+            file_data: Raw file data as bytes
+            filename: Original filename
+            content_type: MIME type of the file
+            metadata: Optional additional metadata
 
         Returns:
-            FileInfo object.
+            FileObject: The stored file object
         """
-        # Delegates to the new handler which includes validation/processing
-        return self.handle_upload(file_data=file_data, filename=filename, content_type=content_type, metadata=metadata)
+        return self.handle_upload(
+            file_data=file_data,
+            filename=filename,
+            content_type=content_type,
+            metadata=metadata,
+        )
 
     async def put_file_async(
-        self, file_data: bytes, filename: str, content_type: str, metadata: "Optional[dict[str, Any]]" = None
+        self, file_data: AsyncDataLike, filename: str, content_type: str, metadata: "Optional[dict[str, Any]]" = None
     ) -> "FileObject":
-        """Simple async wrapper for handle_upload_async."""
-        # Delegates to the new handler which includes validation/processing
+        """Store a file asynchronously.
+
+        Args:
+            file_data: Raw file data as bytes or async stream
+            filename: Original filename
+            content_type: MIME type of the file
+            metadata: Optional additional metadata
+
+        Returns:
+            FileObject: The stored file object
+        """
         return await self.handle_upload_async(
-            file_data=file_data,  # Assumes bytes for this simple wrapper
+            file_data=file_data,
             filename=filename,
             content_type=content_type,
             metadata=metadata,
         )
 
     def sign(self, paths: Union[str, list[str]], expires_in: Optional[int] = None) -> Union[str, list[str]]:
-        """Get URL for accessing file.
+        """Generate signed URLs for files.
+
+        Args:
+            paths: Single path or list of paths
+            expires_in: Optional expiration time in seconds
 
         Returns:
-            The signed URL for accessing the file.
+            Signed URL(s)
         """
-        expires_in = expires_in or self.default_expires_in
-
-        return self.backend.sign(paths, expires_in=expires_in)
+        return self.backend.sign(paths, expires_in=expires_in or self.default_expires_in)
 
     async def sign_async(self, paths: Union[str, list[str]], expires_in: Optional[int] = None) -> Union[str, list[str]]:
-        """Get URL for accessing file.
+        """Generate signed URLs for files asynchronously.
+
+        Args:
+            paths: Single path or list of paths
+            expires_in: Optional expiration time in seconds
 
         Returns:
-            The signed URL for accessing the file.
+            Signed URL(s)
         """
-        expires_in = expires_in or self.default_expires_in
-
-        return await self.backend.sign_async(paths, expires_in=expires_in)
+        return await self.backend.sign_async(paths, expires_in=expires_in or self.default_expires_in)
 
     def delete_file(self, path: str) -> None:
-        """Delete file from storage."""
+        """Delete a file synchronously.
+
+        Args:
+            path: Path to the file
+        """
         self.backend.delete(path)
 
     async def delete_file_async(self, path: str) -> None:
-        """Delete file from storage."""
+        """Delete a file asynchronously.
+
+        Args:
+            path: Path to the file
+        """
         await self.backend.delete_async(path)

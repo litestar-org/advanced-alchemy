@@ -136,24 +136,98 @@ class FileObject(FreezableFileBase):
             version_id: Optional version ID of the file
             metadata: Optional additional metadata
             **kwargs: Additional keyword arguments to store in the object
+
+        Raises:
+            ValueError: If required fields are missing or invalid
         """
+        if not filename:
+            msg = "filename is required"
+            raise ValueError(msg)
+        if not content_type:
+            msg = "content_type is required"
+            raise ValueError(msg)
+        if size < 0:
+            msg = "size must be non-negative"
+            raise ValueError(msg)
+
         super().__init__()
-        self.update(
-            {
-                "filename": filename,
-                "content_type": content_type,
-                "size": size,
-                "path": path,
-                "backend": backend,
-                "protocol": protocol,
-                "last_modified": last_modified,
-                "checksum": checksum,
-                "etag": etag,
-                "version_id": version_id,
-                "metadata": metadata or {},
-                **kwargs,
-            }
-        )
+        self.update({
+            "filename": filename,
+            "content_type": content_type,
+            "size": size,
+            "path": path or filename,  # Default to filename if path not provided
+            "backend": backend,
+            "protocol": protocol,
+            "last_modified": last_modified,
+            "checksum": checksum,
+            "etag": etag,
+            "version_id": version_id,
+            "metadata": metadata or {},
+            **kwargs,
+        })
+
+    @property
+    def filename(self) -> str:
+        """Get the filename."""
+        return self["filename"]
+
+    @property
+    def content_type(self) -> str:
+        """Get the content type."""
+        return self["content_type"]
+
+    @property
+    def size(self) -> int:
+        """Get the file size."""
+        return self["size"]
+
+    @property
+    def path(self) -> str:
+        """Get the storage path."""
+        return self["path"]
+
+    @property
+    def backend(self) -> "Optional[StorageBackend]":
+        """Get the storage backend."""
+        return self.get("backend")
+
+    @property
+    def protocol(self) -> Optional[str]:
+        """Get the storage protocol."""
+        return self.get("protocol")
+
+    @property
+    def last_modified(self) -> Optional[float]:
+        """Get the last modification timestamp."""
+        return self.get("last_modified")
+
+    @property
+    def checksum(self) -> Optional[str]:
+        """Get the file checksum."""
+        return self.get("checksum")
+
+    @property
+    def etag(self) -> Optional[str]:
+        """Get the file ETag."""
+        return self.get("etag")
+
+    @property
+    def version_id(self) -> Optional[str]:
+        """Get the file version ID."""
+        return self.get("version_id")
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """Get the file metadata."""
+        return self.get("metadata", {})
+
+    def update_metadata(self, metadata: dict[str, Any]) -> None:
+        """Update the file metadata.
+
+        Args:
+            metadata: New metadata to merge with existing metadata
+        """
+        self["metadata"] = {**self.metadata, **metadata}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FileObject":
@@ -187,10 +261,10 @@ class FileObject(FreezableFileBase):
         Returns:
             bytes: The file content
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return self["backend"].get(self["path"], options=options)
+        return self.backend.get_content(self.path, options=options)
 
     async def get_content_async(self, *, options: Optional[dict[str, Any]] = None) -> bytes:
         """Get the file content from the storage backend asynchronously.
@@ -204,10 +278,10 @@ class FileObject(FreezableFileBase):
         Returns:
             bytes: The file content
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return await self["backend"].get_async(self["path"], options=options)
+        return await self.backend.get_content_async(self.path, options=options)
 
     def get_range(
         self,
@@ -228,11 +302,21 @@ class FileObject(FreezableFileBase):
 
         Raises:
             RuntimeError: If no backend is configured
+            ValueError: If range parameters are invalid
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return self["backend"].get_range(self["path"], start=start, end=end, length=length)
+        if start < 0:
+            msg = "start must be non-negative"
+            raise ValueError(msg)
+        if end is not None and end < start:
+            msg = "end must be greater than or equal to start"
+            raise ValueError(msg)
+        if length is not None and length <= 0:
+            msg = "length must be positive"
+            raise ValueError(msg)
+        return self.backend.get_range(self.path, start=start, end=end, length=length)
 
     async def get_range_async(
         self,
@@ -253,11 +337,21 @@ class FileObject(FreezableFileBase):
 
         Raises:
             RuntimeError: If no backend is configured
+            ValueError: If range parameters are invalid
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return await self["backend"].get_range_async(self["path"], start=start, end=end, length=length)
+        if start < 0:
+            msg = "start must be non-negative"
+            raise ValueError(msg)
+        if end is not None and end < start:
+            msg = "end must be greater than or equal to start"
+            raise ValueError(msg)
+        if length is not None and length <= 0:
+            msg = "length must be positive"
+            raise ValueError(msg)
+        return await self.backend.get_range_async(self.path, start=start, end=end, length=length)
 
     def get_ranges(
         self,
@@ -274,15 +368,25 @@ class FileObject(FreezableFileBase):
             lengths: Optional sequence of lengths to read
 
         Returns:
-            list[bytes]: The requested byte ranges
+            list[bytes]: List of requested byte ranges
 
         Raises:
             RuntimeError: If no backend is configured
+            ValueError: If range parameters are invalid
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return self["backend"].get_ranges(self["path"], starts=starts, ends=ends, lengths=lengths)
+        if not starts:
+            msg = "starts must not be empty"
+            raise ValueError(msg)
+        if ends is not None and len(ends) != len(starts):
+            msg = "ends must have same length as starts"
+            raise ValueError(msg)
+        if lengths is not None and len(lengths) != len(starts):
+            msg = "lengths must have same length as starts"
+            raise ValueError(msg)
+        return self.backend.get_ranges(self.path, starts=starts, ends=ends, lengths=lengths)
 
     async def get_ranges_async(
         self,
@@ -299,15 +403,15 @@ class FileObject(FreezableFileBase):
             lengths: Optional sequence of lengths to read
 
         Returns:
-            list[bytes]: The requested byte ranges
+            list[bytes]: List of requested byte ranges
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return await self["backend"].get_ranges_async(self["path"], starts=starts, ends=ends, lengths=lengths)
+        return await self.backend.get_ranges_async(self.path, starts=starts, ends=ends, lengths=lengths)
 
     def sign(
         self,
@@ -315,11 +419,11 @@ class FileObject(FreezableFileBase):
         expires_in: Optional[int] = None,
         for_upload: bool = False,
     ) -> str:
-        """Get a signed URL for accessing or uploading the file.
+        """Generate a signed URL for the file.
 
         Args:
             expires_in: Optional expiration time in seconds
-            for_upload: Whether the URL is for uploading
+            for_upload: Whether the URL is for upload
 
         Returns:
             str: The signed URL
@@ -327,10 +431,16 @@ class FileObject(FreezableFileBase):
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return self["backend"].sign(self["path"], expires_in=expires_in, for_upload=for_upload)
+        result = self.backend.sign(self.path, expires_in=expires_in, for_upload=for_upload)
+        if isinstance(result, list):
+            if not result:
+                msg = "No signed URL generated"
+                raise RuntimeError(msg)
+            return result[0]
+        return result
 
     async def sign_async(
         self,
@@ -338,11 +448,11 @@ class FileObject(FreezableFileBase):
         expires_in: Optional[int] = None,
         for_upload: bool = False,
     ) -> str:
-        """Get a signed URL for accessing or uploading the file asynchronously.
+        """Generate a signed URL for the file asynchronously.
 
         Args:
             expires_in: Optional expiration time in seconds
-            for_upload: Whether the URL is for uploading
+            for_upload: Whether the URL is for upload
 
         Returns:
             str: The signed URL
@@ -350,92 +460,100 @@ class FileObject(FreezableFileBase):
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        return await self["backend"].sign_async(self["path"], expires_in=expires_in, for_upload=for_upload)
+        result = await self.backend.sign_async(self.path, expires_in=expires_in, for_upload=for_upload)
+        if isinstance(result, list):
+            if not result:
+                msg = "No signed URL generated"
+                raise RuntimeError(msg)
+            return result[0]
+        return result
 
     def delete(self) -> None:
-        """Delete the file from the storage backend.
+        """Delete the file from storage.
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        self["backend"].delete(self["path"])
+        self.backend.delete(self.path)
 
     async def delete_async(self) -> None:
-        """Delete the file from the storage backend asynchronously.
+        """Delete the file from storage asynchronously.
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        await self["backend"].delete_async(self["path"])
+        await self.backend.delete_async(self.path)
 
     def copy_to(self, to: PathLike, *, overwrite: bool = True) -> None:
-        """Copy the file to another location in the same backend.
+        """Copy the file to another location.
 
         Args:
             to: Destination path
-            overwrite: Whether to overwrite existing files
+            overwrite: Whether to overwrite existing file
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        self["backend"].copy(self["path"], to, overwrite=overwrite)
+        self.backend.copy(self.path, to, overwrite=overwrite)
 
     async def copy_to_async(self, to: PathLike, *, overwrite: bool = True) -> None:
-        """Copy the file to another location in the same backend asynchronously.
+        """Copy the file to another location asynchronously.
 
         Args:
             to: Destination path
-            overwrite: Whether to overwrite existing files
+            overwrite: Whether to overwrite existing file
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        await self["backend"].copy_async(self["path"], to, overwrite=overwrite)
+        await self.backend.copy_async(self.path, to, overwrite=overwrite)
 
     def rename_to(self, to: PathLike, *, overwrite: bool = True) -> None:
-        """Move the file to another location in the same backend.
+        """Rename the file to another location.
 
         Args:
-            to: Destination path
-            overwrite: Whether to overwrite existing files
+            to: New path
+            overwrite: Whether to overwrite existing file
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        self["backend"].rename(self["path"], to, overwrite=overwrite)
+        self.backend.rename(self.path, to, overwrite=overwrite)
+        self["path"] = str(to)
 
     async def rename_to_async(self, to: PathLike, *, overwrite: bool = True) -> None:
-        """Move the file to another location in the same backend asynchronously.
+        """Rename the file to another location asynchronously.
 
         Args:
-            to: Destination path
-            overwrite: Whether to overwrite existing files
+            to: New path
+            overwrite: Whether to overwrite existing file
 
         Raises:
             RuntimeError: If no backend is configured
         """
-        if not self.get("backend"):
+        if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        await self["backend"].rename_async(self["path"], to, overwrite=overwrite)
+        await self.backend.rename_async(self.path, to, overwrite=overwrite)
+        self["path"] = str(to)
 
 
 class StorageRegistry(metaclass=SingletonMeta):
@@ -534,49 +652,47 @@ class StorageBackend(ABC):
         """Initialize the storage backend.
 
         Args:
-            fs: The storage backend instance
+            fs: The filesystem or storage client
             options: Optional backend-specific options
             **kwargs: Additional keyword arguments
         """
         self.fs = fs
-        self.options = options
+        self.options = options or {}
 
     @staticmethod
     def _to_path(path: PathLike) -> str:
-        """Convert a PathLike to a string path.
+        """Convert a path-like object to a string.
 
         Args:
-            path: PathLike to convert
+            path: The path to convert
 
         Returns:
-            str: The string path
+            str: The string representation of the path
         """
-        if isinstance(path, str):
-            return path
         return str(path)
 
     @abstractmethod
     def get_content(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
-        """Return the bytes stored at the specified location.
+        """Get the content of a file.
 
         Args:
-            path: Path to retrieve
+            path: Path to the file
             options: Optional backend-specific options
 
         Returns:
-            The file content as bytes
+            bytes: The file content
         """
 
     @abstractmethod
     async def get_content_async(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
-        """Return the bytes stored at the specified location asynchronously.
+        """Get the content of a file asynchronously.
 
         Args:
-            path: Path to retrieve
+            path: Path to the file
             options: Optional backend-specific options
 
         Returns:
-            The file content as bytes
+            bytes: The file content
         """
 
     @abstractmethod
@@ -588,16 +704,16 @@ class StorageBackend(ABC):
         end: Optional[int] = None,
         length: Optional[int] = None,
     ) -> bytes:
-        """Return the bytes stored at the specified location in the given byte range.
+        """Get a range of bytes from a file.
 
         Args:
             path: Path to the file
-            start: Offset to start reading from
-            end: Offset to stop reading at (inclusive)
-            length: Number of bytes to read (alternative to end)
+            start: Starting byte offset
+            end: Optional ending byte offset (inclusive)
+            length: Optional number of bytes to read
 
         Returns:
-            The requested byte range
+            bytes: The requested byte range
         """
 
     @abstractmethod
@@ -609,16 +725,16 @@ class StorageBackend(ABC):
         end: Optional[int] = None,
         length: Optional[int] = None,
     ) -> bytes:
-        """Return the bytes stored at the specified location in the given byte range asynchronously.
+        """Get a range of bytes from a file asynchronously.
 
         Args:
             path: Path to the file
-            start: Offset to start reading from
-            end: Offset to stop reading at (inclusive)
-            length: Number of bytes to read (alternative to end)
+            start: Starting byte offset
+            end: Optional ending byte offset (inclusive)
+            length: Optional number of bytes to read
 
         Returns:
-            The requested byte range
+            bytes: The requested byte range
         """
 
     @abstractmethod
@@ -630,18 +746,16 @@ class StorageBackend(ABC):
         ends: Optional[Sequence[int]] = None,
         lengths: Optional[Sequence[int]] = None,
     ) -> list[bytes]:
-        """Return the bytes stored at the specified location in the given byte ranges.
+        """Get multiple ranges of bytes from a file.
 
         Args:
-            path: Path to read from
-            starts: A sequence of `int` where each offset starts.
-            ends: A sequence of `int` where each offset ends (exclusive). Either `ends` or `lengths` must be non-None.
-            lengths: A sequence of `int` with the number of bytes of each byte range. Either `ends` or `lengths` must be non-None.
+            path: Path to the file
+            starts: Sequence of starting byte offsets
+            ends: Optional sequence of ending byte offsets (inclusive)
+            lengths: Optional sequence of lengths to read
 
         Returns:
-            A sequence of `Bytes`, one for each range. This `Bytes` object implements the
-                Python buffer protocol, allowing zero-copy access to the underlying memory
-                provided by Rust.
+            list[bytes]: List of requested byte ranges
         """
 
     @abstractmethod
@@ -653,18 +767,16 @@ class StorageBackend(ABC):
         ends: Optional[Sequence[int]] = None,
         lengths: Optional[Sequence[int]] = None,
     ) -> list[bytes]:
-        """Return the bytes stored at the specified location in the given byte ranges.
+        """Get multiple ranges of bytes from a file asynchronously.
 
         Args:
-            path: Path to read from
-            starts: A sequence of `int` where each offset starts.
-            ends: A sequence of `int` where each offset ends (exclusive). Either `ends` or `lengths` must be non-None.
-            lengths: A sequence of `int` with the number of bytes of each byte range. Either `ends` or `lengths` must be non-None.
+            path: Path to the file
+            starts: Sequence of starting byte offsets
+            ends: Optional sequence of ending byte offsets (inclusive)
+            lengths: Optional sequence of lengths to read
 
         Returns:
-            A sequence of `Bytes`, one for each range. This `Bytes` object implements the
-                Python buffer protocol, allowing zero-copy access to the underlying memory
-                provided by Rust.
+            list[bytes]: List of requested byte ranges
         """
 
     @abstractmethod
@@ -679,19 +791,19 @@ class StorageBackend(ABC):
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> FileObject:
-        """Save data to the specified path.
+        """Store a file.
 
         Args:
-            path: Destination path
-            data: The data to save
-            content_type: MIME type of the content
-            metadata: Additional metadata to store
+            path: Path to store the file at
+            data: The file data to store
+            content_type: Optional MIME type of the file
+            metadata: Optional additional metadata
             use_multipart: Whether to use multipart upload
-            chunk_size: Size of chunks for multipart uploads
-            max_concurrency: Maximum concurrent uploads
+            chunk_size: Size of chunks for multipart upload
+            max_concurrency: Maximum number of concurrent uploads
 
         Returns:
-            Information about the saved file
+            FileObject: The stored file object
         """
 
     @abstractmethod
@@ -706,24 +818,24 @@ class StorageBackend(ABC):
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> FileObject:
-        """Save data to the specified path asynchronously.
+        """Store a file asynchronously.
 
         Args:
-            path: Destination path
-            data: The data to save
-            content_type: MIME type of the content
-            metadata: Additional metadata to store
+            path: Path to store the file at
+            data: The file data to store
+            content_type: Optional MIME type of the file
+            metadata: Optional additional metadata
             use_multipart: Whether to use multipart upload
-            chunk_size: Size of chunks for multipart uploads
-            max_concurrency: Maximum concurrent uploads
+            chunk_size: Size of chunks for multipart upload
+            max_concurrency: Maximum number of concurrent uploads
 
         Returns:
-            Information about the saved file
+            FileObject: The stored file object
         """
 
     @abstractmethod
     def delete(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
-        """Delete the object(s) at the specified location(s).
+        """Delete one or more files.
 
         Args:
             paths: Path or paths to delete
@@ -731,7 +843,7 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def delete_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
-        """Delete the object(s) at the specified location(s) asynchronously.
+        """Delete one or more files asynchronously.
 
         Args:
             paths: Path or paths to delete
@@ -739,42 +851,42 @@ class StorageBackend(ABC):
 
     @abstractmethod
     def copy(self, from_: PathLike, to: PathLike, *, overwrite: bool = True) -> None:
-        """Copy an object from one path to another in the same storage backend.
+        """Copy a file.
 
         Args:
             from_: Source path
             to: Destination path
-            overwrite: Whether to overwrite existing files
+            overwrite: Whether to overwrite existing file
         """
 
     @abstractmethod
     async def copy_async(self, from_: PathLike, to: PathLike, *, overwrite: bool = True) -> None:
-        """Copy an object from one path to another in the same storage backend asynchronously.
+        """Copy a file asynchronously.
 
         Args:
             from_: Source path
             to: Destination path
-            overwrite: Whether to overwrite existing files
+            overwrite: Whether to overwrite existing file
         """
 
     @abstractmethod
     def rename(self, from_: PathLike, to: PathLike, *, overwrite: bool = True) -> None:
-        """Move an object from one path to another in the same storage backend.
+        """Rename a file.
 
         Args:
             from_: Source path
             to: Destination path
-            overwrite: Whether to overwrite existing files
+            overwrite: Whether to overwrite existing file
         """
 
     @abstractmethod
     async def rename_async(self, from_: PathLike, to: PathLike, *, overwrite: bool = True) -> None:
-        """Move an object from one path to another in the same storage backend asynchronously.
+        """Rename a file asynchronously.
 
         Args:
             from_: Source path
             to: Destination path
-            overwrite: Whether to overwrite existing files
+            overwrite: Whether to overwrite existing file
         """
 
     @abstractmethod
@@ -784,17 +896,16 @@ class StorageBackend(ABC):
         *,
         expires_in: Optional[int] = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
-        """Create signed URLs for accessing or uploading a file
+    ) -> str:
+        """Generate a signed URL for one or more files.
 
         Args:
-            paths: The path or paths of the file
-            expires_in: The expiration time of the URL in seconds
-            http_method: The HTTP method to use for the URL
-            for_upload: Whether the URL is for uploading a file
+            paths: Path or paths to generate URLs for
+            expires_in: Optional expiration time in seconds
+            for_upload: Whether the URL is for upload
 
         Returns:
-            A URL for accessing the file, or a tuple of (URL, token) for upload URLs
+            str: The signed URL
         """
 
     @abstractmethod
@@ -804,18 +915,16 @@ class StorageBackend(ABC):
         *,
         expires_in: Optional[int] = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
-        """Create a signed URL for accessing or uploading a file asynchronously.
+    ) -> str:
+        """Generate a signed URL for one or more files asynchronously.
 
         Args:
-            paths: The path or paths of the file
-            expires_in: The expiration time of the URL in seconds
-            http_method: The HTTP method to use for the URL
-            for_upload: Whether the URL is for uploading a file
-
+            paths: Path or paths to generate URLs for
+            expires_in: Optional expiration time in seconds
+            for_upload: Whether the URL is for upload
 
         Returns:
-            A URL for accessing the file, or a tuple of (URL, token) for upload URLs
+            str: The signed URL
         """
 
     @abstractmethod
@@ -827,16 +936,16 @@ class StorageBackend(ABC):
         offset: Optional[str] = None,
         limit: int = 50,
     ) -> list[FileObject]:
-        """List objects with the given prefix asynchronously.
+        """List files asynchronously.
 
         Args:
-            prefix: Prefix to filter by
-            delimiter: Character to group results by
-            offset: Token for pagination
-            limit: Maximum number of results
+            prefix: Optional prefix to filter by
+            delimiter: Optional delimiter for hierarchical listing
+            offset: Optional offset for pagination
+            limit: Maximum number of results to return
 
         Returns:
-            List of file information objects
+            list[FileObject]: List of files
         """
 
     @abstractmethod
@@ -848,14 +957,14 @@ class StorageBackend(ABC):
         offset: Optional[str] = None,
         limit: int = 50,
     ) -> list[FileObject]:
-        """List objects with the given prefix.
+        """List files.
 
         Args:
-            prefix: Prefix to filter by
-            delimiter: Character to group results by
-            offset: Token for pagination
-            limit: Maximum number of results
+            prefix: Optional prefix to filter by
+            delimiter: Optional delimiter for hierarchical listing
+            offset: Optional offset for pagination
+            limit: Maximum number of results to return
 
         Returns:
-            List of file information objects
+            list[FileObject]: List of files
         """
