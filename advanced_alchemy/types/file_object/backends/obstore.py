@@ -7,11 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Union, cast
 
-from obstore import sign as obstore_sign
-from obstore import sign_async as obstore_sign_async
-from obstore._scheme import parse_scheme  # pyright: ignore[reportMissingModuleSource]
-from obstore.store import ObjectStore
-
+from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
     DataLike,
@@ -19,6 +15,14 @@ from advanced_alchemy.types.file_object.base import (
     PathLike,
     StorageBackend,
 )
+
+try:
+    from obstore import sign as obstore_sign
+    from obstore import sign_async as obstore_sign_async
+    from obstore._scheme import parse_scheme  # pyright: ignore[reportMissingModuleSource]
+    from obstore.store import ObjectStore
+except ImportError:
+    raise MissingDependencyError(package="obstore")
 
 
 def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
@@ -95,24 +99,26 @@ def schema_from_type(obj: Any) -> str:  # noqa: PLR0911
 class ObstoreBackend(StorageBackend):
     """Obstore-backed storage backend implementing both sync and async operations."""
 
-    backend = "obstore"
+    driver = "obstore"
 
-    def __init__(self, fs: Union[ObjectStore, str], name: str) -> None:
+    def __init__(
+        self, fs: Union[ObjectStore, str], key: str, *, options: Optional[dict[str, Any]] = None, **kwargs: Any
+    ) -> None:
         """Initialize ObstoreBackend.
 
         Args:
             fs: The ObjectStore instance from the obstore package
-            name: The name of the backend instance
-
+            key: The key of the backend instance
+            options: Optional backend-specific options
         """
-
+        self.key = key
         if isinstance(fs, str):
             self.protocol = scheme_from_url(fs)
             self.fs = cast("ObjectStore", ObjectStore.from_url(fs))  # type: ignore
         else:
             self.protocol = schema_from_type(fs)
             self.fs = fs
-        self.name = name
+        self.options = options or {}
 
     def get(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
         """Return the bytes stored at the specified location.
@@ -243,8 +249,12 @@ class ObstoreBackend(StorageBackend):
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
+            # content_type=content_type, # Remove if not supported by obstore.put
+            # metadata=metadata, # Remove if not supported by obstore.put
         )
         return FileObject(
+            backend=self,
+            protocol=self.protocol,
             filename=obj.name,
             path=obj.path,
             size=obj.size,
@@ -287,17 +297,21 @@ class ObstoreBackend(StorageBackend):
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
+            # content_type=content_type, # Remove if not supported by obstore.put_async
+            # metadata=metadata, # Remove if not supported by obstore.put_async
         )
         return FileObject(
-            filename=obj.name,
-            path=obj.path,
-            size=obj.size,
-            checksum=obj.checksum,
-            content_type=obj.content_type,
-            last_modified=obj.last_modified,
-            etag=obj.get("etag"),
-            version_id=obj.get("version"),
-            metadata=obj.metadata,
+            filename=os.path.basename(obj.path),  # type: ignore[attr-defined]
+            path=obj.path,  # type: ignore[attr-defined]
+            size=obj.size,  # type: ignore[attr-defined]
+            content_type=content_type or obj.content_type,  # type: ignore[attr-defined]
+            last_modified=get_mtime_equivalent(obj.dict()),  # type: ignore[attr-defined]
+            etag=obj.etag,  # type: ignore[attr-defined]
+            checksum=obj.checksum,  # type: ignore[attr-defined]
+            version_id=obj.version_id,  # type: ignore[attr-defined]
+            metadata=obj.metadata,  # type: ignore[attr-defined]
+            backend=self,
+            protocol=self.protocol,
         )
 
     def delete(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
@@ -373,12 +387,12 @@ class ObstoreBackend(StorageBackend):
         expires_in: Optional[int] = None,
         for_upload: bool = False,
     ) -> Union[str, list[str]]:
-        """Sign a URL for a given path.
+        """Create a signed URL for accessing or uploading the file.
 
         Args:
-            paths: Path to sign
-            expires_in: Expiration time in seconds
-            for_upload: Whether the URL is for uploading a file
+            paths: The path or list of paths of the file
+            expires_in: The expiration time of the URL in seconds
+            for_upload: If True, generates a URL suitable for uploads (e.g., presigned POST)
 
         Returns:
             A URL or list of URLs for accessing the file
@@ -423,24 +437,25 @@ class ObstoreBackend(StorageBackend):
     async def list_async(
         self,
         prefix: Optional[str] = None,
-        *,
-        offset: Optional[str] = None,
-        limit: int = 50,
+        /,
+        **kwargs: Any,
     ) -> list[FileObject]:
         """List objects with the given prefix asynchronously.
 
         Args:
             prefix: Prefix to filter by
             offset: Token for pagination
-            limit: Maximum number of results
+            chunk_size: Maximum number of results
 
         Returns:
             A list of file information objects
         """
-        objs = await self.fs.list_async(prefix=prefix, offset=offset, limit=limit)
+        objs = await self.fs.list_with_delimiter_async(prefix=prefix, return_arrow=False).objects
 
         return [
             FileObject(
+                backend=self,
+                protocol=self.protocol,
                 filename=obj.name,
                 path=obj.path,
                 size=obj.size,
@@ -454,26 +469,16 @@ class ObstoreBackend(StorageBackend):
             for obj in objs
         ]
 
-    def list(
-        self,
-        prefix: Optional[str] = None,
-        *,
-        delimiter: Optional[str] = None,
-        offset: Optional[str] = None,
-        limit: int = 50,
-    ) -> list[FileObject]:
+    def list(self, prefix: Optional[str] = None, **kwargs: Any) -> list[FileObject]:
         """List objects with the given prefix.
 
         Args:
             prefix: Prefix to filter by
-            delimiter: Character to group results by
-            offset: Token for pagination
-            limit: Maximum number of results
 
         Returns:
             A list of file information objects
         """
-        objs = self.fs.list(prefix=prefix, offset=offset, limit=limit)
+        objs = self.fs.list_with_delimiter(prefix=prefix, return_arrow=False).objects
 
         return [
             FileObject(

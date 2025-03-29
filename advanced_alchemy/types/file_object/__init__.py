@@ -13,7 +13,7 @@ from advanced_alchemy.types.file_object.base import (
     StorageRegistry,
     storages,
 )
-from advanced_alchemy.types.file_object.data_type import StorageBucket
+from advanced_alchemy.types.file_object.data_type import StoredObject
 
 __all__ = [
     "AsyncDataLike",
@@ -25,7 +25,7 @@ __all__ = [
     "PathLike",
     "StorageBackend",
     "StorageBackendT",
-    "StorageBucket",
     "StorageRegistry",
+    "StoredObject",
     "storages",
 ]

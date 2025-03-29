@@ -1,17 +1,19 @@
-# ruff: noqa: PLR0904
+# ruff: noqa: PLR0904, PLR6301
 """Generic unified storage protocol compatible with multiple backend implementations."""
 
+import hashlib
 import os
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import IO, Any, Callable, Optional, TypeVar, Union
+from typing import IO, Any, Callable, Optional, TypeVar, Union, cast, overload
 
 from typing_extensions import TypeAlias
 
 from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.mutables import FreezableFileBase
+from advanced_alchemy.utils.module_loader import import_string
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 # Type variables
@@ -85,6 +87,48 @@ class FileExtensionProcessor(FileProcessor):
         return file_data  # Return data unmodified
 
 
+def default_checksum_handler(value: bytes) -> str:
+    """Calculate the checksum of the file using MD5.
+
+    Args:
+        value: The file data to calculate the checksum of
+
+    Returns:
+        The MD5 checksum of the file
+    """
+    return hashlib.md5(value, usedforsecurity=False).hexdigest()
+
+
+class ChecksumProcessor(FileProcessor):
+    """Processor to calculate and add a checksum to the file object."""
+
+    def __init__(self, checksum_handler: Optional[Callable[[bytes], str]] = None) -> None:
+        """Initialize the ChecksumProcessor.
+
+        Args:
+            checksum_handler: Optional callable to compute the checksum. Defaults to MD5.
+        """
+        self.checksum_handler = checksum_handler or default_checksum_handler
+
+    def process(self, file: "FileObject", file_data: Optional[bytes] = None, key: str = "") -> Optional[bytes]:
+        """Calculate checksum if data is available and add it to the file object.
+
+        Args:
+            file: The file object to process (metadata will be updated).
+            file_data: The raw file data to calculate the checksum from.
+            key: The key of the file object (unused here).
+
+        Returns:
+            The original file_data, unmodified.
+        """
+        if file_data is not None:
+            checksum = self.checksum_handler(file_data)
+            file["checksum"] = checksum
+        # Note: This processor cannot calculate checksum for streams without buffering.
+        # Checksum for streams might need to be handled by the backend during upload.
+        return file_data
+
+
 class FileObject(FreezableFileBase):
     """Dictionary-like object representing file metadata during processing.
 
@@ -109,8 +153,8 @@ class FileObject(FreezableFileBase):
     def __init__(
         self,
         filename: str,
-        content_type: str,
-        size: int,
+        content_type: str = "application/octet-stream",
+        size: int = 0,
         path: Optional[str] = None,
         backend: "Optional[StorageBackend]" = None,
         protocol: Optional[str] = None,
@@ -143,28 +187,27 @@ class FileObject(FreezableFileBase):
         if not filename:
             msg = "filename is required"
             raise ValueError(msg)
-        if not content_type:
-            msg = "content_type is required"
-            raise ValueError(msg)
         if size < 0:
             msg = "size must be non-negative"
             raise ValueError(msg)
 
         super().__init__()
-        self.update({
-            "filename": filename,
-            "content_type": content_type,
-            "size": size,
-            "path": path or filename,  # Default to filename if path not provided
-            "backend": backend,
-            "protocol": protocol,
-            "last_modified": last_modified,
-            "checksum": checksum,
-            "etag": etag,
-            "version_id": version_id,
-            "metadata": metadata or {},
-            **kwargs,
-        })
+        self.update(
+            {
+                "filename": filename,
+                "content_type": content_type,
+                "size": size,
+                "path": path or filename,  # Default to filename if path not provided
+                "backend": backend,
+                "protocol": protocol,
+                "last_modified": last_modified,
+                "checksum": checksum,
+                "etag": etag,
+                "version_id": version_id,
+                "metadata": metadata or {},
+                **kwargs,
+            }
+        )
 
     @property
     def filename(self) -> str:
@@ -549,11 +592,15 @@ class FileObject(FreezableFileBase):
         Raises:
             RuntimeError: If no backend is configured
         """
+
+        await self.backend.rename_async(self.path, to, overwrite=overwrite)
+        self["path"] = str(to)
+
+    def _has_backend(self) -> None:
+        """Check if the file has a backend."""
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        await self.backend.rename_async(self.path, to, overwrite=overwrite)
-        self["path"] = str(to)
 
 
 class StorageRegistry(metaclass=SingletonMeta):
@@ -563,11 +610,13 @@ class StorageRegistry(metaclass=SingletonMeta):
         self,
         json_serializer: Callable[[Any], str] = encode_json,
         json_deserializer: Callable[[Union[str, bytes]], Any] = decode_json,
+        default_backend: str = "advanced_alchemy.types.file_object.backends.objectstore.ObstoreBackend",
     ) -> None:
         """Initialize the PortalProvider."""
         self._registry: dict[str, StorageBackend] = {}
         self.json_serializer = json_serializer
         self.json_deserializer = json_deserializer
+        self.default_backend = cast("type[StorageBackend]", import_string(default_backend))
 
     def to_json(self, obj: Any) -> str:
         """Convert an object to a JSON string using the configured serializer.
@@ -585,6 +634,17 @@ class StorageRegistry(metaclass=SingletonMeta):
         """
         return self.json_deserializer(data)
 
+    def is_registered(self, key: str) -> bool:
+        """Check if a storage backend is registered in the registry.
+
+        Args:
+            key: The key of the storage backend
+
+        Returns:
+            bool: True if the storage backend is registered, False otherwise.
+        """
+        return key in self._registry
+
     def get_backend(self, key: str) -> "StorageBackend":
         """Retrieve a configured storage backend from the registry.
 
@@ -600,9 +660,16 @@ class StorageRegistry(metaclass=SingletonMeta):
             msg = f"No storage backend registered with key {key}"
             raise ImproperConfigurationError(msg) from e
 
-    def register_backend(self, key: str, value: "StorageBackend") -> None:
+    @overload
+    def register_backend(self, key: str, value: "StorageBackend") -> None: ...
+    @overload
+    def register_backend(self, key: str, value: str) -> None: ...
+    def register_backend(self, key: str, value: "Union[StorageBackend, str]") -> None:
         """Register a new storage backend in the registry."""
-        self._registry[key] = value
+        if isinstance(value, str):
+            self._registry[key] = self.default_backend(fs=value, key=key)
+        else:
+            self._registry[key] = value
 
     def unregister_backend(self, key: str) -> None:
         """Unregister a storage backend from the registry."""
@@ -617,25 +684,6 @@ class StorageRegistry(metaclass=SingletonMeta):
         """Return a list of all registered keys."""
         return list(self._registry.keys())
 
-    def get_file(self, key: str, path: str) -> bytes:
-        """Retrieve a file object from the backend.
-
-        Returns:
-            FileMetadata object
-        """
-        return self.get_backend(key).get_content(path)
-
-    async def get_file_async(self, key: str, path: str) -> bytes:
-        """Retrieve a file object from the backend asynchronously.
-
-        Returns:
-            FileMetadata object
-        """
-        return await self.get_backend(key).get_content_async(path)
-
-    def __contains__(self, key: str) -> bool:
-        return key in self._registry
-
 
 storages = StorageRegistry()
 
@@ -643,16 +691,17 @@ storages = StorageRegistry()
 class StorageBackend(ABC):
     """Unified protocol for storage backend implementations supporting both sync and async operations."""
 
-    backend: str
+    driver: str
     """The name of the storage backend."""
     protocol: str
     """The protocol used by the storage backend."""
 
-    def __init__(self, fs: Any, *, options: Optional[dict[str, Any]] = None, **kwargs: Any) -> None:
+    def __init__(self, fs: Any, key: str, *, options: Optional[dict[str, Any]] = None, **kwargs: Any) -> None:
         """Initialize the storage backend.
 
         Args:
             fs: The filesystem or storage client
+            key: The key of the backend instance
             options: Optional backend-specific options
             **kwargs: Additional keyword arguments
         """
@@ -896,7 +945,7 @@ class StorageBackend(ABC):
         *,
         expires_in: Optional[int] = None,
         for_upload: bool = False,
-    ) -> str:
+    ) -> Union[str, list[str]]:
         """Generate a signed URL for one or more files.
 
         Args:
@@ -915,7 +964,7 @@ class StorageBackend(ABC):
         *,
         expires_in: Optional[int] = None,
         for_upload: bool = False,
-    ) -> str:
+    ) -> Union[str, list[str]]:
         """Generate a signed URL for one or more files asynchronously.
 
         Args:
@@ -931,18 +980,14 @@ class StorageBackend(ABC):
     async def list_async(
         self,
         prefix: Optional[str] = None,
-        *,
-        delimiter: Optional[str] = None,
-        offset: Optional[str] = None,
-        limit: int = 50,
+        /,
+        **kwargs: Any,
     ) -> list[FileObject]:
         """List files asynchronously.
 
         Args:
             prefix: Optional prefix to filter by
-            delimiter: Optional delimiter for hierarchical listing
-            offset: Optional offset for pagination
-            limit: Maximum number of results to return
+            **kwargs: Additional keyword arguments
 
         Returns:
             list[FileObject]: List of files
@@ -952,18 +997,14 @@ class StorageBackend(ABC):
     def list(
         self,
         prefix: Optional[str] = None,
-        *,
-        delimiter: Optional[str] = None,
-        offset: Optional[str] = None,
-        limit: int = 50,
+        /,
+        **kwargs: Any,
     ) -> list[FileObject]:
         """List files.
 
         Args:
             prefix: Optional prefix to filter by
-            delimiter: Optional delimiter for hierarchical listing
-            offset: Optional offset for pagination
-            limit: Maximum number of results to return
+            **kwargs: Additional keyword arguments
 
         Returns:
             list[FileObject]: List of files

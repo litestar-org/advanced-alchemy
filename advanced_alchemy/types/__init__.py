@@ -12,7 +12,7 @@ from advanced_alchemy.types.encrypted_string import (
 from advanced_alchemy.types.file_object import (
     FileObject,
     StorageBackend,
-    StorageBucket,
+    StoredObject,
 )
 from advanced_alchemy.types.guid import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED
 from advanced_alchemy.types.identity import BigIntIdentity
@@ -36,6 +36,6 @@ __all__ = (
     "MutableList",
     "PGCryptoBackend",
     "StorageBackend",
-    "StorageBucket",
+    "StoredObject",
     "file_object",
 )
