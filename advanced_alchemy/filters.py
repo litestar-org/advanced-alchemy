@@ -467,7 +467,7 @@ class SearchFilter(StatementFilter):
         return or_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate LIKE or ILIKE operator as a function.
 
         Returns:
@@ -558,7 +558,7 @@ class NotInSearchFilter(SearchFilter):
         return and_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate NOT LIKE or NOT ILIKE operator as a function.
 
         Returns:
