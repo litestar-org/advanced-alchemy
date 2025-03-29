@@ -302,6 +302,10 @@ ignore = [
   "COM812",
   "CPY001",
   "FA100",
+  "PLC0415",
+  "PLR0917",
+  "PLR0904",
+  "PGH003",
 ]
 select = ["ALL"]
 
@@ -326,6 +330,7 @@ classmethod-decorators = [
 "advanced_alchemy/repository/*.py" = ['C901']
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
+"examples/litestar/*.py" = ["B008"]
 "tests/**/*.*" = [
   "A",
   "ARG",
