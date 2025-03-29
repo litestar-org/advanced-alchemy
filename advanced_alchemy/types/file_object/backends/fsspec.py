@@ -8,12 +8,11 @@ from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, Optional, Union, cast
 
 from fsspec.asyn import AsyncFileSystem
-from typing_extensions import Self
 
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
     DataLike,
-    FileInfo,
+    FileObject,
     PathLike,
     StorageBackend,
 )
@@ -57,6 +56,9 @@ class FSSpecBackend(StorageBackend):
         Args:
             path: Path to retrieve
             options: Optional backend-specific options passed to fsspec's open.
+
+        Raises:
+            TypeError: If the filesystem is not an AsyncFileSystem.
         """
         if not self.is_async:
             # Fallback for sync filesystems
@@ -65,7 +67,8 @@ class FSSpecBackend(StorageBackend):
         options = options or {}
         path_str = self._to_path(path)
         if not isinstance(self.fs, AsyncFileSystem):
-            raise TypeError("fs must be an AsyncFileSystem")
+            msg = "fs must be an AsyncFileSystem"
+            raise TypeError(msg)
         async with self.fs.open_async(path_str, mode="rb", **options) as f:
             return await f.read()
 
@@ -168,12 +171,7 @@ class FSSpecBackend(StorageBackend):
 
         path_str = self._to_path(path)
         result = []
-        read_lengths: Sequence[int]
-
-        if ends is not None:
-            read_lengths = [end - start for start, end in zip(starts, ends)]
-        else:  # lengths must not be None here due to initial check
-            read_lengths = lengths  # type: ignore[assignment]
+        read_lengths = [end - start for start, end in zip(starts, ends)] if ends is not None else lengths
 
         with self.fs.open(path_str, "rb") as f:
             for start, length in zip(starts, read_lengths):
@@ -205,20 +203,18 @@ class FSSpecBackend(StorageBackend):
             return self.get_ranges(path, starts=starts, ends=ends, lengths=lengths)
 
         if (ends is None and lengths is None) or (ends is not None and lengths is not None):
-            raise ValueError("Exactly one of 'ends' or 'lengths' must be provided.")
+            msg = "Exactly one of 'ends' or 'lengths' must be provided."
+            raise ValueError(msg)
         if ends is not None and len(starts) != len(ends):
-            raise ValueError("'starts' and 'ends' must have the same number of elements.")
+            msg = "'starts' and 'ends' must have the same number of elements."
+            raise ValueError(msg)
         if lengths is not None and len(starts) != len(lengths):
-            raise ValueError("'starts' and 'lengths' must have the same number of elements.")
+            msg = "'starts' and 'lengths' must have the same number of elements."
+            raise ValueError(msg)
 
         path_str = self._to_path(path)
         result = []
-        read_lengths: Sequence[int]
-
-        if ends is not None:
-            read_lengths = [end - start for start, end in zip(starts, ends)]
-        else:  # lengths must not be None here
-            read_lengths = lengths  # type: ignore[assignment]
+        read_lengths = [end - start for start, end in zip(starts, ends)] if ends is not None else lengths
 
         fs = cast("AsyncFileSystem", self.fs)
         async with fs.open(path_str, "rb") as f:
@@ -238,7 +234,7 @@ class FSSpecBackend(StorageBackend):
         use_multipart: Optional[bool] = None,  # Ignored - fsspec handles internally
         chunk_size: int = 5 * 1024 * 1024,  # Used for IO/Path reading
         max_concurrency: int = 12,  # Ignored - fsspec handles internally
-    ) -> FileInfo[Self]:
+    ) -> FileObject:
         """Save data to the specified path.
 
         Args:
@@ -250,8 +246,11 @@ class FSSpecBackend(StorageBackend):
             chunk_size: Size of chunks when reading from IO/Path.
             max_concurrency: Ignored.
 
+        Raises:
+            TypeError: If the data type is unsupported.
+
         Returns:
-            A FileInfo object representing the saved file.
+            A FileObject object representing the saved file.
         """
         path_str = self._to_path(path)
         mode = "wb"  # Always write bytes
@@ -279,7 +278,8 @@ class FSSpecBackend(StorageBackend):
                         break
                     dst.write(chunk)
         else:
-            raise TypeError(f"Unsupported data type for put: {type(data)}")
+            msg = f"Unsupported data type for put: {type(data)}"
+            raise TypeError(msg)
 
         # Get file stats - use fs.info for consistency
         info = self.fs.info(path_str)
@@ -288,16 +288,14 @@ class FSSpecBackend(StorageBackend):
         last_modified_raw = info.get("mtime", info.get("last_modified", info.get("updated_at")))
         last_modified = float(last_modified_raw) if last_modified_raw is not None else None
 
-        return FileInfo(
-            protocol=self.protocol,
-            name=path_str,  # Use the full path as name for fsspec
+        return FileObject(
+            filename=path_str,
+            content_type=content_type or "application/octet-stream",
             size=size,
             last_modified=last_modified,
-            content_type=content_type,  # Pass through, might be None
-            metadata=metadata,  # Pass through, might be None
+            metadata=metadata,
             backend=self,
-            # Checksum/ETag/VersionID are usually backend-specific, try to get if available
-            checksum=info.get("checksum", info.get("md5", info.get("ETag", None))),  # Best effort
+            checksum=info.get("checksum", info.get("md5", info.get("ETag", None))),
             etag=info.get("ETag", info.get("etag", None)),
             version_id=info.get("version_id", info.get("versionId", None)),
         )
@@ -312,7 +310,7 @@ class FSSpecBackend(StorageBackend):
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
-    ) -> FileInfo[Self]:
+    ) -> FileObject:
         """Save data to the specified path asynchronously.
 
         Args:
@@ -324,9 +322,11 @@ class FSSpecBackend(StorageBackend):
             chunk_size: Size of chunks when reading from IO/Path.
             max_concurrency: Ignored.
 
+        Raises:
+            TypeError: If the data type is unsupported.
 
         Returns:
-            A FileInfo object representing the saved file.
+            A FileObject object representing the saved file.
         """
         if not self.is_async:
             # Fallback for sync filesystems, but need to handle async data carefully
@@ -371,7 +371,8 @@ class FSSpecBackend(StorageBackend):
                             break
                         await dst.write(chunk)
         else:
-            raise TypeError(f"Unsupported data type for put_async: {type(data)}")
+            msg = f"Unsupported data type for put_async: {type(data)}"
+            raise TypeError(msg)
 
         # Get file stats - use fs.info for consistency
         info = await fs.info(path_str)
@@ -379,12 +380,11 @@ class FSSpecBackend(StorageBackend):
         last_modified_raw = info.get("mtime", info.get("last_modified", info.get("updated_at")))
         last_modified = float(last_modified_raw) if last_modified_raw is not None else None
 
-        return FileInfo(
-            protocol=self.protocol,
-            name=path_str,
+        return FileObject(
+            filename=path_str,
+            content_type=content_type or "application/octet-stream",
             size=size,
             last_modified=last_modified,
-            content_type=content_type,
             metadata=metadata,
             backend=self,
             checksum=info.get("checksum", info.get("md5", info.get("ETag", None))),
@@ -430,6 +430,9 @@ class FSSpecBackend(StorageBackend):
             from_: Source path.
             to: Destination path.
             overwrite: Whether to overwrite if 'to' exists. fsspec cp usually overwrites by default.
+
+        Raises:
+            FileExistsError: If the destination file exists and overwrite is False.
         """
         from_str = self._to_path(from_)
         to_str = self._to_path(to)
@@ -450,6 +453,9 @@ class FSSpecBackend(StorageBackend):
             from_: Source path.
             to: Destination path.
             overwrite: Whether to overwrite if 'to' exists.
+
+        Raises:
+            FileExistsError: If the destination file exists and overwrite is False.
         """
         if not self.is_async:
             self.copy(from_, to, overwrite=overwrite)
@@ -472,6 +478,9 @@ class FSSpecBackend(StorageBackend):
             from_: Source path.
             to: Destination path.
             overwrite: Whether to overwrite if 'to' exists. fsspec mv often overwrites.
+
+        Raises:
+            FileExistsError: If the destination file exists and overwrite is False.
         """
         from_str = self._to_path(from_)
         to_str = self._to_path(to)
@@ -491,6 +500,9 @@ class FSSpecBackend(StorageBackend):
             from_: Source path.
             to: Destination path.
             overwrite: Whether to overwrite if 'to' exists.
+
+        Raises:
+            FileExistsError: If the destination file exists and overwrite is False.
         """
         if not self.is_async:
             self.rename(from_, to, overwrite=overwrite)
@@ -520,14 +532,15 @@ class FSSpecBackend(StorageBackend):
             expires_in: Expiration time in seconds.
             for_upload: If the URL is for uploading (less common for generic fsspec sign).
 
-        Returns:
-            Signed URL string or list of strings.
-
         Raises:
             NotImplementedError: If the underlying fsspec filesystem doesn't support signing.
+
+        Returns:
+            Signed URL string or list of strings.
         """
         if not hasattr(self.fs, "sign"):
-            raise NotImplementedError(f"The filesystem '{self.protocol}' does not support signing URLs.")
+            msg = f"The filesystem '{self.protocol}' does not support signing URLs."
+            raise NotImplementedError(msg)
 
         if isinstance(paths, (str, Path, os.PathLike)):
             return self.fs.sign(self._to_path(paths), expiration=expires_in)  # type: ignore[no-any-return]
@@ -578,10 +591,7 @@ class FSSpecBackend(StorageBackend):
             return await fs.sign([self._to_path(p) for p in paths], expiration=expires_in)  # type: ignore[no-any-return,attr-defined]
         except TypeError:
             # Async fallback - potentially less efficient
-            results = []
-            for path in paths:
-                results.append(await fs.sign(self._to_path(path), expiration=expires_in))  # type: ignore[attr-defined]
-            return results
+            return [await fs.sign(self._to_path(path), expiration=expires_in) for path in paths]  # type: ignore[attr-defined]
 
     async def list_async(
         self,
@@ -590,7 +600,7 @@ class FSSpecBackend(StorageBackend):
         delimiter: Optional[str] = None,  # Often handled by detail=True in fsspec ls
         offset: Optional[str] = None,  # fsspec ls doesn't directly support offset token
         limit: int = -1,  # fsspec ls doesn't directly support limit
-    ) -> list[FileInfo[Self]]:
+    ) -> list[FileObject]:
         """List objects asynchronously.
 
         Note: fsspec `ls` doesn't directly support `offset` or `limit` like some cloud APIs.
@@ -651,9 +661,8 @@ class FSSpecBackend(StorageBackend):
             last_modified = float(last_modified_raw) if last_modified_raw is not None else None
 
             result.append(
-                FileInfo(
-                    protocol=self.protocol,
-                    name=name,  # fsspec ls with detail=True provides the full path
+                FileObject(
+                    filename=name,  # fsspec ls with detail=True provides the full path
                     size=size,
                     last_modified=last_modified,
                     content_type=info.get("content_type", info.get("ContentType")),  # Try common variations
@@ -675,7 +684,7 @@ class FSSpecBackend(StorageBackend):
         delimiter: Optional[str] = None,
         offset: Optional[str] = None,
         limit: int = -1,
-    ) -> list[FileInfo[Self]]:
+    ) -> list[FileObject]:
         """List objects synchronously.
 
         Args:
@@ -717,9 +726,8 @@ class FSSpecBackend(StorageBackend):
             last_modified = float(last_modified_raw) if last_modified_raw is not None else None
 
             result.append(
-                FileInfo(
-                    protocol=self.protocol,
-                    name=name,
+                FileObject(
+                    filename=name,  # fsspec ls with detail=True provides the full path
                     size=size,
                     last_modified=last_modified,
                     content_type=info.get("content_type", info.get("ContentType")),

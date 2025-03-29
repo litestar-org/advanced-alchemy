@@ -11,12 +11,11 @@ from obstore import sign as obstore_sign
 from obstore import sign_async as obstore_sign_async
 from obstore._scheme import parse_scheme  # pyright: ignore[reportMissingModuleSource]
 from obstore.store import ObjectStore
-from typing_extensions import Self
 
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
     DataLike,
-    FileInfo,
+    FileObject,
     PathLike,
     StorageBackend,
 )
@@ -223,7 +222,7 @@ class ObstoreBackend(StorageBackend):
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
-    ) -> FileInfo[Self]:
+    ) -> FileObject:
         """Save data to the specified path.
 
         Args:
@@ -245,10 +244,7 @@ class ObstoreBackend(StorageBackend):
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
         )
-        return FileInfo[Self](
-            backend=self,
-            name=self.name,
-            protocol=self.protocol,
+        return FileObject(
             filename=obj.name,
             path=obj.path,
             size=obj.size,
@@ -270,7 +266,7 @@ class ObstoreBackend(StorageBackend):
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
-    ) -> FileInfo[Self]:
+    ) -> FileObject:
         """Save data to the specified path asynchronously.
 
         Args:
@@ -292,10 +288,9 @@ class ObstoreBackend(StorageBackend):
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
         )
-        return FileInfo[Self](
-            backend=self,
-            name=self.name,
-            protocol=self.protocol,
+        return FileObject(
+            filename=obj.name,
+            path=obj.path,
             size=obj.size,
             checksum=obj.checksum,
             content_type=obj.content_type,
@@ -431,7 +426,7 @@ class ObstoreBackend(StorageBackend):
         *,
         offset: Optional[str] = None,
         limit: int = 50,
-    ) -> list[FileInfo[Self]]:
+    ) -> list[FileObject]:
         """List objects with the given prefix asynchronously.
 
         Args:
@@ -445,11 +440,9 @@ class ObstoreBackend(StorageBackend):
         objs = await self.fs.list_async(prefix=prefix, offset=offset, limit=limit)
 
         return [
-            FileInfo[Self](
-                backend=self,
+            FileObject(
                 filename=obj.name,
                 path=obj.path,
-                uploaded_at=obj.uploaded_at,
                 size=obj.size,
                 checksum=obj.checksum,
                 content_type=obj.content_type,
@@ -465,9 +458,10 @@ class ObstoreBackend(StorageBackend):
         self,
         prefix: Optional[str] = None,
         *,
+        delimiter: Optional[str] = None,
         offset: Optional[str] = None,
         limit: int = 50,
-    ) -> list[FileInfo[Self]]:
+    ) -> list[FileObject]:
         """List objects with the given prefix.
 
         Args:
@@ -482,11 +476,9 @@ class ObstoreBackend(StorageBackend):
         objs = self.fs.list(prefix=prefix, offset=offset, limit=limit)
 
         return [
-            FileInfo[Self](
-                backend=self,
+            FileObject(
                 filename=obj.name,
                 path=obj.path,
-                uploaded_at=obj.uploaded_at,
                 size=obj.size,
                 checksum=obj.checksum,
                 content_type=obj.content_type,

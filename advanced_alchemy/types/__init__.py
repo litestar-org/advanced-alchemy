@@ -1,5 +1,6 @@
 """SQLAlchemy custom types for use with the ORM."""
 
+from advanced_alchemy.types import file_object
 from advanced_alchemy.types.datetime import DateTimeUTC
 from advanced_alchemy.types.encrypted_string import (
     EncryptedString,
@@ -11,6 +12,7 @@ from advanced_alchemy.types.encrypted_string import (
 from advanced_alchemy.types.file_object import (
     FileObject,
     StorageBackend,
+    StorageBucket,
 )
 from advanced_alchemy.types.guid import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED
 from advanced_alchemy.types.identity import BigIntIdentity
@@ -34,4 +36,6 @@ __all__ = (
     "MutableList",
     "PGCryptoBackend",
     "StorageBackend",
+    "StorageBucket",
+    "file_object",
 )

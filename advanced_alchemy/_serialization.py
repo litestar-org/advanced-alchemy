@@ -25,7 +25,7 @@ except ImportError:
 
             Returns:
                 The JSON representation of the model.
-            """  # noqa: DOC202, DOC501
+            """
             msg = "pydantic"
             raise MissingDependencyError(msg)
 

@@ -5,12 +5,12 @@ from sqlalchemy import TypeDecorator
 
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
-    FileInfo,
     FileObject,
     FileProcessor,
     FileValidator,
     PathLike,
-    StorageBackendT,
+    StorageBackend,
+    storages,
 )
 from advanced_alchemy.types.json import JsonB
 from advanced_alchemy.utils.sync_tools import async_
@@ -28,7 +28,7 @@ def default_checksum_handler(value: bytes) -> str:
     return hashlib.md5(value, usedforsecurity=False).hexdigest()
 
 
-class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
+class StorageBucket(TypeDecorator[FileObject]):
     """Custom SQLAlchemy type for storing file metadata and handling uploads.
 
     Stores file metadata in JSONB and handles file validation, processing,
@@ -41,7 +41,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
     # Default settings
     default_expires_in: int = 3600  # 1 hour
 
-    backend: "StorageBackendT"
+    backend: "StorageBackend"
     compute_checksum: bool
     checksum_handler: Callable[[bytes], str]
     validators: list[FileValidator]
@@ -49,7 +49,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
 
     def __init__(
         self,
-        backend: "StorageBackendT",
+        backend: Union[str, StorageBackend],
         compute_checksum: bool = True,
         checksum_handler: Optional[Callable[[bytes], str]] = None,
         default_expires_in: Optional[int] = None,
@@ -72,7 +72,11 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
 
         """
         super().__init__(*args, **kwargs)
-        self.backend = backend
+        if isinstance(backend, str):
+            self.backend = storages.get_backend(backend)
+        else:
+            storages.register_backend(backend.backend, backend)
+            self.backend = backend
         self.compute_checksum = compute_checksum
         self.checksum_handler = checksum_handler or default_checksum_handler
         self.default_expires_in = default_expires_in or self.default_expires_in
@@ -80,7 +84,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         self.processors = processors or []  # New
 
     def process_bind_param(
-        self, value: "Optional[Union[FileInfo[StorageBackendT], dict[str, Any]]]", dialect: Any
+        self, value: "Optional[Union[FileObject, dict[str, Any]]]", dialect: Any
     ) -> "Optional[dict[str, Any]]":
         """Convert FileInfo object/dict to database JSON format.
 
@@ -92,14 +96,12 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         """
         if value is None:
             return None
-        if isinstance(value, FileInfo):
+        if isinstance(value, FileObject):
             return value.to_dict()
         # Assuming it's already a dict suitable for JSONB
         return value
 
-    def process_result_value(
-        self, value: "Optional[dict[str, Any]]", dialect: Any
-    ) -> "Optional[FileInfo[StorageBackendT]]":
+    def process_result_value(self, value: "Optional[dict[str, Any]]", dialect: Any) -> "Optional[FileObject]":
         """Convert database JSON format back to FileInfo object.
 
         Returns:
@@ -110,7 +112,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
 
         # Inject the backend into the file info - crucial for functionality
         value["backend"] = self.backend
-        return FileInfo[StorageBackendT].from_dict(value)  # type: ignore
+        return FileObject.from_dict(value)
 
     # --- New Upload Handling Methods ---
 
@@ -121,7 +123,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         content_type: str,
         metadata: Optional[dict[str, Any]] = None,
         storage_path: Optional[PathLike] = None,
-    ) -> FileInfo[StorageBackendT]:
+    ) -> FileObject:
         """Handles synchronous validation, processing, and storage of file data.
 
         Args:
@@ -192,7 +194,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         content_type: str,
         metadata: Optional[dict[str, Any]] = None,
         storage_path: Optional[PathLike] = None,
-    ) -> FileInfo[StorageBackendT]:
+    ) -> FileObject:
         """Handles asynchronous validation, processing, and storage of file data.
 
         Args:
@@ -233,7 +235,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         file_object = FileObject(
             filename=filename,
             content_type=content_type,
-            size=None,  # Size might be unknown for streams
+            size=0,  # Size might be unknown for streams
         )
 
         # Run Validators (Sync for now) - They likely won't have access to full stream data easily
@@ -262,11 +264,9 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
         )
         # Note: FileInfo size might be updated by the backend after upload
 
-    # --- Keep existing methods, potentially deprecate or adjust ---
-
     def put_file(
         self, file_data: bytes, filename: str, content_type: str, metadata: "Optional[dict[str, Any]]" = None
-    ) -> "FileInfo[StorageBackendT]":
+    ) -> "FileObject":
         """Simple wrapper for handle_upload for backward compatibility or direct use.
 
         Args:
@@ -283,7 +283,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
 
     async def put_file_async(
         self, file_data: bytes, filename: str, content_type: str, metadata: "Optional[dict[str, Any]]" = None
-    ) -> "FileInfo[StorageBackendT]":
+    ) -> "FileObject":
         """Simple async wrapper for handle_upload_async."""
         # Delegates to the new handler which includes validation/processing
         return await self.handle_upload_async(
@@ -293,8 +293,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
             metadata=metadata,
         )
 
-    # ... (get_url, get_url_async, delete_file, delete_file_async remain the same) ...
-    def get_url(self, paths: Union[str, list[str]], expires_in: Optional[int] = None) -> Union[str, list[str]]:
+    def sign(self, paths: Union[str, list[str]], expires_in: Optional[int] = None) -> Union[str, list[str]]:
         """Get URL for accessing file.
 
         Returns:
@@ -304,9 +303,7 @@ class StorageBucket(TypeDecorator[FileInfo[StorageBackendT]]):
 
         return self.backend.sign(paths, expires_in=expires_in)
 
-    async def get_url_async(
-        self, paths: Union[str, list[str]], expires_in: Optional[int] = None
-    ) -> Union[str, list[str]]:
+    async def sign_async(self, paths: Union[str, list[str]], expires_in: Optional[int] = None) -> Union[str, list[str]]:
         """Get URL for accessing file.
 
         Returns:
