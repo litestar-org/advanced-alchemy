@@ -388,14 +388,15 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     def _find_or_raise_not_found(self, id_: Any) -> ModelT:
         return self.check_not_found(self.__collection__().get_or_none(id_))
 
-    def _find_one_or_raise_error(self, result: list[ModelT]) -> ModelT:
+    @staticmethod
+    def _find_one_or_raise_error(result: list[ModelT]) -> ModelT:
         if not result:
             msg = "No item found when one was expected"
             raise IntegrityError(msg)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
             raise IntegrityError(msg)
-        return result[0]
+        return result[0]  # pyright: ignore
 
     def _get_update_many_statement(
         self,

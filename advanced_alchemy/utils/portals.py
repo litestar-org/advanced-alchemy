@@ -18,20 +18,22 @@ _R = TypeVar("_R")
 
 
 class PortalProviderSingleton(type):
-    """A singleton metaclass for PortalProvider."""
+    """A singleton metaclass for PortalProvider that creates unique instances per event loop."""
 
-    _instances: "ClassVar[dict[type, PortalProvider]]" = {}
+    _instances: "ClassVar[dict[tuple[type, Optional[asyncio.AbstractEventLoop]], PortalProvider]]" = {}
 
     def __call__(cls, *args: Any, **kwargs: Any) -> "PortalProvider":
-        if cls not in cls._instances:  # pyright: ignore[reportUnnecessaryContains]
-            cls._instances[cls] = super().__call__(*args, **kwargs)
-        return cls._instances[cls]  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
+        # Use a tuple of the class and loop as the key
+        key = (cls, kwargs.get("loop"))
+        if key not in cls._instances:
+            cls._instances[key] = super().__call__(*args, **kwargs)
+        return cls._instances[key]
 
 
 class PortalProvider(metaclass=PortalProviderSingleton):
     """A provider for creating and managing threaded portals."""
 
-    def __init__(self) -> None:
+    def __init__(self, /, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
         """Initialize the PortalProvider."""
         self._request_queue: queue.Queue[
             tuple[
@@ -42,7 +44,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
             ]
         ] = queue.Queue()
         self._result_queue: queue.Queue[tuple[Optional[Any], Optional[Exception]]] = queue.Queue()
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = loop
         self._thread: Optional[threading.Thread] = None
         self._ready_event: threading.Event = threading.Event()
 
@@ -63,7 +65,11 @@ class PortalProvider(metaclass=PortalProviderSingleton):
 
     @property
     def loop(self) -> "asyncio.AbstractEventLoop":  # pragma: no cover
-        """The event loop."""
+        """The event loop.
+
+        Raises:
+            ImproperConfigurationError: If the portal provider is not started.
+        """
         if self._loop is None:
             msg = "The PortalProvider is not started.  Did you forget to call .start()?"
             raise ImproperConfigurationError(msg)
@@ -92,19 +98,28 @@ class PortalProvider(metaclass=PortalProviderSingleton):
 
     def _run_event_loop(self) -> None:  # pragma: no cover
         """The main function of the background thread."""
-        self._loop = asyncio.new_event_loop()
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._ready_event.set()  # Signal that the loop is ready
-
         self._loop.run_forever()
 
+    @staticmethod
     async def _async_caller(
-        self,
         func: "Callable[..., Coroutine[Any, Any, _R]]",
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> _R:
-        """Wrapper to run the async function and send the result to the result queue."""
+        """Wrapper to run the async function and send the result to the result queue.
+
+        Args:
+            func: The async function to call.
+            args: Positional arguments to the function.
+            kwargs: Keyword arguments to the function.
+
+        Returns:
+            The result of the async function.
+        """
         result: _R = await func(*args, **kwargs)
         return result
 
@@ -116,11 +131,11 @@ class PortalProvider(metaclass=PortalProviderSingleton):
             *args: Positional arguments to the function.
             **kwargs: Keyword arguments to the function.
 
+        Raises:
+            ImproperConfigurationError: If the portal provider is not started.
+
         Returns:
             The result of the async function.
-
-        Raises:
-            Exception: If the async function raises an exception.
         """
         if self._loop is None:
             msg = "The PortalProvider is not started.  Did you forget to call .start()?"
@@ -155,8 +170,8 @@ class PortalProvider(metaclass=PortalProviderSingleton):
                 functools.partial(self._handle_future_result, local_result_queue=local_result_queue),  # pyright: ignore[reportArgumentType]
             )
 
+    @staticmethod
     def _handle_future_result(
-        self,
         future: "asyncio.Future[Any]",
         local_result_queue: "queue.Queue[tuple[Optional[Any], Optional[Exception]]]",
     ) -> None:  # pragma: no cover
@@ -173,5 +188,14 @@ class Portal:
         self._provider = provider
 
     def call(self, func: "Callable[..., Coroutine[Any, Any, _R]]", *args: Any, **kwargs: Any) -> _R:
-        """Calls an async function using the associated PortalProvider."""
+        """Calls an async function using the associated PortalProvider.
+
+        Args:
+            func: The async function to call.
+            *args: Positional arguments to the function.
+            **kwargs: Keyword arguments to the function.
+
+        Returns:
+            The result of the async function.
+        """
         return self._provider.call(func, *args, **kwargs)

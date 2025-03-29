@@ -150,7 +150,7 @@ class AuthorController(Controller):
     async def get_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(  # noqa: B008
+        author_id: UUID = Parameter(
             title="Author ID",
             description="The author to retrieve.",
         ),
@@ -167,7 +167,7 @@ class AuthorController(Controller):
         self,
         authors_repo: AuthorRepository,
         data: AuthorUpdate,
-        author_id: UUID = Parameter(  # noqa: B008
+        author_id: UUID = Parameter(
             title="Author ID",
             description="The author to update.",
         ),
@@ -183,7 +183,7 @@ class AuthorController(Controller):
     async def delete_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(  # noqa: B008
+        author_id: UUID = Parameter(
             title="Author ID",
             description="The author to delete.",
         ),

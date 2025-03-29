@@ -43,6 +43,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
+from advanced_alchemy.utils.singleton import SingletonMeta
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -109,17 +110,6 @@ class FilterConfig(TypedDict):
     """When set, updated_at filter is enabled."""
 
 
-class SingletonMeta(type):
-    """Metaclass for singleton pattern."""
-
-    _instances: dict[type, Any] = {}
-
-    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
-        if cls not in cls._instances:  # pyright: ignore[reportUnnecessaryContains]
-            cls._instances[cls] = super().__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
 class DependencyCache(metaclass=SingletonMeta):
     """Simple dependency cache for the application.  This is used to help memoize dependencies that are generated dynamically."""
 
@@ -175,7 +165,11 @@ def create_service_provider(
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
 ) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
-    """Create a dependency provider for a service."""
+    """Create a dependency provider for a service.
+
+    Returns:
+        A dependency provider for the service.
+    """
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
 
         async def provide_async_service(

@@ -294,8 +294,6 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
         Raises:
             RuntimeError: If the mapper cannot be found for the model type.
-            NotImplementedError: If an unsupported property or extension type is encountered.
-            ImproperConfigurationError: If a type cannot be parsed from an element.
         """
         if (mapper := inspect(model_type)) is None:  # pragma: no cover # pyright: ignore[reportUnnecessaryComparison]
             msg = "Unexpected `None` value for mapper."  # type: ignore[unreachable]
@@ -402,11 +400,11 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
         elem: The SQLAlchemy element to parse.
         orm_descriptor: The attribute `elem` was extracted from.
 
+    Raises:
+        ImproperConfigurationError: If the type cannot be parsed.
+
     Returns:
         FieldDefinition: The parsed type.
-
-    Raises:
-        ImproperlyConfiguredException: If the type cannot be parsed.
     """
 
     if isinstance(elem, Column):
@@ -415,7 +413,7 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
         return FieldDefinition.from_annotation(elem.type.python_type)
 
     if isinstance(elem, RelationshipProperty):
-        if elem.direction in (RelationshipDirection.ONETOMANY, RelationshipDirection.MANYTOMANY):
+        if elem.direction in {RelationshipDirection.ONETOMANY, RelationshipDirection.MANYTOMANY}:
             collection_type = FieldDefinition.from_annotation(elem.collection_class or list)  # pyright: ignore[reportUnknownMemberType]
             return FieldDefinition.from_annotation(collection_type.safe_generic_origin[elem.mapper.class_])
 
@@ -431,9 +429,7 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
         return FieldDefinition.from_annotation(orm_descriptor.type.python_type)
 
     msg = f"Unable to parse type from element '{elem}'. Consider adding a type hint."
-    raise ImproperConfigurationError(
-        msg,
-    )
+    raise ImproperConfigurationError(msg)
 
 
 def detect_nullable_relationship(elem: RelationshipProperty[Any]) -> bool:

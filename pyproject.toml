@@ -59,6 +59,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 cli = ["rich-click"]
 fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
+obstore = ["obstore"]
 uuid = ["uuid-utils>=0.6.1"]
 
 [project.scripts]
@@ -144,7 +145,7 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases",
+  "pytest-databases[minio]",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
@@ -304,7 +305,9 @@ ignore = [
   "COM812",
   "CPY001",
   "PGH003",
-  "FA100"
+  "FA100",
+  "PLC0415", # import should be at the top of the file
+  "PLR0904", # too many public methods
 ]
 select = ["ALL"]
 
@@ -329,6 +332,7 @@ classmethod-decorators = [
 "advanced_alchemy/repository/*.py" = ['C901']
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
+"examples/litestar/*.py" = ["PLR6301", "DOC", "B008"]
 "tests/**/*.*" = [
   "A",
   "ARG",
@@ -478,9 +482,9 @@ exclude = [
   "examples/flask/flask_services.py",
 ]
 include = ["advanced_alchemy"]
-reportMissingTypeStubs = true
-reportUnknownMemberType = false
 pythonVersion = "3.9"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
 reportUnnecessaryTypeIgnoreComments = true
 reportUnusedFunction = false
 strict = ["advanced_alchemy/**/*"]

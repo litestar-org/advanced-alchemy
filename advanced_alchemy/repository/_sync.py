@@ -471,7 +471,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
-        self.uniquify = self._get_uniquify(uniquify)
+        if uniquify is not None:
+            self.uniquify = uniquify
         self.count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
@@ -555,6 +556,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Args:
             item_or_none: Item (:class:`T <T>`) to be tested for existence.
 
+        Raises:
+            NotFoundError: If ``item_or_none`` is ``None
+
         Returns:
             The item, if it exists.
         """
@@ -604,6 +608,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+
         Returns:
             The added instance.
         """
@@ -634,6 +639,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+
         Returns:
             The added instances.
         """
@@ -677,8 +683,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The deleted instance.
 
-        Raises:
-            NotFoundError: If no instance found identified by ``item_id``.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -793,7 +797,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instances
 
-    def _get_insertmanyvalues_max_parameters(self, chunk_size: Optional[int] = None) -> int:
+    @staticmethod
+    def _get_insertmanyvalues_max_parameters(chunk_size: Optional[int] = None) -> int:
         return chunk_size if chunk_size is not None else DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
 
     def delete_where(
@@ -821,6 +826,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             **kwargs: Arguments to apply to a delete
+
+        Raises:
+            RepositoryError: If the number of deleted rows does not match the number of selected instances
+
         Returns:
             The deleted instances.
 
@@ -1237,10 +1246,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             a tuple that includes the instance and whether it needed to be updated.
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
-
-
-        Raises:
-            NotFoundError: If no instance found identified by `item_id`.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1361,9 +1366,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The updated instance.
-
-        Raises:
-            NotFoundError: If no instance found with same identifier as `data`.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1419,9 +1421,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The updated instances.
-
-        Raises:
-            NotFoundError: If no instance found with same identifier as `data`.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1736,9 +1735,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The updated or created instance.
-
-        Raises:
-            NotFoundError: If no instance found with same identifier as `data`.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1817,9 +1813,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The updated or created instance.
-
-        Raises:
-            NotFoundError: If no instance found with same identifier as ``data``.
         """
         self.uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -2003,6 +1996,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 into the session owned by a worker thread or process
                 without re-querying the database.
 
+        Raises:
+            ValueError: If `strategy` is not one of the expected values.
+
         Returns:
             Instance attached to the session - if `"merge"` strategy, may not be same instance
             that was provided.
@@ -2041,7 +2037,11 @@ class SQLAlchemySyncSlugRepository(
         uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
-        """Select record by slug value."""
+        """Select record by slug value.
+
+        Returns:
+            The model instance or None if not found.
+        """
         return self.get_one_or_none(
             slug=slug,
             load=load,
@@ -2125,9 +2125,6 @@ class SQLAlchemySyncQueryRepository:
 
         Returns:
             The retrieved instance.
-
-        Raises:
-            NotFoundError: If no instance found identified by `item_id`.
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
@@ -2274,6 +2271,9 @@ class SQLAlchemySyncQueryRepository:
             statement: statement to filter
             **kwargs: key/value pairs such that objects remaining in the statement after filtering
                 have the property that their attribute named `key` has value equal to `value`.
+
+        Returns:
+            The filtered statement.
         """
 
         with wrap_sqlalchemy_exception(error_messages=self.error_messages):
@@ -2287,6 +2287,9 @@ class SQLAlchemySyncQueryRepository:
 
         Args:
             item_or_none: Item to be tested for existence.
+
+        Raises:
+            NotFoundError: If ``item_or_none`` is ``None``
 
         Returns:
             The item, if it exists.
