@@ -21,7 +21,7 @@ try:
     SANIC_INSTALLED = True
 except ModuleNotFoundError:  # pragma: no cover
     SANIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
-    Extend = type("Extend", (), {})  # type: ignore  # noqa: PGH003
+    Extend = type("Extend", (), {})  # type: ignore
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker

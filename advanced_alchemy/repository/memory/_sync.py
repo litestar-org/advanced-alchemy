@@ -330,11 +330,11 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
                 )
 
             elif isinstance(filter_, NotInCollectionFilter):
-                if filter_.values is not None:  # pyright: ignore  # noqa: PGH003
-                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore  # noqa: PGH003
+                if filter_.values is not None:  # pyright: ignore
+                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
             elif isinstance(filter_, CollectionFilter):
-                if filter_.values is not None:  # pyright: ignore  # noqa: PGH003
-                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore  # noqa: PGH003
+                if filter_.values is not None:  # pyright: ignore
+                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
             elif isinstance(filter_, OrderBy):
                 result = self._order_by(
                     result,
@@ -389,14 +389,15 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _find_or_raise_not_found(self, id_: Any) -> ModelT:
         return self.check_not_found(self.__collection__().get_or_none(id_))
 
-    def _find_one_or_raise_error(self, result: list[ModelT]) -> ModelT:
+    @staticmethod
+    def _find_one_or_raise_error(result: list[ModelT]) -> ModelT:
         if not result:
             msg = "No item found when one was expected"
             raise IntegrityError(msg)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
             raise IntegrityError(msg)
-        return result[0]
+        return result[0]  # pyright: ignore
 
     def _get_update_many_statement(
         self,
