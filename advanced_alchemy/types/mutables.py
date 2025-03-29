@@ -1,3 +1,4 @@
+# ruff: noqa: PLC2801
 from collections import UserList
 from typing import Any, TypeVar, no_type_check
 
@@ -271,12 +272,12 @@ class FreezableFileBase(MutableDict[str, Any]):
     def _freeze(self) -> None:
         """Make the instance immutable (dictionary items cannot be changed)."""
         # Use object.__setattr__ to bypass our custom __setattr__
-        object.__setattr__(self, "_frozen", True)  # noqa: PLC2801
+        object.__setattr__(self, "_frozen", True)
 
     def _thaw(self) -> None:
         """Make the instance mutable again."""
         # Use object.__setattr__ to bypass our custom __setattr__
-        object.__setattr__(self, "_frozen", False)  # noqa: PLC2801
+        object.__setattr__(self, "_frozen", False)
 
     def __repr__(self) -> str:
         """Return a developer-friendly string representation."""

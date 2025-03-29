@@ -9,11 +9,8 @@ from advanced_alchemy.types.encrypted_string import (
     PGCryptoBackend,
 )
 from advanced_alchemy.types.file_object import (
-    FileInfo,
     FileObject,
     StorageBackend,
-    StorageBucket,
-    storages,
 )
 from advanced_alchemy.types.guid import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED
 from advanced_alchemy.types.identity import BigIntIdentity
@@ -31,13 +28,10 @@ __all__ = (
     "EncryptedText",
     "EncryptionBackend",
     "FernetBackend",
-    "FileInfo",
     "FileObject",
     "JsonB",
     "MutableDict",
     "MutableList",
     "PGCryptoBackend",
     "StorageBackend",
-    "StorageBucket",
-    "storages",
 )
