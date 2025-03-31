@@ -188,7 +188,19 @@ class FileObjectSessionTracker:
         return None
 
     @classmethod
-    def _save_pending_file(cls, file_object: "FileObject", storage_key: str) -> Optional[Exception]:
+    def _save_pending_file(cls, session: Session, file_object: "FileObject", storage_key: str) -> Optional[Exception]:
+        """Synchronously load data, validate, process, and save a single FileObject.
+
+        Assumes the check for pending data has already been done by the caller.
+
+        Args:
+            session: The SQLAlchemy session
+            file_object: The FileObject to save
+            storage_key: The storage key for the FileObject
+
+        Returns:
+            Optional[Exception]: The exception raised during the save process, or None if successful
+        """
         from collections.abc import Iterable, Iterator
         from pathlib import Path
 
@@ -243,7 +255,7 @@ class FileObjectSessionTracker:
             # 4. Call FileObject.save with the final processed bytes
             if not file_object.backend:
                 file_object.backend = cls._get_backend(storage_key)
-            file_object.save(data=processed_data_bytes)  # Pass processed bytes explicitly
+            file_object.save(data=processed_data_bytes)  # pyright: ignore
 
             # Track successful save for potential rollback
             if file_object.path:
@@ -256,7 +268,21 @@ class FileObjectSessionTracker:
         return None  # Success
 
     @classmethod
-    async def _save_pending_file_async(cls, file_object: "FileObject", storage_key: str) -> Optional[Exception]:  # noqa: C901
+    async def _save_pending_file_async(
+        cls, session: Session, file_object: "FileObject", storage_key: str
+    ) -> Optional[Exception]:  # noqa: C901
+        """Asynchronously load data, validate, process, and save a single FileObject.
+
+        Assumes the check for pending data has already been done by the caller.
+
+        Args:
+            session: The SQLAlchemy session
+            file_object: The FileObject to save
+            storage_key: The storage key for the FileObject
+
+        Returns:
+            Optional[Exception]: The exception raised during the save process, or None if successful
+        """
         import asyncio
         from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
         from pathlib import Path
@@ -318,7 +344,7 @@ class FileObjectSessionTracker:
             # 4. Call FileObject.save_async with the final processed bytes
             if not file_object.backend:
                 file_object.backend = cls._get_backend(storage_key)
-            await file_object.save_async(data=processed_data_bytes)  # Pass processed bytes explicitly
+            await file_object.save_async(data=processed_data_bytes)  # pyright: ignore
 
             # Track successful save for potential rollback
             if file_object.path:
@@ -360,12 +386,12 @@ class FileObjectSessionTracker:
                         for item in current_value:  # pyright: ignore
                             # Use the public property to check for pending data
                             if item and item.has_pending_data:  # pyright: ignore
-                                err = cls._save_pending_file(item, storage_key)  # pyright: ignore
+                                err = cls._save_pending_file(session, item, storage_key)  # pyright: ignore
                                 if err:
                                     errors.append(err)
                 # Use the public property to check for pending data
                 elif current_value and current_value.has_pending_data:
-                    err = cls._save_pending_file(current_value, storage_key)  # pyright: ignore
+                    err = cls._save_pending_file(session, current_value, storage_key)  # pyright: ignore
                     if err:
                         errors.append(err)
 
@@ -406,13 +432,13 @@ class FileObjectSessionTracker:
                         # Ignore type errors for item within generic loop
                         # Schedule async save if needed using the property
                         aws.extend(  # pyright: ignore
-                            cls._save_pending_file_async(item, storage_key)  # pyright: ignore
+                            cls._save_pending_file_async(session, item, storage_key)  # pyright: ignore
                             for item in current_value  # pyright: ignore
                             if item and item.has_pending_data  # pyright: ignore
                         )
                 # Schedule async save if needed using the property
                 elif current_value and current_value.has_pending_data:
-                    aws.append(cls._save_pending_file_async(current_value, storage_key))  # pyright: ignore
+                    aws.append(cls._save_pending_file_async(session, current_value, storage_key))  # pyright: ignore
 
         if aws:
             # Ignore potential type issues with gathered results in generic context
