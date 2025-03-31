@@ -50,9 +50,15 @@ def setup_file_object_listeners(registry: "StorageRegistry", handle_rollback: bo
         event.listen(Mapper, "after_configured", tracker._after_configured)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
 
         # Sync listeners
+        event.listen(Session, "before_flush", tracker._before_flush)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
         event.listen(Session, "after_commit", tracker._after_commit)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
         event.listen(Session, "after_soft_rollback", tracker._after_soft_rollback)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
 
+        # Async listeners
+        with contextlib.suppress(AttributeError):
+            # The `raw=True` argument might be needed depending on SQLAlchemy version specifics
+            # for async listeners to receive the raw session object.
+            event.listen(Session, "async_before_flush", tracker._async_before_flush, raw=True)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
         with contextlib.suppress(AttributeError):
             event.listen(Session, "async_after_commit", tracker._async_after_commit, raw=True)  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
         with contextlib.suppress(AttributeError):
