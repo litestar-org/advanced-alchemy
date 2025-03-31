@@ -46,8 +46,8 @@ class FileObject:
         metadata: Additional metadata associated with the file.
         extra: Dictionary to store any additional keyword arguments passed during init.
                Used to capture 'content' and 'source_path'.
-        _pending_content: Internal storage for content provided at init.
-        _pending_source_path: Internal storage for source_path provided at init.
+        source_content: Internal storage for content provided at init.
+        source_path: Internal storage for source_path provided at init.
     """
 
     filename: str
@@ -107,12 +107,10 @@ class FileObject:
             raise ValueError(msg)
 
         if self.source_content is not None:
-            self._pending_content = self.source_content
+            self.source_content = self.source_content
         elif self.source_path is not None:
             # Ensure source_path is a Path object for consistency
-            self._pending_source_path = (
-                Path(self.source_path) if not isinstance(self.source_path, Path) else self.source_path
-            )
+            self.source_path = Path(self.source_path) if not isinstance(self.source_path, Path) else self.source_path
 
     @property
     def path(self) -> str:
@@ -151,8 +149,6 @@ class FileObject:
                 if k
                 not in {
                     "backend",
-                    "_pending_content",
-                    "_pending_source_path",
                     "source_content",
                     "source_content_path",
                     "path",
@@ -281,7 +277,7 @@ class FileObject:
         if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        self.backend.delete_from_storage(self.target_filename)
+        self.backend.delete_object(self.target_filename)
 
     async def delete_async(self) -> None:
         """Delete the file from storage asynchronously.
@@ -295,7 +291,7 @@ class FileObject:
         if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        await self.backend.delete_from_storage_async(self.target_filename)
+        await self.backend.delete_object_async(self.target_filename)
 
     def save(
         self,
@@ -308,7 +304,7 @@ class FileObject:
         """Save data to the storage backend using this FileObject's metadata.
 
         If `data` is provided, it is used directly.
-        If `data` is None, checks internal _pending_content or _pending_source_path.
+        If `data` is None, checks internal source_content or source_path.
         Clears pending attributes after successful save.
 
         Args:
@@ -325,7 +321,7 @@ class FileObject:
             RuntimeError: If no backend is configured or path is missing, or if no data
                           source (argument or pending) is found.
             TypeError: If trying to save async data synchronously.
-            FileNotFoundError: If internal _pending_source_path is used and file not found.
+            FileNotFoundError: If internal source_path is used and file not found.
         """
         if not self.backend:
             msg = "No storage backend configured for saving."
@@ -336,8 +332,8 @@ class FileObject:
 
         if data is None and self.source_content is not None:
             data = self.source_content  # type: ignore[assignment]
-        elif data is None and self._pending_source_path is not None:
-            source_path = Path(self._pending_source_path)
+        elif data is None and self.source_path is not None:
+            source_path = Path(self.source_path)
             if not source_path.is_file():
                 msg = f"Source path does not exist or is not a file: {source_path}"
                 raise FileNotFoundError(msg)
@@ -355,7 +351,7 @@ class FileObject:
 
         # The backend's save method is expected to update the FileObject instance in-place
         # and return the updated instance.
-        updated_self = self.backend.save_to_storage(
+        updated_self = self.backend.save_object(
             file_object=self,
             data=data,  # Pass the determined data source
             use_multipart=use_multipart,
@@ -364,8 +360,8 @@ class FileObject:
         )
 
         # Clear pending attributes after successful save
-        self._pending_content = None
-        self._pending_source_path = None
+        self.source_content = None
+        self.source_path = None
 
         return updated_self
 
@@ -380,9 +376,9 @@ class FileObject:
         """Save data to the storage backend asynchronously.
 
         If `data` is provided, it is used directly.
-        If `data` is None, checks internal _pending_content or _pending_source_path.
+        If `data` is None, checks internal source_content or source_path.
         Clears pending attributes after successful save.
-        Uses asyncio.to_thread for reading _pending_source_path if backend doesn't handle Path directly.
+        Uses asyncio.to_thread for reading source_path if backend doesn't handle Path directly.
 
         Args:
             data: Optional data to save (bytes, async iterator, file-like, Path, etc.).
@@ -397,7 +393,7 @@ class FileObject:
         Raises:
             RuntimeError: If no backend is configured or path is missing, or if no data
                           source (argument or pending) is found.
-            FileNotFoundError: If internal _pending_source_path is used and file not found.
+            FileNotFoundError: If internal source_path is used and file not found.
             TypeError: If trying to save sync data asynchronously.
         """
         if not self.backend:
@@ -424,7 +420,7 @@ class FileObject:
             raise TypeError(msg)
 
         # Backend's async save method updates the FileObject instance
-        updated_self = await self.backend.save_to_storage_async(
+        updated_self = await self.backend.save_object_async(
             file_object=self,
             data=data,  # Pass the determined data source
             use_multipart=use_multipart,
@@ -433,8 +429,8 @@ class FileObject:
         )
 
         # Clear pending attributes after successful save
-        self._pending_content = None
-        self._pending_source_path = None
+        self.source_content = None
+        self.source_path = None
 
         return updated_self
 

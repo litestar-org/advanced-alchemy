@@ -97,7 +97,7 @@ class FSSpecBackend(StorageBackend):
         async with fs.open(path_str, mode="rb", **options) as f:  # pyright: ignore
             return await f.read()  # type: ignore[no-any-return]
 
-    def save_to_storage(  # noqa: C901
+    def save_object(  # noqa: C901
         self,
         file_object: FileObject,
         data: DataLike,
@@ -186,7 +186,7 @@ class FSSpecBackend(StorageBackend):
 
         return file_object
 
-    async def save_to_storage_async(  # noqa: C901, PLR0915
+    async def save_object_async(  # noqa: C901, PLR0915
         self,
         file_object: FileObject,
         data: AsyncDataLike,
@@ -222,10 +222,10 @@ class FSSpecBackend(StorageBackend):
                 # Read async stream into memory for sync backend (potential memory issue)
                 all_data = b"".join([chunk async for chunk in data])
                 # Pass file_object directly now
-                return await async_(self.save_to_storage)(file_object=file_object, data=all_data, chunk_size=chunk_size)
+                return await async_(self.save_object)(file_object=file_object, data=all_data, chunk_size=chunk_size)
             # If data is sync-compatible
             # Pass file_object directly now
-            return await async_(self.save_to_storage)(file_object=file_object, data=data, chunk_size=chunk_size)  # type: ignore
+            return await async_(self.save_object)(file_object=file_object, data=data, chunk_size=chunk_size)  # type: ignore
 
         fs = cast("AsyncFileSystem", self.fs)
         path_str = self._to_path(file_object.target_filename)
@@ -311,7 +311,7 @@ class FSSpecBackend(StorageBackend):
 
         return file_object
 
-    def delete_from_storage(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    def delete_object(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete the object(s) at the specified location(s).
 
         Args:
@@ -325,14 +325,14 @@ class FSSpecBackend(StorageBackend):
 
         fs.rm(path_list, recursive=False)  # pyright: ignore
 
-    async def delete_from_storage_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_object_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete the object(s) at the specified location(s) asynchronously.
 
         Args:
             paths: Path or sequence of paths to delete.
         """
         if not self.is_async:
-            return await async_(self.delete_from_storage)(paths=paths)
+            return await async_(self.delete_object)(paths=paths)
 
         fs = cast("AsyncFileSystem", self.fs)
         path_list = (

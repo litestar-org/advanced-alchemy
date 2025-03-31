@@ -32,7 +32,7 @@ from advanced_alchemy.mixins import (
     UUIDv6PrimaryKey,
     UUIDv7PrimaryKey,
 )
-from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, DateTimeUTC, FileObject, FileObjectList, JsonB, StoredObject
 from advanced_alchemy.utils.dataclass import DataclassProtocol
 
 if TYPE_CHECKING:
@@ -199,7 +199,7 @@ class CommonTableAttributes(BasicAttributes):
     else:
 
         @declared_attr.directive
-        def __tablename__(cls) -> str:
+        def __tablename__(cls) -> str:  # noqa: PLW3201
             """Infer table name from class name.
 
             Returns:
@@ -232,21 +232,21 @@ def create_registry(
         dict[str, Any]: JsonB,
         dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
+        FileObject: StoredObject,
+        FileObjectList: StoredObject,
     }
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, IPvAnyAddress, IPvAnyInterface, IPvAnyNetwork, Json
 
-        type_annotation_map.update(
-            {
-                EmailStr: String,
-                AnyUrl: String,
-                AnyHttpUrl: String,
-                Json: JsonB,
-                IPvAnyAddress: String,
-                IPvAnyInterface: String,
-                IPvAnyNetwork: String,
-            }
-        )
+        type_annotation_map.update({
+            EmailStr: String,
+            AnyUrl: String,
+            AnyHttpUrl: String,
+            Json: JsonB,
+            IPvAnyAddress: String,
+            IPvAnyInterface: String,
+            IPvAnyNetwork: String,
+        })
     with contextlib.suppress(ImportError):
         from msgspec import Struct
 

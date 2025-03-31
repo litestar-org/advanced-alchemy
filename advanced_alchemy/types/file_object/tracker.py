@@ -196,8 +196,8 @@ class FileObjectSessionTracker:
 
         try:
             # 1. Load data into memory (bytes)
-            if file_object._pending_content is not None:  # pyright: ignore
-                source = file_object._pending_content  # pyright: ignore
+            if file_object.source_content is not None:
+                source = file_object.source_content
                 if isinstance(source, bytes):
                     data_bytes = source
                 elif isinstance(source, (Iterator, Iterable)):
@@ -208,17 +208,17 @@ class FileObjectSessionTracker:
 
                 else:
                     return TypeError(f"Unsupported sync data type for pending content: {type(source)}")
-            elif file_object._pending_source_path is not None:  # pyright: ignore
-                source_path = Path(file_object._pending_source_path)  # pyright: ignore
+            elif file_object.source_path is not None:
+                source_path = Path(file_object.source_path)  # pyright: ignore
                 if not source_path.is_file():
                     msg = f"Source path does not exist: {source_path}"
                     raise FileNotFoundError(msg)
                 data_bytes = source_path.read_bytes()
             else:
-                return RuntimeError("No pending content/path found.")
+                return TypeError("No pending content/path found.")
 
             if data_bytes is None:
-                return RuntimeError("Failed to load data bytes.")
+                return TypeError("Failed to load data bytes.")
 
             # 2. Run Validators
             for validator in stored_object_type.validators:  # pyright: ignore
@@ -227,11 +227,7 @@ class FileObjectSessionTracker:
             # 3. Run Processors
             processed_data_bytes = data_bytes  # pyright: ignore
             for processor in stored_object_type.processors:  # pyright: ignore
-                result = processor.process(file_object, processed_data_bytes, key=storage_key)  # pyright: ignore
-                if result is None:
-                    msg = f"Processor {type(processor).__name__} returned None."  # pyright: ignore
-                    raise RuntimeError(msg)
-                processed_data_bytes = result  # pyright: ignore
+                _ = processor.process(file_object, processed_data_bytes, key=storage_key)  # pyright: ignore
 
             # 4. Call FileObject.save with the final processed bytes
             if not file_object.backend:
@@ -270,10 +266,10 @@ class FileObjectSessionTracker:
                 if isinstance(source, bytes):
                     data_bytes = source
                 elif isinstance(source, (AsyncIterator, AsyncIterable)):
-                    data_bytes = b"".join([chunk async for chunk in source])
+                    data_bytes = b"".join([chunk async for chunk in source])  # pyright: ignore
                 elif isinstance(source, (Iterator, Iterable)):
                     data_bytes = b"".join(source)  # type: ignore
-                elif hasattr(source, "read"):
+                elif hasattr(source, "read"):  # pyright: ignore
                     read_data = source.read()  # pyright: ignore
                     if asyncio.iscoroutine(read_data):  # pyright: ignore
                         read_data = await read_data
@@ -281,8 +277,8 @@ class FileObjectSessionTracker:
                     data_bytes = read_data.encode() if isinstance(read_data, str) else read_data  # pyright: ignore
                 else:
                     return TypeError(f"Unsupported data type for pending content: {type(source)}")  # pyright: ignore
-            elif file_object._pending_source_path is not None:  # pyright: ignore
-                source_path = Path(file_object._pending_source_path)  # pyright: ignore
+            elif file_object.source_path is not None:  # pyright: ignore
+                source_path = Path(file_object.source_path)  # pyright: ignore
                 if not source_path.is_file():
                     msg = f"Source path does not exist: {source_path}"
                     raise FileNotFoundError(msg)
@@ -431,7 +427,7 @@ class FileObjectSessionTracker:
             if not paths_set:
                 continue
             backend = cls._get_backend(storage_key)
-            backend.delete_from_storage(list(paths_set))
+            backend.delete_object(list(paths_set))
 
         cls._clear_session_ops(session)
 
@@ -450,7 +446,7 @@ class FileObjectSessionTracker:
             if not paths_set:
                 continue
             backend = cls._get_backend(storage_key)
-            await backend.delete_from_storage_async(list(paths_set))
+            await backend.delete_object_async(list(paths_set))
 
         cls._clear_session_ops(session)
 
@@ -468,7 +464,7 @@ class FileObjectSessionTracker:
                     if not paths_set:
                         continue
                     backend = cls._get_backend(storage_key)
-                    backend.delete_from_storage(list(paths_set))
+                    backend.delete_object(list(paths_set))
 
         # Always clear the rollback tracking list after rollback handling
         cls._clear_rollback_ops(session)
@@ -487,7 +483,7 @@ class FileObjectSessionTracker:
                     if not paths_set:
                         continue
                     backend = cls._get_backend(storage_key)
-                    await backend.delete_from_storage_async(list(paths_set))
+                    await backend.delete_object_async(list(paths_set))
 
         # Always clear the rollback tracking list after rollback handling
         cls._clear_rollback_ops(session)

@@ -94,7 +94,7 @@ class ObstoreBackend(StorageBackend):
         obj = await self.fs.get_async(self._to_path(path), **options)
         return (await obj.bytes_async()).to_bytes()  # type: ignore[no-any-return]
 
-    def save_to_storage(
+    def save_object(
         self,
         file_object: FileObject,
         data: DataLike,
@@ -140,7 +140,7 @@ class ObstoreBackend(StorageBackend):
         file_object.checksum = obj_info.get("checksum")
         # Use obstore's content_type if returned, otherwise keep original
         file_object.content_type = obj_info.get("content_type", content_type)
-        file_object.last_modified = get_mtime_equivalent(obj_info.dict())  # pyright: ignore
+        file_object.last_modified = get_mtime_equivalent(obj_info)  # pyright: ignore
         file_object.etag = obj_info.get("etag")
         file_object.version_id = obj_info.get("version")
         # Merge metadata if returned by backend
@@ -154,7 +154,7 @@ class ObstoreBackend(StorageBackend):
 
         return file_object
 
-    async def save_to_storage_async(
+    async def save_object_async(
         self,
         file_object: FileObject,
         data: AsyncDataLike,
@@ -203,8 +203,8 @@ class ObstoreBackend(StorageBackend):
         # Use obstore's content_type if returned, otherwise keep original
         file_object.content_type = obj_info.get("content_type", content_type)
         # Pass obj_info as dict to helper function
-        file_object.last_modified = get_mtime_equivalent(obj_info.dict())  # pyright: ignore
-        file_object.etag = obj_info.get("etag")
+        file_object.last_modified = get_mtime_equivalent(obj_info)  # pyright: ignore
+        file_object.etag = obj_info.get("e_tag")
         file_object.version_id = obj_info.get("version")
         # Merge metadata if returned by backend
         backend_meta = obj_info.get("metadata")
@@ -217,7 +217,7 @@ class ObstoreBackend(StorageBackend):
 
         return file_object
 
-    def delete_from_storage(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    def delete_object(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete the specified paths.
 
         Args:
@@ -230,7 +230,7 @@ class ObstoreBackend(StorageBackend):
 
         self.fs.delete(path_list)
 
-    async def delete_from_storage_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_object_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete the specified paths asynchronously.
 
         Args:

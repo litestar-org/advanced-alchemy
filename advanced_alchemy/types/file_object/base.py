@@ -82,7 +82,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    def save_to_storage(
+    def save_object(
         self,
         file_object: "FileObject",
         data: "DataLike",
@@ -105,7 +105,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    async def save_to_storage_async(
+    async def save_object_async(
         self,
         file_object: "FileObject",
         data: AsyncDataLike,
@@ -128,7 +128,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    def delete_from_storage(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    def delete_object(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete one or more files.
 
         Args:
@@ -136,7 +136,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    async def delete_from_storage_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_object_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete one or more files asynchronously.
 
         Args:
