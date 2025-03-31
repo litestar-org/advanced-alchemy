@@ -177,15 +177,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     Disable if you plan to bring your own update mechanism for these columns"""
     add_file_listeners: bool = True
     """If true, attaches event listeners that automatically delete files from storage when a database record is updated (old file replaced) or deleted, after the transaction commits successfully.
-
-    Note: Automatic rollback cleanup of newly uploaded files is not handled by these listeners due to technical limitations.
     """
-    file_listener_handle_rollback: bool = True
-    """Controls the desired behavior for file cleanup when a transaction rolls back.
-
-    If set to ``True`` alongside ``add_file_listeners=True``, it currently raises a ``NotImplementedError`` because automatically handling the rollback cleanup of *newly* uploaded files within listeners is complex and requires careful state management that is not yet implemented. Users should implement manual rollback cleanup in their application code (e.g., using try/except around session commits).
-
-    Defaults to ``False``."""
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
@@ -214,25 +206,17 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             from advanced_alchemy._listeners import setup_file_object_listeners
             from advanced_alchemy.types.file_object import storages
 
-            # Raise if rollback handling is requested but not implemented
-            if self.file_listener_handle_rollback:
-                # TODO: Implement robust rollback handling for new files in listener if feasible
-                msg = (
-                    "Automatic rollback handling for newly uploaded files via listeners "
-                    "(file_listener_handle_rollback=True) is not yet implemented. "
-                    "Please handle rollback cleanup manually in your application code."
-                )
-                raise NotImplementedError(msg)
-
             setup_file_object_listeners(storages)  # Pass the storage registry
 
     def __hash__(self) -> int:  # pragma: no cover
-        return hash((
-            self.__class__.__qualname__,
-            self.connection_string,
-            self.engine_config.__class__.__qualname__,
-            self.bind_key,
-        ))
+        return hash(
+            (
+                self.__class__.__qualname__,
+                self.connection_string,
+                self.engine_config.__class__.__qualname__,
+                self.bind_key,
+            )
+        )
 
     def __eq__(self, other: object) -> bool:
         return self.__hash__() == other.__hash__()

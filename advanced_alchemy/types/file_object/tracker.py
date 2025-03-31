@@ -1,6 +1,6 @@
-# ruff: noqa: TRY301, SLF001
+# ruff: noqa: TRY301, SLF001, C901
 import contextlib
-from typing import TYPE_CHECKING, Any, Coroutine, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy import event
 from sqlalchemy.orm import ColumnProperty, InstanceState, Mapper, Session, SessionTransaction
@@ -8,6 +8,8 @@ from sqlalchemy.orm.base import PASSIVE_OFF
 
 if TYPE_CHECKING:
     # Imports from advanced_alchemy
+    from collections.abc import Coroutine
+
     from advanced_alchemy.types.file_object.base import StorageBackend
     from advanced_alchemy.types.file_object.data_type import StoredObject
     from advanced_alchemy.types.file_object.file import FileObject
@@ -18,8 +20,6 @@ def _extract_paths_and_keys(
     file_objects: "Optional[Union[FileObject, list[FileObject]]]", storage_key: str
 ) -> "list[tuple[str, str]]":
     """Extract paths and storage keys from FileObject(s).
-
-    # TODO: consolidate into a a single lsit of paths per storage key
 
     Args:
         file_objects: A single FileObject or a list of FileObjects
@@ -270,7 +270,7 @@ class FileObjectSessionTracker:
     @classmethod
     async def _save_pending_file_async(
         cls, session: Session, file_object: "FileObject", storage_key: str
-    ) -> Optional[Exception]:  # noqa: C901
+    ) -> Optional[Exception]:
         """Asynchronously load data, validate, process, and save a single FileObject.
 
         Assumes the check for pending data has already been done by the caller.
@@ -366,7 +366,7 @@ class FileObjectSessionTracker:
         # Combine new and dirty objects for checking
         objects_to_check = list(session.new) + list(session.dirty)
 
-        for instance in objects_to_check:  # noqa: PLR1702
+        for instance in objects_to_check:
             # Use attributes.instance_state for clarity
             instance_state: InstanceState[Any] = attributes.instance_state(instance)
             instance_mapper: Optional[Mapper[Any]] = instance_state.mapper
@@ -404,7 +404,7 @@ class FileObjectSessionTracker:
             raise RuntimeError(msg)
 
     @classmethod
-    async def _async_before_flush(cls, session: "Session", flush_context: Any, instances: Any) -> None:
+    async def _before_flush_async(cls, session: "Session", flush_context: Any, instances: Any) -> None:
         import asyncio
 
         from sqlalchemy.orm import attributes
@@ -469,7 +469,7 @@ class FileObjectSessionTracker:
         cls._clear_session_ops(session)
 
     @classmethod
-    async def _async_after_commit(cls, session: "Session") -> None:
+    async def _after_commit_async(cls, session: "Session") -> None:
         # First, clear the rollback list, as the commit succeeded
         cls._clear_rollback_ops(session)
 
@@ -507,7 +507,7 @@ class FileObjectSessionTracker:
         cls._clear_rollback_ops(session)
 
     @classmethod
-    async def _async_after_soft_rollback(cls, session: "Session") -> None:
+    async def _after_soft_rollback_async(cls, session: "Session") -> None:
         # Clear the set for files to be deleted on commit
         cls._clear_session_ops(session)
 

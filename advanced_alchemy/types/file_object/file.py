@@ -7,10 +7,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
 
+from advanced_alchemy.types.file_object.base import (
+    AsyncDataLike,
+    DataLike,
+)
+
 if TYPE_CHECKING:
     from advanced_alchemy.types.file_object.base import (
-        AsyncDataLike,
-        DataLike,
         PathLike,
         StorageBackend,
     )
