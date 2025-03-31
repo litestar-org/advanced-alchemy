@@ -2,13 +2,13 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy import TypeDecorator
 
+from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.file import FileObject
 from advanced_alchemy.types.file_object.registry import storages
 from advanced_alchemy.types.json import JsonB
 from advanced_alchemy.types.mutables import MutableList
 
 if TYPE_CHECKING:
-    from advanced_alchemy.types.file_object.base import StorageBackend
     from advanced_alchemy.types.file_object.processors import FileProcessor
     from advanced_alchemy.types.file_object.validators import FileValidator
 
@@ -28,10 +28,10 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
     cache_ok = True
 
     # Default settings
-    storage_key: str
     multiple: bool
     default_expires_in: int = 3600  # 1 hour
-    backend: "StorageBackend"
+    _raw_backend: Union[str, StorageBackend]  # Store the initial argument
+    _resolved_backend: "Optional[StorageBackend]" = None  # Cache for resolved backend
     validators: "list[FileValidator]"
     processors: "list[FileProcessor]"
 
@@ -41,9 +41,46 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
         # This provides a hint to SQLAlchemy and type checkers
         return MutableList[FileObject] if self.multiple else Optional[FileObject]  # type: ignore
 
+    @property
+    def backend(self) -> "StorageBackend":
+        """Resolves and returns the storage backend instance.
+
+        Raises:
+            ValueError: If the backend key is not found in the storages registry.
+
+
+        Returns:
+            StorageBackend: The resolved storage backend instance.
+
+        """
+        # Return cached version if available
+        if self._resolved_backend is not None:
+            return self._resolved_backend
+
+        # Resolve the backend
+        resolved: StorageBackend
+        if isinstance(self._raw_backend, str):
+            try:
+                resolved = storages.get_backend(self._raw_backend)
+            except KeyError as e:
+                # Raise a more specific error if the key isn't found at access time
+                msg = f"Storage backend key '{self._raw_backend}' not found in registry."
+                raise ValueError(msg) from e
+        else:
+            resolved = self._raw_backend
+
+        # Cache the resolved backend and return it
+        self._resolved_backend = resolved
+        return resolved
+
+    @property
+    def storage_key(self) -> str:
+        """Returns the storage key from the resolved backend."""
+        return self.backend.key
+
     def __init__(
         self,
-        storage_key: str,
+        backend: Union[str, StorageBackend],
         multiple: bool = False,
         default_expires_in: "Optional[int]" = None,
         validators: "Optional[list[FileValidator]]" = None,
@@ -54,7 +91,7 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
         """Initialize StoredObject type.
 
         Args:
-            storage_key: Key to retrieve the backend from the storage registry.
+            backend: Key to retrieve the backend or from the storage registry or storage backend to use.
             multiple: If True, stores a list of files; otherwise, a single file.
             default_expires_in: Default expiration time for signed URLs.
             validators: List of FileValidator instances.
@@ -64,9 +101,10 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
 
         """
         super().__init__(*args, **kwargs)
-        self.storage_key = storage_key
+
         self.multiple = multiple
-        self.backend = storages.get_backend(storage_key)
+        # Store the raw backend reference without resolving it yet
+        self._raw_backend = backend
         self.default_expires_in = default_expires_in or self.default_expires_in
         self.validators = validators or []
         self.processors = processors or []
@@ -96,9 +134,12 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
         if value is None:
             return None
 
+        # Access backend via the property to ensure it's resolved
+        resolved_backend = self.backend
+
         def _ensure_backend(obj: "FileObject") -> "FileObject":
             if obj and obj.backend is None:
-                obj.backend = self.backend
+                obj.backend = resolved_backend  # Use resolved backend
             return obj
 
         if self.multiple:
@@ -136,11 +177,17 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
         if value is None:
             return None
 
+        # Access backend via the property to ensure it's resolved
+        resolved_backend = self.backend
+
         if self.multiple:
             if not isinstance(value, list):
+                # Ensure value is a list even if DB returns single dict for some reason
                 value = [value]
-            return MutableList([FileObject(**item, backend=self.backend) for item in value])
+            # Pass the resolved backend when creating FileObject instances
+            return MutableList([FileObject(**item, backend=resolved_backend) for item in value])
         if isinstance(value, list):
             msg = f"Expected dict from DB for multiple=False, got {type(value)}"
             raise TypeError(msg)
-        return FileObject(**value, backend=self.backend)
+        # Pass the resolved backend when creating FileObject instance
+        return FileObject(**value, backend=resolved_backend)

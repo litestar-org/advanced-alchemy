@@ -1,4 +1,4 @@
-# ruff: noqa: TRY301, SLF001, C901
+# ruff: noqa: TRY301, SLF001, C901, PLR1702
 import contextlib
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -32,7 +32,7 @@ def _extract_paths_and_keys(
         return []
     objects = file_objects if isinstance(file_objects, list) else [file_objects]
     # Ensure it's a FileObject and has a path before tracking
-    return [(fo.path, storage_key) for fo in objects if fo and fo.path]
+    return [(fo.target_filename, storage_key) for fo in objects if fo and fo.target_filename]
 
 
 class FileObjectSessionTracker:
@@ -56,7 +56,6 @@ class FileObjectSessionTracker:
 
     @classmethod
     def _set_registry(cls, registry: "StorageRegistry") -> None:
-        """Internal method to set the storage registry."""
         cls._storages = registry
 
     @classmethod
@@ -80,7 +79,6 @@ class FileObjectSessionTracker:
 
     @classmethod
     def _get_rollback_ops_dict(cls, session: "Session") -> "dict[str, set[str]]":
-        """Get or initialize the dict to track new files for deletion on rollback."""
         attr_name = "_aa_new_files_to_delete_on_rollback"
         if not hasattr(session, attr_name):
             setattr(session, attr_name, {})  # Initialize as dict
@@ -88,7 +86,6 @@ class FileObjectSessionTracker:
 
     @classmethod
     def _add_new_op_for_rollback(cls, session: "Session", path: str, storage_key: str) -> None:
-        """Track a newly saved file path for potential deletion on rollback."""
         ops_dict = cls._get_rollback_ops_dict(session)
         ops_dict.setdefault(storage_key, set()).add(path)
 
@@ -106,7 +103,6 @@ class FileObjectSessionTracker:
 
     @classmethod
     def _clear_rollback_ops(cls, session: "Session") -> None:
-        """Clear the tracking dict for new files to delete on rollback."""
         attr_name = "_aa_new_files_to_delete_on_rollback"
         if hasattr(session, attr_name):
             delattr(session, attr_name)
@@ -114,7 +110,6 @@ class FileObjectSessionTracker:
     # --- Event Listeners ---
     @classmethod
     def _mapper_configured(cls, mapper: "Mapper[Any]", class_: "type[Any]") -> None:
-        """Detect StoredObject columns and store key, storage_key, and multiple flag."""
         from advanced_alchemy.types.file_object.data_type import StoredObject
         from advanced_alchemy.types.mutables import MutableList
 
@@ -132,14 +127,12 @@ class FileObjectSessionTracker:
 
     @classmethod
     def _after_configured(cls) -> None:
-        """Attach instance-level listeners after all mappers are configured."""
         for entity in cls.mapped_entities:
             event.listen(entity, "before_update", cls._before_update, raw=True)
             event.listen(entity, "after_delete", cls._after_delete, raw=True)
 
     @classmethod
     def _before_update(cls, mapper: "Mapper[Any]", connection: "Any", state: "InstanceState[Any]") -> None:
-        """Track replaced files and removed files from MutableList before an update."""
         from advanced_alchemy.types.mutables import MutableList
 
         session = state.session
@@ -189,18 +182,6 @@ class FileObjectSessionTracker:
 
     @classmethod
     def _save_pending_file(cls, session: Session, file_object: "FileObject", storage_key: str) -> Optional[Exception]:
-        """Synchronously load data, validate, process, and save a single FileObject.
-
-        Assumes the check for pending data has already been done by the caller.
-
-        Args:
-            session: The SQLAlchemy session
-            file_object: The FileObject to save
-            storage_key: The storage key for the FileObject
-
-        Returns:
-            Optional[Exception]: The exception raised during the save process, or None if successful
-        """
         from collections.abc import Iterable, Iterator
         from pathlib import Path
 
@@ -258,11 +239,9 @@ class FileObjectSessionTracker:
             file_object.save(data=processed_data_bytes)  # pyright: ignore
 
             # Track successful save for potential rollback
-            if file_object.path:
-                cls._add_new_op_for_rollback(session, file_object.path, storage_key)
-
+            if file_object.target_filename:
+                cls._add_new_op_for_rollback(session, file_object.target_filename, storage_key)
             # NOTE: Clearing pending attributes is now handled within file_object.save()
-
         except Exception as e:  # noqa: BLE001
             return e  # Return the exception to the caller
         return None  # Success
@@ -271,18 +250,6 @@ class FileObjectSessionTracker:
     async def _save_pending_file_async(
         cls, session: Session, file_object: "FileObject", storage_key: str
     ) -> Optional[Exception]:
-        """Asynchronously load data, validate, process, and save a single FileObject.
-
-        Assumes the check for pending data has already been done by the caller.
-
-        Args:
-            session: The SQLAlchemy session
-            file_object: The FileObject to save
-            storage_key: The storage key for the FileObject
-
-        Returns:
-            Optional[Exception]: The exception raised during the save process, or None if successful
-        """
         import asyncio
         from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
         from pathlib import Path
@@ -347,8 +314,8 @@ class FileObjectSessionTracker:
             await file_object.save_async(data=processed_data_bytes)  # pyright: ignore
 
             # Track successful save for potential rollback
-            if file_object.path:
-                cls._add_new_op_for_rollback(session, file_object.path, storage_key)
+            if file_object.target_filename:
+                cls._add_new_op_for_rollback(session, file_object.target_filename, storage_key)
 
             # NOTE: Clearing pending attributes is now handled within file_object.save_async()
 

@@ -7,6 +7,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
 
+from sqlalchemy.ext.mutable import MutableList
+from typing_extensions import TypeAlias
+
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
     DataLike,
@@ -51,7 +54,7 @@ class FileObject:
     # Allow content_type to be initially None for guessing
     content_type: Optional[str] = None
     size: "Optional[int]" = None
-    path: "Optional[str]" = None
+    target_filename: "Optional[str]" = None
     protocol: "Optional[str]" = None
     last_modified: "Optional[float]" = None
     checksum: "Optional[str]" = None
@@ -59,14 +62,12 @@ class FileObject:
     version_id: "Optional[str]" = None
     metadata: "dict[str, Any]" = field(default_factory=dict)
     # Capture arbitrary kwargs, including potential 'content' or 'source_path'
-    extra: "dict[str, Any]" = field(default_factory=dict)
-    backend: "Optional[StorageBackend]" = field(default=None, compare=False, repr=False)
-
-    # Internal fields for pending data, not part of init/repr/compare
-    _pending_content: "Optional[Union[DataLike, AsyncDataLike]]" = field(
-        default=None, init=False, repr=False, compare=False
+    extra: "dict[str, Any]" = field(default_factory=dict, compare=False, repr=False, hash=False)
+    backend: "Optional[StorageBackend]" = field(default=None, compare=False, repr=False, hash=False)
+    source_path: "Optional[PathLike]" = field(default=None, repr=False, compare=False, hash=False)
+    source_content: "Optional[Union[DataLike, AsyncDataLike]]" = field(
+        default=None, repr=False, compare=False, hash=False
     )
-    _pending_source_path: "Optional[PathLike]" = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Perform post-initialization validation and setup.
@@ -86,8 +87,8 @@ class FileObject:
             raise ValueError(msg)
 
         # Default path to filename if not explicitly provided
-        if self.path is None:
-            self.path = self.filename
+        if self.target_filename is None:
+            self.target_filename = self.filename
 
         # Guess content_type if not provided
         if self.content_type is None:
@@ -101,24 +102,27 @@ class FileObject:
         if self.backend and not self.protocol:
             self.protocol = self.backend.protocol
 
-        # Process content or source_path from extra kwargs
-        content = self.extra.pop("content", None)
-        source_path = self.extra.pop("source_path", None)
-
-        if content is not None and source_path is not None:
-            msg = "Cannot provide both 'content' and 'source_path' during initialization."
+        if self.source_content is not None and self.source_path is not None:
+            msg = "Cannot provide both 'source_content' and 'source_path' during initialization."
             raise ValueError(msg)
 
-        if content is not None:
-            self._pending_content = content
-        elif source_path is not None:
+        if self.source_content is not None:
+            self._pending_content = self.source_content
+        elif self.source_path is not None:
             # Ensure source_path is a Path object for consistency
-            self._pending_source_path = Path(source_path) if not isinstance(source_path, Path) else source_path
+            self._pending_source_path = (
+                Path(self.source_path) if not isinstance(self.source_path, Path) else self.source_path
+            )
+
+    @property
+    def path(self) -> str:
+        """Return the path of the file, defaulting to target_filename if not set."""
+        return self.target_filename or self.filename
 
     @property
     def has_pending_data(self) -> bool:
         """Check if the FileObject has pending content or a source path to save."""
-        return bool(self._pending_content or self._pending_source_path)
+        return bool(self.source_content or self.source_path)
 
     def update_metadata(self, metadata: "dict[str, Any]") -> None:
         """Update the file metadata.
@@ -139,7 +143,22 @@ class FileObject:
             dict[str, Any]: A dictionary representation of the file information.
         """
         # Use dataclasses.asdict and filter out the backend
-        data = asdict(self, dict_factory=lambda x: {k: v for (k, v) in x if k != "backend"})
+        data = asdict(
+            self,
+            dict_factory=lambda x: {
+                k: v
+                for (k, v) in x
+                if k
+                not in {
+                    "backend",
+                    "_pending_content",
+                    "_pending_source_path",
+                    "source_content",
+                    "source_content_path",
+                    "path",
+                }
+            },
+        )
         # Ensure metadata and extra are included even if empty (asdict might skip if default_factory)
         data.setdefault("metadata", {})
         data.setdefault("extra", {})
@@ -160,11 +179,11 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             # This should not happen due to __post_init__, but check defensively
             msg = "File path is not set"
             raise RuntimeError(msg)
-        return self.backend.get_content(self.path, options=options)
+        return self.backend.get_content(self.target_filename, options=options)
 
     async def get_content_async(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Get the file content from the storage backend asynchronously.
@@ -181,10 +200,10 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        return await self.backend.get_content_async(self.path, options=options)
+        return await self.backend.get_content_async(self.target_filename, options=options)
 
     def sign(
         self,
@@ -207,10 +226,10 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        result = self.backend.sign(self.path, expires_in=expires_in, for_upload=for_upload)
+        result = self.backend.sign(self.target_filename, expires_in=expires_in, for_upload=for_upload)
         if isinstance(result, list):
             if not result:
                 msg = "No signed URL generated"
@@ -239,10 +258,10 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        result = await self.backend.sign_async(self.path, expires_in=expires_in, for_upload=for_upload)
+        result = await self.backend.sign_async(self.target_filename, expires_in=expires_in, for_upload=for_upload)
         if isinstance(result, list):
             if not result:
                 msg = "No signed URL generated"
@@ -259,10 +278,10 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        self.backend.delete_from_storage(self.path)
+        self.backend.delete_from_storage(self.target_filename)
 
     async def delete_async(self) -> None:
         """Delete the file from storage asynchronously.
@@ -273,10 +292,10 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set"
             raise RuntimeError(msg)
-        await self.backend.delete_from_storage_async(self.path)
+        await self.backend.delete_from_storage_async(self.target_filename)
 
     def save(
         self,
@@ -311,30 +330,26 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured for saving."
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set for saving."
             raise RuntimeError(msg)
 
-        data_source: Optional[DataLike] = data
+        if data is None and self.source_content is not None:
+            data = self.source_content  # type: ignore[assignment]
+        elif data is None and self._pending_source_path is not None:
+            source_path = Path(self._pending_source_path)
+            if not source_path.is_file():
+                msg = f"Source path does not exist or is not a file: {source_path}"
+                raise FileNotFoundError(msg)
+            # Pass Path object itself, backend handles reading
+            data = source_path
 
-        if data_source is None:
-            # If data argument not provided, try pending attributes
-            if self._pending_content is not None:
-                data_source = self._pending_content  # type: ignore[assignment]
-            elif self._pending_source_path is not None:
-                source_path = Path(self._pending_source_path)
-                if not source_path.is_file():
-                    msg = f"Source path does not exist or is not a file: {source_path}"
-                    raise FileNotFoundError(msg)
-                # Pass Path object itself, backend handles reading
-                data_source = source_path
-
-        if data_source is None:
+        if data is None:
             msg = "No data provided and no pending content/path found to save."
             raise TypeError(msg)
 
         # Check for incompatible async data types
-        if isinstance(data_source, (AsyncIterator, AsyncIterable)):
+        if isinstance(data, (AsyncIterator, AsyncIterable)):
             msg = "Cannot save async data with synchronous save method. Use save_async."
             raise TypeError(msg)
 
@@ -342,7 +357,7 @@ class FileObject:
         # and return the updated instance.
         updated_self = self.backend.save_to_storage(
             file_object=self,
-            data=data_source,  # Pass the determined data source
+            data=data,  # Pass the determined data source
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
@@ -388,34 +403,30 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured for saving."
             raise RuntimeError(msg)
-        if self.path is None:
+        if self.target_filename is None:
             msg = "File path is not set for saving."
             raise RuntimeError(msg)
 
-        data_source: Optional[AsyncDataLike] = data
+        if data is None and self.source_content is not None:
+            data = self.source_content  # type: ignore[assignment]
+        elif data is None and self.source_path is not None:
+            source_path = Path(self.source_path)
+            if not source_path.is_file():
+                msg = f"Source path does not exist or is not a file: {source_path}"
+                raise FileNotFoundError(msg)
+            # Pass Path object itself, backend handles reading (async if possible)
+            # Note: Reading logic specifically for validation/processing is in the tracker.
+            # Here, we just pass the source to the backend.
+            data = source_path
 
-        if data_source is None:
-            # If data argument not provided, try pending attributes
-            if self._pending_content is not None:
-                data_source = self._pending_content
-            elif self._pending_source_path is not None:
-                source_path = Path(self._pending_source_path)
-                if not source_path.is_file():
-                    msg = f"Source path does not exist or is not a file: {source_path}"
-                    raise FileNotFoundError(msg)
-                # Pass Path object itself, backend handles reading (asyncly if possible)
-                # Note: Reading logic specifically for validation/processing is in the tracker.
-                # Here, we just pass the source to the backend.
-                data_source = source_path
-
-        if data_source is None:
+        if data is None:
             msg = "No data provided and no pending content/path found to save."
             raise TypeError(msg)
 
         # Backend's async save method updates the FileObject instance
         updated_self = await self.backend.save_to_storage_async(
             file_object=self,
-            data=data_source,  # Pass the determined data source
+            data=data,  # Pass the determined data source
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
@@ -426,3 +437,6 @@ class FileObject:
         self._pending_source_path = None
 
         return updated_self
+
+
+FileObjectList: TypeAlias = MutableList[FileObject]

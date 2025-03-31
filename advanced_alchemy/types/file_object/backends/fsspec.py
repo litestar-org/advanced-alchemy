@@ -20,6 +20,7 @@ from advanced_alchemy.utils.sync_tools import async_
 
 try:
     # Correct import for AsyncFileSystem and try importing async file handle
+    import fsspec  # pyright: ignore[reportMissingTypeStubs]
     from fsspec.asyn import AsyncFileSystem  # pyright: ignore[reportMissingTypeStubs]
 except ImportError as e:
     msg = "fsspec"
@@ -39,7 +40,7 @@ class FSSpecBackend(StorageBackend):
 
     def __init__(
         self,
-        fs: "Union[AbstractFileSystem, AsyncFileSystem]",
+        fs: "Union[AbstractFileSystem, AsyncFileSystem, str]",
         key: str,
         *,
         options: Optional[dict[str, Any]] = None,
@@ -53,8 +54,11 @@ class FSSpecBackend(StorageBackend):
             options: Optional backend-specific options.
             **kwargs: Additional keyword arguments.
         """
-        self.is_async = isinstance(fs, AsyncFileSystem)
-        self.protocol = getattr(fs, "protocol", "file") if isinstance(fs.protocol, str) else "file"
+        self.fs = fsspec.filesystem(fs, **options or {}) if isinstance(fs, str) else fs  # pyright: ignore
+        self.is_async = isinstance(self.fs, AsyncFileSystem)
+        protocol = getattr(self.fs, "protocol", None)
+        protocol = cast("Optional[str]", protocol[0] if isinstance(protocol, (list, tuple)) else protocol)
+        self.protocol = protocol or "file"
         self.key = key
         self.options = options or {}
         self.kwargs = kwargs
@@ -119,11 +123,11 @@ class FSSpecBackend(StorageBackend):
         Returns:
             FileObject object representing the saved file, potentially updated.
         """
-        if file_object.path is None:
+        if file_object.target_filename is None:
             msg = "FileObject.path cannot be None for saving."
             raise RuntimeError(msg)
 
-        path_str = self._to_path(file_object.path)
+        path_str = self._to_path(file_object.target_filename)
         fs = cast("AbstractFileSystem", self.fs)
 
         with fs.open(path_str, "wb") as f:  # pyright: ignore
@@ -208,7 +212,7 @@ class FSSpecBackend(StorageBackend):
         Returns:
             FileObject object representing the saved file, potentially updated.
         """
-        if file_object.path is None:
+        if file_object.target_filename is None:
             msg = "FileObject.path cannot be None for saving."
             raise RuntimeError(msg)
 
@@ -224,7 +228,7 @@ class FSSpecBackend(StorageBackend):
             return await async_(self.save_to_storage)(file_object=file_object, data=data, chunk_size=chunk_size)  # type: ignore
 
         fs = cast("AsyncFileSystem", self.fs)
-        path_str = self._to_path(file_object.path)
+        path_str = self._to_path(file_object.target_filename)
         size: Optional[int] = 0  # Initialize size, might remain None if unknown
 
         # Let type inference work for f, add ignore for context manager protocol errors

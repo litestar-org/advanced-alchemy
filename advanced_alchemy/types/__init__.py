@@ -11,6 +11,7 @@ from advanced_alchemy.types.encrypted_string import (
 )
 from advanced_alchemy.types.file_object import (
     FileObject,
+    FileObjectList,
     StorageBackend,
     StoredObject,
 )
@@ -31,6 +32,7 @@ __all__ = (
     "EncryptionBackend",
     "FernetBackend",
     "FileObject",
+    "FileObjectList",
     "JsonB",
     "MutableList",
     "PGCryptoBackend",

@@ -17,7 +17,7 @@ from advanced_alchemy.base import (
     merge_table_arguments,
 )
 from advanced_alchemy.mixins import SlugKey
-from advanced_alchemy.types import EncryptedString, EncryptedText, ObjectStore, StoredObject
+from advanced_alchemy.types import EncryptedString, EncryptedText, FileObject, StoredObject
 
 
 class UUIDAuthor(UUIDAuditBase):
@@ -117,10 +117,11 @@ class UUIDFileDocument(UUIDv7Base):
     """The file document domain model."""
 
     title: Mapped[str] = mapped_column(String(length=100))
-    file: Mapped[StoredObject] = mapped_column(
-        ObjectStore(backend="memory", base_path="test-files"),
+    file: Mapped[FileObject] = mapped_column(
+        StoredObject(backend="memory"),
         nullable=True,
     )
-    required_file: Mapped[StoredObject] = mapped_column(
-        ObjectStore(backend="memory", base_path="test-files"),
+    required_file: Mapped[FileObject] = mapped_column(
+        StoredObject(backend="memory"),
+        nullable=True,
     )

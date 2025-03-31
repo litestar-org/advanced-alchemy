@@ -1,8 +1,7 @@
 """Example domain objects for testing."""
 
-from __future__ import annotations
-
 import datetime
+from typing import Optional
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
@@ -10,9 +9,8 @@ from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright:
 
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase, merge_table_arguments
 from advanced_alchemy.mixins import SlugKey
-from advanced_alchemy.types import EncryptedString
+from advanced_alchemy.types import EncryptedString, FileObject, MutableList, StoredObject
 from advanced_alchemy.types.encrypted_string import EncryptedText
-from advanced_alchemy.types.file_object import ObjectStore, StoredObject
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -21,7 +19,7 @@ class BigIntAuthor(BigIntAuditBase):
     name: Mapped[str] = mapped_column(String(length=100))
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)
     dob: Mapped[datetime.date] = mapped_column(nullable=True)
-    books: Mapped[list[BigIntBook]] = relationship(
+    books: Mapped[list["BigIntBook"]] = relationship(
         lazy="selectin",
         back_populates="author",
         cascade="all, delete",
@@ -84,7 +82,7 @@ bigint_item_tag = Table(
 class BigIntItem(BigIntBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
-    tags: Mapped[list[BigIntTag]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
+    tags: Mapped[list["BigIntTag"]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
 
 
 class BigIntTag(BigIntBase):
@@ -116,10 +114,12 @@ class BigIntFileDocument(BigIntBase):
     """The file document domain model."""
 
     title: Mapped[str] = mapped_column(String(length=100))
-    file: Mapped[StoredObject] = mapped_column(
-        ObjectStore(backend="memory", base_path="test-files"),
+    file: Mapped[FileObject] = mapped_column(
+        StoredObject(backend="memory"),
         nullable=True,
     )
-    required_file: Mapped[StoredObject] = mapped_column(
-        ObjectStore(backend="memory", base_path="test-files"),
+    required_files: Mapped[MutableList[FileObject]] = mapped_column(
+        StoredObject(backend="memory", multiple=True),
+        nullable=True,
     )
+    required_file: Mapped["Optional[FileObject]"] = mapped_column(StoredObject(backend="memory"), nullable=True)

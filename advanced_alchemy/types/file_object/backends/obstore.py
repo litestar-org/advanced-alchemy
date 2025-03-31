@@ -19,22 +19,9 @@ from advanced_alchemy.types.file_object.file import FileObject
 try:
     from obstore import sign as obstore_sign
     from obstore import sign_async as obstore_sign_async
-    from obstore._scheme import parse_scheme  # pyright: ignore[reportMissingModuleSource,reportPrivateImportUsage]
     from obstore.store import ObjectStore
 except ImportError as e:
     raise MissingDependencyError(package="obstore") from e
-
-
-def scheme_from_url(url: str) -> str:
-    """Extract the schema from a URL.
-
-    Args:
-        url: URL to parse
-
-    Returns:
-        The schema extracted from the URL
-    """
-    return parse_scheme(url)
 
 
 def schema_from_type(obj: Any) -> str:  # noqa: PLR0911
@@ -68,20 +55,22 @@ class ObstoreBackend(StorageBackend):
 
     driver = "obstore"
 
-    def __init__(self, fs: Union[ObjectStore, str], options: Optional[dict[str, Any]] = None) -> None:
+    def __init__(
+        self, fs: Union[ObjectStore, str], key: str, *, options: Optional[dict[str, Any]] = None, **kwargs: Any
+    ) -> None:
         """Initialize ObstoreBackend.
 
         Args:
             fs: The ObjectStore instance from the obstore package
+            key: The key for the storage backend
             options: Optional backend-specific options
+            kwargs: Additional keyword arguments
         """
-        if isinstance(fs, str):
-            self.protocol = scheme_from_url(fs)
-            self.fs = cast("ObjectStore", ObjectStore.from_url(fs))  # type: ignore
-        else:
-            self.protocol = schema_from_type(fs)
-            self.fs = fs
+        self.fs = cast("ObjectStore", ObjectStore.from_url(fs)) if isinstance(fs, str) else fs  # type: ignore
+        self.protocol = schema_from_type(self.fs)
+        self.key = key
         self.options = options or {}
+        self.kwargs = kwargs
 
     def get_content(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
         """Return the bytes stored at the specified location.
@@ -129,12 +118,12 @@ class ObstoreBackend(StorageBackend):
         Raises:
             RuntimeError: If file_object.path is None.
         """
-        if file_object.path is None:
+        if file_object.target_filename is None:
             msg = "FileObject.path cannot be None for saving."
             raise RuntimeError(msg)
 
         # Extract info, though obstore might ignore some
-        path_str = self._to_path(file_object.path)
+        path_str = self._to_path(file_object.target_filename)
         content_type = file_object.content_type
         # Note: obstore.put might not explicitly support content_type/metadata args
         # Check obstore documentation if these are needed or handled differently
@@ -189,12 +178,12 @@ class ObstoreBackend(StorageBackend):
         Raises:
             RuntimeError: If file_object.path is None.
         """
-        if file_object.path is None:
+        if file_object.target_filename is None:
             msg = "FileObject.path cannot be None for saving."
             raise RuntimeError(msg)
 
         # Extract info, though obstore might ignore some
-        path_str = self._to_path(file_object.path)
+        path_str = self._to_path(file_object.target_filename)
         content_type = file_object.content_type
         # Note: obstore.put_async might not explicitly support content_type/metadata args
         # Check obstore documentation if these are needed or handled differently
@@ -241,7 +230,7 @@ class ObstoreBackend(StorageBackend):
 
         self.fs.delete(path_list)
 
-    async def delete_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_from_storage_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
         """Delete the specified paths asynchronously.
 
         Args:
