@@ -17,7 +17,7 @@ from advanced_alchemy.types.file_object import (
 from advanced_alchemy.types.guid import GUID, NANOID_INSTALLED, UUID_UTILS_INSTALLED
 from advanced_alchemy.types.identity import BigIntIdentity
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
-from advanced_alchemy.types.mutables import MutableDict, MutableList
+from advanced_alchemy.types.mutables import MutableList
 
 __all__ = (
     "GUID",
@@ -32,7 +32,6 @@ __all__ = (
     "FernetBackend",
     "FileObject",
     "JsonB",
-    "MutableDict",
     "MutableList",
     "PGCryptoBackend",
     "StorageBackend",

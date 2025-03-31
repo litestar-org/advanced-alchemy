@@ -310,6 +310,7 @@ ignore = [
   "PLR0904", # too many public methods
   "PLR0917",
   "PGH003",
+  "PLC2701",
 ]
 select = ["ALL"]
 
@@ -359,6 +360,7 @@ classmethod-decorators = [
   "TC",
   "TRY",
   "SLF001",
+
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
@@ -486,6 +488,7 @@ exclude = [
 include = ["advanced_alchemy"]
 pythonVersion = "3.9"
 reportMissingTypeStubs = false
+reportPrivateImportUsage = false
 reportUnknownMemberType = false
 reportUnnecessaryTypeIgnoreComments = true
 reportUnusedFunction = false

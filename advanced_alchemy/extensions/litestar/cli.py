@@ -1,7 +1,7 @@
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from litestar.cli._utils import LitestarGroup
+from litestar.cli._utils import LitestarGroup  # pyright: ignore
 
 from advanced_alchemy.cli import add_migration_commands
 
@@ -17,7 +17,17 @@ if TYPE_CHECKING:
 
 
 def get_database_migration_plugin(app: "Litestar") -> "SQLAlchemyInitPlugin":
-    """Retrieve a database migration plugin from the Litestar application's plugins."""
+    """Retrieve a database migration plugin from the Litestar application's plugins.
+
+    Args:
+        app: The Litestar application
+
+    Returns:
+        The database migration plugin
+
+    Raises:
+        ImproperConfigurationError: If the database migration plugin is not found
+    """
     from advanced_alchemy.exceptions import ImproperConfigurationError
     from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyInitPlugin
 

@@ -229,14 +229,15 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         # include a default_factory in that case.
                         or "context" not in signature(default_callable).parameters
                     ):
-                        default_value = default.arg({})  # pyright: ignore[reportUnknownMemberType, reportCallIssue]
+                        default_value = default.arg({})  # pyright: ignore
                     else:
                         continue
                 else:
                     continue
                 setattr(data, elem.key, default_value)
 
-    def changed_attrs(self, data: ModelT) -> "Iterable[str]":  # pragma: no cover
+    @staticmethod
+    def changed_attrs(data: ModelT) -> "Iterable[str]":  # pragma: no cover
         res: list[str] = []
         mapper = inspect(data)
         if mapper is None:
@@ -266,7 +267,8 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
 
 
 class SQLAlchemyMultiStore(MultiStore[ModelT]):
-    def _new_instances(self, instance: ModelT) -> "Iterable[ModelT]":
+    @staticmethod
+    def _new_instances(instance: ModelT) -> "Iterable[ModelT]":
         session = Session()
         session.add(instance)
         relations = list(session.new)

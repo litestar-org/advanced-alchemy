@@ -83,7 +83,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     bind: "Optional[Union[EngineT, ConnectionT, EmptyType]]" = Empty
     """The :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection <sqlalchemy.engine.Connection>` that new
     :class:`Session <sqlalchemy.orm.Session>` objects will be bound to."""
-    binds: "Union[dict[Union[type[Any], Mapper[Any], TableClause, str], Union[EngineT, ConnectionT]], None, EmptyType]" = Empty
+    binds: "Optional[Union[dict[Union[type[Any], Mapper[Any], TableClause, str], Union[EngineT, ConnectionT]], EmptyType]]" = Empty
     """A dictionary which may specify any number of :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection
     <sqlalchemy.engine.Connection>` objects as the source of connectivity for SQL operations on a per-entity basis. The
     keys of the dictionary consist of any series of mapped classes, arbitrary Python classes that are bases for mapped
@@ -94,18 +94,18 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     """Class to use in order to create new :class:`Session <sqlalchemy.orm.Session>` objects."""
     expire_on_commit: "Union[bool, EmptyType]" = Empty
     """If ``True``, all instances will be expired after each commit."""
-    info: "Union[dict[str, Any], None, EmptyType]" = Empty
+    info: "Optional[Union[dict[str, Any], EmptyType]]" = Empty
     """Optional dictionary of information that will be available via the
     :attr:`Session.info <sqlalchemy.orm.Session.info>`"""
     join_transaction_mode: "Union[JoinTransactionMode, EmptyType]" = Empty
     """Describes the transactional behavior to take when a given bind is a Connection that has already begun a
     transaction outside the scope of this Session; in other words the
     :attr:`Connection.in_transaction() <sqlalchemy.Connection.in_transaction>` method returns True."""
-    query_cls: "Union[type[Query], None, EmptyType]" = Empty  # pyright: ignore[reportMissingTypeArgument]
+    query_cls: "Optional[Union[type[Query], EmptyType]]" = Empty  # pyright: ignore[reportMissingTypeArgument]
     """Class which should be used to create new Query objects, as returned by the
     :attr:`Session.query() <sqlalchemy.orm.Session.query>` method."""
     twophase: "Union[bool, EmptyType]" = Empty
-    """When ``True``, all transactions will be started as a “two phase” transaction, i.e. using the “two phase”
+    """When ``True``, all transactions will be started as a "two phase" transaction, i.e. using the "two phase"
     semantics of the database in use along with an XID. During a :attr:`commit() <sqlalchemy.orm.Session.commit>`, after
     :attr:`flush() <sqlalchemy.orm.Session.flush>` has been issued for all attached databases, the
     :attr:`TwoPhaseTransaction.prepare() <sqlalchemy.engine.TwoPhaseTransaction.prepare>` method on each database`s
@@ -138,7 +138,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         :class:`sqlalchemy.orm.sessionmaker`
         :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
     """
-    connection_string: "Union[str, None]" = field(default=None)
+    connection_string: "Optional[str]" = field(default=None)
     """Database connection string in one of the formats supported by SQLAlchemy.
 
     Notes:
@@ -151,12 +151,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     The configuration options are documented in the SQLAlchemy documentation.
     """
-    session_maker: "Union[Callable[[], SessionT], None]" = None
+    session_maker: "Optional[Callable[[], SessionT]]" = None
     """Callable that returns a session.
 
     If provided, the plugin will use this rather than instantiate a sessionmaker.
     """
-    engine_instance: "Union[EngineT, None]" = None
+    engine_instance: "Optional[EngineT]" = None
     """Optional engine to use.
 
     If set, the plugin will use the provided instance rather than instantiate an engine.
@@ -164,17 +164,28 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     create_all: bool = False
     """If true, all models are automatically created on engine creation."""
 
-    metadata: "Union[MetaData, None]" = None
+    metadata: "Optional[MetaData]" = None
     """Optional metadata to use.
 
       If set, the plugin will use the provided instance rather than the default metadata."""
+    bind_key: "Optional[str]" = None
+    """Bind key to register a metadata to a specific engine configuration."""
     enable_touch_updated_timestamp_listener: bool = True
     """Enable Created/Updated Timestamp event listener.
 
     This is a listener that will update ``created_at`` and ``updated_at`` columns on record modification.
     Disable if you plan to bring your own update mechanism for these columns"""
-    bind_key: "Union[str, None]" = None
-    """Bind key to register a metadata to a specific engine configuration."""
+    add_file_listeners: bool = True
+    """If true, attaches event listeners that automatically delete files from storage when a database record is updated (old file replaced) or deleted, after the transaction commits successfully.
+
+    Note: Automatic rollback cleanup of newly uploaded files is not handled by these listeners due to technical limitations.
+    """
+    file_listener_handle_rollback: bool = True
+    """Controls the desired behavior for file cleanup when a transaction rolls back.
+
+    If set to ``True`` alongside ``add_file_listeners=True``, it currently raises a ``NotImplementedError`` because automatically handling the rollback cleanup of *newly* uploaded files within listeners is complex and requires careful state management that is not yet implemented. Users should implement manual rollback cleanup in their application code (e.g., using try/except around session commits).
+
+    Defaults to ``False``."""
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
@@ -198,15 +209,30 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
             event.listen(Session, "before_flush", touch_updated_timestamp)
 
+        # --- Setup File Listeners --- > ADDED
+        if self.add_file_listeners:
+            from advanced_alchemy._listeners import setup_file_object_listeners
+            from advanced_alchemy.types.file_object import storages
+
+            # Raise if rollback handling is requested but not implemented
+            if self.file_listener_handle_rollback:
+                # TODO: Implement robust rollback handling for new files in listener if feasible
+                msg = (
+                    "Automatic rollback handling for newly uploaded files via listeners "
+                    "(file_listener_handle_rollback=True) is not yet implemented. "
+                    "Please handle rollback cleanup manually in your application code."
+                )
+                raise NotImplementedError(msg)
+
+            setup_file_object_listeners(storages)  # Pass the storage registry
+
     def __hash__(self) -> int:  # pragma: no cover
-        return hash(
-            (
-                self.__class__.__qualname__,
-                self.connection_string,
-                self.engine_config.__class__.__qualname__,
-                self.bind_key,
-            )
-        )
+        return hash((
+            self.__class__.__qualname__,
+            self.connection_string,
+            self.engine_config.__class__.__qualname__,
+            self.bind_key,
+        ))
 
     def __eq__(self, other: object) -> bool:
         return self.__hash__() == other.__hash__()

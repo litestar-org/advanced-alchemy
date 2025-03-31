@@ -2,7 +2,7 @@ from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
-from litestar.cli._utils import console
+from litestar.cli._utils import console  # pyright: ignore[reportPrivateImportUsage]
 from sqlalchemy import Engine, MetaData, Table
 from typing_extensions import TypeIs
 
