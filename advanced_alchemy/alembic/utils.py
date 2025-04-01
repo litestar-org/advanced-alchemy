@@ -20,7 +20,7 @@ async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str
         version_table_name: The name of the version table.
         metadata: The metadata object containing the tables to drop.
     """
-    from rich import get_console  # noqa: PLC0415
+    from rich import get_console
 
     console = get_console()
 
@@ -55,11 +55,11 @@ async def dump_tables(
     session: "Union[AbstractContextManager[Session], AbstractAsyncContextManager[AsyncSession]]",
     models: "list[type[DeclarativeBase]]",
 ) -> None:
-    from types import new_class  # noqa: PLC0415
+    from types import new_class
 
-    from rich import get_console  # noqa: PLC0415
+    from rich import get_console
 
-    from advanced_alchemy._serialization import encode_json  # noqa: PLC0415
+    from advanced_alchemy._serialization import encode_json
 
     console = get_console()
 
@@ -69,7 +69,7 @@ async def dump_tables(
         return isinstance(session, AbstractContextManager)
 
     def _dump_table_sync(session: "AbstractContextManager[Session]") -> None:
-        from advanced_alchemy.repository import SQLAlchemySyncRepository  # noqa: PLC0415
+        from advanced_alchemy.repository import SQLAlchemySyncRepository
 
         with session as _session:
             for model in models:
@@ -87,7 +87,7 @@ async def dump_tables(
                 json_path.write_text(encode_json([row.to_dict() for row in repo(session=_session).list()]))
 
     async def _dump_table_async(session: "AbstractAsyncContextManager[AsyncSession]") -> None:
-        from advanced_alchemy.repository import SQLAlchemyAsyncRepository  # noqa: PLC0415
+        from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
         async with session as _session:
             for model in models:
