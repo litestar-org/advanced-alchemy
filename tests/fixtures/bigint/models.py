@@ -1,7 +1,6 @@
 """Example domain objects for testing."""
 
 import datetime
-from typing import Optional
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
@@ -9,8 +8,7 @@ from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright:
 
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase, merge_table_arguments
 from advanced_alchemy.mixins import SlugKey
-from advanced_alchemy.types import EncryptedString, FileObject, MutableList, StoredObject
-from advanced_alchemy.types.encrypted_string import EncryptedText
+from advanced_alchemy.types import EncryptedString, EncryptedText, FileObject, FileObjectList, StoredObject
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -118,12 +116,12 @@ class BigIntFileDocument(BigIntBase):
     """The file document domain model."""
 
     title: Mapped[str] = mapped_column(String(length=100))
-    file: Mapped[FileObject] = mapped_column(
+    attachment: Mapped[FileObject] = mapped_column(
         StoredObject(backend="memory"),
         nullable=True,
     )
-    required_files: Mapped[MutableList[FileObject]] = mapped_column(
+    required_file: Mapped[FileObject] = mapped_column(StoredObject(backend="memory"), nullable=True)
+    required_files: Mapped[FileObjectList] = mapped_column(
         StoredObject(backend="memory", multiple=True),
         nullable=True,
     )
-    required_file: Mapped["Optional[FileObject]"] = mapped_column(StoredObject(backend="memory"), nullable=True)

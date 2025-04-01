@@ -114,6 +114,7 @@ async def async_session(
 # --- Test Cases ---
 
 
+@pytest.mark.xdist_group("file_object")
 async def test_save_retrieve_delete_content(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     backend = storage_registry.get_backend("local_test_store")
@@ -146,6 +147,7 @@ async def test_save_retrieve_delete_content(storage_registry: StorageRegistry) -
         await backend.get_content_async(file_path)
 
 
+@pytest.mark.xdist_group("file_object")
 async def test_sqlalchemy_single_file_persist(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test saving and loading a model with a single StoredObject."""
 
@@ -182,6 +184,7 @@ async def test_sqlalchemy_single_file_persist(async_session: AsyncSession, stora
     assert loaded_content == file_content
 
 
+@pytest.mark.xdist_group("file_object")
 async def test_sqlalchemy_multiple_files_persist(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -232,6 +235,7 @@ async def test_sqlalchemy_multiple_files_persist(
     assert await loaded_obj2.get_content_async() == img2_content
 
 
+@pytest.mark.xdist_group("file_object")
 async def test_update_file_object(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed."""
     backend = storage_registry.get_backend("local_test_store")
@@ -270,6 +274,7 @@ async def test_update_file_object(async_session: AsyncSession, storage_registry:
         await backend.get_content_async(old_path)
 
 
+@pytest.mark.xdist_group("file_object")
 async def test_listener_delete_on_update_clear(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is cleared and session committed."""
     backend = storage_registry.get_backend("local_test_store")
@@ -301,6 +306,7 @@ async def test_listener_delete_on_update_clear(async_session: AsyncSession, stor
         await backend.get_content_async(old_path)
 
 
+@pytest.mark.xdist_group("file_object")
 async def test_listener_delete_multiple_removed(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test listener deletes files removed from a multiple list."""
     backend = storage_registry.get_backend("local_test_store")
