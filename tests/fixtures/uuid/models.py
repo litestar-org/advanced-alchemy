@@ -18,6 +18,7 @@ from advanced_alchemy.base import (
 )
 from advanced_alchemy.mixins import SlugKey
 from advanced_alchemy.types import EncryptedString, EncryptedText, FileObject, FileObjectList, StoredObject
+from advanced_alchemy.types.file_object import storages
 
 
 class UUIDAuthor(UUIDAuditBase):
@@ -130,3 +131,7 @@ class UUIDFileDocument(UUIDv7Base):
         StoredObject(backend="memory", multiple=True),
         nullable=True,
     )
+
+
+if not storages.is_registered("memory"):
+    storages.register_backend("memory://", "memory")

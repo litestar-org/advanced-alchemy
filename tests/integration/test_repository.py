@@ -1187,8 +1187,8 @@ async def test_file_object_crud(
         filename=filename,
         to_filename=filename,
         content_type=content_type,
-        source_content=file_data,
         size=len(file_data),
+        content=file_data,
     )
     await initial_doc.required_file.save_async()
 
@@ -1210,9 +1210,9 @@ async def test_file_object_metadata(
         file_document_repo: The file document repository
         file_document_model: The file document model class
     """
+
     file_data = b"Test data"
     metadata = {"category": "test", "tags": ["sample"]}
-
     # Create a new document instance
     document = file_document_model(title="Test Document")
 
@@ -1225,8 +1225,9 @@ async def test_file_object_metadata(
         filename="test.txt",
         to_filename="test.txt",
         content_type="text/plain",
-        source_content=file_data,
+        content=file_data,
         size=len(file_data),
+        metadata=metadata,
     )
 
     # Update the document with the file metadata

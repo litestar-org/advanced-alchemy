@@ -222,7 +222,7 @@ class ResultConverter:
             schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
 
         Raises:
-            :class:`~advanced_alchemy.exceptions.AdvancedAlchemyError` if `schema_type` is not a valid Pydantic or Msgspec schema.
+            AdvancedAlchemyError: If `schema_type` is not a valid Pydantic or Msgspec schema and both libraries are not installed.
 
         Returns:
             :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`

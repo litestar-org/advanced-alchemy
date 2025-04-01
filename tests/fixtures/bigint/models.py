@@ -9,6 +9,7 @@ from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright:
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase, merge_table_arguments
 from advanced_alchemy.mixins import SlugKey
 from advanced_alchemy.types import EncryptedString, EncryptedText, FileObject, FileObjectList, StoredObject
+from advanced_alchemy.types.file_object import storages
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -125,3 +126,7 @@ class BigIntFileDocument(BigIntBase):
         StoredObject(backend="memory", multiple=True),
         nullable=True,
     )
+
+
+if not storages.is_registered("memory"):
+    storages.register_backend("memory://", "memory")

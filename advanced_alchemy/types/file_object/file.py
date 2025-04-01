@@ -73,7 +73,6 @@ class FileObject:
         metadata: Optional[dict[str, Any]] = None,
         source_path: "Optional[PathLike]" = None,
         content: "Optional[Union[DataLike, AsyncDataLike]]" = None,
-        **kwargs: Any,
     ) -> None:
         """Perform post-initialization validation and setup.
 
@@ -95,12 +94,34 @@ class FileObject:
         self.etag = etag
         self.version_id = version_id
         self.metadata = metadata or {}
-        self.extra = kwargs
         self._pending_source_path = Path(source_path) if source_path is not None else None
         self._pending_source_content = content
         if self._pending_source_content is not None and self._pending_source_path is not None:
             msg = "Cannot provide both 'source_content' and 'source_path' during initialization."
             raise ValueError(msg)
+
+    def __repr__(self) -> str:
+        """Return a string representation of the FileObject."""
+        return f"FileObject(filename={self.path}, backend={self.backend.key}, size={self.size}, content_type={self.content_type}, etag={self.etag}, last_modified={self.last_modified}, version_id={self.version_id})"
+
+    def __eq__(self, other: object) -> bool:
+        """Check equality based on filename and backend key.
+
+        Args:
+            other: The object to compare with.
+
+
+        Returns:
+            bool: True if the objects are equal, False otherwise.
+
+        """
+        if not isinstance(other, FileObject):
+            return False
+        return self.path == other.path and self.backend.key == other.backend.key
+
+    def __hash__(self) -> int:
+        """Return a hash based on filename and backend key."""
+        return hash((self.path, self.backend.key))
 
     @property
     def backend(self) -> "StorageBackend":
@@ -161,7 +182,6 @@ class FileObject:
         return {
             "filename": self.path,
             "content_type": self.content_type,
-            "backend": self.backend.key,
             "size": self.size,
             "protocol": self.protocol,
             "last_modified": self.last_modified,
@@ -169,7 +189,6 @@ class FileObject:
             "etag": self.etag,
             "version_id": self.version_id,
             "metadata": self.metadata,
-            "extra": self.extra,
         }
 
     def get_content(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:

@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_etag_equivalent, get_mtime_equivalent
@@ -22,7 +22,8 @@ if TYPE_CHECKING:
 try:
     from obstore import sign as obstore_sign
     from obstore import sign_async as obstore_sign_async
-    from obstore.store import ObjectStore
+    from obstore.store import ObjectStore, from_url
+
 except ImportError as e:
     raise MissingDependencyError(package="obstore") from e
 
@@ -69,7 +70,7 @@ class ObstoreBackend(StorageBackend):
             options: Optional backend-specific options
             kwargs: Additional keyword arguments
         """
-        self.fs = cast("ObjectStore", ObjectStore.from_url(fs)) if isinstance(fs, str) else fs  # type: ignore
+        self.fs = from_url(fs) if isinstance(fs, str) else fs
         self.protocol = schema_from_type(self.fs)
         self.key = key
         self.options = options or {}
