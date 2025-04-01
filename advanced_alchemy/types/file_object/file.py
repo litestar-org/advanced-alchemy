@@ -183,7 +183,6 @@ class FileObject:
             "filename": self.path,
             "content_type": self.content_type,
             "size": self.size,
-            "protocol": self.protocol,
             "last_modified": self.last_modified,
             "checksum": self.checksum,
             "etag": self.etag,
