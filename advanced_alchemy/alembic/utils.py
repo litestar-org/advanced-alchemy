@@ -2,9 +2,10 @@ from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
-from litestar.cli._utils import console
 from sqlalchemy import Engine, MetaData, Table
 from typing_extensions import TypeIs
+
+from advanced_alchemy.exceptions import MissingDependencyError
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -14,6 +15,24 @@ __all__ = ("drop_all", "dump_tables")
 
 
 async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str, metadata: MetaData) -> None:
+    """Drop all tables in the database.
+
+    Args:
+        engine: The database engine.
+        version_table_name: The name of the version table.
+        metadata: The metadata object containing the tables to drop.
+
+    Raises:
+        MissingDependencyError: If the `rich` package is not installed.
+    """
+    try:
+        from rich import get_console
+    except ImportError as e:  # pragma: no cover
+        msg = "rich"
+        raise MissingDependencyError(msg, install_package="cli") from e
+
+    console = get_console()
+
     def _is_sync(engine: "Union[Engine, AsyncEngine]") -> "TypeIs[Engine]":
         return isinstance(engine, Engine)
 
@@ -48,6 +67,14 @@ async def dump_tables(
     from types import new_class
 
     from advanced_alchemy._serialization import encode_json
+
+    try:
+        from rich import get_console
+    except ImportError as e:  # pragma: no cover
+        msg = "rich"
+        raise MissingDependencyError(msg, install_package="cli") from e
+
+    console = get_console()
 
     def _is_sync(
         session: "Union[AbstractAsyncContextManager[AsyncSession], AbstractContextManager[Session]]",
