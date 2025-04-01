@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Union
 from sqlalchemy import Engine, MetaData, Table
 from typing_extensions import TypeIs
 
+from advanced_alchemy.exceptions import MissingDependencyError
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import DeclarativeBase, Session
@@ -19,8 +21,15 @@ async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str
         engine: The database engine.
         version_table_name: The name of the version table.
         metadata: The metadata object containing the tables to drop.
+
+    Raises:
+        MissingDependencyError: If the `rich` package is not installed.
     """
-    from rich import get_console
+    try:
+        from rich import get_console
+    except ImportError as e:  # pragma: no cover
+        msg = "rich"
+        raise MissingDependencyError(msg, install_package="cli") from e
 
     console = get_console()
 
@@ -57,9 +66,13 @@ async def dump_tables(
 ) -> None:
     from types import new_class
 
-    from rich import get_console
-
     from advanced_alchemy._serialization import encode_json
+
+    try:
+        from rich import get_console
+    except ImportError as e:  # pragma: no cover
+        msg = "rich"
+        raise MissingDependencyError(msg, install_package="cli") from e
 
     console = get_console()
 
