@@ -1,7 +1,12 @@
 """Utility functions for file object types."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+from zlib import adler32
+
+if TYPE_CHECKING:
+    from advanced_alchemy.types.file_object.base import PathLike
+    from advanced_alchemy.types.file_object.file import FileObject
 
 
 def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
@@ -37,11 +42,13 @@ def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
     return None
 
 
-def get_etag_equivalent(info: dict[str, Any]) -> Optional[str]:
+def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modified_time: Optional[float] = None) -> str:
     """Return standardized etag from different implementations.
 
     Args:
+        file_object: Path to the file
         info: Dictionary containing file metadata
+        modified_time: Optional modified time for the file
 
     Returns:
         Standardized etag or None if not available
@@ -53,6 +60,24 @@ def get_etag_equivalent(info: dict[str, Any]) -> Optional[str]:
         "etag_key",
     )
     etag = next((info[key] for key in etag_keys if key in info), None)
-    if etag is None:
-        return None
-    return str(etag)
+    if etag is not None:
+        return str(etag)
+    if file_object.etag is not None:
+        return file_object.etag
+    return create_etag_for_file(file_object.path, modified_time, info.get("size", file_object.size))
+
+
+def create_etag_for_file(path: "PathLike", modified_time: Optional[float], file_size: int) -> str:
+    """Create an etag.
+
+    Notes:
+        - Function is derived from flask.
+
+    Returns:
+        An etag.
+    """
+    check = adler32(str(path).encode("utf-8")) & 0xFFFFFFFF
+    parts = [str(file_size), str(check)]
+    if modified_time:
+        parts.insert(0, str(modified_time))
+    return f'"{"-".join(parts)}"'

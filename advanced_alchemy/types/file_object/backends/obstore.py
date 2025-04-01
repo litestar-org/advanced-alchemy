@@ -1,12 +1,13 @@
 # ruff: noqa: PLR0904, PLC2701
 """Obstore-backed storage backend for file objects."""
 
+import datetime
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
 from advanced_alchemy.exceptions import MissingDependencyError
-from advanced_alchemy.types.file_object._utils import get_etag_equivalent, get_mtime_equivalent
+from advanced_alchemy.types.file_object._utils import get_mtime_equivalent, get_or_generate_etag
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
     DataLike,
@@ -120,26 +121,24 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
-
-        # Extract info, though obstore might ignore some
-        path_str = self._to_path(file_object.path)
-        # Note: obstore.put might not explicitly support content_type/metadata args
-        # Check obstore documentation if these are needed or handled differently
-        obj_info = self.fs.put(
-            path_str,
+        _ = self.fs.put(
+            file_object.path,
             data,
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
         )
+        info = self.fs.head(file_object.path)
+        file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
+        file_object.last_modified = (
+            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+        )
+        file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
+        # Merge backend metadata if available and different
+        backend_meta: dict[str, Any] = info.get("metadata", {})  # pyright: ignore
+        if backend_meta and backend_meta != file_object.metadata:
+            file_object.update_metadata(backend_meta)  # pyright: ignore
 
-        # Update the original FileObject with info returned by obstore
-        file_object.size = obj_info.get("size")
-        file_object.checksum = obj_info.get("checksum")
-        file_object.last_modified = get_mtime_equivalent(obj_info)  # pyright: ignore
-        file_object.etag = get_etag_equivalent(dict(obj_info))
-        file_object.version_id = obj_info.get("version")
-        file_object.update_metadata(dict(obj_info))
         return file_object
 
     async def save_object_async(
@@ -164,30 +163,23 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
-
-        # Extract info, though obstore might ignore some
-        path_str = self._to_path(file_object.path)
-        # Note: obstore.put_async might not explicitly support content_type/metadata args
-        # Check obstore documentation if these are needed or handled differently
-        obj_info = await self.fs.put_async(
-            path_str,
+        _ = await self.fs.put_async(
+            file_object.path,
             data,
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
         )
-
-        # Update the original FileObject with info returned by obstore
-        # Assuming obj_info is a dict-like structure or object with attributes
-        # Use .get() consistently for safer access
-        file_object.size = obj_info.get("size")
-        file_object.checksum = obj_info.get("checksum")
-        # Pass obj_info as dict to helper function
-        file_object.last_modified = get_mtime_equivalent(obj_info)  # pyright: ignore
-        file_object.etag = get_etag_equivalent(dict(obj_info))
-        file_object.version_id = obj_info.get("version")
-        # Merge metadata if returned by backend
-        file_object.update_metadata(dict(obj_info))
+        info = await self.fs.head_async(file_object.path)
+        file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
+        file_object.last_modified = (
+            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+        )
+        file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
+        # Merge backend metadata if available and different
+        backend_meta: dict[str, Any] = info.get("metadata", {})  # pyright: ignore
+        if backend_meta and backend_meta != file_object.metadata:
+            file_object.update_metadata(backend_meta)  # pyright: ignore
 
         return file_object
 

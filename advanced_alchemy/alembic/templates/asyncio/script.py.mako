@@ -1,4 +1,3 @@
-# type: ignore
 """${message}
 
 Revision ID: ${up_revision}
@@ -12,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from alembic import op
-from advanced_alchemy.types import EncryptedString, EncryptedText, GUID, ORA_JSONB, DateTimeUTC, ObjectStore
+from advanced_alchemy.types import EncryptedString, EncryptedText, GUID, ORA_JSONB, DateTimeUTC, StoredObject
 from sqlalchemy import Text  # noqa: F401
 ${imports if imports else ""}
 if TYPE_CHECKING:
@@ -25,7 +24,7 @@ sa.DateTimeUTC = DateTimeUTC
 sa.ORA_JSONB = ORA_JSONB
 sa.EncryptedString = EncryptedString
 sa.EncryptedText = EncryptedText
-as.ObjectStore = ObjectStore
+sa.StoredObject = StoredObject
 
 # revision identifiers, used by Alembic.
 revision = ${repr(up_revision)}
