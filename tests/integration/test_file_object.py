@@ -55,8 +55,10 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
     """
     from obstore.store import LocalStore, MemoryStore
 
-    storages.clear_backends()  # Ensure clean slate for tests
-    storages.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
+    if not storages.is_registered("memory"):
+        storages.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
+    if storages.is_registered("local_test_store"):
+        storages.unregister_backend("local_test_store")
     storages.register_backend(
         ObstoreBackend(
             fs=LocalStore(prefix=Path(tmp_path / "file_object_test_storage"), automatic_cleanup=False, mkdir=True),  # pyright: ignore
