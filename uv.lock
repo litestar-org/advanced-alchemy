@@ -3246,6 +3246,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/8c/e4/0355a09a43abba67f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cf/8d/d152a50bfbd9d6f4e3e193271e26ec2ccf0bb950f86775669b98d807d1d5/pytest_databases-0.12.0-py3-none-any.whl", hash = "sha256:2e5b920a4fa04667ddd4991b3be96f5afa886a1b550607e54315ac2e042ee211", size = 27177 },
 ]
+
 [package.optional-dependencies]
 minio = [
     { name = "minio" },
