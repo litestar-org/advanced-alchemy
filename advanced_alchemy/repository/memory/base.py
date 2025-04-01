@@ -229,7 +229,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         # include a default_factory in that case.
                         or "context" not in signature(default_callable).parameters
                     ):
-                        default_value = default.arg({})  # pyright: ignore[reportUnknownMemberType, reportCallIssue]
+                        default_value = default.arg({})  # pyright: ignore
                     else:
                         continue
                 else:

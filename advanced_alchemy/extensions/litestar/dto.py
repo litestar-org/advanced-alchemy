@@ -168,7 +168,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             msg = f"Unhandled property type: '{orm_descriptor.property}'"  # pyright: ignore[reportUnknownMemberType]
             raise NotImplementedError(msg)
 
-        default, default_factory = _detect_defaults(elem)
+        default, default_factory = _detect_defaults(elem)  # pyright: ignore
 
         try:
             if (field_definition := model_type_hints[key]).origin in {
@@ -184,7 +184,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         except KeyError:
             field_definition = parse_type_from_element(elem, orm_descriptor)  # pyright: ignore[reportUnknownArgumentType]
 
-        dto_field = elem.info.get(DTO_FIELD_META_KEY) if hasattr(elem, "info") else None  # pyright: ignore[reportArgumentMemberType]
+        dto_field = elem.info.get(DTO_FIELD_META_KEY) if hasattr(elem, "info") else None  # pyright: ignore
         if dto_field is None and isinstance(orm_descriptor, InstrumentedAttribute) and hasattr(orm_descriptor, "info"):  # pyright: ignore[reportUnknownArgumentType]
             dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportArgumentMemberType]
         if dto_field is None:

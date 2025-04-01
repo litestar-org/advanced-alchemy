@@ -1,7 +1,7 @@
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from litestar.cli._utils import LitestarGroup
+from litestar.cli._utils import LitestarGroup  # pyright: ignore
 
 from advanced_alchemy.cli import add_migration_commands
 

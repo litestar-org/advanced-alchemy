@@ -18,7 +18,7 @@ T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
 try:
-    from pydantic import BaseModel, FailFast, TypeAdapter  # pyright: ignore[reportGeneralTypeIssues]
+    from pydantic import BaseModel, FailFast, TypeAdapter  # pyright: ignore
 
     PYDANTIC_INSTALLED = True
 except ImportError:

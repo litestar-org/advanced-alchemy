@@ -3,6 +3,34 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.0.2
+    :date: 2025-04-01
+
+    .. change:: prevent forward resolution issues
+        :type: bugfix
+        :pr: 423
+
+        Removes some stringified representations to help with the forward resolution of `datetime` and `Collection`.
+
+    .. change:: correctly set `uniquify` from `new`
+        :type: bugfix
+        :pr: 424
+
+        Unquify is now correctly set when passed into the `new`/`init` methods.
+
+        Introduced tests for `sync_tools` utilities, including `maybe_async_`, `maybe_async_context`, `SoonValue`, `TaskGroup`, and others.
+
+        Improves coverage for async and sync function handling, context managers, and value management.
+
+
+
+    .. change:: remove accidental litestar import
+        :type: bugfix
+        :pr: 426
+
+        Remove an incorrect import of `console` from `litestar.cli._utils` and replace it with a correct import from `rich`. This change ensures proper functionality without unnecessary dependencies.
+
+
 .. changelog:: 1.0.1
     :date: 2025-03-19
 
