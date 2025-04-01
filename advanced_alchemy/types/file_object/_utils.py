@@ -35,3 +35,24 @@ def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
         except ValueError:
             pass
     return None
+
+
+def get_etag_equivalent(info: dict[str, Any]) -> Optional[str]:
+    """Return standardized etag from different implementations.
+
+    Args:
+        info: Dictionary containing file metadata
+
+    Returns:
+        Standardized etag or None if not available
+    """
+    # Check these keys in order of preference
+    etag_keys = (
+        "e_tag",
+        "etag",
+        "etag_key",
+    )
+    etag = next((info[key] for key in etag_keys if key in info), None)
+    if etag is None:
+        return None
+    return str(etag)

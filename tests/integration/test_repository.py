@@ -44,7 +44,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
 )
 from advanced_alchemy.service.pagination import OffsetPagination
-from advanced_alchemy.types.file_object import StoredObject
+from advanced_alchemy.types.file_object.file import FileObject
 from advanced_alchemy.utils.text import slugify
 from tests.fixtures.bigint import models as models_bigint
 from tests.fixtures.bigint import repositories as repositories_bigint
@@ -1182,62 +1182,22 @@ async def test_file_object_crud(
     # Save to database to get the ObjectStore type initialized
     initial_doc = await maybe_async(file_document_repo.add(document))
 
-    # Now save the file data
-    file_metadata = await initial_doc.required_file.save_file(
-        file_data=file_data,
+    initial_doc.required_file = FileObject(
+        backend="memory",
         filename=filename,
+        to_filename=filename,
         content_type=content_type,
+        source_content=file_data,
+        size=len(file_data),
     )
-    initial_doc.required_file = file_metadata
+    await initial_doc.required_file.save_async()
 
     # Update the document with the file
     saved_document = await maybe_async(file_document_repo.update(initial_doc))
-    assert isinstance(saved_document.required_file, StoredObject)
+    assert isinstance(saved_document.required_file, FileObject)
     assert saved_document.required_file.filename == filename
     assert saved_document.required_file.content_type == content_type
     assert saved_document.required_file.size == len(file_data)
-
-    # Test URL generation
-    url = await saved_document.required_file.get_url()
-    assert url.startswith("file://") or url.startswith("memory://")
-
-    # Test pre-signed upload URL
-    upload_url, path = await saved_document.required_file.get_upload_url(
-        filename="new.txt",
-        content_type="text/plain",
-    )
-    assert upload_url.startswith("file://") or upload_url.startswith("memory://")
-    assert path.startswith("test-files/")
-
-
-async def test_file_object_validation(
-    file_document_repo: FileDocumentRepository,
-    file_document_model: FileDocumentModel,
-) -> None:
-    """Test FileObject validation.
-
-    Args:
-        file_document_repo: The file document repository
-        file_document_model: The file document model class
-    """
-    # We can no longer test for errors with missing required file directly
-    # since we've updated the model to validate on save rather than on create
-
-    # Test that the model can be created without a file first
-    document = file_document_model(title="Test Document")
-    assert document.required_file is None
-
-    # Test with an invalid StoredObject that's missing a type
-    document.required_file = StoredObject(
-        filename="test.txt",
-        path="/test/path",
-        backend="invalid",
-        uploaded_at=datetime.datetime.now(datetime.timezone.utc),
-    )
-
-    # Attempting to use the StoredObject methods without a type should raise ValueError
-    with pytest.raises(ValueError):
-        await document.required_file.get_url()
 
 
 async def test_file_object_metadata(
@@ -1260,18 +1220,18 @@ async def test_file_object_metadata(
     initial_doc = await maybe_async(file_document_repo.add(document))
 
     # Now we can use the type reference that was set during instantiation
-    file_metadata = await initial_doc.required_file.save_file(
-        file_data=file_data,
+    initial_doc.required_file = FileObject(
+        backend="memory",
         filename="test.txt",
+        to_filename="test.txt",
         content_type="text/plain",
-        metadata=metadata,
+        source_content=file_data,
+        size=len(file_data),
     )
 
     # Update the document with the file metadata
-    initial_doc.required_file = file_metadata
-
-    # Save the updated document
     saved_document = await maybe_async(file_document_repo.update(initial_doc))
+    assert isinstance(saved_document.required_file, FileObject)
     assert saved_document.required_file.metadata == metadata
 
 

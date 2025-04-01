@@ -2,27 +2,19 @@
 """Generic unified storage protocol compatible with multiple backend implementations."""
 
 import mimetypes
-from collections.abc import AsyncIterable, AsyncIterator
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy.ext.mutable import MutableList
 from typing_extensions import TypeAlias
 
-from advanced_alchemy.types.file_object.base import (
-    AsyncDataLike,
-    DataLike,
-)
+from advanced_alchemy.types.file_object.base import AsyncDataLike, DataLike, StorageBackend
+from advanced_alchemy.types.file_object.registry import storages
 
 if TYPE_CHECKING:
-    from advanced_alchemy.types.file_object.base import (
-        PathLike,
-        StorageBackend,
-    )
+    from advanced_alchemy.types.file_object.base import PathLike
 
 
-@dataclass
 class FileObject:
     """Represents file metadata during processing using a dataclass structure.
 
@@ -50,26 +42,39 @@ class FileObject:
         source_path: Internal storage for source_path provided at init.
     """
 
-    filename: str
-    # Allow content_type to be initially None for guessing
-    content_type: Optional[str] = None
-    size: "Optional[int]" = None
-    target_filename: "Optional[str]" = None
-    protocol: "Optional[str]" = None
-    last_modified: "Optional[float]" = None
-    checksum: "Optional[str]" = None
-    etag: "Optional[str]" = None
-    version_id: "Optional[str]" = None
-    metadata: "dict[str, Any]" = field(default_factory=dict)
-    # Capture arbitrary kwargs, including potential 'content' or 'source_path'
-    extra: "dict[str, Any]" = field(default_factory=dict, compare=False, repr=False, hash=False)
-    backend: "Optional[StorageBackend]" = field(default=None, compare=False, repr=False, hash=False)
-    source_path: "Optional[PathLike]" = field(default=None, repr=False, compare=False, hash=False)
-    source_content: "Optional[Union[DataLike, AsyncDataLike]]" = field(
-        default=None, repr=False, compare=False, hash=False
+    __slots__ = (
+        "_content_type",
+        "_filename",
+        "_pending_source_content",
+        "_pending_source_path",
+        "_raw_backend",
+        "_resolved_backend",
+        "_to_filename",
+        "checksum",
+        "etag",
+        "extra",
+        "last_modified",
+        "metadata",
+        "size",
+        "version_id",
     )
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        backend: "Union[str, StorageBackend]",
+        filename: str,
+        to_filename: Optional[str] = None,
+        content_type: Optional[str] = None,
+        size: Optional[int] = None,
+        last_modified: Optional[float] = None,
+        checksum: Optional[str] = None,
+        etag: Optional[str] = None,
+        version_id: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        source_path: "Optional[PathLike]" = None,
+        content: "Optional[Union[DataLike, AsyncDataLike]]" = None,
+        **kwargs: Any,
+    ) -> None:
         """Perform post-initialization validation and setup.
 
         Handles default path, content type guessing, backend protocol inference,
@@ -79,48 +84,60 @@ class FileObject:
             ValueError: If filename is not provided, size is negative, backend/protocol mismatch,
                         or both 'content' and 'source_path' are provided.
         """
-        if not self.filename:
-            msg = "filename is required"
-            raise ValueError(msg)
-        if self.size is not None and self.size < 0:
-            msg = "size must be non-negative"
-            raise ValueError(msg)
-
-        # Default path to filename if not explicitly provided
-        if self.target_filename is None:
-            self.target_filename = self.filename
-
-        # Guess content_type if not provided
-        if self.content_type is None:
-            guessed_type, _ = mimetypes.guess_type(self.filename)
-            self.content_type = guessed_type or "application/octet-stream"
-
-        # Handle backend and protocol assignment/validation
-        if self.backend and self.protocol and self.backend.protocol != self.protocol:
-            msg = f"Provided protocol '{self.protocol}' does not match backend protocol '{self.backend.protocol}'"
-            raise ValueError(msg)
-        if self.backend and not self.protocol:
-            self.protocol = self.backend.protocol
-
-        if self.source_content is not None and self.source_path is not None:
+        self._filename = filename
+        self._to_filename = to_filename
+        self._content_type = content_type
+        self._raw_backend = backend
+        self.size = size
+        self._resolved_backend: Optional[StorageBackend] = backend if isinstance(backend, StorageBackend) else None
+        self.last_modified = last_modified
+        self.checksum = checksum
+        self.etag = etag
+        self.version_id = version_id
+        self.metadata = metadata or {}
+        self.extra = kwargs
+        self._pending_source_path = Path(source_path) if source_path is not None else None
+        self._pending_source_content = content
+        if self._pending_source_content is not None and self._pending_source_path is not None:
             msg = "Cannot provide both 'source_content' and 'source_path' during initialization."
             raise ValueError(msg)
 
-        if self.source_content is not None:
-            self.source_content = self.source_content
-        elif self.source_path is not None:
-            # Ensure source_path is a Path object for consistency
-            self.source_path = Path(self.source_path) if not isinstance(self.source_path, Path) else self.source_path
+    @property
+    def backend(self) -> "StorageBackend":
+        """Return the storage backend instance."""
+        if self._resolved_backend is None:
+            self._resolved_backend = (
+                storages.get_backend(self._raw_backend) if isinstance(self._raw_backend, str) else self._raw_backend
+            )
+        return self._resolved_backend
+
+    @property
+    def filename(self) -> str:
+        """Return the filename of the file."""
+        return self.path
+
+    @property
+    def content_type(self) -> str:
+        """Return the content type of the file."""
+        if self._content_type is None:
+            guessed_type, _ = mimetypes.guess_type(self._filename)
+            self._content_type = guessed_type or "application/octet-stream"
+        return self._content_type
+
+    @property
+    def protocol(self) -> str:
+        """Return the protocol of the file, defaulting to backend protocol if not set."""
+        return self.backend.protocol if self.backend else "file"
 
     @property
     def path(self) -> str:
-        """Return the path of the file, defaulting to target_filename if not set."""
-        return self.target_filename or self.filename
+        """Return the path of the file, defaulting to to_filename if not set."""
+        return self._to_filename or self._filename
 
     @property
     def has_pending_data(self) -> bool:
         """Check if the FileObject has pending content or a source path to save."""
-        return bool(self.source_content or self.source_path)
+        return bool(self._pending_source_content or self._pending_source_path)
 
     def update_metadata(self, metadata: "dict[str, Any]") -> None:
         """Update the file metadata.
@@ -141,24 +158,19 @@ class FileObject:
             dict[str, Any]: A dictionary representation of the file information.
         """
         # Use dataclasses.asdict and filter out the backend
-        data = asdict(
-            self,
-            dict_factory=lambda x: {
-                k: v
-                for (k, v) in x
-                if k
-                not in {
-                    "backend",
-                    "source_content",
-                    "source_content_path",
-                    "path",
-                }
-            },
-        )
-        # Ensure metadata and extra are included even if empty (asdict might skip if default_factory)
-        data.setdefault("metadata", {})
-        data.setdefault("extra", {})
-        return data
+        return {
+            "filename": self.path,
+            "content_type": self.content_type,
+            "backend": self.backend.key,
+            "size": self.size,
+            "protocol": self.protocol,
+            "last_modified": self.last_modified,
+            "checksum": self.checksum,
+            "etag": self.etag,
+            "version_id": self.version_id,
+            "metadata": self.metadata,
+            "extra": self.extra,
+        }
 
     def get_content(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Get the file content from the storage backend.
@@ -166,20 +178,10 @@ class FileObject:
         Args:
             options: Optional backend-specific options.
 
-        Raises:
-            RuntimeError: If no backend is configured or path is missing.
-
         Returns:
             bytes: The file content.
         """
-        if not self.backend:
-            msg = "No storage backend configured"
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            # This should not happen due to __post_init__, but check defensively
-            msg = "File path is not set"
-            raise RuntimeError(msg)
-        return self.backend.get_content(self.target_filename, options=options)
+        return self.backend.get_content(self.path, options=options)
 
     async def get_content_async(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Get the file content from the storage backend asynchronously.
@@ -187,19 +189,10 @@ class FileObject:
         Args:
             options: Optional backend-specific options.
 
-        Raises:
-            RuntimeError: If no backend is configured or path is missing.
-
         Returns:
             bytes: The file content.
         """
-        if not self.backend:
-            msg = "No storage backend configured"
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set"
-            raise RuntimeError(msg)
-        return await self.backend.get_content_async(self.target_filename, options=options)
+        return await self.backend.get_content_async(self.path, options=options)
 
     def sign(
         self,
@@ -213,19 +206,13 @@ class FileObject:
             expires_in: Optional expiration time in seconds.
             for_upload: Whether the URL is for upload.
 
+        Raises:
+            RuntimeError: If no signed URL is generated.
+
         Returns:
             str: The signed URL.
-
-        Raises:
-            RuntimeError: If no backend is configured or path is missing.
         """
-        if not self.backend:
-            msg = "No storage backend configured"
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set"
-            raise RuntimeError(msg)
-        result = self.backend.sign(self.target_filename, expires_in=expires_in, for_upload=for_upload)
+        result = self.backend.sign(self.path, expires_in=expires_in, for_upload=for_upload)
         if isinstance(result, list):
             if not result:
                 msg = "No signed URL generated"
@@ -249,15 +236,9 @@ class FileObject:
             str: The signed URL.
 
         Raises:
-            RuntimeError: If no backend is configured or path is missing.
+            RuntimeError: If no signed URL is generated.
         """
-        if not self.backend:
-            msg = "No storage backend configured"
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set"
-            raise RuntimeError(msg)
-        result = await self.backend.sign_async(self.target_filename, expires_in=expires_in, for_upload=for_upload)
+        result = await self.backend.sign_async(self.path, expires_in=expires_in, for_upload=for_upload)
         if isinstance(result, list):
             if not result:
                 msg = "No signed URL generated"
@@ -274,29 +255,16 @@ class FileObject:
         if not self.backend:
             msg = "No storage backend configured"
             raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set"
-            raise RuntimeError(msg)
-        self.backend.delete_object(self.target_filename)
+        self.backend.delete_object(self.path)
 
     async def delete_async(self) -> None:
-        """Delete the file from storage asynchronously.
-
-        Raises:
-            RuntimeError: If no backend is configured or path is missing.
-        """
-        if not self.backend:
-            msg = "No storage backend configured"
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set"
-            raise RuntimeError(msg)
-        await self.backend.delete_object_async(self.target_filename)
+        """Delete the file from storage asynchronously."""
+        await self.backend.delete_object_async(self.path)
 
     def save(
         self,
-        *,
         data: Optional[DataLike] = None,
+        *,
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
@@ -318,57 +286,38 @@ class FileObject:
             The updated FileObject instance returned by the backend.
 
         Raises:
-            RuntimeError: If no backend is configured or path is missing, or if no data
-                          source (argument or pending) is found.
             TypeError: If trying to save async data synchronously.
-            FileNotFoundError: If internal source_path is used and file not found.
         """
-        if not self.backend:
-            msg = "No storage backend configured for saving."
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set for saving."
-            raise RuntimeError(msg)
 
-        if data is None and self.source_content is not None:
-            data = self.source_content  # type: ignore[assignment]
-        elif data is None and self.source_path is not None:
-            source_path = Path(self.source_path)
-            if not source_path.is_file():
-                msg = f"Source path does not exist or is not a file: {source_path}"
-                raise FileNotFoundError(msg)
-            # Pass Path object itself, backend handles reading
-            data = source_path
+        if data is None and self._pending_source_content is not None:
+            data = self._pending_source_content  # type: ignore[assignment]
+        elif data is None and self._pending_source_path is not None:
+            data = self._pending_source_path
 
         if data is None:
             msg = "No data provided and no pending content/path found to save."
-            raise TypeError(msg)
-
-        # Check for incompatible async data types
-        if isinstance(data, (AsyncIterator, AsyncIterable)):
-            msg = "Cannot save async data with synchronous save method. Use save_async."
             raise TypeError(msg)
 
         # The backend's save method is expected to update the FileObject instance in-place
         # and return the updated instance.
         updated_self = self.backend.save_object(
             file_object=self,
-            data=data,  # Pass the determined data source
+            data=data,
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
         )
 
         # Clear pending attributes after successful save
-        self.source_content = None
-        self.source_path = None
+        self._pending_source_content = None
+        self._pending_source_path = None
 
         return updated_self
 
     async def save_async(
         self,
-        *,
         data: Optional[AsyncDataLike] = None,
+        *,
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
@@ -391,29 +340,13 @@ class FileObject:
             The updated FileObject instance returned by the backend.
 
         Raises:
-            RuntimeError: If no backend is configured or path is missing, or if no data
-                          source (argument or pending) is found.
-            FileNotFoundError: If internal source_path is used and file not found.
             TypeError: If trying to save sync data asynchronously.
         """
-        if not self.backend:
-            msg = "No storage backend configured for saving."
-            raise RuntimeError(msg)
-        if self.target_filename is None:
-            msg = "File path is not set for saving."
-            raise RuntimeError(msg)
 
-        if data is None and self.source_content is not None:
-            data = self.source_content  # type: ignore[assignment]
-        elif data is None and self.source_path is not None:
-            source_path = Path(self.source_path)
-            if not source_path.is_file():
-                msg = f"Source path does not exist or is not a file: {source_path}"
-                raise FileNotFoundError(msg)
-            # Pass Path object itself, backend handles reading (async if possible)
-            # Note: Reading logic specifically for validation/processing is in the tracker.
-            # Here, we just pass the source to the backend.
-            data = source_path
+        if data is None and self._pending_source_content is not None:
+            data = self._pending_source_content
+        elif data is None and self._pending_source_path is not None:
+            data = self._pending_source_path
 
         if data is None:
             msg = "No data provided and no pending content/path found to save."
@@ -429,8 +362,8 @@ class FileObject:
         )
 
         # Clear pending attributes after successful save
-        self.source_content = None
-        self.source_path = None
+        self._pending_source_content = None
+        self._pending_source_path = None
 
         return updated_self
 

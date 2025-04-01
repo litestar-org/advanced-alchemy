@@ -199,7 +199,7 @@ class CommonTableAttributes(BasicAttributes):
     else:
 
         @declared_attr.directive
-        def __tablename__(cls) -> str:  # noqa: PLW3201
+        def __tablename__(cls) -> str:
             """Infer table name from class name.
 
             Returns:
@@ -238,15 +238,17 @@ def create_registry(
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, IPvAnyAddress, IPvAnyInterface, IPvAnyNetwork, Json
 
-        type_annotation_map.update({
-            EmailStr: String,
-            AnyUrl: String,
-            AnyHttpUrl: String,
-            Json: JsonB,
-            IPvAnyAddress: String,
-            IPvAnyInterface: String,
-            IPvAnyNetwork: String,
-        })
+        type_annotation_map.update(
+            {
+                EmailStr: String,
+                AnyUrl: String,
+                AnyHttpUrl: String,
+                Json: JsonB,
+                IPvAnyAddress: String,
+                IPvAnyInterface: String,
+                IPvAnyNetwork: String,
+            }
+        )
     with contextlib.suppress(ImportError):
         from msgspec import Struct
 

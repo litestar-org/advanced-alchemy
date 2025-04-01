@@ -10,8 +10,6 @@ from typing import IO, TYPE_CHECKING, Any, Optional, Union, cast
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_mtime_equivalent
 from advanced_alchemy.types.file_object.base import (
-    AsyncDataLike,
-    DataLike,
     PathLike,
     StorageBackend,
 )
@@ -97,10 +95,10 @@ class FSSpecBackend(StorageBackend):
         async with fs.open(path_str, mode="rb", **options) as f:  # pyright: ignore
             return await f.read()  # type: ignore[no-any-return]
 
-    def save_object(  # noqa: C901
+    def save_object(
         self,
         file_object: FileObject,
-        data: DataLike,
+        data: Union[bytes, IO[bytes], Path, Iterable[bytes]],
         *,
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
@@ -118,19 +116,14 @@ class FSSpecBackend(StorageBackend):
         Raises:
             TypeError: If the data type is unsupported.
             FileNotFoundError: If data is a Path and does not exist.
-            RuntimeError: If file_object.path is None.
 
         Returns:
             FileObject object representing the saved file, potentially updated.
         """
-        if file_object.target_filename is None:
-            msg = "FileObject.path cannot be None for saving."
-            raise RuntimeError(msg)
 
-        path_str = self._to_path(file_object.target_filename)
         fs = cast("AbstractFileSystem", self.fs)
 
-        with fs.open(path_str, "wb") as f:  # pyright: ignore
+        with fs.open(file_object.path, "wb") as f:  # pyright: ignore
             # Use AbstractBufferedFile for the opened file handle type hint
             f_handle = cast("AbstractBufferedFile", f)
             if isinstance(data, bytes):
@@ -165,7 +158,7 @@ class FSSpecBackend(StorageBackend):
 
         # Try to get info after writing
         try:
-            info = fs.info(path_str)  # pyright: ignore
+            info = fs.info(file_object.path)  # pyright: ignore
             if not isinstance(info, dict):
                 info: dict[str, Any] = {"size": 0, "mtime": None, "etag": None, "metadata": {}}  # type: ignore[no-redef]
             file_object.size = cast("int", info.get("size", size))  # pyright: ignore
@@ -180,16 +173,12 @@ class FSSpecBackend(StorageBackend):
             # Backend couldn't provide info, rely on calculated/provided data
             file_object.size = size
 
-        # Ensure backend and protocol are set
-        file_object.backend = self
-        file_object.protocol = self.protocol
-
         return file_object
 
     async def save_object_async(  # noqa: C901, PLR0915
         self,
         file_object: FileObject,
-        data: AsyncDataLike,
+        data: Union[bytes, IO[bytes], Path, Iterable[bytes], AsyncIterable[bytes]],
         *,
         use_multipart: Optional[bool] = None,
         chunk_size: int = 5 * 1024 * 1024,
@@ -207,29 +196,22 @@ class FSSpecBackend(StorageBackend):
         Raises:
             TypeError: If the filesystem is not async or data type is not supported.
             FileNotFoundError: If data is a Path and does not exist.
-            RuntimeError: If file_object.path is None.
 
         Returns:
             FileObject object representing the saved file, potentially updated.
         """
-        if file_object.target_filename is None:
-            msg = "FileObject.path cannot be None for saving."
-            raise RuntimeError(msg)
 
         if not self.is_async:
             # Fallback for sync filesystems. Handle async data carefully.
             if isinstance(data, (AsyncIterator, AsyncIterable)) and not isinstance(data, (bytes, str)):
                 # Read async stream into memory for sync backend (potential memory issue)
                 all_data = b"".join([chunk async for chunk in data])
-                # Pass file_object directly now
                 return await async_(self.save_object)(file_object=file_object, data=all_data, chunk_size=chunk_size)
-            # If data is sync-compatible
-            # Pass file_object directly now
             return await async_(self.save_object)(file_object=file_object, data=data, chunk_size=chunk_size)  # type: ignore
 
         fs = cast("AsyncFileSystem", self.fs)
-        path_str = self._to_path(file_object.target_filename)
-        size: Optional[int] = 0  # Initialize size, might remain None if unknown
+        path_str = self._to_path(file_object.path)
+        size: Optional[int] = None
 
         # Let type inference work for f, add ignore for context manager protocol errors
         async with fs.open(path_str, "wb") as f:  # pyright: ignore
@@ -245,7 +227,7 @@ class FSSpecBackend(StorageBackend):
                 size = 0
                 for chunk in data:
                     await f.write(chunk)  # pyright: ignore
-                    size += len(chunk)  # type: ignore
+                    size += len(chunk)
             elif isinstance(data, IO):  # Sync IO
                 size = 0
                 while True:
@@ -284,30 +266,19 @@ class FSSpecBackend(StorageBackend):
         file_object.etag = None
         original_metadata = file_object.metadata  # Keep original metadata unless backend provides updates
 
-        # Try to get info from the backend after writing
-        try:
-            info = await fs.info(path_str)  # pyright: ignore
-            if isinstance(info, dict):
-                # Update file_object with info from the backend if available and it's a dict
-                size = cast("int", info.get("size", size))  # pyright: ignore
-                file_object.size = size or 0
-                file_object.last_modified = get_mtime_equivalent(info)  # pyright: ignore
-                file_object.etag = info.get("etag")  # pyright: ignore
-                # Merge backend metadata if available and different from original
-                backend_meta = info.get("metadata", {})  # pyright: ignore
-                if backend_meta and backend_meta != original_metadata:
-                    # Create a new metadata dict starting with original, then update with backend
-                    updated_metadata = original_metadata.copy() if original_metadata else {}
-                    updated_metadata.update(backend_meta)  # pyright: ignore
-                    file_object.metadata = updated_metadata
-
-        except (FileNotFoundError, NotImplementedError, Exception):  # noqa: S110
-            # If info fails or isn't a dict, we rely on defaults/calculated values set above
-            pass
-
-        # Ensure backend and protocol are set regardless of info success
-        file_object.backend = self
-        file_object.protocol = self.protocol
+        info = await fs.info(path_str)  # pyright: ignore
+        if isinstance(info, dict):
+            # Update file_object with info from the backend if available and it's a dict
+            file_object.size = cast("int", info.get("size", size))  # pyright: ignore
+            file_object.last_modified = get_mtime_equivalent(info)  # pyright: ignore
+            file_object.etag = info.get("etag")  # pyright: ignore
+            # Merge backend metadata if available and different from original
+            backend_meta = info.get("metadata", {})  # pyright: ignore
+            if backend_meta and backend_meta != original_metadata:
+                # Create a new metadata dict starting with original, then update with backend
+                updated_metadata = original_metadata.copy() if original_metadata else {}
+                updated_metadata.update(backend_meta)  # pyright: ignore
+                file_object.metadata = updated_metadata
 
         return file_object
 

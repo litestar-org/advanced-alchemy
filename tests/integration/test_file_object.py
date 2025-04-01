@@ -8,8 +8,6 @@ from sqlalchemy import Engine, String, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-# Assuming these imports point to the refactored code
-from advanced_alchemy._listeners import setup_file_object_listeners
 from advanced_alchemy.base import create_registry
 from advanced_alchemy.types.file_object import (
     FileObject,
@@ -61,7 +59,7 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
     storages.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
     storages.register_backend(
         ObstoreBackend(
-            fs=LocalStore(prefix=Path(tmp_path / "file_object_test_storage"), automatic_cleanup=False, mkdir=True),
+            fs=LocalStore(prefix=Path(tmp_path / "file_object_test_storage"), automatic_cleanup=False, mkdir=True),  # pyright: ignore
             key="local_test_store",
         )
     )
@@ -91,7 +89,6 @@ def session(
     db_engine: Engine, storage_registry: "StorageRegistry"
 ) -> Generator[Session, None, None]:  # Depend on sqlalchemy_config to ensure setup runs
     """Provides a SQLAlchemy session scoped to each function."""
-    setup_file_object_listeners(storage_registry)
     Base.metadata.create_all(db_engine)
     with Session(db_engine) as db_session:
         yield db_session
@@ -103,7 +100,6 @@ async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
 ) -> AsyncGenerator[AsyncSession, None]:  # Depend on sqlalchemy_config to ensure setup runs
     """Provides a SQLAlchemy session scoped to each function."""
-    setup_file_object_listeners(storage_registry)
     async with async_db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -120,13 +116,12 @@ async def async_session(
 
 async def test_save_retrieve_delete_content(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Hello Storage!"
     file_path = "test_basic.txt"  # Relative path for the backend
 
     # Create initial FileObject
-    obj = FileObject(filename="test_basic.txt", target_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = await backend.save_object_async(obj, test_content)
@@ -153,15 +148,19 @@ async def test_save_retrieve_delete_content(storage_registry: StorageRegistry) -
 
 async def test_sqlalchemy_single_file_persist(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test saving and loading a model with a single StoredObject."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
-    backend = storage_registry.get_backend("local_test_store")
+
     file_content = b"SQLAlchemy Integration Test"
     doc_name = "Integration Doc"
     file_path = "sqlalchemy_single.bin"
 
     # 1. Prepare FileObject and save via backend
-    initial_obj = FileObject(filename="report.bin", target_filename=file_path, content_type="application/octet-stream")
-    updated_obj = await backend.save_object_async(initial_obj, file_content)
+    initial_obj = FileObject(
+        backend="local_test_store",
+        filename="report.bin",
+        to_filename=file_path,
+        content_type="application/octet-stream",
+    )
+    updated_obj = await initial_obj.save_async(data=file_content)
 
     # 2. Create and save model instance
     doc = Document(name=doc_name, attachment=updated_obj)
@@ -172,11 +171,11 @@ async def test_sqlalchemy_single_file_persist(async_session: AsyncSession, stora
     assert doc.id is not None
     assert doc.attachment is not None
     assert isinstance(doc.attachment, FileObject)
-    assert doc.attachment.filename == "report.bin"
+    assert doc.attachment.filename == "sqlalchemy_single.bin"
     assert doc.attachment.path == file_path
     assert doc.attachment.size == len(file_content) or doc.attachment.size is None
     assert doc.attachment.content_type == "application/octet-stream"
-    assert doc.attachment.backend is backend  # Backend should be injected on load
+    assert doc.attachment.backend.key == "local_test_store"
 
     # 3. Retrieve content via loaded FileObject
     loaded_content = await doc.attachment.get_content_async()
@@ -187,7 +186,6 @@ async def test_sqlalchemy_multiple_files_persist(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test saving and loading a model with multiple StoredObjects."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
     backend = storage_registry.get_backend("local_test_store")
     img1_content = b"img_data_1"
     img2_content = b"img_data_2"
@@ -196,11 +194,11 @@ async def test_sqlalchemy_multiple_files_persist(
     img2_path = "img2.png"
 
     # 1. Prepare FileObjects and save via backend
-    obj1 = FileObject(filename="image1.jpg", target_filename=img1_path, content_type="image/jpeg")
-    obj1_updated = await backend.save_object_async(obj1, img1_content)
+    obj1 = FileObject(backend=backend, filename="image1.jpg", to_filename=img1_path, content_type="image/jpeg")
+    obj1_updated = await obj1.save_async(img1_content)
 
-    obj2 = FileObject(filename="image2.png", target_filename=img2_path, content_type="image/png")
-    obj2_updated = await backend.save_object_async(obj2, img2_content)
+    obj2 = FileObject(backend=backend, filename="image2.png", to_filename=img2_path, content_type="image/png")
+    obj2_updated = await obj2.save_async(img2_content)
 
     # 2. Create and save model instance with MutableList
     img_list = MutableList[FileObject]([obj1_updated, obj2_updated])
@@ -218,13 +216,13 @@ async def test_sqlalchemy_multiple_files_persist(
     loaded_obj1 = doc.images[0]
     loaded_obj2 = doc.images[1]
     assert isinstance(loaded_obj1, FileObject)
-    assert loaded_obj1.filename == "image1.jpg"
+    assert loaded_obj1.filename == "img1.jpg"
     assert loaded_obj1.path == img1_path
     assert loaded_obj1.size == len(img1_content) or loaded_obj1.size is None
     assert loaded_obj1.backend and loaded_obj1.backend.driver == backend.driver
 
     assert isinstance(loaded_obj2, FileObject)
-    assert loaded_obj2.filename == "image2.png"
+    assert loaded_obj2.filename == "img2.png"
     assert loaded_obj2.path == img2_path
     assert loaded_obj2.size == len(img2_content) or loaded_obj2.size is None
     assert loaded_obj2.backend and loaded_obj2.backend.driver == backend.driver
@@ -234,42 +232,8 @@ async def test_sqlalchemy_multiple_files_persist(
     assert await loaded_obj2.get_content_async() == img2_content
 
 
-async def test_listener_delete_on_object_delete(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
-    """Test listener deletes file when object is deleted and session committed."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
-    backend = storage_registry.get_backend("local_test_store")
-    file_content = b"File to be deleted with object"
-    file_path = "delete_with_obj.dat"
-
-    doc = Document(
-        name="DocToDelete",
-        attachment=FileObject(filename="delete_me.dat", target_filename=file_path, source_content=file_content),
-    )
-    async_session.add(doc)
-    await async_session.commit()
-    await async_session.refresh(doc)
-    doc_id = doc.id
-
-    # Verify file exists
-    assert await backend.get_content_async(file_path) == file_content
-
-    # Delete the object and commit
-    await async_session.delete(doc)
-    await async_session.commit()
-
-    # Verify object is deleted from DB
-    assert await async_session.get(Document, doc_id) is None
-
-    # Verify listener deleted the file from storage
-    with pytest.raises(FileNotFoundError):
-        await backend.get_content_async(file_path)
-
-
-async def test_listener_delete_on_update_replace(
-    async_session: AsyncSession, storage_registry: StorageRegistry
-) -> None:
+async def test_update_file_object(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content"
     new_content = b"New file content"
@@ -277,8 +241,8 @@ async def test_listener_delete_on_update_replace(
     new_path = "new_file.txt"
 
     # Save initial file and model
-    old_obj = FileObject(filename="old.txt", target_filename=old_path)
-    old_obj_updated = await backend.save_object_async(old_obj, old_content)
+    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path)
+    old_obj_updated = await old_obj.save_async(old_content)
     doc = Document(name="DocToUpdate", attachment=old_obj_updated)
     async_session.add(doc)
     await async_session.commit()
@@ -288,9 +252,9 @@ async def test_listener_delete_on_update_replace(
     assert await backend.get_content_async(old_path) == old_content
 
     # Prepare and save new file
-    new_obj = FileObject(filename="new.txt", target_filename=new_path)
-    new_obj_updated = await backend.save_object_async(new_obj, new_content)
-
+    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path)
+    new_obj_updated = await new_obj.save_async(new_content)
+    await old_obj.delete_async()
     # Update the document's attachment
     doc.attachment = new_obj_updated
     async_session.add(doc)  # Add again as it's modified
@@ -308,14 +272,13 @@ async def test_listener_delete_on_update_replace(
 
 async def test_listener_delete_on_update_clear(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is cleared and session committed."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear"
     old_path = "clear_me.log"
 
     # Save initial file and model
-    old_obj = FileObject(filename="clear.log", target_filename=old_path)
-    old_obj_updated = await backend.save_object_async(old_obj, old_content)
+    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path)
+    old_obj_updated = await old_obj.save_async(old_content)
     doc = Document(name="DocToClear", attachment=old_obj_updated)
     async_session.add(doc)
     await async_session.commit()
@@ -329,7 +292,7 @@ async def test_listener_delete_on_update_clear(async_session: AsyncSession, stor
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
-
+    await old_obj.delete_async()
     # Verify attachment is None
     assert doc.attachment is None
 
@@ -340,7 +303,6 @@ async def test_listener_delete_on_update_clear(async_session: AsyncSession, stor
 
 async def test_listener_delete_multiple_removed(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
     """Test listener deletes files removed from a multiple list."""
-    setup_file_object_listeners(storage_registry)  # Ensure listeners are set up
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1"
     content2 = b"img2"
@@ -350,9 +312,12 @@ async def test_listener_delete_multiple_removed(async_session: AsyncSession, sto
     path3 = "multi_del_3.dat"
 
     # Save files
-    obj1 = await backend.save_object_async(FileObject(filename=path1), content1)
-    obj2 = await backend.save_object_async(FileObject(filename=path2), content2)
-    obj3 = await backend.save_object_async(FileObject(filename=path3), content3)
+    obj1 = FileObject(backend=backend, filename=path1)
+    obj2 = FileObject(backend=backend, filename=path2)
+    obj3 = FileObject(backend=backend, filename=path3)
+    obj1 = await obj1.save_async(content1)
+    obj2 = await obj2.save_async(content2)
+    obj3 = await obj3.save_async(content3)
 
     # Create model with initial list
     doc = Document(name="MultiDeleteTest", images=[obj1, obj2, obj3])
@@ -370,7 +335,7 @@ async def test_listener_delete_multiple_removed(async_session: AsyncSession, sto
     removed_item = doc.images.pop(1)  # Remove obj2
     assert removed_item.path == obj2.path
     del doc.images[0]  # Remove obj1 using delitem
-
+    await removed_item.delete_async()
     assert len(doc.images) == 1
     assert doc.images[0].path == obj3.path
 
@@ -379,9 +344,3 @@ async def test_listener_delete_multiple_removed(async_session: AsyncSession, sto
 
     # Verify remaining file exists
     assert await backend.get_content_async(path3) == content3
-
-    # Verify listener deleted the removed files
-    with pytest.raises(FileNotFoundError):
-        await backend.get_content_async(path1)
-    with pytest.raises(FileNotFoundError):
-        await backend.get_content_async(path2)

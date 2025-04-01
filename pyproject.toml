@@ -360,6 +360,7 @@ classmethod-decorators = [
   "TC",
   "TRY",
   "SLF001",
+  "DOC",
 
 ]
 

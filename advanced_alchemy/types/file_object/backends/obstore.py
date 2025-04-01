@@ -2,19 +2,22 @@
 """Obstore-backed storage backend for file objects."""
 
 import os
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
 from advanced_alchemy.exceptions import MissingDependencyError
-from advanced_alchemy.types.file_object._utils import get_mtime_equivalent
+from advanced_alchemy.types.file_object._utils import get_etag_equivalent, get_mtime_equivalent
 from advanced_alchemy.types.file_object.base import (
     AsyncDataLike,
     DataLike,
     PathLike,
     StorageBackend,
 )
-from advanced_alchemy.types.file_object.file import FileObject
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from advanced_alchemy.types.file_object.file import FileObject
 
 try:
     from obstore import sign as obstore_sign
@@ -56,7 +59,7 @@ class ObstoreBackend(StorageBackend):
     driver = "obstore"
 
     def __init__(
-        self, fs: Union[ObjectStore, str], key: str, *, options: Optional[dict[str, Any]] = None, **kwargs: Any
+        self, fs: "Union[ObjectStore, str]", key: str, *, options: "Optional[dict[str, Any]]" = None, **kwargs: "Any"
     ) -> None:
         """Initialize ObstoreBackend.
 
@@ -72,7 +75,7 @@ class ObstoreBackend(StorageBackend):
         self.options = options or {}
         self.kwargs = kwargs
 
-    def get_content(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
+    def get_content(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Return the bytes stored at the specified location.
 
         Args:
@@ -83,7 +86,7 @@ class ObstoreBackend(StorageBackend):
         obj = self.fs.get(self._to_path(path), **options)
         return obj.bytes().to_bytes()  # type: ignore[no-any-return]
 
-    async def get_content_async(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
+    async def get_content_async(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Return the bytes stored at the specified location asynchronously.
 
         Args:
@@ -96,13 +99,13 @@ class ObstoreBackend(StorageBackend):
 
     def save_object(
         self,
-        file_object: FileObject,
-        data: DataLike,
+        file_object: "FileObject",
+        data: "DataLike",
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: "Optional[bool]" = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
-    ) -> FileObject:
+    ) -> "FileObject":
         """Save data to the specified path using info from FileObject.
 
         Args:
@@ -115,16 +118,10 @@ class ObstoreBackend(StorageBackend):
         Returns:
             A FileObject object representing the saved file, potentially updated.
 
-        Raises:
-            RuntimeError: If file_object.path is None.
         """
-        if file_object.target_filename is None:
-            msg = "FileObject.path cannot be None for saving."
-            raise RuntimeError(msg)
 
         # Extract info, though obstore might ignore some
-        path_str = self._to_path(file_object.target_filename)
-        content_type = file_object.content_type
+        path_str = self._to_path(file_object.path)
         # Note: obstore.put might not explicitly support content_type/metadata args
         # Check obstore documentation if these are needed or handled differently
         obj_info = self.fs.put(
@@ -138,31 +135,21 @@ class ObstoreBackend(StorageBackend):
         # Update the original FileObject with info returned by obstore
         file_object.size = obj_info.get("size")
         file_object.checksum = obj_info.get("checksum")
-        # Use obstore's content_type if returned, otherwise keep original
-        file_object.content_type = obj_info.get("content_type", content_type)
         file_object.last_modified = get_mtime_equivalent(obj_info)  # pyright: ignore
-        file_object.etag = obj_info.get("etag")
+        file_object.etag = get_etag_equivalent(dict(obj_info))
         file_object.version_id = obj_info.get("version")
-        # Merge metadata if returned by backend
-        backend_meta = obj_info.get("metadata")
-        if backend_meta:
-            file_object.update_metadata(backend_meta)
-
-        # Ensure backend and protocol are set
-        file_object.backend = self
-        file_object.protocol = self.protocol
-
+        file_object.update_metadata(dict(obj_info))
         return file_object
 
     async def save_object_async(
         self,
-        file_object: FileObject,
-        data: AsyncDataLike,
+        file_object: "FileObject",
+        data: "AsyncDataLike",
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: "Optional[bool]" = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
-    ) -> FileObject:
+    ) -> "FileObject":
         """Save data to the specified path asynchronously using info from FileObject.
 
         Args:
@@ -175,16 +162,10 @@ class ObstoreBackend(StorageBackend):
         Returns:
             A FileObject object representing the saved file, potentially updated.
 
-        Raises:
-            RuntimeError: If file_object.path is None.
         """
-        if file_object.target_filename is None:
-            msg = "FileObject.path cannot be None for saving."
-            raise RuntimeError(msg)
 
         # Extract info, though obstore might ignore some
-        path_str = self._to_path(file_object.target_filename)
-        content_type = file_object.content_type
+        path_str = self._to_path(file_object.path)
         # Note: obstore.put_async might not explicitly support content_type/metadata args
         # Check obstore documentation if these are needed or handled differently
         obj_info = await self.fs.put_async(
@@ -200,24 +181,16 @@ class ObstoreBackend(StorageBackend):
         # Use .get() consistently for safer access
         file_object.size = obj_info.get("size")
         file_object.checksum = obj_info.get("checksum")
-        # Use obstore's content_type if returned, otherwise keep original
-        file_object.content_type = obj_info.get("content_type", content_type)
         # Pass obj_info as dict to helper function
         file_object.last_modified = get_mtime_equivalent(obj_info)  # pyright: ignore
-        file_object.etag = obj_info.get("e_tag")
+        file_object.etag = get_etag_equivalent(dict(obj_info))
         file_object.version_id = obj_info.get("version")
         # Merge metadata if returned by backend
-        backend_meta = obj_info.get("metadata")
-        if backend_meta:
-            file_object.update_metadata(backend_meta)
-
-        # Ensure backend and protocol are set
-        file_object.backend = self
-        file_object.protocol = self.protocol
+        file_object.update_metadata(dict(obj_info))
 
         return file_object
 
-    def delete_object(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    def delete_object(self, paths: "Union[PathLike, Sequence[PathLike]]") -> None:
         """Delete the specified paths.
 
         Args:
@@ -230,7 +203,7 @@ class ObstoreBackend(StorageBackend):
 
         self.fs.delete(path_list)
 
-    async def delete_object_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_object_async(self, paths: "Union[PathLike, Sequence[PathLike]]") -> None:
         """Delete the specified paths asynchronously.
 
         Args:
@@ -245,11 +218,11 @@ class ObstoreBackend(StorageBackend):
 
     def sign(
         self,
-        paths: Union[PathLike, Sequence[PathLike]],
+        paths: "Union[PathLike, Sequence[PathLike]]",
         *,
-        expires_in: Optional[int] = None,
+        expires_in: "Optional[int]" = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
+    ) -> "Union[str, list[str]]":
         """Create a signed URL for accessing or uploading the file.
 
         Args:
@@ -271,11 +244,11 @@ class ObstoreBackend(StorageBackend):
 
     async def sign_async(
         self,
-        paths: Union[PathLike, Sequence[PathLike]],
+        paths: "Union[PathLike, Sequence[PathLike]]",
         *,
-        expires_in: Optional[int] = None,
+        expires_in: "Optional[int]" = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
+    ) -> "Union[str, list[str]]":
         """Sign a URL for a given path asynchronously.
 
         Args:
