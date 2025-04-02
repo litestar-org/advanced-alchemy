@@ -32,18 +32,17 @@ class StorageBackend(ABC):
     key: str
     """The key of the backend instance."""
 
-    def __init__(self, fs: Any, key: str, *, options: Optional[dict[str, Any]] = None, **kwargs: Any) -> None:
+    def __init__(self, key: str, fs: Any, **kwargs: Any) -> None:
         """Initialize the storage backend.
 
         Args:
-            fs: The filesystem or storage client
             key: The key of the backend instance
-            options: Optional backend-specific options
+            fs: The filesystem or storage client
             **kwargs: Additional keyword arguments
         """
         self.fs = fs
         self.key = key
-        self.options = options or {}
+        self.options = kwargs
 
     @staticmethod
     def _to_path(path: "PathLike") -> str:

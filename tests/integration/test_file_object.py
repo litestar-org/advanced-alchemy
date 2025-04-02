@@ -4,16 +4,20 @@ from pathlib import Path
 from typing import Optional
 
 import pytest
+from minio import Minio
+from pytest_databases.docker.minio import MinioService
 from sqlalchemy import Engine, String, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy.base import create_registry
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.file_object import (
     FileObject,
     FileObjectList,
     StoredObject,
 )
+from advanced_alchemy.types.file_object.backends.fsspec import FSSpecBackend
 from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.registry import StorageRegistry, storages
 from advanced_alchemy.types.mutables import MutableList
@@ -59,9 +63,14 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
         storages.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
     if storages.is_registered("local_test_store"):
         storages.unregister_backend("local_test_store")
+
+    # Create the storage directory
+    storage_dir = tmp_path / "file_object_test_storage"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
     storages.register_backend(
         ObstoreBackend(
-            fs=LocalStore(prefix=Path(tmp_path / "file_object_test_storage"), automatic_cleanup=False, mkdir=True),  # pyright: ignore
+            fs=LocalStore(prefix=str(storage_dir)),  # pyright: ignore
             key="local_test_store",
         )
     )
@@ -117,7 +126,125 @@ async def async_session(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_save_retrieve_delete_content(storage_registry: StorageRegistry) -> None:
+async def test_fsspec_s3_backend(
+    storage_registry: StorageRegistry,
+    minio_client: "Minio",
+    minio_service: "MinioService",
+    minio_default_bucket_name: str,
+) -> None:
+    """Test basic save, get_content, delete via backend and FileObject with prefix."""
+    try:
+        import s3fs
+    except ImportError:
+        pytest.skip("s3fs not installed")
+
+    assert minio_client.bucket_exists(minio_default_bucket_name)
+    _ = minio_client
+
+    # Create s3fs filesystem instance without bucket info
+    fs = s3fs.S3FileSystem(
+        anon=False,
+        key=minio_service.access_key,
+        secret=minio_service.secret_key,
+        endpoint_url=f"http://{minio_service.endpoint}",
+        client_kwargs={
+            "verify": False,
+            "use_ssl": False,
+        },
+        asynchronous=True,
+    )
+
+    # Initialize backend with prefix
+    backend = FSSpecBackend(
+        key="s3_test_store",
+        fs=fs,
+        prefix=minio_default_bucket_name,
+    )
+
+    test_content = b"Hello Storage!"
+    # Use relative path, prefix handles the bucket
+    file_path = "test_basic.txt"
+
+    # Create initial FileObject with relative path
+    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+
+    # Save using backend
+    updated_obj = await backend.save_object_async(obj, test_content)
+
+    # Assert FileObject updated
+    assert updated_obj is obj  # Should update in-place
+    assert obj.path == file_path  # Path should remain relative
+    assert obj.filename == "test_basic.txt"
+    assert obj.etag is not None
+    assert obj.size == len(test_content)
+    assert obj.backend is backend
+    assert obj.protocol == "s3"  # Based on s3fs filesystem
+
+    # Retrieve content via FileObject method (uses relative obj.path, backend adds prefix)
+    retrieved_content = await obj.get_content_async()
+    assert retrieved_content == test_content
+
+    # Delete via FileObject method (uses relative obj.path, backend adds prefix)
+    await obj.delete_async()
+
+    # Verify deletion using relative path with backend (backend adds prefix)
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(file_path)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_s3_backend(
+    storage_registry: StorageRegistry,
+    minio_client: "Minio",
+    minio_service: "MinioService",
+    minio_default_bucket_name: str,
+) -> None:
+    """Test basic save, get_content, delete via backend and FileObject."""
+
+    assert minio_client.bucket_exists(minio_default_bucket_name)
+    _ = minio_client
+    backend = ObstoreBackend(
+        key="s3_test_store",
+        fs=f"s3://{minio_default_bucket_name}/",
+        aws_endpoint=f"http://{minio_service.endpoint}/",
+        aws_access_key_id=minio_service.access_key,
+        aws_secret_access_key=minio_service.secret_key,
+        aws_virtual_hosted_style_request=False,
+        client_options={"allow_http": True},
+    )
+
+    test_content = b"Hello Storage!"
+    file_path = "test_basic.txt"  # Relative path for the backend
+
+    # Create initial FileObject
+    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+
+    # Save using backend
+    updated_obj = await backend.save_object_async(obj, test_content)
+
+    # Assert FileObject updated
+    assert updated_obj is obj  # Should update in-place
+    assert obj.path == file_path
+    assert obj.filename == "test_basic.txt"
+    assert obj.etag is not None
+    assert obj.size == len(test_content)
+    assert obj.backend is backend
+    assert obj.protocol == "s3"  # Based on LocalFileSystem
+
+    # Retrieve content via FileObject method
+    retrieved_content = await obj.get_content_async()
+    assert retrieved_content == test_content
+
+    # Delete via FileObject method
+    await obj.delete_async()
+
+    # Verify deletion (expect FileNotFoundError or similar from backend)
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(file_path)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_basic_operations(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Hello Storage!"
@@ -150,7 +277,9 @@ async def test_save_retrieve_delete_content(storage_registry: StorageRegistry) -
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_sqlalchemy_single_file_persist(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
+async def test_obstore_backend_sqlalchemy_single_file_persist(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
     """Test saving and loading a model with a single StoredObject."""
 
     file_content = b"SQLAlchemy Integration Test"
@@ -187,7 +316,7 @@ async def test_sqlalchemy_single_file_persist(async_session: AsyncSession, stora
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_sqlalchemy_multiple_files_persist(
+async def test_obstore_backend_sqlalchemy_multiple_files_persist(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test saving and loading a model with multiple StoredObjects."""
@@ -238,7 +367,9 @@ async def test_sqlalchemy_multiple_files_persist(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_update_file_object(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
+async def test_obstore_backend_update_file_object(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
     """Test listener deletes old file when attribute is updated and session committed."""
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content"
@@ -277,7 +408,9 @@ async def test_update_file_object(async_session: AsyncSession, storage_registry:
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_listener_delete_on_update_clear(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
+async def test_obstore_backend_listener_delete_on_update_clear(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
     """Test listener deletes old file when attribute is cleared and session committed."""
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear"
@@ -309,7 +442,9 @@ async def test_listener_delete_on_update_clear(async_session: AsyncSession, stor
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_listener_delete_multiple_removed(async_session: AsyncSession, storage_registry: StorageRegistry) -> None:
+async def test_obstore_backend_listener_delete_multiple_removed(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
     """Test listener deletes files removed from a multiple list."""
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1"
@@ -352,3 +487,375 @@ async def test_listener_delete_multiple_removed(async_session: AsyncSession, sto
 
     # Verify remaining file exists
     assert await backend.get_content_async(path3) == content3
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_file_object_invalid_init(storage_registry: StorageRegistry) -> None:
+    """Test FileObject initialization with invalid parameters."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test content"
+    test_path = Path("test.txt")
+
+    # Test both content and source_path provided
+    with pytest.raises(ValueError, match="Cannot provide both 'source_content' and 'source_path'"):
+        FileObject(
+            backend=backend,
+            filename="test.txt",
+            content=test_content,
+            source_path=test_path,
+        )
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_file_object_metadata(storage_registry: StorageRegistry) -> None:
+    """Test FileObject metadata handling."""
+    backend = storage_registry.get_backend("local_test_store")
+    initial_metadata = {"category": "test", "tags": ["sample"]}
+    additional_metadata = {"priority": "high", "tags": ["important"]}
+
+    # Create FileObject with initial metadata
+    obj = FileObject(
+        backend=backend,
+        filename="test.txt",
+        metadata=initial_metadata,
+    )
+    assert obj.metadata == initial_metadata
+
+    # Update metadata
+    obj.update_metadata(additional_metadata)
+    expected_metadata = {
+        "category": "test",
+        "tags": ["important"],  # New tags override old ones
+        "priority": "high",
+    }
+    assert obj.metadata == expected_metadata
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_file_object_to_dict(storage_registry: StorageRegistry) -> None:
+    """Test FileObject to_dict method."""
+    backend = storage_registry.get_backend("local_test_store")
+    obj = FileObject(
+        backend=backend,
+        filename="test.txt",
+        content_type="text/plain",
+        size=100,
+        last_modified=1234567890.0,
+        checksum="abc123",
+        etag="xyz789",
+        version_id="v1",
+        metadata={"category": "test"},
+    )
+
+    # Convert to dict
+    obj_dict = obj.to_dict()
+    assert obj_dict == {
+        "filename": "test.txt",
+        "content_type": "text/plain",
+        "size": 100,
+        "last_modified": 1234567890.0,
+        "checksum": "abc123",
+        "etag": "xyz789",
+        "version_id": "v1",
+        "metadata": {"category": "test"},
+    }
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_local_file_object_sign_urls(storage_registry: StorageRegistry) -> None:
+    """Test FileObject sign and sign_async methods."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test content for signing"
+    file_path = "test_sign.txt"
+
+    # Create and save file
+    obj = FileObject(backend=backend, filename="test.txt", to_filename=file_path)
+    await obj.save_async(data=test_content)
+
+    # Test sign method
+    with pytest.raises(NotImplementedError, match=r"Error signing path test_sign.txt"):
+        _ = obj.sign(expires_in=3600)
+
+    # Test sign_async method
+    with pytest.raises(NotImplementedError, match=r"Error signing path test_sign.txt"):
+        _ = await obj.sign_async(expires_in=3600)
+
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Error signing path test_sign.txt",
+    ):
+        _ = obj.sign(for_upload=True)
+
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Error signing path test_sign.txt",
+    ):
+        _ = await obj.sign_async(for_upload=True)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_file_object_save_with_different_data_types(storage_registry: StorageRegistry) -> None:
+    """Test FileObject save with different data types."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test content"
+    file_path = "test_data_types.txt"
+
+    # Test with bytes
+    obj1 = FileObject(backend=backend, filename="test1.txt", to_filename=file_path)
+    await obj1.save_async(data=test_content)
+    assert await obj1.get_content_async() == test_content
+
+    # Test with Path
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(mode="wb", delete=False) as f:
+        f.write(test_content)
+        temp_path = Path(f.name)
+
+    obj2 = FileObject(backend=backend, filename="test2.txt", to_filename=file_path)
+    await obj2.save_async(data=temp_path)
+    assert await obj2.get_content_async() == test_content
+
+    # Cleanup
+    temp_path.unlink()
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_file_object_pending_data(storage_registry: StorageRegistry) -> None:
+    """Test FileObject has_pending_data property."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test content"
+    test_path = Path("test.txt")
+
+    # Test with content
+    obj1 = FileObject(backend=backend, filename="test1.txt", content=test_content)
+    assert obj1.has_pending_data
+
+    # Test with source_path
+    obj2 = FileObject(backend=backend, filename="test2.txt", source_path=test_path)
+    assert obj2.has_pending_data
+
+    # Test without pending data
+    obj3 = FileObject(backend=backend, filename="test3.txt")
+    assert not obj3.has_pending_data
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_file_object_delete_methods(storage_registry: StorageRegistry) -> None:
+    """Test FileObject delete and delete_async methods."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test content to delete"
+    file_path = "test_delete.txt"
+
+    # Create and save file
+    obj = FileObject(backend=backend, filename="test.txt", to_filename=file_path)
+    await obj.save_async(data=test_content)
+
+    # Verify file exists
+    assert await backend.get_content_async(file_path) == test_content
+
+    # Test delete_async
+    await obj.delete_async()
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(file_path)
+
+    # Create and save file again
+    await obj.save_async(data=test_content)
+    assert await backend.get_content_async(file_path) == test_content
+
+    # Test delete
+    obj.delete()
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(file_path)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_storage_registry_management(storage_registry: StorageRegistry) -> None:
+    """Test StorageRegistry management methods."""
+    from obstore.store import MemoryStore
+
+    from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+
+    # Test registered_backends
+    initial_backends = storage_registry.registered_backends()
+    assert "local_test_store" in initial_backends
+    assert "memory" in initial_backends
+
+    # Test unregister_backend
+    storage_registry.unregister_backend("local_test_store")
+    assert "local_test_store" not in storage_registry.registered_backends()
+    with pytest.raises(ImproperConfigurationError):
+        storage_registry.get_backend("local_test_store")
+
+    # Test clear_backends
+    storage_registry.clear_backends()
+    assert not storage_registry.registered_backends()
+
+    # Test set_default_backend
+    storage_registry.set_default_backend("advanced_alchemy.types.file_object.backends.obstore.ObstoreBackend")
+    assert storage_registry.default_backend.__name__ == "ObstoreBackend"
+
+    # Test register_backend with string value
+    storage_registry.register_backend("memory://", key="test_backend")
+    assert "test_backend" in storage_registry.registered_backends()
+    assert isinstance(storage_registry.get_backend("test_backend"), ObstoreBackend)
+
+    # Test register_backend with StorageBackend instance
+    test_backend = ObstoreBackend(fs=MemoryStore(), key="test_backend2")
+    storage_registry.register_backend(test_backend)
+    assert "test_backend2" in storage_registry.registered_backends()
+    assert storage_registry.get_backend("test_backend2") is test_backend
+
+    # Test error cases
+    with pytest.raises(ImproperConfigurationError, match="key is required when registering a string value"):
+        storage_registry.register_backend("memory://")  # type: ignore[arg-type]
+
+    with pytest.raises(ImproperConfigurationError, match="key is not allowed when registering a StorageBackend"):
+        storage_registry.register_backend(test_backend, key="invalid_key")  # type: ignore[arg-type]
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_storage_registry_error_handling(storage_registry: StorageRegistry) -> None:
+    """Test StorageRegistry error handling."""
+    # Test get_backend with non-existent key
+    with pytest.raises(ImproperConfigurationError, match="No storage backend registered with key nonexistent"):
+        storage_registry.get_backend("nonexistent")
+
+    # Test unregister_backend with non-existent key
+    storage_registry.unregister_backend("nonexistent")  # Should not raise an error
+
+    # Test set_default_backend with invalid backend
+    with pytest.raises(ImportError):
+        storage_registry.set_default_backend("invalid.module.path.Backend")
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_fsspec_backend_basic_operations(storage_registry: StorageRegistry) -> None:
+    """Test basic operations with FSSpec backend."""
+    try:
+        import fsspec
+    except ImportError:
+        pytest.skip("fsspec not installed")
+
+    # Create a local filesystem backend
+    fs = fsspec.filesystem("file")
+    backend = FSSpecBackend(fs=fs, key="fsspec_test")
+    test_content = b"Test content"
+    file_path = "test_fsspec.txt"
+
+    # Test save and get content
+    obj = FileObject(backend=backend, filename="test.txt", to_filename=file_path)
+    await obj.save_async(data=test_content)
+    assert await obj.get_content_async() == test_content
+
+    # Test delete
+    await obj.delete_async()
+    with pytest.raises(FileNotFoundError):
+        await obj.get_content_async()
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_fsspec_backend_protocols(storage_registry: StorageRegistry) -> None:
+    """Test FSSpec backend with different protocols."""
+    try:
+        import fsspec
+    except ImportError:
+        pytest.skip("fsspec not installed")
+
+    # Test local filesystem
+    fs_local = fsspec.filesystem("file")
+    backend_local = FSSpecBackend(fs=fs_local, key="fsspec_local")
+    assert backend_local.protocol == "file"
+
+    # Test memory filesystem
+    fs_memory = fsspec.filesystem("memory")
+    backend_memory = FSSpecBackend(fs=fs_memory, key="fsspec_memory")
+    assert backend_memory.protocol == "memory"
+
+    # Test with protocol string
+    backend_from_string = FSSpecBackend(fs="file", key="fsspec_string")
+    assert backend_from_string.protocol == "file"
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_fsspec_backend_content_types(storage_registry: StorageRegistry) -> None:
+    """Test FSSpec backend with different content types."""
+    try:
+        import fsspec
+    except ImportError:
+        pytest.skip("fsspec not installed")
+
+    fs = fsspec.filesystem("memory")
+    backend = FSSpecBackend(fs=fs, key="fsspec_content")
+    file_path = "test_content.txt"
+
+    # Test with bytes
+    content_bytes = b"Test bytes"
+    obj_bytes = FileObject(backend=backend, filename="test_bytes.txt", to_filename=file_path)
+    await obj_bytes.save_async(data=content_bytes)
+    assert await obj_bytes.get_content_async() == content_bytes
+
+    # Test with string
+    content_str = "Test string"
+    obj_str = FileObject(backend=backend, filename="test_str.txt", to_filename=file_path)
+    await obj_str.save_async(data=content_str.encode("utf-8"))
+    assert await obj_str.get_content_async() == content_str.encode("utf-8")
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_fsspec_backend_multipart_upload(storage_registry: StorageRegistry) -> None:
+    """Test FSSpec backend multipart upload."""
+    try:
+        import fsspec
+    except ImportError:
+        pytest.skip("fsspec not installed")
+
+    fs = fsspec.filesystem("memory")
+    backend = FSSpecBackend(fs=fs, key="fsspec_multipart")
+    file_path = "test_multipart.txt"
+
+    # Create large content for multipart upload
+    large_content = b"x" * (5 * 1024 * 1024 + 1)  # 5MB + 1 byte
+    obj = FileObject(backend=backend, filename="test.txt", to_filename=file_path)
+
+    # Test with multipart upload
+    await obj.save_async(
+        data=large_content,
+        use_multipart=True,
+        chunk_size=1024 * 1024,  # 1MB chunks
+        max_concurrency=4,
+    )
+    assert await obj.get_content_async() == large_content
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_fsspec_backend_sign_urls(storage_registry: StorageRegistry, tmp_path: Path) -> None:
+    """Test FSSpec backend URL signing."""
+    try:
+        import fsspec
+    except ImportError:
+        pytest.skip("fsspec not installed")
+
+    fs = fsspec.filesystem("file")
+    backend = FSSpecBackend(fs=fs, key="fsspec_sign", prefix=str(tmp_path))
+    file_path = "test_sign.txt"
+
+    # Create and save test file
+    test_content = b"Test content for signing"
+    obj = FileObject(backend=backend, filename="test.txt", to_filename=file_path)
+    await obj.save_async(data=test_content)
+
+    # Test sign method
+    with pytest.raises(NotImplementedError, match="Signing URLs not supported by file backend"):
+        _ = obj.sign(expires_in=3600)
+
+    # Test sign_async method
+    with pytest.raises(NotImplementedError, match="Signing URLs not supported by file backend"):
+        _ = await obj.sign_async(expires_in=3600)
+
+    # Test for_upload parameter
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Generating signed URLs for upload is generally not supported by fsspec's generic sign method.",
+    ):
+        _ = obj.sign(for_upload=True)

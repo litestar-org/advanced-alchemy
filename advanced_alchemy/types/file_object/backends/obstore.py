@@ -60,22 +60,18 @@ class ObstoreBackend(StorageBackend):
 
     driver = "obstore"
 
-    def __init__(
-        self, fs: "Union[ObjectStore, str]", key: str, *, options: "Optional[dict[str, Any]]" = None, **kwargs: "Any"
-    ) -> None:
+    def __init__(self, key: str, fs: "Union[ObjectStore, str]", **kwargs: "Any") -> None:
         """Initialize ObstoreBackend.
 
         Args:
             fs: The ObjectStore instance from the obstore package
             key: The key for the storage backend
-            options: Optional backend-specific options
-            kwargs: Additional keyword arguments
+            kwargs: Additional keyword arguments to pass to the ObjectStore constructor
         """
-        self.fs = from_url(fs) if isinstance(fs, str) else fs
-        self.protocol = schema_from_type(self.fs)
+        self.fs = from_url(fs, **kwargs) if isinstance(fs, str) else fs  # pyright: ignore
+        self.protocol = schema_from_type(self.fs)  # pyright: ignore
         self.key = key
-        self.options = options or {}
-        self.kwargs = kwargs
+        self.options = kwargs
 
     def get_content(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Return the bytes stored at the specified location.
@@ -227,13 +223,23 @@ class ObstoreBackend(StorageBackend):
             A URL or list of URLs for accessing the file
         """
         http_method = "PUT" if for_upload else "GET"
-
+        expires_delta = (
+            datetime.timedelta(seconds=expires_in) if expires_in is not None else datetime.timedelta(hours=1)
+        )
         if isinstance(paths, (str, Path, os.PathLike)):
             single_path = self._to_path(paths)
-            return obstore_sign(store=self.fs, http_method=http_method, paths=single_path, expires_in=expires_in)  # type: ignore
+            try:
+                return obstore_sign(store=self.fs, method=http_method, paths=single_path, expires_in=expires_delta)  # type: ignore
+            except ValueError as e:
+                msg = f"Error signing path {single_path}: {e}"
+                raise NotImplementedError(msg) from e
 
         path_list = [self._to_path(p) for p in paths]
-        return obstore_sign(store=self.fs, http_method=http_method, paths=path_list, expires_in=expires_in)  # type: ignore
+        try:
+            return obstore_sign(store=self.fs, method=http_method, paths=path_list, expires_in=expires_delta)  # type: ignore
+        except ValueError as e:
+            msg = f"Error signing paths {path_list}: {e}"
+            raise NotImplementedError(msg) from e
 
     async def sign_async(
         self,
@@ -253,12 +259,30 @@ class ObstoreBackend(StorageBackend):
             A URL or list of URLs for accessing the file
         """
         http_method = "PUT" if for_upload else "GET"
-
+        expires_delta = (
+            datetime.timedelta(seconds=expires_in) if expires_in is not None else datetime.timedelta(hours=1)
+        )
         if isinstance(paths, (str, Path, os.PathLike)):
             single_path = self._to_path(paths)
-            return await obstore_sign_async(  # type: ignore
-                store=self.fs, http_method=http_method, paths=single_path, expires_in=expires_in
-            )
+            try:
+                return await obstore_sign_async(  # type: ignore
+                    store=self.fs,  # pyright: ignore
+                    method=http_method,
+                    paths=single_path,
+                    expires_in=expires_delta,
+                )
+            except ValueError as e:
+                msg = f"Error signing path {single_path}: {e}"
+                raise NotImplementedError(msg) from e
 
         path_list = [self._to_path(p) for p in paths]
-        return await obstore_sign_async(store=self.fs, http_method=http_method, paths=path_list, expires_in=expires_in)  # type: ignore
+        try:
+            return await obstore_sign_async(  # type: ignore
+                store=self.fs,  # pyright: ignore
+                method=http_method,
+                paths=path_list,
+                expires_in=expires_delta,
+            )
+        except ValueError as e:
+            msg = f"Error signing paths {path_list}: {e}"
+            raise NotImplementedError(msg) from e
