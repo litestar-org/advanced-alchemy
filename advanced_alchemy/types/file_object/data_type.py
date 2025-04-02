@@ -1,7 +1,8 @@
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from sqlalchemy import TypeDecorator
 
+from advanced_alchemy._serialization import decode_json
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.file import FileObject
 from advanced_alchemy.types.file_object.registry import storages
@@ -106,7 +107,7 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
         return value.to_dict() if value else None
 
     def process_result_value(
-        self, value: "Optional[Union[dict[str, Any], list[dict[str, Any]]]]", dialect: "Any"
+        self, value: "Optional[Union[bytes, str, dict[str, Any], list[dict[str, Any]]]]", dialect: "Any"
     ) -> "Optional[FileObjectOrList]":
         """Convert database JSON back to FileObject or MutableList[FileObject].
 
@@ -124,13 +125,16 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
             return None
 
         if self.multiple:
-            if not isinstance(value, list):
-                # Ensure value is a list even if DB returns single dict for some reason
+            if isinstance(value, dict):
+                # If the DB returns a single dict, wrap it in a list
                 value = [value]
-            # Pass the resolved backend when creating FileObject instances
-            return MutableList([FileObject(**(item | {"backend": self.backend})) for item in value])
+            elif isinstance(value, (str, bytes)):
+                # Decode JSON string or bytes to dict
+                value = [cast("dict[str, Any]", decode_json(value))]
+            return MutableList[FileObject]([FileObject(**v) for v in value if v])  # pyright: ignore
         if isinstance(value, list):
             msg = f"Expected dict from DB for multiple=False, got {type(value)}"
             raise TypeError(msg)
-        # Pass the resolved backend when creating FileObject instance
-        return FileObject(**(value | {"backend": self.backend}))
+        if isinstance(value, (bytes, str)):
+            value = cast("dict[str,Any]", decode_json(value))
+        return FileObject(**value)

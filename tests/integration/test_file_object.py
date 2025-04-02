@@ -592,6 +592,7 @@ async def test_obstore_backend_file_object_to_dict(storage_registry: StorageRegi
         "etag": "xyz789",
         "version_id": "v1",
         "metadata": {"category": "test"},
+        "backend": "local_test_store",
     }
 
 

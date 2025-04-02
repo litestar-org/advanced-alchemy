@@ -83,17 +83,17 @@ class FileObject:
             ValueError: If filename is not provided, size is negative, backend/protocol mismatch,
                         or both 'content' and 'source_path' are provided.
         """
-        self._filename = filename
-        self._to_filename = to_filename
-        self._content_type = content_type
-        self._raw_backend = backend
         self.size = size
-        self._resolved_backend: Optional[StorageBackend] = backend if isinstance(backend, StorageBackend) else None
         self.last_modified = last_modified
         self.checksum = checksum
         self.etag = etag
         self.version_id = version_id
         self.metadata = metadata or {}
+        self._filename = filename
+        self._content_type = content_type
+        self._to_filename = to_filename
+        self._resolved_backend: Optional[StorageBackend] = backend if isinstance(backend, StorageBackend) else None
+        self._raw_backend = backend
         self._pending_source_path = Path(source_path) if source_path is not None else None
         self._pending_source_content = content
         if self._pending_source_content is not None and self._pending_source_path is not None:
@@ -188,6 +188,7 @@ class FileObject:
             "etag": self.etag,
             "version_id": self.version_id,
             "metadata": self.metadata,
+            "backend": self.backend.key,
         }
 
     def get_content(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
