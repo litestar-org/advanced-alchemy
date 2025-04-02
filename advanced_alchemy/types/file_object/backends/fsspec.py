@@ -300,30 +300,5 @@ class FSSpecBackend(StorageBackend):
             A signed URL string if a single path is given, or a list of strings
             if multiple paths are provided.
 
-        Raises:
-            NotImplementedError: If the backend doesn't support signing or if `for_upload=True`.
         """
-        if not self.is_async:
-            # Pass the original relative path(s) to the sync method wrapper
-            return await async_(self.sign)(paths=paths, expires_in=expires_in, for_upload=for_upload)
-
-        if for_upload:
-            msg = "Generating signed URLs for upload is generally not supported by fsspec's generic sign method."
-            raise NotImplementedError(msg)
-
-        expires_in = expires_in or self.default_expires_in
-        is_single = isinstance(paths, (str, Path, os.PathLike))
-        path_list = [self._prepare_path(paths)] if is_single else [self._prepare_path(p) for p in paths]  # type: ignore
-
-        if not hasattr(self.fs, "_sign"):
-            msg = f"Async filesystem object {type(self.fs).__name__} does not have a '_sign' method."
-            raise NotImplementedError(msg)
-
-        signed_urls: list[str] = []
-        try:
-            signed_urls.extend([await self.fs._sign(path_str, expiration=expires_in) for path_str in path_list])  # pyright: ignore
-        except NotImplementedError as e:
-            # This might be raised by the sign method itself if not implemented for the protocol
-            msg = f"Signing URLs not supported by {self.protocol} backend via fsspec."
-            raise NotImplementedError(msg) from e
-        return signed_urls[0] if is_single else signed_urls
+        return await async_(self.sign)(paths=paths, expires_in=expires_in, for_upload=for_upload)

@@ -151,7 +151,6 @@ async def test_fsspec_s3_backend(
             "verify": False,
             "use_ssl": False,
         },
-        asynchronous=True,
     )
 
     # Initialize backend with prefix
@@ -184,6 +183,22 @@ async def test_fsspec_s3_backend(
     retrieved_content = await obj.get_content_async()
     assert retrieved_content == test_content
 
+    # Test sign method
+    url = obj.sign(expires_in=3600)
+    assert isinstance(url, str)
+    assert url.startswith("http")
+
+    # Test sign_async method
+    url_async = await obj.sign_async(expires_in=3600)
+    assert isinstance(url_async, str)
+    assert url_async.startswith("http")
+
+    # Test for_upload parameter
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Generating signed URLs for upload is generally not supported by fsspec's generic sign method.",
+    ):
+        _ = obj.sign(for_upload=True)
     # Delete via FileObject method (uses relative obj.path, backend adds prefix)
     await obj.delete_async()
 
@@ -234,6 +249,25 @@ async def test_obstore_s3_backend(
     # Retrieve content via FileObject method
     retrieved_content = await obj.get_content_async()
     assert retrieved_content == test_content
+
+    # Test sign method
+    url = obj.sign(expires_in=3600)
+    assert isinstance(url, str)
+    assert url.startswith("http")
+
+    # Test sign_async method
+    url_async = await obj.sign_async(expires_in=3600)
+    assert isinstance(url_async, str)
+    assert url_async.startswith("http")
+
+    # Test for_upload parameter
+    url_for_upload = obj.sign(for_upload=True)
+    assert isinstance(url_for_upload, str)
+    assert url_for_upload.startswith("http")
+
+    url_for_upload_async = await obj.sign_async(for_upload=True)
+    assert isinstance(url_for_upload_async, str)
+    assert url_for_upload_async.startswith("http")
 
     # Delete via FileObject method
     await obj.delete_async()
