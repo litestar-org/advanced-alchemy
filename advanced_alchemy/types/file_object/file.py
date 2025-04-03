@@ -22,41 +22,22 @@ class FileObject:
     across different storage backends.
 
     Content or a source path can optionally be provided during initialization via kwargs, store it internally, and add save/save_async methods to persist this pending data using the configured backend.
-
-    Attributes:
-        filename: The name of the file.
-        content_type: The MIME type of the file. If None, it's guessed from filename,
-                      defaulting to 'application/octet-stream'.
-        size: The size of the file in bytes, or None if unknown. Defaults to None.
-        path: The storage path/key of the file. If None, defaults to filename in __post_init__.
-        backend: The storage backend instance. Not included in comparisons or default repr.
-        protocol: The protocol used by the storage backend.
-        last_modified: Last modification timestamp.
-        checksum: MD5 checksum of the file.
-        etag: ETag of the file.
-        version_id: Version ID of the file.
-        metadata: Additional metadata associated with the file.
-        extra: Dictionary to store any additional keyword arguments passed during init.
-               Used to capture 'content' and 'source_path'.
-        source_content: Internal storage for content provided at init.
-        source_path: Internal storage for source_path provided at init.
     """
 
     __slots__ = (
+        "_checksum",
         "_content_type",
+        "_etag",
         "_filename",
+        "_last_modified",
+        "_metadata",
         "_pending_source_content",
         "_pending_source_path",
         "_raw_backend",
         "_resolved_backend",
+        "_size",
         "_to_filename",
-        "checksum",
-        "etag",
-        "extra",
-        "last_modified",
-        "metadata",
-        "size",
-        "version_id",
+        "_version_id",
     )
 
     def __init__(
@@ -83,12 +64,12 @@ class FileObject:
             ValueError: If filename is not provided, size is negative, backend/protocol mismatch,
                         or both 'content' and 'source_path' are provided.
         """
-        self.size = size
-        self.last_modified = last_modified
-        self.checksum = checksum
-        self.etag = etag
-        self.version_id = version_id
-        self.metadata = metadata or {}
+        self._size = size
+        self._last_modified = last_modified
+        self._checksum = checksum
+        self._etag = etag
+        self._version_id = version_id
+        self._metadata = metadata or {}
         self._filename = filename
         self._content_type = content_type
         self._to_filename = to_filename
@@ -125,7 +106,6 @@ class FileObject:
 
     @property
     def backend(self) -> "StorageBackend":
-        """Return the storage backend instance."""
         if self._resolved_backend is None:
             self._resolved_backend = (
                 storages.get_backend(self._raw_backend) if isinstance(self._raw_backend, str) else self._raw_backend
@@ -134,12 +114,10 @@ class FileObject:
 
     @property
     def filename(self) -> str:
-        """Return the filename of the file."""
         return self.path
 
     @property
     def content_type(self) -> str:
-        """Return the content type of the file."""
         if self._content_type is None:
             guessed_type, _ = mimetypes.guess_type(self._filename)
             self._content_type = guessed_type or "application/octet-stream"
@@ -147,18 +125,63 @@ class FileObject:
 
     @property
     def protocol(self) -> str:
-        """Return the protocol of the file, defaulting to backend protocol if not set."""
         return self.backend.protocol if self.backend else "file"
 
     @property
     def path(self) -> str:
-        """Return the path of the file, defaulting to to_filename if not set."""
         return self._to_filename or self._filename
 
     @property
     def has_pending_data(self) -> bool:
-        """Check if the FileObject has pending content or a source path to save."""
         return bool(self._pending_source_content or self._pending_source_path)
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, value: dict[str, Any]) -> None:
+        self._metadata = value
+
+    @property
+    def size(self) -> "Optional[int]":
+        return self._size
+
+    @size.setter
+    def size(self, value: int) -> None:
+        self._size = value
+
+    @property
+    def last_modified(self) -> "Optional[float]":
+        return self._last_modified
+
+    @last_modified.setter
+    def last_modified(self, value: float) -> None:
+        self._last_modified = value
+
+    @property
+    def checksum(self) -> "Optional[str]":
+        return self._checksum
+
+    @checksum.setter
+    def checksum(self, value: str) -> None:
+        self._checksum = value
+
+    @property
+    def etag(self) -> "Optional[str]":
+        return self._etag
+
+    @etag.setter
+    def etag(self, value: str) -> None:
+        self._etag = value
+
+    @property
+    def version_id(self) -> "Optional[str]":
+        return self._version_id
+
+    @version_id.setter
+    def version_id(self, value: str) -> None:
+        self._version_id = value
 
     def update_metadata(self, metadata: "dict[str, Any]") -> None:
         """Update the file metadata.

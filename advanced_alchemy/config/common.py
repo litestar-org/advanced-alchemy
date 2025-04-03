@@ -175,6 +175,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     This is a listener that will update ``created_at`` and ``updated_at`` columns on record modification.
     Disable if you plan to bring your own update mechanism for these columns"""
+    enable_file_object_listener: bool = True
+    """Enable FileObject listener.
+
+    This is a listener that will automatically save and delete :class:`FileObject <advanced_alchemy.types.file_object.FileObject>` instances when they are saved or deleted.
+
+    Disable if you plan to bring your own save/delete mechanism for these columns"""
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
@@ -197,6 +203,10 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             from advanced_alchemy._listeners import touch_updated_timestamp
 
             event.listen(Session, "before_flush", touch_updated_timestamp)
+        if self.enable_file_object_listener:
+            from advanced_alchemy._listeners import setup_file_object_listeners
+
+            setup_file_object_listeners()
 
     def __hash__(self) -> int:  # pragma: no cover
         return hash(

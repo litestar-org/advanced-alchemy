@@ -33,6 +33,7 @@ offering:
 - Integration with major web frameworks including Litestar, Starlette, FastAPI, Sanic
 - Custom-built alembic configuration and CLI with optional framework integration
 - Utility base classes with audit columns, primary keys and utility functions
+- Built in `File Object` data type for storing objects with `fsspec` or `obstore`
 - Optimized JSON types including a custom JSON type for Oracle
 - Integrated support for UUID6 and UUID7 using [`uuid-utils`](https://github.com/aminalaee/uuid-utils) (install with the `uuid` extra)
 - Integrated support for Nano ID using [`fastnanoid`](https://github.com/oliverlambson/fastnanoid) (install with the `nanoid` extra)
