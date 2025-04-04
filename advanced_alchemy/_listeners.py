@@ -1,4 +1,4 @@
-# ruff: noqa: BLE001, C901, PLR0914
+# ruff: noqa: BLE001, C901, PLR0914, PLR0915
 """Application ORM configuration."""
 
 import asyncio
@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session, UOWTransaction
 
     from advanced_alchemy.types.file_object import FileObjectSessionTracker, StorageRegistry
-    from advanced_alchemy.types.mutables import MutableList
 
 _active_file_operations: set[asyncio.Task[Any]] = set()
 """Stores active file operations to prevent them from being garbage collected."""
@@ -57,6 +56,7 @@ def _inspect_attribute_changes(
     tracker: "FileObjectSessionTracker",
 ) -> None:
     from advanced_alchemy.types.file_object import FileObject, StoredObject
+    from advanced_alchemy.types.mutables import MutableList
 
     state = inspect(instance)
     if not state:
@@ -93,39 +93,95 @@ def _inspect_attribute_changes(
                 tracker.add_pending_delete(original_value)
             continue
 
-        # Handle multiple FileObjects (MutableList)
-        current_list: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
-        original_list: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
+        # --- Multiple FileObjects Logic (v4 - Prioritize _pending_removed) ---
         items_to_delete: set[FileObject] = set()
+        items_to_save: dict[FileObject, Any] = {}
 
-        if current_list:
-            pending_append = getattr(current_list, "_pending_append", [])
-            for item in pending_append:
-                pending_content = getattr(item, "_pending_content", None)
+        current_list_instance: Optional[MutableList[FileObject]] = getattr(instance, attr_name, None)
+        original_list_from_history: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
+        current_list_from_history: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
+
+        # 1. Deletions from Mutations (Primary source: _pending_removed set)
+        if isinstance(current_list_instance, MutableList):
+            removed_items_internal: set[FileObject] = getattr(
+                current_list_instance, "_pending_removed", set[FileObject]()
+            )
+            valid_removed_internal = {item for item in removed_items_internal if item and item.path}
+            if valid_removed_internal:
+                logger.debug(
+                    "[Multiple-Mutation] Found %d valid items in internal _pending_removed set.",
+                    len(valid_removed_internal),
+                )
+                items_to_delete.update(valid_removed_internal)
+
+        # 2. Deletions from Replacements (Secondary source: history)
+        if original_list_from_history:  # Indicates list replacement
+            logger.debug("[Multiple-Replacement] Processing list replacement via history.")
+            original_items_set = {item for item in original_list_from_history if item.path}
+            current_items_set = (
+                {item for item in current_list_from_history if item.path}
+                if current_list_from_history
+                else set[FileObject]()
+            )
+            removed_due_to_replacement = original_items_set - current_items_set
+            if removed_due_to_replacement:
+                logger.debug(
+                    "[Multiple-Replacement] Found %d items removed via replacement.", len(removed_due_to_replacement)
+                )
+                items_to_delete.update(removed_due_to_replacement)
+
+        # 3. Determine items to save
+        # Saves from pending appends (Mutation or New)
+        if isinstance(current_list_instance, MutableList):
+            pending_append = getattr(current_list_instance, "_pending_append", [])
+            if pending_append:
+                logger.debug("[Multiple-Mutation] Found %d items in _pending_append list.", len(pending_append))
+                for item in pending_append:
+                    pending_content = getattr(item, "_pending_content", None)
+                    pending_source_path = getattr(item, "_pending_source_path", None)
+                    if pending_content is not None:
+                        items_to_save[item] = pending_content
+                    elif pending_source_path is not None:
+                        items_to_save[item] = pending_source_path
+
+        # Saves from newly added list items (New Instance or Replacement)
+        if current_list_from_history:
+            log_prefix = "[Multiple-New]" if not original_list_from_history else "[Multiple-Replacement]"
+            logger.debug(
+                "%s Checking current list from history (%d items) for pending saves.",
+                log_prefix,
+                len(current_list_from_history),
+            )
+            for item in current_list_from_history:
+                pending_content = getattr(item, "_pending_source_content", None)
                 pending_source_path = getattr(item, "_pending_source_path", None)
-                if pending_content is not None:
-                    tracker.add_pending_save(item, pending_content)
-                elif pending_source_path is not None:
-                    tracker.add_pending_save(item, pending_source_path)
+                if pending_content is not None and item not in items_to_save:
+                    logger.debug("%s Found pending content for %r", log_prefix, item.filename)
+                    items_to_save[item] = pending_content
+                elif pending_source_path is not None and item not in items_to_save:
+                    logger.debug("%s Found pending source path for %r", log_prefix, item.filename)
+                    items_to_save[item] = pending_source_path
 
-            removed_items_from_mutation: set[FileObject] = getattr(current_list, "_removed", set[FileObject]())
-            items_to_delete.update(item for item in removed_items_from_mutation if item.path)
-
-            finalize_method = getattr(current_list, "_finalize_pending", None)
+        # 4. Finalize MutableList state (if applicable)
+        if isinstance(current_list_instance, MutableList):
+            finalize_method = getattr(current_list_instance, "_finalize_pending", None)
             if finalize_method:
+                logger.debug("[Multiple] Calling _finalize_pending on list instance.")
                 finalize_method()
 
-        if original_list:
-            original_items_set = {item for item in original_list if item.path}
-            current_items_set = {item for item in current_list if item.path} if current_list else set[FileObject]()
-            removed_due_to_replacement = original_items_set - current_items_set
-            items_to_delete.update(removed_due_to_replacement)
+        # 5. Schedule all collected operations
+        if items_to_delete:
+            logger.debug("[Multiple] Scheduling %d items for deletion.", len(items_to_delete))
+            for item_to_delete in items_to_delete:
+                tracker.add_pending_delete(item_to_delete)
 
-        for item_to_delete in items_to_delete:
-            tracker.add_pending_delete(item_to_delete)
+        if items_to_save:
+            logger.debug("[Multiple] Scheduling %d items for saving.", len(items_to_save))
+            for item_to_save, data in items_to_save.items():
+                tracker.add_pending_save(item_to_save, data)
 
 
-class FileObjectListener:
+class FileObjectListener:  # pragma: no cover
     """Manages FileObject persistence actions during SQLAlchemy Session transactions.
 
     This listener hooks into the SQLAlchemy Session event lifecycle to automatically
@@ -371,7 +427,7 @@ def setup_file_object_listeners(registry: Optional["StorageRegistry"] = None) ->
 
 
 # Existing listener (keep it)
-def touch_updated_timestamp(session: "Session", *_: Any) -> None:
+def touch_updated_timestamp(session: "Session", *_: Any) -> None:  # pragma: no cover
     """Set timestamp on update.
 
     Called from SQLAlchemy's

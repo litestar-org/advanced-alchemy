@@ -1,9 +1,10 @@
-from typing import Any, TypeVar, no_type_check
+from typing import Any, TypeVar, cast, no_type_check
 
+from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.ext.mutable import MutableList as SQLMutableList
 from typing_extensions import Self
 
-T = TypeVar("T", bound=Any)
+T = TypeVar("T", bound="Any")
 
 
 class MutableList(SQLMutableList[T]):  # pragma: no cover
@@ -20,10 +21,19 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
 
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: "Any", **kwargs: "Any") -> None:
         super().__init__(*args, **kwargs)
         self._pending_removed: set[T] = set()
         self._pending_append: list[T] = []
+
+    @classmethod
+    def coerce(cls, key: "Any", value: "Any") -> "Any":  # pragma: no cover
+        if not isinstance(value, MutableList):
+            if isinstance(value, list):
+                return MutableList[T](value)
+            # this call will raise ValueError
+            return Mutable.coerce(key, value)
+        return cast("MutableList[T]", value)
 
     @no_type_check
     def __reduce_ex__(self, proto: int) -> "tuple[type[MutableList[T]], tuple[list[T]]]":  # pragma: no cover

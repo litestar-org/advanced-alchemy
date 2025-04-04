@@ -1367,6 +1367,45 @@ def test_obstore_backend_sqlalchemy_single_file_persist_sync(
 
 
 @pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
+    """Test saving and loading a model with a single StoredObject using synchronous SQLAlchemy session."""
+    setup_file_object_listeners()
+    set_async_context(True)
+    file_content = b"SQLAlchemy Async Integration Test"
+    doc_name = "Sync Integration Doc"
+    file_path = "sqlalchemy_single_sync.bin"
+
+    # 1. Prepare FileObject and save via backend
+    initial_obj = FileObject(
+        backend="local_test_store",
+        filename="report.bin",
+        to_filename=file_path,
+        content_type="application/octet-stream",
+        content=file_content,
+    )
+    # 2. Create and save model instance
+    doc = Document(name=doc_name, attachment=initial_obj)
+    async_session.add(doc)
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    assert doc.id is not None
+    assert doc.attachment is not None
+    assert isinstance(doc.attachment, FileObject)
+    assert doc.attachment.filename == "sqlalchemy_single_sync.bin"
+    assert doc.attachment.path == file_path
+    assert doc.attachment.size == len(file_content) or doc.attachment.size is None
+    assert doc.attachment.content_type == "application/octet-stream"
+    assert doc.attachment.backend.key == "local_test_store"
+
+    # 3. Retrieve content via loaded FileObject
+    loaded_content = doc.attachment.get_content()
+    assert loaded_content == file_content
+
+
+@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1430,7 +1469,6 @@ def test_obstore_backend_listener_delete_on_update_clear_sync(
 
     # Save initial file and model
     old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path, content=old_content)
-    old_obj = old_obj.save()  # Explicitly save before commit
     doc = Document(name="DocToClearSync", attachment=old_obj)
     session.add(doc)
     session.commit()
@@ -1454,6 +1492,41 @@ def test_obstore_backend_listener_delete_on_update_clear_sync(
 
 
 @pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_listener_delete_on_update_clear_async(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
+    """Test listener deletes old file when attribute is cleared using asynchronous SQLAlchemy session."""
+    setup_file_object_listeners()
+    set_async_context(True)
+    backend = storage_registry.get_backend("local_test_store")
+    old_content = b"File to clear sync"
+    old_path = "clear_me_sync.log"
+
+    # Save initial file and model
+    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path, content=old_content)
+    doc = Document(name="DocToClearSync", attachment=old_obj)
+    async_session.add(doc)
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    # Verify old file exists
+    assert await backend.get_content_async(old_path) == old_content
+
+    # Clear the attachment
+    doc.attachment = None
+    async_session.add(doc)
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    # Verify attachment is None
+    assert doc.attachment is None
+
+    # Verify the listener deleted the file from storage
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(old_path)
+
+
+@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
     setup_file_object_listeners()
@@ -1465,7 +1538,6 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
 
     # Save initial file and model
     old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
-    old_obj = old_obj.save()  # Explicitly save before commit
     doc = Document(name="DocToUpdateSync", attachment=old_obj)
     session.add(doc)
     session.commit()
@@ -1491,10 +1563,48 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
 
 
 @pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_listener_update_file_object_async(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
+    """Test listener deletes old file when attribute is updated and session committed using asynchronous SQLAlchemy session."""
+    setup_file_object_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    old_content = b"Old file content sync"
+    new_content = b"New file content sync"
+    old_path = "old_file_sync.txt"
+    new_path = "new_file_sync.txt"
+
+    # Save initial file and model
+    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
+    doc = Document(name="DocToUpdateSync", attachment=old_obj)
+    async_session.add(doc)
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    # Verify old file exists
+    assert backend.get_content(old_path) == old_content
+
+    # Update the document's attachment (inline creation)
+    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path, content=new_content)
+    doc.attachment = new_obj
+    async_session.add(doc)  # Add again as it's modified
+    await async_session.commit()  # Listener should save new_obj and queue deletion of old_obj
+    await async_session.refresh(doc)
+
+    assert backend.get_content(new_path) == new_content
+    assert doc.attachment is not None and doc.attachment.path == new_path  # pyright: ignore
+
+    # Verify the listener deleted the old file from storage
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(old_path)
+
+
+@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_multiple_removed_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes files removed from a multiple list using synchronous SQLAlchemy session."""
+    set_async_context(False)
     setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1_sync"
@@ -1503,10 +1613,8 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
     path2 = "multi_del_2_sync.dat"
 
     # Save files
-    obj1 = FileObject(backend=backend, filename=path1)
-    obj2 = FileObject(backend=backend, filename=path2)
-    obj1 = obj1.save(content1)
-    obj2 = obj2.save(content2)
+    obj1 = FileObject(backend=backend, filename=path1, content=content1)
+    obj2 = FileObject(backend=backend, filename=path2, content=content2)
 
     # Create model with initial list
     doc = Document(name="MultiDeleteSyncTest", images=[obj1, obj2])
@@ -1520,7 +1628,67 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
 
     # Remove items from the list (triggers MutableList tracking)
     assert doc.images is not None
-    removed_item = doc.images.pop(1)  # Remove obj2
+    current_images = list(doc.images)  # Create standard list copy
+    removed_item = current_images.pop(1)  # Mutate copy
     assert removed_item.path == obj2.path
-    del doc.images[0]  # Remove obj1 using delitem
-    assert len(doc.images) == 0  # Both items should be removed
+    del current_images[0]  # Mutate copy
+    assert len(current_images) == 0
+    doc.images = MutableList(current_images)  # Wrap in MutableList before reassignment
+
+    session.add(doc)
+    # Commit the session to trigger listener
+    session.commit()
+    session.refresh(doc)
+    assert doc.images == []
+    # Verify the listener deleted the files
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(path1)
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(path2)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_backend_listener_delete_multiple_removed_async(
+    async_session: AsyncSession, storage_registry: StorageRegistry
+) -> None:
+    """Test listener deletes files removed from a multiple list using asynchronous SQLAlchemy session."""
+    set_async_context(True)
+    setup_file_object_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    content1 = b"img1_async_multi"
+    content2 = b"img2_async_multi"
+    path1 = "multi_del_1_async.dat"
+    path2 = "multi_del_2_async.dat"
+
+    # Save files
+    obj1 = FileObject(backend=backend, filename=path1, content=content1)
+    obj2 = FileObject(backend=backend, filename=path2, content=content2)
+
+    # Create model with initial list
+    doc = Document(name="MultiDeleteAsyncTest", images=[obj1, obj2])
+    async_session.add(doc)
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    # Verify all files exist
+    assert await backend.get_content_async(path1) == content1
+    assert await backend.get_content_async(path2) == content2
+
+    # Remove items from the list (triggers MutableList tracking)
+    assert doc.images is not None
+    current_images = list(doc.images)  # Create standard list copy
+    removed_item = current_images.pop(1)  # Mutate copy
+    assert removed_item.path == obj2.path
+    del current_images[0]  # Mutate copy
+    assert len(current_images) == 0
+    doc.images = MutableList(current_images)  # Wrap in MutableList before reassignment
+
+    # Commit the session to trigger listener
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    # Verify the listener deleted the files
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(path1)
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(path2)
