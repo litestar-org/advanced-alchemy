@@ -357,7 +357,7 @@ def setup_file_object_listeners(registry: Optional["StorageRegistry"] = None) ->
     # Register for sync Session
     for event_name, listener_func in listeners.items():
         if not contains(Session, event_name, listener_func):  # type: ignore[arg-type]
-            event.listen(Session, event_name, listener_func)
+            event.listen(Session, event_name, listener_func)  # type: ignore[arg-type]
 
     async_listeners_to_register = {
         "after_commit": FileObjectListener.after_commit,

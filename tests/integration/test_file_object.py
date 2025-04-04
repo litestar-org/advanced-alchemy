@@ -1,11 +1,11 @@
-# ruff: noqa: PLC2701 DOC402 ANN201
+# ruff: noqa: PLC2701 DOC402 ANN201 RUF043
 import logging
 from collections.abc import AsyncGenerator, Generator
+from contextlib import suppress
 from pathlib import Path
 from typing import Optional
 
 import pytest
-from exceptiongroup import suppress
 from minio import Minio
 from pytest_databases.docker.minio import MinioService
 from sqlalchemy import Engine, String, create_engine, event
@@ -661,7 +661,7 @@ async def test_obstore_update_async_with_listener(
 
     # Verify new file exists and attachment updated
     assert await backend.get_content_async(new_path) == new_content
-    assert doc.attachment is not None and doc.attachment.path == new_path
+    assert doc.attachment is not None and doc.attachment.path == new_path  # pyright: ignore
 
     # Verify the listener deleted the old file
     with pytest.raises(FileNotFoundError):
@@ -763,8 +763,8 @@ async def test_obstore_delete_async_multiple_removed_with_listener(
 
     # Verify only one image remains
     assert doc.images is not None
-    assert len(doc.images) == 1
-    assert doc.images[0].path == path2
+    assert len(doc.images or []) == 1
+    assert doc.images[0].path == path2  # pyright: ignore
 
     # Verify first file is deleted and second still exists
     with pytest.raises(FileNotFoundError):
@@ -1483,7 +1483,7 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
 
     # Verify new file exists and attachment updated
     assert backend.get_content(new_path) == new_content
-    assert doc.attachment is not None and doc.attachment.path == new_path
+    assert doc.attachment is not None and doc.attachment.path == new_path  # pyright: ignore
 
     # Verify the listener deleted the old file from storage
     with pytest.raises(FileNotFoundError):
