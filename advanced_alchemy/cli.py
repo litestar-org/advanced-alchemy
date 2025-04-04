@@ -202,6 +202,21 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
             alembic_commands.upgrade(revision=revision, sql=sql, tag=tag)
 
     @database_group.command(
+        help="Stamp the revision table with the given revision",
+    )
+    @click.argument("revision", type=str)
+    @bind_key_option
+    @verbose_option
+    def stamp(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Stamp the revision table with the given revision."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = click.get_current_context()
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.stamp(revision=revision)
+
+    @database_group.command(
         name="init",
         help="Initialize migrations for the project.",
     )
