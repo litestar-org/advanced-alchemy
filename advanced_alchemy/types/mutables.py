@@ -22,7 +22,8 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._removed: list[T] = []
+        self._pending_removed: set[T] = set()
+        self._pending_append: list[T] = []
 
     @no_type_check
     def __reduce_ex__(self, proto: int) -> "tuple[type[MutableList[T]], tuple[list[T]]]":  # pragma: no cover
@@ -30,39 +31,41 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
 
     # needed for backwards compatibility with
     # older pickles
-    def __getstate__(self) -> "tuple[list[T], list[T]]":  # pragma: no cover
-        return list(self), self._removed
+    def __getstate__(self) -> "tuple[list[T], set[T]]":  # pragma: no cover
+        return list(self), self._pending_removed
 
     def __setstate__(self, state: "Any") -> None:  # pragma: no cover
         self[:] = state[0]
-        self._removed = state[1]
+        self._pending_removed = state[1]
 
     def __setitem__(self, index: "Any", value: "Any") -> None:
         """Detect list set events and emit change events."""
         old_value = self[index] if isinstance(index, slice) else [self[index]]
         list.__setitem__(self, index, value)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         self.changed()
-        self._removed.extend(old_value)  # pyright: ignore[reportArgumentType]
+        self._pending_removed.update(old_value)  # pyright: ignore[reportArgumentType]
 
     def __delitem__(self, index: "Any") -> None:
         """Detect list del events and emit change events."""
         old_value = self[index] if isinstance(index, slice) else [self[index]]
         list.__delitem__(self, index)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         self.changed()
-        self._removed.extend(old_value)  # pyright: ignore[reportArgumentType]
+        self._pending_removed.update(old_value)  # pyright: ignore[reportArgumentType]
 
     def pop(self, *arg: "Any") -> "T":
         result = list.pop(self, *arg)  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         self.changed()
-        self._removed.append(result)  # pyright: ignore[reportArgumentType,reportUnknownArgumentType]
+        self._pending_removed.add(result)  # pyright: ignore[reportArgumentType,reportUnknownArgumentType]
         return result  # pyright: ignore[reportUnknownVariableType]
 
     def append(self, x: "Any") -> None:
         list.append(self, x)  # pyright: ignore[reportUnknownMemberType]
+        self._pending_append.append(x)
         self.changed()
 
     def extend(self, x: "Any") -> None:
         list.extend(self, x)  # pyright: ignore[reportUnknownMemberType]
+        self._pending_append.extend(x)
         self.changed()
 
     @no_type_check
@@ -72,15 +75,16 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
 
     def insert(self, i: "Any", x: "Any") -> None:
         list.insert(self, i, x)  # pyright: ignore[reportUnknownMemberType]
+        self._pending_append.append(x)
         self.changed()
 
     def remove(self, i: "T") -> None:
         list.remove(self, i)  # pyright: ignore[reportUnknownMemberType]
-        self._removed.append(i)
+        self._pending_removed.add(i)
         self.changed()
 
     def clear(self) -> None:
-        self._removed.extend(self)
+        self._pending_removed.update(self)
         list.clear(self)  # type: ignore[arg-type] # pyright: ignore[reportUnknownMemberType]
         self.changed()
 
@@ -91,3 +95,7 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
     def reverse(self) -> None:
         list.reverse(self)  # type: ignore[arg-type]  # pyright: ignore[reportUnknownMemberType]
         self.changed()
+
+    def _finalize_pending(self) -> None:
+        """Finalize pending changes by clearing the pending append list."""
+        self._pending_append.clear()

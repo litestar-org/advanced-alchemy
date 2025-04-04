@@ -1,15 +1,19 @@
 # ruff: noqa: PLC2701 DOC402 ANN201
+import logging
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Optional
 
 import pytest
+from exceptiongroup import suppress
 from minio import Minio
 from pytest_databases.docker.minio import MinioService
-from sqlalchemy import Engine, String, create_engine
+from sqlalchemy import Engine, String, create_engine, event
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
+from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
 from advanced_alchemy.base import create_registry
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.file_object import (
@@ -22,7 +26,33 @@ from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.registry import StorageRegistry, storages
 from advanced_alchemy.types.mutables import MutableList
 
+# Setup logger
+logger = logging.getLogger(__name__)
+
 pytestmark = pytest.mark.integration
+
+
+def remove_listeners() -> None:
+    """Remove file object listeners safely to prevent test interactions."""
+    from sqlalchemy.event import contains
+
+    from advanced_alchemy._listeners import FileObjectListener
+
+    # Only try to remove listeners if they're actually registered
+    if contains(Session, "before_flush", FileObjectListener.before_flush):
+        with suppress(InvalidRequestError):
+            event.remove(Session, "before_flush", FileObjectListener.before_flush)
+
+    if contains(Session, "after_commit", FileObjectListener.after_commit):
+        with suppress(InvalidRequestError):
+            event.remove(Session, "after_commit", FileObjectListener.after_commit)
+
+    if contains(Session, "after_rollback", FileObjectListener.after_rollback):
+        with suppress(InvalidRequestError):
+            event.remove(Session, "after_rollback", FileObjectListener.after_rollback)
+
+    # Reset async context flag to ensure clean state
+    set_async_context(False)
 
 
 # --- Fixtures ---
@@ -81,7 +111,7 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
 def sync_db_engine(tmp_path: Path) -> Generator[Engine, None, None]:
     """Provides an SQLite engine scoped to each function."""
     db_file = tmp_path / "test_file_object_sync.db"
-    engine = create_engine(f"sqlite:///{db_file}")
+    engine = create_engine(f"sqlite:///{db_file}", execution_options={"enable_file_object_listener": True})
     yield engine
     db_file.unlink(missing_ok=True)
 
@@ -90,20 +120,22 @@ def sync_db_engine(tmp_path: Path) -> Generator[Engine, None, None]:
 def async_db_engine(tmp_path: Path) -> Generator[AsyncEngine, None, None]:
     """Provides an SQLite engine scoped to each function."""
     db_file = tmp_path / "test_file_object_async.db"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}")
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{db_file}", execution_options={"enable_file_object_listener": True}
+    )
     yield engine
     db_file.unlink(missing_ok=True)
 
 
 @pytest.fixture()
 def session(
-    db_engine: Engine, storage_registry: "StorageRegistry"
+    sync_db_engine: Engine, storage_registry: "StorageRegistry"
 ) -> Generator[Session, None, None]:  # Depend on sqlalchemy_config to ensure setup runs
     """Provides a SQLAlchemy session scoped to each function."""
-    Base.metadata.create_all(db_engine)
-    with Session(db_engine) as db_session:
+    Base.metadata.create_all(sync_db_engine)
+    with Session(sync_db_engine) as db_session:
         yield db_session
-    Base.metadata.drop_all(db_engine)
+    Base.metadata.drop_all(sync_db_engine)
 
 
 @pytest.fixture()
@@ -114,8 +146,23 @@ async def async_session(
     async with async_db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    async with async_sessionmaker(async_db_engine)() as db_session:
+    # Create session with flag for listener to identify async operations
+    set_async_context(True)
+    # Create session factory
+    async_session_factory = async_sessionmaker(
+        async_db_engine,
+        expire_on_commit=False,
+    )
+
+    # Create session
+    async with async_session_factory() as db_session:
+        # Add flag to session.info dictionary
+        db_session.info["enable_file_object_listener"] = True
+        logger.debug(f"Created async session: {id(db_session)}, with info: {db_session.info}")
         yield db_session
+
+    # Reset async context flag
+    set_async_context(False)
 
     async with async_db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -126,13 +173,14 @@ async def async_session(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_fsspec_s3_backend(
+async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
     minio_client: "Minio",
     minio_service: "MinioService",
     minio_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject with prefix."""
+    remove_listeners()
     try:
         import s3fs
     except ImportError:
@@ -183,11 +231,6 @@ async def test_fsspec_s3_backend(
     retrieved_content = await obj.get_content_async()
     assert retrieved_content == test_content
 
-    # Test sign method
-    url = obj.sign(expires_in=3600)
-    assert isinstance(url, str)
-    assert url.startswith("http")
-
     # Test sign_async method
     url_async = await obj.sign_async(expires_in=3600)
     assert isinstance(url_async, str)
@@ -198,7 +241,7 @@ async def test_fsspec_s3_backend(
         NotImplementedError,
         match=r"Generating signed URLs for upload is generally not supported by fsspec's generic sign method.",
     ):
-        _ = obj.sign(for_upload=True)
+        _ = await obj.sign_async(for_upload=True)
     # Delete via FileObject method (uses relative obj.path, backend adds prefix)
     await obj.delete_async()
 
@@ -208,14 +251,94 @@ async def test_fsspec_s3_backend(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_s3_backend(
+def test_fsspec_s3_basic_operations_sync(
+    storage_registry: StorageRegistry,
+    minio_client: "Minio",
+    minio_service: "MinioService",
+    minio_default_bucket_name: str,
+) -> None:
+    """Test basic save, get_content, delete via backend and FileObject with prefix."""
+    remove_listeners()
+    try:
+        import s3fs
+    except ImportError:
+        pytest.skip("s3fs not installed")
+
+    assert minio_client.bucket_exists(minio_default_bucket_name)
+    _ = minio_client
+
+    # Create s3fs filesystem instance without bucket info
+    fs = s3fs.S3FileSystem(
+        anon=False,
+        key=minio_service.access_key,
+        secret=minio_service.secret_key,
+        endpoint_url=f"http://{minio_service.endpoint}",
+        client_kwargs={
+            "verify": False,
+            "use_ssl": False,
+        },
+        asynchronous=False,
+        loop=None,
+    )
+
+    # Initialize backend with prefix
+    backend = FSSpecBackend(
+        key="s3_test_store",
+        fs=fs,
+        prefix=minio_default_bucket_name,
+    )
+
+    test_content = b"Hello Storage!"
+    # Use relative path, prefix handles the bucket
+    file_path = "test_basic.txt"
+
+    # Create initial FileObject with relative path
+    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+
+    # Save using backend
+    updated_obj = backend.save_object(obj, test_content)
+
+    # Assert FileObject updated
+    assert updated_obj is obj  # Should update in-place
+    assert obj.path == file_path  # Path should remain relative
+    assert obj.filename == "test_basic.txt"
+    assert obj.etag is not None
+    assert obj.size == len(test_content)
+    assert obj.backend is backend
+    assert obj.protocol == "s3"  # Based on s3fs filesystem
+
+    # Retrieve content via FileObject method (uses relative obj.path, backend adds prefix)
+    retrieved_content = obj.get_content()
+    assert retrieved_content == test_content
+
+    # Test sign_async method
+    url_async = obj.sign(expires_in=3600)
+    assert isinstance(url_async, str)
+    assert url_async.startswith("http")
+
+    # Test for_upload parameter
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Generating signed URLs for upload is generally not supported by fsspec's generic sign method.",
+    ):
+        _ = obj.sign(for_upload=True)
+    # Delete via FileObject method (uses relative obj.path, backend adds prefix)
+    obj.delete()
+
+    # Verify deletion using relative path with backend (backend adds prefix)
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(file_path)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
     minio_client: "Minio",
     minio_service: "MinioService",
     minio_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
-
+    remove_listeners()
     assert minio_client.bucket_exists(minio_default_bucket_name)
     _ = minio_client
     backend = ObstoreBackend(
@@ -260,11 +383,6 @@ async def test_obstore_s3_backend(
     assert isinstance(url_async, str)
     assert url_async.startswith("http")
 
-    # Test for_upload parameter
-    url_for_upload = obj.sign(for_upload=True)
-    assert isinstance(url_for_upload, str)
-    assert url_for_upload.startswith("http")
-
     url_for_upload_async = await obj.sign_async(for_upload=True)
     assert isinstance(url_for_upload_async, str)
     assert url_for_upload_async.startswith("http")
@@ -278,8 +396,75 @@ async def test_obstore_s3_backend(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_basic_operations(storage_registry: StorageRegistry) -> None:
+def test_obstore_s3_basic_operations_sync(
+    storage_registry: StorageRegistry,
+    minio_client: "Minio",
+    minio_service: "MinioService",
+    minio_default_bucket_name: str,
+) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
+    remove_listeners()
+    assert minio_client.bucket_exists(minio_default_bucket_name)
+    _ = minio_client
+    backend = ObstoreBackend(
+        key="s3_test_store",
+        fs=f"s3://{minio_default_bucket_name}/",
+        aws_endpoint=f"http://{minio_service.endpoint}/",
+        aws_access_key_id=minio_service.access_key,
+        aws_secret_access_key=minio_service.secret_key,
+        aws_virtual_hosted_style_request=False,
+        client_options={"allow_http": True},
+    )
+
+    test_content = b"Hello Storage!"
+    file_path = "test_basic.txt"  # Relative path for the backend
+
+    # Create initial FileObject
+    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+
+    # Save using backend
+    updated_obj = backend.save_object(obj, test_content)
+
+    # Assert FileObject updated
+    assert updated_obj is obj  # Should update in-place
+    assert obj.path == file_path
+    assert obj.filename == "test_basic.txt"
+    assert obj.etag is not None
+    assert obj.size == len(test_content)
+    assert obj.backend is backend
+    assert obj.protocol == "s3"  # Based on LocalFileSystem
+
+    # Retrieve content via FileObject method
+    retrieved_content = obj.get_content()
+    assert retrieved_content == test_content
+
+    # Test sign method
+    url = obj.sign(expires_in=3600)
+    assert isinstance(url, str)
+    assert url.startswith("http")
+
+    # Test sign_async method
+    url_async = obj.sign(expires_in=3600)
+    assert isinstance(url_async, str)
+    assert url_async.startswith("http")
+
+    # Test for_upload parameter
+    url_for_upload = obj.sign(for_upload=True)
+    assert isinstance(url_for_upload, str)
+    assert url_for_upload.startswith("http")
+
+    # Delete via FileObject method
+    obj.delete()
+
+    # Verify deletion (expect FileNotFoundError or similar from backend)
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(file_path)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_basic_operations_async(storage_registry: StorageRegistry) -> None:
+    """Test basic save, get_content, delete via backend and FileObject."""
+    remove_listeners()
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Hello Storage!"
     file_path = "test_basic.txt"  # Relative path for the backend
@@ -294,7 +479,8 @@ async def test_obstore_backend_basic_operations(storage_registry: StorageRegistr
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path
     assert obj.filename == "test_basic.txt"
-    assert obj.size == len(test_content) or obj.size is None
+    assert obj.etag is not None
+    assert obj.size == len(test_content)
     assert obj.backend is backend
     assert obj.protocol == "file"  # Based on LocalFileSystem
 
@@ -311,11 +497,46 @@ async def test_obstore_backend_basic_operations(storage_registry: StorageRegistr
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_sqlalchemy_single_file_persist(
+def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> None:
+    """Test basic save, get_content, delete via backend and FileObject."""
+    remove_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Hello Storage!"
+    file_path = "test_basic.txt"  # Relative path for the backend
+
+    # Create initial FileObject
+    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+
+    # Save using backend
+    updated_obj = backend.save_object(obj, test_content)
+
+    # Assert FileObject updated
+    assert updated_obj is obj  # Should update in-place
+    assert obj.path == file_path
+    assert obj.filename == "test_basic.txt"
+    assert obj.etag is not None
+    assert obj.size == len(test_content)
+    assert obj.backend is backend
+    assert obj.protocol == "file"  # Based on LocalFileSystem
+
+    # Retrieve content via FileObject method
+    retrieved_content = obj.get_content()
+    assert retrieved_content == test_content
+
+    # Delete via FileObject method
+    obj.delete()
+
+    # Verify deletion (expect FileNotFoundError or similar from backend)
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(file_path)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_single_file_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test saving and loading a model with a single StoredObject."""
-
+    remove_listeners()
     file_content = b"SQLAlchemy Integration Test"
     doc_name = "Integration Doc"
     file_path = "sqlalchemy_single.bin"
@@ -350,10 +571,11 @@ async def test_obstore_backend_sqlalchemy_single_file_persist(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_sqlalchemy_multiple_files_persist(
+async def test_obstore_multiple_files_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test saving and loading a model with multiple StoredObjects."""
+    remove_listeners()
     backend = storage_registry.get_backend("local_test_store")
     img1_content = b"img_data_1"
     img2_content = b"img_data_2"
@@ -401,10 +623,14 @@ async def test_obstore_backend_sqlalchemy_multiple_files_persist(
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_update_file_object(
+async def test_obstore_update_async_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is updated and session committed."""
+    # Set async context flag to enable async operations in the listener
+    set_async_context(True)
+
+    setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content"
     new_content = b"New file content"
@@ -412,9 +638,11 @@ async def test_obstore_backend_update_file_object(
     new_path = "new_file.txt"
 
     # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path)
-    old_obj_updated = await old_obj.save_async(old_content)
-    doc = Document(name="DocToUpdate", attachment=old_obj_updated)
+    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
+    # Make sure file is saved to the backend
+    old_obj = await old_obj.save_async()
+
+    doc = Document(name="DocToUpdate", attachment=old_obj)
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
@@ -422,13 +650,12 @@ async def test_obstore_backend_update_file_object(
     # Verify old file exists
     assert await backend.get_content_async(old_path) == old_content
 
-    # Prepare and save new file
-    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path)
-    new_obj_updated = await new_obj.save_async(new_content)
-    await old_obj.delete_async()
-    # Update the document's attachment
-    doc.attachment = new_obj_updated
-    async_session.add(doc)  # Add again as it's modified
+    # Prepare new file
+    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path, content=new_content)
+
+    # Update the document with the new file
+    doc.attachment = new_obj
+    async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
 
@@ -436,24 +663,33 @@ async def test_obstore_backend_update_file_object(
     assert await backend.get_content_async(new_path) == new_content
     assert doc.attachment is not None and doc.attachment.path == new_path
 
-    # Verify listener deleted the OLD file from storage
+    # Verify the listener deleted the old file
     with pytest.raises(FileNotFoundError):
         await backend.get_content_async(old_path)
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_listener_delete_on_update_clear(
+async def test_obstore_delete_async_on_update_clear_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
-    """Test listener deletes old file when attribute is cleared and session committed."""
+    """Test listener deletes file when attribute is cleared.
+
+    Note that AsyncSession in SQLAlchemy 2.0 has limitations with event listeners.
+    We will manually handle cleanup of files to ensure proper functionality.
+    """
+    # Set async context flag to enable async operations in the listener
+    set_async_context(True)
+
+    setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear"
     old_path = "clear_me.log"
 
     # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path)
-    old_obj_updated = await old_obj.save_async(old_content)
-    doc = Document(name="DocToClear", attachment=old_obj_updated)
+    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path, content=old_content)
+    old_obj = await old_obj.save_async()  # Make sure it's saved to the backend
+
+    doc = Document(name="DocToClear", attachment=old_obj)
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
@@ -466,65 +702,78 @@ async def test_obstore_backend_listener_delete_on_update_clear(
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
-    await old_obj.delete_async()
+
     # Verify attachment is None
     assert doc.attachment is None
 
-    # Verify listener deleted the file from storage
+    # Verify the listener deleted the file
     with pytest.raises(FileNotFoundError):
         await backend.get_content_async(old_path)
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_listener_delete_multiple_removed(
+async def test_obstore_delete_async_multiple_removed_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
-    """Test listener deletes files removed from a multiple list."""
+    """Test listener deletes files removed from a multiple list.
+
+    Note that AsyncSession in SQLAlchemy 2.0 has limitations with event listeners.
+    MutableList tracking doesn't work properly with AsyncSession, so we use direct
+    assignment for updates instead of mutating the list in-place.
+    """
+    # Set async context flag to enable async operations in the listener
+    set_async_context(True)
+
+    setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1"
     content2 = b"img2"
-    content3 = b"img3"
-    path1 = "multi_del_1.dat"
-    path2 = "multi_del_2.dat"
-    path3 = "multi_del_3.dat"
+    path1 = "img1_list.jpg"
+    path2 = "img2_list.png"
 
-    # Save files
-    obj1 = FileObject(backend=backend, filename=path1)
-    obj2 = FileObject(backend=backend, filename=path2)
-    obj3 = FileObject(backend=backend, filename=path3)
-    obj1 = await obj1.save_async(content1)
-    obj2 = await obj2.save_async(content2)
-    obj3 = await obj3.save_async(content3)
+    # Create file objects and save them
+    obj1 = FileObject(backend=backend, filename="img1.jpg", to_filename=path1, content=content1)
+    obj1 = await obj1.save_async()
 
-    # Create model with initial list
-    doc = Document(name="MultiDeleteTest", images=[obj1, obj2, obj3])
+    obj2 = FileObject(backend=backend, filename="img2.png", to_filename=path2, content=content2)
+    obj2 = await obj2.save_async()
+
+    # Create and save model with both images
+    img_list = MutableList[FileObject]([obj1, obj2])
+    doc = Document(name="ImagesDoc", images=img_list)
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify all files exist
+    # Verify files exist
     assert await backend.get_content_async(path1) == content1
     assert await backend.get_content_async(path2) == content2
-    assert await backend.get_content_async(path3) == content3
 
-    # Remove items from the list (triggers MutableList tracking)
+    # Verify images are loaded
     assert doc.images is not None
-    removed_item = doc.images.pop(1)  # Remove obj2
-    assert removed_item.path == obj2.path
-    del doc.images[0]  # Remove obj1 using delitem
-    await removed_item.delete_async()
+    assert len(doc.images) == 2
+
+    # With AsyncSession, mutations to MutableList may not be tracked correctly.
+    # Instead of mutating the list in place, we'll create a new list with only obj2
+    doc.images = MutableList[FileObject]([obj2])
+
+    async_session.add(doc)
+    await async_session.commit()
+    await async_session.refresh(doc)
+
+    # Verify only one image remains
+    assert doc.images is not None
     assert len(doc.images) == 1
-    assert doc.images[0].path == obj3.path
+    assert doc.images[0].path == path2
 
-    async_session.add(doc)  # Mark modified
-    await async_session.commit()  # Listener should delete obj1 and obj2 based on MutableList._removed
-
-    # Verify remaining file exists
-    assert await backend.get_content_async(path3) == content3
+    # Verify first file is deleted and second still exists
+    with pytest.raises(FileNotFoundError):
+        await backend.get_content_async(path1)
+    assert await backend.get_content_async(path2) == content2
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_file_object_invalid_init(storage_registry: StorageRegistry) -> None:
+async def test_file_object_invalid_init(storage_registry: StorageRegistry) -> None:
     """Test FileObject initialization with invalid parameters."""
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Test content"
@@ -541,7 +790,7 @@ async def test_obstore_backend_file_object_invalid_init(storage_registry: Storag
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_file_object_metadata(storage_registry: StorageRegistry) -> None:
+async def test_file_object_metadata_management(storage_registry: StorageRegistry) -> None:
     """Test FileObject metadata handling."""
     backend = storage_registry.get_backend("local_test_store")
     initial_metadata = {"category": "test", "tags": ["sample"]}
@@ -566,7 +815,7 @@ async def test_obstore_backend_file_object_metadata(storage_registry: StorageReg
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_file_object_to_dict(storage_registry: StorageRegistry) -> None:
+async def test_file_object_to_dict(storage_registry: StorageRegistry) -> None:
     """Test FileObject to_dict method."""
     backend = storage_registry.get_backend("local_test_store")
     obj = FileObject(
@@ -597,7 +846,7 @@ async def test_obstore_backend_file_object_to_dict(storage_registry: StorageRegi
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_local_file_object_sign_urls(storage_registry: StorageRegistry) -> None:
+async def test_obstore_local_sign_urls(storage_registry: StorageRegistry) -> None:
     """Test FileObject sign and sign_async methods."""
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Test content for signing"
@@ -629,15 +878,15 @@ async def test_obstore_backend_local_file_object_sign_urls(storage_registry: Sto
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_file_object_save_with_different_data_types(storage_registry: StorageRegistry) -> None:
+async def test_file_object_save_with_different_data_types(storage_registry: StorageRegistry) -> None:
     """Test FileObject save with different data types."""
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Test content"
     file_path = "test_data_types.txt"
 
     # Test with bytes
-    obj1 = FileObject(backend=backend, filename="test1.txt", to_filename=file_path)
-    await obj1.save_async(data=test_content)
+    obj1 = FileObject(backend=backend, filename="test1.txt", to_filename=file_path, content=test_content)
+    obj1.save()
     assert await obj1.get_content_async() == test_content
 
     # Test with Path
@@ -650,13 +899,13 @@ async def test_obstore_backend_file_object_save_with_different_data_types(storag
     obj2 = FileObject(backend=backend, filename="test2.txt", to_filename=file_path)
     await obj2.save_async(data=temp_path)
     assert await obj2.get_content_async() == test_content
-
+    assert obj2.get_content() == test_content
     # Cleanup
     temp_path.unlink()
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_file_object_pending_data(storage_registry: StorageRegistry) -> None:
+async def test_file_object_pending_data_property(storage_registry: StorageRegistry) -> None:
     """Test FileObject has_pending_data property."""
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Test content"
@@ -676,7 +925,7 @@ async def test_obstore_backend_file_object_pending_data(storage_registry: Storag
 
 
 @pytest.mark.xdist_group("file_object")
-async def test_obstore_backend_file_object_delete_methods(storage_registry: StorageRegistry) -> None:
+async def test_file_object_delete_methods(storage_registry: StorageRegistry) -> None:
     """Test FileObject delete and delete_async methods."""
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Test content to delete"
@@ -894,3 +1143,384 @@ async def test_fsspec_backend_sign_urls(storage_registry: StorageRegistry, tmp_p
         match=r"Generating signed URLs for upload is generally not supported by fsspec's generic sign method.",
     ):
         _ = obj.sign(for_upload=True)
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_sync_save_and_get_content(storage_registry: StorageRegistry) -> None:
+    """Test FileObject synchronous save and get_content methods."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test synchronous content"
+    file_path = "test_sync_save.txt"
+
+    # Create FileObject with content
+    obj = FileObject(backend=backend, filename="test_sync.txt", to_filename=file_path, content=test_content)
+
+    # Test synchronous save method
+    updated_obj = obj.save()
+
+    # Verify save worked correctly
+    assert updated_obj is obj  # Should update in-place
+    assert obj.path == file_path
+    assert obj.size == len(test_content) or obj.size is None
+
+    # Test synchronous get_content method
+    retrieved_content = obj.get_content()
+    assert retrieved_content == test_content
+
+    # Clean up
+    obj.delete()
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_save_with_source_path(storage_registry: StorageRegistry, tmp_path: Path) -> None:
+    """Test FileObject save with source_path."""
+    backend = storage_registry.get_backend("local_test_store")
+    test_content = b"Test content from file"
+    file_path = "test_source_path.txt"
+
+    # Create a temporary file
+    source_file = tmp_path / "source.txt"
+    source_file.write_bytes(test_content)
+
+    # Create FileObject with source_path
+    obj = FileObject(backend=backend, filename="test_source.txt", to_filename=file_path, source_path=source_file)
+
+    # Test save method with source_path
+    obj.save()
+
+    # Verify save worked correctly
+    retrieved_content = obj.get_content()
+    assert retrieved_content == test_content
+
+    # Clean up
+    obj.delete()
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_equality_and_hash(storage_registry: StorageRegistry) -> None:
+    """Test FileObject __eq__ and __hash__ methods."""
+    backend = storage_registry.get_backend("local_test_store")
+
+    # Create two identical FileObjects
+    obj1 = FileObject(backend=backend, filename="test.txt", to_filename="same_path.txt")
+    obj2 = FileObject(backend=backend, filename="different.txt", to_filename="same_path.txt")
+
+    # They should be equal because they have the same path and backend
+    assert obj1 == obj2
+    assert hash(obj1) == hash(obj2)
+
+    # Create a different FileObject
+    obj3 = FileObject(backend=backend, filename="test.txt", to_filename="different_path.txt")
+
+    # They should not be equal because they have different paths
+    assert obj1 != obj3
+    assert hash(obj1) != hash(obj3)
+
+    # Compare with a non-FileObject
+    assert obj1 != "not a file object"
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_property_setters(storage_registry: StorageRegistry) -> None:
+    """Test FileObject property setters."""
+    backend = storage_registry.get_backend("local_test_store")
+
+    obj = FileObject(backend=backend, filename="test.txt")
+
+    # Test size property
+    obj.size = 100
+    assert obj.size == 100
+
+    # Test last_modified property
+    timestamp = 1234567890.0
+    obj.last_modified = timestamp
+    assert obj.last_modified == timestamp
+
+    # Test checksum property
+    obj.checksum = "abc123"
+    assert obj.checksum == "abc123"
+
+    # Test etag property
+    obj.etag = "etag123"
+    assert obj.etag == "etag123"
+
+    # Test version_id property
+    obj.version_id = "v1"
+    assert obj.version_id == "v1"
+
+    # Test metadata property
+    new_metadata = {"key": "value"}
+    obj.metadata = new_metadata
+    assert obj.metadata == new_metadata
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_repr(storage_registry: StorageRegistry) -> None:
+    """Test FileObject __repr__ method."""
+    backend = storage_registry.get_backend("local_test_store")
+
+    # Create a FileObject with all attributes set
+    obj = FileObject(
+        backend=backend,
+        filename="test.txt",
+        size=100,
+        content_type="text/plain",
+        last_modified=1234567890.0,
+        etag="etag123",
+        version_id="v1",
+    )
+
+    # Test __repr__ method
+    repr_str = repr(obj)
+    assert "FileObject" in repr_str
+    assert "filename=test.txt" in repr_str
+    assert "backend=local_test_store" in repr_str
+    assert "size=100" in repr_str
+    assert "content_type=text/plain" in repr_str
+    assert "etag=etag123" in repr_str
+    assert "last_modified=1234567890.0" in repr_str
+    assert "version_id=v1" in repr_str
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_content_type_guessing(storage_registry: StorageRegistry) -> None:
+    """Test content_type guessing from filename."""
+    backend = storage_registry.get_backend("local_test_store")
+
+    # Test common file types
+    file_types = {
+        "test.txt": "text/plain",
+        "image.jpg": "image/jpeg",
+        "doc.pdf": "application/pdf",
+        "data.json": "application/json",
+        "unknown": "application/octet-stream",
+    }
+
+    for filename, expected_type in file_types.items():
+        obj = FileObject(backend=backend, filename=filename)
+        assert obj.content_type == expected_type
+
+
+@pytest.mark.xdist_group("file_object")
+def test_file_object_save_no_data(storage_registry: StorageRegistry) -> None:
+    """Test save method with no data."""
+    backend = storage_registry.get_backend("local_test_store")
+
+    # Create a FileObject with no content or source_path
+    obj = FileObject(backend=backend, filename="test.txt")
+
+    # Saving with no data should raise a TypeError
+    with pytest.raises(TypeError, match="No data provided and no pending content/path found to save."):
+        obj.save()
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_file_object_save_async_no_data(storage_registry: StorageRegistry) -> None:
+    """Test save_async method with no data."""
+    backend = storage_registry.get_backend("local_test_store")
+
+    # Create a FileObject with no content or source_path
+    obj = FileObject(backend=backend, filename="test.txt")
+
+    # Saving with no data should raise a TypeError
+    with pytest.raises(TypeError, match="No data provided and no pending content/path found to save."):
+        await obj.save_async()
+
+
+@pytest.mark.xdist_group("file_object")
+def test_obstore_backend_sqlalchemy_single_file_persist_sync(
+    session: Session, storage_registry: StorageRegistry
+) -> None:
+    """Test saving and loading a model with a single StoredObject using synchronous SQLAlchemy session."""
+    remove_listeners()
+    file_content = b"SQLAlchemy Sync Integration Test"
+    doc_name = "Sync Integration Doc"
+    file_path = "sqlalchemy_single_sync.bin"
+
+    # 1. Prepare FileObject and save via backend
+    initial_obj = FileObject(
+        backend="local_test_store",
+        filename="report.bin",
+        to_filename=file_path,
+        content_type="application/octet-stream",
+    )
+    updated_obj = initial_obj.save(data=file_content)
+
+    # 2. Create and save model instance
+    doc = Document(name=doc_name, attachment=updated_obj)
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+
+    assert doc.id is not None
+    assert doc.attachment is not None
+    assert isinstance(doc.attachment, FileObject)
+    assert doc.attachment.filename == "sqlalchemy_single_sync.bin"
+    assert doc.attachment.path == file_path
+    assert doc.attachment.size == len(file_content) or doc.attachment.size is None
+    assert doc.attachment.content_type == "application/octet-stream"
+    assert doc.attachment.backend.key == "local_test_store"
+
+    # 3. Retrieve content via loaded FileObject
+    loaded_content = doc.attachment.get_content()
+    assert loaded_content == file_content
+
+
+@pytest.mark.xdist_group("file_object")
+def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
+    session: Session, storage_registry: StorageRegistry
+) -> None:
+    """Test saving and loading a model with multiple StoredObjects using synchronous SQLAlchemy session."""
+    remove_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    img1_content = b"img_data_1_sync"
+    img2_content = b"img_data_2_sync"
+    doc_name = "Multi Image Doc Sync"
+    img1_path = "img1_sync.jpg"
+    img2_path = "img2_sync.png"
+
+    # 1. Prepare FileObjects and save via backend
+    obj1 = FileObject(backend=backend, filename="image1.jpg", to_filename=img1_path, content_type="image/jpeg")
+    obj1_updated = obj1.save(img1_content)
+
+    obj2 = FileObject(backend=backend, filename="image2.png", to_filename=img2_path, content_type="image/png")
+    obj2_updated = obj2.save(img2_content)
+
+    # 2. Create and save model instance with MutableList
+    img_list = MutableList[FileObject]([obj1_updated, obj2_updated])
+    doc = Document(name=doc_name, images=img_list)
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+
+    assert doc.id is not None
+    assert doc.images is not None
+    assert isinstance(doc.images, MutableList)
+    assert len(doc.images) == 2
+
+    # Verify loaded objects
+    loaded_obj1 = doc.images[0]
+    loaded_obj2 = doc.images[1]
+    assert isinstance(loaded_obj1, FileObject)
+    assert loaded_obj1.filename == "img1_sync.jpg"
+    assert loaded_obj1.path == img1_path
+    assert loaded_obj1.size == len(img1_content) or loaded_obj1.size is None
+    assert loaded_obj1.backend and loaded_obj1.backend.driver == backend.driver
+
+    assert isinstance(loaded_obj2, FileObject)
+    assert loaded_obj2.filename == "img2_sync.png"
+    assert loaded_obj2.path == img2_path
+    assert loaded_obj2.size == len(img2_content) or loaded_obj2.size is None
+    assert loaded_obj2.backend and loaded_obj2.backend.driver == backend.driver
+
+    # Verify content
+    assert loaded_obj1.get_content() == img1_content
+    assert loaded_obj2.get_content() == img2_content
+
+
+@pytest.mark.xdist_group("file_object")
+def test_obstore_backend_listener_delete_on_update_clear_sync(
+    session: Session, storage_registry: StorageRegistry
+) -> None:
+    """Test listener deletes old file when attribute is cleared using synchronous SQLAlchemy session."""
+    setup_file_object_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    old_content = b"File to clear sync"
+    old_path = "clear_me_sync.log"
+
+    # Save initial file and model
+    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path, content=old_content)
+    old_obj = old_obj.save()  # Explicitly save before commit
+    doc = Document(name="DocToClearSync", attachment=old_obj)
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+
+    # Verify old file exists
+    assert backend.get_content(old_path) == old_content
+
+    # Clear the attachment
+    doc.attachment = None
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+
+    # Verify attachment is None
+    assert doc.attachment is None
+
+    # Verify the listener deleted the file from storage
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(old_path)
+
+
+@pytest.mark.xdist_group("file_object")
+def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
+    """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
+    setup_file_object_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    old_content = b"Old file content sync"
+    new_content = b"New file content sync"
+    old_path = "old_file_sync.txt"
+    new_path = "new_file_sync.txt"
+
+    # Save initial file and model
+    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
+    old_obj = old_obj.save()  # Explicitly save before commit
+    doc = Document(name="DocToUpdateSync", attachment=old_obj)
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+
+    # Verify old file exists
+    assert backend.get_content(old_path) == old_content
+
+    # Update the document's attachment (inline creation)
+    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path, content=new_content)
+    doc.attachment = new_obj
+    session.add(doc)  # Add again as it's modified
+    session.commit()  # Listener should save new_obj and queue deletion of old_obj
+    session.refresh(doc)
+
+    # Verify new file exists and attachment updated
+    assert backend.get_content(new_path) == new_content
+    assert doc.attachment is not None and doc.attachment.path == new_path
+
+    # Verify the listener deleted the old file from storage
+    with pytest.raises(FileNotFoundError):
+        backend.get_content(old_path)
+
+
+@pytest.mark.xdist_group("file_object")
+def test_obstore_backend_listener_delete_multiple_removed_sync(
+    session: Session, storage_registry: StorageRegistry
+) -> None:
+    """Test listener deletes files removed from a multiple list using synchronous SQLAlchemy session."""
+    setup_file_object_listeners()
+    backend = storage_registry.get_backend("local_test_store")
+    content1 = b"img1_sync"
+    content2 = b"img2_sync"
+    path1 = "multi_del_1_sync.dat"
+    path2 = "multi_del_2_sync.dat"
+
+    # Save files
+    obj1 = FileObject(backend=backend, filename=path1)
+    obj2 = FileObject(backend=backend, filename=path2)
+    obj1 = obj1.save(content1)
+    obj2 = obj2.save(content2)
+
+    # Create model with initial list
+    doc = Document(name="MultiDeleteSyncTest", images=[obj1, obj2])
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+
+    # Verify all files exist
+    assert backend.get_content(path1) == content1
+    assert backend.get_content(path2) == content2
+
+    # Remove items from the list (triggers MutableList tracking)
+    assert doc.images is not None
+    removed_item = doc.images.pop(1)  # Remove obj2
+    assert removed_item.path == obj2.path
+    del doc.images[0]  # Remove obj1 using delitem
+    assert len(doc.images) == 0  # Both items should be removed

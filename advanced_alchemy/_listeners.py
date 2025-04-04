@@ -1,25 +1,45 @@
+# ruff: noqa: BLE001, C901, PLR0914
 """Application ORM configuration."""
 
+import asyncio
 import contextvars
 import datetime
-from typing import TYPE_CHECKING, Any, Optional, Union
+import logging
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 from sqlalchemy import event
+from sqlalchemy.inspection import inspect
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import InstanceState, Session, UOWTransaction
+    from sqlalchemy.orm import Session, UOWTransaction
 
     from advanced_alchemy.types.file_object import FileObjectSessionTracker, StorageRegistry
     from advanced_alchemy.types.mutables import MutableList
 
+_active_file_operations: set[asyncio.Task[Any]] = set()
+"""Stores active file operations to prevent them from being garbage collected."""
 # Context variable to hold the session tracker instance for the current session context
 _current_session_tracker: contextvars.ContextVar[Optional["FileObjectSessionTracker"]] = contextvars.ContextVar(
     "_current_session_tracker",
     default=None,
 )
+
+# Context variable to track if we're in an async context
+_is_async_context: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_is_async_context",
+    default=False,
+)
+
+logger = logging.getLogger("advanced_alchemy")
+
+
+def set_async_context(is_async: bool = True) -> None:
+    """Set the async context flag."""
+    _is_async_context.set(is_async)
+
+
+def is_async_context() -> bool:
+    return _is_async_context.get()
 
 
 def _get_session_tracker(create: bool = True) -> Optional["FileObjectSessionTracker"]:
@@ -33,222 +53,321 @@ def _get_session_tracker(create: bool = True) -> Optional["FileObjectSessionTrac
 
 
 def _inspect_attribute_changes(
-    state: "InstanceState[Any]",
+    instance: Any,
     tracker: "FileObjectSessionTracker",
 ) -> None:
-    """Inspects an instance's attributes for FileObject changes."""
-    from sqlalchemy.inspection import inspect
-    from sqlalchemy.orm.attributes import get_history
-
     from advanced_alchemy.types.file_object import FileObject, StoredObject
 
-    mapper = inspect(state.class_)
+    state = inspect(instance)
+    if not state:
+        return
+    mapper = state.mapper
+    if not mapper:
+        return
+
     for attr_name, attr in mapper.column_attrs.items():
-        # Check if the column type is our StoredObject
         if not isinstance(attr.expression.type, StoredObject):
             continue
 
         is_multiple = getattr(attr.expression.type, "multiple", False)
-        history = get_history(state, attr_name)
+        try:
+            attr_state = state.attrs[attr_name]
+        except KeyError:
+            continue
+        history = attr_state.history
 
         # Handle single FileObject attribute
         if not is_multiple:
             current_value: Optional[FileObject] = history.added[0] if history.added else None
             original_value: Optional[FileObject] = history.deleted[0] if history.deleted else None
 
-            # If attribute was set or changed to a new FileObject with pending data
-            if current_value and current_value.has_pending_data:
-                # Access internal attributes for pending data
-                data: Optional[Union[bytes, Path]] = getattr(current_value, "_pending_content", None) or getattr(
-                    current_value, "_pending_source_path", None
-                )
-                if data:
-                    tracker.add_pending_save(current_value, data)
+            if current_value:
+                pending_content = getattr(current_value, "_pending_source_content", None)
+                pending_source_path = getattr(current_value, "_pending_source_path", None)
+                if pending_content is not None:
+                    tracker.add_pending_save(current_value, pending_content)
+                elif pending_source_path is not None:
+                    tracker.add_pending_save(current_value, pending_source_path)
 
-            # If attribute was changed or cleared, mark the original for deletion
             if original_value and original_value.path:
                 tracker.add_pending_delete(original_value)
-            return
+            continue
 
+        # Handle multiple FileObjects (MutableList)
         current_list: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
+        original_list: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
+        items_to_delete: set[FileObject] = set()
 
         if current_list:
-            # Access internal attribute _pending_append
             pending_append = getattr(current_list, "_pending_append", [])
             for item in pending_append:
-                if item.has_pending_data:
-                    # Access internal attributes for pending data
-                    data: Optional[Union[bytes, Path]] = getattr(item, "_pending_content", None) or getattr(  # type: ignore[no-redef]
-                        item, "_pending_source_path", None
-                    )
-                    if data:
-                        tracker.add_pending_save(item, data)
+                pending_content = getattr(item, "_pending_content", None)
+                pending_source_path = getattr(item, "_pending_source_path", None)
+                if pending_content is not None:
+                    tracker.add_pending_save(item, pending_content)
+                elif pending_source_path is not None:
+                    tracker.add_pending_save(item, pending_source_path)
 
-            # Access internal attribute _removed
-            removed_items: set[FileObject] = getattr(current_list, "_removed", set["FileObject"]())
-            for removed_item in removed_items:
-                tracker.add_pending_delete(removed_item)
+            removed_items_from_mutation: set[FileObject] = getattr(current_list, "_removed", set[FileObject]())
+            items_to_delete.update(item for item in removed_items_from_mutation if item.path)
 
-            # Access internal method _finalize_pending
             finalize_method = getattr(current_list, "_finalize_pending", None)
             if finalize_method:
                 finalize_method()
 
+        if original_list:
+            original_items_set = {item for item in original_list if item.path}
+            current_items_set = {item for item in current_list if item.path} if current_list else set[FileObject]()
+            removed_due_to_replacement = original_items_set - current_items_set
+            items_to_delete.update(removed_due_to_replacement)
 
-class FileObjectSyncListener:
+        for item_to_delete in items_to_delete:
+            tracker.add_pending_delete(item_to_delete)
+
+
+class FileObjectListener:
+    """Manages FileObject persistence actions during SQLAlchemy Session transactions.
+
+    This listener hooks into the SQLAlchemy Session event lifecycle to automatically
+    handle the saving and deletion of files associated with `FileObject` attributes
+    mapped using the `StoredObject` type.
+
+    How it Works:
+
+    1.  **Event Registration (`setup_file_object_listeners`):**
+        This listener's methods are registered to be called during specific phases
+        of a Session's lifecycle (`before_flush`, `after_commit`, `after_rollback`).
+
+    2.  **Tracking Changes (`before_flush`):**
+        *   Before SQLAlchemy writes changes to the database (`flush`), this method
+          is triggered.
+        *   It inspects objects within the session that are:
+            *   `session.new`: Newly added to the session.
+            *   `session.dirty`: Modified within the session.
+            *   `session.deleted`: Marked for deletion.
+        *   For each object, it checks attributes mapped with `StoredObject`.
+        *   Using SQLAlchemy's attribute history, it identifies:
+            *   New `FileObject` instances (or those with pending content/paths) that need saving.
+            *   Old `FileObject` instances that have been replaced or belong to deleted objects and need deleting.
+        *   These intended file operations (saves and deletes) are recorded in a
+          `FileObjectSessionTracker` specific to the current session context.
+
+    3.  **Executing Operations (`after_commit`):**
+        *   If the session transaction successfully commits, this method is called.
+        *   It retrieves the `FileObjectSessionTracker` for the session.
+        *   It instructs the tracker to execute all the pending file save and delete operations
+          using the appropriate storage backend.
+        *   The tracker is then cleared.
+
+    4.  **Discarding Operations (`after_rollback`):**
+        *   If the session transaction is rolled back, this method is called.
+        *   It retrieves the tracker and instructs it to discard all pending operations,
+          as the database changes they corresponded to were also discarded.
+        *   The tracker is then cleared.
+
+    **Synchronous vs. Asynchronous Handling:**
+    *   The listener needs to know if it's operating within a standard synchronous
+      SQLAlchemy Session or an `AsyncSession`.
+    *   The `set_async_context(True)` function should be called before using an
+      `AsyncSession` to set a flag (using `contextvars`).
+    *   The `is_async_context()` function checks this flag.
+    *   In `after_commit` and `after_rollback`, if `is_async_context()` is true,
+      the file operations (tracker commit/rollback) are scheduled to run
+      asynchronously using `asyncio.create_task`. Otherwise, they are executed
+      synchronously.
+
+    This ensures that file operations align correctly with the database transaction
+    and are performed efficiently whether using sync or async sessions.
+    """
+
+    @classmethod
+    def _is_listener_enabled(cls, session: "Session") -> bool:
+        enable_listener = True  # Enabled by default
+
+        session_info = getattr(session, "info", {})
+        if "enable_file_object_listener" in session_info:
+            return bool(session_info["enable_file_object_listener"])
+
+        # Type hint for the list of potential option sources
+        options_sources: list[Optional[Union[Callable[[], dict[str, Any]], dict[str, Any]]]] = []
+        if session.bind:
+            options_sources.append(getattr(session.bind, "execution_options", None))
+            sync_engine = getattr(session.bind, "sync_engine", None)
+            if sync_engine:
+                options_sources.append(getattr(sync_engine, "execution_options", None))
+        options_sources.append(getattr(session, "execution_options", None))
+
+        for options_source in options_sources:
+            if options_source is None:
+                continue
+
+            options: Optional[dict[str, Any]] = None
+            if callable(options_source):
+                try:
+                    result = options_source()
+                    if isinstance(result, dict):  # pyright: ignore
+                        options = result
+                except Exception as e:
+                    logger.debug("Error calling execution_options source: %s", e)
+            else:
+                # If not None and not callable, assume it's the dict based on type hint
+                options = options_source
+
+            # Only perform the 'in' check if we successfully got a dictionary
+            if options is not None and "enable_file_object_listener" in options:
+                enable_listener = bool(options["enable_file_object_listener"])
+                break
+
+        return enable_listener
+
+    @classmethod
+    def _process_commit(cls, tracker: "FileObjectSessionTracker") -> None:
+        """Processes pending operations after a commit."""
+        try:
+            if is_async_context():
+                import asyncio
+
+                async def _do_async_commit() -> None:
+                    try:
+                        await tracker.commit_async()
+                    except Exception as e:
+                        # Using %s for cleaner logging of exception causes
+                        logger.debug("An error occurred while committing a file object: %s", e.__cause__)
+                    finally:
+                        _current_session_tracker.set(None)
+
+                # Store the task reference, even if not awaited here
+                t = asyncio.create_task(_do_async_commit())
+                _active_file_operations.add(t)
+                t.add_done_callback(lambda _: _active_file_operations.remove(t))
+            else:
+                tracker.commit()
+                _current_session_tracker.set(None)
+        except Exception:
+            _current_session_tracker.set(None)
+
+    @classmethod
+    def _process_rollback(cls, tracker: "FileObjectSessionTracker") -> None:
+        """Processes pending operations after a rollback."""
+        try:
+            if is_async_context():
+                import asyncio
+
+                async def _do_async_rollback() -> None:
+                    try:
+                        await tracker.rollback_async()
+                    except Exception as e:
+                        logger.debug("An error occurred during async FileObject rollback: %s", e.__cause__)
+                    finally:
+                        _current_session_tracker.set(None)
+
+                # Store the task reference, even if not awaited here
+                t = asyncio.create_task(_do_async_rollback())
+                _active_file_operations.add(t)
+                t.add_done_callback(lambda _: _active_file_operations.remove(t))
+            else:
+                tracker.rollback()
+                _current_session_tracker.set(None)
+        except Exception:
+            _current_session_tracker.set(None)
+
     @classmethod
     def before_flush(cls, session: "Session", flush_context: "UOWTransaction", instances: Optional[object]) -> None:
-        """Track FileObject changes before a synchronous flush."""
-        from sqlalchemy.inspection import inspect
-
+        """Track FileObject changes before a flush."""
         from advanced_alchemy.types.file_object import StoredObject
 
-        config = getattr(session.bind, "engine_config", {}) if session.bind else {}
-        if not config.get("enable_file_object_listener", False):
+        if not cls._is_listener_enabled(session):
             return
 
         tracker = _get_session_tracker(create=True)
         if not tracker:
-            return  # Should not happen if create=True
+            return
 
-        # Inspect newly added instances
         for instance in session.new:
-            state = inspect(instance)
-            _inspect_attribute_changes(state, tracker)
+            _inspect_attribute_changes(instance, tracker)
 
-        # Inspect modified instances
         for instance in session.dirty:
-            state = inspect(instance)
-            _inspect_attribute_changes(state, tracker)
+            _inspect_attribute_changes(instance, tracker)
 
-        # Inspect deleted instances (mark their FileObjects for deletion)
         for instance in session.deleted:
             state = inspect(instance)
-            mapper = inspect(state.class_)
-            for attr_name, attr in mapper.column_attrs.items():
-                if isinstance(attr.expression.type, StoredObject):
-                    is_multiple = getattr(attr.expression.type, "multiple", False)
-                    original_value = getattr(instance, attr_name)  # Get value before delete
-                    if not is_multiple:
-                        tracker.add_pending_delete(original_value)
-                    else:
-                        for item in original_value:
-                            tracker.add_pending_delete(item)
+            if not state:
+                continue
+            mapper = state.mapper
+            if not mapper:
+                continue
+
+            # Avoid inspecting if no StoredObject columns exist
+            has_stored_object = any(
+                isinstance(attr.expression.type, StoredObject) for attr in mapper.column_attrs.values()
+            )
+            if not has_stored_object:
+                continue
+
+            tracker = cls._process_pending_operations(tracker, instance, mapper)
+
+    @classmethod
+    def _process_pending_operations(
+        cls, tracker: "FileObjectSessionTracker", instance: Any, mapper: Any
+    ) -> "FileObjectSessionTracker":
+        from advanced_alchemy.types.file_object import FileObject, StoredObject
+        from advanced_alchemy.types.mutables import MutableList
+
+        for attr_name, attr in mapper.column_attrs.items():
+            if isinstance(attr.expression.type, StoredObject):
+                is_multiple = getattr(attr.expression.type, "multiple", False)
+                original_value: Any = getattr(instance, attr_name, None)
+                if original_value is None:
+                    continue
+
+                if not is_multiple:
+                    tracker.add_pending_delete(original_value)
+                elif isinstance(original_value, (list, MutableList)):
+                    for item in original_value:  # pyright: ignore
+                        tracker.add_pending_delete(cast("FileObject", item))
+        return tracker
 
     @classmethod
     def after_commit(cls, session: "Session") -> None:
-        """Process file operations after a successful synchronous commit."""
+        """Process file operations after a successful commit."""
         tracker = _get_session_tracker(create=False)
         if tracker:
-            try:
-                tracker.commit()
-            finally:
-                # Ensure tracker is reset even if commit fails
-                _current_session_tracker.set(None)
+            cls._process_commit(tracker)
 
     @classmethod
     def after_rollback(cls, session: "Session") -> None:
-        """Clean up pending file operations after a synchronous rollback."""
+        """Clean up pending file operations after a rollback."""
         tracker = _get_session_tracker(create=False)
         if tracker:
-            try:
-                tracker.rollback()
-            finally:
-                # Ensure tracker is reset even if rollback fails
-                _current_session_tracker.set(None)
-
-
-class FileObjectAsyncListener:
-    @classmethod
-    async def before_flush(
-        cls,
-        session: "AsyncSession",
-        flush_context: Optional["UOWTransaction"],
-        instances: Optional[object],
-    ) -> None:
-        """Track FileObject changes before an asynchronous flush."""
-        from sqlalchemy.inspection import inspect
-
-        from advanced_alchemy.types.file_object import StoredObject
-
-        config = getattr(session.bind, "engine_config", {}) if session.bind else {}
-        if not config.get("enable_file_object_listener", False):
-            return
-
-        tracker = _get_session_tracker(create=True)
-        if not tracker:
-            return  # Should not happen if create=True
-
-        # Use run_sync within the async listener to inspect state, as inspection tools are often sync
-        # This might be inefficient but necessary if state inspection triggers sync-only operations.
-        # Alternatively, ensure all models/operations needed are loaded before this point.
-
-        # Inspect newly added instances
-        for instance in session.new:
-            state = inspect(instance)
-            _inspect_attribute_changes(state, tracker)
-
-        # Inspect modified instances
-        for instance in session.dirty:
-            state = inspect(instance)
-            _inspect_attribute_changes(state, tracker)
-
-        # Inspect deleted instances
-        for instance in session.deleted:
-            state = inspect(instance)
-            mapper = inspect(state.class_)
-            for attr_name, attr in mapper.column_attrs.items():
-                if isinstance(attr.expression.type, StoredObject):
-                    is_multiple = getattr(attr.expression.type, "multiple", False)
-                    # Need the state *before* deletion for original value, which might be tricky
-                    # in async context if object attributes are unloaded. Relying on session.deleted
-                    # state might be sufficient if values are retained until flush.
-                    # Let's assume the object still holds the value here.
-                    original_value = getattr(instance, attr_name)
-                    if not is_multiple:
-                        tracker.add_pending_delete(original_value)
-                    else:
-                        for item in original_value:
-                            tracker.add_pending_delete(item)
-
-    @classmethod
-    async def after_commit(cls, session: "AsyncSession") -> None:
-        """Process file operations after a successful asynchronous commit."""
-        tracker = _get_session_tracker(create=False)
-        if tracker:
-            try:
-                await tracker.commit_async()
-            finally:
-                _current_session_tracker.set(None)
-
-    @classmethod
-    async def after_rollback(cls, session: "AsyncSession") -> None:
-        """Clean up pending file operations after an asynchronous rollback."""
-        tracker = _get_session_tracker(create=False)
-        if tracker:
-            try:
-                await tracker.rollback_async()
-            finally:
-                _current_session_tracker.set(None)
+            cls._process_rollback(tracker)
 
 
 def setup_file_object_listeners(registry: Optional["StorageRegistry"] = None) -> None:  # noqa: ARG001
-    """Registers the FileObject event listeners globally if not already registered."""
-    # Import AsyncSession lazily to avoid circular dependency if called early
+    """Registers the FileObject event listeners globally."""
+    from sqlalchemy.event import contains
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    # Register synchronous listeners
-    event.listen(Session, "before_flush", FileObjectSyncListener.before_flush)
-    event.listen(Session, "after_commit", FileObjectSyncListener.after_commit)
-    event.listen(Session, "after_rollback", FileObjectSyncListener.after_rollback)
+    listeners = {
+        "before_flush": FileObjectListener.before_flush,
+        "after_commit": FileObjectListener.after_commit,
+        "after_rollback": FileObjectListener.after_rollback,
+    }
 
-    # Register asynchronous listeners
-    # Ref: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#using-events-with-the-asyncio-extension
-    # Use raw=True for async listeners on AsyncSession
-    event.listen(AsyncSession, "before_flush", FileObjectAsyncListener.before_flush, raw=True)
-    event.listen(AsyncSession, "after_commit", FileObjectAsyncListener.after_commit, raw=True)
-    event.listen(AsyncSession, "after_rollback", FileObjectAsyncListener.after_rollback, raw=True)
+    # Register for sync Session
+    for event_name, listener_func in listeners.items():
+        if not contains(Session, event_name, listener_func):  # type: ignore[arg-type]
+            event.listen(Session, event_name, listener_func)
+
+    async_listeners_to_register = {
+        "after_commit": FileObjectListener.after_commit,
+        "after_rollback": FileObjectListener.after_rollback,
+    }
+    for event_name, listener_func in async_listeners_to_register.items():
+        if hasattr(AsyncSession, event_name) and not contains(AsyncSession, event_name, listener_func):
+            event.listen(AsyncSession, event_name, listener_func)
+
+    set_async_context(False)
 
 
 # Existing listener (keep it)
@@ -264,5 +383,9 @@ def touch_updated_timestamp(session: "Session", *_: Any) -> None:
             session.
     """
     for instance in session.dirty:
-        if hasattr(instance, "updated_at"):
+        state = inspect(instance)
+        if not state or not hasattr(state.mapper.class_, "updated_at"):
+            continue
+        updated_at_attr = state.attrs.get("updated_at")
+        if updated_at_attr and not updated_at_attr.history.has_changes():
             instance.updated_at = datetime.datetime.now(datetime.timezone.utc)

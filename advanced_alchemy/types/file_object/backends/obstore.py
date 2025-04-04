@@ -81,7 +81,11 @@ class ObstoreBackend(StorageBackend):
             options: Optional backend-specific options
         """
         options = options or {}
-        obj = self.fs.get(self._to_path(path), **options)
+        # Filter out unsupported options
+        supported_options = {
+            k: v for k, v in options.items() if k in {"use_multipart", "chunk_size", "max_concurrency"}
+        }
+        obj = self.fs.get(self._to_path(path), **supported_options)
         return obj.bytes().to_bytes()  # type: ignore[no-any-return]
 
     async def get_content_async(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
@@ -92,7 +96,11 @@ class ObstoreBackend(StorageBackend):
             options: Optional backend-specific options
         """
         options = options or {}
-        obj = await self.fs.get_async(self._to_path(path), **options)
+        # Filter out unsupported options
+        supported_options = {
+            k: v for k, v in options.items() if k in {"use_multipart", "chunk_size", "max_concurrency"}
+        }
+        obj = await self.fs.get_async(self._to_path(path), **supported_options)
         return (await obj.bytes_async()).to_bytes()  # type: ignore[no-any-return]
 
     def save_object(
