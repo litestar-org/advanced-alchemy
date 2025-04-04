@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy import base, mixins
+from advanced_alchemy._listeners import is_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask import (
     AdvancedAlchemy,
@@ -98,7 +99,9 @@ def test_sync_extension_init(setup_database: Path) -> None:
         config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
-        session = extension.get_session()
+        assert isinstance(extension, AdvancedAlchemy)
+        session = extension.get_sync_session()
+        assert is_async_context() is False
         assert isinstance(session, Session)
 
 
@@ -109,7 +112,9 @@ def test_sync_extension_init_with_app(setup_database: Path) -> None:
         config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
-        session = extension.get_session()
+        assert isinstance(extension, AdvancedAlchemy)
+        session = extension.get_sync_session()
+        assert is_async_context() is False
         assert isinstance(session, Session)
 
 
@@ -136,6 +141,7 @@ def test_async_extension_init(setup_database: Path) -> None:
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session("async")
         assert isinstance(session, AsyncSession)
+        assert is_async_context() is True
         extension.portal_provider.stop()
 
 

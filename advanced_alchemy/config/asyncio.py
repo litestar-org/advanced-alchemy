@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.config.common import (
     GenericAlembicConfig,
     GenericSessionConfig,
@@ -85,5 +86,6 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             AsyncGenerator[AsyncSession, None]: An async context manager that yields an AsyncSession.
         """
         session_maker = self.create_session_maker()
+        set_async_context(True)  # Set context for standalone usage
         async with session_maker() as session:
             yield session

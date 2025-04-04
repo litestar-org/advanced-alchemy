@@ -32,9 +32,21 @@ _is_async_context: contextvars.ContextVar[bool] = contextvars.ContextVar(
 logger = logging.getLogger("advanced_alchemy")
 
 
-def set_async_context(is_async: bool = True) -> None:
-    """Set the async context flag."""
-    _is_async_context.set(is_async)
+def set_async_context(is_async: bool = True) -> Optional[contextvars.Token[bool]]:
+    """Set the async context flag.
+
+    Args:
+        is_async: Whether the context is async.
+
+    Returns:
+        The token for the async context.
+    """
+    return _is_async_context.set(is_async)
+
+
+def reset_async_context(token: contextvars.Token[bool]) -> None:
+    """Reset the async context flag using the provided token."""
+    _is_async_context.reset(token)
 
 
 def is_async_context() -> bool:

@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import Literal
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
@@ -127,7 +128,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
     @property
     def app(self) -> "Sanic[Any, Any]":
-        """The Sanic application instance."""
+        """The Sanic application instance.
+
+        Raises:
+            ImproperConfigurationError: If the application is not initialized.
+        """
         if self._app is None:
             msg = "The Sanic application instance is not set."
             raise ImproperConfigurationError(msg)
@@ -189,6 +194,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
+                set_async_context(True)
 
         @self.app.middleware("response")  # type: ignore[arg-type]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -232,9 +238,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 The incoming HTTP request.
             response (sanic.HTTPResponse):
                 The outgoing HTTP response.
-
-        Returns:
-            None
         """
         try:
             if (self.commit_mode == "autocommit" and 200 <= response.status < 300) or (  # noqa: PLR2004
@@ -293,8 +296,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         Ensures that all connections are properly closed during application shutdown.
 
-        Returns:
-            None
         """
         await self.close_engine()
         if hasattr(self.app.ctx, self.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
@@ -327,7 +328,11 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
     @property
     def app(self) -> "Sanic[Any, Any]":
-        """The Sanic application instance."""
+        """The Sanic application instance.
+
+        Raises:
+            ImproperConfigurationError: If the application is not initialized.
+        """
         if self._app is None:
             msg = "The Sanic application instance is not set."
             raise ImproperConfigurationError(msg)
@@ -397,6 +402,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
+                set_async_context(False)
 
         @self.app.middleware("response")  # type: ignore[arg-type]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -440,9 +446,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 The incoming HTTP request.
             response (sanic.HTTPResponse):
                 The outgoing HTTP response.
-
-        Returns:
-            None
         """
         loop = asyncio.get_event_loop()
         try:
@@ -500,9 +503,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
-
-        Returns:
-            None
         """
         await self.close_engine()
         if hasattr(self.app.ctx, self.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]

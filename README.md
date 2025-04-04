@@ -33,7 +33,9 @@ offering:
 - Integration with major web frameworks including Litestar, Starlette, FastAPI, Sanic
 - Custom-built alembic configuration and CLI with optional framework integration
 - Utility base classes with audit columns, primary keys and utility functions
-- Built in `File Object` data type for storing objects with `fsspec` or `obstore`
+- Built in `File Object` data type for storing objects:
+    - Unified interface for various storage backends ([`fsspec`](https://filesystem-spec.readthedocs.io/en/latest/) and [`obstore`](https://developmentseed.org/obstore/latest/))
+    - Optional lifecycle event hooks integrated with SQLAlchemy's event system to automatically save and delete files as records are inserted, updated, or deleted.
 - Optimized JSON types including a custom JSON type for Oracle
 - Integrated support for UUID6 and UUID7 using [`uuid-utils`](https://github.com/aminalaee/uuid-utils) (install with the `uuid` extra)
 - Integrated support for Nano ID using [`fastnanoid`](https://github.com/oliverlambson/fastnanoid) (install with the `nanoid` extra)
