@@ -1,22 +1,15 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from types import ModuleType
+from typing import Callable
 
 from litestar import get
-from litestar.pagination import ClassicPagination
 from litestar.status_codes import HTTP_200_OK
-from litestar.testing import create_test_client
+from litestar.testing import RequestFactory, create_test_client
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDAuditBase
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemySerializationPlugin
-
-if TYPE_CHECKING:
-    from types import ModuleType
-    from typing import Callable
-
-    from litestar.testing import RequestFactory
+from advanced_alchemy.extensions.litestar import SQLAlchemySerializationPlugin
+from advanced_alchemy.service.pagination import OffsetPagination
 
 
 async def test_serialization_plugin(
@@ -32,7 +25,7 @@ from typing import Dict, List, Set, Tuple, Type, List
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from litestar import Litestar, get, post
-from advanced_alchemy.extensions.litestar.plugins import SQLAlchemySerializationPlugin
+from advanced_alchemy.extensions.litestar import SQLAlchemySerializationPlugin
 
 class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -75,8 +68,8 @@ def test_pagination_serialization() -> None:
     users = [User(first_name="ASD"), User(first_name="qwe")]
 
     @get("/paginated")
-    async def paginated_handler() -> ClassicPagination[User]:
-        return ClassicPagination[User](items=users, page_size=2, current_page=1, total_pages=1)
+    async def paginated_handler() -> OffsetPagination[User]:
+        return OffsetPagination[User](items=users, limit=2, offset=0, total=2)
 
     with create_test_client(paginated_handler, plugins=[SQLAlchemySerializationPlugin()]) as client:
         response = client.get("/paginated")

@@ -1,7 +1,7 @@
-from __future__ import annotations
-
+import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 if TYPE_CHECKING:
     from click import Group
@@ -13,8 +13,15 @@ if TYPE_CHECKING:
 __all__ = ("add_migration_commands", "get_alchemy_group")
 
 
-def get_alchemy_group() -> Group:
-    """Get the Advanced Alchemy CLI group."""
+def get_alchemy_group() -> "Group":
+    """Get the Advanced Alchemy CLI group.
+
+    Raises:
+        MissingDependencyError: If the `click` package is not installed.
+
+    Returns:
+        The Advanced Alchemy CLI group.
+    """
     from advanced_alchemy.exceptions import MissingDependencyError
 
     try:
@@ -33,7 +40,7 @@ def get_alchemy_group() -> Group:
         type=str,
     )
     @click.pass_context
-    def alchemy_group(ctx: click.Context, config: str) -> None:
+    def alchemy_group(ctx: "click.Context", config: str) -> None:
         """Advanced Alchemy CLI commands."""
         from rich import get_console
 
@@ -43,7 +50,7 @@ def get_alchemy_group() -> Group:
         ctx.ensure_object(dict)
         try:
             config_instance = module_loader.import_string(config)
-            if isinstance(config_instance, (list, tuple)):
+            if isinstance(config_instance, Sequence):
                 ctx.obj["configs"] = config_instance
             else:
                 ctx.obj["configs"] = [config_instance]
@@ -54,8 +61,18 @@ def get_alchemy_group() -> Group:
     return alchemy_group
 
 
-def add_migration_commands(database_group: Group | None = None) -> Group:  # noqa: C901, PLR0915
-    """Add migration commands to the database group."""
+def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":  # noqa: C901, PLR0915
+    """Add migration commands to the database group.
+
+    Args:
+        database_group: The database group to add the commands to.
+
+    Raises:
+        MissingDependencyError: If the `click` package is not installed.
+
+    Returns:
+        The database group with the migration commands added.
+    """
     from advanced_alchemy.exceptions import MissingDependencyError
 
     try:
@@ -72,18 +89,65 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     if database_group is None:
         database_group = get_alchemy_group()
 
+    bind_key_option = click.option(
+        "--bind-key",
+        help="Specify which SQLAlchemy config to use by bind key",
+        type=str,
+        default=None,
+    )
+    verbose_option = click.option(
+        "--verbose",
+        help="Enable verbose output.",
+        type=bool,
+        default=False,
+        is_flag=True,
+    )
+    no_prompt_option = click.option(
+        "--no-prompt",
+        help="Do not prompt for confirmation before executing the command.",
+        type=bool,
+        default=False,
+        required=False,
+        show_default=True,
+        is_flag=True,
+    )
+
+    def get_config_by_bind_key(
+        ctx: "click.Context", bind_key: Optional[str]
+    ) -> "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]":
+        """Get the SQLAlchemy config for the specified bind key.
+
+        Args:
+            ctx: The click context.
+            bind_key: The bind key to get the config for.
+
+        Returns:
+            The SQLAlchemy config for the specified bind key.
+        """
+        configs = ctx.obj["configs"]
+        if bind_key is None:
+            return cast("Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]", configs[0])
+
+        for config in configs:
+            if config.bind_key == bind_key:
+                return cast("Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]", config)
+
+        console.print(f"[red]No config found for bind key: {bind_key}[/]")
+        sys.exit(1)
+
     @database_group.command(
         name="show-current-revision",
         help="Shows the current revision for the database.",
     )
-    @click.option("--verbose", type=bool, help="Enable verbose output.", default=False, is_flag=True)
-    @click.pass_context
-    def show_database_revision(ctx: click.Context, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @bind_key_option
+    @verbose_option
+    def show_database_revision(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
+        ctx = click.get_current_context()
         console.rule("[yellow]Listing current revision[/]", align="left")
-        sqlalchemy_config = ctx.obj["configs"][0]
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.current(verbose=verbose)
 
@@ -91,6 +155,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="downgrade",
         help="Downgrade database to a specific revision.",
     )
+    @bind_key_option
     @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
     @click.option(
         "--tag",
@@ -98,27 +163,21 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default=None,
     )
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before downgrading.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.argument(
         "revision",
         type=str,
         default="-1",
     )
-    @click.pass_context
-    def downgrade_database(ctx: click.Context, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def downgrade_database(  # pyright: ignore[reportUnusedFunction]
+        bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], no_prompt: bool
+    ) -> None:
         """Downgrade the database to the latest revision."""
         from rich.prompt import Confirm
 
         from advanced_alchemy.alembic.commands import AlembicCommands
 
+        ctx = click.get_current_context()
         console.rule("[yellow]Starting database downgrade process[/]", align="left")
         input_confirmed = (
             True
@@ -126,7 +185,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             else Confirm.ask(f"Are you sure you want to downgrade the database to the `{revision}` revision?")
         )
         if input_confirmed:
-            sqlalchemy_config = ctx.obj["configs"][0]
+            sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
             alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
             alembic_commands.downgrade(revision=revision, sql=sql, tag=tag)
 
@@ -134,6 +193,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="upgrade",
         help="Upgrade database to a specific revision.",
     )
+    @bind_key_option
     @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
     @click.option(
         "--tag",
@@ -141,27 +201,21 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         type=str,
         default=None,
     )
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before upgrading.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
+    @no_prompt_option
     @click.argument(
         "revision",
         type=str,
         default="head",
     )
-    @click.pass_context
-    def upgrade_database(ctx: click.Context, revision: str, sql: bool, tag: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def upgrade_database(  # pyright: ignore[reportUnusedFunction]
+        bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], no_prompt: bool
+    ) -> None:
         """Upgrade the database to the latest revision."""
         from rich.prompt import Confirm
 
         from advanced_alchemy.alembic.commands import AlembicCommands
 
+        ctx = click.get_current_context()
         console.rule("[yellow]Starting database upgrade process[/]", align="left")
         input_confirmed = (
             True
@@ -169,41 +223,53 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             else Confirm.ask(f"[bold]Are you sure you want migrate the database to the `{revision}` revision?[/]")
         )
         if input_confirmed:
-            sqlalchemy_config = ctx.obj["configs"][0]
+            sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
             alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
             alembic_commands.upgrade(revision=revision, sql=sql, tag=tag)
+
+    @database_group.command(
+        help="Stamp the revision table with the given revision",
+    )
+    @click.argument("revision", type=str)
+    @bind_key_option
+    def stamp(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Stamp the revision table with the given revision."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = click.get_current_context()
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.stamp(revision=revision)
 
     @database_group.command(
         name="init",
         help="Initialize migrations for the project.",
     )
-    @click.argument("directory", default=None)
+    @bind_key_option
+    @click.argument(
+        "directory",
+        default=None,
+        required=False,
+    )
     @click.option("--multidb", is_flag=True, default=False, help="Support multiple databases")
     @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before initializing.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
-    @click.pass_context
-    def init_alembic(ctx: click.Context, directory: str | None, multidb: bool, package: bool, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @no_prompt_option
+    def init_alembic(  # pyright: ignore[reportUnusedFunction]
+        bind_key: Optional[str], directory: Optional[str], multidb: bool, package: bool, no_prompt: bool
+    ) -> None:
         """Initialize the database migrations."""
         from rich.prompt import Confirm
 
         from advanced_alchemy.alembic.commands import AlembicCommands
 
+        ctx = click.get_current_context()
         console.rule("[yellow]Initializing database migrations.", align="left")
         input_confirmed = (
-            True
-            if no_prompt
-            else Confirm.ask(f"[bold]Are you sure you want initialize the project in `{directory}`?[/]")
+            True if no_prompt else Confirm.ask("[bold]Are you sure you want initialize migrations for the project?[/]")
         )
         if input_confirmed:
-            for config in ctx.obj["configs"]:
+            configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]
+            for config in configs:
                 directory = config.alembic_config.script_location if directory is None else directory
                 alembic_commands = AlembicCommands(sqlalchemy_config=config)
                 alembic_commands.init(directory=cast("str", directory), multidb=multidb, package=package)
@@ -212,6 +278,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         name="make-migrations",
         help="Create a new migration revision.",
     )
+    @bind_key_option
     @click.option("-m", "--message", default=None, help="Revision message")
     @click.option(
         "--autogenerate/--no-autogenerate", default=True, help="Automatically populate revision with detected changes"
@@ -224,26 +291,17 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
     @click.option("--branch-label", default=None, help="Specify a branch label to apply to the new revision")
     @click.option("--version-path", default=None, help="Specify specific path from config for version file")
     @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for a migration message.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
-    @click.pass_context
+    @no_prompt_option
     def create_revision(  # pyright: ignore[reportUnusedFunction]
-        ctx: click.Context,
-        message: str | None,
+        bind_key: Optional[str],
+        message: Optional[str],
         autogenerate: bool,
         sql: bool,
         head: str,
         splice: bool,
-        branch_label: str | None,
-        version_path: str | None,
-        rev_id: str | None,
+        branch_label: Optional[str],
+        version_path: Optional[str],
+        rev_id: Optional[str],
         no_prompt: bool,
     ) -> None:
         """Create a new database revision."""
@@ -252,9 +310,9 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         def process_revision_directives(
-            context: MigrationContext,  # noqa: ARG001
+            context: "MigrationContext",  # noqa: ARG001
             revision: tuple[str],  # noqa: ARG001
-            directives: list[MigrationScript],
+            directives: list["MigrationScript"],
         ) -> None:
             """Handle revision directives."""
             if autogenerate and cast("UpgradeOps", directives[0].upgrade_ops).is_empty():
@@ -275,11 +333,12 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
                 )
                 directives.clear()
 
+        ctx = click.get_current_context()
         console.rule("[yellow]Starting database upgrade process[/]", align="left")
         if message is None:
             message = "autogenerated" if no_prompt else Prompt.ask("Please enter a message describing this revision")
 
-        sqlalchemy_config = ctx.obj["configs"][0]
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.revision(
             message=message,
@@ -294,17 +353,9 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         )
 
     @database_group.command(name="drop-all", help="Drop all tables from the database.")
-    @click.option(
-        "--no-prompt",
-        help="Do not prompt for confirmation before upgrading.",
-        type=bool,
-        default=False,
-        required=False,
-        show_default=True,
-        is_flag=True,
-    )
-    @click.pass_context
-    def drop_all(ctx: click.Context, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    @bind_key_option
+    @no_prompt_option
+    def drop_all(bind_key: Optional[str], no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
         from anyio import run
         from rich.prompt import Confirm
@@ -312,22 +363,25 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         from advanced_alchemy.alembic.utils import drop_all
         from advanced_alchemy.base import metadata_registry
 
+        ctx = click.get_current_context()
         console.rule("[yellow]Dropping all tables from the database[/]", align="left")
         input_confirmed = no_prompt or Confirm.ask(
             "[bold red]Are you sure you want to drop all tables from the database?"
         )
 
         async def _drop_all(
-            configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+            configs: "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]",
         ) -> None:
             for config in configs:
                 engine = config.get_engine()
                 await drop_all(engine, config.alembic_config.version_table_name, metadata_registry.get(config.bind_key))
 
         if input_confirmed:
-            run(_drop_all, ctx.obj["configs"])
+            configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]
+            run(_drop_all, configs)
 
     @database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
+    @bind_key_option
     @click.option(
         "--table",
         "table_names",
@@ -344,8 +398,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    @click.pass_context
-    def dump_table_data(ctx: click.Context, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
+    def dump_table_data(bind_key: Optional[str], table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
         from anyio import run
         from rich.prompt import Confirm
@@ -353,6 +406,7 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
         from advanced_alchemy.alembic.utils import dump_tables
         from advanced_alchemy.base import metadata_registry, orm_registry
 
+        ctx = click.get_current_context()
         all_tables = "*" in table_names
 
         if all_tables and not Confirm.ask(
@@ -361,7 +415,8 @@ def add_migration_commands(database_group: Group | None = None) -> Group:  # noq
             return console.rule("[red bold]No data was dumped.", style="red", align="left")
 
         async def _dump_tables() -> None:
-            for config in ctx.obj["configs"]:
+            configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]
+            for config in configs:
                 target_tables = set(metadata_registry.get(config.bind_key).tables)
 
                 if not all_tables:

@@ -1,7 +1,7 @@
 # ruff: noqa: FA100
 from base64 import b64decode
 from importlib.util import find_spec
-from typing import Any, Optional, Type, Union, cast
+from typing import Any, Optional, Union, cast
 from uuid import UUID
 
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
@@ -34,7 +34,7 @@ class GUID(TypeDecorator[UUID]):
     cache_ok = True
 
     @property
-    def python_type(self) -> Type[UUID]:
+    def python_type(self) -> type[UUID]:
         return UUID
 
     def __init__(self, *args: Any, binary: bool = True, **kwargs: Any) -> None:
@@ -85,12 +85,12 @@ class GUID(TypeDecorator[UUID]):
     @staticmethod
     def to_uuid(value: Any) -> Optional[UUID]:
         if value.__class__.__name__ == "UUID" or value is None:
-            return cast("UUID | None", value)
+            return cast("Optional[UUID]", value)
         try:
             value = UUID(hex=value)
         except (TypeError, ValueError):
             value = UUID(bytes=value)
-        return cast("UUID | None", value)
+        return cast("Optional[UUID]", value)
 
     def compare_values(self, x: Any, y: Any) -> bool:
         """Compare two values for equality."""

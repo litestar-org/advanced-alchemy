@@ -90,6 +90,9 @@ class DockerServiceRegistry:
         **kwargs: Any,
     ) -> None:
         if name not in self._running_services:
+            if await wrap_sync(check)(self.docker_ip, **kwargs):
+                self._running_services.add(name)
+                return
             self.run_command("up", "-d", name)
             self._running_services.add(name)
 

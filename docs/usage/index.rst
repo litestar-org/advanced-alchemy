@@ -18,13 +18,15 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     repositories
     services
     types
-    utilities
+    cli
+    database_seeding
 
 .. toctree::
     :maxdepth: 2
     :caption: Framework Integration
 
     frameworks/litestar
+    frameworks/flask
     frameworks/fastapi
 
 The guide follows a practical approach:
@@ -45,7 +47,7 @@ Each section includes:
 Prerequisites
 -------------
 
-- Python 3.8+
+- Python 3.9+
 - SQLAlchemy 2.0+
 - Pydantic v2 or Msgspec (for schema validation)
 - Basic understanding of SQLAlchemy and async programming

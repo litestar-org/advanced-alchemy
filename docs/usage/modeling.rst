@@ -3,7 +3,7 @@ Modeling
 ========
 
 Advanced Alchemy enhances SQLAlchemy's modeling capabilities with production-ready base classes, mixins, and specialized types.
-This guide demonstrates building a complete blog system with posts and tags, showcasing key features and best practices.
+This guide demonstrates modeling for a blog system with posts and tags, showcasing key features and best practices.
 
 Base Classes
 ------------
@@ -32,9 +32,9 @@ Advanced Alchemy provides several base classes optimized for different use cases
      - UUIDv6 primary keys, Automatic created_at/updated_at timestamps
    * - ``UUIDv7AuditBase``
      - Time-sortable UUIDv7 primary keys, Automatic created_at/updated_at timestamps
-   * - ``NanoidBase``
+   * - ``NanoIDBase``
      - URL-friendly unique identifiers, Shorter than UUIDs, collision resistant
-   * - ``NanoidAuditBase``
+   * - ``NanoIDAuditBase``
      - URL-friendly IDs with audit timestamps, Combines Nanoid benefits with audit trails
 
 Mixins
@@ -64,10 +64,11 @@ Let's start with a simple blog post model:
 
 .. code-block:: python
 
+    import datetime
+    from typing import Optional
+
     from advanced_alchemy.base import BigIntAuditBase
     from sqlalchemy.orm import Mapped, mapped_column
-    from datetime import datetime
-    from typing import Optional
 
     class Post(BigIntAuditBase):
         """Blog post model with auto-incrementing ID and audit fields.
@@ -83,7 +84,9 @@ Let's start with a simple blog post model:
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
         published: Mapped[bool] = mapped_column(default=False)
-        published_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+        published_at: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
+
+.. _many_to_many_relationships:
 
 Many-to-Many Relationships
 --------------------------
@@ -160,20 +163,22 @@ If we want to interact with the models above, we might use something like the fo
         return post
 
 
-While not too difficult, there is definitely some additional logic required to handle the unique tags on this post.  Fortunately, we can remove some of this logic thanks to the ``UniqueMixin``.  Let's look at how we can do this.
+Fortunately, we can remove some of this logic thanks to :class:`UniqueMixin`.
 
-Using the UniqueMixin
----------------------
+.. _using_unique_mixin:
 
-The UniqueMixin provides automatic handling of unique constraints and merging of duplicate records. When using the mixin,
-you must implement two classmethods: ``unique_hash`` and ``unique_filter``. These methods enable:
+Using :class:`UniqueMixin`
+--------------------------
+
+:class:`UniqueMixin` provides automatic handling of unique constraints and merging of duplicate records. When using the mixin,
+you must implement two classmethods: :meth:`unique_hash <UniqueMixin.unique_hash>` and :meth:`unique_filter <UniqueMixin.unique_hash>`. These methods enable:
 
 - Automatic lookup of existing records
 - Safe merging of duplicates
 - Atomic get-or-create operations
 - Configurable uniqueness criteria
 
-Let's enhance our Tag model with UniqueMixin:
+Let's enhance our Tag model with :class:`UniqueMixin`:
 
 .. code-block:: python
 
@@ -213,10 +218,7 @@ Let's enhance our Tag model with UniqueMixin:
             """SQL filter for finding existing records."""
             return cls.slug == slugify(name)
 
-Using the Models
-----------------
-
-Here's how to use these models with the UniqueMixin:
+We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the logic.
 
 .. code-block:: python
 
@@ -227,13 +229,11 @@ Here's how to use these models with the UniqueMixin:
         post: Post,
         tag_names: list[str]
     ) -> Post:
-        """Add tags to a post, creating new tags if needed.
-
-        The UniqueMixin automatically handles:
-        1. Looking up existing tags
-        2. Creating new tags if needed
-        3. Merging duplicates
-        """
+        """Add tags to a post, creating new tags if needed."""
+        # The UniqueMixin automatically handles:
+        # 1. Looking up existing tags
+        # 2. Creating new tags if needed
+        # 3. Merging duplicates
         post.tags = [
           await Tag.as_unique_async(session, name=tag_text, slug=slugify(tag_text))
           for tag_text in tag_names
@@ -253,7 +253,7 @@ Here's an example showing a class to generate a server-side UUID primary key for
 
 .. code-block:: python
 
-    from datetime import datetime
+    import datetime
     from uuid import UUID, uuid4
 
     from advanced_alchemy.base import CommonTableAttributes, orm_registry
@@ -294,7 +294,7 @@ Here's an example showing a class to generate a server-side UUID primary key for
         email: Mapped[str] = mapped_column(unique=True)
         full_name: Mapped[str]
         is_active: Mapped[bool] = mapped_column(default=True)
-        last_login: Mapped[datetime | None] = mapped_column(default=None)
+        last_login: Mapped[datetime.datetime | None] = mapped_column(default=None)
 
 
 With this foundation in place, let's look at the repository pattern.

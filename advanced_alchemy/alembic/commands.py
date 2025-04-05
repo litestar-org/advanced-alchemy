@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import sys
-from typing import TYPE_CHECKING, Any, Mapping, TextIO
+from typing import TYPE_CHECKING, Any, Optional, TextIO, Union
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from alembic import command as migration_command
@@ -11,6 +9,7 @@ from alembic.ddl.impl import DefaultImpl
 if TYPE_CHECKING:
     import os
     from argparse import Namespace
+    from collections.abc import Mapping
     from pathlib import Path
 
     from sqlalchemy import Engine
@@ -36,21 +35,21 @@ class AlembicDuckDBImpl(DefaultImpl):
 class AlembicCommandConfig(_AlembicCommandConfig):
     def __init__(
         self,
-        engine: Engine | AsyncEngine,
+        engine: "Union[Engine, AsyncEngine]",
         version_table_name: str,
-        bind_key: str | None = None,
-        file_: str | os.PathLike[str] | None = None,
+        bind_key: "Optional[str]" = None,
+        file_: "Union[str, os.PathLike[str], None]" = None,
         ini_section: str = "alembic",
-        output_buffer: TextIO | None = None,
-        stdout: TextIO = sys.stdout,
-        cmd_opts: Namespace | None = None,
-        config_args: Mapping[str, Any] | None = None,
-        attributes: dict[str, Any] | None = None,
-        template_directory: Path | None = None,
-        version_table_schema: str | None = None,
+        output_buffer: "Optional[TextIO]" = None,
+        stdout: "TextIO" = sys.stdout,
+        cmd_opts: "Optional[Namespace]" = None,
+        config_args: "Optional[Mapping[str, Any]]" = None,
+        attributes: "Optional[dict[str, Any]]" = None,
+        template_directory: "Optional[Path]" = None,
+        version_table_schema: "Optional[str]" = None,
         render_as_batch: bool = True,
         compare_type: bool = False,
-        user_module_prefix: str | None = "sa.",
+        user_module_prefix: "Optional[str]" = "sa.",
     ) -> None:
         """Initialize the AlembicCommandConfig.
 
@@ -98,7 +97,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
 
 
 class AlembicCommands:
-    def __init__(self, sqlalchemy_config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig) -> None:
+    def __init__(self, sqlalchemy_config: "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]") -> None:
         """Initialize the AlembicCommands.
 
         Args:
@@ -111,7 +110,7 @@ class AlembicCommands:
         self,
         revision: str = "head",
         sql: bool = False,
-        tag: str | None = None,
+        tag: "Optional[str]" = None,
     ) -> None:
         """Upgrade the database to a specified revision.
 
@@ -127,7 +126,7 @@ class AlembicCommands:
         self,
         revision: str = "head",
         sql: bool = False,
-        tag: str | None = None,
+        tag: "Optional[str]" = None,
     ) -> None:
         """Downgrade the database to a specified revision.
 
@@ -181,7 +180,7 @@ class AlembicCommands:
 
     def history(
         self,
-        rev_range: str | None = None,
+        rev_range: "Optional[str]" = None,
         verbose: bool = False,
         indicate_current: bool = False,
     ) -> None:
@@ -202,10 +201,10 @@ class AlembicCommands:
     def merge(
         self,
         revisions: str,
-        message: str | None = None,
-        branch_label: str | None = None,
-        rev_id: str | None = None,
-    ) -> Script | None:
+        message: "Optional[str]" = None,
+        branch_label: "Optional[str]" = None,
+        rev_id: "Optional[str]" = None,
+    ) -> "Union[Script, None]":
         """Merge two revisions together.
 
         Args:
@@ -227,17 +226,17 @@ class AlembicCommands:
 
     def revision(
         self,
-        message: str | None = None,
+        message: "Optional[str]" = None,
         autogenerate: bool = False,
         sql: bool = False,
         head: str = "head",
         splice: bool = False,
-        branch_label: str | None = None,
-        version_path: str | None = None,
-        rev_id: str | None = None,
-        depends_on: str | None = None,
-        process_revision_directives: ProcessRevisionDirectiveFn | None = None,
-    ) -> Script | list[Script | None] | None:
+        branch_label: "Optional[str]" = None,
+        version_path: "Optional[str]" = None,
+        rev_id: "Optional[str]" = None,
+        depends_on: "Optional[str]" = None,
+        process_revision_directives: "Optional[ProcessRevisionDirectiveFn]" = None,
+    ) -> "Union[Script, list[Optional[Script]], None]":
         """Create a new revision file.
 
         Args:
@@ -318,7 +317,7 @@ class AlembicCommands:
         self,
         revision: str,
         sql: bool = False,
-        tag: str | None = None,
+        tag: "Optional[str]" = None,
         purge: bool = False,
     ) -> None:
         """Stamp the revision table with the given revision.
@@ -331,7 +330,7 @@ class AlembicCommands:
         """
         return migration_command.stamp(config=self.config, revision=revision, sql=sql, tag=tag, purge=purge)
 
-    def _get_alembic_command_config(self) -> AlembicCommandConfig:
+    def _get_alembic_command_config(self) -> "AlembicCommandConfig":
         """Get the Alembic command configuration.
 
         Returns:

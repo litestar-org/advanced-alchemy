@@ -44,7 +44,7 @@ install-uv:                                         ## Install latest version of
 .PHONY: install
 install: destroy clean                              ## Install the project, dependencies, and pre-commit
 	@echo "${INFO} Starting fresh installation..."
-	@uv python pin 3.12 >/dev/null 2>&1
+	@uv python pin 3.9 >/dev/null 2>&1
 	@uv venv >/dev/null 2>&1
 	@uv sync --all-extras --dev
 	@echo "${OK} Installation complete! 🎉"
@@ -52,7 +52,6 @@ install: destroy clean                              ## Install the project, depe
 .PHONY: destroy
 destroy:                                            ## Destroy the virtual environment
 	@echo "${INFO} Destroying virtual environment... 🗑️"
-	@uv run pre-commit clean >/dev/null 2>&1
 	@rm -rf .venv
 	@echo "${OK} Virtual environment destroyed 🗑️"
 
@@ -90,8 +89,8 @@ release:                                           ## Bump version and create re
 	@make docs
 	@make clean
 	@make build
-	@uv lock --upgrade-package advanced-alchemy >/dev/null 2>&1
 	@uv run bump-my-version bump $(bump)
+	@uv lock --upgrade-package advanced-alchemy
 	@echo "${OK} Release complete 🎉"
 
 # =============================================================================
@@ -194,9 +193,9 @@ docs-clean:                                        ## Clean documentation build
 	@echo "${OK} Documentation assets cleaned"
 
 .PHONY: docs-serve
-docs-serve: docs-clean                             ## Serve documentation locally
+docs-serve:                              ## Serve documentation locally
 	@echo "${INFO} Starting documentation server... 📚"
-	@uv run sphinx-autobuild docs docs/_build/ -j auto --watch advanced_alchemy --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
+	@uv run sphinx-autobuild docs docs/_build/ -j auto --watch advanced_alchemy --watch docs --watch tests --watch CONTRIBUTING.rst --open-browser
 
 .PHONY: docs
 docs: docs-clean                                   ## Build documentation

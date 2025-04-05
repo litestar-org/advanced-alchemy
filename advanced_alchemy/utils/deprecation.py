@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import inspect
 from functools import wraps
-from typing import Callable, Literal
+from typing import Callable, Literal, Optional
 from warnings import warn
 
 from typing_extensions import ParamSpec, TypeVar
@@ -20,9 +18,9 @@ def warn_deprecation(
     deprecated_name: str,
     kind: DeprecatedKind,
     *,
-    removal_in: str | None = None,
-    alternative: str | None = None,
-    info: str | None = None,
+    removal_in: Optional[str] = None,
+    alternative: Optional[str] = None,
+    info: Optional[str] = None,
     pending: bool = False,
 ) -> None:
     """Warn about a call to a (soon to be) deprecated function.
@@ -71,17 +69,17 @@ def warn_deprecation(
 def deprecated(
     version: str,
     *,
-    removal_in: str | None = None,
-    alternative: str | None = None,
-    info: str | None = None,
+    removal_in: Optional[str] = None,
+    alternative: Optional[str] = None,
+    info: Optional[str] = None,
     pending: bool = False,
-    kind: Literal["function", "method", "classmethod", "property"] | None = None,
+    kind: Optional[Literal["function", "method", "classmethod", "property"]] = None,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Create a decorator wrapping a function, method or property with a warning call about a (pending) deprecation.
 
     Args:
-        version: Litestar version where the deprecation will occur
-        removal_in: Litestar version where the deprecated function will be removed
+        version: Advanced Alchemy version where the deprecation will occur
+        removal_in: Advanced Alchemy version where the deprecated function will be removed
         alternative: Name of a function that should be used instead
         info: Additional information
         pending: Use :class:`warnings.PendingDeprecationWarning` instead of :class:`warnings.DeprecationWarning`

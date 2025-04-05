@@ -1,0 +1,9 @@
+[default]
+extend-ignore-re = ["(?Rm)^.*(#|//)\\s*codespell:ignore\\s*$"]
+
+[default.extend-words]
+selectin = 'selectin'
+froms = 'froms'
+
+[files]
+extend-exclude = ["docs/changelog.rst", '/examples/us_state_lookup.json']

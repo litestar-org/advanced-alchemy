@@ -2,9 +2,9 @@
 # ruff: noqa: FIX002 PLR0911 ARG001 ERA001
 from __future__ import annotations
 
+import datetime
 import os
 import warnings
-from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
@@ -15,14 +15,14 @@ from advanced_alchemy.__metadata__ import __project__, __version__
 if TYPE_CHECKING:
     from typing import Any
 
-    from sphinx.addnodes import document
+    from sphinx.addnodes import document  # type: ignore[attr-defined,unused-ignore]
     from sphinx.application import Sphinx
 
 # -- Environmental Data ------------------------------------------------------
 warnings.filterwarnings("ignore", category=SAWarning)
 
 # -- Project information -----------------------------------------------------
-current_year = datetime.now().year  # noqa: DTZ005
+current_year = datetime.datetime.now().year  # noqa: DTZ005
 project = __project__
 copyright = f"{current_year}, Litestar Organization"  # noqa: A001
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
@@ -79,6 +79,9 @@ nitpicky = True
 nitpick_ignore: list[str] = []
 nitpick_ignore_regex: list[str] = []
 
+auto_pytabs_min_version = (3, 9)
+auto_pytabs_max_version = (3, 13)
+
 napoleon_google_docstring = True
 napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_examples = True
@@ -120,6 +123,7 @@ autodoc_type_aliases = {
     "BaseModel": "pydantic.BaseModel",
     "Struct": "msgspec.Struct",
     "TableArgsType": "sqlalchemy.orm.decl_base._TableArgsType",
+    "DateTimeUTC": "advanced_alchemy.types.DateTimeUTC",
     "TypeEngine": "sqlalchemy.types.TypeEngine",
     "DeclarativeBase": "sqlalchemy.orm.DeclarativeBase",
     "UUIDBase": "advanced_alchemy.base.UUIDBase",
@@ -141,6 +145,17 @@ autodoc_type_aliases = {
     "EmptyType": "advanced_alchemy.utils.dataclass.EmptyType",
     "async_sessionmaker": "sqlalchemy.ext.asyncio.async_sessionmaker",
     "sessionmaker": "sqlalchemy.orm.sessionmaker",
+    "SlugMixin": "advanced_alchemy.mixins.slug.SlugKey",
+    "UniqueMixin": "advanced_alchemy.mixins.unique.UniqueMixin",
+    "AsyncEngine": "sqlalchemy.ext.asyncio.AsyncEngine",
+    "Engine": "sqlalchemy.engine.Engine",
+    "sqlalchemy": "sqlalchemy",
+    "RenameStrategy": "litestar.dto.types.RenameStrategy",
+    "Union": "typing.Union",
+    "Callable": "typing.Callable",
+    "Any": "typing.Any",
+    "Optional": "typing.Optional",
+    "_EchoFlagType": "advanced_alchemy.config._EchoFlagType",
 }
 autodoc_mock_imports = [
     "alembic",
@@ -156,11 +171,17 @@ autodoc_mock_imports = [
     "advanced_alchemy.config.sync.SyncSessionConfig",
     "advanced_alchemy.utils.dataclass.EmptyType",
     "advanced_alchemy.extensions.litestar.plugins.init.config.engine.EngineConfig",
+    "sqlalchemy.ext.asyncio",
+    "sqlalchemy.engine",
+    "sqlalchemy.orm",
 ]
 
 
 autosectionlabel_prefix_document = True
 
+# Strip the dollar prompt when copying code
+# https://sphinx-copybutton.readthedocs.io/en/latest/use.html#strip-and-configure-input-prompts-for-code-cells
+copybutton_prompt_text = "$ "
 
 # -- Style configuration -----------------------------------------------------
 html_theme = "shibuya"
@@ -190,6 +211,7 @@ html_theme_options = {
     "logo_target": "/",
     "accent_color": "amber",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
+    "discord_url": "https://discord.gg/dSDXd4mKhp",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
     "light_logo": "_static/logo-default.png",

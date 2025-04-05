@@ -1,7 +1,7 @@
-from __future__ import annotations
+from collections.abc import Sequence
+from typing import Union
 
-from typing import TYPE_CHECKING, Sequence
-
+from litestar.config.app import AppConfig
 from litestar.plugins import InitPluginProtocol
 
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
@@ -13,28 +13,27 @@ from advanced_alchemy.extensions.litestar.plugins.init import (
 )
 from advanced_alchemy.extensions.litestar.plugins.serialization import SQLAlchemySerializationPlugin
 
-if TYPE_CHECKING:
-    from litestar.config.app import AppConfig
-
 
 class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
     """A plugin that provides SQLAlchemy integration."""
 
     def __init__(
         self,
-        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | list[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+        config: Union[
+            SQLAlchemyAsyncConfig, SQLAlchemySyncConfig, Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]
+        ],
     ) -> None:
         """Initialize ``SQLAlchemyPlugin``.
 
         Args:
             config: configure DB connection and hook handlers and dependencies.
         """
-        self._config = config
+        self._config = config if isinstance(config, Sequence) else [config]
 
     @property
     def config(
         self,
-    ) -> SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
+    ) -> Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]:
         return self._config
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:

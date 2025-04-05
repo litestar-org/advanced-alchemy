@@ -1,12 +1,11 @@
 # ruff: noqa: PD011
 
-from __future__ import annotations
 
 import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Generic, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Union, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
@@ -69,9 +68,11 @@ class InMemoryStore(Generic[T]):
     def get(self, key: Any, default: type[_NotSet] = _NotSet) -> T: ...
 
     @overload
-    def get(self, key: Any, default: AnyObject) -> T | AnyObject: ...
+    def get(self, key: Any, default: AnyObject) -> "Union[T, AnyObject]": ...
 
-    def get(self, key: Any, default: AnyObject | type[_NotSet] = _NotSet) -> T | AnyObject:
+    def get(
+        self, key: Any, default: "Union[AnyObject, type[_NotSet]]" = _NotSet
+    ) -> "Union[T, AnyObject]":  # pragma: no cover
         """Get the object identified by `key`, or return `default` if set or raise a `KeyError` otherwise
 
         Args:
@@ -88,11 +89,11 @@ class InMemoryStore(Generic[T]):
             key = self._resolve_key(key)
         except KeyError as error:
             if isclass(default) and not issubclass(default, _NotSet):  # pyright: ignore[reportUnnecessaryIsInstance]
-                return cast(AnyObject, default)
+                return cast("AnyObject", default)
             raise KeyError from error
         return self._store[key]
 
-    def get_or_none(self, key: Any, default: Any = _NotSet) -> T | None:
+    def get_or_none(self, key: Any, default: Any = _NotSet) -> "Union[T, None]":
         return self.get(key) if default is _NotSet else self.get(key, default)
 
     def remove(self, key: Any) -> T:
@@ -117,14 +118,14 @@ class InMemoryStore(Generic[T]):
 
 
 class MultiStore(Generic[T]):
-    def __init__(self, store_type: type[InMemoryStore[T]]) -> None:
+    def __init__(self, store_type: "type[InMemoryStore[T]]") -> None:
         self.store_type = store_type
         self._store: defaultdict[Any, InMemoryStore[T]] = defaultdict(store_type)
 
     def add(self, identity: Any, obj: T) -> T:
         return self._store[identity].add(obj)
 
-    def store(self, identity: Any) -> InMemoryStore[T]:
+    def store(self, identity: Any) -> "InMemoryStore[T]":
         return self._store[identity]
 
     def identity(self, obj: T) -> Any:
@@ -137,7 +138,7 @@ class MultiStore(Generic[T]):
 class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
     id_attribute: str = "id"
 
-    def _update_relationship(self, data: ModelT, ref: ModelT) -> None:
+    def _update_relationship(self, data: ModelT, ref: ModelT) -> None:  # pragma: no cover
         """Set relationship data fields targeting ref class to ref.
 
         Example:
@@ -172,7 +173,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                 else:
                     setattr(data, relationship.key, ref)
 
-    def _update_fks(self, data: ModelT) -> None:
+    def _update_fks(self, data: ModelT) -> None:  # pragma: no cover
         """Update foreign key fields according to their corresponding relationships.
 
         This make sure that `data.child_id` == `data.child.id`
@@ -202,7 +203,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         setattr(data, local.key, remote_value)
                     self._update_relationship(value, data)
 
-    def _set_defaults(self, data: ModelT) -> None:
+    def _set_defaults(self, data: ModelT) -> None:  # pragma: no cover
         """Set fields with dynamic defaults.
 
         Args:
@@ -228,14 +229,14 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         # include a default_factory in that case.
                         or "context" not in signature(default_callable).parameters
                     ):
-                        default_value = default.arg({})  # pyright: ignore[reportUnknownMemberType, reportCallIssue]
+                        default_value = default.arg({})  # pyright: ignore
                     else:
                         continue
                 else:
                     continue
                 setattr(data, elem.key, default_value)
 
-    def changed_attrs(self, data: ModelT) -> Iterable[str]:
+    def changed_attrs(self, data: ModelT) -> "Iterable[str]":  # pragma: no cover
         res: list[str] = []
         mapper = inspect(data)
         if mapper is None:
@@ -265,14 +266,14 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
 
 
 class SQLAlchemyMultiStore(MultiStore[ModelT]):
-    def _new_instances(self, instance: ModelT) -> Iterable[ModelT]:
+    def _new_instances(self, instance: ModelT) -> "Iterable[ModelT]":
         session = Session()
         session.add(instance)
         relations = list(session.new)
         session.expunge_all()
         return relations
 
-    def _set_relationships_for_fks(self, data: ModelT) -> None:
+    def _set_relationships_for_fks(self, data: ModelT) -> None:  # pragma: no cover
         """Set relationships matching newly added foreign keys on the instance.
 
         Example:

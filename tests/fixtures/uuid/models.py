@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import List
+import datetime
 from uuid import UUID
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
@@ -26,8 +25,8 @@ class UUIDAuthor(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)  # pyright: ignore
-    dob: Mapped[date] = mapped_column(nullable=True)  # pyright: ignore
-    books: Mapped[List[UUIDBook]] = relationship(
+    dob: Mapped[datetime.date] = mapped_column(nullable=True)  # pyright: ignore
+    books: Mapped[list[UUIDBook]] = relationship(
         lazy="selectin",
         back_populates="author",
         cascade="all, delete",
@@ -60,7 +59,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
 class UUIDEventLog(UUIDAuditBase):
     """The event log domain object."""
 
-    logged_at: Mapped[datetime] = mapped_column(default=datetime.now())  # pyright: ignore
+    logged_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now())  # pyright: ignore
     payload: Mapped[dict] = mapped_column(default={})  # pyright: ignore
 
 
@@ -83,7 +82,7 @@ class UUIDModelWithFetchedValue(UUIDv6Base):
     """The ModelWithFetchedValue UUIDBase."""
 
     val: Mapped[int]  # pyright: ignore
-    updated: Mapped[datetime] = mapped_column(  # pyright: ignore
+    updated: Mapped[datetime.datetime] = mapped_column(  # pyright: ignore
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
         server_onupdate=FetchedValue(),
@@ -101,14 +100,14 @@ uuid_item_tag = Table(
 class UUIDItem(UUIDBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
-    tags: Mapped[List[UUIDTag]] = relationship(secondary=lambda: uuid_item_tag, back_populates="items")
+    tags: Mapped[list[UUIDTag]] = relationship(secondary=lambda: uuid_item_tag, back_populates="items")
 
 
 class UUIDTag(UUIDAuditBase):
     """The event log domain object."""
 
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-    items: Mapped[List[UUIDItem]] = relationship(secondary=lambda: uuid_item_tag, back_populates="tags")
+    items: Mapped[list[UUIDItem]] = relationship(secondary=lambda: uuid_item_tag, back_populates="tags")
 
 
 class UUIDRule(UUIDAuditBase):

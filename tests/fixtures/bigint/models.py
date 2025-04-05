@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import List
+import datetime
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
@@ -20,8 +19,8 @@ class BigIntAuthor(BigIntAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=100))
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)
-    dob: Mapped[date] = mapped_column(nullable=True)
-    books: Mapped[List[BigIntBook]] = relationship(
+    dob: Mapped[datetime.date] = mapped_column(nullable=True)
+    books: Mapped[list[BigIntBook]] = relationship(
         lazy="selectin",
         back_populates="author",
         cascade="all, delete",
@@ -58,7 +57,7 @@ class BigIntSlugBook(BigIntBase, SlugKey):
 class BigIntEventLog(BigIntAuditBase):
     """The event log domain object."""
 
-    logged_at: Mapped[datetime] = mapped_column(default=datetime.now())  # pyright: ignore
+    logged_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now())  # pyright: ignore
     payload: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
 
 
@@ -66,7 +65,7 @@ class BigIntModelWithFetchedValue(BigIntBase):
     """The ModelWithFetchedValue BigIntBase."""
 
     val: Mapped[int]  # pyright: ignore
-    updated: Mapped[datetime] = mapped_column(  # pyright: ignore
+    updated: Mapped[datetime.datetime] = mapped_column(  # pyright: ignore
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
         server_onupdate=FetchedValue(),
@@ -84,14 +83,14 @@ bigint_item_tag = Table(
 class BigIntItem(BigIntBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
-    tags: Mapped[List[BigIntTag]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
+    tags: Mapped[list[BigIntTag]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
 
 
 class BigIntTag(BigIntBase):
     """The event log domain object."""
 
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-    items: Mapped[List[BigIntItem]] = relationship(secondary=lambda: bigint_item_tag, back_populates="tags")
+    items: Mapped[list[BigIntItem]] = relationship(secondary=lambda: bigint_item_tag, back_populates="tags")
 
 
 class BigIntRule(BigIntAuditBase):

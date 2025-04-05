@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Callable, Optional
 from uuid import UUID
 
 import pytest
@@ -25,13 +25,12 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
 )
-from typing_extensions import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
 
 class Base(DeclarativeBase):
-    id: Mapped[str] = mapped_column(primary_key=True, default=UUID)  # pyright: ignore
+    id: Mapped[str] = mapped_column(primary_key=True, default=UUID)
 
     # noinspection PyMethodParameters
     @declared_attr.directive
@@ -41,7 +40,7 @@ class Base(DeclarativeBase):
 
 
 class Tag(Base):
-    name: Mapped[str] = mapped_column(default="best seller")  # pyright: ignore
+    name: Mapped[str] = mapped_column(default="best seller")
 
 
 class TaggableMixin:
@@ -51,12 +50,12 @@ class TaggableMixin:
         return Table(
             f"{cls.__tablename__}_tag_association",  # type: ignore
             cls.metadata,  # type: ignore
-            Column("base_id", ForeignKey(f"{cls.__tablename__}.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
-            Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore # type: ignore
+            Column("base_id", ForeignKey(f"{cls.__tablename__}.id", ondelete="CASCADE"), primary_key=True),  # type: ignore
+            Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # type: ignore
         )
 
     @declared_attr
-    def assigned_tags(cls) -> Mapped[List[Tag]]:
+    def assigned_tags(cls) -> Mapped[list[Tag]]:
         return relationship(
             "Tag",
             secondary=lambda: cls.tag_association_table,
@@ -66,33 +65,33 @@ class TaggableMixin:
         )
 
     @declared_attr
-    def tags(cls) -> AssociationProxy[List[str]]:
+    def tags(cls) -> AssociationProxy[list[str]]:
         return association_proxy(
             "assigned_tags",
             "name",
-            creator=lambda name: Tag(name=name),  # pyright: ignore
+            creator=lambda name: Tag(name=name),  # pyright: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
             info={"__dto__": DTOField()},
         )
 
 
 class Author(Base):
-    name: Mapped[str] = mapped_column(default="Arthur")  # pyright: ignore
-    date_of_birth: Mapped[str] = mapped_column(nullable=True)  # pyright: ignore
+    name: Mapped[str] = mapped_column(default="Arthur")
+    date_of_birth: Mapped[str] = mapped_column(nullable=True)
 
 
 class BookReview(Base):
-    review: Mapped[str]  # pyright: ignore
-    book_id: Mapped[str] = mapped_column(ForeignKey("book.id"), default="000")  # pyright: ignore
+    review: Mapped[str]
+    book_id: Mapped[str] = mapped_column(ForeignKey("book.id"), default="000")
 
 
 class Book(Base):
-    title: Mapped[str] = mapped_column(String(length=250), default="Hi")  # pyright: ignore
-    author_id: Mapped[str] = mapped_column(ForeignKey("author.id"), default="123")  # pyright: ignore
-    first_author: Mapped[Author] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
-    reviews: Mapped[List[BookReview]] = relationship(lazy="joined", innerjoin=True)  # pyright: ignore
-    bar: Mapped[str] = mapped_column(default="Hello")  # pyright: ignore
-    SPAM: Mapped[str] = mapped_column(default="Bye")  # pyright: ignore
-    spam_bar: Mapped[str] = mapped_column(default="Goodbye")  # pyright: ignore
+    title: Mapped[str] = mapped_column(String(length=250), default="Hi")
+    author_id: Mapped[str] = mapped_column(ForeignKey("author.id"), default="123")
+    first_author: Mapped[Author] = relationship(lazy="joined", innerjoin=True)
+    reviews: Mapped[list[BookReview]] = relationship(lazy="joined", innerjoin=True)
+    bar: Mapped[str] = mapped_column(default="Hello")
+    SPAM: Mapped[str] = mapped_column(default="Bye")
+    spam_bar: Mapped[str] = mapped_column(default="Goodbye")
     number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP007
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
@@ -127,9 +126,9 @@ class BookAuthorTestData:
 
 
 @pytest.fixture
-def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dict[str, Any], Book]]:
-    def _generate(rename_strategy: RenameStrategy, test_data: BookAuthorTestData) -> Tuple[Dict[str, Any], Book]:
-        data: Dict[str, Any] = {
+def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], tuple[dict[str, Any], Book]]:
+    def _generate(rename_strategy: RenameStrategy, test_data: BookAuthorTestData) -> tuple[dict[str, Any], Book]:
+        data: dict[str, Any] = {
             _rename_field(name="id", strategy=rename_strategy): test_data.book_id,
             _rename_field(name="title", strategy=rename_strategy): test_data.book_title,
             _rename_field(name="author_id", strategy=rename_strategy): test_data.book_author_id,
@@ -177,7 +176,7 @@ def book_json_data() -> Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dic
 )
 def test_fields_alias_generator_sqlalchemy(
     rename_strategy: RenameStrategy,
-    book_json_data: Callable[[RenameStrategy, BookAuthorTestData], Tuple[Dict[str, Any], Book]],
+    book_json_data: Callable[[RenameStrategy, BookAuthorTestData], tuple[dict[str, Any], Book]],
 ) -> None:
     test_data = BookAuthorTestData()
     json_data, instance = book_json_data(rename_strategy, test_data)
@@ -236,7 +235,7 @@ def test_dto_with_association_proxy(create_module: Callable[[str], ModuleType]) 
         """
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Type, Final, List
+from typing import Dict, List, Set, Tuple, Type, Final, List, Generator
 
 from sqlalchemy import Column
 from sqlalchemy import ForeignKey
@@ -568,7 +567,7 @@ class ModelCreateDTO(SQLAlchemyDTO[Model]):
 
 ModelReturnDTO = SQLAlchemyDTO[Model]
 
-@post("/", dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 def post_handler(data: Model) -> Model:
     Base.metadata.create_all(engine)
 
@@ -724,7 +723,7 @@ def test_dto_to_sync_service(create_module: Callable[[str], ModuleType]) -> None
         """
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING, Generator
+from typing import Dict, List, Set, Tuple, Type, Generator
 
 from litestar import post
 from litestar.di import Provide
@@ -758,7 +757,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
     Model.metadata.drop_all(engine)
 
 
-@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 def post_handler(data: DTOData[Model], service: ModelService) -> Model:
     return service.create(data, auto_commit=True)
 
@@ -809,7 +808,7 @@ async def provide_service( ) -> AsyncGenerator[ModelService, None]:
     async with engine.begin() as conn:
         await conn.run_sync(AModel.metadata.create_all)
 
-@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 async def post_handler(data: DTOData[AModel], service: ModelService) -> AModel:
     return await service.create(data, auto_commit=True)
 
@@ -864,7 +863,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
         yield service
     Model.metadata.drop_all(engine)
 
-@post("/", dependencies={"service": Provide(provide_service, sync_to_thread=False)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO, sync_to_thread=False)
+@post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
 def post_handler(data: DTOData[Model], service: ModelService) -> Model:
     return service.create(data, auto_commit=True)
 

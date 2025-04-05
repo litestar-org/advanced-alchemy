@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import TypeAlias, TypeVar
@@ -11,6 +9,8 @@ if TYPE_CHECKING:
     from advanced_alchemy import base
     from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
     from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
+    from advanced_alchemy.repository.memory._async import SQLAlchemyAsyncMockRepository
+    from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository
 
 __all__ = (
     "MISSING",
@@ -36,7 +36,7 @@ SelectT = TypeVar("SelectT", bound="Select[Any]")
 
 :class:`~sqlalchemy.sql.Select`
 """
-RowT = TypeVar("RowT", bound=Tuple[Any, ...])
+RowT = TypeVar("RowT", bound=tuple[Any, ...])
 """Type variable for rows.
 
 :class:`~sqlalchemy.engine.Row`
@@ -51,20 +51,25 @@ ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtoc
 
 :class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping`
 """
-SQLAlchemySyncRepositoryT = TypeVar("SQLAlchemySyncRepositoryT", bound="SQLAlchemySyncRepository[Any]")
+SQLAlchemySyncRepositoryT = TypeVar(
+    "SQLAlchemySyncRepositoryT",
+    bound="Union[SQLAlchemySyncRepository[Any], SQLAlchemySyncMockRepository[Any]]",
+    default="Any",
+)
 """Type variable for synchronous SQLAlchemy repositories.
 
 :class:`~advanced_alchemy.repository.SQLAlchemySyncRepository`
 """
 SQLAlchemyAsyncRepositoryT = TypeVar(
     "SQLAlchemyAsyncRepositoryT",
-    bound="SQLAlchemyAsyncRepository[Any]",
+    bound="Union[SQLAlchemyAsyncRepository[Any], SQLAlchemyAsyncMockRepository[Any]]",
+    default="Any",
 )
 """Type variable for asynchronous SQLAlchemy repositories.
 
 :class:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository`
 """
-OrderingPair: TypeAlias = Tuple[Union[str, InstrumentedAttribute[Any]], bool]
+OrderingPair: TypeAlias = tuple[Union[str, InstrumentedAttribute[Any]], bool]
 """Type alias for ordering pairs.
 
 A tuple of (column, ascending) where:

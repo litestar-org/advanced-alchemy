@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003
-from typing import TYPE_CHECKING, List, Optional
+import datetime  # noqa: TC003
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
@@ -37,8 +37,8 @@ class AuthorModel(UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[date]]  # noqa: UP007
-    books: Mapped[List[BookModel]] = relationship(back_populates="author", lazy="noload")  # noqa: UP006
+    dob: Mapped[Optional[datetime.date]]  # noqa: UP007
+    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
@@ -57,17 +57,17 @@ class BookModel(UUIDAuditBase):
 class Author(BaseModel):
     id: UUID | None
     name: str
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorUpdate(BaseModel):
     name: str | None = None
-    dob: date | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
@@ -124,7 +124,7 @@ class AuthorController(Controller):
     ) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_repo.list_and_count(limit_offset)
-        type_adapter = TypeAdapter(List[Author])
+        type_adapter = TypeAdapter(list[Author])
         return OffsetPagination[Author](
             items=type_adapter.validate_python(results),
             total=total,
@@ -150,7 +150,7 @@ class AuthorController(Controller):
     async def get_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(  # noqa: B008
+        author_id: UUID = Parameter(
             title="Author ID",
             description="The author to retrieve.",
         ),
@@ -167,7 +167,7 @@ class AuthorController(Controller):
         self,
         authors_repo: AuthorRepository,
         data: AuthorUpdate,
-        author_id: UUID = Parameter(  # noqa: B008
+        author_id: UUID = Parameter(
             title="Author ID",
             description="The author to update.",
         ),
@@ -183,7 +183,7 @@ class AuthorController(Controller):
     async def delete_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(  # noqa: B008
+        author_id: UUID = Parameter(
             title="Author ID",
             description="The author to delete.",
         ),

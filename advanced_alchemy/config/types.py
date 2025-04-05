@@ -1,26 +1,23 @@
 """Type aliases and constants used in the package config."""
 
-from __future__ import annotations
+from collections.abc import Mapping, Sequence
+from typing import Any, Callable, Literal
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence, Tuple
+from typing_extensions import TypeAlias
 
-if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
-
-
-TypeEncodersMap: TypeAlias = "Mapping[Any, Callable[[Any], Any]]"
+TypeEncodersMap: TypeAlias = Mapping[Any, Callable[[Any], Any]]
 """Type alias for a mapping of type encoders.
 
 Maps types to their encoder functions.
 """
 
-TypeDecodersSequence: TypeAlias = "Sequence[Tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]"
+TypeDecodersSequence: TypeAlias = Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]]
 """Type alias for a sequence of type decoders.
 
 Each tuple contains a type check predicate and its corresponding decoder function.
 """
 
-CommitStrategy = Literal["always", "match_status"]
+CommitStrategy: TypeAlias = Literal["always", "match_status"]
 """Commit strategy for SQLAlchemy sessions.
 
 Values:

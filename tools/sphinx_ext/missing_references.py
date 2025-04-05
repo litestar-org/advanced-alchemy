@@ -180,6 +180,8 @@ def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
         "GenericAlembicConfig",
     }
 
+    func_references = {"repository.SQLAlchemyAsyncRepositoryProtocol.add_many"}
+
     # Handle type module references
     type_classes = {"DateTimeUTC", "ORA_JSONB", "GUID", "EncryptedString", "EncryptedText"}
 
@@ -189,7 +191,7 @@ def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
     # Handle fully qualified references
     if target.startswith("advanced_alchemy."):
         parts = target.split(".")
-        if parts[-1] in base_classes | config_classes | type_classes:
+        if parts[-1] in base_classes | config_classes | type_classes | func_references:
             return True
 
     # Handle module-relative references
@@ -240,7 +242,6 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
     target = attributes["reftarget"]
     ref_type = attributes.get("reftype")
     module = attributes.get("py:module", "")
-
     # Handle TypeVar references
     if hasattr(target, "__class__") and target.__class__.__name__ == "TypeVar":
         return True

@@ -1,12 +1,11 @@
 # ruff: noqa: TC004
-"""Application ORM configuration."""
-
-from __future__ import annotations
+"""Common base classes for SQLAlchemy declarative models."""
 
 import contextlib
+import datetime
 import re
-from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Protocol, cast, runtime_checkable
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -20,78 +19,49 @@ from sqlalchemy.orm import (
     registry as SQLAlchemyRegistry,  # noqa: N812
 )
 from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.types import TypeEngine
 from typing_extensions import Self, TypeVar
 
 from advanced_alchemy.mixins import (
-    AuditColumns as _AuditColumns,
-)
-from advanced_alchemy.mixins import (
-    BigIntPrimaryKey as _BigIntPrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    NanoIDPrimaryKey as _NanoIDPrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    UUIDPrimaryKey as _UUIDPrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    UUIDv6PrimaryKey as _UUIDv6PrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    UUIDv7PrimaryKey as _UUIDv7PrimaryKey,
+    AuditColumns,
+    BigIntPrimaryKey,
+    NanoIDPrimaryKey,
+    UUIDPrimaryKey,
+    UUIDv6PrimaryKey,
+    UUIDv7PrimaryKey,
 )
 from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
 from advanced_alchemy.utils.dataclass import DataclassProtocol
-from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
     from sqlalchemy.sql.schema import (
         _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
     )
-    from sqlalchemy.types import TypeEngine
-
-    # these should stay here since they are deprecated.  They are imported in the __getattr__ function
-    from advanced_alchemy.mixins import (
-        AuditColumns,
-        BigIntPrimaryKey,
-        NanoIDPrimaryKey,
-        SlugKey,
-        UUIDPrimaryKey,
-        UUIDv6PrimaryKey,
-        UUIDv7PrimaryKey,
-    )
 
 
 __all__ = (
     "AdvancedDeclarativeBase",
-    "AuditColumns",
     "BasicAttributes",
     "BigIntAuditBase",
     "BigIntBase",
     "BigIntBaseT",
-    "BigIntPrimaryKey",
     "CommonTableAttributes",
     "ModelProtocol",
     "NanoIDAuditBase",
     "NanoIDBase",
     "NanoIDBaseT",
-    "NanoIDPrimaryKey",
     "SQLQuery",
-    "SlugKey",
     "TableArgsType",
     "UUIDAuditBase",
     "UUIDBase",
     "UUIDBaseT",
-    "UUIDPrimaryKey",
     "UUIDv6AuditBase",
     "UUIDv6Base",
     "UUIDv6BaseT",
-    "UUIDv6PrimaryKey",
     "UUIDv7AuditBase",
     "UUIDv7Base",
     "UUIDv7BaseT",
-    "UUIDv7PrimaryKey",
     "convention",
     "create_registry",
     "merge_table_arguments",
@@ -99,42 +69,6 @@ __all__ = (
     "orm_registry",
     "table_name_regexp",
 )
-
-
-def __getattr__(attr_name: str) -> object:
-    if attr_name == "__path__":
-        return __file__
-
-    _deprecated_attrs = {
-        "SlugKey",
-        "AuditColumns",
-        "NanoIDPrimaryKey",
-        "BigIntPrimaryKey",
-        "UUIDPrimaryKey",
-        "UUIDv6PrimaryKey",
-        "UUIDv7PrimaryKey",
-    }
-    if attr_name in _deprecated_attrs:
-        from advanced_alchemy import mixins
-
-        module = "advanced_alchemy.mixins"
-        value = globals()[attr_name] = getattr(mixins, attr_name)
-
-        warn_deprecation(
-            deprecated_name=f"advanced_alchemy.base.{attr_name}",
-            version="0.26.0",
-            kind="import",
-            removal_in="1.0.0",
-            info=f"importing {attr_name} from 'advanced_alchemy.base' is deprecated, please import it from '{module}' instead",
-        )
-
-        return value
-    if attr_name in set(__all__).difference(_deprecated_attrs):
-        value = globals()[attr_name] = locals()[attr_name]
-        return value
-
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
-    raise AttributeError(msg)
 
 
 UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
@@ -148,7 +82,7 @@ UUIDv7BaseT = TypeVar("UUIDv7BaseT", bound="UUIDv7Base")
 NanoIDBaseT = TypeVar("NanoIDBaseT", bound="NanoIDBase")
 """Type variable for :class:`NanoIDBase`."""
 
-convention: NamingSchemaParameter = {
+convention: "NamingSchemaParameter" = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
@@ -160,7 +94,7 @@ table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
+def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[TableArgsType] = None) -> TableArgsType:
     """Merge Table Arguments.
 
     This function helps merge table arguments when using mixins that include their own table args,
@@ -212,7 +146,7 @@ class ModelProtocol(Protocol):
         __mapper__: Mapper[Any]
         __name__: str
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -235,7 +169,7 @@ class BasicAttributes:
         __table__: FromClause
         __mapper__: Mapper[Any]
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -270,7 +204,7 @@ class CommonTableAttributes(BasicAttributes):
 
 
 def create_registry(
-    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
+    custom_annotation_map: Optional[dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]]] = None,
 ) -> SQLAlchemyRegistry:
     """Create a new SQLAlchemy registry.
 
@@ -283,12 +217,14 @@ def create_registry(
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
+    type_annotation_map: dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
-        datetime: DateTimeUTC,
-        date: Date,
+        datetime.datetime: DateTimeUTC,
+        datetime.date: Date,
         dict: JsonB,
+        dict[str, Any]: JsonB,
+        dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
     }
     with contextlib.suppress(ImportError):
@@ -327,32 +263,32 @@ class MetadataRegistry:
         set: Sets the metadata for a given bind key.
     """
 
-    _instance: MetadataRegistry | None = None
-    _registry: dict[str | None, MetaData] = {None: orm_registry.metadata}
+    _instance: Optional["MetadataRegistry"] = None
+    _registry: dict[Union[str, None], MetaData] = {None: orm_registry.metadata}
 
     def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cast(Self, cls._instance)
+        return cast("Self", cls._instance)
 
-    def get(self, bind_key: str | None = None) -> MetaData:
+    def get(self, bind_key: Optional[str] = None) -> MetaData:
         """Get the metadata for the given bind key."""
         return self._registry.setdefault(bind_key, MetaData(naming_convention=convention))
 
-    def set(self, bind_key: str | None, metadata: MetaData) -> None:
+    def set(self, bind_key: Optional[str], metadata: MetaData) -> None:
         """Set the metadata for the given bind key."""
         self._registry[bind_key] = metadata
 
-    def __iter__(self) -> Iterator[str | None]:
+    def __iter__(self) -> Iterator[Union[str, None]]:
         return iter(self._registry)
 
-    def __getitem__(self, bind_key: str | None) -> MetaData:
+    def __getitem__(self, bind_key: Union[str, None]) -> MetaData:
         return self._registry[bind_key]
 
-    def __setitem__(self, bind_key: str | None, metadata: MetaData) -> None:
+    def __setitem__(self, bind_key: Union[str, None], metadata: MetaData) -> None:
         self._registry[bind_key] = metadata
 
-    def __contains__(self, bind_key: str | None) -> bool:
+    def __contains__(self, bind_key: Union[str, None]) -> bool:
         return bind_key in self._registry
 
 
@@ -373,7 +309,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     registry = orm_registry
     __abstract__ = True
     __metadata_registry__: MetadataRegistry = MetadataRegistry()
-    __bind_key__: Optional[str] = None  # noqa: UP007
+    __bind_key__: Optional[str] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)
@@ -384,7 +320,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
         super().__init_subclass__(**kwargs)
 
 
-class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v4 primary keys.
 
     .. seealso::
@@ -397,7 +333,7 @@ class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, 
     __abstract__ = True
 
 
-class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v4 primary keys and audit columns.
 
     .. seealso::
@@ -411,7 +347,7 @@ class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, Advan
     __abstract__ = True
 
 
-class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v6 primary keys.
 
     .. seealso::
@@ -424,7 +360,7 @@ class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v6 primary keys and audit columns.
 
     .. seealso::
@@ -438,7 +374,7 @@ class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, A
     __abstract__ = True
 
 
-class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v7 primary keys.
 
     .. seealso::
@@ -451,7 +387,7 @@ class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v7 primary keys and audit columns.
 
     .. seealso::
@@ -465,7 +401,7 @@ class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, A
     __abstract__ = True
 
 
-class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class NanoIDBase(NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with Nano ID primary keys.
 
     .. seealso::
@@ -478,7 +414,7 @@ class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class NanoIDAuditBase(CommonTableAttributes, NanoIDPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with Nano ID primary keys and audit columns.
 
     .. seealso::
@@ -492,7 +428,7 @@ class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, A
     __abstract__ = True
 
 
-class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class BigIntBase(BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with BigInt primary keys.
 
     .. seealso::
@@ -505,7 +441,7 @@ class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with BigInt primary keys and audit columns.
 
     .. seealso::

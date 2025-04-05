@@ -11,13 +11,13 @@ Features:
 Example:
     Basic usage with a datetime filter::
 
-        from datetime import datetime
+        import datetime
         from advanced_alchemy.filters import BeforeAfter
 
         filter = BeforeAfter(
             field_name="created_at",
-            before=datetime.now(),
-            after=datetime(2023, 1, 1),
+            before=datetime.datetime.now(),
+            after=datetime.datetime(2023, 1, 1),
         )
         statement = filter.append_to_statement(select(Model), Model)
 
@@ -32,12 +32,10 @@ See Also:
 
 """
 
-from __future__ import annotations
-
+import datetime
 from abc import ABC, abstractmethod
-from collections import abc  # noqa: TC003
+from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import datetime  # noqa: TC003
 from operator import attrgetter
 from typing import (
     TYPE_CHECKING,
@@ -54,11 +52,18 @@ from sqlalchemy import BinaryExpression, ColumnElement, Date, Delete, Select, Up
 from sqlalchemy.sql import operators as op
 from typing_extensions import TypeAlias, TypedDict
 
+
+from typing import Any, Callable, Generic, Literal, Optional, Union, cast
+
+from sqlalchemy import BinaryExpression, ColumnElement, Delete, Select, Update, and_, any_, or_, text
+from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from typing_extensions import TypeAlias, TypeVar
+ 
+from advanced_alchemy.base import ModelProtocol
 if TYPE_CHECKING:
     from sqlalchemy.orm import InstrumentedAttribute
     from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
-
-    from advanced_alchemy import base
 
 __all__ = (
     "BeforeAfter",
@@ -80,13 +85,15 @@ __all__ = (
 )
 
 T = TypeVar("T")
-ModelT = TypeVar("ModelT", bound="base.ModelProtocol")
+ModelT = TypeVar("ModelT", bound=ModelProtocol)
 StatementFilterT = TypeVar("StatementFilterT", bound="StatementFilter")
 StatementTypeT = TypeVar(
     "StatementTypeT",
-    bound="ReturningDelete[tuple[Any]] | ReturningUpdate[tuple[Any]] | Select[tuple[Any]] | Select[Any] | Update | Delete",
+    bound=Union[
+        ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Select[Any], Update, Delete
+    ],
 )
-FilterTypes: TypeAlias = "BeforeAfter | OnBeforeAfter | CollectionFilter[Any] | LimitOffset | OrderBy | SearchFilter | NotInCollectionFilter[Any] | NotInSearchFilter"
+FilterTypes: TypeAlias = "Union[BeforeAfter, OnBeforeAfter, CollectionFilter[Any], LimitOffset, OrderBy, SearchFilter, NotInCollectionFilter[Any], NotInSearchFilter]"
 """Aggregate type alias of the types supported for collection filtering."""
 
 
@@ -143,7 +150,7 @@ class StatementFilter(ABC):
         return statement
 
     @staticmethod
-    def _get_instrumented_attr(model: Any, key: str | InstrumentedAttribute[Any]) -> InstrumentedAttribute[Any]:
+    def _get_instrumented_attr(model: Any, key: Union[str, InstrumentedAttribute[Any]]) -> InstrumentedAttribute[Any]:
         """Get SQLAlchemy instrumented attribute from model.
 
         Args:
@@ -178,9 +185,9 @@ class BeforeAfter(StatementFilter):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    before: datetime | None
+    before: Optional[datetime.datetime]
     """Filter results where field is earlier than this value."""
-    after: datetime | None
+    after: Optional[datetime.datetime]
     """Filter results where field is later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -224,9 +231,9 @@ class OnBeforeAfter(StatementFilter):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    on_or_before: datetime | None
+    on_or_before: Optional[datetime.datetime]
     """Filter results where field is on or earlier than this value."""
-    on_or_after: datetime | None
+    on_or_after: Optional[datetime.datetime]
     """Filter results where field is on or later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -272,7 +279,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    values: abc.Collection[T] | None
+    values: Union[Collection[T], None]
     """Values for the ``IN`` clause. If this is None, no filter is applied.
         An empty list will force an empty result set (WHERE 1=-1)"""
 
@@ -331,7 +338,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     field_name: str
     """Name of the model attribute to filter on."""
-    values: abc.Collection[T] | None
+    values: Union[Collection[T], None]
     """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
 
     def append_to_statement(
@@ -479,11 +486,11 @@ class SearchFilter(StatementFilter):
         - :meth:`sqlalchemy.sql.expression.ColumnOperators.ilike`: Case-insensitive LIKE
     """
 
-    field_name: str | set[str]
+    field_name: Union[str, set[str]]
     """Name or set of names of model attributes to search on."""
     value: str
     """Text to match within the field(s)."""
-    ignore_case: bool | None = False
+    ignore_case: Optional[bool] = False
     """Whether to use case-insensitive matching."""
 
     @property
@@ -499,7 +506,7 @@ class SearchFilter(StatementFilter):
         return or_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate LIKE or ILIKE operator as a function.
 
         Returns:
@@ -590,7 +597,7 @@ class NotInSearchFilter(SearchFilter):
         return and_
 
     @property
-    def _func(self) -> attrgetter[Callable[[str], BinaryExpression[bool]]]:
+    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
         """Return the appropriate NOT LIKE or NOT ILIKE operator as a function.
 
         Returns:

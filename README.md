@@ -14,7 +14,7 @@
 |-----------|:----|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | CI/CD     |     | [![Latest Release](https://github.com/litestar-org/advanced-alchemy/actions/workflows/publish.yml/badge.svg)](https://github.com/litestar-org/advanced-alchemy/actions/workflows/publish.yml) [![ci](https://github.com/litestar-org/advanced-alchemy/actions/workflows/ci.yml/badge.svg)](https://github.com/litestar-org/advanced-alchemy/actions/workflows/ci.yml) [![Documentation Building](https://github.com/litestar-org/advanced-alchemy/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/litestar-org/advanced-alchemy/actions/workflows/docs.yml)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Quality   |     | [![Coverage](https://codecov.io/github/litestar-org/advanced-alchemy/graph/badge.svg?token=vKez4Pycrc)](https://codecov.io/github/litestar-org/advanced-alchemy) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=litestar-org_advanced-alchemy&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=litestar-org_advanced-alchemy) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=litestar-org_advanced-alchemy&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=litestar-org_advanced-alchemy) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=litestar-org_advanced-alchemy&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=litestar-org_advanced-alchemy) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=litestar-org_advanced-alchemy&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=litestar-org_advanced-alchemy)                                                                                                    |
-| Package   |     | [![PyPI - Version](https://img.shields.io/pypi/v/advanced-alchemy?labelColor=202235&color=edb641&logo=python&logoColor=edb641)](https://badge.fury.io/py/litestar) ![PyPI - Support Python Versions](https://img.shields.io/pypi/pyversions/litestar?labelColor=202235&color=edb641&logo=python&logoColor=edb641) ![Advanced Alchemy PyPI - Downloads](https://img.shields.io/pypi/dm/advanced-alchemy?logo=python&label=package%20downloads&labelColor=202235&color=edb641&logoColor=edb641)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Package   |     | [![PyPI - Version](https://img.shields.io/pypi/v/advanced-alchemy?labelColor=202235&color=edb641&logo=python&logoColor=edb641)](https://badge.fury.io/py/advanced-alchemy) ![PyPI - Support Python Versions](https://img.shields.io/pypi/pyversions/advanced-alchemy?labelColor=202235&color=edb641&logo=python&logoColor=edb641) ![Advanced Alchemy PyPI - Downloads](https://img.shields.io/pypi/dm/advanced-alchemy?logo=python&label=package%20downloads&labelColor=202235&color=edb641&logoColor=edb641)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Community |     | [![Discord](https://img.shields.io/discord/919193495116337154?labelColor=202235&color=edb641&label=chat%20on%20discord&logo=discord&logoColor=edb641)](https://discord.gg/litestar) [![Matrix](https://img.shields.io/badge/chat%20on%20Matrix-bridged-202235?labelColor=202235&color=edb641&logo=matrix&logoColor=edb641)](https://matrix.to/#/#litestar:matrix.org) |
 | Meta      |     | [![Litestar Project](https://img.shields.io/badge/Litestar%20Org-%E2%AD%90%20Advanced%20Alchemy-202235.svg?logo=python&labelColor=202235&color=edb641&logoColor=edb641)](https://github.com/litestar-org/advanced-alchemy) [![types - Mypy](https://img.shields.io/badge/types-Mypy-202235.svg?logo=python&labelColor=202235&color=edb641&logoColor=edb641)](https://github.com/python/mypy) [![License - MIT](https://img.shields.io/badge/license-MIT-202235.svg?logo=python&labelColor=202235&color=edb641&logoColor=edb641)](https://spdx.org/licenses/) [![linting - Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json&labelColor=202235)](https://github.com/astral-sh/ruff) |
 
@@ -74,35 +74,31 @@ operations on your SQLAlchemy models.
 <!-- markdownlint-restore -->
 
 ```python
-from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.repository import SQLAlchemySyncRepository
+from advanced_alchemy import base, repository, config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped, sessionmaker
 
 
-class User(UUIDBase):
+class User(base.UUIDBase):
     # you can optionally override the generated table name by manually setting it.
     __tablename__ = "user_account"  # type: ignore[assignment]
     email: Mapped[str]
     name: Mapped[str]
 
 
-class UserRepository(SQLAlchemySyncRepository[User]):
+class UserRepository(repository.SQLAlchemySyncRepository[User]):
     """User repository."""
 
     model_type = User
 
 
-# use any compatible sqlalchemy engine.
-engine = create_engine("duckdb:///:memory:")
-session_factory = sessionmaker(engine, expire_on_commit=False)
+db = config.SQLAlchemySyncConfig(connection_string="duckdb:///:memory:", session_config=config.SyncSessionConfig(expire_on_commit=False))
 
 # Initializes the database.
-with engine.begin() as conn:
+with db.get_engine().begin() as conn:
     User.metadata.create_all(conn)
 
-with session_factory() as db_session:
+with db.get_session() as db_session:
     repo = UserRepository(session=db_session)
     # 1) Create multiple users with `add_many`
     bulk_users = [
@@ -143,41 +139,33 @@ and it will handle the type conversions for you.
 <!-- markdownlint-restore -->
 
 ```python
-from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy import SQLAlchemySyncRepository, SQLAlchemySyncRepositoryService
+from advanced_alchemy import base, repository, filters, service, config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped, sessionmaker
 
 
-class User(UUIDBase):
+class User(base.UUIDBase):
     # you can optionally override the generated table name by manually setting it.
     __tablename__ = "user_account"  # type: ignore[assignment]
     email: Mapped[str]
     name: Mapped[str]
 
-
-class UserRepository(SQLAlchemySyncRepository[User]):
+class UserService(service.SQLAlchemySyncRepositoryService[User]):
     """User repository."""
+    class Repo(repository.SQLAlchemySyncRepository[User]):
+        """User repository."""
 
-    model_type = User
+        model_type = User
 
+    repository_type = Repo
 
-class UserService(SQLAlchemySyncRepositoryService[User]):
-    """User repository."""
-
-    repository_type = UserRepository
-
-
-# use any compatible sqlalchemy engine.
-engine = create_engine("duckdb:///:memory:")
-session_factory = sessionmaker(engine, expire_on_commit=False)
+db = config.SQLAlchemySyncConfig(connection_string="duckdb:///:memory:", session_config=config.SyncSessionConfig(expire_on_commit=False))
 
 # Initializes the database.
-with engine.begin() as conn:
+with db.get_engine().begin() as conn:
     User.metadata.create_all(conn)
 
-with session_factory() as db_session:
+with db.get_session() as db_session:
     service = UserService(session=db_session)
     # 1) Create multiple users with `add_many`
     objs = service.create_many([
@@ -225,8 +213,7 @@ it can also be installed as a Litestar extra with `pip install litestar[sqlalche
 from litestar import Litestar
 from litestar.plugins.sqlalchemy import SQLAlchemyPlugin, SQLAlchemyAsyncConfig
 # alternately...
-# from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyPlugin
-# from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
+# from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 
 alchemy = SQLAlchemyPlugin(
   config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
@@ -238,6 +225,27 @@ app = Litestar(plugins=[alchemy])
 
 For a full Litestar example, check [here][litestar-example]
 
+#### Flask
+
+<!-- markdownlint-disable -->
+<details>
+<summary>Flask Example</summary>
+<!-- markdownlint-restore -->
+
+```python
+from flask import Flask
+from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemySyncConfig
+
+app = Flask(__name__)
+alchemy = AdvancedAlchemy(
+    config=SQLAlchemySyncConfig(connection_string="duckdb:///:memory:"), app=app,
+)
+```
+
+</details>
+
+For a full Flask example, see [here][flask-example]
+
 #### FastAPI
 
 <!-- markdownlint-disable -->
@@ -246,20 +254,18 @@ For a full Litestar example, check [here][litestar-example]
 <!-- markdownlint-restore -->
 
 ```python
+from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig
 from fastapi import FastAPI
 
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
-
 app = FastAPI()
-alchemy = StarletteAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
 
 </details>
 
-For a full FastAPI example, see [here][fastapi-example]
+For a full FastAPI example with optional CLI integration, see [here][fastapi-example]
 
 #### Starlette
 
@@ -269,13 +275,11 @@ For a full FastAPI example, see [here][fastapi-example]
 <!-- markdownlint-restore -->
 
 ```python
+from advanced_alchemy.extensions.starlette import AdvancedAlchemy, SQLAlchemyAsyncConfig
 from starlette.applications import Starlette
 
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.starlette import StarletteAdvancedAlchemy
-
 app = Starlette()
-alchemy = StarletteAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"), app=app,
 )
 ```
@@ -293,11 +297,10 @@ alchemy = StarletteAdvancedAlchemy(
 from sanic import Sanic
 from sanic_ext import Extend
 
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
-from advanced_alchemy.extensions.sanic import SanicAdvancedAlchemy
+from advanced_alchemy.extensions.sanic import AdvancedAlchemy, SQLAlchemyAsyncConfig
 
 app = Sanic("AlchemySanicApp")
-alchemy = SanicAdvancedAlchemy(
+alchemy = AdvancedAlchemy(
     sqlalchemy_config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
 )
 Extend.register(alchemy)
@@ -330,6 +333,7 @@ or the [project-specific GitHub discussions page][project-discussions].
 [project-discussions]: https://github.com/litestar-org/advanced-alchemy/discussions
 [project-docs]: https://docs.advanced-alchemy.litestar.dev
 [install-guide]: https://docs.advanced-alchemy.litestar.dev/latest/#installation
-[fastapi-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/fastapi.py
+[fastapi-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/fastapi_service.py
+[flask-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/flask/flask_services.py
 [litestar-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/litestar.py
 [standalone-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/standalone.py

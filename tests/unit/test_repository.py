@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Generator, Union, cast
+import datetime
+from collections.abc import AsyncGenerator, Collection, Generator
+from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -64,7 +64,7 @@ class BigIntModel(base.BigIntAuditBase):
 
 
 @pytest.fixture()
-def async_mock_repo() -> Generator[SQLAlchemyAsyncRepository[MagicMock], None, None]:
+async def async_mock_repo() -> AsyncGenerator[SQLAlchemyAsyncRepository[MagicMock], None]:
     """SQLAlchemy repository with a mock model type."""
 
     class Repo(SQLAlchemyAsyncRepository[MagicMock]):
@@ -72,7 +72,8 @@ def async_mock_repo() -> Generator[SQLAlchemyAsyncRepository[MagicMock], None, N
 
         model_type = MagicMock(__name__="MagicMock")  # pyright:ignore[reportGeneralTypeIssues,reportAssignmentType]
 
-    yield Repo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()), statement=MagicMock())
+    session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    yield Repo(session=session, statement=MagicMock())
 
 
 @pytest.fixture()
@@ -93,42 +94,42 @@ def mock_repo(request: FixtureRequest) -> Generator[SQLAlchemyAsyncRepository[Ma
 
 
 @pytest.fixture()
-def mock_session_scalars(
+def mock_session_scalars(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
     yield mocker.patch.object(mock_repo.session, "scalars")
 
 
 @pytest.fixture()
-def mock_session_execute(
+def mock_session_execute(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
     yield mocker.patch.object(mock_repo.session, "scalars")
 
 
 @pytest.fixture()
-def mock_repo_list(
+def mock_repo_list(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
     yield mocker.patch.object(mock_repo, "list")
 
 
 @pytest.fixture()
-def mock_repo_execute(
+def mock_repo_execute(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
     yield mocker.patch.object(mock_repo, "_execute")
 
 
 @pytest.fixture()
-def mock_repo_attach_to_session(
+def mock_repo_attach_to_session(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
     yield mocker.patch.object(mock_repo, "_attach_to_session")
 
 
 @pytest.fixture()
-def mock_repo_count(
+def mock_repo_count(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
     yield mocker.patch.object(mock_repo, "count")
@@ -526,7 +527,6 @@ async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncReposito
     """Test expected method calls for list operation."""
     mock_instances = [MagicMock(), MagicMock()]
     mock_count = len(mock_instances)
-    mocker.patch.object(mock_repo, "_list_and_count_basic", return_value=(mock_instances, mock_count))
     mocker.patch.object(mock_repo, "_list_and_count_window", return_value=(mock_instances, mock_count))
 
     instances, instance_count = await maybe_async(mock_repo.list_and_count())
@@ -545,9 +545,8 @@ async def test_sqlalchemy_repo_list_and_count_basic(
     mock_instances = [MagicMock(), MagicMock()]
     mock_count = len(mock_instances)
     mocker.patch.object(mock_repo, "_list_and_count_basic", return_value=(mock_instances, mock_count))
-    mocker.patch.object(mock_repo, "_list_and_count_window", return_value=(mock_instances, mock_count))
 
-    instances, instance_count = await maybe_async(mock_repo.list_and_count(force_basic_query_mode=True))
+    instances, instance_count = await maybe_async(mock_repo.list_and_count(count_with_window_function=False))
 
     assert instances == mock_instances
     assert instance_count == mock_count
@@ -627,7 +626,7 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
     mocker.patch.object(BeforeAfter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.max, datetime.min)))
+    await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -644,7 +643,7 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
     mocker.patch.object(OnBeforeAfter, "append_to_statement", return_value=statement)
 
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.max, datetime.min)))
+    await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -809,7 +808,7 @@ async def test_execute(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     mock_repo.session.execute.assert_called_once_with(mock_repo.statement)  # pyright: ignore[reportFunctionMemberAccess]
 
 
-def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+async def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Ensures we don't filter on an empty collection."""
     statement = MagicMock()
     filter = CollectionFilter(field_name="id", values=[])  # type:ignore[var-annotated]
@@ -820,14 +819,14 @@ def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyn
 @pytest.mark.parametrize(
     ("before", "after"),
     [
-        (datetime.max, datetime.min),
-        (None, datetime.min),
-        (datetime.max, None),
+        (datetime.datetime.max, datetime.datetime.min),
+        (None, datetime.datetime.min),
+        (datetime.datetime.max, None),
     ],
 )
-def test_filter_on_datetime_field(
-    before: datetime,
-    after: datetime,
+async def test_filter_on_datetime_field(
+    before: datetime.datetime,
+    after: datetime.datetime,
     mock_repo: SQLAlchemyAsyncRepository[Any],
     mocker: MockerFixture,
     monkeypatch: MonkeyPatch,

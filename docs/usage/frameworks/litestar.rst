@@ -2,7 +2,13 @@
 Litestar Integration
 ====================
 
-Advanced Alchemy provides first-class integration with Litestar through its SQLAlchemy plugin, repository, and service patterns. This guide demonstrates building a complete CRUD API for a book management system.
+.. seealso::
+
+    :external+litestar:doc:`Litestar's documentation for SQLAlchemy integration <usage/databases/sqlalchemy/index>`
+
+Advanced Alchemy provides first-class integration with Litestar through its SQLAlchemy plugin, which re-exports many of the modules within Advanced Alchemy.
+
+This guide demonstrates building a complete CRUD API for a book management system.
 
 Key Features
 ------------
@@ -44,7 +50,7 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
 
 .. code-block:: python
 
-    from datetime import date
+    import datetime
     from uuid import UUID
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,7 +60,7 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
     class AuthorModel(UUIDBase):
         __tablename__ = "author"
         name: Mapped[str]
-        dob: Mapped[date | None]
+        dob: Mapped[datetime.date | None]
         books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
     class BookModel(UUIDAuditBase):
@@ -70,7 +76,7 @@ Define Pydantic schemas for input validation and response serialization:
 
 .. code-block:: python
 
-    from datetime import date
+    import datetime
     from pydantic import BaseModel, ConfigDict
     from uuid import UUID
     from typing import Optional
@@ -83,17 +89,17 @@ Define Pydantic schemas for input validation and response serialization:
         """Author response schema."""
         id: UUID
         name: str
-        dob: Optional[date] = None
+        dob: Optional[datetime.date] = None
 
     class AuthorCreate(BaseSchema):
         """Schema for creating authors."""
         name: str
-        dob: Optional[date] = None
+        dob: Optional[datetime.date] = None
 
     class AuthorUpdate(BaseSchema):
         """Schema for updating authors."""
         name: Optional[str] = None
-        dob: Optional[date] = None
+        dob: Optional[datetime.date] = None
 
     class Book(BaseSchema):
         """Book response schema with author details."""
@@ -114,10 +120,11 @@ Create repository, service classes, and dependency injection provider function:
 
 .. code-block:: python
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from typing import AsyncGenerator
+
+    from litestar.plugins.sqlalchemy.repository import SQLAlchemyAsyncRepository
+    from litestar.plugins.sqlalchemy.service import SQLAlchemyAsyncRepositoryService
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
         """Author repository."""
@@ -271,7 +278,7 @@ You can access the database session from the controller by using the `db_session
 .. code-block:: python
 
     from litestar import Litestar, get
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -305,7 +312,7 @@ Dependency injection is not available in middleware. Instead, you can create a n
 
     from litestar import Litestar
     from litestar.types import ASGIApp, Scope, Receive, Send
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -380,12 +387,11 @@ Initializing a new project
 
 If you would like to initial set of alembic migrations, you can easily scaffold out new templates to setup a project.
 
-Assuming that you are using the default configuration for the SQLAlchemy configuration, you can run the following.
+Assuming that you are using the default configuration for the SQLAlchemy configuration, you can run the following to initialize the migrations directory.
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    # Initialize migrations directory
-    litestar database init ./migrations
+    $ litestar database init ./migrations
 
 If you use a different path than `./migrations`, be sure to also set this in your SQLAlchemy config.  For instance, if you'd like to use `./alembic`:
 
@@ -397,12 +403,11 @@ If you use a different path than `./migrations`, be sure to also set this in you
         ),
     )
 
-And then run the following:
+And then run the following to initialize the migrations directory:
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    # Initialize migrations directory
-    litestar database init ./alembic
+    $ litestar database init ./alembic
 
 You will now be configured to use the alternate directory for migrations.
 
@@ -411,10 +416,9 @@ Generate New Migrations
 
 Once configured, you can run the following command to auto-generate new alembic migrations:
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    # Create a new migration
-    litestar database make-migrations
+    $ litestar database make-migrations
 
 
 Upgrading a Database
@@ -422,6 +426,6 @@ Upgrading a Database
 
 You can upgrade a database to the latest version by running the following command:
 
-.. code-block:: bash
+.. code-block:: shell-session
 
-    litestar database upgrade
+    $ litestar database upgrade

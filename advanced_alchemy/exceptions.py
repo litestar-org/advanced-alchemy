@@ -1,19 +1,14 @@
-# ruff: noqa: UP007
-from __future__ import annotations
-
 import re
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, TypedDict, Union, cast
+from typing import Any, Callable, Optional, TypedDict, Union, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError, StatementError
 
-from advanced_alchemy.utils.deprecation import deprecated
-
 __all__ = (
     "AdvancedAlchemyError",
-    "ConflictError",
     "DuplicateKeyError",
     "ErrorMessages",
     "ForeignKeyError",
@@ -136,7 +131,7 @@ class MissingDependencyError(AdvancedAlchemyError, ImportError):
         install_package: Optional alternative package name to install.
     """
 
-    def __init__(self, package: str, install_package: str | None = None) -> None:
+    def __init__(self, package: str, install_package: Optional[str] = None) -> None:
         super().__init__(
             f"Package {package!r} is not installed but required. You can install it by running "
             f"'pip install advanced_alchemy[{install_package or package}]' to install advanced_alchemy with the required extra "
@@ -173,28 +168,6 @@ class RepositoryError(AdvancedAlchemyError):
         *args: Variable length argument list passed to parent class.
         detail: Detailed error message.
     """
-
-
-class ConflictError(RepositoryError):
-    """Data integrity error.
-
-    Args:
-        *args: Variable length argument list passed to parent class.
-        detail: Detailed error message.
-
-    Note:
-        This class is deprecated in favor of :class:`advanced_alchemy.exceptions.IntegrityError`.
-    """
-
-    @deprecated(
-        version="0.7.1",
-        alternative="advanced_alchemy.exceptions.IntegrityError",
-        kind="method",
-        removal_in="1.0.0",
-        info="`ConflictError` has been renamed to `IntegrityError`",
-    )
-    def __init__(self, *args: Any, detail: str = "") -> None:
-        super().__init__(*args, detail=detail)
 
 
 class IntegrityError(RepositoryError):
@@ -264,6 +237,7 @@ class ErrorMessages(TypedDict, total=False):
     multiple_rows: Union[str, Callable[[Exception], str]]
     check_constraint: Union[str, Callable[[Exception], str]]
     other: Union[str, Callable[[Exception], str]]
+    not_found: Union[str, Callable[[Exception], str]]
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
@@ -274,12 +248,18 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 
 
 @contextmanager
-def wrap_sqlalchemy_exception(
-    error_messages: ErrorMessages | None = None,
-    dialect_name: str | None = None,
+def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
+    error_messages: Optional[ErrorMessages] = None,
+    dialect_name: Optional[str] = None,
+    wrap_exceptions: bool = True,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
+
+    Args:
+        error_messages: Error messages to use for the exception.
+        dialect_name: The name of the dialect to use for the exception.
+        wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
 
         >>> try:
         ...     with wrap_sqlalchemy_exception():
@@ -293,13 +273,25 @@ def wrap_sqlalchemy_exception(
     try:
         yield
 
+    except NotFoundError as exc:
+        if wrap_exceptions is False:
+            raise
+        if error_messages is not None:
+            msg = _get_error_message(error_messages=error_messages, key="not_found", exc=exc)
+        else:
+            msg = "No rows matched the specified data"
+        raise NotFoundError(detail=msg) from exc
     except MultipleResultsFound as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="multiple_rows", exc=exc)
         else:
             msg = "Multiple rows matched the specified data"
         raise MultipleResultsFoundError(detail=msg) from exc
     except SQLAlchemyIntegrityError as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None and dialect_name is not None:
             _keys_to_regex = {
                 "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
@@ -319,18 +311,26 @@ def wrap_sqlalchemy_exception(
             ) from exc
         raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
     except SQLAlchemyInvalidRequestError as exc:
+        if wrap_exceptions is False:
+            raise
         raise InvalidRequestError(detail="An invalid request was made.") from exc
     except StatementError as exc:
+        if wrap_exceptions is False:
+            raise
         raise IntegrityError(
-            detail=cast(str, getattr(exc.orig, "detail", "There was an issue processing the statement."))
+            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
         ) from exc
     except SQLAlchemyError as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
         else:
             msg = f"An exception occurred: {exc}"
         raise RepositoryError(detail=msg) from exc
     except AttributeError as exc:
+        if wrap_exceptions is False:
+            raise
         if error_messages is not None:
             msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
         else:

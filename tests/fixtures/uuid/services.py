@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -59,170 +57,171 @@ from tests.fixtures.uuid.repositories import (
 )
 
 
-class SecretAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSecret]):
+class SecretAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSecret, SecretAsyncRepository]):
     """Rule repository."""
 
     repository_type = SecretAsyncRepository
 
 
-class RuleAsyncService(SQLAlchemyAsyncRepositoryService[UUIDRule]):
+class RuleAsyncService(SQLAlchemyAsyncRepositoryService[UUIDRule, RuleAsyncRepository]):
     """Rule repository."""
 
     repository_type = RuleAsyncRepository
 
 
-class RuleAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDRule]):
+class RuleAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDRule, RuleAsyncMockRepository]):
     """Rule repository."""
 
     repository_type = RuleAsyncMockRepository
 
 
-class RuleSyncMockService(SQLAlchemySyncRepositoryService[UUIDRule]):
+class RuleSyncMockService(SQLAlchemySyncRepositoryService[UUIDRule, RuleSyncMockRepository]):
     """Rule repository."""
 
     repository_type = RuleSyncMockRepository
 
 
-class AuthorAsyncService(SQLAlchemyAsyncRepositoryService[UUIDAuthor]):
+class AuthorAsyncService(SQLAlchemyAsyncRepositoryService[UUIDAuthor, AuthorAsyncRepository]):
     """Author repository."""
 
     repository_type = AuthorAsyncRepository
 
 
-class AuthorAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDAuthor]):
+class AuthorAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDAuthor, AuthorAsyncMockRepository]):
     """Author repository."""
 
     repository_type = AuthorAsyncMockRepository
 
 
-class AuthorSyncMockService(SQLAlchemySyncRepositoryService[UUIDAuthor]):
+class AuthorSyncMockService(SQLAlchemySyncRepositoryService[UUIDAuthor, AuthorSyncMockRepository]):
     """Author repository."""
 
     repository_type = AuthorSyncMockRepository
 
 
-class BookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDBook]):
+class BookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDBook, BookAsyncRepository]):
     """Book repository."""
 
     repository_type = BookAsyncRepository
 
 
-class BookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDBook]):
+class BookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDBook, BookAsyncMockRepository]):
     """Book repository."""
 
     repository_type = BookAsyncMockRepository
 
 
-class BookSyncMockService(SQLAlchemySyncRepositoryService[UUIDBook]):
+class BookSyncMockService(SQLAlchemySyncRepositoryService[UUIDBook, BookSyncMockRepository]):
     """Book repository."""
 
     repository_type = BookSyncMockRepository
 
 
-class EventLogAsyncService(SQLAlchemyAsyncRepositoryService[UUIDEventLog]):
+class EventLogAsyncService(SQLAlchemyAsyncRepositoryService[UUIDEventLog, EventLogAsyncRepository]):
     """Event log repository."""
 
     repository_type = EventLogAsyncRepository
 
 
-class ModelWithFetchedValueAsyncService(SQLAlchemyAsyncRepositoryService[UUIDModelWithFetchedValue]):
+class ModelWithFetchedValueAsyncService(
+    SQLAlchemyAsyncRepositoryService[UUIDModelWithFetchedValue, ModelWithFetchedValueAsyncRepository]
+):
     """UUIDModelWithFetchedValue repository."""
 
     repository_type = ModelWithFetchedValueAsyncRepository
 
 
-class TagAsyncService(SQLAlchemyAsyncRepositoryService[UUIDTag]):
+class TagAsyncService(SQLAlchemyAsyncRepositoryService[UUIDTag, TagAsyncRepository]):
     """Tag repository."""
 
     repository_type = TagAsyncRepository
 
 
-class TagAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDTag]):
+class TagAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDTag, TagAsyncMockRepository]):
     """Tag repository."""
 
     repository_type = TagAsyncMockRepository
 
 
-class TagSyncMockService(SQLAlchemySyncRepositoryService[UUIDTag]):
+class TagSyncMockService(SQLAlchemySyncRepositoryService[UUIDTag, TagSyncMockRepository]):
     """Tag repository."""
 
     repository_type = TagSyncMockRepository
 
 
-class ItemAsyncService(SQLAlchemyAsyncRepositoryService[UUIDItem]):
+class ItemAsyncService(SQLAlchemyAsyncRepositoryService[UUIDItem, ItemAsyncRepository]):
     """Item repository."""
 
     repository_type = ItemAsyncRepository
 
 
-class ItemAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDItem]):
+class ItemAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDItem, ItemAsyncMockRepository]):
     """Item repository."""
 
     repository_type = ItemAsyncMockRepository
 
 
-class ItemSyncMockService(SQLAlchemySyncRepositoryService[UUIDItem]):
+class ItemSyncMockService(SQLAlchemySyncRepositoryService[UUIDItem, ItemSyncMockRepository]):
     """Item repository."""
 
     repository_type = ItemSyncMockRepository
 
 
-class RuleSyncService(SQLAlchemySyncRepositoryService[UUIDRule]):
+class RuleSyncService(SQLAlchemySyncRepositoryService[UUIDRule, RuleSyncRepository]):
     """Rule repository."""
 
     repository_type = RuleSyncRepository
 
 
-class AuthorSyncService(SQLAlchemySyncRepositoryService[UUIDAuthor]):
+class AuthorSyncService(SQLAlchemySyncRepositoryService[UUIDAuthor, AuthorSyncRepository]):
     """Author repository."""
 
     repository_type = AuthorSyncRepository
 
 
-class BookSyncService(SQLAlchemySyncRepositoryService[UUIDBook]):
+class BookSyncService(SQLAlchemySyncRepositoryService[UUIDBook, BookSyncRepository]):
     """Book repository."""
 
     repository_type = BookSyncRepository
 
 
-class EventLogSyncService(SQLAlchemySyncRepositoryService[UUIDEventLog]):
+class EventLogSyncService(SQLAlchemySyncRepositoryService[UUIDEventLog, EventLogSyncRepository]):
     """Event log repository."""
 
     repository_type = EventLogSyncRepository
 
 
-class ModelWithFetchedValueSyncService(SQLAlchemySyncRepositoryService[UUIDModelWithFetchedValue]):
+class ModelWithFetchedValueSyncService(
+    SQLAlchemySyncRepositoryService[UUIDModelWithFetchedValue, ModelWithFetchedValueSyncRepository]
+):
     """UUIDModelWithFetchedValue repository."""
 
     repository_type = ModelWithFetchedValueSyncRepository
 
 
-class TagSyncService(SQLAlchemySyncRepositoryService[UUIDTag]):
+class TagSyncService(SQLAlchemySyncRepositoryService[UUIDTag, TagSyncRepository]):
     """Tag repository."""
 
     repository_type = TagSyncRepository
 
 
-class ItemSyncService(SQLAlchemySyncRepositoryService[UUIDItem]):
+class ItemSyncService(SQLAlchemySyncRepositoryService[UUIDItem, ItemSyncRepository]):
     """Item repository."""
 
     repository_type = ItemSyncRepository
 
 
-class SecretSyncService(SQLAlchemySyncRepositoryService[UUIDSecret]):
+class SecretSyncService(SQLAlchemySyncRepositoryService[UUIDSecret, SecretSyncRepository]):
     """Rule repository."""
 
     repository_type = SecretSyncRepository
 
 
-class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
+class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook, SlugBookAsyncRepository]):
     """Book repository."""
 
     repository_type = SlugBookAsyncRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(
         self,
@@ -237,13 +236,10 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         return await super().to_model(data, operation)
 
 
-class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
+class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook, SlugBookSyncRepository]):
     """Book repository."""
 
     repository_type = SlugBookSyncRepository
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(
         self,
@@ -258,14 +254,11 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
         return super().to_model(data, operation)
 
 
-class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
+class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook, SlugBookAsyncMockRepository]):
     """Book repository."""
 
     repository_type = SlugBookAsyncMockRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookAsyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     async def to_model(
         self,
@@ -280,14 +273,11 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook]):
         return await super().to_model(data, operation)
 
 
-class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook]):
+class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook, SlugBookSyncMockRepository]):
     """Book repository."""
 
     repository_type = SlugBookSyncMockRepository
     match_fields = ["title"]
-
-    def __init__(self, **repo_kwargs: Any) -> None:
-        self.repository: SlugBookSyncMockRepository = self.repository_type(**repo_kwargs)  # pyright: ignore
 
     def to_model(
         self,
