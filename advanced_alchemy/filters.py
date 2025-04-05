@@ -39,7 +39,22 @@ from dataclasses import dataclass
 from operator import attrgetter
 from typing import Any, Callable, Generic, Literal, Optional, Union, cast
 
-from sqlalchemy import BinaryExpression, ColumnElement, Delete, Select, Update, and_, any_, or_, text
+from sqlalchemy import (
+    BinaryExpression,
+    ColumnElement,
+    Delete,
+    Select,
+    Update,
+    and_,
+    any_,
+    exists,
+    false,
+    not_,
+    or_,
+    select,
+    text,
+    true,
+)
 from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from typing_extensions import TypeAlias, TypeVar
@@ -49,9 +64,11 @@ from advanced_alchemy.base import ModelProtocol
 __all__ = (
     "BeforeAfter",
     "CollectionFilter",
+    "ExistsFilter",
     "FilterTypes",
     "InAnyFilter",
     "LimitOffset",
+    "NotExistsFilter",
     "NotInCollectionFilter",
     "NotInSearchFilter",
     "OnBeforeAfter",
@@ -72,7 +89,7 @@ StatementTypeT = TypeVar(
         ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Select[Any], Update, Delete
     ],
 )
-FilterTypes: TypeAlias = "Union[BeforeAfter, OnBeforeAfter, CollectionFilter[Any], LimitOffset, OrderBy, SearchFilter, NotInCollectionFilter[Any], NotInSearchFilter]"
+FilterTypes: TypeAlias = "Union[BeforeAfter, OnBeforeAfter, CollectionFilter[Any], LimitOffset, OrderBy, SearchFilter, NotInCollectionFilter[Any], NotInSearchFilter, ExistsFilter, NotExistsFilter]"
 """Aggregate type alias of the types supported for collection filtering."""
 
 
@@ -569,3 +586,266 @@ class NotInSearchFilter(SearchFilter):
             - :meth:`sqlalchemy.sql.expression.ColumnOperators.notilike`: NOT ILIKE
         """
         return attrgetter("not_ilike" if self.ignore_case else "not_like")
+
+
+@dataclass
+class ExistsFilter(StatementFilter):
+    """Filter for EXISTS subqueries.
+
+    This filter creates an EXISTS condition using a list of column expressions.
+    The expressions can be combined using either AND or OR logic. The filter applies
+    a correlated subquery that returns only the rows from the main query that match
+    the specified conditions.
+
+    For example, if searching movies with `Movie.genre == "Action"`, only rows where
+    the genre is "Action" will be returned.
+
+    Parameters
+    ----------
+    values : list[ColumnElement[bool]]
+        values: List of SQLAlchemy column expressions to use in the EXISTS clause
+    operator : Literal["and", "or"], optional
+        operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
+
+    Example:
+    --------
+        Basic usage with AND conditions::
+
+            from sqlalchemy import select
+            from advanced_alchemy.filters import ExistsFilter
+
+            filter = ExistsFilter(
+                values=[User.email.like("%@example.com%")],
+            )
+            statement = filter.append_to_statement(
+                select(Organization), Organization
+            )
+
+        This will return only organizations where the user's email contains "@example.com".
+
+        Using OR conditions::
+
+            filter = ExistsFilter(
+                values=[User.role == "admin", User.role == "owner"],
+                operator="or",
+            )
+
+        This will return organizations where the user's role is either "admin" OR "owner".
+
+    See Also:
+    --------
+        :class:`NotExistsFilter`: The inverse of this filter
+        :func:`sqlalchemy.sql.expression.exists`: SQLAlchemy EXISTS expression
+    """
+
+    values: list[ColumnElement[bool]]
+    """List of SQLAlchemy column expressions to use in the EXISTS clause."""
+    operator: Literal["and", "or"] = "and"
+    """If "and", combines conditions with the AND operator, otherwise uses OR."""
+
+    @property
+    def _and(self) -> Callable[..., ColumnElement[bool]]:
+        """Access the SQLAlchemy `and_` operator.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `and_` operator for AND conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.and_`: SQLAlchemy AND operator
+        """
+        return and_
+
+    @property
+    def _or(self) -> Callable[..., ColumnElement[bool]]:
+        """Access the SQLAlchemy `or_` operator.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `or_` operator for OR conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.or_`: SQLAlchemy OR operator
+        """
+        return or_
+
+    def _get_combined_conditions(self) -> ColumnElement[bool]:
+        """Combine the filter conditions using the specified operator.
+
+        Returns:
+            ColumnElement[bool]:
+                A SQLAlchemy column expression combining all conditions with AND or OR
+        """
+        op = self._and if self.operator == "and" else self._or
+        return op(*self.values)
+
+    def get_exists_clause(self, model: type[ModelT]) -> ColumnElement[bool]:
+        """Generate the EXISTS clause for the statement.
+
+        Args:
+            model : type[ModelT]
+                The SQLAlchemy model class to correlate with
+
+        Returns:
+            ColumnElement[bool]:
+                A correlated EXISTS expression for use in a WHERE clause
+        """
+        # Handle empty values list case
+        if not self.values:
+            # Use explicitly imported 'false' from sqlalchemy
+            # Return SQLAlchemy FALSE expression
+            return false()
+
+        # Combine all values with AND or OR (using the operator specified in the filter)
+        # This creates a single boolean expression from multiple conditions
+        combined_conditions = self._get_combined_conditions()
+
+        # Create a correlated subquery with the combined conditions
+        try:
+            subquery = select(1).where(combined_conditions)
+            correlated_subquery = subquery.correlate(model.__table__)
+            return exists(correlated_subquery)
+        except Exception:  # noqa: BLE001
+            return false()
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Append EXISTS condition to the statement.
+
+        Args:
+            statement : StatementTypeT
+                The SQLAlchemy statement to modify
+            model : type[ModelT]
+            The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT:
+                Modified statement with EXISTS condition
+        """
+        # We apply the exists clause regardless of whether self.values is empty,
+        # as get_exists_clause handles the empty case by returning false().
+        exists_clause = self.get_exists_clause(model)
+        return cast("StatementTypeT", statement.where(exists_clause))
+
+
+@dataclass
+class NotExistsFilter(StatementFilter):
+    """Filter for NOT EXISTS subqueries.
+
+    This filter creates a NOT EXISTS condition using a list of column expressions.
+    The expressions can be combined using either AND or OR logic. The filter applies
+    a correlated subquery that returns only the rows from the main query that DO NOT
+    match the specified conditions.
+
+    For example, if searching movies with `Movie.genre == "Action"`, only rows where
+    the genre is NOT "Action" will be returned.
+
+    Parameters
+    ----------
+    values : list[ColumnElement[bool]]
+        values: List of SQLAlchemy column expressions to use in the NOT EXISTS clause
+    operator : Literal["and", "or"], optional
+        operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
+
+    Example:
+    --------
+        Basic usage with AND conditions::
+
+            from sqlalchemy import select
+            from advanced_alchemy.filters import NotExistsFilter
+
+            filter = NotExistsFilter(
+                values=[User.email.like("%@example.com%")],
+            )
+            statement = filter.append_to_statement(
+                select(Organization), Organization
+            )
+
+        This will return only organizations where the user's email does NOT contain "@example.com".
+
+        Using OR conditions::
+
+            filter = NotExistsFilter(
+                values=[User.role == "admin", User.role == "owner"],
+                operator="or",
+            )
+
+        This will return organizations where the user's role is NEITHER "admin" NOR "owner".
+
+    See Also:
+    --------
+        :class:`ExistsFilter`: The inverse of this filter
+        :func:`sqlalchemy.sql.expression.not_`: SQLAlchemy NOT operator
+        :func:`sqlalchemy.sql.expression.exists`: SQLAlchemy EXISTS expression
+    """
+
+    values: list[ColumnElement[bool]]
+    """List of SQLAlchemy column expressions to use in the NOT EXISTS clause."""
+    operator: Literal["and", "or"] = "and"
+    """If "and", combines conditions with the AND operator, otherwise uses OR."""
+
+    @property
+    def _and(self) -> Callable[..., ColumnElement[bool]]:
+        """Access the SQLAlchemy `and_` operator.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `and_` operator for AND conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.and_`: SQLAlchemy AND operator
+        """
+        return and_
+
+    @property
+    def _or(self) -> Callable[..., ColumnElement[bool]]:
+        """Access the SQLAlchemy `or_` operator.
+
+        Returns:
+            Callable[..., ColumnElement[bool]]: The `or_` operator for OR conditions
+
+        See Also:
+            :func:`sqlalchemy.sql.expression.or_`: SQLAlchemy OR operator
+        """
+        return or_
+
+    def _get_combined_conditions(self) -> ColumnElement[bool]:
+        op = self._and if self.operator == "and" else self._or
+        return op(*self.values)
+
+    def get_exists_clause(self, model: type[ModelT]) -> ColumnElement[bool]:
+        """Generate the NOT EXISTS clause for the statement.
+
+        Args:
+            model : type[ModelT]
+                The SQLAlchemy model class to correlate with
+
+
+        Returns:
+            ColumnElement[bool]:
+                A correlated NOT EXISTS expression for use in a WHERE clause
+        """
+        # Handle empty values list case
+        if not self.values:
+            # Return SQLAlchemy TRUE expression
+            return true()
+
+        # Combine conditions and create correlated subquery
+        combined_conditions = self._get_combined_conditions()
+        subquery = select(1).where(combined_conditions)
+        correlated_subquery = subquery.correlate(model.__table__)
+        return not_(exists(correlated_subquery))
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Append NOT EXISTS condition to the statement.
+
+        Args:
+            statement : StatementTypeT
+                The SQLAlchemy statement to modify
+            model : type[ModelT]
+                The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT:
+                Modified statement with NOT EXISTS condition
+        """
+        # We apply the exists clause regardless of whether self.values is empty,
+        # as get_exists_clause handles the empty case by returning true.
+        exists_clause = self.get_exists_clause(model)
+        return cast("StatementTypeT", statement.where(exists_clause))
