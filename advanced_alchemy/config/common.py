@@ -80,7 +80,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     autoflush: "Union[bool, EmptyType]" = Empty
     """When ``True``, all query operations will issue a flush call to this :class:`Session <sqlalchemy.orm.Session>`
     before proceeding"""
-    bind: "Union[EngineT, ConnectionT, None, EmptyType]" = Empty
+    bind: "Optional[Union[EngineT, ConnectionT, EmptyType]]" = Empty
     """The :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection <sqlalchemy.engine.Connection>` that new
     :class:`Session <sqlalchemy.orm.Session>` objects will be bound to."""
     binds: "Union[dict[Union[type[Any], Mapper[Any], TableClause, str], Union[EngineT, ConnectionT]], None, EmptyType]" = Empty
@@ -234,6 +234,9 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     def get_engine(self) -> EngineT:
         """Return an engine. If none exists yet, create one.
 
+        Raises:
+            ImproperConfigurationError: if neither `connection_string` nor `engine_instance` are provided.
+
         Returns:
             :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine` instance used by the plugin.
         """
@@ -246,12 +249,13 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
         engine_config = self.engine_config_dict
         try:
-            return self.create_engine_callable(self.connection_string, **engine_config)
+            self.engine_instance = self.create_engine_callable(self.connection_string, **engine_config)
         except TypeError:
             # likely due to a dialect that doesn't support json type
             del engine_config["json_deserializer"]
             del engine_config["json_serializer"]
-            return self.create_engine_callable(self.connection_string, **engine_config)
+            self.engine_instance = self.create_engine_callable(self.connection_string, **engine_config)
+        return self.engine_instance
 
     def create_session_maker(self) -> "Callable[[], SessionT]":  # pragma: no cover
         """Get a session maker. If none exists yet, create one.
@@ -265,7 +269,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         session_kws = self.session_config_dict
         if session_kws.get("bind") is None:
             session_kws["bind"] = self.get_engine()
-        return cast("Callable[[], SessionT]", self.session_maker_class(**session_kws))
+        self.session_maker = cast("Callable[[], SessionT]", self.session_maker_class(**session_kws))
+        return self.session_maker
 
 
 @dataclass

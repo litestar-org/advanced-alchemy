@@ -23,74 +23,45 @@ from sqlalchemy.types import TypeEngine
 from typing_extensions import Self, TypeVar
 
 from advanced_alchemy.mixins import (
-    AuditColumns as _AuditColumns,
-)
-from advanced_alchemy.mixins import (
-    BigIntPrimaryKey as _BigIntPrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    NanoIDPrimaryKey as _NanoIDPrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    UUIDPrimaryKey as _UUIDPrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    UUIDv6PrimaryKey as _UUIDv6PrimaryKey,
-)
-from advanced_alchemy.mixins import (
-    UUIDv7PrimaryKey as _UUIDv7PrimaryKey,
+    AuditColumns,
+    BigIntPrimaryKey,
+    NanoIDPrimaryKey,
+    UUIDPrimaryKey,
+    UUIDv6PrimaryKey,
+    UUIDv7PrimaryKey,
 )
 from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
 from advanced_alchemy.utils.dataclass import DataclassProtocol
-from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
-    # these should stay here since they are deprecated.  They are imported in the __getattr__ function
     from sqlalchemy.sql import FromClause
     from sqlalchemy.sql.schema import (
         _NamingSchemaParameter as NamingSchemaParameter,  # pyright: ignore[reportPrivateUsage]
     )
 
-    from advanced_alchemy.mixins import (
-        AuditColumns,
-        BigIntPrimaryKey,
-        NanoIDPrimaryKey,
-        SlugKey,
-        UUIDPrimaryKey,
-        UUIDv6PrimaryKey,
-        UUIDv7PrimaryKey,
-    )
-
 
 __all__ = (
     "AdvancedDeclarativeBase",
-    "AuditColumns",
     "BasicAttributes",
     "BigIntAuditBase",
     "BigIntBase",
     "BigIntBaseT",
-    "BigIntPrimaryKey",
     "CommonTableAttributes",
     "ModelProtocol",
     "NanoIDAuditBase",
     "NanoIDBase",
     "NanoIDBaseT",
-    "NanoIDPrimaryKey",
     "SQLQuery",
-    "SlugKey",
     "TableArgsType",
     "UUIDAuditBase",
     "UUIDBase",
     "UUIDBaseT",
-    "UUIDPrimaryKey",
     "UUIDv6AuditBase",
     "UUIDv6Base",
     "UUIDv6BaseT",
-    "UUIDv6PrimaryKey",
     "UUIDv7AuditBase",
     "UUIDv7Base",
     "UUIDv7BaseT",
-    "UUIDv7PrimaryKey",
     "convention",
     "create_registry",
     "merge_table_arguments",
@@ -98,42 +69,6 @@ __all__ = (
     "orm_registry",
     "table_name_regexp",
 )
-
-
-def __getattr__(attr_name: str) -> object:
-    if attr_name == "__path__":
-        return __file__
-
-    _deprecated_attrs = {
-        "SlugKey",
-        "AuditColumns",
-        "NanoIDPrimaryKey",
-        "BigIntPrimaryKey",
-        "UUIDPrimaryKey",
-        "UUIDv6PrimaryKey",
-        "UUIDv7PrimaryKey",
-    }
-    if attr_name in _deprecated_attrs:
-        from advanced_alchemy import mixins
-
-        module = "advanced_alchemy.mixins"
-        value = globals()[attr_name] = getattr(mixins, attr_name)
-
-        warn_deprecation(
-            deprecated_name=f"advanced_alchemy.base.{attr_name}",
-            version="0.26.0",
-            kind="import",
-            removal_in="1.0.0",
-            info=f"importing {attr_name} from 'advanced_alchemy.base' is deprecated, please import it from '{module}' instead",
-        )
-
-        return value
-    if attr_name in set(__all__).difference(_deprecated_attrs):
-        value = globals()[attr_name] = locals()[attr_name]
-        return value
-
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
-    raise AttributeError(msg)
 
 
 UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
@@ -288,6 +223,8 @@ def create_registry(
         datetime.datetime: DateTimeUTC,
         datetime.date: Date,
         dict: JsonB,
+        dict[str, Any]: JsonB,
+        dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
     }
     with contextlib.suppress(ImportError):
@@ -332,7 +269,7 @@ class MetadataRegistry:
     def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cast(Self, cls._instance)
+        return cast("Self", cls._instance)
 
     def get(self, bind_key: Optional[str] = None) -> MetaData:
         """Get the metadata for the given bind key."""
@@ -383,7 +320,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
         super().__init_subclass__(**kwargs)
 
 
-class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDBase(UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v4 primary keys.
 
     .. seealso::
@@ -396,7 +333,7 @@ class UUIDBase(_UUIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, 
     __abstract__ = True
 
 
-class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDAuditBase(CommonTableAttributes, UUIDPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v4 primary keys and audit columns.
 
     .. seealso::
@@ -410,7 +347,7 @@ class UUIDAuditBase(CommonTableAttributes, _UUIDPrimaryKey, _AuditColumns, Advan
     __abstract__ = True
 
 
-class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv6Base(UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v6 primary keys.
 
     .. seealso::
@@ -423,7 +360,7 @@ class UUIDv6Base(_UUIDv6PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv6AuditBase(CommonTableAttributes, UUIDv6PrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v6 primary keys and audit columns.
 
     .. seealso::
@@ -437,7 +374,7 @@ class UUIDv6AuditBase(CommonTableAttributes, _UUIDv6PrimaryKey, _AuditColumns, A
     __abstract__ = True
 
 
-class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv7Base(UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with UUID v7 primary keys.
 
     .. seealso::
@@ -450,7 +387,7 @@ class UUIDv7Base(_UUIDv7PrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class UUIDv7AuditBase(CommonTableAttributes, UUIDv7PrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with UUID v7 primary keys and audit columns.
 
     .. seealso::
@@ -464,7 +401,7 @@ class UUIDv7AuditBase(CommonTableAttributes, _UUIDv7PrimaryKey, _AuditColumns, A
     __abstract__ = True
 
 
-class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class NanoIDBase(NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with Nano ID primary keys.
 
     .. seealso::
@@ -477,7 +414,7 @@ class NanoIDBase(_NanoIDPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class NanoIDAuditBase(CommonTableAttributes, NanoIDPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with Nano ID primary keys and audit columns.
 
     .. seealso::
@@ -491,7 +428,7 @@ class NanoIDAuditBase(CommonTableAttributes, _NanoIDPrimaryKey, _AuditColumns, A
     __abstract__ = True
 
 
-class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+class BigIntBase(BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for all SQLAlchemy declarative models with BigInt primary keys.
 
     .. seealso::
@@ -504,7 +441,7 @@ class BigIntBase(_BigIntPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBa
     __abstract__ = True
 
 
-class BigIntAuditBase(CommonTableAttributes, _BigIntPrimaryKey, _AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
     """Base for declarative models with BigInt primary keys and audit columns.
 
     .. seealso::

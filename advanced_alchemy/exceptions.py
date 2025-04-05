@@ -7,11 +7,8 @@ from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
 from sqlalchemy.exc import MultipleResultsFound, SQLAlchemyError, StatementError
 
-from advanced_alchemy.utils.deprecation import deprecated
-
 __all__ = (
     "AdvancedAlchemyError",
-    "ConflictError",
     "DuplicateKeyError",
     "ErrorMessages",
     "ForeignKeyError",
@@ -173,28 +170,6 @@ class RepositoryError(AdvancedAlchemyError):
     """
 
 
-class ConflictError(RepositoryError):
-    """Data integrity error.
-
-    Args:
-        *args: Variable length argument list passed to parent class.
-        detail: Detailed error message.
-
-    Note:
-        This class is deprecated in favor of :class:`advanced_alchemy.exceptions.IntegrityError`.
-    """
-
-    @deprecated(
-        version="0.7.1",
-        alternative="advanced_alchemy.exceptions.IntegrityError",
-        kind="method",
-        removal_in="1.0.0",
-        info="`ConflictError` has been renamed to `IntegrityError`",
-    )
-    def __init__(self, *args: Any, detail: str = "") -> None:
-        super().__init__(*args, detail=detail)
-
-
 class IntegrityError(RepositoryError):
     """Data integrity error.
 
@@ -262,6 +237,7 @@ class ErrorMessages(TypedDict, total=False):
     multiple_rows: Union[str, Callable[[Exception], str]]
     check_constraint: Union[str, Callable[[Exception], str]]
     other: Union[str, Callable[[Exception], str]]
+    not_found: Union[str, Callable[[Exception], str]]
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
@@ -272,7 +248,7 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 
 
 @contextmanager
-def wrap_sqlalchemy_exception(  # noqa: C901
+def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     error_messages: Optional[ErrorMessages] = None,
     dialect_name: Optional[str] = None,
     wrap_exceptions: bool = True,
@@ -297,6 +273,14 @@ def wrap_sqlalchemy_exception(  # noqa: C901
     try:
         yield
 
+    except NotFoundError as exc:
+        if wrap_exceptions is False:
+            raise
+        if error_messages is not None:
+            msg = _get_error_message(error_messages=error_messages, key="not_found", exc=exc)
+        else:
+            msg = "No rows matched the specified data"
+        raise NotFoundError(detail=msg) from exc
     except MultipleResultsFound as exc:
         if wrap_exceptions is False:
             raise
@@ -334,7 +318,7 @@ def wrap_sqlalchemy_exception(  # noqa: C901
         if wrap_exceptions is False:
             raise
         raise IntegrityError(
-            detail=cast(str, getattr(exc.orig, "detail", "There was an issue processing the statement."))
+            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
         ) from exc
     except SQLAlchemyError as exc:
         if wrap_exceptions is False:

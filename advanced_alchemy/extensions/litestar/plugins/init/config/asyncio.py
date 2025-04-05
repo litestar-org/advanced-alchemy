@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, cast
 
-from litestar.cli._utils import console
+from litestar.cli._utils import console  # pyright: ignore
 from litestar.constants import HTTP_RESPONSE_START
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession

@@ -1192,7 +1192,7 @@ async def test_repo_list_and_count_basic_method(raw_authors: RawRecordData, auth
         author_repo: The author mock repository
     """
     exp_count = len(raw_authors)
-    collection, count = await maybe_async(author_repo.list_and_count(force_basic_query_mode=True))
+    collection, count = await maybe_async(author_repo.list_and_count(count_with_window_function=True))
     assert exp_count == count
     assert isinstance(collection, list)
     assert len(collection) == exp_count
@@ -2092,7 +2092,7 @@ async def test_service_list_and_count_basic_method(raw_authors: RawRecordData, a
         author_service: The author mock repository
     """
     exp_count = len(raw_authors)
-    collection, count = await maybe_async(author_service.list_and_count(force_basic_query_mode=True))
+    collection, count = await maybe_async(author_service.list_and_count(count_with_window_function=False))
     assert exp_count == count
     assert isinstance(collection, list)
     assert len(collection) == exp_count

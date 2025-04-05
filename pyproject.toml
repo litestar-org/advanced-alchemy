@@ -38,13 +38,13 @@ maintainers = [
   { name = "Litestar Developers", email = "hello@litestar.dev" },
   { name = "Cody Fincher", email = "cody@litestar.dev" },
   { name = "Jacob Coffee", email = "jacob@litestar.dev" },
-  { name = "Janek Nouvertné", email = "provinzkraut@litestar.dev" },
+  { name = "Janek Nouvertné", email = "janek@litestar.dev" },
   { name = "Julien Courtes", email = "julien@litestar.dev" },
 ]
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.30.3"
+version = "1.0.2"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -91,7 +91,6 @@ dev = [
 ]
 doc = [
   "auto-pytabs[sphinx]>=0.5.0",
-  "git-cliff>=2.6.1",
   "shibuya",
   "sphinx>=7.0.0; python_version <= \"3.9\"",
   "sphinx>=8.0.0; python_version >= \"3.10\"",
@@ -128,7 +127,7 @@ lint = [
   "types-pytz",
   "types-ujson",
 ]
-litestar = ["litestar[cli]>=2.12.1"]
+litestar = ["litestar[cli]>=2.15.0"]
 mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
@@ -157,9 +156,9 @@ test = [
 
 [tool.bumpversion]
 allow_dirty = true
-commit = true
+commit = false
 commit_args = "--no-verify"
-current_version = "0.30.3"
+current_version = "1.0.2"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -178,16 +177,6 @@ filename = "pyproject.toml"
 replace = 'version = "{new_version}"'
 search = 'version = "{current_version}"'
 
-[[tool.bumpversion.files]]
-filename = "uv.lock"
-replace = """
-name = "advanced-alchemy"
-version = "{new_version}"
-"""
-search = """
-name = "advanced-alchemy"
-version = "{current_version}"
-"""
 
 [build-system]
 build-backend = "hatchling.build"
@@ -279,7 +268,6 @@ docstring-code-format = true
 docstring-code-line-length = 60
 
 [tool.ruff.lint]
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 extend-safe-fixes = ["TC"]
 fixable = ["ALL"]
 ignore = [
@@ -314,6 +302,11 @@ ignore = [
   "COM812",
   "CPY001",
   "FA100",
+  "PLC0415",
+  "PLR0917",
+  "PLR0904",
+  "PGH003",
+  "PLC2701",
 ]
 select = ["ALL"]
 
@@ -338,6 +331,7 @@ classmethod-decorators = [
 "advanced_alchemy/repository/*.py" = ['C901']
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
+"examples/litestar/*.py" = ["B008"]
 "tests/**/*.*" = [
   "A",
   "ARG",

@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING, Any, Union, cast
 from litestar.di import Provide
 from litestar.dto import DTOData
 from litestar.params import Dependency, Parameter
-from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+from litestar.plugins import CLIPlugin, InitPluginProtocol
+from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
+from sqlalchemy.orm import Session, scoped_session
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryError
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
@@ -21,7 +23,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
-from advanced_alchemy.service import OffsetPagination
+from advanced_alchemy.service import ModelDictListT, ModelDictT, ModelDTOT, ModelOrRowMappingT, ModelT, OffsetPagination
 
 if TYPE_CHECKING:
     from click import Group
@@ -47,10 +49,19 @@ signature_namespace_values: dict[str, Any] = {
     "Dependency": Dependency,
     "DTOData": DTOData,
     "Sequence": Sequence,
+    "ModelT": ModelT,
+    "ModelDictT": ModelDictT,
+    "ModelDTOT": ModelDTOT,
+    "ModelDictListT": ModelDictListT,
+    "ModelOrRowMappingT": ModelOrRowMappingT,
+    "Session": Session,
+    "scoped_session": scoped_session,
+    "AsyncSession": AsyncSession,
+    "async_scoped_session": async_scoped_session,
 }
 
 
-class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPluginProtocol, _slots_base.SlotsBase):
+class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase):
     """SQLAlchemy application lifecycle configuration."""
 
     def __init__(

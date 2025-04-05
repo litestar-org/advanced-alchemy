@@ -62,6 +62,7 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
     "duplicate_key": "A record matching the supplied data already exists.",
     "other": "There was an error during data processing",
     "check_constraint": "The data failed a check constraint during processing",
+    "not_found": "The requested resource was not found",
 }
 """Default error messages for repository errors."""
 
@@ -185,15 +186,10 @@ class FilterableRepositoryProtocol(Protocol[ModelT]):
 
     This protocol defines the required attributes and methods that any
     filterable repository implementation must provide.
-
-    Type Parameters:
-        ModelT: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model type this repository handles.
-
-    Attributes:
-        model_type: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model class this repository manages.
     """
 
     model_type: type[ModelT]
+    """The SQLAlchemy model class this repository manages."""
 
 
 class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
@@ -201,9 +197,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
     Provides core filtering, ordering and pagination functionality for
     SQLAlchemy models.
-
-    Type Parameters:
-        ModelT: :class:`~advanced_alchemy.base.ModelProtocol` The SQLAlchemy model type this repository handles.
     """
 
     model_type: type[ModelT]

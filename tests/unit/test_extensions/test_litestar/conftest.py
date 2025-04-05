@@ -295,14 +295,14 @@ async def async_app(async_sqlalchemy_plugin: SQLAlchemyPlugin) -> AsyncGenerator
 @pytest.fixture()
 async def sync_alembic_commands(sync_app: Litestar) -> AsyncGenerator[AlembicCommands, None]:
     plugin = sync_app.plugins.get(SQLAlchemyPlugin)
-    config = plugin.config[0] if isinstance(plugin.config, Sequence) else plugin.config
+    config = plugin.config[0] if isinstance(plugin.config, Sequence) else plugin.config  # type: ignore
     yield AlembicCommands(sqlalchemy_config=config)
 
 
 @pytest.fixture()
 async def async_alembic_commands(async_app: Litestar) -> AsyncGenerator[AlembicCommands, None]:
     plugin = async_app.plugins.get(SQLAlchemyPlugin)
-    config = plugin.config[0] if isinstance(plugin.config, Sequence) else plugin.config
+    config = plugin.config[0] if isinstance(plugin.config, Sequence) else plugin.config  # type: ignore
     yield AlembicCommands(sqlalchemy_config=config)
 
 

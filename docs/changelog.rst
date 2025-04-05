@@ -3,6 +3,218 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.0.2
+    :date: 2025-04-01
+
+    .. change:: prevent forward resolution issues
+        :type: bugfix
+        :pr: 423
+
+        Removes some stringified representations to help with the forward resolution of `datetime` and `Collection`.
+
+    .. change:: correctly set `uniquify` from `new`
+        :type: bugfix
+        :pr: 424
+
+        Unquify is now correctly set when passed into the `new`/`init` methods.
+
+        Introduced tests for `sync_tools` utilities, including `maybe_async_`, `maybe_async_context`, `SoonValue`, `TaskGroup`, and others.
+
+        Improves coverage for async and sync function handling, context managers, and value management.
+
+
+
+    .. change:: remove accidental litestar import
+        :type: bugfix
+        :pr: 426
+
+        Remove an incorrect import of `console` from `litestar.cli._utils` and replace it with a correct import from `rich`. This change ensures proper functionality without unnecessary dependencies.
+
+
+.. changelog:: 1.0.1
+    :date: 2025-03-19
+
+    .. change:: properly serialize `Relationship` type hints
+        :type: bugfix
+        :pr: 422
+
+        Adds `sqlalchemy.orm.Relationship` to the supported type hints for the `SQLAlchemyDTO`
+
+
+.. changelog:: 1.0.0
+    :date: 2025-03-18
+
+    .. change:: remove deprecated packages removed in `v1.0.0`
+        :type: misc
+        :pr: 419
+
+        Removes deprecated packages and prepares for 1.0 release.
+
+    .. change:: logic correction for window function
+        :type: bugfix
+        :pr: 421
+
+        Corrects the logic for using a count with a window function.
+
+
+.. changelog:: 0.34.0
+    :date: 2025-03-10
+
+    .. change:: allow custom `not_found` error messages
+        :type: feature
+        :pr: 417
+        :issue: 391
+
+        Enhance the SQLAlchemy exception wrapper to handle NotFoundError with custom error messages and improved error handling. This includes:
+
+        - Adding a 'not_found' key to ErrorMessages type
+        - Extending wrap_sqlalchemy_exception to catch and handle NotFoundError
+        - Updating default error message templates with a not_found message
+        - Adding unit tests for custom NotFoundError handling
+
+    .. change:: Refactor Sanic extension for multi-config support
+        :type: feature
+        :pr: 415
+        :issue: 375
+
+        This commit refactors the Sanic extension for Advanced Alchemy:
+
+        - Refactored configuration handling with support for multiple database configurations
+        - Added methods for retrieving async and sync sessions, engines, and configs
+        - Improved dependency injection with new provider methods
+        - Simplified extension initialization and registration
+        - Updated example and test files to reflect new extension structure
+        - Removed deprecated methods and simplified the extension interface
+
+
+
+.. changelog:: 0.33.2
+    :date: 2025-03-09
+
+    .. change:: simplify session type hints in service providers
+        :type: bugfix
+        :pr: 414
+
+        Remove unnecessary scoped session type hints from service provider functions.
+
+        Prevents the following exception from being incorrectly raised:
+
+        `TypeError: Type unions may not contain more than one custom type - type typing.Union[sqlalchemy.ext.asyncio.session.AsyncSession, sqlalchemy.ext.asyncio.scoping.async_scoped_session[sqlalchemy.ext.asyncio.session.AsyncSession], NoneType] is not supported.`
+
+
+.. changelog:: 0.33.1
+    :date: 2025-03-07
+
+    .. change:: add session to namespace signature
+        :type: feature
+        :pr: 412
+
+        The new filter providers expect that the sessions are in the signature namespace.  This ensures there are no issues when configuring the plugin.
+
+
+.. changelog:: 0.33.0
+    :date: 2025-03-07
+
+    .. change:: Add dependency factory utilities
+        :type: feature
+        :pr: 405
+
+        Introduces a new module `advanced_alchemy.extensions.litestar.providers` with comprehensive dependency injection utilities for SQLAlchemy services in Litestar. The module provides:
+
+        - Dynamic filter configuration generation
+        - Dependency caching mechanism
+        - Flexible filter and pagination support
+        - Singleton metaclass for dependency management
+        - Configurable filter and search dependencies
+
+
+.. changelog:: 0.32.2
+    :date: 2025-02-26
+
+    .. change:: Litestar extension: Use ``SerializationPlugin`` instead of ``SerializationPluginProtocol``
+        :type: misc
+        :pr: 401
+
+        Use ``SerializationPlugin`` instead of ``SerializationPluginProtocol``
+
+
+.. changelog:: 0.32.1
+    :date: 2025-02-26
+
+    .. change:: Litestar extension: Use ``CLIPlugin`` instead of ``CLIPluginProtocol``
+        :type: misc
+        :pr: 399
+
+        Internal change migrating from using Litestar's ``CLIPluginProtocol`` to
+        ``CLIPlugin``.
+
+
+.. changelog:: 0.32.0
+    :date: 2025-02-23
+
+    .. change:: remove `limit` and `offset` from count statement
+        :type: bugfix
+        :pr: 395
+
+        Remove `limit` and `offset` from count statement
+
+    .. change:: rename `force_basic_query_mode`
+        :type: misc
+        :pr: 396
+
+        Renames `force_basic_query_mode` to `count_with_window_function`.  This is also exposed as a class/init parameter for the service and repository.
+
+    .. change:: add Enum to default type decoders
+        :type: feature
+        :pr: 397
+
+        Extends the default `msgspec` type decoders to handle Enum types by converting them to their underlying value during serialization
+
+
+
+.. changelog:: 0.31.0
+    :date: 2025-02-18
+
+    .. change:: Fix reference in `changelog.py`
+        :type: bugfix
+        :pr: 383
+
+        Should link to the AA repo, not litestar :)
+
+    .. change:: Query repository list method for custom queries
+        :type: bugfix
+        :pr: 379
+        :issue: 338
+
+        Fix query repositories list method according to [documentation](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories.html#query-repository).
+
+        Now its return a list of tuples with values instead of first column of the query.
+
+    .. change:: remove 3.8 support
+        :type: misc
+        :pr: 386
+
+        Removes 3.8 support and removes future annotations in a few places for better compatibility
+
+    .. change:: remove future annotations
+        :type: feature
+        :pr: 387
+
+        This removes the usage of future annotations.
+
+    .. change:: add `uniquify` to service and repo
+        :type: feature
+        :pr: 389
+
+        Exposes the `uniquify` flag in all functions on the repository and add to the service
+
+    .. change:: improved default serializer
+        :type: feature
+        :pr: 390
+
+        Improves the default serializer so that it handles various types a bit better
+
+
 .. changelog:: 0.30.3
     :date: 2025-01-26
 
@@ -37,26 +249,7 @@
         :pr: 358
         :issue: 357
 
-        <!--
-        By submitting this pull request, you agree to:
-        - follow [Litestar's Code of Conduct](https://github.com/litestar-org/.github/blob/main/CODE_OF_CONDUCT.md)
-        - follow [Litestar's contribution guidelines](https://github.com/litestar-org/.github/blob/main/CONTRIBUTING.md)
-        - follow the [PSFs's Code of Conduct](https://www.python.org/psf/conduct/)
-        -->
-        ## Description
-
         Adds hash function to `SQLAlchemySyncConfig` and `SQLAlchemyAsyncConfig` classes.
-
-
-        <!--
-        Please add in issue numbers this pull request will close, if applicable
-        Examples: Fixes #4321 or Closes #1234
-
-        Ensure you are using a supported keyword to properly link an issue:
-        https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword
-        -->
-        ## Closes
-        Closes #357
 
 
 .. changelog:: 0.30.1
