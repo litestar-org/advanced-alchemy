@@ -10,9 +10,9 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from advanced_alchemy.base import BigIntBase
 from advanced_alchemy.filters import (
-    AGGridFilter,
     BeforeAfter,
     CollectionFilter,
+    ComparisonFilter,
     ExistsFilter,
     FilterGroup,
     LimitOffset,
@@ -22,7 +22,6 @@ from advanced_alchemy.filters import (
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
-    TanStackFilter,
     and_,
     or_,
 )
@@ -301,121 +300,346 @@ def test_multi_filter_nested(db_session: Session) -> None:
     assert {r.title for r in results} == {"The Matrix", "The Hangover"}
 
 
-def test_tanstack_filter_conversion(db_session: Session) -> None:
-    # Test TanStackFilter adapter
-    tanstack_filters = [
-        {"field": "release_date", "operator": "lessThan", "value": datetime(2000, 1, 1, tzinfo=timezone.utc)},
-        {"field": "title", "operator": "contains", "value": "The"},
-        {"field": "genre", "operator": "equals", "value": "Action"},
-    ]
-
-    adapter = TanStackFilter(tanstack_filters=tanstack_filters)  # type: ignore
-    multi_filter_dict = adapter.to_multifilter_format()
-
-    # Convert to MultiFilter and apply
-    multi_filter = MultiFilter(filters=multi_filter_dict)
+def test_multi_filter_empty_filters(db_session: Session) -> None:
+    """Test MultiFilter with empty filter lists."""
+    # Test with empty filter list
+    multi_filter = MultiFilter(filters={"and_": []})
     statement = multi_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
+    # Should return all movies since no filters are applied
+    assert len(results) == 3
 
-    # Should match "The Matrix" (before 2000, contains "The", and Action genre)
-    assert len(results) == 1
-    assert results[0].title == "The Matrix"
+    # Test with empty filters dict
+    multi_filter = MultiFilter(filters={})
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    # Should return all movies since no filters are applied
+    assert len(results) == 3
 
 
-def test_tanstack_filter_with_nested_logic(db_session: Session) -> None:
-    # Test TanStackFilter with nested logical conditions
-    tanstack_filters = [
-        {
-            "logical": "or_",
-            "filters": [
-                {"field": "genre", "operator": "equals", "value": "Comedy"},
+def test_multi_filter_invalid_filter_type(db_session: Session) -> None:
+    """Test MultiFilter with invalid filter types."""
+    # Test with non-existent filter type
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
                 {
-                    "logical": "and_",
-                    "filters": [
-                        {
-                            "field": "release_date",
-                            "operator": "lessThan",
-                            "value": datetime(2000, 1, 1, tzinfo=timezone.utc),
-                        },
-                        {"field": "title", "operator": "contains", "value": "The"},
-                    ],
-                },
-            ],
+                    "type": "non_existent_filter",
+                    "field_name": "title",
+                    "value": "The Matrix",
+                }
+            ]
         }
-    ]
-
-    adapter = TanStackFilter(tanstack_filters=tanstack_filters)
-    multi_filter_dict = adapter.to_multifilter_format()
-
-    # Convert to MultiFilter and apply
-    multi_filter = MultiFilter(filters=multi_filter_dict)
+    )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
+    # Should return all movies since invalid filter is ignored
+    assert len(results) == 3
 
-    # Should match "The Matrix" and "The Hangover" as in test_multi_filter_nested
-    assert len(results) == 2
-    assert {r.title for r in results} == {"The Matrix", "The Hangover"}
-
-
-def test_aggrid_filter_conversion(db_session: Session) -> None:
-    # Test AG Grid filter adapter
-    aggrid_filters = {
-        "release_date": {"type": "lessThan", "filter": datetime(2000, 1, 1, tzinfo=timezone.utc)},
-        "title": {"type": "contains", "filter": "The"},
-        "genre": {"type": "equals", "filter": "Action"},
-    }
-
-    adapter = AGGridFilter(aggrid_filters=aggrid_filters)  # type: ignore
-    multi_filter_dict = adapter.to_multifilter_format()
-
-    # Convert to MultiFilter and apply
-    multi_filter = MultiFilter(filters=multi_filter_dict)
+    # Test with missing type field
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "field_name": "title",
+                    "value": "The Matrix",
+                }
+            ]
+        }
+    )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
-
-    # Should match "The Matrix" (before 2000, contains "The", and Action genre)
-    assert len(results) == 1
-    assert results[0].title == "The Matrix"
+    # Should return all movies since invalid filter is ignored
+    assert len(results) == 3
 
 
-def test_aggrid_range_filter(db_session: Session) -> None:
-    # Test AG Grid range filter
-    aggrid_filters = {
-        "release_date": {
-            "type": "inRange",
-            "filter": datetime(1994, 1, 1, tzinfo=timezone.utc),
-            "filterTo": datetime(2000, 1, 1, tzinfo=timezone.utc),
-        },
-    }
-
-    adapter = AGGridFilter(aggrid_filters=aggrid_filters)
-    multi_filter_dict = adapter.to_multifilter_format()
-
-    # Convert to MultiFilter and apply
-    multi_filter = MultiFilter(filters=multi_filter_dict)
+def test_multi_filter_invalid_filter_args(db_session: Session) -> None:
+    """Test MultiFilter with invalid filter arguments."""
+    # Test with missing required field
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "type": "search",
+                    # Missing field_name
+                    "value": "The Matrix",
+                }
+            ]
+        }
+    )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
+    # Should return all movies since invalid filter is ignored
+    assert len(results) == 3
 
-    # Should match "The Matrix" and "Shawshank Redemption" (both in 1994-2000 range)
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "type": "search",
+                    "field_name": "non_existent_field",
+                    "value": "The Matrix",
+                }
+            ]
+        }
+    )
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    # Should return all movies since invalid filter is ignored
+    assert len(results) == 3
+
+
+def test_multi_filter_invalid_logical_operator(db_session: Session) -> None:
+    """Test MultiFilter with invalid logical operators."""
+    # Test with non-existent logical operator
+    multi_filter = MultiFilter(
+        filters={
+            "invalid_operator": [
+                {
+                    "type": "search",
+                    "field_name": "title",
+                    "value": "The Matrix",
+                }
+            ]
+        }
+    )
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    # Should return all movies since invalid operator is ignored
+    assert len(results) == 3
+
+
+def test_multi_filter_complex_nested(db_session: Session) -> None:
+    """Test MultiFilter with complex nested conditions."""
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                # First condition: Movie is from before 2000
+                {
+                    "type": "before_after",
+                    "field_name": "release_date",
+                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "after": None,
+                },
+                # Second condition: Nested OR group
+                {
+                    "or_": [
+                        # Movie has "The" in title
+                        {"type": "search", "field_name": "title", "value": "The", "ignore_case": True},
+                        # OR movie is a drama
+                        {"type": "search", "field_name": "genre", "value": "Drama", "ignore_case": True},
+                    ]
+                },
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    # Should match "The Matrix" (before 2000 AND has "The" in title)
+    # and "Shawshank Redemption" (before 2000 AND is a drama)
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_empty_filters(db_session: Session) -> None:
-    # Test empty filters
-    multi_filter = MultiFilter(filters={})
+def test_multi_filter_all_filter_types(db_session: Session) -> None:
+    """Test MultiFilter with all supported filter types."""
+    multi_filter = MultiFilter(
+        filters={
+            "or_": [
+                # BeforeAfter filter
+                {
+                    "type": "before_after",
+                    "field_name": "release_date",
+                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "after": None,
+                },
+                # OnBeforeAfter filter
+                {
+                    "type": "on_before_after",
+                    "field_name": "release_date",
+                    "on_or_before": datetime(2009, 6, 1, tzinfo=timezone.utc),
+                    "on_or_after": None,
+                },
+                # CollectionFilter
+                {
+                    "type": "collection",
+                    "field_name": "title",
+                    "values": ["The Matrix", "Shawshank Redemption"],
+                },
+                # NotInCollectionFilter
+                {
+                    "type": "not_in_collection",
+                    "field_name": "title",
+                    "values": ["The Hangover"],
+                },
+                # SearchFilter
+                {
+                    "type": "search",
+                    "field_name": "title",
+                    "value": "Matrix",
+                    "ignore_case": True,
+                },
+                # NotInSearchFilter
+                {
+                    "type": "not_in_search",
+                    "field_name": "title",
+                    "value": "Hangover",
+                    "ignore_case": True,
+                },
+                # ComparisonFilter
+                {
+                    "type": "comparison",
+                    "field_name": "genre",
+                    "operator": "eq",
+                    "value": "Action",
+                },
+                # ExistsFilter
+                {
+                    "type": "exists",
+                    "values": [Movie.genre == "Comedy"],
+                },
+                # NotExistsFilter
+                {
+                    "type": "not_exists",
+                    "values": [Movie.genre == "SciFi"],
+                },
+            ]
+        }
+    )
+
     statement = multi_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
+    # Should match all movies since at least one condition is true for each
+    assert len(results) == 3
+    assert {r.title for r in results} == {"The Matrix", "The Hangover", "Shawshank Redemption"}
 
-    # Should match all movies since no filters are applied
+
+def test_comparison_filter(db_session: Session) -> None:
+    """Test ComparisonFilter with various operators."""
+    # Test equality operator
+    eq_filter = ComparisonFilter(field_name="genre", operator="eq", value="Action")
+    statement = eq_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 1
+    assert results[0].title == "The Matrix"
+
+    # Test inequality operator
+    ne_filter = ComparisonFilter(field_name="genre", operator="ne", value="Action")
+    statement = ne_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Hangover", "Shawshank Redemption"}
+
+    # Test greater than operator
+    gt_filter = ComparisonFilter(
+        field_name="release_date", operator="gt", value=datetime(2000, 1, 1, tzinfo=timezone.utc)
+    )
+    statement = gt_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 1
+    assert results[0].title == "The Hangover"
+
+    # Test less than operator
+    lt_filter = ComparisonFilter(
+        field_name="release_date", operator="lt", value=datetime(2000, 1, 1, tzinfo=timezone.utc)
+    )
+    statement = lt_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+    # Test greater than or equal operator
+    ge_filter = ComparisonFilter(
+        field_name="release_date", operator="ge", value=datetime(1999, 3, 31, tzinfo=timezone.utc)
+    )
+    statement = ge_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "The Hangover"}
+
+    # Test less than or equal operator
+    le_filter = ComparisonFilter(
+        field_name="release_date", operator="le", value=datetime(1999, 3, 31, tzinfo=timezone.utc)
+    )
+    statement = le_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+    # Test invalid operator (should be ignored)
+    invalid_filter = ComparisonFilter(field_name="genre", operator="invalid", value="Action")
+    statement = invalid_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    # Should return all movies since invalid operator is ignored
     assert len(results) == 3
 
-    # Test empty tanstack filter
-    adapter = TanStackFilter(tanstack_filters=[])
-    multi_filter_dict = adapter.to_multifilter_format()
-    assert not multi_filter_dict  # Should be empty
 
-    # Test empty aggrid filter
-    adapter = AGGridFilter(aggrid_filters={})  # type: ignore
-    multi_filter_dict = adapter.to_multifilter_format()
-    assert not multi_filter_dict  # Should be empty
+def test_collection_filter_prefer_any(db_session: Session) -> None:
+    """Test CollectionFilter with prefer_any parameter."""
+    # Test with prefer_any=False (default, using IN)
+    collection_filter: CollectionFilter[str] = CollectionFilter(
+        field_name="title", values=["The Matrix", "Shawshank Redemption"]
+    )
+    statement = collection_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+    # Test with prefer_any=True (using ANY)
+    # Skip this test for SQLite since it doesn't support the ANY function
+    from sqlalchemy.dialects import sqlite
+
+    if not isinstance(db_session.get_bind().dialect, sqlite.dialect):
+        collection_filter = CollectionFilter[str](field_name="title", values=["The Matrix", "Shawshank Redemption"])
+        statement = collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
+        results = db_session.execute(statement).scalars().all()
+        assert len(results) == 2
+        assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+    # Test with empty collection
+    collection_filter = CollectionFilter[str](field_name="title", values=[])
+    statement = collection_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 0
+
+    # Test with None values
+    collection_filter = CollectionFilter[str](field_name="title", values=None)
+    statement = collection_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 3  # Should return all movies
+
+
+def test_not_in_collection_filter_prefer_any(db_session: Session) -> None:
+    """Test NotInCollectionFilter with prefer_any parameter."""
+    # Test with prefer_any=False (default, using NOT IN)
+    not_in_collection_filter: NotInCollectionFilter[str] = NotInCollectionFilter(
+        field_name="title", values=["The Hangover"]
+    )
+    statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+    # Test with prefer_any=True (using != ANY)
+    # Skip this test for SQLite since it doesn't support the ANY function
+    from sqlalchemy.dialects import sqlite
+
+    if not isinstance(db_session.get_bind().dialect, sqlite.dialect):
+        not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=["The Hangover"])
+        statement = not_in_collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
+        results = db_session.execute(statement).scalars().all()
+        assert len(results) == 2
+        assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+    # Test with empty collection
+    not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=[])
+    statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 3  # Should return all movies
+
+    # Test with None values
+    not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=None)
+    statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 3  # Should return all movies
