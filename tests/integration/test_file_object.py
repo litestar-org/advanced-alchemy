@@ -169,10 +169,6 @@ async def async_session(
     await async_db_engine.dispose()
 
 
-# --- Test Cases ---
-
-
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
@@ -211,10 +207,10 @@ async def test_fsspec_s3_basic_operations_async(
 
     test_content = b"Hello Storage!"
     # Use relative path, prefix handles the bucket
-    file_path = "test_basic.txt"
+    file_path = "test_basic_s3_async.txt"
 
     # Create initial FileObject with relative path
-    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic_s3_async.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = await backend.save_object_async(obj, test_content)
@@ -222,7 +218,7 @@ async def test_fsspec_s3_basic_operations_async(
     # Assert FileObject updated
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path  # Path should remain relative
-    assert obj.filename == "test_basic.txt"
+    assert obj.filename == "test_basic_s3_async.txt"
     assert obj.etag is not None
     assert obj.size == len(test_content)
     assert obj.backend is backend
@@ -251,7 +247,6 @@ async def test_fsspec_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_fsspec_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
@@ -292,10 +287,10 @@ def test_fsspec_s3_basic_operations_sync(
 
     test_content = b"Hello Storage!"
     # Use relative path, prefix handles the bucket
-    file_path = "test_basic.txt"
+    file_path = "test_basic_s3_sync.txt"
 
     # Create initial FileObject with relative path
-    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic_s3_sync.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = backend.save_object(obj, test_content)
@@ -303,7 +298,7 @@ def test_fsspec_s3_basic_operations_sync(
     # Assert FileObject updated
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path  # Path should remain relative
-    assert obj.filename == "test_basic.txt"
+    assert obj.filename == "test_basic_s3_sync.txt"
     assert obj.etag is not None
     assert obj.size == len(test_content)
     assert obj.backend is backend
@@ -332,7 +327,6 @@ def test_fsspec_s3_basic_operations_sync(
         backend.get_content(file_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
@@ -355,10 +349,10 @@ async def test_obstore_s3_basic_operations_async(
     )
 
     test_content = b"Hello Storage!"
-    file_path = "test_basic.txt"  # Relative path for the backend
+    file_path = "test_basic_s3_async.txt"  # Relative path for the backend
 
     # Create initial FileObject
-    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic_s3_async.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = await backend.save_object_async(obj, test_content)
@@ -366,7 +360,7 @@ async def test_obstore_s3_basic_operations_async(
     # Assert FileObject updated
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path
-    assert obj.filename == "test_basic.txt"
+    assert obj.filename == "test_basic_s3_async.txt"
     assert obj.etag is not None
     assert obj.size == len(test_content)
     assert obj.backend is backend
@@ -398,7 +392,6 @@ async def test_obstore_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
@@ -421,10 +414,10 @@ def test_obstore_s3_basic_operations_sync(
     )
 
     test_content = b"Hello Storage!"
-    file_path = "test_basic.txt"  # Relative path for the backend
+    file_path = "test_basic_s3_sync.txt"  # Relative path for the backend
 
     # Create initial FileObject
-    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic_s3_sync.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = backend.save_object(obj, test_content)
@@ -432,7 +425,7 @@ def test_obstore_s3_basic_operations_sync(
     # Assert FileObject updated
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path
-    assert obj.filename == "test_basic.txt"
+    assert obj.filename == "test_basic_s3_sync.txt"
     assert obj.etag is not None
     assert obj.size == len(test_content)
     assert obj.backend is backend
@@ -465,17 +458,16 @@ def test_obstore_s3_basic_operations_sync(
         backend.get_content(file_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_basic_operations_async(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Hello Storage!"
-    file_path = "test_basic.txt"  # Relative path for the backend
+    file_path = "test_basic_async.txt"  # Relative path for the backend
 
     # Create initial FileObject
-    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic_async.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = await backend.save_object_async(obj, test_content)
@@ -483,7 +475,7 @@ async def test_obstore_basic_operations_async(storage_registry: StorageRegistry)
     # Assert FileObject updated
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path
-    assert obj.filename == "test_basic.txt"
+    assert obj.filename == "test_basic_async.txt"
     assert obj.etag is not None
     assert obj.size == len(test_content)
     assert obj.backend is backend
@@ -501,17 +493,16 @@ async def test_obstore_basic_operations_async(storage_registry: StorageRegistry)
         await backend.get_content_async(file_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
     backend = storage_registry.get_backend("local_test_store")
     test_content = b"Hello Storage!"
-    file_path = "test_basic.txt"  # Relative path for the backend
+    file_path = "test_basic_sync.txt"  # Relative path for the backend
 
     # Create initial FileObject
-    obj = FileObject(backend=backend, filename="test_basic.txt", to_filename=file_path)
+    obj = FileObject(backend=backend, filename="test_basic_sync.txt", to_filename=file_path)
 
     # Save using backend
     updated_obj = backend.save_object(obj, test_content)
@@ -519,7 +510,7 @@ def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> Non
     # Assert FileObject updated
     assert updated_obj is obj  # Should update in-place
     assert obj.path == file_path
-    assert obj.filename == "test_basic.txt"
+    assert obj.filename == "test_basic_sync.txt"
     assert obj.etag is not None
     assert obj.size == len(test_content)
     assert obj.backend is backend
@@ -537,7 +528,6 @@ def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> Non
         backend.get_content(file_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_single_file_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -546,7 +536,7 @@ async def test_obstore_single_file_async_no_listener(
     remove_listeners()
     file_content = b"SQLAlchemy Integration Test"
     doc_name = "Integration Doc"
-    file_path = "sqlalchemy_single.bin"
+    file_path = "sqlalchemy_single_async.bin"
 
     # 1. Prepare FileObject and save via backend
     initial_obj = FileObject(
@@ -566,7 +556,7 @@ async def test_obstore_single_file_async_no_listener(
     assert doc.id is not None
     assert doc.attachment is not None
     assert isinstance(doc.attachment, FileObject)
-    assert doc.attachment.filename == "sqlalchemy_single.bin"
+    assert doc.attachment.filename == "sqlalchemy_single_async.bin"
     assert doc.attachment.path == file_path
     assert doc.attachment.size == len(file_content) or doc.attachment.size is None
     assert doc.attachment.content_type == "application/octet-stream"
@@ -577,7 +567,6 @@ async def test_obstore_single_file_async_no_listener(
     assert loaded_content == file_content
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_multiple_files_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -630,7 +619,6 @@ async def test_obstore_multiple_files_async_no_listener(
     assert await loaded_obj2.get_content_async() == img2_content
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_update_async_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -643,11 +631,11 @@ async def test_obstore_update_async_with_listener(
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content"
     new_content = b"New file content"
-    old_path = "old_file.txt"
-    new_path = "new_file.txt"
+    old_path = "old_file_async.txt"
+    new_path = "new_file_async.txt"
 
     # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
+    old_obj = FileObject(backend=backend, filename="old_file_async.txt", to_filename=old_path, content=old_content)
     # Make sure file is saved to the backend
     old_obj = await old_obj.save_async()
 
@@ -660,7 +648,7 @@ async def test_obstore_update_async_with_listener(
     assert await backend.get_content_async(old_path) == old_content
 
     # Prepare new file
-    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path, content=new_content)
+    new_obj = FileObject(backend=backend, filename="new_file_async.txt", to_filename=new_path, content=new_content)
 
     # Update the document with the new file
     doc.attachment = new_obj
@@ -677,7 +665,6 @@ async def test_obstore_update_async_with_listener(
         await backend.get_content_async(old_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_delete_async_on_update_clear_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -693,10 +680,10 @@ async def test_obstore_delete_async_on_update_clear_with_listener(
     setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear"
-    old_path = "clear_me.log"
+    old_path = "clear_me_async.log"
 
     # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path, content=old_content)
+    old_obj = FileObject(backend=backend, filename="clear_me_async.log", to_filename=old_path, content=old_content)
     old_obj = await old_obj.save_async()  # Make sure it's saved to the backend
 
     doc = Document(name="DocToClear", attachment=old_obj)
@@ -721,7 +708,6 @@ async def test_obstore_delete_async_on_update_clear_with_listener(
         await backend.get_content_async(old_path)
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_delete_async_multiple_removed_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -739,14 +725,14 @@ async def test_obstore_delete_async_multiple_removed_with_listener(
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1"
     content2 = b"img2"
-    path1 = "img1_list.jpg"
-    path2 = "img2_list.png"
+    path1 = "img1_list_async.jpg"
+    path2 = "img2_list_async.png"
 
     # Create file objects and save them
-    obj1 = FileObject(backend=backend, filename="img1.jpg", to_filename=path1, content=content1)
+    obj1 = FileObject(backend=backend, filename="img1_list_async.jpg", to_filename=path1, content=content1)
     obj1 = await obj1.save_async()
 
-    obj2 = FileObject(backend=backend, filename="img2.png", to_filename=path2, content=content2)
+    obj2 = FileObject(backend=backend, filename="img2_list_async.png", to_filename=path2, content=content2)
     obj2 = await obj2.save_async()
 
     # Create and save model with both images
@@ -1338,7 +1324,6 @@ async def test_file_object_save_async_no_data(storage_registry: StorageRegistry)
         await obj.save_async()
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1378,7 +1363,6 @@ def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     assert loaded_content == file_content
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -1388,7 +1372,7 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     set_async_context(True)
     file_content = b"SQLAlchemy Async Integration Test"
     doc_name = "Sync Integration Doc"
-    file_path = "sqlalchemy_single_sync.bin"
+    file_path = "sqlalchemy_single_async.bin"
 
     # 1. Prepare FileObject and save via backend
     initial_obj = FileObject(
@@ -1407,7 +1391,7 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     assert doc.id is not None
     assert doc.attachment is not None
     assert isinstance(doc.attachment, FileObject)
-    assert doc.attachment.filename == "sqlalchemy_single_sync.bin"
+    assert doc.attachment.filename == "sqlalchemy_single_async.bin"
     assert doc.attachment.path == file_path
     assert doc.attachment.size == len(file_content) or doc.attachment.size is None
     assert doc.attachment.content_type == "application/octet-stream"
@@ -1418,7 +1402,6 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     assert loaded_content == file_content
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1429,14 +1412,16 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     img1_content = b"img_data_1_sync"
     img2_content = b"img_data_2_sync"
     doc_name = "Multi Image Doc Sync"
-    img1_path = "img1_sync.jpg"
-    img2_path = "img2_sync.png"
+    img1_path = "img1_list_sync.jpg"
+    img2_path = "img2_list_sync.png"
 
     # 1. Prepare FileObjects and save via backend
-    obj1 = FileObject(backend=backend, filename="image1.jpg", to_filename=img1_path, content_type="image/jpeg")
+    obj1 = FileObject(
+        backend=backend, filename="image1_list_sync.jpg", to_filename=img1_path, content_type="image/jpeg"
+    )
     obj1_updated = obj1.save(img1_content)
 
-    obj2 = FileObject(backend=backend, filename="image2.png", to_filename=img2_path, content_type="image/png")
+    obj2 = FileObject(backend=backend, filename="image2_list_sync.png", to_filename=img2_path, content_type="image/png")
     obj2_updated = obj2.save(img2_content)
 
     # 2. Create and save model instance with MutableList
@@ -1455,13 +1440,13 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     loaded_obj1 = doc.images[0]
     loaded_obj2 = doc.images[1]
     assert isinstance(loaded_obj1, FileObject)
-    assert loaded_obj1.filename == "img1_sync.jpg"
+    assert loaded_obj1.filename == "img1_list_sync.jpg"
     assert loaded_obj1.path == img1_path
     assert loaded_obj1.size == len(img1_content) or loaded_obj1.size is None
     assert loaded_obj1.backend and loaded_obj1.backend.driver == backend.driver
 
     assert isinstance(loaded_obj2, FileObject)
-    assert loaded_obj2.filename == "img2_sync.png"
+    assert loaded_obj2.filename == "img2_list_sync.png"
     assert loaded_obj2.path == img2_path
     assert loaded_obj2.size == len(img2_content) or loaded_obj2.size is None
     assert loaded_obj2.backend and loaded_obj2.backend.driver == backend.driver
@@ -1471,7 +1456,6 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     assert loaded_obj2.get_content() == img2_content
 
 
-@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_on_update_clear_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1550,11 +1534,13 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content sync"
     new_content = b"New file content sync"
-    old_path = "old_file_sync.txt"
-    new_path = "new_file_sync.txt"
+    old_path = "old_file_sync_update.txt"
+    new_path = "new_file_sync_update.txt"
 
     # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
+    old_obj = FileObject(
+        backend=backend, filename="old_file_sync_update.txt", to_filename=old_path, content=old_content
+    )
     doc = Document(name="DocToUpdateSync", attachment=old_obj)
     session.add(doc)
     session.commit()
@@ -1564,7 +1550,9 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
     assert backend.get_content(old_path) == old_content
 
     # Update the document's attachment (inline creation)
-    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path, content=new_content)
+    new_obj = FileObject(
+        backend=backend, filename="new_file_sync_update.txt", to_filename=new_path, content=new_content
+    )
     doc.attachment = new_obj
     session.add(doc)  # Add again as it's modified
     session.commit()  # Listener should save new_obj and queue deletion of old_obj
@@ -1589,11 +1577,13 @@ async def test_obstore_backend_listener_update_file_object_async(
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content sync"
     new_content = b"New file content sync"
-    old_path = "old_file_sync.txt"
-    new_path = "new_file_sync.txt"
+    old_path = "old_file_async_update.txt"
+    new_path = "new_file_async_update.txt"
 
     # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="old.txt", to_filename=old_path, content=old_content)
+    old_obj = FileObject(
+        backend=backend, filename="old_file_async_update.txt", to_filename=old_path, content=old_content
+    )
     doc = Document(name="DocToUpdateSync", attachment=old_obj)
     async_session.add(doc)
     await async_session.commit()
@@ -1603,7 +1593,9 @@ async def test_obstore_backend_listener_update_file_object_async(
     assert backend.get_content(old_path) == old_content
 
     # Update the document's attachment (inline creation)
-    new_obj = FileObject(backend=backend, filename="new.txt", to_filename=new_path, content=new_content)
+    new_obj = FileObject(
+        backend=backend, filename="new_file_async_update.txt", to_filename=new_path, content=new_content
+    )
     doc.attachment = new_obj
     async_session.add(doc)  # Add again as it's modified
     await async_session.commit()  # Listener should save new_obj and queue deletion of old_obj
@@ -1626,8 +1618,8 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
     set_async_context(False)
     setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
-    content1 = b"img1_sync"
-    content2 = b"img2_sync"
+    content1 = b"img1_sync_multi"
+    content2 = b"img2_sync_multi"
     path1 = "multi_del_1_sync.dat"
     path2 = "multi_del_2_sync.dat"
 
