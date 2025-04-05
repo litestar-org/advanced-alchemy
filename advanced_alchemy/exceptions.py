@@ -256,11 +256,6 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     """Do something within context to raise a ``RepositoryError`` chained
     from an original ``SQLAlchemyError``.
 
-    Args:
-        error_messages: Error messages to use for the exception.
-        dialect_name: The name of the dialect to use for the exception.
-        wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
-
         >>> try:
         ...     with wrap_sqlalchemy_exception():
         ...         raise SQLAlchemyError("Original Exception")
@@ -269,6 +264,23 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
         ...         f"caught repository exception from {type(exc.__context__)}"
         ...     )
         caught repository exception from <class 'sqlalchemy.exc.SQLAlchemyError'>
+
+    Args:
+        error_messages: Error messages to use for the exception.
+        dialect_name: The name of the dialect to use for the exception.
+        wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
+
+    Raises:
+        NotFoundError: Raised when no rows matched the specified data.
+        MultipleResultsFound: Raised when multiple rows matched the specified data.
+        IntegrityError: Raised when an integrity error occurs.
+        InvalidRequestError: Raised when an invalid request was made to SQLAlchemy.
+        RepositoryError: Raised for other SQLAlchemy errors.
+        AttributeError: Raised when an attribute error occurs during processing.
+        SQLAlchemyError: Raised for general SQLAlchemy errors.
+        StatementError: Raised when there is an issue processing the statement.
+        MultipleResultsFoundError: Raised when multiple rows matched the specified data.
+
     """
     try:
         yield
@@ -293,13 +305,13 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
         if wrap_exceptions is False:
             raise
         if error_messages is not None and dialect_name is not None:
-            _keys_to_regex = {
+            keys_to_regex = {
                 "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
                 "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
                 "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
             detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
-            for key, (regexes, exception) in _keys_to_regex.items():
+            for key, (regexes, exception) in keys_to_regex.items():
                 for regex in regexes:
                     if (match := regex.findall(detail)) and match[0]:
                         raise exception(

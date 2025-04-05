@@ -2,8 +2,9 @@
 extend-ignore-re = ["(?Rm)^.*(#|//)\\s*codespell:ignore\\s*$"]
 
 [default.extend-words]
-selectin = 'selectin'
+fo = 'fo'
 froms = 'froms'
+selectin = 'selectin'
 
 [files]
 extend-exclude = ["docs/changelog.rst", '/examples/us_state_lookup.json']

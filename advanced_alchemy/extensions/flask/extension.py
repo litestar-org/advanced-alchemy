@@ -9,6 +9,7 @@ from flask import g
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
 from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -58,6 +59,18 @@ class AdvancedAlchemy:
     def is_async_enabled(self) -> bool:
         """Return True if any of the database configs are async."""
         return self._has_async_config
+
+    def _is_async(self, bind_key: str) -> bool:
+        """Check if the config for the given bind key is async.
+
+        Args:
+            bind_key: The bind key to check.
+
+        Returns:
+            True if the config is async, False otherwise.
+        """
+        config = next((c for c in self.config if (c.bind_key or "default") == bind_key), None)
+        return isinstance(config, SQLAlchemyAsyncConfig)
 
     def init_app(self, app: "Flask") -> None:
         """Initialize the Flask application.
@@ -139,6 +152,9 @@ class AdvancedAlchemy:
             raise ImproperConfigurationError(msg)
 
         session = session_maker()
+
+        set_async_context(self._is_async(bind_key))
+
         if self._has_async_config:
             # Ensure portal is started
             if not self.portal_provider.is_running:
@@ -148,7 +164,17 @@ class AdvancedAlchemy:
         return session
 
     def get_async_session(self, bind_key: str = "default") -> AsyncSession:
-        """Get an async session from the configured session factory."""
+        """Get an async session from the configured session factory.
+
+        Args:
+            bind_key: The bind key to use for the session.
+
+        Raises:
+            ImproperConfigurationError: If the session is not an async session.
+
+        Returns:
+            An async session from the configured session factory.
+        """
         session = self.get_session(bind_key)
         if not isinstance(session, AsyncSession):
             msg = f"Expected async session for bind key {bind_key}, but got {type(session)}"
@@ -156,7 +182,17 @@ class AdvancedAlchemy:
         return session
 
     def get_sync_session(self, bind_key: str = "default") -> Session:
-        """Get a sync session from the configured session factory."""
+        """Get a sync session from the configured session factory.
+
+        Args:
+            bind_key: The bind key to use for the session.
+
+        Raises:
+            ImproperConfigurationError: If the session is not a sync session.
+
+        Returns:
+            A sync session from the configured session factory.
+        """
         session = self.get_session(bind_key)
         if not isinstance(session, Session):
             msg = f"Expected sync session for bind key {bind_key}, but got {type(session)}"

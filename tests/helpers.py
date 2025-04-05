@@ -74,7 +74,7 @@ class NoValue:
     """A fake "Empty class"""
 
 
-async def anext_(iterable: Any, default: Any = NoValue, *args: Any) -> Any:  # pragma: nocover
+async def anext_(iterable: Any, default: Any = NoValue, *args: Any) -> Any:  # pragma: no cover
     """Return the next item from an async iterator.
 
     Args:

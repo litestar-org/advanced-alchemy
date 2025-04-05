@@ -1,25 +1,26 @@
 # ruff: noqa: ARG001
 import contextlib
-from collections.abc import AsyncGenerator, Generator, Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Optional,
     Union,
     cast,
     overload,
 )
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.starlette.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncEngine
     from sqlalchemy.orm import Session
     from starlette.applications import Starlette
 
@@ -64,6 +65,10 @@ class AdvancedAlchemy:
 
         Args:
             app (starlette.applications.Starlette): The Starlette application instance.
+
+        Raises:
+            advanced_alchemy.exceptions.ImproperConfigurationError:
+                If the application is not initialized.
         """
         self._app = app
         unique_bind_keys = {config.bind_key for config in self.config}
@@ -127,9 +132,6 @@ class AdvancedAlchemy:
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
-
-        Returns:
-            None
         """
         for config in self.config:
             await config.on_shutdown()
@@ -137,7 +139,11 @@ class AdvancedAlchemy:
             delattr(self.app.state, "advanced_alchemy")
 
     def map_configs(self) -> dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]:
-        """Maps the configs to the session bind keys."""
+        """Maps the configs to the session bind keys.
+
+        Returns:
+            A dictionary of config bind keys to configs.
+        """
         mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = {}
         for config in self.config:
             if config.bind_key is None:
@@ -146,7 +152,18 @@ class AdvancedAlchemy:
         return mapped_configs
 
     def get_config(self, key: Optional[str] = None) -> Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]:
-        """Get the config for the given key."""
+        """Get the config for the given key.
+
+        Args:
+            key: The key to get the config for.
+
+        Raises:
+            advanced_alchemy.exceptions.ImproperConfigurationError:
+                If the config is not found.
+
+        Returns:
+            The config for the given key.
+        """
         if key is None:
             key = "default"
         if key == "default" and len(self.config) == 1:
@@ -158,7 +175,15 @@ class AdvancedAlchemy:
         return config
 
     def get_async_config(self, key: Optional[str] = None) -> SQLAlchemyAsyncConfig:
-        """Get the async config for the given key."""
+        """Get the async config for the given key.
+
+        Raises:
+            advanced_alchemy.exceptions.ImproperConfigurationError:
+                If the config is not found.
+
+        Returns:
+            The async config for the given key.
+        """
         config = self.get_config(key)
         if not isinstance(config, SQLAlchemyAsyncConfig):  # pragma: no cover
             msg = "Expected an async config, but got a sync config"
@@ -166,7 +191,15 @@ class AdvancedAlchemy:
         return config
 
     def get_sync_config(self, key: Optional[str] = None) -> SQLAlchemySyncConfig:
-        """Get the sync config for the given key."""
+        """Get the sync config for the given key.
+
+        Raises:
+            advanced_alchemy.exceptions.ImproperConfigurationError:
+                If the config is not found.
+
+        Returns:
+            The sync config for the given key.
+        """
         config = self.get_config(key)
         if not isinstance(config, SQLAlchemySyncConfig):  # pragma: no cover
             msg = "Expected a sync config, but got an async config"
@@ -177,14 +210,22 @@ class AdvancedAlchemy:
     async def with_async_session(
         self, key: Optional[str] = None
     ) -> AsyncGenerator["AsyncSession", None]:  # pragma: no cover
-        """Context manager for getting an async session."""
+        """Context manager for getting an async session.
+
+        Yields:
+            The async session for the given key.
+        """
         config = self.get_async_config(key)
         async with config.get_session() as session:
             yield session
 
     @contextmanager
     def with_sync_session(self, key: Optional[str] = None) -> Generator["Session", None]:  # pragma: no cover
-        """Context manager for getting a sync session."""
+        """Context manager for getting a sync session.
+
+        Yields:
+            The sync session for the given key.
+        """
         config = self.get_sync_config(key)
         with config.get_session() as session:
             yield session
@@ -202,37 +243,78 @@ class AdvancedAlchemy:
         request: Request,
         config: Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig],  # pragma: no cover
     ) -> Union["Session", "AsyncSession"]:  # pragma: no cover
-        """Get the session for the given key."""
+        """Get the session for the given key.
+
+        Args:
+            request: The request object.
+            config: The config object.
+
+        Returns:
+            The session for the given key.
+        """
         session = getattr(request.state, config.session_key, None)
         if session is None:
             session = config.create_session_maker()()
             setattr(request.state, config.session_key, session)
+        set_async_context(isinstance(session, AsyncSession))
         return session
 
     def get_session(
         self, request: Request, key: Optional[str] = None
     ) -> Union["Session", "AsyncSession"]:  # pragma: no cover
-        """Get the session for the given key."""
+        """Get the session for the given key.
+
+        Args:
+            request: The request object.
+            key: The key to get the session for.
+
+        Returns:
+            The session for the given key.
+        """
         config = self.get_config(key)
         return self._get_session_from_request(request, config)
 
     def get_async_session(self, request: Request, key: Optional[str] = None) -> "AsyncSession":  # pragma: no cover
-        """Get the async session for the given key."""
+        """Get the async session for the given key.
+
+        Args:
+            request: The request object.
+            key: The key to get the session for.
+
+        Returns:
+            The async session for the given key.
+        """
         config = self.get_async_config(key)
         return self._get_session_from_request(request, config)
 
     def get_sync_session(self, request: Request, key: Optional[str] = None) -> "Session":  # pragma: no cover
-        """Get the sync session for the given key."""
+        """Get the sync session for the given key.
+
+        Args:
+            request: The request object.
+            key: The key to get the session for.
+
+        Returns:
+            The sync session for the given key.
+        """
         config = self.get_sync_config(key)
         return self._get_session_from_request(request, config)
 
     def provide_session(
         self, key: Optional[str] = None
     ) -> Callable[[Request], Union["Session", "AsyncSession"]]:  # pragma: no cover
-        """Get the session for the given key."""
+        """Get the session for the given key.
+
+        Args:
+            key: The key to get the session for.
+
+        Returns:
+            The session for the given key.
+        """
         config = self.get_config(key)
 
         def _get_session(request: Request) -> Union["Session", "AsyncSession"]:
+            set_async_context(isinstance(config, SQLAlchemyAsyncConfig))
             return self._get_session_from_request(request, config)
 
         return _get_session
@@ -240,42 +322,86 @@ class AdvancedAlchemy:
     def provide_async_session(
         self, key: Optional[str] = None
     ) -> Callable[[Request], "AsyncSession"]:  # pragma: no cover
-        """Get the async session for the given key."""
+        """Get the async session for the given key.
+
+        Args:
+            key: The key to get the session for.
+
+        Returns:
+            The async session for the given key.
+        """
         config = self.get_async_config(key)
 
         def _get_session(request: Request) -> "AsyncSession":
+            set_async_context(True)
             return self._get_session_from_request(request, config)
 
         return _get_session
 
     def provide_sync_session(self, key: Optional[str] = None) -> Callable[[Request], "Session"]:  # pragma: no cover
-        """Get the sync session for the given key."""
+        """Get the sync session for the given key.
+
+        Args:
+            key: The key to get the session for.
+
+        Returns:
+            The sync session for the given key.
+        """
         config = self.get_sync_config(key)
 
         def _get_session(request: Request) -> "Session":
+            set_async_context(False)
             return self._get_session_from_request(request, config)
 
         return _get_session
 
     def get_engine(self, key: Optional[str] = None) -> Union["Engine", "AsyncEngine"]:  # pragma: no cover
-        """Get the engine for the given key."""
+        """Get the engine for the given key.
+
+        Args:
+            key: The key to get the engine for.
+
+        Returns:
+            The engine for the given key.
+        """
         config = self.get_config(key)
         return config.get_engine()
 
     def get_async_engine(self, key: Optional[str] = None) -> "AsyncEngine":  # pragma: no cover
-        """Get the async engine for the given key."""
+        """Get the async engine for the given key.
+
+        Args:
+            key: The key to get the engine for.
+
+        Returns:
+            The async engine for the given key.
+        """
         config = self.get_async_config(key)
         return config.get_engine()
 
     def get_sync_engine(self, key: Optional[str] = None) -> "Engine":  # pragma: no cover
-        """Get the sync engine for the given key."""
+        """Get the sync engine for the given key.
+
+        Args:
+            key: The key to get the engine for.
+
+        Returns:
+            The sync engine for the given key.
+        """
         config = self.get_sync_config(key)
         return config.get_engine()
 
     def provide_engine(
         self, key: Optional[str] = None
     ) -> Callable[[], Union["Engine", "AsyncEngine"]]:  # pragma: no cover
-        """Get the engine for the given key."""
+        """Get the engine for the given key.
+
+        Args:
+            key: The key to get the engine for.
+
+        Returns:
+            The engine for the given key.
+        """
         config = self.get_config(key)
 
         def _get_engine() -> Union["Engine", "AsyncEngine"]:
@@ -284,7 +410,14 @@ class AdvancedAlchemy:
         return _get_engine
 
     def provide_async_engine(self, key: Optional[str] = None) -> Callable[[], "AsyncEngine"]:  # pragma: no cover
-        """Get the async engine for the given key."""
+        """Get the async engine for the given key.
+
+        Args:
+            key: The key to get the engine for.
+
+        Returns:
+            The async engine for the given key.
+        """
         config = self.get_async_config(key)
 
         def _get_engine() -> "AsyncEngine":
@@ -293,7 +426,14 @@ class AdvancedAlchemy:
         return _get_engine
 
     def provide_sync_engine(self, key: Optional[str] = None) -> Callable[[], "Engine"]:  # pragma: no cover
-        """Get the sync engine for the given key."""
+        """Get the sync engine for the given key.
+
+        Args:
+            key: The key to get the engine for.
+
+        Returns:
+            The sync engine for the given key.
+        """
         config = self.get_sync_config(key)
 
         def _get_engine() -> "Engine":

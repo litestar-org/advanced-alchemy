@@ -79,10 +79,10 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         product_2.tags = []
         db_session.add(product_2)
 
-        _product_2_validate = db_session.execute(select(Product).where(Product.name == "Product 2")).unique().fetchone()
-        assert _product_2_validate
+        product_2_validate = db_session.execute(select(Product).where(Product.name == "Product 2")).unique().fetchone()
+        assert product_2_validate
         tags_2 = db_session.execute(select(Tag)).unique().fetchall()
-        assert len(_product_2_validate[0].product_tags) == 0
+        assert len(product_2_validate[0].product_tags) == 0
         assert len(tags_2) == 3
         # add more assertions
 

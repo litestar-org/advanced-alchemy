@@ -173,9 +173,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 The incoming HTTP request.
             response (starlette.responses.Response):
                 The outgoing HTTP response.
-
-        Returns:
-            None
         """
         try:
             if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
@@ -221,9 +218,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
-
-        Returns:
-            None
         """
         await self.close_engine()
         if self.app is not None:
@@ -319,9 +313,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 The incoming HTTP request.
             response (starlette.responses.Response):
                 The outgoing HTTP response.
-
-        Returns:
-            None
         """
         try:
             if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
@@ -367,9 +358,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
 
         Ensures that all connections are properly closed during application shutdown.
-
-        Returns:
-            None
         """
         await self.close_engine()
         if self.app is not None:

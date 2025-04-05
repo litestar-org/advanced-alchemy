@@ -1,10 +1,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.config.common import (
     GenericAlembicConfig,
     GenericSessionConfig,
@@ -30,7 +31,7 @@ __all__ = (
 class AsyncSessionConfig(GenericSessionConfig[AsyncConnection, AsyncEngine, AsyncSession]):
     """SQLAlchemy async session config."""
 
-    sync_session_class: "Union[type[Session], None, EmptyType]" = Empty
+    sync_session_class: "Optional[Union[type[Session], EmptyType]]" = Empty
     """A :class:`Session <sqlalchemy.orm.Session>` subclass or other callable which will be used to construct the
     :class:`Session <sqlalchemy.orm.Session>` which will be proxied. This parameter may be used to provide custom
     :class:`Session <sqlalchemy.orm.Session>` subclasses. Defaults to the
@@ -81,9 +82,10 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     ) -> AsyncGenerator[AsyncSession, None]:
         """Get a session from the session maker.
 
-        Returns:
+        Yields:
             AsyncGenerator[AsyncSession, None]: An async context manager that yields an AsyncSession.
         """
         session_maker = self.create_session_maker()
+        set_async_context(True)  # Set context for standalone usage
         async with session_maker() as session:
             yield session

@@ -14,7 +14,17 @@ if TYPE_CHECKING:
 
 
 def get_database_migration_plugin(app: "FastAPI") -> "AdvancedAlchemy":  # pragma: no cover
-    """Retrieve the Advanced Alchemy extension from a FastAPI application instance."""
+    """Retrieve the Advanced Alchemy extension from a FastAPI application instance.
+
+    Args:
+        app: The FastAPI application instance.
+
+    Raises:
+        ImproperConfigurationError: If the Advanced Alchemy extension is not properly configured.
+
+    Returns:
+        The Advanced Alchemy extension instance.
+    """
     from advanced_alchemy.exceptions import ImproperConfigurationError
 
     extension = cast("Optional[AdvancedAlchemy]", getattr(app.state, "advanced_alchemy", None))

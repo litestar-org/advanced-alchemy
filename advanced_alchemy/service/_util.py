@@ -55,6 +55,9 @@ def _default_msgspec_deserializer(
         value: Value to coerce
         type_decoders: Optional sequence of type decoders
 
+    Raises:
+        TypeError: If the value cannot be coerced to the target type
+
     Returns:
         A ``msgspec``-supported type
     """
@@ -217,8 +220,12 @@ class ResultConverter:
             total: The total number of rows in the data.
             filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
             schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
+
+        Raises:
+            AdvancedAlchemyError: If `schema_type` is not a valid Pydantic or Msgspec schema and both libraries are not installed.
+
         Returns:
-            - :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
+            :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
         """
         if filters is None:
             filters = []
@@ -273,7 +280,7 @@ class ResultConverter:
                     get_type_adapter(schema_type).validate_python(data, from_attributes=True),
                 )
             limit_offset = find_filter(LimitOffset, filters=filters)
-            total = total if total else len(data)
+            total = total or len(data)
             limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
             return OffsetPagination[ModelDTOT](
                 items=get_type_adapter(list[schema_type]).validate_python(data, from_attributes=True),  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]

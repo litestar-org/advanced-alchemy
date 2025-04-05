@@ -1676,11 +1676,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 instances.append(instance)
             return instances, count
 
+    @staticmethod
     def _get_count_stmt(
-        self,
         statement: Select[tuple[ModelT]],
-        loader_options: Optional[list[_AbstractLoad]],
-        execution_options: Optional[dict[str, Any]],
+        loader_options: Optional[list[_AbstractLoad]],  # noqa: ARG004
+        execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
         return (
@@ -1893,7 +1893,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if match_fields is None:
             match_fields = [self.id_attribute]
         for existing_datum in existing_data:
-            for _row_id, datum in enumerate(data):
+            for datum in data:
                 match = all(
                     getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
                 )

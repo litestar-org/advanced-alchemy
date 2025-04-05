@@ -42,7 +42,7 @@ class EncryptionBackend(abc.ABC):
             key = key.encode()
 
     @abc.abstractmethod
-    def init_engine(self, key: "Union[bytes, str]") -> None:  # pragma: nocover
+    def init_engine(self, key: "Union[bytes, str]") -> None:  # pragma: no cover
         """Initializes the encryption engine with the provided key.
 
         Args:
@@ -53,7 +53,7 @@ class EncryptionBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def encrypt(self, value: Any) -> str:  # pragma: nocover
+    def encrypt(self, value: Any) -> str:  # pragma: no cover
         """Encrypts the given value.
 
         Args:
@@ -67,7 +67,7 @@ class EncryptionBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def decrypt(self, value: Any) -> str:  # pragma: nocover
+    def decrypt(self, value: Any) -> str:  # pragma: no cover
         """Decrypts the given value.
 
         Args:
@@ -109,11 +109,8 @@ class PGCryptoBackend(EncryptionBackend):
 
         Returns:
             str: The encrypted value.
-
-        Raises:
-            TypeError: If the value is not a string.
         """
-        if not isinstance(value, str):  # pragma: nocover
+        if not isinstance(value, str):  # pragma: no cover
             value = repr(value)
         value = value.encode()
         return sql_func.pgp_sym_encrypt(value, self.passphrase)  # type: ignore[return-value]
@@ -126,11 +123,8 @@ class PGCryptoBackend(EncryptionBackend):
 
         Returns:
             str: The decrypted value.
-
-        Raises:
-            TypeError: If the value is not a string.
         """
-        if not isinstance(value, str):  # pragma: nocover
+        if not isinstance(value, str):  # pragma: no cover
             value = str(value)
         return sql_func.pgp_sym_decrypt(value, self.passphrase)  # type: ignore[return-value]
 
@@ -181,10 +175,6 @@ class FernetBackend(EncryptionBackend):
 
         Returns:
             str: The encrypted value.
-
-        Raises:
-            TypeError: If the value is not a string.
-            cryptography.fernet.InvalidToken: If encryption fails.
         """
         if not isinstance(value, str):
             value = repr(value)
@@ -200,12 +190,8 @@ class FernetBackend(EncryptionBackend):
 
         Returns:
             str: The decrypted value.
-
-        Raises:
-            TypeError: If the value is not a string.
-            cryptography.fernet.InvalidToken: If decryption fails.
         """
-        if not isinstance(value, str):  # pragma: nocover
+        if not isinstance(value, str):  # pragma: no cover
             value = str(value)
         decrypted: Union[str, bytes] = self.fernet.decrypt(value.encode())
         if not isinstance(decrypted, str):
@@ -295,11 +281,11 @@ class EncryptedString(TypeDecorator[str]):
             value (Any): The value to process.
             dialect (Dialect): The SQLAlchemy dialect.
 
+        Raises:
+            IntegrityError: If the unencrypted value exceeds the maximum length.
+
         Returns:
             str | None: The encrypted value or None if the input is None.
-
-        Raises:
-            ValueError: If the value exceeds the specified length.
         """
         if value is None:
             return value

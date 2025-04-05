@@ -44,6 +44,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
 )
 from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.types.file_object.file import FileObject
 from advanced_alchemy.utils.text import slugify
 from tests.fixtures.bigint import models as models_bigint
 from tests.fixtures.bigint import repositories as repositories_bigint
@@ -113,6 +114,11 @@ ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
     AnyModelWithFetchedValue, ModelWithFetchedValueRepository
 ]
 
+
+FileDocumentModel = type[Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]]
+AnyFileDocument = Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]
+FileDocumentRepository = SQLAlchemyAsyncRepository[AnyFileDocument]
+FileDocumentService = SQLAlchemyAsyncRepositoryService[AnyFileDocument]
 
 RawRecordData = list[dict[str, Any]]
 
@@ -382,6 +388,14 @@ def slug_book_model(
 def secret_model(repository_pk_type: RepositoryPKType) -> SecretModel:
     """Return the ``Secret`` model matching the current repository PK type"""
     return models_uuid.UUIDSecret if repository_pk_type == "uuid" else models_bigint.BigIntSecret
+
+
+@pytest.fixture()
+def file_document_model(repository_pk_type: str) -> FileDocumentModel:
+    """Return the FileDocument model matching the current PK type."""
+    if repository_pk_type == "uuid":
+        return models_uuid.UUIDFileDocument
+    return models_bigint.BigIntFileDocument
 
 
 @pytest.fixture()
@@ -1106,6 +1120,120 @@ def model_with_fetched_value_repo(
     else:
         repo = repository_module.ModelWithFetchedValueSyncRepository(session=any_session)
     yield cast(ModelWithFetchedValueRepository, repo)
+
+
+@pytest.fixture()
+def file_document_repo(
+    any_session: AsyncSession | Session,
+    repository_module: Any,
+    request: FixtureRequest,
+) -> Generator[FileDocumentRepository, None, None]:
+    """Return a FileDocumentRepository based on the current PK and session type."""
+    if "mock_async_engine" in request.fixturenames:
+        repo = repository_module.FileDocumentAsyncMockRepository(session=any_session)
+    elif "mock_sync_engine" in request.fixturenames:
+        repo = repository_module.FileDocumentSyncMockRepository(session=any_session)
+    elif isinstance(any_session, AsyncSession):
+        repo = repository_module.FileDocumentAsyncRepository(session=any_session)
+    else:
+        repo = repository_module.FileDocumentSyncRepository(session=any_session)
+    yield cast(FileDocumentRepository, repo)
+
+
+@pytest.fixture(name="raw_file_documents")
+def fx_raw_file_documents(repository_pk_type: str) -> RawRecordData:
+    """File document representations."""
+    id_value = "97108ac1-ffcb-411d-8b1e-d9183399f63b" if repository_pk_type == "uuid" else 1
+    return [
+        {
+            "id": id_value,
+            "title": "Test Document",
+            "required_file": {
+                "filename": "test.txt",
+                "path": "test-files/test.txt",
+                "backend": "memory",
+                "size": 13,
+                "checksum": "abc123",
+                "content_type": "text/plain",
+                "created_at": datetime.datetime.now(datetime.timezone.utc),
+            },
+        },
+    ]
+
+
+async def test_file_object_crud(
+    file_document_repo: FileDocumentRepository,
+    file_document_model: FileDocumentModel,
+) -> None:
+    """Test basic CRUD operations with FileObject.
+
+    Args:
+        file_document_repo: The file document repository
+        file_document_model: The file document model class
+    """
+    # Test file data
+    file_data = b"Hello, World!"
+    filename = "test.txt"
+    content_type = "text/plain"
+
+    # Create document with empty file first
+    document = file_document_model(title="Test Document")
+
+    # Save to database to get the ObjectStore type initialized
+    initial_doc = await maybe_async(file_document_repo.add(document))
+
+    initial_doc.required_file = FileObject(
+        backend="memory",
+        filename=filename,
+        to_filename=filename,
+        content_type=content_type,
+        size=len(file_data),
+        content=file_data,
+    )
+    await initial_doc.required_file.save_async()
+
+    # Update the document with the file
+    saved_document = await maybe_async(file_document_repo.update(initial_doc))
+    assert isinstance(saved_document.required_file, FileObject)
+    assert saved_document.required_file.filename == filename
+    assert saved_document.required_file.content_type == content_type
+    assert saved_document.required_file.size == len(file_data) or saved_document.required_file.size is None
+
+
+async def test_file_object_metadata(
+    file_document_repo: FileDocumentRepository,
+    file_document_model: FileDocumentModel,
+) -> None:
+    """Test FileObject metadata handling.
+
+    Args:
+        file_document_repo: The file document repository
+        file_document_model: The file document model class
+    """
+
+    file_data = b"Test data"
+    metadata = {"category": "test", "tags": ["sample"]}
+    # Create a new document instance
+    document = file_document_model(title="Test Document")
+
+    # First save the document to get access to the ObjectStore type
+    initial_doc = await maybe_async(file_document_repo.add(document))
+
+    # Now we can use the type reference that was set during instantiation
+    initial_doc.required_file = FileObject(
+        backend="memory",
+        filename="test.txt",
+        to_filename="test.txt",
+        content_type="text/plain",
+        content=file_data,
+        size=len(file_data),
+        metadata=metadata,
+    )
+
+    # Update the document with the file metadata
+    saved_document = await maybe_async(file_document_repo.update(initial_doc))
+    assert isinstance(saved_document.required_file, FileObject)
+    assert saved_document.required_file.metadata == metadata
 
 
 async def test_repo_count_method(author_repo: AnyAuthorRepository) -> None:
@@ -1962,7 +2090,6 @@ async def test_encrypted_string_length_validation(
     request: FixtureRequest, secret_repo: SecretRepository, secret_model: SecretModel
 ) -> None:
     """Test that EncryptedString enforces length validation.
-
     Args:
         secret_repo: The secret repository
         secret_model: The secret model class
