@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from sqlalchemy import String, create_engine, select
@@ -82,49 +82,90 @@ def test_not_in_collection_filter(db_session: Session) -> None:
     assert len(results) == 2
 
 
-def test_exists_filter_basic(db_session: Session) -> None:
-    exists_filter_1 = ExistsFilter(field_name="genre", values=[Movie.genre == "Action"])
+def test_exists_filter(db_session: Session) -> None:
+    # Test EXISTS with a condition that is true for at least one row
+    # Should return all rows because the subquery finds a match
+    exists_filter_1 = ExistsFilter(values=[Movie.genre == "Action"])
+    # For correlated subquery: Should return only rows where the condition is true
     statement = exists_filter_1.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 1
 
-    exists_filter_2 = ExistsFilter(
-        field_name="genre", values=[Movie.genre.startswith("Action"), Movie.genre.startswith("Drama")]
-    )
-    statement = exists_filter_2.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
-    assert len(results) == 2
-
-
-def test_exists_filter(db_session: Session) -> None:
-    exists_filter_1 = ExistsFilter(field_name="title", values=[Movie.title.startswith("The")])
-    statement = exists_filter_1.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
-    assert len(results) == 3
-
-    exists_filter_2 = ExistsFilter(
-        field_name="title",
-        values=[Movie.title.startswith("Shawshank Redemption"), Movie.title.startswith("The")],
-    )
+    # Test EXISTS with multiple conditions using AND (default) that are true for different rows
+    # The combination (Action AND Drama) is never true for a single row, so subquery is empty
+    exists_filter_2 = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "Drama"])
+    # For correlated subquery: Should return only rows where BOTH conditions are true (none)
     statement = exists_filter_2.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 0
 
-    exists_filter_3 = ExistsFilter(
-        field_name="title",
-        values=[Movie.title.startswith("The"), Movie.title.startswith("Shawshank")],
-        operator="or",
-    )
+    # Test EXISTS with a condition that is never true
+    # Should return no rows because the subquery is empty
+    exists_filter_3 = ExistsFilter(values=[Movie.genre == "SciFi"])
+    # For correlated subquery: Should return only rows where the condition is true (none)
     statement = exists_filter_3.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 0
+
+
+def test_exists_filter_operators(db_session: Session) -> None:
+    # Test EXISTS with OR operator - condition is true
+    exists_filter_or = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "SciFi"], operator="or")
+    # For correlated subquery: Should return rows where EITHER condition is true (only Action movie)
+    statement = exists_filter_or.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 1
+
+    exists_filter_or_2 = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "Drama"], operator="or")
+    # For correlated subquery: Should return rows where EITHER condition is true (only Action movie)
+    statement = exists_filter_or_2.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+
+    # Test EXISTS with AND operator - conditions never true simultaneously
+    exists_filter_and = ExistsFilter(
+        values=[Movie.title.startswith("The Matrix"), Movie.title.startswith("Shawshank")], operator="and"
+    )
+    # For correlated subquery: Should return rows where BOTH conditions are true (none)
+    statement = exists_filter_and.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 0
+
+
+def test_not_exists_filter(db_session: Session) -> None:
+    # Test NOT EXISTS with a condition that is true for at least one row
+    # Should return no rows because the subquery finds a match
+    not_exists_filter_true = NotExistsFilter(values=[Movie.title.like("%Hangover%")])
+    # For correlated subquery: Should return rows where condition is FALSE (Matrix, Shawshank)
+    statement = not_exists_filter_true.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+
+    # Test NOT EXISTS with a condition that is never true
+    # Should return all rows because the subquery is empty
+    not_exists_filter_false = NotExistsFilter(values=[Movie.title == "NonExistentMovie"])
+    # For correlated subquery: Should return rows where condition is FALSE (all movies)
+    statement = not_exists_filter_false.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 3
 
 
-def test_not_exists_filter(db_session: Session) -> None:
-    not_exists_filter = NotExistsFilter(field_name="title", values=[Movie.title.like("%Hangover%")])
-    statement = not_exists_filter.append_to_statement(select(Movie), Movie)
+def test_not_exists_filter_operators(db_session: Session) -> None:
+    # Test NOT EXISTS with OR operator - Should return rows where NEITHER condition is true
+    not_exists_filter_or = NotExistsFilter(values=[Movie.genre == "Comedy", Movie.genre == "SciFi"], operator="or")
+    # For correlated subquery: Should return rows where NEITHER condition is true (Action, Drama)
+    statement = not_exists_filter_or.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 2
+
+    # Test NOT EXISTS with AND operator - Should return rows where NOT BOTH conditions are true
+    not_exists_filter_and = NotExistsFilter(
+        values=[Movie.title.startswith("The Matrix"), Movie.title.startswith("Shawshank")], operator="and"
+    )
+    # For correlated subquery: Should return rows where NOT BOTH conditions are true (all)
+    statement = not_exists_filter_and.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 3
 
 
 def test_limit_offset_filter(db_session: Session) -> None:
