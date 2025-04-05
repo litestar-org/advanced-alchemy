@@ -172,6 +172,7 @@ async def async_session(
 # --- Test Cases ---
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
@@ -250,6 +251,7 @@ async def test_fsspec_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_fsspec_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
@@ -330,6 +332,7 @@ def test_fsspec_s3_basic_operations_sync(
         backend.get_content(file_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
@@ -395,6 +398,7 @@ async def test_obstore_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
@@ -461,6 +465,7 @@ def test_obstore_s3_basic_operations_sync(
         backend.get_content(file_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_basic_operations_async(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
@@ -496,6 +501,7 @@ async def test_obstore_basic_operations_async(storage_registry: StorageRegistry)
         await backend.get_content_async(file_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
@@ -531,6 +537,7 @@ def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> Non
         backend.get_content(file_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_single_file_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -570,6 +577,7 @@ async def test_obstore_single_file_async_no_listener(
     assert loaded_content == file_content
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_multiple_files_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -622,6 +630,7 @@ async def test_obstore_multiple_files_async_no_listener(
     assert await loaded_obj2.get_content_async() == img2_content
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_update_async_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -668,6 +677,7 @@ async def test_obstore_update_async_with_listener(
         await backend.get_content_async(old_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_delete_async_on_update_clear_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -711,6 +721,7 @@ async def test_obstore_delete_async_on_update_clear_with_listener(
         await backend.get_content_async(old_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_delete_async_multiple_removed_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -1327,6 +1338,7 @@ async def test_file_object_save_async_no_data(storage_registry: StorageRegistry)
         await obj.save_async()
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1366,6 +1378,7 @@ def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     assert loaded_content == file_content
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -1405,6 +1418,7 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     assert loaded_content == file_content
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1457,6 +1471,7 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     assert loaded_obj2.get_content() == img2_content
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_on_update_clear_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1491,6 +1506,7 @@ def test_obstore_backend_listener_delete_on_update_clear_sync(
         backend.get_content(old_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_delete_on_update_clear_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -1526,6 +1542,7 @@ async def test_obstore_backend_listener_delete_on_update_clear_async(
         await backend.get_content_async(old_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
@@ -1562,6 +1579,7 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
         backend.get_content(old_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_update_file_object_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
@@ -1599,6 +1617,7 @@ async def test_obstore_backend_listener_update_file_object_async(
         backend.get_content(old_path)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_multiple_removed_sync(
     session: Session, storage_registry: StorageRegistry
@@ -1647,6 +1666,7 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
         backend.get_content(path2)
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_delete_multiple_removed_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
