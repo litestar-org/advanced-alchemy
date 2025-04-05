@@ -37,11 +37,21 @@ from abc import ABC, abstractmethod
 from collections.abc import Collection
 from dataclasses import dataclass
 from operator import attrgetter
-from typing import Any, Callable, Generic, Literal, Optional, Union, cast
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    Literal,
+    Optional,
+    Union,
+    cast,
+)
 
 from sqlalchemy import (
     BinaryExpression,
     ColumnElement,
+    Date,
     Delete,
     Select,
     Update,
@@ -56,18 +66,22 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
-from typing_extensions import TypeAlias, TypeVar
+from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
 
 __all__ = (
+    "AGGridFilter",
     "BeforeAfter",
     "CollectionFilter",
     "ExistsFilter",
+    "FilterGroup",
     "FilterTypes",
     "InAnyFilter",
     "LimitOffset",
+    "MultiFilter",
     "NotExistsFilter",
     "NotInCollectionFilter",
     "NotInSearchFilter",
@@ -75,9 +89,11 @@ __all__ = (
     "OrderBy",
     "PaginationFilter",
     "SearchFilter",
+    "SimpleFilter",
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
+    "TanStackFilter",
 )
 
 T = TypeVar("T")
@@ -91,6 +107,25 @@ StatementTypeT = TypeVar(
 )
 FilterTypes: TypeAlias = "Union[BeforeAfter, OnBeforeAfter, CollectionFilter[Any], LimitOffset, OrderBy, SearchFilter, NotInCollectionFilter[Any], NotInSearchFilter, ExistsFilter, NotExistsFilter]"
 """Aggregate type alias of the types supported for collection filtering."""
+
+
+# Define TypedDicts for filter and logical maps
+class FilterMapDict(TypedDict):
+    before_after: "type[BeforeAfter]"
+    on_before_after: "type[OnBeforeAfter]"
+    collection: "type[CollectionFilter[Any]]"
+    not_in_collection: "type[NotInCollectionFilter[Any]]"
+    limit_offset: "type[LimitOffset]"
+    order_by: "type[OrderBy]"
+    search: "type[SearchFilter]"
+    not_in_search: "type[NotInSearchFilter]"
+    filter_group: "type[FilterGroup]"  # For nested filter groups
+    simple_filter: "type[SimpleFilter]"  # For basic comparison operations
+
+
+class LogicalMapDict(TypedDict):
+    and_: Callable[..., ColumnElement[bool]]
+    or_: Callable[..., ColumnElement[bool]]
 
 
 class StatementFilter(ABC):
@@ -542,6 +577,57 @@ class SearchFilter(StatementFilter):
 
 
 @dataclass
+class SimpleFilter(StatementFilter):
+    """Simple comparison filter for equality and inequality operations.
+
+    This filter applies basic comparison operators (=, !=, >, >=, <, <=) to a field.
+    It provides a generic way to perform common comparison operations.
+
+    Attributes:
+    ----------~
+    field_name : str
+        Name of the model attribute to filter on
+    operator : str
+        Comparison operator to use ('eq', 'ne', 'gt', 'ge', 'lt', 'le')
+    value : Any
+        Value to compare against
+
+    Examples:
+    --------~
+    >>> filter = SimpleFilter(
+    ...     field_name="age", operator="gt", value=18
+    ... )
+    >>> statement = filter.append_to_statement(select(User), User)
+    """
+
+    field_name: str
+    """Name of the model attribute to filter on."""
+    operator: str
+    """Comparison operator to use (one of 'eq', 'ne', 'gt', 'ge', 'lt', 'le')."""
+    value: Any
+    """Value to compare against."""
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Apply a comparison operation to the statement.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with the comparison condition
+        """
+        field = self._get_instrumented_attr(model, self.field_name)
+        operator_func = operators_map.get(self.operator)
+
+        if operator_func is None:
+            return statement
+
+        condition = operator_func(field, self.value)
+        return cast("StatementTypeT", statement.where(condition))
+
+
+@dataclass
 class NotInSearchFilter(SearchFilter):
     """Filter for excluding records that match a substring.
 
@@ -849,3 +935,453 @@ class NotExistsFilter(StatementFilter):
         # as get_exists_clause handles the empty case by returning true.
         exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
+
+
+@dataclass
+class FilterGroup(StatementFilter):
+    """A group of filters combined with a logical operator.
+
+    This class combines multiple filters with a logical operator (AND/OR).
+    It provides a way to create complex nested filter conditions.
+
+    Attributes:
+    ----------~
+    logical_operator : Callable[..., ColumnElement[bool]]
+        The SQLAlchemy operator to combine filters with (and_, or_)
+    filters : list[StatementFilter]
+        List of filters to apply
+    """
+
+    logical_operator: Callable[..., ColumnElement[bool]]
+    """Logical operator to combine the filters (e.g., and_, or_)."""
+    filters: list[StatementFilter]
+    """List of filters to combine."""
+
+    def append_to_statement(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+    ) -> "StatementTypeT":
+        """Apply all filters combined with the logical operator.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with combined filters
+        """
+        if not self.filters:
+            return statement
+
+        # Create a list of expressions from each filter
+        expressions = []
+        for filter_obj in self.filters:
+            # Each filter needs to be applied to a clean version of the statement
+            # to get just its expression
+            filter_statement = filter_obj.append_to_statement(select(), model)
+            # Extract the whereclause from the filter's statement
+            if hasattr(filter_statement, "whereclause") and filter_statement.whereclause is not None:
+                expressions.append(filter_statement.whereclause)  # pyright: ignore
+
+        if expressions:
+            # Combine all expressions with the logical operator
+            combined = self.logical_operator(*expressions)
+            return cast("StatementTypeT", statement.where(combined))
+        return statement
+
+
+# Regular typed dictionary for operators_map
+operators_map: dict[str, Callable[[Any, Any], ColumnElement[bool]]] = {
+    "eq": op.eq,
+    "ne": op.ne,
+    "gt": op.gt,
+    "ge": op.ge,
+    "lt": op.lt,
+    "le": op.le,
+    "in": op.in_op,
+    "notin": op.notin_op,
+    "between": lambda c, v: c.between(v[0], v[1]),
+    "like": op.like_op,
+    "ilike": op.ilike_op,
+    "startswith": op.startswith_op,
+    "istartswith": lambda c, v: c.ilike(v + "%"),
+    "endswith": op.endswith_op,
+    "iendswith": lambda c, v: c.ilike(v + "%"),
+    "dateeq": lambda c, v: cast("Date", c) == v,
+}
+
+
+@dataclass
+class MultiFilter(StatementFilter):
+    """Apply multiple filters to a query based on a JSON/dict input.
+
+    This filter provides a way to construct complex filter trees from
+    a structured dictionary input, supporting nested logical groups and
+    various filter types.
+
+    Attributes:
+    ----------~
+    filters : dict[str, Any]
+        Dictionary structure representing the filters, where keys can be
+        logical operators ("and_", "or_") and values are lists of filter
+        definitions.
+    """
+
+    filters: dict[str, Any]
+    """JSON/dict structure representing the filters."""
+
+    # TypedDict class variables
+    _filter_map: ClassVar[FilterMapDict] = {
+        "before_after": BeforeAfter,
+        "on_before_after": OnBeforeAfter,
+        "collection": CollectionFilter,
+        "not_in_collection": NotInCollectionFilter,
+        "limit_offset": LimitOffset,
+        "order_by": OrderBy,
+        "search": SearchFilter,
+        "not_in_search": NotInSearchFilter,
+        "filter_group": FilterGroup,
+        "simple_filter": SimpleFilter,
+    }
+
+    _logical_map: ClassVar[LogicalMapDict] = {
+        "and_": and_,
+        "or_": or_,
+    }
+
+    def append_to_statement(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+    ) -> StatementTypeT:
+        """Apply the filters to the statement based on the filter definitions.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with all filters applied
+        """
+        for filter_type, conditions in self.filters.items():
+            operator = self._logical_map.get(filter_type)
+            if operator and isinstance(conditions, list):
+                # Create filters from the conditions
+                valid_filters = []
+                for cond in conditions:  # pyright: ignore
+                    filter_instance = self._create_filter(cond)  # pyright: ignore
+                    if filter_instance is not None:
+                        valid_filters.append(filter_instance)  # pyright: ignore
+
+                # Only create a filter group if we have valid filters
+                if valid_filters:
+                    filter_group = FilterGroup(
+                        logical_operator=operator,  # type: ignore
+                        filters=valid_filters,  # pyright: ignore
+                    )
+                    statement = filter_group.append_to_statement(statement, model)
+        return statement
+
+    def _create_filter(self, condition: dict[str, Any]) -> Optional[StatementFilter]:
+        """Create a filter instance from a condition dictionary.
+
+        Args:
+            condition: Dictionary defining a filter
+
+        Returns:
+            Optional[StatementFilter]: Filter instance if successfully created, None otherwise
+        """
+        # Check if condition is a nested logical group
+        logical_keys = set(self._logical_map.keys())
+        intersect = logical_keys.intersection(condition.keys())
+        if intersect:
+            # It's a nested filter group
+            for key in intersect:
+                operator = self._logical_map.get(key)
+                if operator and isinstance(condition.get(key), list):
+                    nested_filters = []
+                    for cond in condition[key]:
+                        filter_instance = self._create_filter(cond)
+                        if filter_instance is not None:
+                            nested_filters.append(filter_instance)  # pyright: ignore
+
+                    if nested_filters:
+                        return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore
+        else:
+            # Regular filter
+            filter_type = condition.get("type")
+            if filter_type is not None and isinstance(filter_type, str):
+                filter_class = self._filter_map.get(filter_type)
+                if filter_class is not None:
+                    try:
+                        # Create a copy of the condition without the type key
+                        filter_args = {k: v for k, v in condition.items() if k != "type"}
+                        return filter_class(**filter_args)  # type: ignore
+                    except Exception:  # noqa: BLE001
+                        return None
+        return None
+
+
+@dataclass
+class TanStackFilter:
+    """Adapter to convert TanStack Tables filter input into MultiFilter-compatible format.
+
+    TanStack Tables is a popular React framework for building data tables.
+    This adapter converts TanStack's filter format to MultiFilter's format.
+
+    Attributes:
+    ----------~
+    tanstack_filters : list[dict[str, Any]]
+        List of filter objects from TanStack Tables
+    """
+
+    tanstack_filters: list[dict[str, Any]]
+
+    def to_multifilter_format(self) -> dict[str, Any]:
+        """Convert TanStack filter list to MultiFilter dict.
+
+        Returns:
+            dict[str, Any]: Filter structure compatible with MultiFilter
+        """
+
+        def parse_filters(filters: list[dict[str, Any]], logical_op: str = "and_") -> dict[str, Any]:
+            result = []
+            for f in filters:
+                parsed = self._parse_single_filter(f)
+                if parsed is not None:
+                    result.append(parsed)  # pyright: ignore
+            return {logical_op: result} if result else {}
+
+        return parse_filters(self.tanstack_filters)
+
+    def _parse_single_filter(self, filter_obj: dict[str, Any]) -> Optional[dict[str, Any]]:  # noqa: PLR0911
+        """Parse a single TanStack filter object.
+
+        Args:
+            filter_obj: TanStack filter object
+
+        Returns:
+            Optional[dict[str, Any]]: Parsed filter in MultiFilter format, or None if invalid
+        """
+        # Handle nested logical filters
+        if "logical" in filter_obj and "filters" in filter_obj:
+            logical_op = filter_obj.get("logical")
+            filters = filter_obj.get("filters")
+            if isinstance(logical_op, str) and isinstance(filters, list):
+                result = []
+                for f in filters:  # pyright: ignore
+                    parsed = self._parse_single_filter(f)  # pyright: ignore
+                    if parsed is not None:
+                        result.append(parsed)  # pyright: ignore
+                return {logical_op: result} if result else None
+            return None
+
+        # Handle single filter condition
+        field = filter_obj.get("field")
+        operator = filter_obj.get("operator")
+        value = filter_obj.get("value")
+
+        if not isinstance(field, str) or not isinstance(operator, str):
+            return None
+
+        # Map TanStack operators to filter types and operators
+        operator_mapping = {
+            "contains": "like",
+            "notContains": "not_like",
+            "equals": "eq",
+            "notEqual": "ne",
+            "greaterThan": "gt",
+            "greaterThanOrEqual": "ge",
+            "lessThan": "lt",
+            "lessThanOrEqual": "le",
+            "inNumberRange": "between",
+            "in": "in",
+            "notIn": "notin",
+            "startsWith": "startswith",
+            "endsWith": "endswith",
+        }
+
+        mapped_operator = operator_mapping.get(operator)
+        if mapped_operator is None:
+            return None
+
+        # Determine filter type based on operator
+        if mapped_operator in {"eq", "ne", "gt", "ge", "lt", "le"}:
+            # Handle datetime filters separately
+            if "before" in filter_obj or "after" in filter_obj:
+                return {
+                    "type": "before_after",
+                    "field_name": field,
+                    "before": filter_obj.get("before"),
+                    "after": filter_obj.get("after"),
+                }
+            # Handle on_before/on_after
+            if "on_or_before" in filter_obj or "on_or_after" in filter_obj:
+                return {
+                    "type": "on_before_after",
+                    "field_name": field,
+                    "on_or_before": filter_obj.get("on_or_before"),
+                    "on_or_after": filter_obj.get("on_or_after"),
+                }
+            # Regular comparison operator
+            return {
+                "type": "simple_filter",
+                "field_name": field,
+                "operator": mapped_operator,
+                "value": value,
+            }
+        if mapped_operator == "between":
+            return {
+                "type": "between",
+                "field_name": field,
+                "value": value,  # Expecting a list like [min, max]
+            }
+        if mapped_operator in {"like", "not_like", "startswith", "endswith"}:
+            return {
+                "type": "search" if "not" not in mapped_operator else "not_in_search",
+                "field_name": field,
+                "value": value,
+                "ignore_case": filter_obj.get("ignore_case", True),
+            }
+        if mapped_operator in {"in", "notin"}:
+            return {
+                "type": "collection" if mapped_operator == "in" else "not_in_collection",
+                "field_name": field,
+                "values": value,
+            }
+        return None
+
+
+@dataclass
+class AGGridFilter:
+    """Adapter to convert AG Grid filter input into MultiFilter-compatible format.
+
+    AG Grid is a feature-rich data grid for JavaScript applications.
+    This adapter converts AG Grid's filter format to MultiFilter's format.
+
+    Attributes:
+    ----------~
+    aggrid_filters : dict[str, dict[str, Any]]
+        Dictionary of filter objects from AG Grid, keyed by field name
+    """
+
+    aggrid_filters: dict[str, dict[str, Any]]
+
+    def to_multifilter_format(self) -> dict[str, Any]:  # noqa: C901
+        """Convert AG Grid filter model to MultiFilter dict.
+
+        Returns:
+            dict[str, Any]: Filter structure compatible with MultiFilter
+        """
+        filters = []
+        for field, condition in self.aggrid_filters.items():
+            # Extract filter components - ignore filter_type that's not used
+            operator = condition.get("type")
+            value = condition.get("filter")
+
+            if not isinstance(operator, str):
+                continue
+
+            # Map AG Grid operators to filter types and operators
+            operator_mapping = {
+                "equals": "eq",
+                "notEqual": "ne",
+                "contains": "like",
+                "notContains": "not_like",
+                "startsWith": "startswith",
+                "endsWith": "endswith",
+                "inRange": "between",
+                "greaterThan": "gt",
+                "greaterThanOrEqual": "ge",
+                "lessThan": "lt",
+                "lessThanOrEqual": "le",
+                "blank": None,  # Special case for null/empty values
+                "notBlank": None,  # Special case for non-null/non-empty values
+            }
+
+            mapped_operator = operator_mapping.get(operator)
+            if mapped_operator is None:
+                # Handle special cases
+                if operator == "blank":
+                    filters.append(  # pyright: ignore
+                        {
+                            "type": "search",
+                            "field_name": field,
+                            "value": "",
+                            "ignore_case": True,
+                        }
+                    )
+                elif operator == "notBlank":
+                    filters.append(  # pyright: ignore
+                        {
+                            "type": "not_in_search",
+                            "field_name": field,
+                            "value": "",
+                            "ignore_case": True,
+                        }
+                    )
+                continue
+
+            filter_conditions = {}
+            if mapped_operator == "between":
+                filter_to = condition.get("filterTo")
+                if value is not None and filter_to is not None:
+                    filter_conditions = {
+                        "type": "on_before_after",
+                        "field_name": field,
+                        "on_or_after": value,
+                        "on_or_before": filter_to,
+                    }
+            elif mapped_operator in {"like", "not_like", "startswith", "endswith"}:
+                if value is not None:
+                    filter_conditions = {
+                        "type": "search" if "not" not in mapped_operator else "not_in_search",
+                        "field_name": field,
+                        "value": value,
+                        "ignore_case": condition.get("caseSensitive", False) is False,
+                    }
+            # Regular comparison operators
+            elif value is not None:
+                # Set the appropriate before/after fields for comparison operators
+                if mapped_operator == "gt":
+                    filter_conditions = {
+                        "type": "before_after",
+                        "field_name": field,
+                        "after": value,
+                        "before": None,
+                    }
+                elif mapped_operator == "ge":
+                    filter_conditions = {
+                        "type": "on_before_after",
+                        "field_name": field,
+                        "on_or_after": value,
+                        "on_or_before": None,
+                    }
+                elif mapped_operator == "lt":
+                    filter_conditions = {
+                        "type": "before_after",
+                        "field_name": field,
+                        "before": value,
+                        "after": None,
+                    }
+                elif mapped_operator == "le":
+                    filter_conditions = {
+                        "type": "on_before_after",
+                        "field_name": field,
+                        "on_or_before": value,
+                        "on_or_after": None,
+                    }
+                else:
+                    # For eq, ne operators
+                    filter_conditions = {
+                        "type": "simple_filter",
+                        "field_name": field,
+                        "operator": mapped_operator,
+                        "value": value,
+                    }
+
+            if filter_conditions:
+                filters.append(filter_conditions)  # pyright: ignore
+
+        return {"and_": filters} if filters else {}
