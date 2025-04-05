@@ -94,7 +94,13 @@ __all__ = (
     "FilterTypes",
     "InAnyFilter",
     "LimitOffset",
-    "NotExistsFilter", 
+    "NotExistsFilter",  
+    "ExistsFilter",
+    "FilterTypes",
+    "InAnyFilter",
+    "LimitOffset",
+    "NotExistsFilter",
+ 
     "NotInCollectionFilter",
     "NotInSearchFilter",
     "OnBeforeAfter",
@@ -893,8 +899,8 @@ class NotExistsFilter(StatementFilter):
         # as get_exists_clause handles the empty case by returning true.
         exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
-      
-class FilterGroup(StatementFilter):
+
+ class FilterGroup(StatementFilter):
     """A group of filters combined with a logical operator."""
 
     logical_operator: Callable[..., BinaryExpression[bool]]
