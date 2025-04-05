@@ -51,6 +51,7 @@ dev = [
     { name = "auto-pytabs", extra = ["sphinx"] },
     { name = "bump-my-version" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage" },
     { name = "duckdb" },
     { name = "duckdb-engine" },
@@ -70,6 +71,7 @@ dev = [
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-cdist" },
     { name = "pytest-click" },
     { name = "pytest-cov" },
     { name = "pytest-databases" },
@@ -198,6 +200,7 @@ sqlite = [
 test = [
     { name = "asgi-lifespan" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage" },
     { name = "pydantic-extra-types" },
     { name = "pytest" },
@@ -245,6 +248,7 @@ dev = [
     { name = "auto-pytabs", extras = ["sphinx"], specifier = ">=0.5.0" },
     { name = "bump-my-version" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage", specifier = ">=7.6.1" },
     { name = "duckdb", specifier = ">=1.1.2" },
     { name = "duckdb-engine", specifier = ">=0.13.4" },
@@ -263,6 +267,7 @@ dev = [
     { name = "pyright", specifier = ">=1.1.386" },
     { name = "pytest", specifier = ">=7.4.4" },
     { name = "pytest-asyncio", specifier = ">=0.23.8" },
+    { name = "pytest-cdist", specifier = ">=0.3.1" },
     { name = "pytest-click" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "pytest-databases" },
@@ -376,6 +381,7 @@ sqlite = [{ name = "aiosqlite", specifier = ">=0.20.0" }]
 test = [
     { name = "asgi-lifespan" },
     { name = "click" },
+    { name = "covdefaults" },
     { name = "coverage", specifier = ">=7.6.1" },
     { name = "pydantic-extra-types" },
     { name = "pytest", specifier = ">=7.4.4" },
@@ -964,6 +970,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335 },
+]
+
+[[package]]
+name = "covdefaults"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "coverage" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/ee/9a6f2611f72e4c5657ae5542a510cf4164d2c673687c0ea73bb1cbd85b4d/covdefaults-2.3.0.tar.gz", hash = "sha256:4e99f679f12d792bc62e5510fa3eb59546ed47bd569e36e4fddc4081c9c3ebf7", size = 4835 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/4c/823bc951445aa97e5a1b7e337690db3abf85212c8d138e170922e7916ac8/covdefaults-2.3.0-py2.py3-none-any.whl", hash = "sha256:2832961f6ffcfe4b57c338bc3418a3526f495c26fb9c54565409c5532f7c41be", size = 5144 },
 ]
 
 [[package]]
@@ -3020,6 +3038,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8e/c4/453c52c659521066969523e87d85d54139bbd17b78f09532fb8eb8cdb58e/pytest_asyncio-0.26.0.tar.gz", hash = "sha256:c4df2a697648241ff39e7f0e4a73050b03f123f760673956cf0d72a4990e312f", size = 54156 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/7f/338843f449ace853647ace35870874f69a764d251872ed1b4de9f234822c/pytest_asyncio-0.26.0-py3-none-any.whl", hash = "sha256:7b51ed894f4fbea1340262bdae5135797ebbe21d8638978e35d31c6d19f72fb0", size = 19694 },
+]
+
+[[package]]
+name = "pytest-cdist"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/d4/777909e5547e71f7ccdc0887cb12c3a57a8923f9631d245cef9f0b78d495/pytest_cdist-0.3.1.tar.gz", hash = "sha256:5cfc0f64d1796a8d61cbdc818bd6b42cfa0a82cee03916c4d3d136c4902d66fb", size = 26719 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/ca/9ea14503d75a7cea3362742430a33c65e31bccee6ff8968e7b25d4b84e0b/pytest_cdist-0.3.1-py3-none-any.whl", hash = "sha256:95228f0a782a8d3bf93813ce1c31ca733e18d1c7ad21530e5cbf49854c70bcef", size = 7870 },
 ]
 
 [[package]]
