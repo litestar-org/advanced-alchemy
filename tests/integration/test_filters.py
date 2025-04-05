@@ -10,15 +10,21 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from advanced_alchemy.base import BigIntBase
 from advanced_alchemy.filters import (
+    AGGridFilter,
     BeforeAfter,
     CollectionFilter,
     ExistsFilter,
+    FilterGroup,
     LimitOffset,
+    MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
+    TanStackFilter,
+    and_,
+    or_,
 )
 
 
@@ -191,3 +197,225 @@ def test_search_filter(db_session: Session) -> None:
     statement = search_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 1
+
+
+def test_filter_group_logical_operators(db_session: Session) -> None:
+    # Test AND operator
+    before_2000 = BeforeAfter(field_name="release_date", before=datetime(2000, 1, 1, tzinfo=timezone.utc), after=None)
+    has_the_in_title = SearchFilter(field_name="title", value="The", ignore_case=True)
+
+    # Should match only "The Matrix" (before 2000 AND has "The" in title)
+    and_filter_group = FilterGroup(
+        logical_operator=and_,
+        filters=[before_2000, has_the_in_title],
+    )
+
+    statement = and_filter_group.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 1
+    assert results[0].title == "The Matrix"
+
+    # Test OR operator
+    drama_filter = SearchFilter(field_name="genre", value="Drama", ignore_case=True)
+
+    # Should match "The Matrix", "Shawshank Redemption" (before 2000 OR is drama)
+    or_filter_group = FilterGroup(
+        logical_operator=or_,
+        filters=[before_2000, drama_filter],
+    )
+
+    statement = or_filter_group.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+
+def test_multi_filter_basic(db_session: Session) -> None:
+    # Test basic MultiFilter with AND condition
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "type": "before_after",
+                    "field_name": "release_date",
+                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "after": None,
+                },
+                {"type": "search", "field_name": "title", "value": "The", "ignore_case": True},
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 1
+    assert results[0].title == "The Matrix"
+
+    # Test basic MultiFilter with OR condition
+    multi_filter = MultiFilter(
+        filters={
+            "or_": [
+                {
+                    "type": "before_after",
+                    "field_name": "release_date",
+                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "after": None,
+                },
+                {"type": "search", "field_name": "genre", "value": "Drama", "ignore_case": True},
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+
+def test_multi_filter_nested(db_session: Session) -> None:
+    # Test nested AND/OR conditions
+    multi_filter = MultiFilter(
+        filters={
+            "or_": [
+                # Match any comedy movie
+                {"type": "search", "field_name": "genre", "value": "Comedy", "ignore_case": True},
+                # OR match any movie from before 2000 that has "The" in title
+                {
+                    "and_": [
+                        {
+                            "type": "before_after",
+                            "field_name": "release_date",
+                            "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                            "after": None,
+                        },
+                        {"type": "search", "field_name": "title", "value": "The", "ignore_case": True},
+                    ]
+                },
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "The Hangover"}
+
+
+def test_tanstack_filter_conversion(db_session: Session) -> None:
+    # Test TanStackFilter adapter
+    tanstack_filters = [
+        {"field": "release_date", "operator": "lessThan", "value": datetime(2000, 1, 1, tzinfo=timezone.utc)},
+        {"field": "title", "operator": "contains", "value": "The"},
+        {"field": "genre", "operator": "equals", "value": "Action"},
+    ]
+
+    adapter = TanStackFilter(tanstack_filters=tanstack_filters)  # type: ignore
+    multi_filter_dict = adapter.to_multifilter_format()
+
+    # Convert to MultiFilter and apply
+    multi_filter = MultiFilter(filters=multi_filter_dict)
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+
+    # Should match "The Matrix" (before 2000, contains "The", and Action genre)
+    assert len(results) == 1
+    assert results[0].title == "The Matrix"
+
+
+def test_tanstack_filter_with_nested_logic(db_session: Session) -> None:
+    # Test TanStackFilter with nested logical conditions
+    tanstack_filters = [
+        {
+            "logical": "or_",
+            "filters": [
+                {"field": "genre", "operator": "equals", "value": "Comedy"},
+                {
+                    "logical": "and_",
+                    "filters": [
+                        {
+                            "field": "release_date",
+                            "operator": "lessThan",
+                            "value": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                        },
+                        {"field": "title", "operator": "contains", "value": "The"},
+                    ],
+                },
+            ],
+        }
+    ]
+
+    adapter = TanStackFilter(tanstack_filters=tanstack_filters)
+    multi_filter_dict = adapter.to_multifilter_format()
+
+    # Convert to MultiFilter and apply
+    multi_filter = MultiFilter(filters=multi_filter_dict)
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+
+    # Should match "The Matrix" and "The Hangover" as in test_multi_filter_nested
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "The Hangover"}
+
+
+def test_aggrid_filter_conversion(db_session: Session) -> None:
+    # Test AG Grid filter adapter
+    aggrid_filters = {
+        "release_date": {"type": "lessThan", "filter": datetime(2000, 1, 1, tzinfo=timezone.utc)},
+        "title": {"type": "contains", "filter": "The"},
+        "genre": {"type": "equals", "filter": "Action"},
+    }
+
+    adapter = AGGridFilter(aggrid_filters=aggrid_filters)  # type: ignore
+    multi_filter_dict = adapter.to_multifilter_format()
+
+    # Convert to MultiFilter and apply
+    multi_filter = MultiFilter(filters=multi_filter_dict)
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+
+    # Should match "The Matrix" (before 2000, contains "The", and Action genre)
+    assert len(results) == 1
+    assert results[0].title == "The Matrix"
+
+
+def test_aggrid_range_filter(db_session: Session) -> None:
+    # Test AG Grid range filter
+    aggrid_filters = {
+        "release_date": {
+            "type": "inRange",
+            "filter": datetime(1994, 1, 1, tzinfo=timezone.utc),
+            "filterTo": datetime(2000, 1, 1, tzinfo=timezone.utc),
+        },
+    }
+
+    adapter = AGGridFilter(aggrid_filters=aggrid_filters)
+    multi_filter_dict = adapter.to_multifilter_format()
+
+    # Convert to MultiFilter and apply
+    multi_filter = MultiFilter(filters=multi_filter_dict)
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+
+    # Should match "The Matrix" and "Shawshank Redemption" (both in 1994-2000 range)
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+
+def test_empty_filters(db_session: Session) -> None:
+    # Test empty filters
+    multi_filter = MultiFilter(filters={})
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = db_session.execute(statement).scalars().all()
+
+    # Should match all movies since no filters are applied
+    assert len(results) == 3
+
+    # Test empty tanstack filter
+    adapter = TanStackFilter(tanstack_filters=[])
+    multi_filter_dict = adapter.to_multifilter_format()
+    assert not multi_filter_dict  # Should be empty
+
+    # Test empty aggrid filter
+    adapter = AGGridFilter(aggrid_filters={})  # type: ignore
+    multi_filter_dict = adapter.to_multifilter_format()
+    assert not multi_filter_dict  # Should be empty
