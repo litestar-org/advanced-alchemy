@@ -145,6 +145,19 @@ def test_dump_data(cli_runner: CliRunner, database_cli: Group, mock_context: Mag
     assert result.exit_code == 0
 
 
+def test_stamp(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the stamp command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "stamp", "head"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.stamp.assert_called_once_with(revision="head")
+
+
 def test_cli_group_creation() -> None:
     """Test that the CLI group is created correctly."""
     cli_group = add_migration_commands()
@@ -156,3 +169,4 @@ def test_cli_group_creation() -> None:
     assert "make-migrations" in cli_group.commands
     assert "drop-all" in cli_group.commands
     assert "dump-data" in cli_group.commands
+    assert "stamp" in cli_group.commands

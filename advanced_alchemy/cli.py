@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Union, cast
@@ -13,7 +14,14 @@ __all__ = ("add_migration_commands", "get_alchemy_group")
 
 
 def get_alchemy_group() -> "Group":
-    """Get the Advanced Alchemy CLI group."""
+    """Get the Advanced Alchemy CLI group.
+
+    Raises:
+        MissingDependencyError: If the `click` package is not installed.
+
+    Returns:
+        The Advanced Alchemy CLI group.
+    """
     from advanced_alchemy.exceptions import MissingDependencyError
 
     try:
@@ -54,7 +62,17 @@ def get_alchemy_group() -> "Group":
 
 
 def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":  # noqa: C901, PLR0915
-    """Add migration commands to the database group."""
+    """Add migration commands to the database group.
+
+    Args:
+        database_group: The database group to add the commands to.
+
+    Raises:
+        MissingDependencyError: If the `click` package is not installed.
+
+    Returns:
+        The database group with the migration commands added.
+    """
     from advanced_alchemy.exceptions import MissingDependencyError
 
     try:
@@ -97,7 +115,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     def get_config_by_bind_key(
         ctx: "click.Context", bind_key: Optional[str]
     ) -> "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]":
-        """Get the SQLAlchemy config for the specified bind key."""
+        """Get the SQLAlchemy config for the specified bind key.
+
+        Args:
+            ctx: The click context.
+            bind_key: The bind key to get the config for.
+
+        Returns:
+            The SQLAlchemy config for the specified bind key.
+        """
         configs = ctx.obj["configs"]
         if bind_key is None:
             return cast("Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]", configs[0])
@@ -107,7 +133,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
                 return cast("Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]", config)
 
         console.print(f"[red]No config found for bind key: {bind_key}[/]")
-        ctx.exit(1)  # noqa: RET503
+        sys.exit(1)
 
     @database_group.command(
         name="show-current-revision",
@@ -200,6 +226,20 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
             sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
             alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
             alembic_commands.upgrade(revision=revision, sql=sql, tag=tag)
+
+    @database_group.command(
+        help="Stamp the revision table with the given revision",
+    )
+    @click.argument("revision", type=str)
+    @bind_key_option
+    def stamp(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Stamp the revision table with the given revision."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = click.get_current_context()
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.stamp(revision=revision)
 
     @database_group.command(
         name="init",
