@@ -90,7 +90,7 @@ convention: "NamingSchemaParameter" = {
     "pk": "pk_%(table_name)s",
 }
 """Templates for automated constraint name generation."""
-table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
+table_name_regexp = re.compile(r"((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 

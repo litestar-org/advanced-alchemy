@@ -85,6 +85,9 @@ def autocommit_handler_maker(
         extra_rollback_statuses: A set of additional status codes that trigger a rollback
         session_scope_key: The key to use within the application state
 
+    Raises:
+        ValueError: If extra rollback statuses and commit statuses share any status codes
+
     Returns:
         The handler callable
     """
@@ -106,9 +109,6 @@ def autocommit_handler_maker(
         Args:
             message: ASGI-``litestar.types.Message``
             scope: An ASGI-``litestar.types.Scope``
-
-        Returns:
-            None
         """
         session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, session_scope_key))
         try:
