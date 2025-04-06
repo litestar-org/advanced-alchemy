@@ -1,10 +1,11 @@
 import datetime
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union, cast
 
 from litestar.middleware.session.server_side import ServerSideSessionBackend, ServerSideSessionConfig
 from sqlalchemy import (
     BooleanClauseList,
+    Index,
     LargeBinary,
     ScalarResult,
     String,
@@ -14,7 +15,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, Session, declarative_mixin, mapped_column
+from sqlalchemy.orm import Mapped, Session, declarative_mixin, declared_attr, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
 from advanced_alchemy.extensions.litestar.plugins.init import (
@@ -27,6 +28,7 @@ from advanced_alchemy.utils.time import get_utc_now
 if TYPE_CHECKING:
     from litestar.stores.base import Store
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import Select
     from sqlalchemy.sql.elements import BooleanClauseList
 
@@ -40,11 +42,41 @@ class SessionModelMixin(UUIDv7Base):
     """Mixin for session storage."""
 
     __abstract__ = True
-    __table_args__ = (UniqueConstraint("session_id", name="uix_session_id"),)
 
-    session_id: Mapped[str] = mapped_column(String(length=255), nullable=False, index=True)
-    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    expires_at: Mapped[datetime.datetime] = mapped_column(index=True)
+    @declared_attr.directive
+    @classmethod
+    def __table_args__(cls) -> "TableArgsType":
+        return (
+            UniqueConstraint(
+                cls.session_id,
+                name=f"uq_{cls.__tablename__}_session_id",
+            ).ddl_if(callable_=cls._create_unique_session_id_constraint),
+            Index(
+                f"ix_{cls.__tablename__}_session_id_unique",
+                cls.session_id,
+                unique=True,
+            ).ddl_if(callable_=cls._create_unique_session_id_index),
+        )
+
+    @declared_attr
+    def session_id(cls) -> Mapped[str]:
+        return mapped_column(String(length=255), nullable=False)
+
+    @declared_attr
+    def data(cls) -> Mapped[bytes]:
+        return mapped_column(LargeBinary, nullable=False)
+
+    @declared_attr
+    def expires_at(cls) -> Mapped[datetime.datetime]:
+        return mapped_column(index=True)
+
+    @classmethod
+    def _create_unique_session_id_index(cls, *_: Any, **kwargs: Any) -> bool:
+        return bool(kwargs["dialect"].name.startswith("spanner"))
+
+    @classmethod
+    def _create_unique_session_id_constraint(cls, *_: Any, **kwargs: Any) -> bool:
+        return not kwargs["dialect"].name.startswith("spanner")
 
     @hybrid_property
     def is_expired(self) -> bool:  # pyright: ignore

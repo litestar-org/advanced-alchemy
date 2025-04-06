@@ -1,6 +1,6 @@
 import datetime
 from contextlib import asynccontextmanager, contextmanager
-from typing import TYPE_CHECKING, Final, Generic, Optional, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Generic, Optional, TypeVar, Union, cast
 
 from litestar.exceptions import ImproperlyConfiguredException
 from litestar.stores.base import NamespacedStore
@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     delete,
+    func,
     insert,
     select,
     text,
@@ -21,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, Session, declarative_mixin, mapped_column
+from sqlalchemy.orm import Mapped, Session, declarative_mixin, declared_attr, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
 
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql.elements import BooleanClauseList
 
 SQLAlchemyConfigT = TypeVar("SQLAlchemyConfigT", bound=Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig])
@@ -53,14 +55,47 @@ class StoreModelMixin(UUIDv7Base):
     """Mixin for session storage."""
 
     __abstract__ = True
-    __table_args__ = (
-        UniqueConstraint("key", "namespace", name="uix_store_key_namespace"),
-        Index("ix_store_key_namespace", "key", "namespace"),
-    )
-    key: Mapped[str] = mapped_column(String(length=255), nullable=False)
-    namespace: Mapped[str] = mapped_column(String(length=255), nullable=False)
-    value: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    expires_at: Mapped[datetime.datetime] = mapped_column(index=True)
+
+    @declared_attr.directive
+    @classmethod
+    def __table_args__(cls) -> "TableArgsType":
+        return (
+            UniqueConstraint(
+                cls.key,
+                cls.namespace,
+                name=f"uq_{cls.__tablename__}_key_namespace",
+            ).ddl_if(callable_=cls._create_unique_store_key_namespace_constraint),
+            Index(
+                f"ix_{cls.__tablename__}_key_namespace_unique",
+                cls.key,
+                cls.namespace,
+                unique=True,
+            ).ddl_if(callable_=cls._create_unique_store_key_namespace_index),
+        )
+
+    @declared_attr
+    def key(cls) -> Mapped[str]:
+        return mapped_column(String(length=255), nullable=False)
+
+    @declared_attr
+    def namespace(cls) -> Mapped[str]:
+        return mapped_column(String(length=255), nullable=False)
+
+    @declared_attr
+    def value(cls) -> Mapped[bytes]:
+        return mapped_column(LargeBinary, nullable=False)
+
+    @declared_attr
+    def expires_at(cls) -> Mapped[datetime.datetime]:
+        return mapped_column(index=True)
+
+    @classmethod
+    def _create_unique_store_key_namespace_index(cls, *_: Any, **kwargs: Any) -> bool:
+        return bool(kwargs["dialect"].name.startswith("spanner"))
+
+    @classmethod
+    def _create_unique_store_key_namespace_constraint(cls, *_: Any, **kwargs: Any) -> bool:
+        return not kwargs["dialect"].name.startswith("spanner")
 
     @hybrid_property
     def is_expired(self) -> bool:  # pyright: ignore
@@ -78,7 +113,7 @@ class StoreModelMixin(UUIDv7Base):
         Returns:
             SQL-Expression to check if the session has expired.
         """
-        return get_utc_now() > cls.expires_at  # pyright: ignore
+        return cast("BooleanClauseList", func.now() > cls.expires_at)
 
 
 class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
