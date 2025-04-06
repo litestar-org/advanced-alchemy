@@ -18,7 +18,9 @@ from sqlalchemy.orm import (
 from sqlalchemy.orm import (
     registry as SQLAlchemyRegistry,  # noqa: N812
 )
-from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm.decl_base import (
+    _TableArgsType as TableArgsType,  # pyright: ignore[reportPrivateUsage]
+)
 from sqlalchemy.types import TypeEngine
 from typing_extensions import Self, TypeVar
 
@@ -30,7 +32,7 @@ from advanced_alchemy.mixins import (
     UUIDv6PrimaryKey,
     UUIDv7PrimaryKey,
 )
-from advanced_alchemy.types import GUID, DateTimeUTC, JsonB
+from advanced_alchemy.types import GUID, DateTimeUTC, FileObject, FileObjectList, JsonB, StoredObject
 from advanced_alchemy.utils.dataclass import DataclassProtocol
 
 if TYPE_CHECKING:
@@ -90,7 +92,7 @@ convention: "NamingSchemaParameter" = {
     "pk": "pk_%(table_name)s",
 }
 """Templates for automated constraint name generation."""
-table_name_regexp = re.compile("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
+table_name_regexp = re.compile(r"((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
@@ -122,7 +124,7 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[Table
                 else:
                     args.append(last_positional_arg)
             else:
-                kwargs.update(arg_to_merge)
+                kwargs.update(arg_to_merge)  # pyright: ignore
 
     if args:
         if kwargs:
@@ -198,7 +200,11 @@ class CommonTableAttributes(BasicAttributes):
 
         @declared_attr.directive
         def __tablename__(cls) -> str:
-            """Infer table name from class name."""
+            """Infer table name from class name.
+
+            Returns:
+                str: The inferred table name.
+            """
 
             return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
@@ -226,6 +232,8 @@ def create_registry(
         dict[str, Any]: JsonB,
         dict[str, str]: JsonB,
         DataclassProtocol: JsonB,
+        FileObject: StoredObject,
+        FileObjectList: StoredObject,
     }
     with contextlib.suppress(ImportError):
         from pydantic import AnyHttpUrl, AnyUrl, EmailStr, IPvAnyAddress, IPvAnyInterface, IPvAnyNetwork, Json
@@ -272,11 +280,23 @@ class MetadataRegistry:
         return cast("Self", cls._instance)
 
     def get(self, bind_key: Optional[str] = None) -> MetaData:
-        """Get the metadata for the given bind key."""
+        """Get the metadata for the given bind key.
+
+        Args:
+            bind_key (Optional[str]): The bind key for the metadata.
+
+        Returns:
+            :class:`sqlalchemy.MetaData`: The metadata for the given bind key.
+        """
         return self._registry.setdefault(bind_key, MetaData(naming_convention=convention))
 
     def set(self, bind_key: Optional[str], metadata: MetaData) -> None:
-        """Set the metadata for the given bind key."""
+        """Set the metadata for the given bind key.
+
+        Args:
+            bind_key (Optional[str]): The bind key for the metadata.
+            metadata (:class:`sqlalchemy.MetaData`): The metadata to set.
+        """
         self._registry[bind_key] = metadata
 
     def __iter__(self) -> Iterator[Union[str, None]]:

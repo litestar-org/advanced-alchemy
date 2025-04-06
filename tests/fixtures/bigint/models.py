@@ -1,7 +1,5 @@
 """Example domain objects for testing."""
 
-from __future__ import annotations
-
 import datetime
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
@@ -10,8 +8,8 @@ from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright:
 
 from advanced_alchemy.base import BigIntAuditBase, BigIntBase, merge_table_arguments
 from advanced_alchemy.mixins import SlugKey
-from advanced_alchemy.types import EncryptedString
-from advanced_alchemy.types.encrypted_string import EncryptedText
+from advanced_alchemy.types import EncryptedString, EncryptedText, FileObject, FileObjectList, StoredObject
+from advanced_alchemy.types.file_object import storages
 
 
 class BigIntAuthor(BigIntAuditBase):
@@ -20,7 +18,7 @@ class BigIntAuthor(BigIntAuditBase):
     name: Mapped[str] = mapped_column(String(length=100))
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)
     dob: Mapped[datetime.date] = mapped_column(nullable=True)
-    books: Mapped[list[BigIntBook]] = relationship(
+    books: Mapped[list["BigIntBook"]] = relationship(
         lazy="selectin",
         back_populates="author",
         cascade="all, delete",
@@ -83,7 +81,7 @@ bigint_item_tag = Table(
 class BigIntItem(BigIntBase):
     name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
     description: Mapped[str] = mapped_column(String(length=100), nullable=True)  # pyright: ignore
-    tags: Mapped[list[BigIntTag]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
+    tags: Mapped[list["BigIntTag"]] = relationship(secondary=lambda: bigint_item_tag, back_populates="items")
 
 
 class BigIntTag(BigIntBase):
@@ -113,3 +111,22 @@ class BigIntSecret(BigIntBase):
         EncryptedString(key="super_secret", length=10),
         nullable=True,
     )
+
+
+class BigIntFileDocument(BigIntBase):
+    """The file document domain model."""
+
+    title: Mapped[str] = mapped_column(String(length=100))
+    attachment: Mapped[FileObject] = mapped_column(
+        StoredObject(backend="memory"),
+        nullable=True,
+    )
+    required_file: Mapped[FileObject] = mapped_column(StoredObject(backend="memory"), nullable=True)
+    required_files: Mapped[FileObjectList] = mapped_column(
+        StoredObject(backend="memory", multiple=True),
+        nullable=True,
+    )
+
+
+if not storages.is_registered("memory"):
+    storages.register_backend("memory://", "memory")

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
 
 if TYPE_CHECKING:
@@ -74,5 +75,6 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             ...     session.execute(...)
         """
         session_maker = self.create_session_maker()
+        set_async_context(False)  # Set context for standalone usage
         with session_maker() as session:
             yield session
