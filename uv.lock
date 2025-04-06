@@ -72,7 +72,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-click" },
     { name = "pytest-cov" },
-    { name = "pytest-databases", extra = ["bigquery", "cockroachdb", "mariadb", "minio", "mssql", "mysql", "oracle", "postgres", "spanner"] },
+    { name = "pytest-databases", extra = ["bigquery", "cockroachdb", "minio", "mssql", "mysql", "oracle", "postgres", "spanner"] },
     { name = "pytest-lazy-fixtures" },
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures" },
@@ -204,7 +204,7 @@ test = [
     { name = "pytest-asyncio" },
     { name = "pytest-click" },
     { name = "pytest-cov" },
-    { name = "pytest-databases", extra = ["bigquery", "cockroachdb", "mariadb", "minio", "mssql", "mysql", "oracle", "postgres", "spanner"] },
+    { name = "pytest-databases", extra = ["bigquery", "cockroachdb", "minio", "mssql", "mysql", "oracle", "postgres", "spanner"] },
     { name = "pytest-lazy-fixtures" },
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures" },
@@ -265,7 +265,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23.8" },
     { name = "pytest-click" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
-    { name = "pytest-databases", extras = ["postgres", "oracle", "cockroachdb", "mssql", "bigquery", "spanner", "mariadb", "mysql", "minio"] },
+    { name = "pytest-databases", extras = ["postgres", "oracle", "cockroachdb", "mssql", "bigquery", "spanner", "mysql", "minio"] },
     { name = "pytest-lazy-fixtures", specifier = ">=1.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "pytest-rerunfailures" },
@@ -382,7 +382,7 @@ test = [
     { name = "pytest-asyncio", specifier = ">=0.23.8" },
     { name = "pytest-click" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
-    { name = "pytest-databases", extras = ["postgres", "oracle", "cockroachdb", "mssql", "bigquery", "spanner", "mariadb", "mysql", "minio"] },
+    { name = "pytest-databases", extras = ["postgres", "oracle", "cockroachdb", "mssql", "bigquery", "spanner", "mysql", "minio"] },
     { name = "pytest-lazy-fixtures", specifier = ">=1.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "pytest-rerunfailures" },
@@ -2048,27 +2048,6 @@ wheels = [
 ]
 
 [[package]]
-name = "mariadb"
-version = "1.1.12"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "packaging" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/17/bb/4bbc803fbdafedbfba015f7cc1ab1e87a6d1de36725ba058c53e2f8a45ad/mariadb-1.1.12.tar.gz", hash = "sha256:50b02ff2c78b1b4f4628a054e3c8c7dd92972137727a5cc309a64c9ed20c878c", size = 85934 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/a6/5f150850d26bcecdca20e35ea4925da1e8c6370ab386c2fcab1bd930e9be/mariadb-1.1.12-cp310-cp310-win32.whl", hash = "sha256:8cc4068bdd14f4907746ec3bb37005682e47f84438cf56bdc6d901c2587f792a", size = 184292 },
-    { url = "https://files.pythonhosted.org/packages/46/b6/c81a8516cdc2a8f8c52c8aa3f72e0a10a5031158b050dfbbf87c46f3d8c2/mariadb-1.1.12-cp310-cp310-win_amd64.whl", hash = "sha256:69b284ed12e6ef8dda6314cb1ca9d20d53b8a32a07bed2924beb25488e7d9502", size = 201260 },
-    { url = "https://files.pythonhosted.org/packages/0a/14/e71871b0e60d1f72868bf206487f610825a078568593997c654e475ea96e/mariadb-1.1.12-cp311-cp311-win32.whl", hash = "sha256:e3ce7c47be58897822d07f119461b2aa6aa41a53f3505bec517b14fc6c3611a6", size = 184291 },
-    { url = "https://files.pythonhosted.org/packages/28/4c/3878b9a3fc1f3d5ecc4a43a295b1345142e1bbd3744690b58bdf6eabfc9b/mariadb-1.1.12-cp311-cp311-win_amd64.whl", hash = "sha256:5ae99af48ba92e3e2edad1dcda293f352c1b65e335007943b9def4cdde622fab", size = 201255 },
-    { url = "https://files.pythonhosted.org/packages/cc/d5/62a2de8ec78b6735346499b4d3a1c9ddc1e1449a4776f17fa65207a2dc82/mariadb-1.1.12-cp312-cp312-win32.whl", hash = "sha256:194045d2f59b2c9100dad210dbd8ba3008120f8a434e792dae15b711e5449022", size = 184393 },
-    { url = "https://files.pythonhosted.org/packages/2e/06/0dcad420b4afca7b3a9a96d75a4ddbb9a3e8e7787cbc5db499344dd13ff8/mariadb-1.1.12-cp312-cp312-win_amd64.whl", hash = "sha256:dd9d0ca112eb670dfa99a2fb7c4398bcc2a8c452dbf5507a8e4b5c4ae991bb2a", size = 201268 },
-    { url = "https://files.pythonhosted.org/packages/2b/1b/b6eca3870ac1b5577a10d3b49ba42ac263c2e5718c9224cc1c8463940422/mariadb-1.1.12-cp313-cp313-win32.whl", hash = "sha256:ba43c42130d41352f32a5786c339cc931d05472ef7640fa3764d428dc294b88e", size = 184338 },
-    { url = "https://files.pythonhosted.org/packages/fb/ff/c29a543ee1f9009755bc304138f61cd9b0ee1f14533e446513f84ccf143a/mariadb-1.1.12-cp313-cp313-win_amd64.whl", hash = "sha256:b69bc18418e72fcf359d17736cdc3f601a271203aff13ef7c57a415c8fd52ab0", size = 201272 },
-    { url = "https://files.pythonhosted.org/packages/2c/6f/db162712d4ca19c178d33b4ac7900b33b75d3d16697a7433177500395faa/mariadb-1.1.12-cp39-cp39-win32.whl", hash = "sha256:8b49fc1e8c38bf5a779d46f8cea61c99660adb08d5d15cb7dbc7911a6439ffc2", size = 186813 },
-    { url = "https://files.pythonhosted.org/packages/a0/f2/2eb8ef9fc0a01b80094b014bd85a47f5bea376715f0071d61306679238c4/mariadb-1.1.12-cp39-cp39-win_amd64.whl", hash = "sha256:992064971e0ff4b4154b80b16589ec86237ce4bd33debe1be5212141c056858a", size = 203738 },
-]
-
-[[package]]
 name = "markdown-it-py"
 version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3331,9 +3310,6 @@ bigquery = [
 ]
 cockroachdb = [
     { name = "psycopg" },
-]
-mariadb = [
-    { name = "mariadb" },
 ]
 minio = [
     { name = "minio" },

@@ -1,4 +1,5 @@
 import contextlib
+from collections.abc import Generator
 
 import pytest
 from google.cloud import spanner  # pyright: ignore
@@ -20,12 +21,11 @@ pytest_plugins = [
     "pytest_databases.docker.cockroachdb",
     "pytest_databases.docker.mssql",
     "pytest_databases.docker.bigquery",
-    "pytest_databases.docker.mariadb",
 ]
 
 
 @pytest.fixture(scope="session")
-def monkeypatch_session():
+def monkeypatch_session() -> Generator[MonkeyPatch, None, None]:
     mpatch = MonkeyPatch()
     yield mpatch
     mpatch.undo()
