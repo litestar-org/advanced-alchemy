@@ -3292,16 +3292,15 @@ wheels = [
 
 [[package]]
 name = "pytest-databases"
-version = "0.12.1"
+version = "0.12.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docker" },
     { name = "filelock" },
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/14/77/d072a530e88ee6ec72d13bbfd243db190fb17a7729f37d78285bd07df431/pytest_databases-0.12.1.tar.gz", hash = "sha256:30fab281dd8c937697356ba3797dbe48120d42ab0f0c8d7ac17dcc0eefe808c2", size = 164668 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/bf/8d0f32d516e7620dee050828fb313164500094058243e5b4c0fd8a0a1fb9/pytest_databases-0.12.1-py3-none-any.whl", hash = "sha256:5b9782457e0b0a3a507cafdfc0a7bf683a0d71ac086a0f79f2e9c2fbe740f89f", size = 27261 },
+    { url = "https://files.pythonhosted.org/packages/e5/dd/79aa47e0866c61940d5c5f88296b8666c84c2a37057c36dad604ed29990c/pytest_databases-0.12.2-py3-none-any.whl", hash = "sha256:8b772c2c5e83bdf8c6fd21712a2873fb9a07db5e7d91662973e393ea2327b0fd", size = 27322 },
 ]
 
 [package.optional-dependencies]
