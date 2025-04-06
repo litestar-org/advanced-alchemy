@@ -21,8 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
-from sqlalchemy.orm import Session as SyncSession
+from sqlalchemy.orm import Mapped, Session, declarative_mixin, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
 
@@ -45,6 +44,8 @@ SQLAlchemyConfigT = TypeVar("SQLAlchemyConfigT", bound=Union[SQLAlchemyAsyncConf
 __all__ = ("SQLAlchemyStore", "StoreModelMixin")
 
 _POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
+
+__all__ = ("SQLAlchemyStore", "StoreModelMixin")
 
 
 @declarative_mixin
@@ -119,11 +120,11 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             yield session
 
     @contextmanager
-    def _get_sync_session(self) -> "Generator[SyncSession, None, None]":
+    def _get_sync_session(self) -> "Generator[Session, None, None]":
         if self._is_async:
             msg = "Store configured for asynchronous operation."
             raise ImproperlyConfiguredException(msg)
-        with cast("SyncSession", self._config.get_session()) as session:
+        with cast("Session", self._config.get_session()) as session:
             yield session
 
     @staticmethod
@@ -218,7 +219,8 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     text(f"""
                          insert into {self._model.__tablename__} (key, namespace, value, expires_at)
                          values (:key, :namespace, :value, :expires_at)
-                         on conflict (key, namespace) do update set value = :value, expires_at = :expires_at
+                         on conflict (key, namespace)
+                         do update set value = :value, expires_at = :expires_at
                          """),  # noqa: S608
                     {
                         "key": db_key,

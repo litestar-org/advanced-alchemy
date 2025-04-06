@@ -13,10 +13,8 @@ from sqlalchemy import (
     func,
     select,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
-from sqlalchemy.orm import Session as SyncSession
+from sqlalchemy.orm import Mapped, Session, declarative_mixin, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
 from advanced_alchemy.extensions.litestar.plugins.init import (
@@ -28,6 +26,7 @@ from advanced_alchemy.utils.time import get_utc_now
 
 if TYPE_CHECKING:
     from litestar.stores.base import Store
+    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql import Select
     from sqlalchemy.sql.elements import BooleanClauseList
 
@@ -96,7 +95,7 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
     def _select_session_obj(self, session_id: str) -> "Select[tuple[SessionModelMixin]]":
         return select(self._model).where(self._model.session_id == session_id)
 
-    def _update_session_expiry(self, session_obj: SessionModelMixin) -> None:
+    def _update_session_expiry(self, session_obj: "SessionModelMixin") -> None:
         session_obj.expires_at = get_utc_now() + datetime.timedelta(seconds=self.config.max_age)
 
     @abstractmethod
@@ -132,7 +131,7 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
 class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsyncConfig]):
     """Asynchronous SQLAlchemy backend."""
 
-    async def _get_session_obj(self, *, db_session: AsyncSession, session_id: str) -> Optional[SessionModelMixin]:
+    async def _get_session_obj(self, *, db_session: "AsyncSession", session_id: str) -> Optional[SessionModelMixin]:
         return (
             cast(
                 "ScalarResult[Optional[SessionModelMixin]]",
@@ -208,7 +207,7 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
 class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncConfig]):
     """Synchronous SQLAlchemy backend."""
 
-    def _get_session_obj(self, *, db_session: SyncSession, session_id: str) -> Optional[SessionModelMixin]:
+    def _get_session_obj(self, *, db_session: "Session", session_id: str) -> "Optional[SessionModelMixin]":
         return db_session.scalars(self._select_session_obj(session_id)).one_or_none()
 
     def _get_sync(self, session_id: str) -> Optional[bytes]:
