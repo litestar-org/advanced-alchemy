@@ -40,6 +40,7 @@ SessionModelT = TypeVar("SessionModelT", bound="SessionModelMixin")
 class SessionModelMixin(UUIDv7Base):
     """Mixin for session storage."""
 
+    __abstract__ = True
     __table_args__ = (UniqueConstraint("session_id", name="uix_session_id"),)
 
     session_id: Mapped[str] = mapped_column(String(length=255), nullable=False, index=True)
@@ -88,7 +89,6 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
             alchemy_config: An instance of `SQLAlchemyConfig`
             model: A mapped model subclassing `SessionModelMixin`
         """
-        super().__init__(config=config)
         self._model = model
         self._config = config
         self._alchemy = alchemy_config
@@ -111,12 +111,16 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
     def config(self) -> "ServerSideSessionConfig":
         return self._config
 
+    @config.setter
+    def config(self, value: "ServerSideSessionConfig") -> None:
+        self._config = value
+
     @property
     def alchemy(self) -> "SQLAlchemyConfigT":
         return self._alchemy
 
     @property
-    def _backend_class(self) -> "type[Union[SQLAlchemySyncSessionBackend, SQLAlchemyAsyncSessionBackend]]":  # type: ignore[override]
+    def _backend_class(self) -> "type[Union[SQLAlchemySyncSessionBackend, SQLAlchemyAsyncSessionBackend]]":
         """Return either `SQLAlchemyBackend` or `AsyncSQLAlchemyBackend`, depending on the engine type configured in the
         `SQLAlchemyPlugin`
         """

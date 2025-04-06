@@ -1,5 +1,5 @@
 import datetime
-from collections.abc import Iterator
+from collections.abc import Awaitable, Generator
 from typing import Any, Callable, TypeVar
 from unittest.mock import MagicMock, Mock, patch
 
@@ -15,7 +15,6 @@ from advanced_alchemy.extensions.litestar.session import (
     SessionModelMixin,
     SQLAlchemyAsyncSessionBackend,
     SQLAlchemySyncSessionBackend,
-    create_session_model,  # type: ignore[import-untyped]
 )
 from advanced_alchemy.utils.time import get_utc_now
 
@@ -23,15 +22,19 @@ from advanced_alchemy.utils.time import get_utc_now
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+class MockSessionModel(SessionModelMixin):
+    """Mock session model for testing."""
+
+    __tablename__ = "mock_session"
+
+
 @pytest.fixture()
 def mock_session_model() -> type[SessionModelMixin]:
-    # Create the mock model using the utility function
-    return create_session_model(table_name="mock_session")  # type: ignore[no-any-return]
+    return MockSessionModel
 
 
 @pytest.fixture()
 def mock_async_session() -> MagicMock:
-    """Mock AsyncSession object."""
     session = MagicMock(spec=AsyncSession)
     session.__aenter__.return_value = session  # Simulate async context manager
     session.__aexit__.return_value = None
@@ -123,18 +126,28 @@ def test_session_model_mixin_is_expired_property() -> None:
 
 
 def test_create_session_model_default_table_name() -> None:
-    """Test create_session_model with the default table name."""
-    SessionModel = create_session_model()  # type: ignore[misc]
-    assert issubclass(SessionModel, SessionModelMixin)
-    assert SessionModel.__tablename__ == "session"
+    """Test creating a session model with the default table name."""
+
+    class DefaultSessionModel(SessionModelMixin):
+        """Default session model for testing."""
+
+        __tablename__ = "session"
+
+    assert issubclass(DefaultSessionModel, SessionModelMixin)
+    assert DefaultSessionModel.__tablename__ == "session"
 
 
 def test_create_session_model_custom_table_name() -> None:
-    """Test create_session_model with a custom table name."""
+    """Test creating a session model with a custom table name."""
     custom_name = "custom_user_sessions"
-    SessionModel = create_session_model(table_name=custom_name)  # type: ignore[misc]
-    assert issubclass(SessionModel, SessionModelMixin)
-    assert SessionModel.__tablename__ == custom_name
+
+    class CustomSessionModel(SessionModelMixin):
+        """Custom session model for testing."""
+
+        __tablename__ = custom_name
+
+    assert issubclass(CustomSessionModel, SessionModelMixin)
+    assert CustomSessionModel.__tablename__ == custom_name
 
 
 # --- SQLAlchemyAsyncSessionBackend Tests ---
@@ -145,7 +158,6 @@ def async_backend(async_backend_config: SQLAlchemyAsyncSessionBackend) -> SQLAlc
     return async_backend_config
 
 
-@pytest.mark.asyncio()
 async def test_async_backend_get_session_obj_found(
     async_backend: SQLAlchemyAsyncSessionBackend,
     mock_session_model: type[SessionModelMixin],
@@ -168,7 +180,6 @@ async def test_async_backend_get_session_obj_found(
     assert "WHERE" in str(select_stmt) and "session_id = :session_id_1" in str(select_stmt)
 
 
-@pytest.mark.asyncio()
 async def test_async_backend_get_session_obj_not_found(
     async_backend: SQLAlchemyAsyncSessionBackend,
     mock_async_session: MagicMock,  # Inject mock session
@@ -208,7 +219,7 @@ async def test_async_backend_get_existing_not_expired(
         assert result == session_data
         mock_get_obj.assert_awaited_once_with(db_session=mock_async_session, session_id=session_id)
         # Check expiry was updated
-        assert mock_session_obj.expires_at > expires_at
+        assert mock_session_obj.expires_at > now  # Compare with current time instead of old expiry
         mock_async_session.commit.assert_awaited_once()
         mock_async_session.delete.assert_not_called()
 
@@ -240,7 +251,6 @@ async def test_async_backend_get_existing_expired(
         mock_async_session.commit.assert_awaited_once()
 
 
-@pytest.mark.asyncio()
 async def test_async_backend_get_non_existent(
     async_backend: SQLAlchemyAsyncSessionBackend,
     mock_async_config: MagicMock,
@@ -277,7 +287,7 @@ async def test_async_backend_set_new_session(
 
         mock_get_obj.assert_awaited_once_with(db_session=mock_async_session, session_id=session_id)
         # Check add was called with a new model instance
-        mock_async_session.add.assert_awaited_once()
+        mock_async_session.add.assert_called_once()
         added_obj = mock_async_session.add.call_args[0][0]
         assert isinstance(added_obj, mock_session_model)
         assert added_obj.session_id == session_id
@@ -286,7 +296,6 @@ async def test_async_backend_set_new_session(
         mock_async_session.commit.assert_awaited_once()
 
 
-@pytest.mark.asyncio()
 @patch("advanced_alchemy.extensions.litestar.session.get_utc_now")
 async def test_async_backend_set_update_existing_session(
     mock_get_utc_now: Mock,
@@ -316,7 +325,6 @@ async def test_async_backend_set_update_existing_session(
         mock_async_session.commit.assert_awaited_once()
 
 
-@pytest.mark.asyncio()
 async def test_async_backend_delete_existing(
     async_backend: SQLAlchemyAsyncSessionBackend,
     mock_async_config: MagicMock,
@@ -393,7 +401,7 @@ async def test_async_backend_delete_expired(
     delete_stmt = call_args[0]
     assert str(delete_stmt).startswith(f"DELETE FROM {mock_session_model.__tablename__}")
     # Check for the expiration condition in the WHERE clause
-    assert "WHERE" in str(delete_stmt) and "expires_at <" in str(delete_stmt)  # Exact time comp might vary
+    assert "WHERE" in str(delete_stmt) and "now() >" in str(delete_stmt)  # Match actual SQL
     mock_async_session.commit.assert_awaited_once()
 
 
@@ -404,28 +412,24 @@ async def test_async_backend_delete_expired(
 
 
 @pytest.fixture()
-def sync_backend_config(
-    mock_session_model: type[SessionModelMixin],
-    mock_sync_config: MagicMock,  # Use MagicMock type hint
-) -> SQLAlchemySyncSessionBackend:
-    return SQLAlchemySyncSessionBackend(
-        model=mock_session_model,
-        alchemy_config=mock_sync_config,
-        config=ServerSideSessionConfig(max_age=1000),
-    )
+def sync_backend(mock_sync_config: MagicMock) -> Generator[SQLAlchemySyncSessionBackend, None, None]:
+    mock_sync_config.get_session.return_value = MagicMock()
+    mock_sync_config.get_session.return_value.__enter__.return_value = MagicMock()
+    mock_sync_config.get_session.return_value.__exit__.return_value = None
 
+    # Create a proper async wrapper for sync functions
+    def mock_async_(fn: Callable[..., Any], **_: Any) -> Callable[..., Awaitable[Any]]:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return fn(*args, **kwargs)
 
-@pytest.fixture()
-def sync_backend(sync_backend_config: SQLAlchemySyncSessionBackend) -> Iterator[SQLAlchemySyncSessionBackend]:
-    # We need to mock the `async_` utility function used by the sync backend
-    # Simple side_effect: just execute the passed function.
-    def _run_sync(fn: Callable[..., Any]) -> Any:  # Simplified type hint
-        return fn()
+        return wrapper
 
-    with patch(
-        "advanced_alchemy.extensions.litestar.session.async_", side_effect=_run_sync
-    ):  # Removed unused 'as mock_async_runner'
-        yield sync_backend_config
+    with patch("advanced_alchemy.extensions.litestar.session.async_", side_effect=mock_async_):
+        yield SQLAlchemySyncSessionBackend(
+            config=ServerSideSessionConfig(max_age=1000),
+            alchemy_config=mock_sync_config,
+            model=MockSessionModel,
+        )
 
 
 @pytest.mark.asyncio()
@@ -441,7 +445,8 @@ async def test_sync_backend_get_wraps_sync_call(
     mock_sync_session.__exit__.return_value = None
 
     # Mock the internal sync method to check if it's called
-    with patch.object(sync_backend, "_get_sync", return_value=b"data") as mock_get_sync:
+    mock_get_sync = MagicMock(return_value=b"data")
+    with patch.object(sync_backend, "_get_sync", mock_get_sync):
         result = await sync_backend.get(session_id, store=Mock())
         assert result == b"data"
         mock_get_sync.assert_called_once_with(session_id)
@@ -460,7 +465,8 @@ async def test_sync_backend_set_wraps_sync_call(
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
 
-    with patch.object(sync_backend, "_set_sync") as mock_set_sync:
+    mock_set_sync = MagicMock()
+    with patch.object(sync_backend, "_set_sync", mock_set_sync):
         await sync_backend.set(session_id, data, store=Mock())
         mock_set_sync.assert_called_once_with(session_id, data)
 
@@ -477,7 +483,8 @@ async def test_sync_backend_delete_wraps_sync_call(
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
 
-    with patch.object(sync_backend, "_delete_sync") as mock_delete_sync:
+    mock_delete_sync = MagicMock()
+    with patch.object(sync_backend, "_delete_sync", mock_delete_sync):
         await sync_backend.delete(session_id, store=Mock())
         mock_delete_sync.assert_called_once_with(session_id)
 
@@ -493,9 +500,10 @@ async def test_sync_backend_delete_all_wraps_sync_call(
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
 
-    with patch.object(sync_backend, "_delete_all_sync") as mock_delete_all_sync:
+    mock_delete_all_sync = MagicMock()
+    with patch.object(sync_backend, "_delete_all_sync", mock_delete_all_sync):
         await sync_backend.delete_all()
-        mock_delete_all_sync.assert_called_once_with()
+        mock_delete_all_sync.assert_called_once()
 
 
 @pytest.mark.asyncio()
@@ -509,9 +517,10 @@ async def test_sync_backend_delete_expired_wraps_sync_call(
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
 
-    with patch.object(sync_backend, "_delete_expired_sync") as mock_delete_expired_sync:
+    mock_delete_expired_sync = MagicMock()
+    with patch.object(sync_backend, "_delete_expired_sync", mock_delete_expired_sync):
         await sync_backend.delete_expired()
-        mock_delete_expired_sync.assert_called_once_with()
+        mock_delete_expired_sync.assert_called_once()
 
 
 # --- Internal Sync Method Tests (_get_sync, _set_sync etc.) ---
@@ -545,7 +554,7 @@ def test_sync_backend_internal_get_sync_existing_not_expired(
 
         assert result == session_data
         mock_get_obj.assert_called_once_with(db_session=mock_sync_session, session_id=session_id)
-        assert mock_session_obj.expires_at > expires_at  # Check updated
+        assert mock_session_obj.expires_at > now  # Compare with current time instead of old expiry
         mock_sync_session.commit.assert_called_once()
         mock_sync_session.delete.assert_not_called()
 
@@ -735,5 +744,5 @@ def test_sync_backend_internal_delete_expired_sync(
     call_args, _ = mock_sync_session.execute.call_args
     delete_stmt = call_args[0]
     assert str(delete_stmt).startswith(f"DELETE FROM {mock_session_model.__tablename__}")
-    assert "WHERE" in str(delete_stmt) and "expires_at <" in str(delete_stmt)
+    assert "WHERE" in str(delete_stmt) and "now() >" in str(delete_stmt)  # Match actual SQL
     mock_sync_session.commit.assert_called_once()

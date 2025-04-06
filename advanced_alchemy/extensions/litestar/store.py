@@ -51,6 +51,7 @@ _POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 class StoreModelMixin(UUIDv7Base):
     """Mixin for session storage."""
 
+    __abstract__ = True
     __table_args__ = (
         UniqueConstraint("key", "namespace", name="uix_store_key_namespace"),
         Index("ix_store_key_namespace", "key", "namespace"),
