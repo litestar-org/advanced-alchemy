@@ -3,6 +3,48 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.1.0
+    :date: 2025-04-06
+
+    .. change:: add stamp command
+        :type: feature
+        :pr: 428
+
+        Adds the Alembic `stamp` command to the CLI that will stamp the current database state into the migrations directory.
+
+    .. change:: adds an `ExistsFilter` and `NotExists` filter
+        :type: feature
+        :pr: 336
+        :issue: 331
+
+        Implements new `Exists` and `NotExists` filters to more easily apply this type of logic to queries.
+
+        Closes #331
+
+    .. change:: fully migrate to `pytest-databases`
+        :type: feature
+        :pr: 430
+
+        Migrates all database fixtures to `pytest-database`
+
+    .. change:: file object data type
+        :type: feature
+        :pr: 291
+        :issue: 24
+
+        Implement a file data type that leverages `obstore` or `fsspec`.  Supports any supported FSSpec or Obstore backend it including `sftp`, `gcs`, `s3`, `local`, and more.
+
+    .. change:: Implements a `MultiFilter` type for complex searches
+        :type: feature
+        :pr: 311
+
+        This PR implements a "Multi-Filter" Filter type.
+
+        It allows:
+        - Create a collection of filters from an input
+        - Allows filters to be groups with and/or logic
+
+
 .. changelog:: 1.0.2
     :date: 2025-04-01
 

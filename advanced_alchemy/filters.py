@@ -8,19 +8,6 @@ Features:
     Type-safe filter construction, datetime range filtering, collection-based filtering,
     pagination support, search operations, and customizable ordering.
 
-Example:
-    Basic usage with a datetime filter::
-
-        import datetime
-        from advanced_alchemy.filters import BeforeAfter
-
-        filter = BeforeAfter(
-            field_name="created_at",
-            before=datetime.datetime.now(),
-            after=datetime.datetime(2023, 1, 1),
-        )
-        statement = filter.append_to_statement(select(Model), Model)
-
 Note:
     All filter classes implement the :class:`StatementFilter` ABC, ensuring consistent
     interface across different filter types.
@@ -592,22 +579,6 @@ class ComparisonFilter(StatementFilter):
 
     This filter applies basic comparison operators (=, !=, >, >=, <, <=) to a field.
     It provides a generic way to perform common comparison operations.
-
-    Attributes:
-    ----------~
-    field_name : str
-        Name of the model attribute to filter on
-    operator : str
-        Comparison operator to use ('eq', 'ne', 'gt', 'ge', 'lt', 'le')
-    value : Any
-        Value to compare against
-
-    Examples:
-    --------~
-    >>> filter = SimpleFilter(
-    ...     field_name="age", operator="gt", value=18
-    ... )
-    >>> statement = filter.append_to_statement(select(User), User)
     """
 
     field_name: str
@@ -953,17 +924,10 @@ class FilterGroup(StatementFilter):
 
     This class combines multiple filters with a logical operator (AND/OR).
     It provides a way to create complex nested filter conditions.
-
-    Attributes:
-    ----------~
-    logical_operator : Callable[..., ColumnElement[bool]]
-        The SQLAlchemy operator to combine filters with (and_, or_)
-    filters : list[StatementFilter]
-        List of filters to apply
     """
 
     logical_operator: Callable[..., ColumnElement[bool]]
-    """Logical operator to combine the filters (e.g., and_, or_)."""
+    """Logical operator to combine the filters."""
     filters: list[StatementFilter]
     """List of filters to combine."""
 
@@ -1029,13 +993,6 @@ class MultiFilter(StatementFilter):
     This filter provides a way to construct complex filter trees from
     a structured dictionary input, supporting nested logical groups and
     various filter types.
-
-    Attributes:
-    ----------~
-    filters : dict[str, Any]
-        Dictionary structure representing the filters, where keys can be
-        logical operators ("and_", "or_") and values are lists of filter
-        definitions.
     """
 
     filters: dict[str, Any]
