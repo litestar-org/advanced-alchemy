@@ -30,9 +30,9 @@ def test_18c_json_constraint_generation(oracle18c_engine: Engine) -> None:
 
 
 @pytest.mark.xdist_group("oracle23")
-def test_23c_json_constraint_generation(oracle23c_engine: Engine) -> None:
-    ddl = str(CreateTable(UUIDEventLog.__table__).compile(oracle23c_engine, dialect=oracle.dialect()))  # type: ignore
+def test_23c_json_constraint_generation(oracle23ai_engine: Engine) -> None:
+    ddl = str(CreateTable(UUIDEventLog.__table__).compile(oracle23ai_engine, dialect=oracle.dialect()))  # type: ignore
     assert "BLOB" in ddl.upper()
     assert "JSON" in ddl.upper()
-    with oracle23c_engine.begin() as conn:
+    with oracle23ai_engine.begin() as conn:
         UUIDEventLog.metadata.create_all(conn)

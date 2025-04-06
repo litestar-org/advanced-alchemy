@@ -142,7 +142,7 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases",
+  "pytest-databases[postgres,oracle,cockroachdb,mssql,bigquery,spanner,mysql,minio]",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
@@ -356,6 +356,10 @@ classmethod-decorators = [
   "TC",
   "TRY",
   "SLF001",
+  "DOC201",
+  "ANN",
+  "RUF029",
+  "DOC",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
