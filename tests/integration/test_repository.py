@@ -454,7 +454,7 @@ def first_secret_id(raw_secrets: RawRecordData) -> Any:
             ],
         ),
         pytest.param(
-            "oracle23c_engine",
+            "oracle23ai_engine",
             marks=[
                 pytest.mark.oracledb_sync,
                 pytest.mark.integration,
@@ -751,7 +751,7 @@ def session(
             ],
         ),
         pytest.param(
-            "oracle23c_async_engine",
+            "oracle23ai_async_engine",
             marks=[
                 pytest.mark.oracledb_async,
                 pytest.mark.integration,
