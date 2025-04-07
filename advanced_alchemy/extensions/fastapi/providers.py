@@ -7,7 +7,7 @@ similar to the Litestar extension, but tailored for FastAPI.
 
 import datetime
 import inspect
-from typing import Any, Callable, Literal, NamedTuple, Optional, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, NamedTuple, Optional, TypeVar, Union, cast
 
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
@@ -22,9 +22,25 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.service import (
+    Empty,
+    EmptyType,
+    ErrorMessages,
+    LoadSpec,
+    ModelT,
+    SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncRepositoryService,
+)
 from advanced_alchemy.utils.singleton import SingletonMeta
 
-# Type aliases
+if TYPE_CHECKING:
+    from sqlalchemy import Select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Session
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+
+T = TypeVar("T")
 DTorNone = Optional[datetime.datetime]
 StringOrNone = Optional[str]
 UuidOrNone = Optional[str]  # FastAPI doesn't automatically parse UUIDs from query params like Litestar
@@ -35,6 +51,10 @@ SortOrderOrNone = Optional[SortOrder]
 FilterConfigValues = Union[
     bool, str, list[str], type[Union[str, int]]
 ]  # Simplified compared to Litestar's UUID/int flexibility for now
+AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any], covariant=True)
+SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any], covariant=True)
+HashableValue = Union[str, int, float, bool, None]
+HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
 
 
 class FieldNameType(NamedTuple):
@@ -47,12 +67,6 @@ class FieldNameType(NamedTuple):
     """Name of the field to filter on."""
     type_hint: type[Any] = str
     """Type of the filter value. Defaults to str."""
-
-
-HashableValue = Union[str, int, float, bool, None]
-HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
-
-T = TypeVar("T")
 
 
 class DependencyDefaults:
@@ -114,6 +128,144 @@ class FilterConfig(TypedDict):
     """Fields that support not-in collection filters. Can be a single field or a set of fields with type information."""
     in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
     """Fields that support in-collection filters. Can be a single field or a set of fields with type information."""
+
+
+@overload
+def create_service_provider(
+    service_class: type["AsyncServiceT_co"],
+    /,
+    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    config: "Optional[SQLAlchemyAsyncConfig]" = None,
+    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
+    load: "Optional[LoadSpec]" = None,
+    execution_options: "Optional[dict[str, Any]]" = None,
+    uniquify: Optional[bool] = None,
+    count_with_window_function: Optional[bool] = None,
+) -> Callable[..., AsyncGenerator[AsyncServiceT_co, None]]: ...
+
+
+@overload
+def create_service_provider(
+    service_class: type["SyncServiceT_co"],
+    /,
+    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    config: "Optional[SQLAlchemySyncConfig]" = None,
+    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
+    load: "Optional[LoadSpec]" = None,
+    execution_options: "Optional[dict[str, Any]]" = None,
+    uniquify: Optional[bool] = None,
+    count_with_window_function: Optional[bool] = None,
+) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
+
+
+def create_service_provider(
+    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
+    /,
+    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
+    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
+    load: "Optional[LoadSpec]" = None,
+    execution_options: "Optional[dict[str, Any]]" = None,
+    uniquify: Optional[bool] = None,
+    count_with_window_function: Optional[bool] = None,
+) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
+    """Create a dependency provider for a service.
+
+    Returns:
+        A dependency provider for the service.
+    """
+    if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
+
+        async def provide_async_service(
+            db_session: "Optional[AsyncSession]" = None,
+        ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
+            async with service_class.new(  # type: ignore[union-attr,unused-ignore]
+                session=db_session,  # type: ignore[arg-type, unused-ignore]
+                statement=statement,
+                config=cast("Optional[SQLAlchemyAsyncConfig]", config),  # type: ignore[arg-type]
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                count_with_window_function=count_with_window_function,
+            ) as service:
+                yield service
+
+        return provide_async_service
+
+    def provide_sync_service(
+        db_session: "Optional[Session]" = None,
+    ) -> "Generator[SyncServiceT_co, None, None]":
+        with service_class.new(
+            session=db_session,  # type: ignore[arg-type, unused-ignore]
+            statement=statement,
+            config=cast("Optional[SQLAlchemySyncConfig]", config),
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            count_with_window_function=count_with_window_function,
+        ) as service:
+            yield service
+
+    return provide_sync_service
+
+
+def create_filter_dependencies(
+    config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
+) -> dict[str, Any]:
+    """Create FastAPI dependency providers for filters based on config.
+
+    Returns a dictionary containing a single key 'filters' mapped to a
+    FastAPI `Depends` object wrapping the dynamically generated aggregate
+    filter function. Uses caching to avoid recreating the function for the
+    same configuration.
+
+    Args:
+        config: Configuration dictionary with desired settings.
+        dep_defaults: Dependency defaults instance.
+
+    Returns:
+        A dictionary e.g., {"filters": Depends(dynamic_aggregate_func)}
+        or an empty dict if no filters are configured.
+    """
+    # Check if any filters are actually requested in the config
+    filter_keys = {
+        "id_filter",
+        "created_at",
+        "updated_at",
+        "pagination_type",
+        "search",
+        "sort_field",
+        "not_in_fields",
+        "in_fields",
+    }
+
+    has_filters = False
+    for key in filter_keys:
+        value = config.get(key)
+        if value is not None and value is not False and value != []:
+            has_filters = True
+            break
+
+    if not has_filters:
+        return {}
+
+    # Calculate cache key using hashable version of config
+    cache_key = hash(_make_hashable(config))
+
+    # Check cache first
+    cached_deps = dep_cache.get_dependencies(cache_key)
+    if cached_deps is not None:
+        return cached_deps
+
+    # Create new dependencies if not in cache
+    aggregate_func = _create_filter_aggregate_function_fastapi(config, dep_defaults)
+    dependencies = {dep_defaults.FILTERS_DEPENDENCY_KEY: Depends(aggregate_func)}
+
+    # Cache the result
+    dep_cache.add_dependencies(cache_key, dependencies)
+    return dependencies
 
 
 def _make_hashable(value: Any) -> HashableType:
@@ -486,60 +638,3 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
     )
 
     return aggregate_filter_function
-
-
-def create_filter_dependencies(
-    config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
-) -> dict[str, Any]:
-    """Create FastAPI dependency providers for filters based on config.
-
-    Returns a dictionary containing a single key 'filters' mapped to a
-    FastAPI `Depends` object wrapping the dynamically generated aggregate
-    filter function. Uses caching to avoid recreating the function for the
-    same configuration.
-
-    Args:
-        config: Configuration dictionary with desired settings.
-        dep_defaults: Dependency defaults instance.
-
-    Returns:
-        A dictionary e.g., {"filters": Depends(dynamic_aggregate_func)}
-        or an empty dict if no filters are configured.
-    """
-    # Check if any filters are actually requested in the config
-    filter_keys = {
-        "id_filter",
-        "created_at",
-        "updated_at",
-        "pagination_type",
-        "search",
-        "sort_field",
-        "not_in_fields",
-        "in_fields",
-    }
-
-    has_filters = False
-    for key in filter_keys:
-        value = config.get(key)
-        if value is not None and value is not False and value != []:
-            has_filters = True
-            break
-
-    if not has_filters:
-        return {}
-
-    # Calculate cache key using hashable version of config
-    cache_key = hash(_make_hashable(config))
-
-    # Check cache first
-    cached_deps = dep_cache.get_dependencies(cache_key)
-    if cached_deps is not None:
-        return cached_deps
-
-    # Create new dependencies if not in cache
-    aggregate_func = _create_filter_aggregate_function_fastapi(config, dep_defaults)
-    dependencies = {dep_defaults.FILTERS_DEPENDENCY_KEY: Depends(aggregate_func)}
-
-    # Cache the result
-    dep_cache.add_dependencies(cache_key, dependencies)
-    return dependencies
