@@ -3,6 +3,16 @@
 0.x Changelog
 =============
 
+.. changelog:: 1.1.1
+    :date: 2025-04-07
+
+    .. change:: fsspec is not installed
+        :type: bugfix
+        :pr: 432
+
+        Corrects an import issue when `fsspec` and `obstore` are both missing.
+
+
 .. changelog:: 1.1.0
     :date: 2025-04-06
 
