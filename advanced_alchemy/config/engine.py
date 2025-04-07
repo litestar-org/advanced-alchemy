@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Literal, Union
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Union
 
 from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.utils.dataclass import Empty
@@ -68,7 +68,7 @@ class EngineConfig:
     json_serializer: "Callable[[Any], str]" = encode_json
     """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON.
     By default, Litestar's :attr:`encode_json() <.serialization.encode_json>` is used."""
-    label_length: "Union[int, None, EmptyType]" = Empty
+    label_length: "Optional[Union[int, EmptyType]]" = Empty
     """Optional integer value which limits the size of dynamically generated column labels to that many characters. If
     less than 6, labels are generated as “_(counter)”. If ``None``, the value of ``dialect.max_identifier_length``,
     which may be affected via the
@@ -79,7 +79,7 @@ class EngineConfig:
     logging_name: "Union[str, EmptyType]" = Empty
     """String identifier which will be used within the “name” field of logging records generated within the
     “sqlalchemy.engine” logger. Defaults to a hexstring of the object`s id."""
-    max_identifier_length: "Union[int, None, EmptyType]" = Empty
+    max_identifier_length: "Optional[Union[int, EmptyType]]" = Empty
     """Override the max_identifier_length determined by the dialect. if ``None`` or ``0``, has no effect. This is the
     database`s configured maximum number of characters that may be used in a SQL identifier such as a table name, column
     name, or label name. All dialects determine this value automatically, however in the case of a new database version
@@ -88,25 +88,25 @@ class EngineConfig:
     """The number of connections to allow in connection pool “overflow”, that is connections that can be opened above
     and beyond the pool_size setting, which defaults to five. This is only used with
     :class:`QueuePool <sqlalchemy.pool.QueuePool>`."""
-    module: "Union[Any, None, EmptyType]" = Empty
+    module: "Optional[Union[Any, EmptyType]]" = Empty
     """Reference to a Python module object (the module itself, not its string name). Specifies an alternate DBAPI module
     to be used by the engine`s dialect. Each sub-dialect references a specific DBAPI which will be imported before first
     connect. This parameter causes the import to be bypassed, and the given module to be used instead. Can be used for
     testing of DBAPIs as well as to inject “mock” DBAPI implementations into the
     :class:`Engine <sqlalchemy.engine.Engine>`."""
-    paramstyle: "Union[_ParamStyle, None, EmptyType]" = Empty
+    paramstyle: "Optional[Union[_ParamStyle, EmptyType]]" = Empty
     """The paramstyle to use when rendering bound parameters. This style defaults to the one recommended by the DBAPI
     itself, which is retrieved from the ``.paramstyle`` attribute of the DBAPI. However, most DBAPIs accept more than
     one paramstyle, and in particular it may be desirable to change a “named” paramstyle into a “positional” one, or
     vice versa. When this attribute is passed, it should be one of the values "qmark", "numeric", "named", "format" or
     "pyformat", and should correspond to a parameter style known to be supported by the DBAPI in use."""
-    pool: "Union[Pool, None, EmptyType]" = Empty
+    pool: "Optional[Union[Pool, EmptyType]]" = Empty
     """An already-constructed instance of :class:`Pool <sqlalchemy.pool.Pool>`, such as a
     :class:`QueuePool <sqlalchemy.pool.QueuePool>` instance. If non-None, this pool will be used directly as the
     underlying connection pool for the engine, bypassing whatever connection parameters are present in the URL argument.
     For information on constructing connection pools manually, see
     `Connection Pooling <https://docs.sqlalchemy.org/en/20/core/pooling.html>`_."""
-    poolclass: "Union[type[Pool], None, EmptyType]" = Empty
+    poolclass: "Optional[Union[type[Pool], EmptyType]]" = Empty
     """A :class:`Pool <sqlalchemy.pool.Pool>` subclass, which will be used to create a connection pool instance using
     the connection parameters given in the URL. Note this differs from pool in that you don`t actually instantiate the
     pool in this case, you just indicate what type of pool to be used."""

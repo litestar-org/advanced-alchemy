@@ -18,6 +18,7 @@ from tests.fixtures.bigint.models import (
     BigIntAuthor,
     BigIntBook,
     BigIntEventLog,
+    BigIntFileDocument,
     BigIntItem,
     BigIntModelWithFetchedValue,
     BigIntRule,
@@ -215,3 +216,27 @@ class SlugBookSyncMockRepository(SQLAlchemySyncMockSlugRepository[BigIntSlugBook
     """Book repository."""
 
     model_type = BigIntSlugBook
+
+
+class FileDocumentAsyncRepository(SQLAlchemyAsyncRepository[BigIntFileDocument]):
+    """FileDocument repository."""
+
+    model_type = BigIntFileDocument
+
+
+class FileDocumentSyncRepository(SQLAlchemySyncRepository[BigIntFileDocument]):
+    """FileDocument repository."""
+
+    model_type = BigIntFileDocument
+
+
+class FileDocumentAsyncMockRepository(SQLAlchemyAsyncMockRepository[BigIntFileDocument]):
+    """FileDocument repository."""
+
+    model_type = BigIntFileDocument
+
+
+class FileDocumentSyncMockRepository(SQLAlchemySyncMockRepository[BigIntFileDocument]):
+    """FileDocument repository."""
+
+    model_type = BigIntFileDocument

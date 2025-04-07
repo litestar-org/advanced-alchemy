@@ -141,18 +141,18 @@ def test_inject_sync_session() -> None:
         assert call_1_session is call_2_session
 
 
-def test_inject_async_session() -> None:
+async def test_inject_async_session() -> None:
     app = FastAPI()
     mock = MagicMock()
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
     alchemy = AdvancedAlchemy(config=config, app=app)
-    SessionDependency = Annotated[AsyncSession, Depends(alchemy.get_async_session)]
+    SessionDependency = Annotated[AsyncSession, Depends(alchemy.provide_session())]
 
-    def some_dependency(session: SessionDependency) -> None:  # pyright: ignore[reportInvalidTypeForm,reportMissingTypeArgument,reportUnknownParameterType]
+    async def some_dependency(session: SessionDependency) -> None:  # pyright: ignore[reportInvalidTypeForm,reportMissingTypeArgument,reportUnknownParameterType]
         mock(session)
 
     @app.get("/")
-    def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:  # pyright: ignore[reportInvalidTypeForm,reportMissingTypeArgument,reportUnknownParameterType,reportUnknownArgumentType]
+    async def handler(session: SessionDependency, something: Annotated[None, Depends(some_dependency)]) -> None:  # pyright: ignore[reportInvalidTypeForm,reportMissingTypeArgument,reportUnknownParameterType,reportUnknownArgumentType]
         mock(session)
 
     with TestClient(app=app) as client:

@@ -15,13 +15,23 @@ from advanced_alchemy.extensions.litestar.plugins import _slots_base
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
+    ComparisonFilter,
+    ExistsFilter,
+    FilterGroup,
+    FilterMap,
     FilterTypes,
+    InAnyFilter,
     LimitOffset,
+    LogicalOperatorMap,
+    MultiFilter,
+    NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
+    StatementFilter,
+    StatementTypeT,
 )
 from advanced_alchemy.service import ModelDictListT, ModelDictT, ModelDTOT, ModelOrRowMappingT, ModelT, OffsetPagination
 
@@ -45,6 +55,7 @@ signature_namespace_values: dict[str, Any] = {
     "NotInSearchFilter": NotInSearchFilter,
     "FilterTypes": FilterTypes,
     "OffsetPagination": OffsetPagination,
+    "ExistsFilter": ExistsFilter,
     "Parameter": Parameter,
     "Dependency": Dependency,
     "DTOData": DTOData,
@@ -58,6 +69,15 @@ signature_namespace_values: dict[str, Any] = {
     "scoped_session": scoped_session,
     "AsyncSession": AsyncSession,
     "async_scoped_session": async_scoped_session,
+    "FilterGroup": FilterGroup,
+    "NotExistsFilter": NotExistsFilter,
+    "MultiFilter": MultiFilter,
+    "ComparisonFilter": ComparisonFilter,
+    "StatementTypeT": StatementTypeT,
+    "StatementFilter": StatementFilter,
+    "LogicalOperatorMap": LogicalOperatorMap,
+    "InAnyFilter": InAnyFilter,
+    "FilterMap": FilterMap,
 }
 
 

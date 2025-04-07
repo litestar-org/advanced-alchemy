@@ -57,9 +57,6 @@ def default_handler_maker(
         Args:
             message: ASGI-``Message``
             scope: An ASGI-``Scope``
-
-        Returns:
-            None
         """
         session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, session_scope_key))
         if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
@@ -86,7 +83,7 @@ def autocommit_handler_maker(
         session_scope_key: The key to use within the application state
 
     Raises:
-        ValueError: If extra rollback statuses and commit statuses share any status codes
+        ValueError: If the extra commit statuses and extra rollback statuses share any status codes
 
     Returns:
         The handler callable
@@ -244,11 +241,16 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             A session instance.
         """
+        # Import locally to avoid potential circular dependency issues at module level
+        from advanced_alchemy._listeners import set_async_context
+
         session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, self.session_scope_key))
         if session is None:
             session_maker = cast("Callable[[], AsyncSession]", state[self.session_maker_app_state_key])
             session = session_maker()
             set_aa_scope_state(scope, self.session_scope_key, session)
+
+        set_async_context(True)  # Set context before yielding
         return session
 
     @property
@@ -273,7 +275,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 console.print(f"[bold red] * Could not create target metadata.  Reason: {exc}")
 
     def create_app_state_items(self) -> dict[str, Any]:
-        """Key/value pairs to be stored in application state."""
+        """Key/value pairs to be stored in application state.
+
+        Returns:
+            A dictionary of key/value pairs to be stored in application state.
+        """
         return {
             self.engine_app_state_key: self.get_engine(),
             self.session_maker_app_state_key: self.create_session_maker(),
