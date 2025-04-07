@@ -7,7 +7,7 @@ similar to the Litestar extension, but tailored for FastAPI.
 
 import datetime
 import inspect
-from typing import Any, Callable, Literal, NamedTuple, Optional, Type, TypeVar, Union, cast
+from typing import Any, Callable, Literal, NamedTuple, Optional, TypeVar, Union, cast
 
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
@@ -141,7 +141,7 @@ def _make_hashable(value: Any) -> HashableType:
     if isinstance(value, (list, set)):
         hashable_items = [_make_hashable(item) for item in value]  # pyright: ignore
         filtered_items = [item for item in hashable_items if item is not None]  # pyright: ignore
-        return tuple(sorted(filtered_items, key=lambda x: str(x)))  # noqa: PLW0108 # pyright: ignore
+        return tuple(sorted(filtered_items, key=lambda x: str(x)))  # pyright: ignore
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
     return str(value)
@@ -399,13 +399,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
         # Handle both string items and FieldNameType objects for backward compatibility
         for field_item in not_in_fields:
             # Handle both string and FieldNameType
-            if isinstance(field_item, str):
-                field_name = field_item
-            else:  # FieldNameType
-                field_name = field_item.name
-                field_type = (
-                    field_item.type_hint
-                )  # Used for better type hinting in documentation, but not used in this version
+            field_name = field_item.name if isinstance(field_item, FieldNameType) else field_item
 
             def create_not_in_filter_provider(
                 local_field_name: str,
@@ -421,7 +415,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
 
                 return provide_not_in_filter
 
-            provider = create_not_in_filter_provider(field_name)
+            provider = create_not_in_filter_provider(cast("str", field_name))
             param_name = f"{field_name}_not_in"
             params.append(
                 inspect.Parameter(
@@ -438,13 +432,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
         # Handle both string items and FieldNameType objects for backward compatibility
         for field_item in in_fields:
             # Handle both string and FieldNameType
-            if isinstance(field_item, str):
-                field_name = field_item
-            else:  # FieldNameType
-                field_name = field_item.name
-                field_type = (
-                    field_item.type_hint
-                )  # Used for better type hinting in documentation, but not used in this version
+            field_name = field_item.name if isinstance(field_item, FieldNameType) else field_item
 
             def create_in_filter_provider(local_field_name: str) -> Callable[..., Optional[CollectionFilter[Any]]]:
                 def provide_in_filter(
@@ -458,7 +446,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
 
                 return provide_in_filter
 
-            provider = create_in_filter_provider(field_name)
+            provider = create_in_filter_provider(cast("str", field_name))
             param_name = f"{field_name}_in"
             params.append(
                 inspect.Parameter(
@@ -477,7 +465,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             if filter_value is None:
                 continue
             if isinstance(filter_value, list):
-                filters.extend(cast(list[FilterTypes], filter_value))
+                filters.extend(cast("list[FilterTypes]", filter_value))
             elif isinstance(filter_value, SearchFilter) and filter_value.value is None:  # type: ignore[misc]
                 continue  # Skip SearchFilter if value is None
             elif isinstance(filter_value, OrderBy) and filter_value.field_name is None:  # type: ignore[misc]

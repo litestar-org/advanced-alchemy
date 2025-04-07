@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, List, Union, cast
+from typing import Any, Union, cast
 from unittest.mock import patch
 
 from fastapi import Depends, FastAPI
@@ -288,7 +288,7 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     app = FastAPI()
 
     @app.get("/items")
-    async def get_items(filters: List[FilterTypes] = filters_dependency):
+    async def get_items(filters: list[FilterTypes] = filters_dependency) -> list[str]:
         # Return simple representation for verification
         return [type(f).__name__ for f in filters]
 
@@ -330,10 +330,6 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     # Check parameters for the /items endpoint
     path_item = schema.get("paths", {}).get("/items", {}).get("get", {})
     parameters = path_item.get("parameters", [])
-
-    # Debug print
-    print("\nOpenAPI Schema for /items:")
-    print("Parameters:", parameters)
 
     # Verify parameters from each configured filter type are present
     param_names = {p["name"] for p in parameters}
@@ -417,7 +413,7 @@ def test_custom_dependency_defaults_fastapi() -> None:
     app = FastAPI()
 
     @app.get("/custom")
-    async def get_custom(filters: List[FilterTypes] = filters_dependency):
+    async def get_custom(filters: list[FilterTypes] = filters_dependency) -> list[str]:
         return [type(f).__name__ for f in filters]
 
     client = TestClient(app)
@@ -461,17 +457,13 @@ def test_openapi_schema_comprehensive() -> None:
     app = FastAPI()
 
     @app.get("/complex")
-    async def get_complex(filters: List[FilterTypes] = filters_dependency):
+    async def get_complex(filters: list[FilterTypes] = filters_dependency) -> list[str]:
         return [type(f).__name__ for f in filters]
 
     client = TestClient(app)
     schema = client.get("/openapi.json").json()
     path_item = schema.get("paths", {}).get("/complex", {}).get("get", {})
     parameters = path_item.get("parameters", [])
-
-    # Print full schema for debugging
-    print("\nFull OpenAPI Schema for /complex:")
-    print(parameters)
 
     # 1. Test all parameter names are present
     param_names = {p["name"] for p in parameters}
@@ -593,13 +585,13 @@ def test_openapi_schema_edge_cases() -> None:
     app = FastAPI()
 
     @app.get("/minimal")
-    async def get_minimal(filters: List[FilterTypes] = filters_dependency):
+    async def get_minimal(filters: list[FilterTypes] = filters_dependency):
         return [type(f).__name__ for f in filters]
 
     # Test with all optional filters disabled
     @app.get("/no-optionals")
     async def get_no_optionals(
-        filters: List[FilterTypes] = create_filter_dependencies(
+        filters: list[FilterTypes] = create_filter_dependencies(
             cast(FilterConfig, {"pagination_type": "limit_offset", "sort_field": "id"})
         )[DEPENDENCY_DEFAULTS.FILTERS_DEPENDENCY_KEY],
     ):
@@ -608,7 +600,7 @@ def test_openapi_schema_edge_cases() -> None:
     # Test with custom validation
     @app.get("/custom-validation")
     async def get_custom_validation(
-        filters: List[FilterTypes] = create_filter_dependencies(
+        filters: list[FilterTypes] = create_filter_dependencies(
             cast(
                 FilterConfig,
                 {
@@ -620,7 +612,7 @@ def test_openapi_schema_edge_cases() -> None:
                 },
             )
         )[DEPENDENCY_DEFAULTS.FILTERS_DEPENDENCY_KEY],
-    ):
+    ) -> list[str]:
         return [type(f).__name__ for f in filters]
 
     client = TestClient(app)
