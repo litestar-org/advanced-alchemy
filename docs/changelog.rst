@@ -1,6 +1,6 @@
 :orphan:
 
-0.x Changelog
+1.x Changelog
 =============
 
 .. changelog:: 1.1.1
