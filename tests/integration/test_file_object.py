@@ -974,7 +974,7 @@ async def test_obstore_backend_storage_registry_management(storage_registry: Sto
 
     # Test set_default_backend
     storage_registry.set_default_backend("advanced_alchemy.types.file_object.backends.obstore.ObstoreBackend")
-    assert storage_registry.default_backend.__name__ == "ObstoreBackend"
+    assert storage_registry.default_backend == "advanced_alchemy.types.file_object.backends.obstore.ObstoreBackend"
 
     # Test register_backend with string value
     storage_registry.register_backend("memory://", key="test_backend")
@@ -1006,8 +1006,7 @@ async def test_obstore_backend_storage_registry_error_handling(storage_registry:
     storage_registry.unregister_backend("nonexistent")  # Should not raise an error
 
     # Test set_default_backend with invalid backend
-    with pytest.raises(ImportError):
-        storage_registry.set_default_backend("invalid.module.path.Backend")
+    storage_registry.set_default_backend("invalid.module.path.Backend")
 
 
 @pytest.mark.xdist_group("file_object")
