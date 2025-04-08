@@ -280,15 +280,15 @@ When a file object is removed from a model or the model is deleted, the associat
 
     # Update file
     doc.attachment = new_file_obj
-    await session.commit()  # Old file is automatically deleted
+    await db_session.commit()  # Old file is automatically deleted
 
     # Clear file
     doc.attachment = None
-    await session.commit()  # File is automatically deleted
+    await db_session.commit()  # File is automatically deleted
 
     # Delete model
-    await session.delete(doc)
-    await session.commit()  # All associated files are automatically deleted
+    await db_session.delete(doc)
+    await db_session.commit()  # All associated files are automatically deleted
 
 Using Types with Alembic
 ------------------------
