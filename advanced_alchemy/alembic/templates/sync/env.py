@@ -1,61 +1,23 @@
-import operator
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import Column, Engine, engine_from_config, pool
+from sqlalchemy import Engine, engine_from_config, pool
 
 from advanced_alchemy.base import metadata_registry
 from alembic import context
 from alembic.autogenerate import rewriter
-from alembic.operations import ops
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
     from advanced_alchemy.alembic.commands import AlembicCommandConfig
-    from alembic.runtime.environment import EnvironmentContext
 
-__all__ = ["do_run_migrations", "run_migrations_offline", "run_migrations_online"]
+__all__ = ("do_run_migrations", "run_migrations_offline", "run_migrations_online")
 
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config: "AlembicCommandConfig" = context.config  # type: ignore
 writer = rewriter.Rewriter()
-
-
-@writer.rewrites(ops.CreateTableOp)
-def order_columns(
-    context: "EnvironmentContext",  # noqa: ARG001
-    revision: tuple[str, ...],  # noqa: ARG001
-    op: ops.CreateTableOp,
-) -> ops.CreateTableOp:
-    """Orders ID first and the audit columns at the end.
-
-    Args:
-        context: The context of the environment.
-        revision: The revision of the environment.
-        op: The operation to create the table.
-
-    Returns:
-        The operation to create the table.
-    """
-    special_names = {"id": -100, "sa_orm_sentinel": 3001, "created_at": 3002, "updated_at": 3003}
-    cols_by_key = [  # pyright: ignore[reportUnknownVariableType]
-        (
-            special_names.get(col.key, index) if isinstance(col, Column) else 2000,
-            col.copy(),  # type: ignore[attr-defined]
-        )
-        for index, col in enumerate(op.columns)
-    ]
-    columns = [col for _, col in sorted(cols_by_key, key=operator.itemgetter(0))]  # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType,reportUnknownLambdaType]
-    return ops.CreateTableOp(
-        op.table_name,
-        columns,  # pyright: ignore[reportUnknownArgumentType]
-        schema=op.schema,
-        # TODO: Remove when https://github.com/sqlalchemy/alembic/issues/1193 is fixed  # noqa: FIX002
-        _namespace_metadata=op._namespace_metadata,  # noqa: SLF001 # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-        **op.kw,
-    )
 
 
 def run_migrations_offline() -> None:
