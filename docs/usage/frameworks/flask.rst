@@ -30,8 +30,8 @@ Here's a basic example of using Advanced Alchemy with Flask:
     # Use standard SQLAlchemy session in your routes
     @app.route("/users")
     def list_users():
-        session = alchemy.get_sync_session()
-        users = session.execute(select(User))
+        db_session = alchemy.get_sync_session()
+        users = db_session.execute(select(User))
         return {"users": [user.dict() for user in users.scalars()]}
 
 Multiple Databases
@@ -80,8 +80,8 @@ Advanced Alchemy supports async SQLAlchemy with Flask:
     # Use async session in your routes
     @app.route("/users")
     async def list_users():
-        session = alchemy.get_async_session()
-        users = await session.execute(select(User))
+        db_session = alchemy.get_async_session()
+        users = await db_session.execute(select(User))
         return {"users": [user.dict() for user in users.scalars()]}
 
 You can also safely use an AsyncSession in your routes within a sync context.
@@ -95,8 +95,8 @@ You can also safely use an AsyncSession in your routes within a sync context.
 
     @app.route("/users")
     def list_users():
-        session = alchemy.get_async_session()
-        users = alchemy.portal.call(session.execute, select(User))
+        db_session = alchemy.get_async_session()
+        users = alchemy.portal.call(db_session.execute, select(User))
         return {"users": [user.dict() for user in users.scalars()]}
 
 Configuration

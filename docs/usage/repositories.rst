@@ -72,13 +72,14 @@ Let's implement a basic repository for our blog post model:
 
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from sqlalchemy.ext.asyncio import AsyncSession
+    from uuid import UUID
 
     class PostRepository(SQLAlchemyAsyncRepository[Post]):
         """Repository for managing blog posts."""
         model_type = Post
 
-    async def create_post(session: AsyncSession, title: str, content: str, author_id: UUID) -> Post:
-        repository = PostRepository(session=session)
+    async def create_post(db_session: AsyncSession, title: str, content: str, author_id: UUID) -> Post:
+        repository = PostRepository(session=db_session)
         return await repository.add(
             Post(title=title, content=content, author_id=author_id), auto_commit=True
         )
@@ -92,8 +93,8 @@ Advanced Alchemy provides powerful filtering capabilities:
 
     import datetime
 
-    async def get_recent_posts(session: AsyncSession) -> list[Post]:
-        repository = PostRepository(session=session)
+    async def get_recent_posts(db_session: AsyncSession) -> list[Post]:
+        repository = PostRepository(session=db_session)
 
         # Create filter for posts from last week
         return await repository.list(
@@ -111,11 +112,11 @@ Pagination
     from advanced_alchemy.filters import LimitOffset
 
     async def get_paginated_posts(
-        session: AsyncSession,
+        db_session: AsyncSession,
         page: int = 1,
         page_size: int = 20
     ) -> tuple[list[Post], int]:
-        repository = PostRepository(session=session)
+        repository = PostRepository(session=db_session)
 
         # Get page of results and total count
         results, total = await repository.list_and_count(
@@ -134,8 +135,8 @@ Create Many
 
 .. code-block:: python
 
-    async def create_posts(session: AsyncSession, data: list[tuple[str, str, UUID]]) -> list[Post]:
-        repository = PostRepository(session=session)
+    async def create_posts(db_session: AsyncSession, data: list[tuple[str, str, UUID]]) -> list[Post]:
+        repository = PostRepository(session=db_session)
 
         # Create posts
         return await repository.create_many(
@@ -148,8 +149,8 @@ Update Many
 
 .. code-block:: python
 
-    async def publish_posts(session: AsyncSession, post_ids: list[int]) -> list[Post]:
-        repository = PostRepository(session=session)
+    async def publish_posts(db_session: AsyncSession, post_ids: list[int]) -> list[Post]:
+        repository = PostRepository(session=db_session)
 
         # Fetch posts to update
         posts = await repository.list(Post.id.in_(post_ids), published =False)
@@ -165,8 +166,8 @@ Delete Many
 
 .. code-block:: python
 
-    async def delete_posts(session: AsyncSession, post_ids: list[int]) -> list[Post]:
-        repository = PostRepository(session=session)
+    async def delete_posts(db_session: AsyncSession, post_ids: list[int]) -> list[Post]:
+        repository = PostRepository(session=db_session)
 
         return await repository.delete_many(Post.id.in_(post_ids))
 
@@ -175,8 +176,8 @@ Delete Where
 
 .. code-block:: python
 
-    async def delete_unpublished_posts (session: AsyncSession) -> list[Post]:
-        repository = PostRepository(session=session)
+    async def delete_unpublished_posts (db_session: AsyncSession) -> list[Post]:
+        repository = PostRepository(session=db_session)
 
         return await repository.delete_where(Post.published == False)
 
@@ -190,16 +191,16 @@ Transaction Management
 .. code-block:: python
 
     async def create_post_with_tags(
-        session: AsyncSession,
+        db_session: AsyncSession,
         title: str,
         content: str,
         tag_names: list[str]
     ) -> Post:
         # Both repositories share the same transaction
-        post_repo = PostRepository(session=session)
-        tag_repo = TagRepository(session=session)
+        post_repo = PostRepository(session=db_session)
+        tag_repo = TagRepository(session=db_session)
 
-        async with session.begin():
+        async with db_session.begin():
             # Create or get existing tags
             tags = []
             for name in tag_names:
@@ -239,8 +240,8 @@ For models using the :class:`SlugKey` mixin, there is a specialized Slug reposit
         """Repository for articles with slug-based lookups."""
         model_type = Article
 
-    async def get_article_by_slug(session: AsyncSession, slug: str) -> Article:
-        repository = ArticleRepository(session=session)
+    async def get_article_by_slug(db_session: AsyncSession, slug: str) -> Article:
+        repository = ArticleRepository(session=db_session)
         return await repository.get_by_slug(slug)
 
 Query Repository
