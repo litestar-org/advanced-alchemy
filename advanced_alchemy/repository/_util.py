@@ -5,6 +5,7 @@ from sqlalchemy import (
     Delete,
     Dialect,
     Select,
+    UnaryExpression,
     Update,
 )
 from sqlalchemy.orm import (
@@ -294,8 +295,8 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         self,
         statement: StatementTypeT,
         order_by: Union[
-            list[tuple[Union[str, InstrumentedAttribute[Any]], bool]],
-            tuple[Union[str, InstrumentedAttribute[Any]], bool],
+            OrderingPair,
+            list[OrderingPair],
         ],
     ) -> StatementTypeT:
         """Apply ordering to a SQL statement.
@@ -311,13 +312,16 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         """
         if not isinstance(order_by, list):
             order_by = [order_by]
-        for order_field, is_desc in order_by:
-            field = get_instrumented_attr(self.model_type, order_field)
-            statement = self._order_by_attribute(statement, field, is_desc)
+        for order_field in order_by:
+            if isinstance(order_field, UnaryExpression):
+                statement = statement.order_by(order_field)  # type: ignore
+            else:
+                field = get_instrumented_attr(self.model_type, order_field[0])
+                statement = self._order_by_attribute(statement, field, order_field[1])
         return statement
 
+    @staticmethod
     def _order_by_attribute(
-        self,
         statement: StatementTypeT,
         field: InstrumentedAttribute[Any],
         is_desc: bool,
