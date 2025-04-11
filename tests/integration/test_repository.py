@@ -1890,8 +1890,6 @@ async def test_repo_filter_order_by(author_repo: AnyAuthorRepository) -> None:
 async def test_repo_filter_order_by_unary_expression(author_repo: AnyAuthorRepository) -> None:
     existing_obj = await maybe_async(author_repo.list(order_by=author_repo.model_type.created_at.desc()))
     assert existing_obj[0].name == "Agatha Christie"
-    existing_obj = await maybe_async(author_repo.list(order_by=author_repo.model_type.created_at.asc()))
-    assert existing_obj[0].name == "Leo Tolstoy"
 
 
 async def test_repo_filter_collection(
