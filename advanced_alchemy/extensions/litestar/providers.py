@@ -1,4 +1,4 @@
-# ruff: noqa: B008, PGH003
+# ruff: noqa: B008, PGH003, PLW018
 """Application dependency providers generators.
 
 This module contains functions to create dependency providers for services and filters.
@@ -46,6 +46,7 @@ from advanced_alchemy.service import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
+from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -104,7 +105,7 @@ class FieldNameType(NamedTuple):
 class FilterConfig(TypedDict):
     """Configuration for generating dynamic filters."""
 
-    id_filter: NotRequired[type[Union[UUID, int]]]
+    id_filter: NotRequired[type[Union[UUID, int, str]]]
     """Indicates that the id filter should be enabled.  When set, the type specified will be used for the :class:`CollectionFilter`."""
     id_field: NotRequired[str]
     """The field on the model that stored the primary key or identifier."""
@@ -335,7 +336,7 @@ def _make_hashable(value: Any) -> HashableType:
     if isinstance(value, (list, set)):
         hashable_items = [_make_hashable(item) for item in value]  # pyright: ignore
         filtered_items = [item for item in hashable_items if item is not None]  # pyright: ignore
-        return tuple(sorted(filtered_items, key=lambda x: str(x)))  # pyright: ignore
+        return tuple(sorted(filtered_items, key=str))
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
     return str(value)
@@ -451,23 +452,16 @@ def _create_statement_filters(  # noqa: C901
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
         # Get all field names, handling both strings and FieldNameType objects
-        not_in_field_names: list[FieldNameType] = []
-        not_in_fields_set = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
+        not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
 
-        for field_item in not_in_fields_set:
-            if isinstance(field_item, str):
-                not_in_field_names.append(FieldNameType(name=field_item, type_hint=str))
-            else:  # FieldNameType
-                not_in_field_names.append(field_item)
+        for field_def in not_in_fields:
 
-        for field_def in not_in_field_names:
-
-            def create_not_in_filter_provider(  # type: ignore
+            def create_not_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType,
             ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
-                def provide_not_in_filter(  # type: ignore
+                def provide_not_in_filter(  # pyright: ignore
                     values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore
-                        query=f"{field_name.name}NotIn", default=None, required=False
+                        query=camelize(f"{field_name.name}_not_in"), default=None, required=False
                     ),
                 ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
                     return (
@@ -476,43 +470,36 @@ def _create_statement_filters(  # noqa: C901
                         else None
                     )
 
-                return provide_not_in_filter  # type: ignore
+                return provide_not_in_filter  # pyright: ignore
 
-            provider = create_not_in_filter_provider(field_def)  # type: ignore
-            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # type: ignore
+            provider = create_not_in_filter_provider(field_def)  # pyright: ignore
+            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
         # Get all field names, handling both strings and FieldNameType objects
-        in_field_names: list[FieldNameType] = []
-        in_fields_set = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
+        in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
 
-        for field_item in in_fields_set:
-            if isinstance(field_item, str):
-                in_field_names.append(FieldNameType(name=field_item, type_hint=str))
-            else:  # FieldNameType
-                in_field_names.append(field_item)
+        for field_def in in_fields:
 
-        for field_name in in_field_names:
-
-            def create_in_filter_provider(  # type: ignore
+            def create_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType,
-            ) -> Callable[..., Optional[CollectionFilter[field_name.type_hint]]]:  # type: ignore
-                def provide_in_filter(  # type: ignore
-                    values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore
-                        query=f"{field_name.name}In", default=None, required=False
+            ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore # pyright: ignore
+                def provide_in_filter(  # pyright: ignore
+                    values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore # pyright: ignore
+                        query=camelize(f"{field_name.name}_in"), default=None, required=False
                     ),
-                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore
+                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
                     return (
-                        CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
+                        CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
                         if values
                         else None
                     )
 
-                return provide_in_filter  # type: ignore
+                return provide_in_filter  # pyright: ignore
 
-            provider = create_in_filter_provider(field_name)  # type: ignore
-            filters[f"{field_name.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # type: ignore
+            provider = create_in_filter_provider(field_def)  # type: ignore
+            filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
     if filters:
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = Provide(
@@ -592,27 +579,27 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
 
     # Add parameters for not_in filters
     if not_in_fields := config.get("not_in_fields"):
-        for field_item in not_in_fields:
-            field_item = FieldNameType(name=field_item, type_hint=str) if isinstance(field_item, str) else field_item
-            parameters[f"{field_item.name}_not_in_filter"] = inspect.Parameter(
-                name=f"{field_item.name}_not_in_filter",
+        for field_def in not_in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            parameters[f"{field_def.name}_not_in_filter"] = inspect.Parameter(
+                name=f"{field_def.name}_not_in_filter",
                 kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 default=Dependency(skip_validation=True),
-                annotation=NotInCollectionFilter[field_item.type_hint],
+                annotation=NotInCollectionFilter[field_def.type_hint],  # type: ignore
             )
-            annotations[f"{field_item.name}_not_in_filter"] = NotInCollectionFilter[field_item.type_hint]
+            annotations[f"{field_def.name}_not_in_filter"] = NotInCollectionFilter[field_def.type_hint]  # type: ignore
 
     # Add parameters for in filters
     if in_fields := config.get("in_fields"):
-        for field_item in in_fields:
-            field_item = FieldNameType(name=field_item, type_hint=str) if isinstance(field_item, str) else field_item
-            parameters[f"{field_item.name}_in_filter"] = inspect.Parameter(
-                name=f"{field_item.name}_in_filter",
+        for field_def in in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            parameters[f"{field_def.name}_in_filter"] = inspect.Parameter(
+                name=f"{field_def.name}_in_filter",
                 kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 default=Dependency(skip_validation=True),
-                annotation=CollectionFilter[field_item.type_hint],
+                annotation=CollectionFilter[field_def.type_hint],  # type: ignore
             )
-            annotations[f"{field_item.name}_in_filter"] = CollectionFilter[field_item.type_hint]
+            annotations[f"{field_def.name}_in_filter"] = CollectionFilter[field_def.type_hint]  # type: ignore
 
     def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:
         """Provide filter dependencies based on configuration.
@@ -649,35 +636,19 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         # Add not_in filters
         if not_in_fields := config.get("not_in_fields"):
             # Get all field names, handling both strings and FieldNameType objects
-            not_in_field_names: list[FieldNameType] = []
-            not_in_fields_set = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
-
-            for field_item in not_in_fields_set:
-                if isinstance(field_item, str):
-                    not_in_field_names.append(FieldNameType(name=field_item, type_hint=str))
-                else:  # FieldNameType
-                    not_in_field_names.append(field_item)
+            not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
 
             filters.extend(
-                filter_
-                for field_name in not_in_field_names
-                if (filter_ := kwargs.get(f"{field_name.name}_not_in_filter"))
+                filter_ for field_name in not_in_fields if (filter_ := kwargs.get(f"{field_name.name}_not_in_filter"))
             )
 
         # Add in filters
         if in_fields := config.get("in_fields"):
             # Get all field names, handling both strings and FieldNameType objects
-            in_field_names: list[FieldNameType] = []
-            in_fields_set = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
-
-            for field_item in in_fields_set:
-                if isinstance(field_item, str):
-                    in_field_names.append(FieldNameType(name=field_item, type_hint=str))
-                else:  # FieldNameType
-                    in_field_names.append(field_item)
+            in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
 
             filters.extend(
-                filter_ for field_name in in_field_names if (filter_ := kwargs.get(f"{field_name.name}_in_filter"))
+                filter_ for field_name in in_fields if (filter_ := kwargs.get(f"{field_name.name}_in_filter"))
             )
 
         return filters
