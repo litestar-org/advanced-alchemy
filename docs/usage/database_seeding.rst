@@ -111,9 +111,9 @@ Synchronous Loading
         print("Seeding database...")
 
         # Create a session
-        with config.get_session() as session:
+        with config.get_session() as db_session:
             # Create repository for product model
-            product_repo = ProductRepository(session=session)
+            product_repo = ProductRepository(session=db_session)
 
             # Load and add product data
             try:
@@ -121,7 +121,7 @@ Synchronous Loading
                 product_data = open_fixture(fixtures_path, "product")
                 print(f"Loaded {len(product_data)} products from fixture")
                 product_repo.add_many([Product(**item) for item in product_data])
-                session.commit()
+                db_session.commit()
             except FileNotFoundError:
                 print(f"Could not find fixture file at {fixtures_path}/product.json")
 
@@ -193,9 +193,9 @@ Asynchronous Loading
         print("Seeding database...")
 
         # Create a session
-        async with config.get_session() as session:
+        async with config.get_session() as db_session:
             # Create repository for product model
-            product_repo = ProductRepository(session=session)
+            product_repo = ProductRepository(session=db_session)
 
             # Load and add product data
             try:
@@ -203,7 +203,7 @@ Asynchronous Loading
                 product_data = await open_fixture_async(fixtures_path, "product")
                 print(f"Loaded {len(product_data)} products from fixture")
                 await product_repo.add_many([Product(**item) for item in product_data])
-                await session.commit()
+                await db_session.commit()
             except FileNotFoundError:
                 print(f"Could not find fixture file at {fixtures_path}/product.json")
 
@@ -287,16 +287,16 @@ Litestar
         print("Running startup routine...")
 
         # Create a session and seed data
-        async with sqlalchemy_config.get_session() as session:
+        async with sqlalchemy_config.get_session() as db_session:
             # Create repository for product model
-            product_repo = ProductRepository(session=session)
+            product_repo = ProductRepository(session=db_session)
             # Load and add product data
             try:
                 print(f"Attempting to load fixtures from {fixtures_path}/product.json")
                 product_data = await open_fixture_async(fixtures_path, "product")
                 print(f"Loaded {len(product_data)} products from fixture")
                 await product_repo.add_many([Product(**item) for item in product_data])
-                await session.commit()
+                await db_session.commit()
             except FileNotFoundError:
                 print(f"Could not find fixture file at {fixtures_path}/product.json")
 
@@ -368,16 +368,16 @@ FastAPI
         print("Running startup routine...")
 
         # Create a session and seed data
-        async with sqlalchemy_config.get_session() as session:
+        async with sqlalchemy_config.get_session() as db_session:
             # Create repository for product model
-            product_repo = ProductRepository(session=session)
+            product_repo = ProductRepository(session=db_session)
             # Load and add product data
             try:
                 print(f"Attempting to load fixtures from {fixtures_path}/product.json")
                 product_data = await open_fixture_async(fixtures_path, "product")
                 print(f"Loaded {len(product_data)} products from fixture")
                 await product_repo.add_many([Product(**item) for item in product_data])
-                await session.commit()
+                await db_session.commit()
             except FileNotFoundError:
                 print(f"Could not find fixture file at {fixtures_path}/product.json")
 
@@ -469,14 +469,14 @@ Flask
     with app.app_context():  # noqa: SIM117
         # Seed data
         with db.get_session() as session:
-            product_repo = ProductRepository(session=session)
+            product_repo = ProductRepository(session=db_session)
             # Load and add product data
             try:
                 print(f"Attempting to load fixtures from {fixtures_path}/product.json")
                 product_data = open_fixture(fixtures_path, "product")
                 print(f"Loaded {len(product_data)} products from fixture")
                 product_repo.add_many([Product(**item) for item in product_data])
-                session.commit()
+                db_session.commit()
             except FileNotFoundError:
                 print(f"Could not find fixture file at {fixtures_path}/product.json")
 

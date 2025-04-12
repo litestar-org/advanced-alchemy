@@ -77,6 +77,7 @@ Let's start with a simple blog post model:
             title: The post title
             content: The post content
             published: Publication status
+            published_at: Timestamp of publication
             created_at: Timestamp of creation (from BigIntAuditBase)
             updated_at: Timestamp of last update (from BigIntAuditBase)
         """
@@ -146,20 +147,21 @@ If we want to interact with the models above, we might use something like the fo
 .. code-block:: python
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from advanced_alchemy.utils.text import slugify
 
     async def add_tags_to_post(
-        session: AsyncSession,
+        db_session: AsyncSession,
         post: Post,
         tag_names: list[str]
     ) -> Post:
         """Add tags to a post, looking up existing tags and creating new ones if needed."""
-        existing_tags = await session.scalars(
+        existing_tags = await db_session.scalars(
             select(Tag).filter(Tag.slug.in_([slugify(name) for name in tag_names]))
         )
         new_tags = [Tag(name=name, slug=slugify(name)) for name in tag_names if name not in {tag.name for tag in existing_tags}]
         post.tags.extend(new_tags + list(existing_tags))
-        session.merge(post)
-        await session.flush()
+        db_session.merge(post)
+        await db_session.flush()
         return post
 
 
@@ -223,9 +225,10 @@ We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the
 .. code-block:: python
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from advanced_alchemy.utils.text import slugify
 
     async def add_tags_to_post(
-        session: AsyncSession,
+        db_session: AsyncSession,
         post: Post,
         tag_names: list[str]
     ) -> Post:
@@ -235,11 +238,11 @@ We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the
         # 2. Creating new tags if needed
         # 3. Merging duplicates
         post.tags = [
-          await Tag.as_unique_async(session, name=tag_text, slug=slugify(tag_text))
+          await Tag.as_unique_async(db_session, name=tag_text, slug=slugify(tag_text))
           for tag_text in tag_names
         ]
-        session.merge(post)
-        await session.flush()
+        db_session.merge(post)
+        await db_session.flush()
         return post
 
 

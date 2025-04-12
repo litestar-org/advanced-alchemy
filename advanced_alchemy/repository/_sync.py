@@ -1601,7 +1601,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
             )
             if order_by is None:
-                order_by = self.order_by or []
+                order_by = self.order_by if self.order_by is not None else []
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1656,7 +1656,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
             )
             if order_by is None:
-                order_by = self.order_by or []
+                order_by = self.order_by if self.order_by is not None else []
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1944,7 +1944,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
             )
             if order_by is None:
-                order_by = self.order_by or []
+                order_by = self.order_by if self.order_by is not None else []
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
