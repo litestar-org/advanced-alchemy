@@ -10,6 +10,7 @@ import inspect
 from collections.abc import AsyncGenerator, Generator
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
     Callable,
     Literal,
@@ -315,12 +316,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
     if (id_filter := config.get("id_filter", False)) is not False:
 
         def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
-            ids: Optional[list[id_filter]] = Query(  # type: ignore
-                default=None,
-                alias="ids",
-                required=False,
-                description="IDs to filter by.",
-            ),
+            ids: Annotated[  # pyright: ignore
+                Optional[list[id_filter]],  # type: ignore
+                Query(
+                    alias="ids",
+                    required=False,
+                    description="IDs to filter by.",
+                ),
+            ] = None,
         ) -> Optional[CollectionFilter[id_filter]]:  # type: ignore
             return CollectionFilter[id_filter](field_name=config.get("id_field", "id"), values=ids) if ids else None  # type: ignore
 
@@ -328,28 +331,33 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             inspect.Parameter(
                 name=dep_defaults.ID_FILTER_DEPENDENCY_KEY,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=Depends(provide_id_filter),  # pyright: ignore
-                annotation=Optional[CollectionFilter[id_filter]],  # type: ignore
+                annotation=Annotated[Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)],  # type: ignore
             )
         )
-        annotations[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Optional[CollectionFilter[id_filter]]  # type: ignore
+        annotations[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Annotated[
+            Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)  # type: ignore
+        ]
 
     # Add created_at filter providers
     if config.get("created_at", False):
 
         def provide_created_at_filter(
-            before: Optional[str] = Query(
-                default=None,
-                alias="createdBefore",
-                description="Filter by created date before this timestamp.",
-                json_schema_extra={"format": "date-time"},
-            ),
-            after: Optional[str] = Query(
-                default=None,
-                alias="createdAfter",
-                description="Filter by created date after this timestamp.",
-                json_schema_extra={"format": "date-time"},
-            ),
+            before: Annotated[
+                Optional[str],
+                Query(
+                    alias="createdBefore",
+                    description="Filter by created date before this timestamp.",
+                    json_schema_extra={"format": "date-time"},
+                ),
+            ] = None,
+            after: Annotated[
+                Optional[str],
+                Query(
+                    alias="createdAfter",
+                    description="Filter by created date after this timestamp.",
+                    json_schema_extra={"format": "date-time"},
+                ),
+            ] = None,
         ) -> Optional[BeforeAfter]:
             before_dt = None
             after_dt = None
@@ -382,28 +390,31 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=Depends(provide_created_at_filter),
-                annotation=Optional[BeforeAfter],
+                annotation=Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)],
             )
         )
-        annotations[param_name] = Optional[BeforeAfter]
+        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)]
 
     # Add updated_at filter providers
     if config.get("updated_at", False):
 
         def provide_updated_at_filter(
-            before: Optional[str] = Query(
-                default=None,
-                alias="updatedBefore",
-                description="Filter by updated date before this timestamp.",
-                json_schema_extra={"format": "date-time"},
-            ),
-            after: Optional[str] = Query(
-                default=None,
-                alias="updatedAfter",
-                description="Filter by updated date after this timestamp.",
-                json_schema_extra={"format": "date-time"},
-            ),
+            before: Annotated[
+                Optional[str],
+                Query(
+                    alias="updatedBefore",
+                    description="Filter by updated date before this timestamp.",
+                    json_schema_extra={"format": "date-time"},
+                ),
+            ] = None,
+            after: Annotated[
+                Optional[str],
+                Query(
+                    alias="updatedAfter",
+                    description="Filter by updated date after this timestamp.",
+                    json_schema_extra={"format": "date-time"},
+                ),
+            ] = None,
         ) -> Optional[BeforeAfter]:
             before_dt = None
             after_dt = None
@@ -436,28 +447,31 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=Depends(provide_updated_at_filter),
-                annotation=Optional[BeforeAfter],
+                annotation=Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)],
             )
         )
-        annotations[param_name] = Optional[BeforeAfter]
+        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)]
 
     # Add pagination filter providers
     if config.get("pagination_type") == "limit_offset":
 
         def provide_limit_offset_pagination(
-            current_page: int = Query(
-                default=1,
-                ge=1,
-                alias="currentPage",
-                description="Page number for pagination.",
-            ),
-            page_size: int = Query(
-                default=config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
-                ge=1,
-                alias="pageSize",
-                description="Number of items per page.",
-            ),
+            current_page: Annotated[
+                int,
+                Query(
+                    ge=1,
+                    alias="currentPage",
+                    description="Page number for pagination.",
+                ),
+            ] = 1,
+            page_size: Annotated[
+                int,
+                Query(
+                    ge=1,
+                    alias="pageSize",
+                    description="Number of items per page.",
+                ),
+            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
         ) -> LimitOffset:
             return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
@@ -466,28 +480,31 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=Depends(provide_limit_offset_pagination),
-                annotation=LimitOffset,
+                annotation=Annotated[LimitOffset, Depends(provide_limit_offset_pagination)],
             )
         )
-        annotations[param_name] = LimitOffset
+        annotations[param_name] = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
 
     # Add search filter providers
     if search_fields := config.get("search"):
 
         def provide_search_filter(
-            search_string: Optional[str] = Query(
-                default=None,
-                required=False,
-                alias="searchString",
-                description="Search term.",
-            ),
-            ignore_case: Optional[bool] = Query(
-                default=config.get("search_ignore_case", False),
-                required=False,
-                alias="searchIgnoreCase",
-                description="Whether search should be case-insensitive.",
-            ),
+            search_string: Annotated[
+                Optional[str],
+                Query(
+                    required=False,
+                    alias="searchString",
+                    description="Search term.",
+                ),
+            ] = None,
+            ignore_case: Annotated[
+                Optional[bool],
+                Query(
+                    required=False,
+                    alias="searchIgnoreCase",
+                    description="Whether search should be case-insensitive.",
+                ),
+            ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
             field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else search_fields
 
@@ -502,29 +519,32 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=Depends(provide_search_filter),
-                annotation=Optional[SearchFilter],
+                annotation=Annotated[Optional[SearchFilter], Depends(provide_search_filter)],
             )
         )
-        annotations[param_name] = Optional[SearchFilter]
+        annotations[param_name] = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
 
     # Add sort filter providers
     if sort_field := config.get("sort_field"):
         sort_order_default = config.get("sort_order", "desc")
 
         def provide_order_by(
-            field_name: str = Query(
-                default=sort_field,
-                alias="orderBy",
-                description="Field to order by.",
-                required=False,
-            ),
-            sort_order: Optional[SortOrder] = Query(
-                default=config.get("sort_order", "desc"),  # Set to None to ensure anyOf schema in OpenAPI
-                alias="sortOrder",
-                description="Sort order ('asc' or 'desc').",
-                required=False,
-            ),
+            field_name: Annotated[
+                str,
+                Query(
+                    alias="orderBy",
+                    description="Field to order by.",
+                    required=False,
+                ),
+            ] = sort_field,  # pyright: ignore
+            sort_order: Annotated[
+                Optional[SortOrder],
+                Query(
+                    alias="sortOrder",
+                    description="Sort order ('asc' or 'desc').",
+                    required=False,
+                ),
+            ] = sort_order_default,  # pyright: ignore
         ) -> OrderBy:
             return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
 
@@ -533,11 +553,10 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=Depends(provide_order_by),
-                annotation=OrderBy,
+                annotation=Annotated[OrderBy, Depends(provide_order_by)],
             )
         )
-        annotations[param_name] = OrderBy
+        annotations[param_name] = Annotated[OrderBy, Depends(provide_order_by)]
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
@@ -545,16 +564,19 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
         for field_def in not_in_fields:
 
             def create_not_in_filter_provider(  # pyright: ignore
-                local_field_name: str, local_field_type: type[Any]
+                local_field_name: str,
+                local_field_type: type[Any],
             ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
                 def provide_not_in_filter(  # pyright: ignore
-                    values: Optional[set[local_field_type]] = Query(  # type: ignore
-                        default=None,
-                        alias=camelize(f"{local_field_name}_not_in"),
-                        description=f"Filter {local_field_name} not in values",
-                    ),
+                    values: Annotated[
+                        Optional[set[local_field_type]],  # type: ignore
+                        Query(
+                            alias=camelize(f"{local_field_name}_not_in"),
+                            description=f"Filter {local_field_name} not in values",
+                        ),
+                    ] = None,
                 ) -> Optional[NotInCollectionFilter[local_field_type]]:  # type: ignore
-                    return NotInCollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
+                    return NotInCollectionFilter(field_name=local_field_name, values=values) if values else None  # type: ignore
 
                 return provide_not_in_filter  # pyright: ignore
 
@@ -564,11 +586,10 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
                 inspect.Parameter(
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
-                    default=Depends(provider),  # pyright: ignore
-                    annotation=Optional[NotInCollectionFilter[field_def.type_hint]],  # type: ignore
+                    annotation=Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)],  # pyright: ignore
                 )
             )
-            annotations[param_name] = Optional[NotInCollectionFilter[field_def.type_hint]]  # type: ignore
+            annotations[param_name] = Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)]  # pyright: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
@@ -576,30 +597,32 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
         for field_def in in_fields:
 
             def create_in_filter_provider(  # pyright: ignore
-                local_field_name: str, local_field_type: type[Any]
+                local_field_name: str,
+                local_field_type: type[Any],
             ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore
                 def provide_in_filter(  # pyright: ignore
-                    values: Optional[set[local_field_type]] = Query(  # type: ignore
-                        default=None,
-                        alias=camelize(f"{local_field_name}_in"),
-                        description=f"Filter {local_field_name} in values",
-                    ),  # pyright: ignore
+                    values: Annotated[
+                        Optional[set[local_field_type]],  # type: ignore
+                        Query(
+                            alias=camelize(f"{local_field_name}_in"),
+                            description=f"Filter {local_field_name} in values",
+                        ),
+                    ] = None,
                 ) -> Optional[CollectionFilter[local_field_type]]:  # type: ignore
-                    return CollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
+                    return CollectionFilter(field_name=local_field_name, values=values) if values else None  # type: ignore
 
                 return provide_in_filter  # pyright: ignore
 
-            provider = create_in_filter_provider(field_def.name, field_def.type_hint)  # type: ignore
+            provider = create_in_filter_provider(field_def.name, field_def.type_hint)  # pyright: ignore
             param_name = f"{field_def.name}_in_filter"
             params.append(
                 inspect.Parameter(
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
-                    default=Depends(provider),  # pyright: ignore
-                    annotation=Optional[CollectionFilter[field_def.type_hint]],  # type: ignore
+                    annotation=Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)],  # pyright: ignore
                 )
             )
-            annotations[param_name] = Optional[CollectionFilter[field_def.type_hint]]  # type: ignore
+            annotations[param_name] = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # pyright: ignore
 
     # Define our aggregate function with the correct FilterTypes
     def aggregate_filter_function(**kwargs: Any) -> list[FilterTypes]:
@@ -618,14 +641,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
         return filters
 
     # Set the function's annotations
-    annotations["return"] = list[FilterTypes]
+    annotations["return"] = Annotated[list[FilterTypes], Depends(aggregate_filter_function)]
     aggregate_filter_function.__annotations__ = annotations
 
     # Create a new signature with the correct return annotation - explicitly use list[FilterTypes]
     # to ensure proper type checking in tests without monkey patching
     aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
         parameters=params,
-        return_annotation=list[FilterTypes],
+        return_annotation=Annotated[list[FilterTypes], Depends(aggregate_filter_function)],
     )
 
     return aggregate_filter_function

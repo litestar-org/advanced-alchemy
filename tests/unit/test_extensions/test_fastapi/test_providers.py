@@ -1,7 +1,5 @@
 """Tests for the FastAPI DI module."""
 
-from __future__ import annotations
-
 import inspect
 from datetime import datetime
 from typing import Annotated, Union, cast
@@ -150,31 +148,34 @@ def test_create_filter_aggregate_function_fastapi() -> None:
     assert DEPENDENCY_DEFAULTS.LIMIT_OFFSET_DEPENDENCY_KEY in sig.parameters
     assert DEPENDENCY_DEFAULTS.SEARCH_FILTER_DEPENDENCY_KEY in sig.parameters
     assert DEPENDENCY_DEFAULTS.ORDER_BY_DEPENDENCY_KEY in sig.parameters
+
     # Check return annotation origin type (list) and its argument (FilterTypes)
     assert hasattr(sig.return_annotation, "__origin__")
-    assert sig.return_annotation.__origin__ is list
-    assert sig.return_annotation.__args__[0] is FilterTypes
+    assert sig.return_annotation.__origin__ is Annotated
+    assert sig.return_annotation.__args__[0] is list
+    assert sig.return_annotation.__args__[1] is FilterTypes
 
     for param_name, param in sig.parameters.items():
-        # Check that it's a Depends object by verifying it has the dependency attribute
-        assert hasattr(param.default, "dependency")
         # Check annotation (Optional[...] for filters that can return None)
         if param_name in (DEPENDENCY_DEFAULTS.LIMIT_OFFSET_DEPENDENCY_KEY, DEPENDENCY_DEFAULTS.ORDER_BY_DEPENDENCY_KEY):
             # These parameters should not be Optional
             assert param.annotation is not None
+            assert param.annotation.__origin__ is Annotated
+            inner_type = param.annotation.__args__[0]
             assert not (
-                hasattr(param.annotation, "__origin__")
-                and param.annotation.__origin__ is Union
-                and type(None) in param.annotation.__args__
+                hasattr(inner_type, "__origin__")
+                and inner_type.__origin__ is Union
+                and type(None) in inner_type.__args__
             )
         else:
             # Other parameters should be Optional (Union[..., None])
-            assert hasattr(param.annotation, "__origin__")
-            assert param.annotation.__origin__ is Union
-            assert type(None) in param.annotation.__args__
+            assert param.annotation.__origin__ is Annotated
+            inner_type = param.annotation.__args__[0]
+            assert hasattr(inner_type, "__origin__")
+            assert inner_type.__origin__ is Union
+            assert type(None) in inner_type.__args__
 
     # Directly call the aggregate function with mock filter objects
-    # This tests the body logic of the dynamically created function
     mock_id_filter = CollectionFilter(field_name="id", values=["1"])
     mock_created_filter = BeforeAfter(field_name="created_at", before=datetime.now(), after=None)
     mock_limit_offset = LimitOffset(limit=10, offset=0)
@@ -229,16 +230,14 @@ def test_create_filter_dependencies_all_filters() -> None:
     """Test create_filter_dependencies enabling all filters returns the aggregate."""
 
     dep_cache.dependencies.clear()
-    deps = provide_filters(
-        {
-            "id_filter": UUID,
-            "created_at": True,
-            "updated_at": True,
-            "pagination_type": "limit_offset",
-            "search": "name, description",
-            "sort_field": "created_at",
-        }
-    )
+    deps = provide_filters({
+        "id_filter": UUID,
+        "created_at": True,
+        "updated_at": True,
+        "pagination_type": "limit_offset",
+        "search": "name, description",
+        "sort_field": "created_at",
+    })
     assert callable(deps)
 
     sig = inspect.signature(deps)
@@ -258,20 +257,18 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
 
     # Clear cache before test
     dep_cache.dependencies.clear()
-    deps = provide_filters(
-        {
-            "id_filter": UUID,
-            "pagination_type": "limit_offset",
-            "search": "name",
-            "sort_field": "name",  # Enables OrderBy
-            "created_at": True,
-        }
-    )
+    deps = provide_filters({
+        "id_filter": UUID,
+        "pagination_type": "limit_offset",
+        "search": "name",
+        "sort_field": "name",  # Enables OrderBy
+        "created_at": True,
+    })
 
     app = FastAPI()
 
     @app.get("/items")
-    async def get_items(filters: list[FilterTypes] = Depends(deps)) -> list[str]:  # noqa: FAST002
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[str]:
         # Return simple representation for verification
         return [type(f).__name__ for f in filters]
 
@@ -387,7 +384,7 @@ def test_custom_dependency_defaults_fastapi() -> None:
     app = FastAPI()
 
     @app.get("/custom")
-    async def get_custom(filters: list[FilterTypes] = Depends(deps)) -> list[str]:  # noqa: FAST002
+    async def get_custom(filters: Annotated[list[FilterTypes], Depends(deps)] = []) -> list[str]:
         return [type(f).__name__ for f in filters]
 
     client = TestClient(app)
@@ -418,18 +415,16 @@ def test_custom_dependency_defaults_fastapi() -> None:
 def test_openapi_schema_comprehensive() -> None:
     """Test comprehensive filter generation with all filter types."""
     # Create a filter configuration with all supported filter types
-    deps = provide_filters(
-        {
-            "id_filter": UUID,
-            "created_at": True,
-            "updated_at": True,
-            "pagination_type": "limit_offset",
-            "search": "name,description,email",  # Multiple search fields
-            "sort_field": {"name", "created_at", "email"},  # Multiple sort fields (using set)
-            "not_in_fields": {FieldNameType("status", str), FieldNameType("category", str)},  # Not-in fields
-            "in_fields": {FieldNameType("tag", str), FieldNameType("author_id", str)},  # In fields
-        }
-    )
+    deps = provide_filters({
+        "id_filter": UUID,
+        "created_at": True,
+        "updated_at": True,
+        "pagination_type": "limit_offset",
+        "search": "name,description,email",  # Multiple search fields
+        "sort_field": {"name", "created_at", "email"},  # Multiple sort fields (using set)
+        "not_in_fields": {FieldNameType("status", str), FieldNameType("category", str)},  # Not-in fields
+        "in_fields": {FieldNameType("tag", str), FieldNameType("author_id", str)},  # In fields
+    })
 
     # Check the signature of the generated function to ensure it has all required parameters
     sig = inspect.signature(deps)
@@ -450,7 +445,6 @@ def test_openapi_schema_comprehensive() -> None:
 
     # Test that function parameters have the correct types and defaults
     for name, param in sig.parameters.items():
-        assert hasattr(param.default, "dependency"), f"Parameter {name} default should be a Depends instance"
         # Check types for known parameters
         if name == "id_filter":
             assert "UUID" in str(param.annotation), f"id_filter should have UUID type, got {param.annotation}"
@@ -518,7 +512,7 @@ def test_openapi_schema_edge_cases() -> None:
 
     @app.get("/minimal")
     async def get_minimal(
-        filters: list[FilterType] = Depends(provide_filters({"pagination_type": "limit_offset"})),  # noqa: FAST002
+        filters: Annotated[list[FilterType], Depends(provide_filters({"pagination_type": "limit_offset"}))],
     ) -> list[str]:
         return [type(f).__name__ for f in filters]
 
