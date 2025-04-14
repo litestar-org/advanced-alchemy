@@ -19,7 +19,7 @@ class SentinelMixin:
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
-        if issubclass(cls, MappedAsDataclass):  # type: ignore[arg-type]
+        if issubclass(cls, MappedAsDataclass):
             cls._sentinel_kwargs["init"] = False
 
     @declared_attr
