@@ -303,20 +303,21 @@ You can access the database session from the controller by using the `db_session
         plugins=[alchemy],
     )
 
-Sessions in Middleware
-^^^^^^^^^^^^^^^^^^^^^^
+Sessions in Application
+^^^^^^^^^^^^^^^^^^^^^^^
 
-Dependency injection is not available in middleware. Instead, you can create a new session using the `provide_session` method:
+You can use the ``provide_session`` method to get session instances in your application. This is useful for middleware or other components that need to access the session outside of a controller.
 
 .. code-block:: python
 
     from litestar import Litestar
-    from litestar.types import ASGIApp, Scope, Receive, Send
+    from litestar.middleware import ASGIMiddleware
     from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
     )
+    from litestar.types import ASGIApp, Receive, Scope, Send
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
     sqlalchemy_config = SQLAlchemyAsyncConfig(
@@ -327,20 +328,46 @@ Dependency injection is not available in middleware. Instead, you can create a n
     )
     alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
-    def middleware_factory(app: ASGIApp) -> ASGIApp:
-        async def my_middleware(scope: Scope, receive: Receive, send: Send) -> None:
+
+    # Using provide_session.
+    # ``provide_session`` uses dependency injection to provide a session instance.
+    class MyMiddlewareOne(ASGIMiddleware):
+        async def handle(
+            self,
+            scope: Scope,
+            receive: Receive,
+            send: Send,
+            next_app: ASGIApp,
+        ) -> None:
             # NOTE: You can also access the app state from `ASGIConnection`.
-            db_session = await alchemy.provide_session(scope["app"].state, scope)
+            db_session = sqlalchemy_config.provide_session(scope["app"].state, scope)
             # Access the database session here.
             await db_session.close()
-            ...
-            await app(scope, receive, send)
-    return my_middleware
+
+            await next_app(scope, receive, send)
+
+
+    # Using get_session.
+    # ``get_session`` will create a new session each time it is called.
+    class MyMiddlewareTwo(ASGIMiddleware):
+        async def handle(
+            self,
+            scope: Scope,
+            receive: Receive,
+            send: Send,
+            next_app: ASGIApp,
+        ) -> None:
+            async with sqlalchemy_config.get_session() as db_session:
+                # Perform your database operations here.
+                pass
+
+            await next_app(scope, receive, send)
+
 
     app = Litestar(
         route_handlers=[...],
-        middleware=[middleware_factory],
-        plugins=[alchemy]
+        middleware=[MyMiddlewareOne(), MyMiddlewareTwo()],
+        plugins=[alchemy],
     )
 
 Database Migrations
