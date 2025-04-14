@@ -306,7 +306,7 @@ You can access the database session from the controller by using the `db_session
 Sessions in Application
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-You can use the ``provide_session`` method to get session instances in your application. This is useful for middleware or other components that need to access the session outside of a controller.
+You can use either ``provide_session`` or ``get_session`` to get session instances in your application. This is useful for middleware or other components that need to access the session outside of a controller.
 
 .. code-block:: python
 
