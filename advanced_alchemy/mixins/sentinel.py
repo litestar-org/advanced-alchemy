@@ -19,7 +19,7 @@ class SentinelMixin:
     def _sentinel(cls) -> Mapped[int]:
         kwargs: SentinelKwargs = {}
         if issubclass(type[cls], MappedAsDataclass):
-            kwargs["init"] = True
+            kwargs["init"] = False
         return mapped_column(
             name="sa_orm_sentinel",
             insert_default=_InsertSentinelColumnDefault(),
