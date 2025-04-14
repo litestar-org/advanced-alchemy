@@ -4,11 +4,10 @@ from sqlalchemy.orm import Mapped, MappedAsDataclass, declarative_mixin, declare
 from sqlalchemy.sql.schema import (
     _InsertSentinelColumnDefault as InsertSentinelColumnDefault,  # pyright: ignore [reportPrivateUsage]
 )
-from typing_extensions import NotRequired
 
 
-class SentinelKwargs(TypedDict):
-    init: NotRequired[bool]
+class SentinelKwargs(TypedDict, total=False):
+    init: bool
 
 
 @declarative_mixin
@@ -18,7 +17,11 @@ class SentinelMixin:
     kwargs: SentinelKwargs
 
     def __init_subclass__(cls) -> None:
-        cls.kwargs = SentinelKwargs(init=False) if issubclass(cls, MappedAsDataclass) else SentinelKwargs()
+        if issubclass(cls, MappedAsDataclass):
+            cls.kwargs = {"init": False}
+
+        else:
+            cls.kwargs = {}
 
     @declared_attr
     def _sentinel(cls) -> Mapped[int]:
