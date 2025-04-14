@@ -397,8 +397,7 @@ def test_order_by_filter() -> None:
 
 def test_not_in_filter() -> None:
     """Test creating not_in filter dependency."""
-    config = cast(FilterConfig, {"not_in_fields": ["status"]})
-    deps = _create_statement_filters(config)
+    deps = _create_statement_filters({"not_in_fields": ["status"]})
 
     assert "status_not_in_filter" in deps
     assert "filters" in deps
@@ -417,8 +416,7 @@ def test_not_in_filter() -> None:
 
 def test_in_filter() -> None:
     """Test creating in filter dependency."""
-    config = cast(FilterConfig, {"in_fields": ["tag"]})
-    deps = _create_statement_filters(config)
+    deps = _create_statement_filters({"in_fields": ["tag"]})
 
     assert "tag_in_filter" in deps
     assert "filters" in deps
@@ -583,8 +581,7 @@ def test_order_by_filter_aggregation() -> None:
 
 def test_not_in_filter_aggregation() -> None:
     """Test aggregation with not_in filter."""
-    config = cast(FilterConfig, {"not_in_fields": ["status"]})
-    aggregate_func = _create_filter_aggregate_function(config)
+    aggregate_func = _create_filter_aggregate_function({"not_in_fields": ["status"]})
 
     # Check signature
     sig = inspect.signature(aggregate_func)
@@ -690,8 +687,8 @@ def test_multiple_filters_aggregation() -> None:
 
 def test_litestar_openapi_schema() -> None:
     """Test OpenAPI schema generation for filter dependencies."""
-    config = cast(
-        FilterConfig,
+
+    filter_dependencies = create_filter_dependencies(
         {
             "id_filter": uuid.UUID,  # Example using UUID
             "id_field": "guid",
@@ -705,10 +702,8 @@ def test_litestar_openapi_schema() -> None:
             "sort_order": "asc",
             "not_in_fields": ["status", "category"],
             "in_fields": ["tag", "region"],
-        },
+        }
     )
-
-    filter_dependencies = create_filter_dependencies(config)
 
     @get("/test")
     async def test_handler(

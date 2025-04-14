@@ -1,4 +1,4 @@
-# ruff: noqa: B008, PGH003, PLW018
+# ruff: noqa: B008
 """Application dependency providers generators.
 
 This module contains functions to create dependency providers for services and filters.
@@ -117,7 +117,7 @@ class FilterConfig(TypedDict):
     """When set, pagination is enabled based on the type specified."""
     pagination_size: NotRequired[int]
     """The size of the pagination."""
-    search: NotRequired[Union[str, set[str]]]
+    search: NotRequired[Union[str, set[str], list[str]]]
     """Fields to enable search on. Can be a comma-separated string or a set of field names."""
     search_ignore_case: NotRequired[bool]
     """When set, search is case insensitive by default."""
@@ -125,9 +125,9 @@ class FilterConfig(TypedDict):
     """When set, created_at filter is enabled."""
     updated_at: NotRequired[bool]
     """When set, updated_at filter is enabled."""
-    not_in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
+    not_in_fields: NotRequired[Union[FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]]]
     """Fields that support not-in collection filters. Can be a single field or a set of fields with type information."""
-    in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
+    in_fields: NotRequired[Union[FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]]]
     """Fields that support in-collection filters. Can be a single field or a set of fields with type information."""
 
 
@@ -419,7 +419,7 @@ def _create_statement_filters(  # noqa: C901
             ),
         ) -> SearchFilter:
             # Handle both string and set input types for search fields
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else search_fields
+            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
 
             return SearchFilter(
                 field_name=field_names,
@@ -455,6 +455,7 @@ def _create_statement_filters(  # noqa: C901
         not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
 
         for field_def in not_in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
 
             def create_not_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType,
@@ -481,6 +482,7 @@ def _create_statement_filters(  # noqa: C901
         in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
 
         for field_def in in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
 
             def create_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType,
@@ -637,20 +639,21 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         if not_in_fields := config.get("not_in_fields"):
             # Get all field names, handling both strings and FieldNameType objects
             not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
-
-            filters.extend(
-                filter_ for field_name in not_in_fields if (filter_ := kwargs.get(f"{field_name.name}_not_in_filter"))
-            )
+            for field_def in not_in_fields:
+                field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+                filter_ = kwargs.get(f"{field_def.name}_not_in_filter")
+                if filter_ is not None:
+                    filters.append(filter_)
 
         # Add in filters
         if in_fields := config.get("in_fields"):
             # Get all field names, handling both strings and FieldNameType objects
             in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
-
-            filters.extend(
-                filter_ for field_name in in_fields if (filter_ := kwargs.get(f"{field_name.name}_in_filter"))
-            )
-
+            for field_def in in_fields:
+                field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+                filter_ = kwargs.get(f"{field_def.name}_in_filter")
+                if filter_ is not None:
+                    filters.append(filter_)
         return filters
 
     # Set both signature and annotations
