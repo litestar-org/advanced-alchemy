@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
-from sqlalchemy.sql.schema import _InsertSentinelColumnDefault as InsertSentinelColumnDefault
+from sqlalchemy.sql.schema import _InsertSentinelColumnDefault as InsertSentinelColumnDefault  # pyright: ignore [reportPrivateUsage]
 
 
 @declarative_mixin
