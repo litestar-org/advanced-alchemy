@@ -294,7 +294,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         /,
         kwargs: Union[dict[Any, Any], Iterable[tuple[Any, Any]]],
     ) -> list[ModelT]:
-        kwargs_: dict[Any, Any] = kwargs if isinstance(kwargs, dict) else dict(*kwargs)
+        kwargs_: dict[Any, Any] = kwargs if isinstance(kwargs, dict) else dict(*kwargs)  # pyright: ignore
         kwargs_ = self._exclude_unused_kwargs(kwargs_)  # pyright: ignore
         try:
             return [item for item in result if all(getattr(item, field) == value for field, value in kwargs_.items())]  # pyright: ignore

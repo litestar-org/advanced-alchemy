@@ -1,4 +1,4 @@
-# ruff: noqa: B008, PGH003
+# ruff: noqa: B008, PGH003, PLW018
 """Application dependency providers generators.
 
 This module contains functions to create dependency providers for services and filters.
@@ -13,6 +13,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Literal,
+    NamedTuple,
     Optional,
     TypedDict,
     TypeVar,
@@ -31,6 +32,7 @@ from advanced_alchemy.filters import (
     CollectionFilter,
     FilterTypes,
     LimitOffset,
+    NotInCollectionFilter,
     OrderBy,
     SearchFilter,
 )
@@ -44,6 +46,7 @@ from advanced_alchemy.service import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
+from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -61,6 +64,8 @@ SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
 AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any], covariant=True)
 SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any], covariant=True)
+HashableValue = Union[str, int, float, bool, None]
+HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
 
 
 class DependencyDefaults:
@@ -85,10 +90,22 @@ class DependencyDefaults:
 DEPENDENCY_DEFAULTS = DependencyDefaults()
 
 
+class FieldNameType(NamedTuple):
+    """Type for field name and associated type information.
+
+    This allows for specifying both the field name and the expected type for filter values.
+    """
+
+    name: str
+    """Name of the field to filter on."""
+    type_hint: type[Any] = str
+    """Type of the filter value. Defaults to str."""
+
+
 class FilterConfig(TypedDict):
     """Configuration for generating dynamic filters."""
 
-    id_filter: NotRequired[type[Union[UUID, int]]]
+    id_filter: NotRequired[type[Union[UUID, int, str]]]
     """Indicates that the id filter should be enabled.  When set, the type specified will be used for the :class:`CollectionFilter`."""
     id_field: NotRequired[str]
     """The field on the model that stored the primary key or identifier."""
@@ -100,14 +117,18 @@ class FilterConfig(TypedDict):
     """When set, pagination is enabled based on the type specified."""
     pagination_size: NotRequired[int]
     """The size of the pagination."""
-    search: NotRequired[str]
-    """When set, search is enabled for the specified fields."""
+    search: NotRequired[Union[str, set[str]]]
+    """Fields to enable search on. Can be a comma-separated string or a set of field names."""
     search_ignore_case: NotRequired[bool]
     """When set, search is case insensitive by default."""
     created_at: NotRequired[bool]
     """When set, created_at filter is enabled."""
     updated_at: NotRequired[bool]
     """When set, updated_at filter is enabled."""
+    not_in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
+    """Fields that support not-in collection filters. Can be a single field or a set of fields with type information."""
+    in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
+    """Fields that support in-collection filters. Can be a single field or a set of fields with type information."""
 
 
 class DependencyCache(metaclass=SingletonMeta):
@@ -281,7 +302,7 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
-    cache_key = sum(map(hash, config.items()))
+    cache_key = hash(_make_hashable(config))
     deps = dep_cache.get_dependencies(cache_key)
     if deps is not None:
         return deps
@@ -290,7 +311,38 @@ def create_filter_dependencies(
     return deps
 
 
-def _create_statement_filters(
+def _make_hashable(value: Any) -> HashableType:
+    """Convert a value into a hashable type.
+
+    This function converts any value into a hashable type by:
+    - Converting dictionaries to sorted tuples of (key, value) pairs
+    - Converting lists and sets to sorted tuples
+    - Preserving primitive types (str, int, float, bool, None)
+    - Converting any other type to its string representation
+
+    Args:
+        value: Any value that needs to be made hashable.
+
+    Returns:
+        A hashable version of the value.
+    """
+    if isinstance(value, dict):
+        # Convert dict to tuple of tuples with sorted keys
+        items = []
+        for k in sorted(value.keys()):  # pyright: ignore
+            v = value[k]  # pyright: ignore
+            items.append((str(k), _make_hashable(v)))  # pyright: ignore
+        return tuple(items)  # pyright: ignore
+    if isinstance(value, (list, set)):
+        hashable_items = [_make_hashable(item) for item in value]  # pyright: ignore
+        filtered_items = [item for item in hashable_items if item is not None]  # pyright: ignore
+        return tuple(sorted(filtered_items, key=str))
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    return str(value)
+
+
+def _create_statement_filters(  # noqa: C901
     config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
 ) -> dict[str, Provide]:
     """Create filter dependencies based on configuration.
@@ -366,8 +418,11 @@ def _create_statement_filters(
                 required=False,
             ),
         ) -> SearchFilter:
+            # Handle both string and set input types for search fields
+            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else search_fields
+
             return SearchFilter(
-                field_name=set(search_fields.split(",")),
+                field_name=field_names,
                 value=search_string,  # type: ignore[arg-type]
                 ignore_case=ignore_case or False,
             )
@@ -393,6 +448,59 @@ def _create_statement_filters(
             return OrderBy(field_name=field_name, sort_order=sort_order)  # type: ignore[arg-type]
 
         filters[dep_defaults.ORDER_BY_DEPENDENCY_KEY] = Provide(provide_order_by, sync_to_thread=False)
+
+    # Add not_in filter providers
+    if not_in_fields := config.get("not_in_fields"):
+        # Get all field names, handling both strings and FieldNameType objects
+        not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
+
+        for field_def in not_in_fields:
+
+            def create_not_in_filter_provider(  # pyright: ignore
+                field_name: FieldNameType,
+            ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
+                def provide_not_in_filter(  # pyright: ignore
+                    values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore
+                        query=camelize(f"{field_name.name}_not_in"), default=None, required=False
+                    ),
+                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
+                    return (
+                        NotInCollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
+                        if values
+                        else None
+                    )
+
+                return provide_not_in_filter  # pyright: ignore
+
+            provider = create_not_in_filter_provider(field_def)  # pyright: ignore
+            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+
+    # Add in filter providers
+    if in_fields := config.get("in_fields"):
+        # Get all field names, handling both strings and FieldNameType objects
+        in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
+
+        for field_def in in_fields:
+
+            def create_in_filter_provider(  # pyright: ignore
+                field_name: FieldNameType,
+            ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore # pyright: ignore
+                def provide_in_filter(  # pyright: ignore
+                    values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore # pyright: ignore
+                        query=camelize(f"{field_name.name}_in"), default=None, required=False
+                    ),
+                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
+                    return (
+                        CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
+                        if values
+                        else None
+                    )
+
+                return provide_in_filter  # pyright: ignore
+
+            provider = create_in_filter_provider(field_def)  # type: ignore
+            filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+
     if filters:
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = Provide(
             _create_filter_aggregate_function(config), sync_to_thread=False
@@ -401,7 +509,7 @@ def _create_statement_filters(
     return filters
 
 
-def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., list[FilterTypes]]:
+def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., list[FilterTypes]]:  # noqa: C901, PLR0915
     """Create a filter function based on the provided configuration.
 
     Args:
@@ -469,6 +577,30 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         )
         annotations["order_by"] = OrderBy
 
+    # Add parameters for not_in filters
+    if not_in_fields := config.get("not_in_fields"):
+        for field_def in not_in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            parameters[f"{field_def.name}_not_in_filter"] = inspect.Parameter(
+                name=f"{field_def.name}_not_in_filter",
+                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=Dependency(skip_validation=True),
+                annotation=NotInCollectionFilter[field_def.type_hint],  # type: ignore
+            )
+            annotations[f"{field_def.name}_not_in_filter"] = NotInCollectionFilter[field_def.type_hint]  # type: ignore
+
+    # Add parameters for in filters
+    if in_fields := config.get("in_fields"):
+        for field_def in in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            parameters[f"{field_def.name}_in_filter"] = inspect.Parameter(
+                name=f"{field_def.name}_in_filter",
+                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=Dependency(skip_validation=True),
+                annotation=CollectionFilter[field_def.type_hint],  # type: ignore
+            )
+            annotations[f"{field_def.name}_in_filter"] = CollectionFilter[field_def.type_hint]  # type: ignore
+
     def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:
         """Provide filter dependencies based on configuration.
 
@@ -500,6 +632,25 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
             and order_by.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
         ):
             filters.append(order_by)
+
+        # Add not_in filters
+        if not_in_fields := config.get("not_in_fields"):
+            # Get all field names, handling both strings and FieldNameType objects
+            not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
+
+            filters.extend(
+                filter_ for field_name in not_in_fields if (filter_ := kwargs.get(f"{field_name.name}_not_in_filter"))
+            )
+
+        # Add in filters
+        if in_fields := config.get("in_fields"):
+            # Get all field names, handling both strings and FieldNameType objects
+            in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
+
+            filters.extend(
+                filter_ for field_name in in_fields if (filter_ := kwargs.get(f"{field_name.name}_in_filter"))
+            )
+
         return filters
 
     # Set both signature and annotations

@@ -8,7 +8,10 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
+from litestar import Litestar, get  # Added Litestar, get
 from litestar.di import Provide
+from litestar.openapi import OpenAPIConfig  # Added OpenAPIConfig
+from litestar.testing import TestClient  # Added TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
 
@@ -28,7 +31,9 @@ from advanced_alchemy.extensions.litestar.providers import (
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
+    FilterTypes,  # Added FilterTypes
     LimitOffset,
+    NotInCollectionFilter,
     OrderBy,
     SearchFilter,
 )
@@ -390,6 +395,46 @@ def test_order_by_filter() -> None:
     assert f.sort_order == "desc"
 
 
+def test_not_in_filter() -> None:
+    """Test creating not_in filter dependency."""
+    config = cast(FilterConfig, {"not_in_fields": ["status"]})
+    deps = _create_statement_filters(config)
+
+    assert "status_not_in_filter" in deps
+    assert "filters" in deps
+
+    # Test the provider function
+    provider_func = deps["status_not_in_filter"].dependency
+    f = provider_func(values=["pending", "failed"])
+    assert isinstance(f, NotInCollectionFilter)
+    assert f.field_name == "status"
+    assert f.values == ["pending", "failed"]
+
+    # Test with None
+    f_none = provider_func(values=None)
+    assert f_none is None
+
+
+def test_in_filter() -> None:
+    """Test creating in filter dependency."""
+    config = cast(FilterConfig, {"in_fields": ["tag"]})
+    deps = _create_statement_filters(config)
+
+    assert "tag_in_filter" in deps
+    assert "filters" in deps
+
+    # Test the provider function
+    provider_func = deps["tag_in_filter"].dependency
+    f = provider_func(values=["python", "litestar"])
+    assert isinstance(f, CollectionFilter)
+    assert f.field_name == "tag"
+    assert f.values == ["python", "litestar"]
+
+    # Test with None
+    f_none = provider_func(values=None)
+    assert f_none is None
+
+
 def test_custom_dependency_defaults() -> None:
     """Test using custom dependency defaults."""
 
@@ -536,6 +581,48 @@ def test_order_by_filter_aggregation() -> None:
     assert mock_filter not in result
 
 
+def test_not_in_filter_aggregation() -> None:
+    """Test aggregation with not_in filter."""
+    config = cast(FilterConfig, {"not_in_fields": ["status"]})
+    aggregate_func = _create_filter_aggregate_function(config)
+
+    # Check signature
+    sig = inspect.signature(aggregate_func)
+    assert "status_not_in_filter" in sig.parameters
+
+    # Simulate calling with filter
+    mock_filter = MagicMock(spec=NotInCollectionFilter)
+    result = aggregate_func(status_not_in_filter=mock_filter)
+
+    assert isinstance(result, list)
+    assert mock_filter in result
+
+    # Simulate calling without filter (value is None)
+    result_none = aggregate_func(status_not_in_filter=None)
+    assert mock_filter not in result_none
+
+
+def test_in_filter_aggregation() -> None:
+    """Test aggregation with in filter."""
+    config = cast(FilterConfig, {"in_fields": ["tag"]})
+    aggregate_func = _create_filter_aggregate_function(config)
+
+    # Check signature
+    sig = inspect.signature(aggregate_func)
+    assert "tag_in_filter" in sig.parameters
+
+    # Simulate calling with filter
+    mock_filter = MagicMock(spec=CollectionFilter)
+    result = aggregate_func(tag_in_filter=mock_filter)
+
+    assert isinstance(result, list)
+    assert mock_filter in result
+
+    # Simulate calling without filter (value is None)
+    result_none = aggregate_func(tag_in_filter=None)
+    assert mock_filter not in result_none
+
+
 def test_multiple_filters_aggregation() -> None:
     """Test aggregation with multiple filters."""
     config = cast(
@@ -547,6 +634,8 @@ def test_multiple_filters_aggregation() -> None:
             "search": "name",
             "pagination_type": "limit_offset",
             "sort_field": "name",
+            "not_in_fields": ["status"],
+            "in_fields": ["tag"],
         },
     )
 
@@ -560,6 +649,8 @@ def test_multiple_filters_aggregation() -> None:
     assert "search_filter" in sig.parameters
     assert "limit_offset" in sig.parameters
     assert "order_by" in sig.parameters
+    assert "status_not_in_filter" in sig.parameters
+    assert "tag_in_filter" in sig.parameters
 
     # Simulate calling with multiple filters
     mock_id_filter = MagicMock(spec=CollectionFilter)
@@ -571,6 +662,8 @@ def test_multiple_filters_aggregation() -> None:
     mock_limit_offset = MagicMock(spec=LimitOffset)
     mock_order_by = MagicMock(spec=OrderBy)
     mock_order_by.field_name = "name"
+    mock_not_in_filter = MagicMock(spec=NotInCollectionFilter)
+    mock_in_filter = MagicMock(spec=CollectionFilter)
 
     result = aggregate_func(
         id_filter=mock_id_filter,
@@ -579,13 +672,120 @@ def test_multiple_filters_aggregation() -> None:
         search_filter=mock_search_filter,
         limit_offset=mock_limit_offset,
         order_by=mock_order_by,
+        status_not_in_filter=mock_not_in_filter,
+        tag_in_filter=mock_in_filter,
     )
 
     # Verify all filters are included
-    assert len(result) == 6
+    assert len(result) == 8
     assert mock_id_filter in result
     assert mock_created_filter in result
     assert mock_updated_filter in result
     assert mock_search_filter in result
     assert mock_limit_offset in result
     assert mock_order_by in result
+    assert mock_not_in_filter in result
+    assert mock_in_filter in result
+
+
+def test_litestar_openapi_schema() -> None:
+    """Test OpenAPI schema generation for filter dependencies."""
+    config = cast(
+        FilterConfig,
+        {
+            "id_filter": uuid.UUID,  # Example using UUID
+            "id_field": "guid",
+            "created_at": True,
+            "updated_at": True,
+            "pagination_type": "limit_offset",
+            "pagination_size": 25,
+            "search": "name,description",
+            "search_ignore_case": True,
+            "sort_field": "name",
+            "sort_order": "asc",
+            "not_in_fields": ["status", "category"],
+            "in_fields": ["tag", "region"],
+        },
+    )
+
+    filter_dependencies = create_filter_dependencies(config)
+
+    @get("/test")
+    async def test_handler(
+        filters: list[FilterTypes] = Provide(filter_dependencies["filters"].dependency),  # type: ignore[assignment]
+    ) -> list[str]:
+        """Dummy handler to test schema generation."""
+        return [type(f).__name__ for f in filters]
+
+    app = Litestar(
+        route_handlers=[test_handler],
+        dependencies=filter_dependencies,  # Provide all dependencies to the app
+        openapi_config=OpenAPIConfig(
+            title="Test API", version="1.0.0", use_handler_docstrings=True, path="/schema"
+        ),  # Explicitly enable OpenAPI with specific path
+    )
+    client = TestClient(app)
+
+    # Fetch the OpenAPI schema (using the exact path from Litestar's default config)
+    response = client.get("/schema/openapi.json")
+    assert response.status_code == 200, (
+        f"Failed to get schema, status: {response.status_code}, content: {response.text[:200]}"
+    )
+    schema = response.json()
+
+    # Find the parameters for the /test endpoint
+    path_item = schema.get("paths", {}).get("/test", {}).get("get", {})
+    parameters = path_item.get("parameters", [])
+
+    # Assert all expected parameter names are present
+    param_names = {p["name"] for p in parameters}
+    expected_params = {
+        "ids",  # from id_filter, alias based on id_field 'guid' might not be reflected here, Litestar uses parameter name
+        "createdBefore",
+        "createdAfter",
+        "updatedBefore",
+        "updatedAfter",
+        "currentPage",
+        "pageSize",
+        "searchString",
+        "searchIgnoreCase",
+        "orderBy",
+        "sortOrder",
+        "statusNotIn",
+        "categoryNotIn",
+        "tagIn",
+        "regionIn",
+    }
+    assert param_names == expected_params
+
+    # Check details of specific parameters
+
+    # ids (based on id_filter: uuid.UUID)
+    ids_param = next(p for p in parameters if p["name"] == "ids")
+    assert ids_param["in"] == "query"
+    assert ids_param["required"] is False
+    assert "oneOf" in ids_param["schema"]
+    assert len(ids_param["schema"]["oneOf"]) == 2
+    array_schema = ids_param["schema"]["oneOf"][0]
+    assert array_schema["type"] == "array"
+    assert array_schema["items"]["type"] == "string"
+
+    # createdBefore (datetime parameter)
+    created_before_param = next(p for p in parameters if p["name"] == "createdBefore")
+    assert created_before_param["in"] == "query"
+    assert created_before_param["required"] is False
+    assert "oneOf" in created_before_param["schema"]
+    date_schema = created_before_param["schema"]["oneOf"][0]
+    assert date_schema["type"] == "string"
+    assert date_schema["format"] == "date-time"
+
+    # Check in and not_in parameters
+    status_not_in_param = next(p for p in parameters if p["name"] == "statusNotIn")
+    assert status_not_in_param["in"] == "query"
+    assert status_not_in_param["required"] is False
+    assert "oneOf" in status_not_in_param["schema"]
+
+    tag_in_param = next(p for p in parameters if p["name"] == "tagIn")
+    assert tag_in_param["in"] == "query"
+    assert tag_in_param["required"] is False
+    assert "oneOf" in tag_in_param["schema"]

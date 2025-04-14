@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Optional
 
 __all__ = (
@@ -11,7 +12,19 @@ __all__ = (
 
 
 def check_email(email: str) -> str:
-    """Validate an email."""
+    """Validate an email.
+
+    Very simple email validation.
+
+    Args:
+        email (str): The email to validate.
+
+    Raises:
+        ValueError: If the email is invalid.
+
+    Returns:
+        str: The validated email.
+    """
     if "@" not in email:
         msg = "Invalid email!"
         raise ValueError(msg)
@@ -43,3 +56,16 @@ def slugify(value: str, allow_unicode: bool = False, separator: Optional[str] = 
     if separator is not None:
         return re.sub(r"[-\s]+", "-", value).strip("-_").replace("-", separator)
     return re.sub(r"[-\s]+", "-", value).strip("-_")
+
+
+@lru_cache(maxsize=100)
+def camelize(string: str) -> str:
+    """Convert a string to camel case.
+
+    Args:
+        string (str): The string to convert.
+
+    Returns:
+        str: The converted string.
+    """
+    return "".join(word if index == 0 else word.capitalize() for index, word in enumerate(string.split("_")))
