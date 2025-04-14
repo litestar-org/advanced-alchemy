@@ -15,6 +15,8 @@ class SentinelKwargs(TypedDict):
 class SentinelMixin:
     """Mixin to add a sentinel column for SQLAlchemy models."""
 
+    kwargs: SentinelKwargs
+
     def __init_subclass__(cls) -> None:
         cls.kwargs = SentinelKwargs(init=False) if issubclass(cls, MappedAsDataclass) else SentinelKwargs()
 
