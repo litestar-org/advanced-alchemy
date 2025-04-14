@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import inspect
+import unittest.mock
 import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
-from litestar import Litestar, get  # Added Litestar, get
+from litestar import Litestar, get
 from litestar.di import Provide
-from litestar.openapi import OpenAPIConfig  # Added OpenAPIConfig
-from litestar.testing import TestClient  # Added TestClient
+from litestar.openapi.config import OpenAPIConfig
+from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
 
@@ -20,6 +21,7 @@ from advanced_alchemy.extensions.litestar.providers import (
     DependencyCache,
     DependencyDefaults,
     FilterConfig,
+    FilterTypes,
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
     _create_statement_filters,  # pyright: ignore[reportPrivateUsage]
@@ -31,7 +33,6 @@ from advanced_alchemy.extensions.litestar.providers import (
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
-    FilterTypes,  # Added FilterTypes
     LimitOffset,
     NotInCollectionFilter,
     OrderBy,
@@ -481,8 +482,7 @@ def test_id_filter_aggregation() -> None:
 
 def test_created_at_filter_aggregation() -> None:
     """Test aggregation with created_at filter."""
-    config = cast(FilterConfig, {"created_at": "created_at"})
-    aggregate_func = _create_filter_aggregate_function(config)
+    aggregate_func = _create_filter_aggregate_function({"created_at": True})
 
     # Check signature
     sig = inspect.signature(aggregate_func)
@@ -498,8 +498,7 @@ def test_created_at_filter_aggregation() -> None:
 
 def test_updated_at_filter_aggregation() -> None:
     """Test aggregation with updated_at filter."""
-    config = cast(FilterConfig, {"updated_at": "updated_at"})
-    aggregate_func = _create_filter_aggregate_function(config)
+    aggregate_func = _create_filter_aggregate_function({"updated_at": True})
 
     # Check signature
     sig = inspect.signature(aggregate_func)
@@ -515,8 +514,7 @@ def test_updated_at_filter_aggregation() -> None:
 
 def test_search_filter_aggregation() -> None:
     """Test aggregation with search filter."""
-    config = cast(FilterConfig, {"search": ["name"]})
-    aggregate_func = _create_filter_aggregate_function(config)
+    aggregate_func = _create_filter_aggregate_function({"search": ["name"]})
 
     # Check signature
     sig = inspect.signature(aggregate_func)
@@ -540,8 +538,7 @@ def test_search_filter_aggregation() -> None:
 
 def test_limit_offset_filter_aggregation() -> None:
     """Test aggregation with limit_offset filter."""
-    config = cast(FilterConfig, {"pagination_type": "limit_offset"})
-    aggregate_func = _create_filter_aggregate_function(config)
+    aggregate_func = _create_filter_aggregate_function({"pagination_type": "limit_offset"})
 
     # Check signature
     sig = inspect.signature(aggregate_func)
@@ -557,8 +554,7 @@ def test_limit_offset_filter_aggregation() -> None:
 
 def test_order_by_filter_aggregation() -> None:
     """Test aggregation with order_by filter."""
-    config = cast(FilterConfig, {"sort_field": "name"})
-    aggregate_func = _create_filter_aggregate_function(config)
+    aggregate_func = _create_filter_aggregate_function({"sort_field": "name"})
 
     # Check signature
     sig = inspect.signature(aggregate_func)
@@ -685,30 +681,32 @@ def test_multiple_filters_aggregation() -> None:
     assert mock_in_filter in result
 
 
-def test_litestar_openapi_schema() -> None:
+@unittest.mock.patch(
+    "advanced_alchemy.extensions.litestar.providers.create_filter_dependencies",
+    wraps=create_filter_dependencies,  # Call the original function logic
+)
+def test_litestar_openapi_schema(mock_create_filters: unittest.mock.MagicMock) -> None:
     """Test OpenAPI schema generation for filter dependencies."""
 
-    filter_dependencies = create_filter_dependencies(
-        {
-            "id_filter": uuid.UUID,  # Example using UUID
-            "id_field": "guid",
-            "created_at": True,
-            "updated_at": True,
-            "pagination_type": "limit_offset",
-            "pagination_size": 25,
-            "search": "name,description",
-            "search_ignore_case": True,
-            "sort_field": "name",
-            "sort_order": "asc",
-            "not_in_fields": ["status", "category"],
-            "in_fields": ["tag", "region"],
-        }
-    )
+    filter_config = {
+        "id_filter": uuid.UUID,  # Example using UUID
+        "id_field": "guid",
+        "created_at": True,
+        "updated_at": True,
+        "pagination_type": "limit_offset",
+        "pagination_size": 25,
+        "search": "name,description",
+        "search_ignore_case": True,
+        "sort_field": "name",
+        "sort_order": "asc",
+        "not_in_fields": ["status", "category"],
+        "in_fields": ["tag", "region"],
+    }
+    # Call the mocked function, which wraps the original
+    filter_dependencies = mock_create_filters(filter_config)
 
     @get("/test")
-    async def test_handler(
-        filters: list[FilterTypes] = Provide(filter_dependencies["filters"].dependency),  # type: ignore[assignment]
-    ) -> list[str]:
+    async def test_handler(filters: list[FilterTypes]) -> list[str]:
         """Dummy handler to test schema generation."""
         return [type(f).__name__ for f in filters]
 

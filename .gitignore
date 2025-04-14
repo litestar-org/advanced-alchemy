@@ -172,3 +172,4 @@ cython_debug/
 .cursorrules
 .cursorignore
 .zed
+.cursor
