@@ -15,11 +15,15 @@ class SentinelMixin:
 
     __abstract__ = True
 
+    _sentinel_kwargs: SentinelKwargs = {}
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        if issubclass(cls, MappedAsDataclass):  # type: ignore[arg-type]
+            cls._sentinel_kwargs["init"] = False
+
     @declared_attr
     def _sentinel(cls) -> Mapped[int]:
-        kwargs: SentinelKwargs = {}
-        if issubclass(cls, MappedAsDataclass):  # pyright: ignore
-            kwargs["init"] = False
         return mapped_column(
             name="sa_orm_sentinel",
             insert_default=_InsertSentinelColumnDefault(),
@@ -27,5 +31,5 @@ class SentinelMixin:
             insert_sentinel=True,
             use_existing_column=True,
             nullable=True,
-            **kwargs,
+            **cls._sentinel_kwargs,
         )
