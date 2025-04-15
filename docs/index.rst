@@ -45,11 +45,13 @@ It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins
 and implementations of the :doc:`repository <usage/repositories>` and :doc:`service layer <usage/services>` patterns
 to simplify your database operations.
 
-.. container:: buttons
+.. container:: buttons wrap
 
-    :doc:`Get Started <getting-started>`
-    `Usage Docs <usage>`_
-    `API Docs <reference>`_
+  .. raw:: html
+
+    <a href="getting-started.html" class="btn-no-wrap">Get Started</a>
+    <a href="usage/index.html" class="btn-no-wrap">Usage Docs</a>
+    <a href="reference/index.html" class="btn-no-wrap">API Docs</a>
 
 .. grid:: 1 1 2 2
     :padding: 0
