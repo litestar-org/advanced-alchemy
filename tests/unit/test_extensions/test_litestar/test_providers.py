@@ -16,6 +16,7 @@ from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
 
+from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
 from advanced_alchemy.extensions.litestar.providers import (
     DEPENDENCY_DEFAULTS,
     DependencyCache,
@@ -712,6 +713,7 @@ def test_litestar_openapi_schema(mock_create_filters: unittest.mock.MagicMock) -
 
     app = Litestar(
         route_handlers=[test_handler],
+        signature_namespace=signature_namespace_values,
         dependencies=filter_dependencies,  # Provide all dependencies to the app
         openapi_config=OpenAPIConfig(
             title="Test API", version="1.0.0", use_handler_docstrings=True, path="/schema"
