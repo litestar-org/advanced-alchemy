@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Callable
 from uuid import UUID
 
 import pytest
