@@ -3,6 +3,43 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.2.0
+    :date: 2025-04-15
+
+    .. change:: migration generation produces duplicated unique constraints
+        :type: bugfix
+        :pr: 434
+        :issue: 427
+
+        Removes column re-ordering component was incorrectly causing incorrect constraints to be genreated.
+
+        Fixes #427
+
+    .. change:: make `SentinelMixin` compatible with `MappedAsDataclass`
+        :type: bugfix
+        :pr: 442
+
+        `MappedAsDataclass` is a mixin introduced in SQLAlchemy 2.0. It introduces massive DX improvements to SQLAlchemy by introducing dataclass type validation to SQLAlchemy models. However, this mixin is incompatible with SQLAlchemy's recommended method of implementing a sentinel column as written in their [documentation](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns).
+
+        This PR fixes this incompatibility as suggested by the SQLAlchemy maintainer in this [discussion](https://github.com/sqlalchemy/sqlalchemy/discussions/12519#discussioncomment-12804658).
+
+    .. change:: enable standard order by
+        :type: feature
+        :pr: 438
+
+        Enables the standard `UnaryOperator` order by support in addition to the existing `OrderingPair`
+
+    .. change:: additional filter configuration options
+        :type: feature
+        :pr: 444
+
+        Implements the following filters as configurable options:
+        - NotInCollection
+        - Collection
+
+        Search now also accepts a set of strings in addition to a comma delimmited list.
+
+
 .. changelog:: 1.1.1
     :date: 2025-04-07
 

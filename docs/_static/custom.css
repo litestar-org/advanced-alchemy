@@ -75,6 +75,17 @@ html.dark .title-with-logo .brand-text {
   text-shadow: var(--brand-text-glow);
 }
 
+/* Button container wrapping */
+.buttons.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.buttons.wrap .btn-no-wrap {
+  flex: 0 0 auto;
+}
+
 /* Large screens */
 @media (min-width: 1200px) {
   html[class] .title-with-logo .brand-text {
