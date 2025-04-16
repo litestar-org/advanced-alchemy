@@ -1,3 +1,4 @@
+import inspect as stdlib_inspect
 from collections.abc import Collection, Generator
 from collections.abc import Set as AbstractSet
 from dataclasses import asdict, dataclass, field, replace
@@ -231,7 +232,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                     default=Empty,
                 ),
                 default_factory=None,
-                dto_field=orm_descriptor.info.get(DTO_FIELD_META_KEY, DTOField(mark=Mark.READ_ONLY)),
+                dto_field=orm_descriptor.info.get(
+                    DTO_FIELD_META_KEY, DTOField(mark=Mark.READ_ONLY)
+                ),  # Mark as read-only
                 model_name=model_name,
             ),
         ]
@@ -260,7 +263,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                     default=Empty,
                 ),
                 default_factory=None,
-                dto_field=orm_descriptor.info.get(DTO_FIELD_META_KEY, DTOField(mark=Mark.READ_ONLY)),
+                dto_field=orm_descriptor.info.get(
+                    DTO_FIELD_META_KEY, DTOField(mark=Mark.READ_ONLY)
+                ),  # Mark as read-only
                 model_name=model_name,
             ),
         ]
@@ -275,7 +280,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                         default=Empty,
                     ),
                     default_factory=None,
-                    dto_field=orm_descriptor.info.get(DTO_FIELD_META_KEY, DTOField(mark=Mark.WRITE_ONLY)),
+                    dto_field=orm_descriptor.info.get(
+                        DTO_FIELD_META_KEY, DTOField(mark=Mark.WRITE_ONLY)
+                    ),  # Mark as read-only
                     model_name=model_name,
                 ),
             )
@@ -283,7 +290,31 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         return field_defs
 
     @classmethod
-    def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
+    def get_property_fields(cls, model_type: type) -> dict[str, FieldDefinition]:
+        """Get fields defined as properties on the model type.
+
+        Returns:
+            dict[str, FieldDefinition]: A dictionary mapping property names to their field definitions.
+        """
+        properties: dict[str, FieldDefinition] = {}
+        for name, member in stdlib_inspect.getmembers(model_type, predicate=lambda x: isinstance(x, property)):
+            if member.fget:
+                try:
+                    # Attempt to parse the signature to get the return type hint
+                    sig = ParsedSignature.from_fn(member.fget, {})
+                    field_def = sig.return_type
+                    # Ensure the name is set correctly on the FieldDefinition
+                    if field_def.name != name:
+                        field_def = replace(field_def, name=name)
+                    properties[name] = field_def
+                except Exception:  # pragma: no cover  # noqa: BLE001
+                    # Fallback if signature parsing fails (e.g., no type hint)
+                    # Consider logging a warning here
+                    properties[name] = FieldDefinition.from_annotation(Any, name=name)
+        return properties
+
+    @classmethod
+    def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:  # noqa: C901, PLR0914
         """Generate DTO field definitions from a SQLAlchemy model.
 
         Args:
@@ -315,6 +346,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                     skipped_descriptors.add(attr.name)
                 elif isinstance(attr, str):
                     skipped_descriptors.add(attr)
+
+        yielded_sqla_keys: set[str] = set()  # Keep track of keys yielded by SQLAlchemy logic
+
         for key, orm_descriptor in mapper.all_orm_descriptors.items():
             if is_hybrid_property := isinstance(orm_descriptor, hybrid_property):
                 if orm_descriptor in seen_hybrid_descriptors:
@@ -328,7 +362,12 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             should_skip_descriptor = False
             dto_field: Optional[DTOField] = None
             if hasattr(orm_descriptor, "property"):  # pyright: ignore[reportUnknownArgumentType]
-                dto_field = orm_descriptor.property.info.get(DTO_FIELD_META_KEY)  # pyright: ignore
+                # Access info safely, checking if property exists first
+                prop = getattr(orm_descriptor, "property", None)  # pyright: ignore[reportUnknownArgumentType]
+                if prop and hasattr(prop, "info"):
+                    dto_field = prop.info.get(DTO_FIELD_META_KEY)
+                elif hasattr(orm_descriptor, "info"):  # pyright: ignore[reportUnknownArgumentType]
+                    dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
 
             # Case 1
             is_field_marked_not_private = dto_field and dto_field.mark is not Mark.PRIVATE  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
@@ -353,12 +392,38 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             if should_skip_descriptor:
                 continue
 
-            yield from cls.handle_orm_descriptor(
+            # Yield definitions from SQLAlchemy descriptor handling
+            definitions = cls.handle_orm_descriptor(
                 orm_descriptor.extension_type,
                 key,
                 orm_descriptor,
                 model_type_hints,
                 model_name,
+            )
+            for definition in definitions:
+                yielded_sqla_keys.add(definition.name)  # Track yielded key
+                yield definition
+
+        # Now handle Python @property fields
+        property_fields = cls.get_property_fields(model_type)
+        for key, property_field_definition in property_fields.items():
+            if key.startswith("_"):  # Skip private properties
+                continue
+
+            if key in yielded_sqla_keys:  # Skip if already handled by SQLAlchemy logic
+                continue
+
+            # Assume properties are read-only unless configured otherwise
+            yield DTOFieldDefinition.from_field_definition(
+                field_definition=replace(
+                    property_field_definition,
+                    # Ensure name is correct, default is Empty for properties
+                    name=key,
+                    default=Empty,
+                ),
+                model_name=model_name,
+                default_factory=None,
+                dto_field=DTOField(mark=Mark.READ_ONLY),  # Mark as read-only
             )
 
     @classmethod
