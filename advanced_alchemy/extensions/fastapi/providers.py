@@ -25,6 +25,8 @@ from uuid import UUID
 
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from typing_extensions import NotRequired, TypedDict
 
 from advanced_alchemy.filters import (
@@ -50,10 +52,8 @@ from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import Session
 
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 T = TypeVar("T")
 DTorNone = Optional[datetime.datetime]
@@ -155,8 +155,9 @@ class FilterConfig(TypedDict):
 def provide_service(
     service_class: type["AsyncServiceT_co"],
     /,
+    extension: "AdvancedAlchemy",
+    key: "Optional[str]" = None,
     statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[SQLAlchemyAsyncConfig]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
     execution_options: "Optional[dict[str, Any]]" = None,
@@ -169,8 +170,9 @@ def provide_service(
 def provide_service(
     service_class: type["SyncServiceT_co"],
     /,
+    extension: "AdvancedAlchemy",
+    key: "Optional[str]" = None,
     statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[SQLAlchemySyncConfig]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
     execution_options: "Optional[dict[str, Any]]" = None,
@@ -182,8 +184,9 @@ def provide_service(
 def provide_service(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
+    extension: "AdvancedAlchemy",
+    key: "Optional[str]" = None,
     statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
     execution_options: "Optional[dict[str, Any]]" = None,
@@ -198,12 +201,12 @@ def provide_service(
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
 
         async def provide_async_service(
-            db_session: "Optional[AsyncSession]" = None,
+            db_session: AsyncSession = Depends(extension.provide_session(key)),  # noqa: B008
         ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
             async with service_class.new(  # type: ignore[union-attr,unused-ignore]
                 session=db_session,  # type: ignore[arg-type, unused-ignore]
                 statement=statement,
-                config=cast("Optional[SQLAlchemyAsyncConfig]", config),  # type: ignore[arg-type]
+                config=cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key)),  # type: ignore[arg-type]
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
@@ -215,12 +218,12 @@ def provide_service(
         return provide_async_service
 
     def provide_sync_service(
-        db_session: "Optional[Session]" = None,
+        db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
     ) -> "Generator[SyncServiceT_co, None, None]":
         with service_class.new(
             session=db_session,  # type: ignore[arg-type, unused-ignore]
             statement=statement,
-            config=cast("Optional[SQLAlchemySyncConfig]", config),
+            config=cast("Optional[SQLAlchemySyncConfig]", extension.get_config(key)),
             error_messages=error_messages,
             load=load,
             execution_options=execution_options,

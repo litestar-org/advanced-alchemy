@@ -8,13 +8,11 @@
 # ]
 # ///
 import datetime
-from collections.abc import AsyncGenerator
 from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped
 
 from advanced_alchemy.extensions.fastapi import (
@@ -61,19 +59,12 @@ app = FastAPI()
 alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
 
 
-async def provide_authors_service(
-    db_session: Annotated[AsyncSession, Depends(alchemy.provide_session())],
-) -> AsyncGenerator[AuthorService, None]:
-    async with AuthorService.new(session=db_session) as service:
-        yield service
-
-
 author_router = APIRouter()
 
 
 @author_router.get(path="/authors", response_model=service.OffsetPagination[Author])
 async def list_authors(
-    authors_service: Annotated[AuthorService, Depends(provide_authors_service)],
+    authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
     filters: Annotated[
         list[filters.FilterTypes],
         Depends(
