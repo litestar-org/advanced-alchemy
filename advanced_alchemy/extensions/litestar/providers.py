@@ -75,11 +75,11 @@ class DependencyDefaults:
     """Key for the created filter dependency."""
     ID_FILTER_DEPENDENCY_KEY: str = "id_filter"
     """Key for the id filter dependency."""
-    LIMIT_OFFSET_DEPENDENCY_KEY: str = "limit_offset"
+    LIMIT_OFFSET_FILTER_DEPENDENCY_KEY: str = "limit_offset_filter"
     """Key for the limit offset dependency."""
     UPDATED_FILTER_DEPENDENCY_KEY: str = "updated_filter"
     """Key for the updated filter dependency."""
-    ORDER_BY_DEPENDENCY_KEY: str = "order_by"
+    ORDER_BY_FILTER_DEPENDENCY_KEY: str = "order_by_filter"
     """Key for the order by dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
@@ -116,7 +116,7 @@ class FilterConfig(TypedDict):
     pagination_type: NotRequired[Literal["limit_offset"]]
     """When set, pagination is enabled based on the type specified."""
     pagination_size: NotRequired[int]
-    """The size of the pagination."""
+    """The size of the pagination. Defaults to `DEFAULT_PAGINATION_SIZE`."""
     search: NotRequired[Union[str, set[str], list[str]]]
     """Fields to enable search on. Can be a comma-separated string or a set of field names."""
     search_ignore_case: NotRequired[bool]
@@ -398,7 +398,7 @@ def _create_statement_filters(  # noqa: C901
         ) -> LimitOffset:
             return LimitOffset(page_size, page_size * (current_page - 1))
 
-        filters[dep_defaults.LIMIT_OFFSET_DEPENDENCY_KEY] = Provide(
+        filters[dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY] = Provide(
             provide_limit_offset_pagination, sync_to_thread=False
         )
 
@@ -447,7 +447,7 @@ def _create_statement_filters(  # noqa: C901
         ) -> OrderBy:
             return OrderBy(field_name=field_name, sort_order=sort_order)  # type: ignore[arg-type]
 
-        filters[dep_defaults.ORDER_BY_DEPENDENCY_KEY] = Provide(provide_order_by, sync_to_thread=False)
+        filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(provide_order_by, sync_to_thread=False)
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
@@ -562,22 +562,22 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         annotations["search_filter"] = SearchFilter
 
     if config.get("pagination_type") == "limit_offset":
-        parameters["limit_offset"] = inspect.Parameter(
-            name="limit_offset",
+        parameters["limit_offset_filter"] = inspect.Parameter(
+            name="limit_offset_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=Dependency(skip_validation=True),
             annotation=LimitOffset,
         )
-        annotations["limit_offset"] = LimitOffset
+        annotations["limit_offset_filter"] = LimitOffset
 
     if config.get("sort_field"):
-        parameters["order_by"] = inspect.Parameter(
-            name="order_by",
+        parameters["order_by_filter"] = inspect.Parameter(
+            name="order_by_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=Dependency(skip_validation=True),
             annotation=OrderBy,
         )
-        annotations["order_by"] = OrderBy
+        annotations["order_by_filter"] = OrderBy
 
     # Add parameters for not_in filters
     if not_in_fields := config.get("not_in_fields"):
@@ -617,7 +617,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
             filters.append(id_filter)
         if created_filter := kwargs.get("created_filter"):
             filters.append(created_filter)
-        if limit_offset := kwargs.get("limit_offset"):
+        if limit_offset := kwargs.get("limit_offset_filter"):
             filters.append(limit_offset)
         if updated_filter := kwargs.get("updated_filter"):
             filters.append(updated_filter)
@@ -629,7 +629,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         ):
             filters.append(search_filter)
         if (
-            (order_by := cast("Optional[OrderBy]", kwargs.get("order_by")))
+            (order_by := cast("Optional[OrderBy]", kwargs.get("order_by_filter")))
             and order_by is not None  # pyright: ignore[reportUnnecessaryComparison]
             and order_by.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
         ):

@@ -1,4 +1,4 @@
-# ruff: noqa: B008, C901
+# pyright: ignore
 """Application dependency providers generators for FastAPI.
 
 This module contains functions to create dependency providers for filters,
@@ -88,12 +88,19 @@ class DependencyDefaults:
     """Default values for dependency generation."""
 
     CREATED_FILTER_DEPENDENCY_KEY: str = "created_filter"
+    """Key for the created filter dependency."""
     ID_FILTER_DEPENDENCY_KEY: str = "id_filter"
-    LIMIT_OFFSET_DEPENDENCY_KEY: str = "limit_offset"
+    """Key for the id filter dependency."""
+    LIMIT_OFFSET_FILTER_DEPENDENCY_KEY: str = "limit_offset_filter"
+    """Key for the limit offset dependency."""
     UPDATED_FILTER_DEPENDENCY_KEY: str = "updated_filter"
-    ORDER_BY_DEPENDENCY_KEY: str = "order_by"
+    """Key for the updated filter dependency."""
+    ORDER_BY_FILTER_DEPENDENCY_KEY: str = "order_by_filter"
+    """Key for the order by dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
+    """Key for the search filter dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
+    """Default pagination size."""
 
 
 DEPENDENCY_DEFAULTS = DependencyDefaults()
@@ -300,7 +307,7 @@ def _make_hashable(value: Any) -> HashableType:
     return str(value)
 
 
-def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
+def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
 ) -> Callable[..., list[FilterTypes]]:
@@ -316,8 +323,8 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
     if (id_filter := config.get("id_filter", False)) is not False:
 
         def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
-            ids: Annotated[  # pyright: ignore
-                Optional[list[id_filter]],  # type: ignore
+            ids: Annotated[  # type: ignore
+                Optional[list[id_filter]],  # pyright: ignore
                 Query(
                     alias="ids",
                     required=False,
@@ -475,7 +482,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
         ) -> LimitOffset:
             return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
-        param_name = dep_defaults.LIMIT_OFFSET_DEPENDENCY_KEY
+        param_name = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
         params.append(
             inspect.Parameter(
                 name=param_name,
@@ -536,7 +543,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
                     description="Field to order by.",
                     required=False,
                 ),
-            ] = sort_field,  # pyright: ignore
+            ] = sort_field,  # type: ignore[assignment]
             sort_order: Annotated[
                 Optional[SortOrder],
                 Query(
@@ -544,11 +551,11 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
                     description="Sort order ('asc' or 'desc').",
                     required=False,
                 ),
-            ] = sort_order_default,  # pyright: ignore
+            ] = sort_order_default,
         ) -> OrderBy:
             return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
 
-        param_name = dep_defaults.ORDER_BY_DEPENDENCY_KEY
+        param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
         params.append(
             inspect.Parameter(
                 name=param_name,
@@ -568,15 +575,15 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
                 local_field_type: type[Any],
             ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
                 def provide_not_in_filter(  # pyright: ignore
-                    values: Annotated[
-                        Optional[set[local_field_type]],  # type: ignore
+                    values: Annotated[  # type: ignore
+                        Optional[set[local_field_type]],  # pyright: ignore
                         Query(
                             alias=camelize(f"{local_field_name}_not_in"),
                             description=f"Filter {local_field_name} not in values",
                         ),
                     ] = None,
                 ) -> Optional[NotInCollectionFilter[local_field_type]]:  # type: ignore
-                    return NotInCollectionFilter(field_name=local_field_name, values=values) if values else None  # type: ignore
+                    return NotInCollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
 
                 return provide_not_in_filter  # pyright: ignore
 
@@ -586,10 +593,10 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
                 inspect.Parameter(
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)],  # pyright: ignore
+                    annotation=Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)],  # type: ignore
                 )
             )
-            annotations[param_name] = Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)]  # pyright: ignore
+            annotations[param_name] = Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
@@ -601,54 +608,48 @@ def _create_filter_aggregate_function_fastapi(  # noqa: PLR0915
                 local_field_type: type[Any],
             ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore
                 def provide_in_filter(  # pyright: ignore
-                    values: Annotated[
-                        Optional[set[local_field_type]],  # type: ignore
+                    values: Annotated[  # type: ignore
+                        Optional[set[local_field_type]],  # pyright: ignore
                         Query(
                             alias=camelize(f"{local_field_name}_in"),
                             description=f"Filter {local_field_name} in values",
                         ),
                     ] = None,
                 ) -> Optional[CollectionFilter[local_field_type]]:  # type: ignore
-                    return CollectionFilter(field_name=local_field_name, values=values) if values else None  # type: ignore
+                    return CollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
 
                 return provide_in_filter  # pyright: ignore
 
-            provider = create_in_filter_provider(field_def.name, field_def.type_hint)  # pyright: ignore
+            provider = create_in_filter_provider(field_def.name, field_def.type_hint)  # type: ignore
             param_name = f"{field_def.name}_in_filter"
             params.append(
                 inspect.Parameter(
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)],  # pyright: ignore
+                    annotation=Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)],  # type: ignore
                 )
             )
-            annotations[param_name] = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # pyright: ignore
+            annotations[param_name] = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
 
-    # Define our aggregate function with the correct FilterTypes
-    def aggregate_filter_function(**kwargs: Any) -> list[FilterTypes]:
-        filters: list[FilterTypes] = []
-        for filter_value in kwargs.values():
-            if filter_value is None:
-                continue
-            if isinstance(filter_value, list):
-                filters.extend(cast("list[FilterTypes]", filter_value))
-            elif isinstance(filter_value, SearchFilter) and filter_value.value is None:  # pyright: ignore # noqa: SIM114
-                continue  # type: ignore
-            elif isinstance(filter_value, OrderBy) and filter_value.field_name is None:  # pyright: ignore
-                continue  # type: ignore
-            else:
-                filters.append(cast("FilterTypes", filter_value))
-        return filters
-
-    # Set the function's annotations
-    annotations["return"] = Annotated[list[FilterTypes], Depends(aggregate_filter_function)]
-    aggregate_filter_function.__annotations__ = annotations
-
-    # Create a new signature with the correct return annotation - explicitly use list[FilterTypes]
-    # to ensure proper type checking in tests without monkey patching
-    aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
+    _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
         parameters=params,
-        return_annotation=Annotated[list[FilterTypes], Depends(aggregate_filter_function)],
+        return_annotation=Annotated[list[FilterTypes], Depends(_aggregate_filter_function)],
     )
 
-    return aggregate_filter_function
+    return _aggregate_filter_function
+
+
+def _aggregate_filter_function(**kwargs: Any) -> list[FilterTypes]:
+    filters: list[FilterTypes] = []
+    for filter_value in kwargs.values():
+        if filter_value is None:
+            continue
+        if isinstance(filter_value, list):
+            filters.extend(cast("list[FilterTypes]", filter_value))
+        elif isinstance(filter_value, SearchFilter) and filter_value.value is None:  # pyright: ignore # noqa: SIM114
+            continue  # type: ignore
+        elif isinstance(filter_value, OrderBy) and filter_value.field_name is None:  # pyright: ignore
+            continue  # type: ignore
+        else:
+            filters.append(cast("FilterTypes", filter_value))
+    return filters
