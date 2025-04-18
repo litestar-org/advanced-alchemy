@@ -77,12 +77,14 @@ async def list_authors(
     filters: Annotated[
         list[filters.FilterTypes],
         Depends(
-            providers.provide_filters({
-                "id_filter": UUID,
-                "pagination_type": "limit_offset",
-                "search": "name",
-                "search_ignore_case": True,
-            })
+            providers.provide_filters(
+                {
+                    "id_filter": UUID,
+                    "pagination_type": "limit_offset",
+                    "search": "name",
+                    "search_ignore_case": True,
+                }
+            )
         ),
     ],
 ) -> service.OffsetPagination[AuthorModel]:
