@@ -67,7 +67,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
     @overload
     def provide_service(
         self,
-        service_class: type["AsyncServiceT_co"],
+        service_class: type["AsyncServiceT_co"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
         statement: "Optional[Select[tuple[ModelT]]]" = None,
@@ -81,7 +81,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
     @overload
     def provide_service(
         self,
-        service_class: type["SyncServiceT_co"],
+        service_class: type["SyncServiceT_co"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
         statement: "Optional[Select[tuple[ModelT]]]" = None,
@@ -92,7 +92,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         count_with_window_function: Optional[bool] = None,
     ) -> "Callable[..., Generator[SyncServiceT_co, None, None]]": ...
 
-    def provide_service(
+    def provide_service(  # pragma: no cover
         self,
         service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
         /,
@@ -133,7 +133,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         )
 
     @staticmethod
-    def provide_filters(
+    def provide_filters(  # pragma: no cover
         config: "FilterConfig",
         /,
         dep_defaults: "Optional[DependencyDefaults]" = None,
