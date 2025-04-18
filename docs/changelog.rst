@@ -3,6 +3,22 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.3.0
+    :date: 2025-04-18
+
+    .. change:: btn ui
+        :type: bugfix
+        :pr: 446
+
+        Corrects the button UI in the documentation under certain viewport sizes.
+
+    .. change:: add dependency provider
+        :type: feature
+        :pr: 431
+
+        Add dependency factories for filters.
+
+
 .. changelog:: 1.2.0
     :date: 2025-04-15
 

@@ -1,5 +1,3 @@
-"""This example demonstrates how to use the FastAPI CLI to manage the database."""
-
 # /// script
 # dependencies = [
 #   "advanced_alchemy",
@@ -21,10 +19,18 @@ from advanced_alchemy.extensions.fastapi import (
     SQLAlchemyAsyncConfig,
     base,
     filters,
-    providers,
     repository,
     service,
 )
+
+sqlalchemy_config = SQLAlchemyAsyncConfig(
+    connection_string="sqlite+aiosqlite:///test.sqlite",
+    session_config=AsyncSessionConfig(expire_on_commit=False),
+    create_all=True,
+)
+app = FastAPI()
+alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
+author_router = APIRouter()
 
 
 class AuthorModel(base.UUIDBase):
@@ -50,32 +56,18 @@ class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
     repository_type = Repo
 
 
-sqlalchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
-    session_config=AsyncSessionConfig(expire_on_commit=False),
-    create_all=True,
-)
-app = FastAPI()
-alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
-
-
-author_router = APIRouter()
-
-
 @author_router.get(path="/authors", response_model=service.OffsetPagination[Author])
 async def list_authors(
     authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
     filters: Annotated[
         list[filters.FilterTypes],
         Depends(
-            providers.provide_filters(
-                {
-                    "id_filter": UUID,
-                    "pagination_type": "limit_offset",
-                    "search": "name",
-                    "search_ignore_case": True,
-                }
-            )
+            alchemy.provide_filters({
+                "id_filter": UUID,
+                "pagination_type": "limit_offset",
+                "search": "name",
+                "search_ignore_case": True,
+            })
         ),
     ],
 ) -> service.OffsetPagination[AuthorModel]:
@@ -84,8 +76,12 @@ async def list_authors(
 
 
 app.include_router(author_router)
+
+
 if __name__ == "__main__":
-    """Launches the FastAPI CLI with the database commands registered"""
+    """Launches the FastAPI CLI with the database commands registered
+    Run `uv run examples/fastapi/fastapi_service.py` to launch the FastAPI CLI with the database commands registered
+    """
     from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
     from typer.main import get_group
 
