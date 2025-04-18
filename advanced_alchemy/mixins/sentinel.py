@@ -14,7 +14,6 @@ class SentinelMixin:
     """Mixin to add a sentinel column for SQLAlchemy models."""
 
     __abstract__ = True
-
     _sentinel_kwargs: SentinelKwargs = {}
 
     def __init_subclass__(cls) -> None:
