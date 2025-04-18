@@ -22,7 +22,6 @@ from advanced_alchemy.extensions.litestar.providers import (
     DependencyCache,
     DependencyDefaults,
     FilterConfig,
-    FilterTypes,
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
     _create_statement_filters,  # pyright: ignore[reportPrivateUsage]
@@ -34,6 +33,7 @@ from advanced_alchemy.extensions.litestar.providers import (
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
+    FilterTypes,
     LimitOffset,
     NotInCollectionFilter,
     OrderBy,
@@ -370,10 +370,10 @@ def test_limit_offset_filter() -> None:
     config = cast(FilterConfig, {"pagination_type": "limit_offset", "default_limit": 10, "max_limit": 100})
     deps = _create_statement_filters(config)
 
-    assert "limit_offset" in deps
+    assert "limit_offset_filter" in deps
     assert "filters" in deps
     # Test the provider function
-    provider_func = deps["limit_offset"].dependency
+    provider_func = deps["limit_offset_filter"].dependency
 
     f = provider_func(current_page=2, page_size=5)
     assert isinstance(f, LimitOffset)
@@ -386,11 +386,11 @@ def test_order_by_filter() -> None:
     config = cast(FilterConfig, {"sort_field": "name"})
     deps = _create_statement_filters(config)
 
-    assert "order_by" in deps
+    assert "order_by_filter" in deps
     assert "filters" in deps
 
     # Test the provider function
-    provider_func = deps["order_by"].dependency
+    provider_func = deps["order_by_filter"].dependency
     f = provider_func(field_name="name", sort_order="desc")
     assert isinstance(f, OrderBy)
     assert f.field_name == "name"
@@ -441,7 +441,7 @@ def test_custom_dependency_defaults() -> None:
     class CustomDefaults(DependencyDefaults):
         """Custom dependency defaults."""
 
-        LIMIT_OFFSET_DEPENDENCY_KEY = "page"
+        LIMIT_OFFSET_FILTER_DEPENDENCY_KEY = "page"
         ID_FILTER_DEPENDENCY_KEY = "ids"
         DEFAULT_PAGINATION_SIZE = 100
 
@@ -543,11 +543,11 @@ def test_limit_offset_filter_aggregation() -> None:
 
     # Check signature
     sig = inspect.signature(aggregate_func)
-    assert "limit_offset" in sig.parameters
+    assert "limit_offset_filter" in sig.parameters
 
     # Simulate calling with filter
     mock_filter = MagicMock(spec=LimitOffset)
-    result = aggregate_func(limit_offset=mock_filter)
+    result = aggregate_func(limit_offset_filter=mock_filter)
 
     assert isinstance(result, list)
     assert mock_filter in result
@@ -559,27 +559,26 @@ def test_order_by_filter_aggregation() -> None:
 
     # Check signature
     sig = inspect.signature(aggregate_func)
-    assert "order_by" in sig.parameters
+    assert "order_by_filter" in sig.parameters
 
     # Mock order_by filter with valid field_name
     mock_filter = MagicMock(spec=OrderBy)
     mock_filter.field_name = "name"
 
-    result = aggregate_func(order_by=mock_filter)
+    result = aggregate_func(order_by_filter=mock_filter)
 
     assert isinstance(result, list)
     assert mock_filter in result
 
     # Test with invalid order_by filter (None field_name)
     mock_filter.field_name = None
-    result = aggregate_func(order_by=mock_filter)
+    result = aggregate_func(order_by_filter=mock_filter)
     assert mock_filter not in result
 
 
 def test_not_in_filter_aggregation() -> None:
     """Test aggregation with not_in filter."""
     aggregate_func = _create_filter_aggregate_function({"not_in_fields": ["status"]})
-
     # Check signature
     sig = inspect.signature(aggregate_func)
     assert "status_not_in_filter" in sig.parameters
@@ -619,8 +618,8 @@ def test_in_filter_aggregation() -> None:
 
 def test_multiple_filters_aggregation() -> None:
     """Test aggregation with multiple filters."""
-    config = cast(
-        FilterConfig,
+
+    aggregate_func = _create_filter_aggregate_function(
         {
             "id_filter": int,
             "created_at": True,
@@ -630,10 +629,8 @@ def test_multiple_filters_aggregation() -> None:
             "sort_field": "name",
             "not_in_fields": ["status"],
             "in_fields": ["tag"],
-        },
+        }
     )
-
-    aggregate_func = _create_filter_aggregate_function(config)
 
     # Check signature has all parameters
     sig = inspect.signature(aggregate_func)
@@ -641,8 +638,8 @@ def test_multiple_filters_aggregation() -> None:
     assert "created_filter" in sig.parameters
     assert "updated_filter" in sig.parameters
     assert "search_filter" in sig.parameters
-    assert "limit_offset" in sig.parameters
-    assert "order_by" in sig.parameters
+    assert "limit_offset_filter" in sig.parameters
+    assert "order_by_filter" in sig.parameters
     assert "status_not_in_filter" in sig.parameters
     assert "tag_in_filter" in sig.parameters
 
@@ -654,8 +651,8 @@ def test_multiple_filters_aggregation() -> None:
     mock_search_filter.field_name = "name"
     mock_search_filter.value = "test"
     mock_limit_offset = MagicMock(spec=LimitOffset)
-    mock_order_by = MagicMock(spec=OrderBy)
-    mock_order_by.field_name = "name"
+    mock_order_by_filter = MagicMock(spec=OrderBy)
+    mock_order_by_filter.field_name = "name"
     mock_not_in_filter = MagicMock(spec=NotInCollectionFilter)
     mock_in_filter = MagicMock(spec=CollectionFilter)
 
@@ -664,8 +661,8 @@ def test_multiple_filters_aggregation() -> None:
         created_filter=mock_created_filter,
         updated_filter=mock_updated_filter,
         search_filter=mock_search_filter,
-        limit_offset=mock_limit_offset,
-        order_by=mock_order_by,
+        limit_offset_filter=mock_limit_offset,
+        order_by_filter=mock_order_by_filter,
         status_not_in_filter=mock_not_in_filter,
         tag_in_filter=mock_in_filter,
     )
@@ -677,7 +674,7 @@ def test_multiple_filters_aggregation() -> None:
     assert mock_updated_filter in result
     assert mock_search_filter in result
     assert mock_limit_offset in result
-    assert mock_order_by in result
+    assert mock_order_by_filter in result
     assert mock_not_in_filter in result
     assert mock_in_filter in result
 
