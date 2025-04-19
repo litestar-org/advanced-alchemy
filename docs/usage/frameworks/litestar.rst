@@ -308,9 +308,10 @@ Sessions in Application
 
 You can use either ``provide_session`` or ``get_session`` to get session instances in your application. This is useful for components that need to access the session outside of a controller.
 
+- ``provide_session`` provides a session instance from request state if it exists, or creates a new session if it doesn't.
+
 .. code-block:: python
 
-    # ``provide_session``
     from litestar import Litestar, get
     from litestar.connection import ASGIConnection
     from litestar.handlers.base import BaseRouteHandler
@@ -333,7 +334,6 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     async def my_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None:
         db_session = sqlalchemy_config.provide_session(connection.app.state, connection.scope)
         # Access the database session here.
-        await db_session.close()
 
 
     @get("/", guards=[my_guard])
@@ -346,9 +346,10 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
         plugins=[alchemy],
     )
 
+- ``get_session`` creates a new session instance every time it is called.
+
 .. code-block:: python
 
-    # ``get_session``
     from litestar import Litestar, get
     from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
