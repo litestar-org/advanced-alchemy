@@ -303,15 +303,17 @@ You can access the database session from the controller by using the `db_session
         plugins=[alchemy],
     )
 
-Sessions in Middleware
-^^^^^^^^^^^^^^^^^^^^^^
+Sessions in Application
+^^^^^^^^^^^^^^^^^^^^^^^
 
-Dependency injection is not available in middleware. Instead, you can create a new session using the `provide_session` method:
+You can use either ``provide_session`` or ``get_session`` to get session instances in your application. This is useful for components that need to access the session outside of a controller.
 
 .. code-block:: python
 
-    from litestar import Litestar
-    from litestar.types import ASGIApp, Scope, Receive, Send
+    # ``provide_session``
+    from litestar import Litestar, get
+    from litestar.connection import ASGIConnection
+    from litestar.handlers.base import BaseRouteHandler
     from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
@@ -327,20 +329,81 @@ Dependency injection is not available in middleware. Instead, you can create a n
     )
     alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
-    def middleware_factory(app: ASGIApp) -> ASGIApp:
-        async def my_middleware(scope: Scope, receive: Receive, send: Send) -> None:
-            # NOTE: You can also access the app state from `ASGIConnection`.
-            db_session = await alchemy.provide_session(scope["app"].state, scope)
-            # Access the database session here.
-            await db_session.close()
-            ...
-            await app(scope, receive, send)
-    return my_middleware
+
+    async def my_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+        db_session = sqlalchemy_config.provide_session(connection.app.state, connection.scope)
+        # Access the database session here.
+        await db_session.close()
+
+
+    @get("/", guards=[my_guard])
+    async def hello() -> str:
+        return "Hello, world!"
+
 
     app = Litestar(
-        route_handlers=[...],
-        middleware=[middleware_factory],
-        plugins=[alchemy]
+        route_handlers=[hello],
+        plugins=[alchemy],
+    )
+
+.. code-block:: python
+
+    # ``get_session``
+    from litestar import Litestar, get
+    from litestar.plugins.sqlalchemy import (
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+        SQLAlchemyPlugin,
+    )
+    from litestar_saq import CronJob, QueueConfig, SAQConfig, SAQPlugin
+    from saq.types import Context
+
+    session_config = AsyncSessionConfig(expire_on_commit=False)
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///test.sqlite",
+        before_send_handler="autocommit",
+        session_config=session_config,
+        create_all=True,
+    )
+    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+
+
+    async def background_task(_: Context) -> None:
+        async with sqlalchemy_config.get_session() as db_session:
+            # Access the database session here.
+            pass
+
+
+    saq = SAQPlugin(
+        config=SAQConfig(
+            web_enabled=True,
+            use_server_lifespan=True,
+            queue_configs=[
+                QueueConfig(
+                    dsn="redis://localhost:6397/0",
+                    name="process_background_tasks",
+                    scheduled_tasks=[
+                        CronJob(
+                            function=background_task,
+                            cron="* * * * *",
+                            timeout=600,
+                            ttl=2000,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+    @get("/")
+    async def hello() -> str:
+        return "Hello, world!"
+
+
+    app = Litestar(
+        route_handlers=[hello],
+        plugins=[alchemy, saq],
     )
 
 Database Migrations
