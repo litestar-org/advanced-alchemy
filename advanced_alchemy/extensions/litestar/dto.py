@@ -1,3 +1,4 @@
+# ruff: noqa: C901, PLR0914
 import inspect as stdlib_inspect
 from collections.abc import Collection, Generator
 from collections.abc import Set as AbstractSet
@@ -314,7 +315,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         return properties
 
     @classmethod
-    def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:  # noqa: C901, PLR0914
+    def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
         """Generate DTO field definitions from a SQLAlchemy model.
 
         Args:
