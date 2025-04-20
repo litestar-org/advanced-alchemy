@@ -378,7 +378,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
 
 
     saq = SAQPlugin(
-        # congigure the SAQ plugin to run `background_task`
+        # configure the SAQ plugin to run `background_task`
     )
 
 
