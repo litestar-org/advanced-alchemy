@@ -306,9 +306,11 @@ You can access the database session from the controller by using the `db_session
 Sessions in Application
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-You can use either ``provide_session`` or ``get_session`` to get session instances in your application. This is useful for components that need to access the session outside of a controller.
+You can use either ``provide_session`` or ``get_session`` to get session instances in your application. Each of these functions are useful for providing sessions in various places within your application, whether you are in the request/response scope or not.
 
-- ``provide_session`` provides a session instance from request state if it exists, or creates a new session if it doesn't.
+``provide_session`` provides a session instance from request state if it exists, or creates a new session if it doesn't, while ``get_session`` always returns a new instance from the session maker.
+
+- ``provide_session`` is useful in places where you are already in the request/response context such as guards and middleware.
 
 .. code-block:: python
 
@@ -346,7 +348,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
         plugins=[alchemy],
     )
 
-- ``get_session`` creates a new session instance every time it is called.
+- ``get_session`` is useful anywhere outside of the request lifecycle in your application. This includes command line tasks and background jobs.
 
 .. code-block:: python
 
@@ -376,34 +378,12 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
 
 
     saq = SAQPlugin(
-        config=SAQConfig(
-            web_enabled=True,
-            use_server_lifespan=True,
-            queue_configs=[
-                QueueConfig(
-                    dsn="redis://localhost:6397/0",
-                    name="process_background_tasks",
-                    scheduled_tasks=[
-                        CronJob(
-                            function=background_task,
-                            cron="* * * * *",
-                            timeout=600,
-                            ttl=2000,
-                        ),
-                    ],
-                ),
-            ],
-        ),
+        # congigure the SAQ plugin to run `background_task``
     )
 
 
-    @get("/")
-    async def hello() -> str:
-        return "Hello, world!"
-
-
     app = Litestar(
-        route_handlers=[hello],
+        route_handlers=[...],
         plugins=[alchemy, saq],
     )
 
