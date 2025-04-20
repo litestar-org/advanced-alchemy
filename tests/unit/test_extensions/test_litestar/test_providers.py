@@ -170,7 +170,7 @@ def test_create_sync_service_provider() -> None:
 
     # Ensure the provider is callable
     assert callable(provider)
-    svc = next(provider(db_session=MagicMock()))
+    svc = next(provider(_session=MagicMock(), request=MagicMock()))
     assert isinstance(svc, TestSyncService)
 
 
@@ -180,7 +180,7 @@ async def test_create_async_service_provider() -> None:
 
     # Ensure the provider is callable
     assert callable(provider)
-    svc = await anext_(provider(db_session=MagicMock()))
+    svc = await anext_(provider(_session=MagicMock(), request=MagicMock()))
     assert isinstance(svc, TestAsyncService)
 
 
@@ -619,18 +619,16 @@ def test_in_filter_aggregation() -> None:
 def test_multiple_filters_aggregation() -> None:
     """Test aggregation with multiple filters."""
 
-    aggregate_func = _create_filter_aggregate_function(
-        {
-            "id_filter": int,
-            "created_at": True,
-            "updated_at": True,
-            "search": "name",
-            "pagination_type": "limit_offset",
-            "sort_field": "name",
-            "not_in_fields": ["status"],
-            "in_fields": ["tag"],
-        }
-    )
+    aggregate_func = _create_filter_aggregate_function({
+        "id_filter": int,
+        "created_at": True,
+        "updated_at": True,
+        "search": "name",
+        "pagination_type": "limit_offset",
+        "sort_field": "name",
+        "not_in_fields": ["status"],
+        "in_fields": ["tag"],
+    })
 
     # Check signature has all parameters
     sig = inspect.signature(aggregate_func)
