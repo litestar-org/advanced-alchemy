@@ -20,16 +20,6 @@ from advanced_alchemy.extensions.litestar import (
 )
 
 
-# the SQLAlchemy base includes a declarative model for you to use in your models.
-# The `Base` class includes a `UUID` based primary key (`id`)
-class AuthorModel(base.UUIDBase):
-    # we can optionally provide the table name instead of auto-generating it
-    __tablename__ = "author"
-    name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
-    books: Mapped["list[BookModel]"] = relationship(back_populates="author", lazy="noload")
-
-
 # The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
 # additional columns: `created` and `updated`. `created` is a timestamp of when the
 # record created, and `updated` is the last time the record was modified.
@@ -37,7 +27,17 @@ class BookModel(base.UUIDAuditBase):
     __tablename__ = "book"
     title: Mapped[str]
     author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
-    author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
+    author: Mapped["AuthorModel"] = relationship(lazy="joined", innerjoin=True, viewonly=True)
+
+
+# the SQLAlchemy base includes a declarative model for you to use in your models.
+# The `Base` class includes a `UUID` based primary key (`id`)
+class AuthorModel(base.UUIDBase):
+    # we can optionally provide the table name instead of auto-generating it
+    __tablename__ = "author"
+    name: Mapped[str]
+    dob: Mapped[Optional[datetime.date]]
+    books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
 
 # we will explicitly define the schema instead of using DTO objects for clarity.
