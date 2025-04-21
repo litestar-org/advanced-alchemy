@@ -170,7 +170,7 @@ def test_create_sync_service_provider() -> None:
 
     # Ensure the provider is callable
     assert callable(provider)
-    svc = next(provider(db_session=MagicMock()))
+    svc = next(provider(_session=MagicMock(), request=MagicMock()))
     assert isinstance(svc, TestSyncService)
 
 
@@ -180,7 +180,7 @@ async def test_create_async_service_provider() -> None:
 
     # Ensure the provider is callable
     assert callable(provider)
-    svc = await anext_(provider(db_session=MagicMock()))
+    svc = await anext_(provider(_session=MagicMock(), request=MagicMock()))
     assert isinstance(svc, TestAsyncService)
 
 

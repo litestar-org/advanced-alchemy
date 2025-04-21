@@ -27,6 +27,7 @@ from litestar.di import Provide
 from litestar.params import Dependency, Parameter
 from typing_extensions import NotRequired
 
+from advanced_alchemy.extensions.litestar._utils import get_aa_scope_state
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -49,11 +50,13 @@ from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
+    from litestar import Request
     from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 
 DTorNone = Optional[datetime.datetime]
 StringOrNone = Optional[str]
@@ -194,8 +197,17 @@ def create_service_provider(
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
 
         async def provide_async_service(
-            db_session: "Optional[AsyncSession]" = None,
+            _session: "Optional[AsyncSession]" = None,
+            request: "Optional[Request[Any,Any,Any]]" = None,
         ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
+            if _session is not None:
+                db_session = _session
+            elif request is not None:
+                session_key = config.session_dependency_key if config else "db_session"
+                db_session = get_aa_scope_state(request.scope, session_key)
+            else:
+                db_session = None
+
             async with service_class.new(  # type: ignore[union-attr,unused-ignore]
                 session=db_session,  # type: ignore[arg-type, unused-ignore]
                 statement=statement,
@@ -211,8 +223,16 @@ def create_service_provider(
         return provide_async_service
 
     def provide_sync_service(
-        db_session: "Optional[Session]" = None,
+        _session: "Optional[Session]" = None,
+        request: "Optional[Request[Any,Any,Any]]" = None,
     ) -> "Generator[SyncServiceT_co, None, None]":
+        if _session is not None:
+            db_session = _session
+        elif request is not None:
+            session_key = config.session_dependency_key if config else "db_session"
+            db_session = get_aa_scope_state(request.scope, session_key)
+        else:
+            db_session = None
         with service_class.new(
             session=db_session,  # type: ignore[arg-type, unused-ignore]
             statement=statement,
