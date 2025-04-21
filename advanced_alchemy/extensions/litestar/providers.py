@@ -203,15 +203,14 @@ def create_service_provider(
         A dependency provider function suitable for Litestar's DI system.
     """
 
-    # Determine if the service is async or sync
     session_dependency_key = config.session_dependency_key if config else "db_session"
 
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
         session_type_annotation = "Optional[AsyncSession]"
         return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
 
-        async def provide_service_async(**kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
-            db_session = cast("Optional[AsyncSession]", kwargs.get(session_dependency_key))
+        async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
+            db_session = cast("Optional[AsyncSession]", args[0] if args else kwargs.get(session_dependency_key))
             async with service_class.new(  # type: ignore[union-attr]
                 session=db_session,  # type: ignore[arg-type]
                 statement=statement,
@@ -231,7 +230,6 @@ def create_service_provider(
             annotation=session_type_annotation,
         )
 
-        # Create the full signature for the provider function
         provider_signature = inspect.Signature(
             parameters=[session_param],
             return_annotation=return_type_annotation,
@@ -245,10 +243,8 @@ def create_service_provider(
     session_type_annotation = "Optional[Session]"
     return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
 
-    def provide_service_sync(**kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
-        # Extract the session using the dynamic key
-        db_session = cast("Optional[Session]", kwargs.get(session_dependency_key))
-        # Instantiate and yield the service
+    def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
+        db_session = cast("Optional[Session]", args[0] if args else kwargs.get(session_dependency_key))
         with service_class.new(
             session=db_session,
             statement=statement,
@@ -261,8 +257,6 @@ def create_service_provider(
         ) as service:
             yield service
 
-        # Create the signature parameter for the session dependency
-
     session_param = inspect.Parameter(
         name=session_dependency_key,
         kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
@@ -270,7 +264,6 @@ def create_service_provider(
         annotation=session_type_annotation,
     )
 
-    # Create the full signature for the provider function
     provider_signature = inspect.Signature(
         parameters=[session_param],
         return_annotation=return_type_annotation,
