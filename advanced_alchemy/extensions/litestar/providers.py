@@ -27,7 +27,6 @@ from litestar.di import Provide
 from litestar.params import Dependency, Parameter
 from typing_extensions import NotRequired
 
-from advanced_alchemy.extensions.litestar._utils import get_aa_scope_state
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -50,7 +49,6 @@ from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
-    from litestar import Request
     from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
@@ -189,27 +187,33 @@ def create_service_provider(
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
 ) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
-    """Create a dependency provider for a service.
+    """Create a dependency provider for a service with a configurable session key.
+
+    Args:
+        service_class: The service class inheriting from SQLAlchemyAsyncRepositoryService or SQLAlchemySyncRepositoryService.
+        statement: An optional SQLAlchemy Select statement to scope the service.
+        config: An optional SQLAlchemy configuration object.
+        error_messages: Optional custom error messages for the service.
+        load: Optional LoadSpec for eager loading relationships.
+        execution_options: Optional dictionary of execution options for SQLAlchemy.
+        uniquify: Optional flag to uniquify results.
+        count_with_window_function: Optional flag to use window function for counting.
 
     Returns:
-        A dependency provider for the service.
+        A dependency provider function suitable for Litestar's DI system.
     """
+
+    # Determine if the service is async or sync
+    session_dependency_key = config.session_dependency_key if config else "db_session"
+
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
+        session_type_annotation = "Optional[AsyncSession]"
+        return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
 
-        async def provide_async_service(
-            _session: "Optional[AsyncSession]" = None,
-            request: "Optional[Request[Any,Any,Any]]" = None,
-        ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
-            if _session is not None:
-                db_session = _session
-            elif request is not None:
-                session_key = config.session_dependency_key if config else "db_session"
-                db_session = get_aa_scope_state(request.scope, session_key)
-            else:
-                db_session = None
-
-            async with service_class.new(  # type: ignore[union-attr,unused-ignore]
-                session=db_session,  # type: ignore[arg-type, unused-ignore]
+        async def provide_service_async(**kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
+            db_session = cast("Optional[AsyncSession]", kwargs.get(session_dependency_key))
+            async with service_class.new(  # type: ignore[union-attr]
+                session=db_session,  # type: ignore[arg-type]
                 statement=statement,
                 config=cast("Optional[SQLAlchemyAsyncConfig]", config),  # type: ignore[arg-type]
                 error_messages=error_messages,
@@ -220,21 +224,33 @@ def create_service_provider(
             ) as service:
                 yield service
 
-        return provide_async_service
+        session_param = inspect.Parameter(
+            name=session_dependency_key,
+            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default=Dependency(skip_validation=True),
+            annotation=session_type_annotation,
+        )
 
-    def provide_sync_service(
-        _session: "Optional[Session]" = None,
-        request: "Optional[Request[Any,Any,Any]]" = None,
-    ) -> "Generator[SyncServiceT_co, None, None]":
-        if _session is not None:
-            db_session = _session
-        elif request is not None:
-            session_key = config.session_dependency_key if config else "db_session"
-            db_session = get_aa_scope_state(request.scope, session_key)
-        else:
-            db_session = None
+        # Create the full signature for the provider function
+        provider_signature = inspect.Signature(
+            parameters=[session_param],
+            return_annotation=return_type_annotation,
+        )
+        provide_service_async.__signature__ = provider_signature  # type: ignore[attr-defined]
+        provide_service_async.__annotations__ = {
+            session_dependency_key: session_type_annotation,
+            "return": return_type_annotation,
+        }
+        return provide_service_async
+    session_type_annotation = "Optional[Session]"
+    return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
+
+    def provide_service_sync(**kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
+        # Extract the session using the dynamic key
+        db_session = cast("Optional[Session]", kwargs.get(session_dependency_key))
+        # Instantiate and yield the service
         with service_class.new(
-            session=db_session,  # type: ignore[arg-type, unused-ignore]
+            session=db_session,
             statement=statement,
             config=cast("Optional[SQLAlchemySyncConfig]", config),
             error_messages=error_messages,
@@ -245,7 +261,26 @@ def create_service_provider(
         ) as service:
             yield service
 
-    return provide_sync_service
+        # Create the signature parameter for the session dependency
+
+    session_param = inspect.Parameter(
+        name=session_dependency_key,
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        default=Dependency(skip_validation=True),
+        annotation=session_type_annotation,
+    )
+
+    # Create the full signature for the provider function
+    provider_signature = inspect.Signature(
+        parameters=[session_param],
+        return_annotation=return_type_annotation,
+    )
+    provide_service_sync.__signature__ = provider_signature  # type: ignore[attr-defined]
+    provide_service_sync.__annotations__ = {
+        session_dependency_key: session_type_annotation,
+        "return": return_type_annotation,
+    }
+    return provide_service_sync
 
 
 def create_service_dependencies(
