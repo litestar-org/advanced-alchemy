@@ -27,6 +27,11 @@
 
         Update the Litestar service provider to use dynamic session dependency key
 
+    .. change:: allows positional args for session
+        :type: feature
+        :pr: 455
+
+        This change allows for arguments to also be matched when generating a service provider closure.
 
 .. changelog:: 1.3.0
     :date: 2025-04-18
