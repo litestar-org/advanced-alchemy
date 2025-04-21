@@ -116,7 +116,7 @@ Define Pydantic schemas for input validation and response serialization:
 Repository and Service Layer
 ----------------------------
 
-Create repository, service classes, and dependency injection provider function:
+Create repository and service classes to interact with the model:
 
 .. code-block:: python
 
@@ -126,18 +126,13 @@ Create repository, service classes, and dependency injection provider function:
     from litestar.plugins.sqlalchemy.service import SQLAlchemyAsyncRepositoryService
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
-        """Author repository."""
-        model_type = AuthorModel
-
     class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
         """Author service."""
-        repository_type = AuthorRepository
+        class Repo(SQLAlchemyAsyncRepository[AuthorModel]):
+            """Author repository."""
+            model_type = AuthorModel
+        repository_type = Repo
 
-    async def provide_authors_service(db_session: AsyncSession) -> AsyncGenerator[AuthorService, None]:
-        """This provides the default Authors repository."""
-        async with AuthorService.new(session=db_session) as service:
-            yield service
 
 Controllers
 -----------
@@ -149,30 +144,26 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
     from litestar import Controller, get, post, patch, delete
     from litestar.di import Provide
     from litestar.params import Parameter
-    from litestar.pagination import OffsetPagination
-    from litestar.repository.filters import LimitOffset
+    from litestar.plugins.sqlalchemy.filters import FilterTypes
+    from litestar.plugins.sqlalchemy.providers import create_service_dependencies
+    from litestar.plugins.sqlalchemy.service import OffsetPagination
 
     class AuthorController(Controller):
         """Author CRUD endpoints."""
 
         path = "/authors"
-        dependencies = {"authors_service": Provide(provide_authors_service)}
+        dependencies = create_service_dependencies(AuthorService, key="authors_service", filters={"id_filter": UUID, "pagination_type": "limit_offset", "search": "name"})
         tags = ["Authors"]
 
         @get()
         async def list_authors(
             self,
             authors_service: AuthorService,
-            limit_offset: LimitOffset,
+            filters: list[FilterTypes],
         ) -> OffsetPagination[Author]:
             """List all authors with pagination."""
-            results, total = await authors_service.list_and_count(limit_offset)
-            return authors_service.to_schema(
-                data=results,
-                total=total,
-                filters=[limit_offset],
-                schema_type=Author,
-            )
+            results, total = await authors_service.list_and_count(*filters)
+            return authors_service.to_schema(results, total, filters,schema_type=Author)
 
         @post()
         async def create_author(
@@ -239,32 +230,16 @@ Finally, configure your Litestar application with the plugin and dependencies:
         SQLAlchemyPlugin,
     )
 
-    session_config = AsyncSessionConfig(expire_on_commit=False)
     sqlalchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
-        session_config=session_config,
+        session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
     )
     alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
-
-
-    def provide_limit_offset_pagination(
-        current_page: int = Parameter(ge=1, query="currentPage", default=1, required=False),
-        page_size: int = Parameter(
-            query="pageSize",
-            ge=1,
-            default=10,
-            required=False,
-        ),
-    ) -> FilterTypes:
-        """Add offset/limit pagination."""
-        return LimitOffset(page_size, page_size * (current_page - 1))
-
     app = Litestar(
         route_handlers=[AuthorController],
-        plugins=[alchemy],
-        dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
+        plugins=[alchemy]
     )
 
 Database Sessions
@@ -322,6 +297,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
     )
+    from sqlalchemy import text
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
     sqlalchemy_config = SQLAlchemyAsyncConfig(
@@ -333,10 +309,9 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
-    async def my_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+    async def my_guard(connection: ASGIConnection[Any, Any, Any, Any], _: BaseRouteHandler) -> None:
         db_session = sqlalchemy_config.provide_session(connection.app.state, connection.scope)
-        # Access the database session here.
-
+        a_value = await db_session.execute(text("SELECT 1"))
 
     @get("/", guards=[my_guard])
     async def hello() -> str:
@@ -352,40 +327,41 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
 
 .. code-block:: python
 
+    from click import Group
     from litestar import Litestar, get
+    from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
     from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
     )
-    from litestar_saq import CronJob, QueueConfig, SAQConfig, SAQPlugin
-    from saq.types import Context
 
-    session_config = AsyncSessionConfig(expire_on_commit=False)
+    class ApplicationCore(CLIPluginProtocol):
+        __slots__ = ("app_slug", "redis")
+
+        def on_cli_init(self, cli: Group) -> None:
+
+            @cli.command('check-db-status')
+            def check_db_status() -> None:
+                import anyio
+                async def _check_db_status() -> None:
+                    async with sqlalchemy_config.get_session() as db_session:
+                        a_value = await db_session.execute(text("SELECT 1"))
+                        if a_value.scalar_one() == 1:
+                            print("Database is healthy")
+                        else:
+                            print("Database is not healthy")
+                anyio.run(_check_db_status)
+
+
     sqlalchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
-        session_config=session_config,
+        session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
     )
     alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
-
-
-    async def background_task(_: Context) -> None:
-        async with sqlalchemy_config.get_session() as db_session:
-            # Access the database session here.
-            pass
-
-
-    saq = SAQPlugin(
-        # configure the SAQ plugin to run `background_task`
-    )
-
-
-    app = Litestar(
-        route_handlers=[...],
-        plugins=[alchemy, saq],
-    )
+    app = Litestar(plugins=[alchemy, ApplicationCore()])
 
 Database Migrations
 -------------------
