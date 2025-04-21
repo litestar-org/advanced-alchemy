@@ -3,6 +3,31 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.3.1
+    :date: 2025-04-21
+
+    .. change:: updated example `litestar_service.py` model
+        :type: bugfix
+        :pr: 450
+        :issue: 449
+
+        ## fixes #449 relationship updated on models:
+        - AuthorModel
+        - BookModel
+
+    .. change:: `create_service_provider` supports any configuration now
+        :type: bugfix
+        :pr: 451
+
+        The Litestar service provider now allows a user to specify the specific dependency key to use for the session.  Previously the factory only worked with the `db_session` key.
+
+    .. change:: update service provider to use dynamic session dependency key
+        :type: bugfix
+        :pr: 454
+
+        Update the Litestar service provider to use dynamic session dependency key
+
+
 .. changelog:: 1.3.0
     :date: 2025-04-18
 
