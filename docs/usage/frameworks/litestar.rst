@@ -254,7 +254,7 @@ Sessions in Controllers
 
 You can access the database session from the controller by using the session parameter, which is automatically injected by the SQLAlchemy plugin. The session is automatically committed at the end of the request. If an exception occurs, the session is rolled back:
 
-By default, the session key is named "db_session". You can change this by setting the `session_dependency_key`` parameter in the SQLAlchemyAsyncConfig.
+By default, the session key is named "db_session". You can change this by setting the `session_dependency_key` parameter in the SQLAlchemyAsyncConfig.
 
 .. code-block:: python
 
