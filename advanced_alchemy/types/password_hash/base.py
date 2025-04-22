@@ -84,12 +84,6 @@ class PasswordHash(TypeDecorator[str]):
 
     This type provides transparent hashing of password values using the specified backend.
     It extends :class:`sqlalchemy.types.TypeDecorator` and implements String as its underlying type.
-
-    Args:
-        backend (type[HashingBackend]): The hashing backend class to use. Defaults to PasslibBackend.
-        length (int): The maximum length of the hash string. Defaults to 128.
-        backend_options (dict[str, Any] | None): Optional keyword arguments to pass to the backend's constructor.
-            Example: ``PasswordHash(backend=PasslibBackend, backend_options={'context': my_context})``
     """
 
     impl = String
@@ -99,7 +93,7 @@ class PasswordHash(TypeDecorator[str]):
         """Initialize the PasswordHash TypeDecorator.
 
         Args:
-            backend: The hashing backend class to use. Defaults to PasslibBackend.
+            backend: The hashing backend class to use
             length: The maximum length of the hash string. Defaults to 128.
         """
         self.length = length

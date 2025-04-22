@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import func, type_coerce
+from sqlalchemy import BinaryExpression, func, type_coerce
 from sqlalchemy.types import String
 
 from advanced_alchemy.types.password_hash.base import HashingBackend
@@ -77,6 +77,18 @@ class PgCryptoHasher(HashingBackend):
         return isinstance(hashed, str) and (
             hashed.startswith(("$2a$", "$2b$")) or len(hashed) > 10  # noqa: PLR2004
         )  # Add a length check as a fallback
+
+    def compare_expression(self, column: "ColumnElement[str]", plain: "Union[str, bytes]") -> "BinaryExpression[bool]":
+        """Generate a SQLAlchemy expression for comparing a column with a plain text value.
+
+        Args:
+            column: The SQLAlchemy column to compare.
+            plain: The plain text value to compare against.
+
+        Returns:
+            A SQLAlchemy BinaryExpression representing the comparison.
+        """
+        return func.crypt(plain, column) == column  # type: ignore[return-value]
 
     @staticmethod
     def get_sql_comparison_expression(

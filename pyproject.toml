@@ -132,6 +132,8 @@ lint = [
   "types-pytz",
   "types-ujson",
   "types-passlib",
+  "types-cryptography",
+  "types-passlib",
 ]
 litestar = ["litestar[cli]>=2.15.0"]
 mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]

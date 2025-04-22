@@ -65,6 +65,6 @@ class PasslibHasher(HashingBackend):
 
         Raises:
             NotImplementedError: This backend does not support DB-side comparison.
-        """  # noqa: DOC202
+        """
         msg = "PasslibBackend does not support DB-side comparison."
         raise NotImplementedError(msg)

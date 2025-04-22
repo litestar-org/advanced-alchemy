@@ -1,74 +1,176 @@
+# ruff: noqa: RUF100, I001, UP007, UP045
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, cast
-
+from collections.abc import AsyncGenerator, Generator
+from typing import Optional, cast
+from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 import pytest
 from passlib.context import CryptContext
-from sqlalchemy import insert, select, update
-from sqlalchemy.orm import Mapped, mapped_column
+from pytest import FixtureRequest
+from pytest_lazy_fixtures import lf
+from sqlalchemy import Engine, insert, select, update
+from sqlalchemy.orm import Mapped, mapped_column, sessionmaker
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.types import String
 
-from advanced_alchemy.base import BigIntBase
-from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.types.password_hash import PasswordHash
+from advanced_alchemy.base import BigIntBase, UUIDAuditBase
+from advanced_alchemy.types import PasswordHash
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import DeclarativeBase, Session
+from advanced_alchemy.types.password_hash.pgcrypto import PgCryptoHasher
+from advanced_alchemy.utils.sync_tools import maybe_async_, maybe_async_context
 
 
 # Define the User model using PasswordHash
 class User(BigIntBase):
     __tablename__ = "test_user_password_hash"
     name: Mapped[str] = mapped_column(String(50))
-    password: Mapped[Optional[str]] = mapped_column(  # noqa: UP045
+    password: Mapped[Optional[str]] = mapped_column(
         PasswordHash(backend=PasslibHasher(context=CryptContext(schemes=["argon2"])))
     )
-    argon2_password: Mapped[Optional[str]] = mapped_column(  # noqa: UP045
-        PasswordHash(backend=Argon2Hasher())
-    )
+    argon2_password: Mapped[Optional[str]] = mapped_column(PasswordHash(backend=Argon2Hasher()))
+    pgcrypto_password: Mapped[Optional[str]] = mapped_column(PasswordHash(backend=PgCryptoHasher(algorithm="bf")))
 
 
 @pytest.fixture(name="user_model")
-def fx_user_model() -> type[DeclarativeBase]:
+def fx_user_model() -> type[User]:
     """User ORM instance"""
     return User
 
 
+@pytest.fixture(
+    name="postgres_sync_engine",
+    params=[
+        pytest.param(
+            "psycopg_engine",
+            marks=[
+                pytest.mark.psycopg_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+    ],
+)
+def postgres_sync_engine(request: FixtureRequest) -> Generator[Engine, None, None]:
+    yield cast(Engine, request.getfixturevalue(request.param))
+
+
+@pytest.fixture()
+def postgres_sync_session(
+    postgres_sync_engine: Engine, request: FixtureRequest, user_model: type[User]
+) -> Generator[Session, None, None]:
+    session_instance = sessionmaker(bind=postgres_sync_engine, expire_on_commit=False)()
+    with postgres_sync_engine.begin() as conn:
+        user_model.metadata.create_all(conn)
+    try:
+        yield session_instance
+    finally:
+        session_instance.rollback()
+        session_instance.close()
+
+
+@pytest.fixture(
+    name="postgres_async_engine",
+    params=[
+        pytest.param(
+            "asyncpg_engine",
+            marks=[
+                pytest.mark.asyncpg,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[
+                pytest.mark.psycopg_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+    ],
+)
+async def postgres_async_engine(request: FixtureRequest) -> AsyncGenerator[AsyncEngine, None]:
+    """Parametrized fixture to provide different async SQLAlchemy engines."""
+    engine = cast(AsyncEngine, request.getfixturevalue(request.param))
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.xdist_group("postgres")
 @pytest.mark.parametrize(
     ("session",),
     [
-        pytest.param("session", id="sync"),
-        pytest.param("async_session", id="async"),
+        # Run only on postgres async
+        pytest.param(
+            "psycopg_engine",
+            marks=[
+                pytest.mark.psycopg_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+            id="async_postgres",
+        ),
+        # Run only on postgres sync
+        pytest.param(
+            "psycopg_engine",
+            marks=[
+                pytest.mark.psycopg_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+            id="sync_postgres",
+        ),
     ],
     indirect=["session"],
 )
+@pytest.fixture()
+async def postgres_async_session(
+    postgres_async_engine: AsyncEngine,
+    request: FixtureRequest,
+    user_model: type[User],
+) -> AsyncGenerator[AsyncSession, None]:
+    """Provides an async SQLAlchemy session for the parametrized async engine."""
+    session_instance = async_sessionmaker(bind=postgres_async_engine, expire_on_commit=False)()
+    async with postgres_async_engine.begin() as conn:
+        await conn.run_sync(user_model.metadata.create_all)  # type: ignore[arg-type]
+    try:
+        yield session_instance
+    finally:
+        await session_instance.rollback()
+        await session_instance.close()
+
+
+@pytest.fixture(params=[lf("postgres_sync_session"), lf("postgres_async_session")], ids=["sync", "async"])
+async def any_postgres_session(request: FixtureRequest) -> AsyncGenerator[AsyncSession | Session, None]:
+    """Return a session for the current session"""
+    session = request.param
+    try:
+        yield session
+    finally:
+        if isinstance(session, AsyncSession):
+            await session.close()
+        else:
+            session.close()
+
+
 @pytest.mark.integration
 async def test_create_and_verify_password_explicit_argon2(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests creating a user with a password (explicit Argon2) and verifying it."""
     user = user_model(name="testuser_explicit", password="correct_password")  # type: ignore[call-arg]
-    assert isinstance(user.password, PasswordHash)
 
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            session.add(user)
-        await session.flush()
-        await session.refresh(user)
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(user)
+        await maybe_async_(any_postgres_session.flush)()
+        await maybe_async_(any_postgres_session.refresh)(user)
         user_id: int = user.id
-        retrieved_user = await session.get(user_model, user_id)
-    else:
-        with session.begin():
-            session.add(user)
-        session.flush()
-        session.refresh(user)
-        user_id: int = user.id
-        retrieved_user = session.get(user_model, user_id)
+        retrieved_user = await maybe_async_(any_postgres_session.get)(user_model, user_id)  # type: ignore[arg-type]
 
     assert retrieved_user is not None
     assert retrieved_user.name == "testuser_explicit"
@@ -85,91 +187,48 @@ async def test_create_and_verify_password_explicit_argon2(
     assert retrieved_user.password.hash.startswith("$argon2")
 
 
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        pytest.param("session", id="sync"),
-        pytest.param("async_session", id="async"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_update_password_explicit_argon2(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests updating a user's password (explicit Argon2)."""
     user = user_model(name="updateuser_explicit", password="old_password")  # type: ignore[call-arg]
 
     # Initial save
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            session.add(user)
-        await session.flush()
-        user_id: int = user.id
-    else:
-        with session.begin():
-            session.add(user)
-        session.flush()
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(user)
+        await maybe_async_(any_postgres_session.flush)()
         user_id: int = user.id
 
     # Retrieve and update
-    if isinstance(session, AsyncSession):
-        retrieved_user_for_update = await session.get(user_model, user_id)
-        assert retrieved_user_for_update is not None
-        retrieved_user_for_update.password = "new_password"
-        async with session.begin():
-            session.add(retrieved_user_for_update)
-        await session.flush()
-        await session.refresh(retrieved_user_for_update)
-    else:
-        retrieved_user_for_update = session.get(user_model, user_id)
-        assert retrieved_user_for_update is not None
-        retrieved_user_for_update.password = "new_password"
-        with session.begin():
-            session.add(retrieved_user_for_update)
-        session.flush()
-        session.refresh(retrieved_user_for_update)
+    retrieved_user_for_update = await maybe_async_(any_postgres_session.get)(user_model, user_id)  # type: ignore[arg-type]
+    assert retrieved_user_for_update is not None
+    retrieved_user_for_update.password = "new_password"
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(retrieved_user_for_update)
+        await maybe_async_(any_postgres_session.flush)()
+        await maybe_async_(any_postgres_session.refresh)(retrieved_user_for_update)
 
     # Verify updated password
-    if isinstance(session, AsyncSession):
-        updated_user = await session.get(user_model, user_id)
-    else:
-        updated_user = session.get(user_model, user_id)
-
-    assert updated_user is not None
-    assert updated_user.password == "new_password"
-    assert not (updated_user.password == "old_password")
+    assert retrieved_user_for_update is not None
+    assert retrieved_user_for_update.password == "new_password"
+    assert not (retrieved_user_for_update.password == "old_password")
 
 
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        pytest.param("session", id="sync"),
-        pytest.param("async_session", id="async"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_password_comparison_with_non_string_explicit_argon2(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests comparing password (explicit Argon2) with non-string types."""
     user = user_model(name="compareuser_explicit", password="password123")  # type: ignore[call-arg]
 
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            session.add(user)
-        await session.flush()
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(user)
+        await maybe_async_(any_postgres_session.flush)()
         user_id: int = user.id
-        retrieved_user = await session.get(user_model, user_id)
-    else:
-        with session.begin():
-            session.add(user)
-        session.flush()
-        user_id: int = user.id
-        retrieved_user = session.get(user_model, user_id)
+        retrieved_user = await maybe_async_(any_postgres_session.get)(user_model, user_id)  # type: ignore[arg-type]
 
     assert retrieved_user is not None
     assert not (retrieved_user.password == 123)
@@ -177,87 +236,48 @@ async def test_password_comparison_with_non_string_explicit_argon2(
     assert not (retrieved_user.password == b"password123")
 
 
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        pytest.param("session", id="sync"),
-        pytest.param("async_session", id="async"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_set_password_to_none_explicit_argon2(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests setting the password (explicit Argon2) to None explicitly."""
     user = user_model(name="noneuser_explicit", password="initial_password")  # type: ignore[call-arg]
 
     # Initial save
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            session.add(user)
-        await session.flush()
-        user_id: int = user.id
-    else:
-        with session.begin():
-            session.add(user)
-        session.flush()
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(user)
+        await maybe_async_(any_postgres_session.flush)()
         user_id: int = user.id
 
     # Retrieve and set to None
-    if isinstance(session, AsyncSession):
-        retrieved_user_for_update = await session.get(user_model, user_id)
-        assert retrieved_user_for_update is not None
-        retrieved_user_for_update.password = None
-        async with session.begin():
-            session.add(retrieved_user_for_update)
-        await session.flush()
-        refreshed_user = await session.get(user_model, user_id)
-    else:
-        retrieved_user_for_update = session.get(user_model, user_id)
-        assert retrieved_user_for_update is not None
-        retrieved_user_for_update.password = None
-        with session.begin():
-            session.add(retrieved_user_for_update)
-        session.flush()
-        refreshed_user = session.get(user_model, user_id)
+    retrieved_user_for_update = await maybe_async_(any_postgres_session.get)(user_model, user_id)  # type: ignore[arg-type]
+    assert retrieved_user_for_update is not None
+    retrieved_user_for_update.password = None
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(retrieved_user_for_update)
+        await maybe_async_(any_postgres_session.flush)()
+        refreshed_user = await maybe_async_(any_postgres_session.get)(user_model, user_id)  # type: ignore[arg-type]
 
     assert refreshed_user is not None
     assert refreshed_user.password is None
 
 
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        pytest.param("session", id="sync"),
-        pytest.param("async_session", id="async"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_create_and_verify_password_default_argon2(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests creating a user with a password (default Argon2) and verifying it."""
     user = user_model(name="testuser_default", argon2_password="correct_password")
     assert isinstance(user.argon2_password, PasswordHash)
 
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            session.add(user)
-        await session.flush()
-        await session.refresh(user)
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(user)
+        await maybe_async_(any_postgres_session.flush)()
+        await maybe_async_(any_postgres_session.refresh)(user)
         user_id: int = user.id
-        retrieved_user = await session.get(user_model, user_id)
-    else:
-        with session.begin():
-            session.add(user)
-        session.flush()
-        session.refresh(user)
-        user_id: int = user.id
-        retrieved_user = session.get(user_model, user_id)
+        retrieved_user = await maybe_async_(any_postgres_session.get)(user_model, user_id)  # type: ignore[arg-type]
 
     assert retrieved_user is not None
     assert retrieved_user.name == "testuser_default"
@@ -269,120 +289,39 @@ async def test_create_and_verify_password_default_argon2(
     assert retrieved_user.argon2_password.hash.startswith("$argon2")
 
 
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        # Run only on postgres async
-        pytest.param("async_pg_session", marks=pytest.mark.sqlalchemy_dialect("postgresql"), id="async_postgres"),
-        # Run only on postgres sync
-        pytest.param("sync_pg_session", marks=pytest.mark.sqlalchemy_dialect("postgresql"), id="sync_postgres"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_create_and_verify_pgcrypto_password(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests creating a user with a pgcrypto password and verifying it via SQL."""
 
-    plain_password = "correct_pg_password"
-    user = user_model(name="testuser_pgcrypto")
+    # Create user with pgcrypto password
+    user = user_model(name="testuser_default")
+    user.pgcrypto_password = "correct_password"  # This will trigger the PasswordHash type conversion
+    assert isinstance(user.pgcrypto_password, PasswordHash)
 
-    # Hashing for pgcrypto returns a SQL expression, not a string hash directly
-    hash_expression = PgCryptoBackend().hash(plain_password)
+    async with maybe_async_context(any_postgres_session.begin()):
+        await maybe_async_(any_postgres_session.add)(user)
+        await maybe_async_(any_postgres_session.flush)()
+        await maybe_async_(any_postgres_session.refresh)(user)
+        user_id: int = user.id
+        retrieved_user = await maybe_async_(lambda: any_postgres_session.get(user_model, user_id))()
 
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            # Execute the insert with the hash expression
-            insert_stmt = (
-                insert(user_model).values(name=user.name, pgcrypto_password=hash_expression).returning(user_model.id)
-            )
-            result = await session.execute(insert_stmt)
-            user_id = result.scalar_one()
-            await session.flush()  # Ensure the insert happens within the transaction
-
-        # Verify using SQL comparison expression
-        verify_stmt = select(user_model).where(
-            user_model.id == user_id,
-            PgCryptoBackend.get_sql_comparison_expression(
-                cast(ColumnElement[str], user_model.pgcrypto_password), plain_password
-            ),
-        )
-        verify_result = await session.execute(verify_stmt)
-        verified_user = verify_result.scalar_one_or_none()
-
-        # Verify incorrect password fails
-        fail_verify_stmt = select(user_model).where(
-            user_model.id == user_id,
-            PgCryptoBackend.get_sql_comparison_expression(
-                cast(ColumnElement[str], user_model.pgcrypto_password), "wrong_password"
-            ),
-        )
-        fail_verify_result = await session.execute(fail_verify_stmt)
-        failed_user = fail_verify_result.scalar_one_or_none()
-
-    else:  # Sync session
-        with session.begin():
-            insert_stmt = (
-                insert(user_model).values(name=user.name, pgcrypto_password=hash_expression).returning(user_model.id)
-            )
-            result = session.execute(insert_stmt)
-            user_id = result.scalar_one()
-            session.flush()
-
-        # Verify using SQL comparison expression
-        verify_stmt = select(user_model).where(
-            user_model.id == user_id,
-            PgCryptoBackend.get_sql_comparison_expression(
-                cast(ColumnElement[str], user_model.pgcrypto_password), plain_password
-            ),
-        )
-        verify_result = session.execute(verify_stmt)
-        verified_user = verify_result.scalar_one_or_none()
-
-        # Verify incorrect password fails
-        fail_verify_stmt = select(user_model).where(
-            user_model.id == user_id,
-            PgCryptoBackend.get_sql_comparison_expression(
-                cast(ColumnElement[str], user_model.pgcrypto_password), "wrong_password"
-            ),
-        )
-        fail_verify_result = session.execute(fail_verify_stmt)
-        failed_user = fail_verify_result.scalar_one_or_none()
-
-    assert verified_user is not None
-    assert verified_user.name == "testuser_pgcrypto"
-    assert failed_user is None  # Should not find a user with the wrong password
-
-    # Direct comparison in Python is not supported and should fail or raise Error
-    retrieved_user = (
-        await session.get(user_model, user_id)
-        if isinstance(session, AsyncSession)
-        else session.get(user_model, user_id)
-    )
     assert retrieved_user is not None
+    assert retrieved_user.name == "testuser_default"
+    assert isinstance(retrieved_user.pgcrypto_password, PasswordHash)
+    assert retrieved_user.pgcrypto_password == "correct_password"
+    assert not (retrieved_user.pgcrypto_password == "wrong_password")
+    assert retrieved_user.pgcrypto_password.hash is not None
+    # Default context uses argon2
+    assert retrieved_user.pgcrypto_password.hash.startswith("$2a$")
 
-    with pytest.raises(NotImplementedError):
-        _ = retrieved_user.pgcrypto_password == plain_password  # type: ignore[attr-defined]
 
-    with pytest.raises(ImproperConfigurationError):
-        # Accessing .hash directly might also be restricted depending on implementation
-        _ = retrieved_user.pgcrypto_password.hash  # type: ignore[attr-defined]
-
-
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        pytest.param("async_pg_session", marks=pytest.mark.sqlalchemy_dialect("postgresql"), id="async_postgres"),
-        pytest.param("sync_pg_session", marks=pytest.mark.sqlalchemy_dialect("postgresql"), id="sync_postgres"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_update_pgcrypto_password(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests updating a user's pgcrypto password."""
     old_password = "old_pg_password"
@@ -390,128 +329,212 @@ async def test_update_pgcrypto_password(
     user_name = "updateuser_pgcrypto"
 
     # Initial insert
-    hash_expression_old = PgCryptoBackend().hash(old_password)
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            insert_stmt = (
-                insert(user_model)
-                .values(name=user_name, pgcrypto_password=hash_expression_old)
-                .returning(user_model.id)
-            )
-            result = await session.execute(insert_stmt)
-            user_id = result.scalar_one()
-            await session.flush()
-    else:
-        with session.begin():
-            insert_stmt = (
-                insert(user_model)
-                .values(name=user_name, pgcrypto_password=hash_expression_old)
-                .returning(user_model.id)
-            )
-            result = session.execute(insert_stmt)
-            user_id = result.scalar_one()
-            session.flush()
+    hash_expression_old = PgCryptoHasher(algorithm="bf").hash(old_password)
+    async with maybe_async_context(any_postgres_session.begin()):
+        insert_stmt = (
+            insert(user_model).values(name=user_name, pgcrypto_password=hash_expression_old).returning(user_model.id)
+        )
+        result = await maybe_async_(any_postgres_session.execute)(insert_stmt)
+        user_id = result.scalar_one()
+        await maybe_async_(any_postgres_session.flush)()
 
     # Update the password
-    hash_expression_new = PgCryptoBackend().hash(new_password)
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            update_stmt = (
-                update(user_model).where(user_model.id == user_id).values(pgcrypto_password=hash_expression_new)
-            )
-            await session.execute(update_stmt)
-            await session.flush()
-    else:
-        with session.begin():
-            update_stmt = (
-                update(user_model).where(user_model.id == user_id).values(pgcrypto_password=hash_expression_new)
-            )
-            session.execute(update_stmt)
-            session.flush()
+    hash_expression_new = PgCryptoHasher(algorithm="bf").hash(new_password)
+    async with maybe_async_context(any_postgres_session.begin()):
+        update_stmt = update(user_model).where(user_model.id == user_id).values(pgcrypto_password=hash_expression_new)
+        await maybe_async_(any_postgres_session.execute)(update_stmt)
+        await maybe_async_(any_postgres_session.flush)()
 
     # Verify new password works
     verify_new_stmt = select(user_model).where(
         user_model.id == user_id,
-        PgCryptoBackend.get_sql_comparison_expression(
+        PgCryptoHasher(algorithm="bf").compare_expression(
             cast(ColumnElement[str], user_model.pgcrypto_password), new_password
         ),
     )
     # Verify old password fails
     verify_old_stmt = select(user_model).where(
         user_model.id == user_id,
-        PgCryptoBackend.get_sql_comparison_expression(
+        PgCryptoHasher(algorithm="bf").compare_expression(
             cast(ColumnElement[str], user_model.pgcrypto_password), old_password
         ),
     )
 
-    if isinstance(session, AsyncSession):
-        new_pw_result = await session.execute(verify_new_stmt)
-        verified_user_new = new_pw_result.scalar_one_or_none()
-        old_pw_result = await session.execute(verify_old_stmt)
-        verified_user_old = old_pw_result.scalar_one_or_none()
-    else:
-        new_pw_result = session.execute(verify_new_stmt)
-        verified_user_new = new_pw_result.scalar_one_or_none()
-        old_pw_result = session.execute(verify_old_stmt)
-        verified_user_old = old_pw_result.scalar_one_or_none()
+    new_pw_result = await maybe_async_(any_postgres_session.execute)(verify_new_stmt)
+    verified_user_new = new_pw_result.scalar_one_or_none()
+    old_pw_result = await maybe_async_(any_postgres_session.execute)(verify_old_stmt)
+    verified_user_old = old_pw_result.scalar_one_or_none()
 
     assert verified_user_new is not None  # New password should verify
     assert verified_user_old is None  # Old password should fail
 
 
-@pytest.mark.parametrize(
-    ("session",),
-    [
-        pytest.param("async_pg_session", marks=pytest.mark.sqlalchemy_dialect("postgresql"), id="async_postgres"),
-        pytest.param("sync_pg_session", marks=pytest.mark.sqlalchemy_dialect("postgresql"), id="sync_postgres"),
-    ],
-    indirect=["session"],
-)
 @pytest.mark.integration
 async def test_set_pgcrypto_password_to_none(
     user_model: type[User],
-    session: AsyncSession | Session,
+    any_postgres_session: AsyncSession | Session,
 ) -> None:
     """Tests setting the pgcrypto password to None explicitly."""
     initial_password = "initial_pg_password"
     user_name = "noneuser_pgcrypto"
 
     # Initial insert
-    hash_expression_initial = PgCryptoBackend().hash(initial_password)
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            insert_stmt = (
-                insert(user_model)
-                .values(name=user_name, pgcrypto_password=hash_expression_initial)
-                .returning(user_model.id)
-            )
-            result = await session.execute(insert_stmt)
-            user_id = result.scalar_one()
-            await session.flush()
-    else:
-        with session.begin():
-            insert_stmt = (
-                insert(user_model)
-                .values(name=user_name, pgcrypto_password=hash_expression_initial)
-                .returning(user_model.id)
-            )
-            result = session.execute(insert_stmt)
-            user_id = result.scalar_one()
-            session.flush()
+    hash_expression_initial = PgCryptoHasher(algorithm="bf").hash(initial_password)
+    async with maybe_async_context(any_postgres_session.begin()):
+        insert_stmt = (
+            insert(user_model)
+            .values(name=user_name, pgcrypto_password=hash_expression_initial)
+            .returning(user_model.id)
+        )
+        result = await maybe_async_(any_postgres_session.execute)(insert_stmt)
+        user_id = result.scalar_one()
+        await maybe_async_(any_postgres_session.flush)()
 
     # Update to None
-    if isinstance(session, AsyncSession):
-        async with session.begin():
-            update_stmt = update(user_model).where(user_model.id == user_id).values(pgcrypto_password=None)
-            await session.execute(update_stmt)
-            await session.flush()
-        refreshed_user = await session.get(user_model, user_id)
-    else:
-        with session.begin():
-            update_stmt = update(user_model).where(user_model.id == user_id).values(pgcrypto_password=None)
-            session.execute(update_stmt)
-            session.flush()
-        refreshed_user = session.get(user_model, user_id)
+    async with maybe_async_context(any_postgres_session.begin()):
+        update_stmt = update(user_model).where(user_model.id == user_id).values(pgcrypto_password=None)
+        await maybe_async_(any_postgres_session.execute)(update_stmt)
+        await maybe_async_(any_postgres_session.flush)()
+        refreshed_user = await maybe_async_(lambda: any_postgres_session.get(user_model, user_id))()
 
     assert refreshed_user is not None
     assert refreshed_user.pgcrypto_password is None
+
+
+@pytest.fixture()
+async def async_session_maker(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    """Create an async session maker."""
+    return async_sessionmaker(async_engine, expire_on_commit=False)
+
+
+@pytest.fixture()
+async def async_session(async_session_maker: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession, None]:
+    """Create an async session."""
+    async with async_session_maker() as session:
+        yield session
+
+
+@pytest.fixture(autouse=True)
+async def setup_database(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+    """Set up the database."""
+    async with async_engine.begin() as conn:
+        await conn.run_sync(UUIDAuditBase.metadata.create_all)
+    yield
+    async with async_engine.begin() as conn:
+        await conn.run_sync(UUIDAuditBase.metadata.drop_all)
+
+
+@pytest.fixture(scope="function")
+async def async_user(async_session: AsyncSession) -> User:
+    """Create a test user with an argon2 password."""
+    user = User(name="testuser", argon2_password="correct_password")
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+async def async_user_pgcrypto(async_session: AsyncSession) -> User:
+    """Create a test user with a pgcrypto password."""
+    user = User(name="testuser", pgcrypto_password="correct_password")
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+    return user
+
+
+@pytest.mark.asyncio
+async def test_create_and_verify_argon2_password_async_only(async_session: AsyncSession) -> None:
+    """Test creating and verifying an argon2 password."""
+    user = User(name="testuser", argon2_password="correct_password")
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+
+    assert user.argon2_password is not None
+    assert isinstance(user.argon2_password, PasswordHash)
+    assert str(user.argon2_password).startswith("$argon2")
+    assert user.argon2_password == "correct_password"
+    assert user.argon2_password != "wrong_password"
+
+
+@pytest.mark.asyncio
+async def test_create_and_verify_pgcrypto_password_async_only(async_session: AsyncSession) -> None:
+    """Test creating and verifying a pgcrypto password."""
+    user = User(name="testuser", pgcrypto_password="correct_password")
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+
+    assert user.pgcrypto_password is not None
+    assert isinstance(user.pgcrypto_password, PasswordHash)
+    assert user.pgcrypto_password == "correct_password"
+    assert user.pgcrypto_password != "wrong_password"
+
+
+@pytest.mark.asyncio
+async def test_update_password_async_only(async_user: User, async_session: AsyncSession) -> None:
+    """Test updating an argon2 password."""
+    async_user.argon2_password = "new_password"
+    await async_session.commit()
+    await async_session.refresh(async_user)
+
+    assert async_user.argon2_password == "new_password"
+    assert async_user.argon2_password != "old_password"
+
+
+@pytest.mark.asyncio
+async def test_update_password_pgcrypto_async_only(async_user_pgcrypto: User, async_session: AsyncSession) -> None:
+    """Test updating a pgcrypto password."""
+    async_user_pgcrypto.pgcrypto_password = "new_password"
+    await async_session.commit()
+    await async_session.refresh(async_user_pgcrypto)
+
+    assert async_user_pgcrypto.pgcrypto_password == "new_password"
+    assert async_user_pgcrypto.pgcrypto_password != "old_password"
+
+
+@pytest.mark.asyncio
+async def test_password_comparison_with_non_string_async_only(async_user: User) -> None:
+    """Test comparing a password with non-string values."""
+    assert async_user.argon2_password != None  # noqa: E711
+    assert async_user.argon2_password != 123
+    assert async_user.argon2_password != []
+    assert async_user.argon2_password != {}
+
+
+@pytest.mark.asyncio
+async def test_set_password_to_none_async_only(async_user: User, async_session: AsyncSession) -> None:
+    """Test setting a password to None."""
+    async_user.argon2_password = None
+    await async_session.commit()
+    await async_session.refresh(async_user)
+    assert async_user.argon2_password is None
+
+
+@pytest.mark.asyncio
+async def test_set_pgcrypto_password_to_none_async_only(async_user_pgcrypto: User, async_session: AsyncSession) -> None:
+    """Test setting a pgcrypto password to None."""
+    async_user_pgcrypto.pgcrypto_password = None
+    await async_session.commit()
+    await async_session.refresh(async_user_pgcrypto)
+    assert async_user_pgcrypto.pgcrypto_password is None
+
+
+@pytest.mark.asyncio
+async def test_delete_user_async_only(async_user: User, async_session: AsyncSession) -> None:
+    """Test deleting a user."""
+    await async_session.delete(async_user)
+    await async_session.commit()
+    result = await async_session.execute(select(User).filter_by(name="testuser"))
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_delete_user_pgcrypto_async_only(async_user_pgcrypto: User, async_session: AsyncSession) -> None:
+    """Test deleting a user with pgcrypto password."""
+    await async_session.delete(async_user_pgcrypto)
+    await async_session.commit()
+    result = await async_session.execute(select(User).filter_by(name="testuser"))
+    assert result.scalar_one_or_none() is None
