@@ -499,9 +499,9 @@ async def test_update_password_pgcrypto_async_only(async_user_pgcrypto: User, as
 async def test_password_comparison_with_non_string_async_only(async_user: User) -> None:
     """Test comparing a password with non-string values."""
     assert async_user.argon2_password != None  # noqa: E711
-    assert async_user.argon2_password != 123
-    assert async_user.argon2_password != []
-    assert async_user.argon2_password != {}
+    assert async_user.argon2_password != 123  # type: ignore[comparison-overlap]
+    assert async_user.argon2_password != []  # type: ignore[comparison-overlap]
+    assert async_user.argon2_password != {}  # type: ignore[comparison-overlap]
 
 
 @pytest.mark.asyncio
