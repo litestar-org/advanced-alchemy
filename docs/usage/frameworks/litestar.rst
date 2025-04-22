@@ -152,7 +152,11 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
         """Author CRUD endpoints."""
 
         path = "/authors"
-        dependencies = create_service_dependencies(AuthorService, key="authors_service", filters={"id_filter": UUID, "pagination_type": "limit_offset", "search": "name"})
+        dependencies = create_service_dependencies(
+            AuthorService,
+            key="authors_service",
+            filters={"id_filter": UUID, "pagination_type": "limit_offset", "search": "name"}
+        )
         tags = ["Authors"]
 
         @get()
@@ -248,7 +252,9 @@ Database Sessions
 Sessions in Controllers
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-You can access the database session from the controller by using the `db_session` parameter, which is automatically injected by the SQLAlchemy plugin. The session is automatically committed at the end of the request. If an exception occurs, the session is rolled back:
+You can access the database session from the controller by using the session parameter, which is automatically injected by the SQLAlchemy plugin. The session is automatically committed at the end of the request. If an exception occurs, the session is rolled back:
+
+By default, the session key is named "db_session". You can change this by setting the `session_dependency_key`` parameter in the SQLAlchemyAsyncConfig.
 
 .. code-block:: python
 
@@ -337,7 +343,6 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     )
 
     class ApplicationCore(CLIPluginProtocol):
-        __slots__ = ("app_slug", "redis")
 
         def on_cli_init(self, cli: Group) -> None:
 
