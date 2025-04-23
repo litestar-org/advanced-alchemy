@@ -3,6 +3,52 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.3.1
+    :date: 2025-04-21
+
+    .. change:: updated example `litestar_service.py` model
+        :type: bugfix
+        :pr: 450
+        :issue: 449
+
+        ## fixes #449 relationship updated on models:
+        - AuthorModel
+        - BookModel
+
+    .. change:: `create_service_provider` supports any configuration now
+        :type: bugfix
+        :pr: 451
+
+        The Litestar service provider now allows a user to specify the specific dependency key to use for the session.  Previously the factory only worked with the `db_session` key.
+
+    .. change:: update service provider to use dynamic session dependency key
+        :type: bugfix
+        :pr: 454
+
+        Update the Litestar service provider to use dynamic session dependency key
+
+    .. change:: allows positional args for session
+        :type: feature
+        :pr: 455
+
+        This change allows for arguments to also be matched when generating a service provider closure.
+
+.. changelog:: 1.3.0
+    :date: 2025-04-18
+
+    .. change:: btn ui
+        :type: bugfix
+        :pr: 446
+
+        Corrects the button UI in the documentation under certain viewport sizes.
+
+    .. change:: add dependency provider
+        :type: feature
+        :pr: 431
+
+        Add dependency factories for filters.
+
+
 .. changelog:: 1.2.0
     :date: 2025-04-15
 

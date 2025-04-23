@@ -53,7 +53,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+    from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 
 DTorNone = Optional[datetime.datetime]
 StringOrNone = Optional[str]
@@ -75,11 +76,11 @@ class DependencyDefaults:
     """Key for the created filter dependency."""
     ID_FILTER_DEPENDENCY_KEY: str = "id_filter"
     """Key for the id filter dependency."""
-    LIMIT_OFFSET_DEPENDENCY_KEY: str = "limit_offset"
+    LIMIT_OFFSET_FILTER_DEPENDENCY_KEY: str = "limit_offset_filter"
     """Key for the limit offset dependency."""
     UPDATED_FILTER_DEPENDENCY_KEY: str = "updated_filter"
     """Key for the updated filter dependency."""
-    ORDER_BY_DEPENDENCY_KEY: str = "order_by"
+    ORDER_BY_FILTER_DEPENDENCY_KEY: str = "order_by_filter"
     """Key for the order by dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
@@ -116,7 +117,7 @@ class FilterConfig(TypedDict):
     pagination_type: NotRequired[Literal["limit_offset"]]
     """When set, pagination is enabled based on the type specified."""
     pagination_size: NotRequired[int]
-    """The size of the pagination."""
+    """The size of the pagination. Defaults to `DEFAULT_PAGINATION_SIZE`."""
     search: NotRequired[Union[str, set[str], list[str]]]
     """Fields to enable search on. Can be a comma-separated string or a set of field names."""
     search_ignore_case: NotRequired[bool]
@@ -186,18 +187,32 @@ def create_service_provider(
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
 ) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
-    """Create a dependency provider for a service.
+    """Create a dependency provider for a service with a configurable session key.
+
+    Args:
+        service_class: The service class inheriting from SQLAlchemyAsyncRepositoryService or SQLAlchemySyncRepositoryService.
+        statement: An optional SQLAlchemy Select statement to scope the service.
+        config: An optional SQLAlchemy configuration object.
+        error_messages: Optional custom error messages for the service.
+        load: Optional LoadSpec for eager loading relationships.
+        execution_options: Optional dictionary of execution options for SQLAlchemy.
+        uniquify: Optional flag to uniquify results.
+        count_with_window_function: Optional flag to use window function for counting.
 
     Returns:
-        A dependency provider for the service.
+        A dependency provider function suitable for Litestar's DI system.
     """
-    if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
 
-        async def provide_async_service(
-            db_session: "Optional[AsyncSession]" = None,
-        ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
-            async with service_class.new(  # type: ignore[union-attr,unused-ignore]
-                session=db_session,  # type: ignore[arg-type, unused-ignore]
+    session_dependency_key = config.session_dependency_key if config else "db_session"
+
+    if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
+        session_type_annotation = "Optional[AsyncSession]"
+        return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
+
+        async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
+            db_session = cast("Optional[AsyncSession]", args[0] if args else kwargs.get(session_dependency_key))
+            async with service_class.new(  # type: ignore[union-attr]
+                session=db_session,  # type: ignore[arg-type]
                 statement=statement,
                 config=cast("Optional[SQLAlchemyAsyncConfig]", config),  # type: ignore[arg-type]
                 error_messages=error_messages,
@@ -208,13 +223,30 @@ def create_service_provider(
             ) as service:
                 yield service
 
-        return provide_async_service
+        session_param = inspect.Parameter(
+            name=session_dependency_key,
+            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default=Dependency(skip_validation=True),
+            annotation=session_type_annotation,
+        )
 
-    def provide_sync_service(
-        db_session: "Optional[Session]" = None,
-    ) -> "Generator[SyncServiceT_co, None, None]":
+        provider_signature = inspect.Signature(
+            parameters=[session_param],
+            return_annotation=return_type_annotation,
+        )
+        provide_service_async.__signature__ = provider_signature  # type: ignore[attr-defined]
+        provide_service_async.__annotations__ = {
+            session_dependency_key: session_type_annotation,
+            "return": return_type_annotation,
+        }
+        return provide_service_async
+    session_type_annotation = "Optional[Session]"
+    return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
+
+    def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
+        db_session = cast("Optional[Session]", args[0] if args else kwargs.get(session_dependency_key))
         with service_class.new(
-            session=db_session,  # type: ignore[arg-type, unused-ignore]
+            session=db_session,
             statement=statement,
             config=cast("Optional[SQLAlchemySyncConfig]", config),
             error_messages=error_messages,
@@ -225,7 +257,23 @@ def create_service_provider(
         ) as service:
             yield service
 
-    return provide_sync_service
+    session_param = inspect.Parameter(
+        name=session_dependency_key,
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        default=Dependency(skip_validation=True),
+        annotation=session_type_annotation,
+    )
+
+    provider_signature = inspect.Signature(
+        parameters=[session_param],
+        return_annotation=return_type_annotation,
+    )
+    provide_service_sync.__signature__ = provider_signature  # type: ignore[attr-defined]
+    provide_service_sync.__annotations__ = {
+        session_dependency_key: session_type_annotation,
+        "return": return_type_annotation,
+    }
+    return provide_service_sync
 
 
 def create_service_dependencies(
@@ -398,7 +446,7 @@ def _create_statement_filters(  # noqa: C901
         ) -> LimitOffset:
             return LimitOffset(page_size, page_size * (current_page - 1))
 
-        filters[dep_defaults.LIMIT_OFFSET_DEPENDENCY_KEY] = Provide(
+        filters[dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY] = Provide(
             provide_limit_offset_pagination, sync_to_thread=False
         )
 
@@ -447,7 +495,7 @@ def _create_statement_filters(  # noqa: C901
         ) -> OrderBy:
             return OrderBy(field_name=field_name, sort_order=sort_order)  # type: ignore[arg-type]
 
-        filters[dep_defaults.ORDER_BY_DEPENDENCY_KEY] = Provide(provide_order_by, sync_to_thread=False)
+        filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(provide_order_by, sync_to_thread=False)
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
@@ -562,22 +610,22 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         annotations["search_filter"] = SearchFilter
 
     if config.get("pagination_type") == "limit_offset":
-        parameters["limit_offset"] = inspect.Parameter(
-            name="limit_offset",
+        parameters["limit_offset_filter"] = inspect.Parameter(
+            name="limit_offset_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=Dependency(skip_validation=True),
             annotation=LimitOffset,
         )
-        annotations["limit_offset"] = LimitOffset
+        annotations["limit_offset_filter"] = LimitOffset
 
     if config.get("sort_field"):
-        parameters["order_by"] = inspect.Parameter(
-            name="order_by",
+        parameters["order_by_filter"] = inspect.Parameter(
+            name="order_by_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=Dependency(skip_validation=True),
             annotation=OrderBy,
         )
-        annotations["order_by"] = OrderBy
+        annotations["order_by_filter"] = OrderBy
 
     # Add parameters for not_in filters
     if not_in_fields := config.get("not_in_fields"):
@@ -617,7 +665,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
             filters.append(id_filter)
         if created_filter := kwargs.get("created_filter"):
             filters.append(created_filter)
-        if limit_offset := kwargs.get("limit_offset"):
+        if limit_offset := kwargs.get("limit_offset_filter"):
             filters.append(limit_offset)
         if updated_filter := kwargs.get("updated_filter"):
             filters.append(updated_filter)
@@ -629,7 +677,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         ):
             filters.append(search_filter)
         if (
-            (order_by := cast("Optional[OrderBy]", kwargs.get("order_by")))
+            (order_by := cast("Optional[OrderBy]", kwargs.get("order_by_filter")))
             and order_by is not None  # pyright: ignore[reportUnnecessaryComparison]
             and order_by.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
         ):

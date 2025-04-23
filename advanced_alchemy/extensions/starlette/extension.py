@@ -1,4 +1,3 @@
-# ruff: noqa: ARG001
 import contextlib
 from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
