@@ -12,6 +12,7 @@ from uuid import UUID
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -508,17 +509,6 @@ def test_openapi_schema_comprehensive() -> None:
     assert mock_order_by in result
 
 
-class SimpleDishkaTable(UUIDBase):
-    name: Mapped[str] = mapped_column(index=True)
-
-
-class SimpleDishkaService(SQLAlchemyAsyncRepositoryService[SimpleDishkaTable]):
-    class Repo(SQLAlchemyAsyncRepository[SimpleDishkaTable]):
-        model_type = SimpleDishkaTable
-
-    repository_type = Repo
-
-
 def test_openapi_schema_edge_cases() -> None:
     """Test OpenAPI schema generation for edge cases and special configurations."""
     # Test with minimal configuration
@@ -629,6 +619,17 @@ def test_openapi_schema_edge_cases() -> None:
     assert "OrderBy" in data
     assert "SearchFilter" in data
     assert "BeforeAfter" in data
+
+
+class SimpleDishkaTable(UUIDBase):
+    name: Mapped[str] = mapped_column(String(length=50), index=True)
+
+
+class SimpleDishkaService(SQLAlchemyAsyncRepositoryService[SimpleDishkaTable]):
+    class Repo(SQLAlchemyAsyncRepository[SimpleDishkaTable]):
+        model_type = SimpleDishkaTable
+
+    repository_type = Repo
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="Dishka integration requires Python 3.10+")
