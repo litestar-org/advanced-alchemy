@@ -155,7 +155,7 @@ class FilterConfig(TypedDict):
 def provide_service(
     service_class: type["AsyncServiceT_co"],
     /,
-    extension: "AdvancedAlchemy",
+    extension: AdvancedAlchemy,
     key: Optional[str] = None,
     statement: Optional[Select[tuple[ModelT]]] = None,
     error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
