@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from typing_extensions import NotRequired, TypedDict
 
+from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -52,7 +53,7 @@ from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
-    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 T = TypeVar("T")
 DTorNone = Optional[datetime.datetime]
@@ -169,7 +170,7 @@ def provide_service(
 def provide_service(
     service_class: type["SyncServiceT_co"],
     /,
-    extension: "AdvancedAlchemy",
+    extension: AdvancedAlchemy,
     key: Optional[str] = None,
     statement: Optional[Select[tuple[ModelT]]] = None,
     error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
@@ -183,7 +184,7 @@ def provide_service(
 def provide_service(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
-    extension: "AdvancedAlchemy",
+    extension: AdvancedAlchemy,
     key: Optional[str] = None,
     statement: Optional[Select[tuple[ModelT]]] = None,
     error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,

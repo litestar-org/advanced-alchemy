@@ -58,6 +58,7 @@ dev = [
     { name = "bump-my-version" },
     { name = "click" },
     { name = "coverage" },
+    { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "duckdb" },
     { name = "duckdb-engine" },
     { name = "fastapi", extra = ["all"] },
@@ -209,6 +210,7 @@ test = [
     { name = "asgi-lifespan" },
     { name = "click" },
     { name = "coverage" },
+    { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "fsspec", extra = ["s3"] },
     { name = "pydantic-extra-types" },
     { name = "pytest" },
@@ -259,6 +261,7 @@ dev = [
     { name = "bump-my-version" },
     { name = "click" },
     { name = "coverage", specifier = ">=7.6.1" },
+    { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "duckdb", specifier = ">=1.1.2" },
     { name = "duckdb-engine", specifier = ">=0.13.4" },
     { name = "fastapi", extras = ["all"], specifier = ">=0.115.3" },
@@ -392,6 +395,7 @@ test = [
     { name = "asgi-lifespan" },
     { name = "click" },
     { name = "coverage", specifier = ">=7.6.1" },
+    { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "fsspec", extras = ["s3"] },
     { name = "pydantic-extra-types" },
     { name = "pytest", specifier = ">=7.4.4" },
@@ -1331,6 +1335,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/24/eb/776eef1f1aa0188c0fc165c3a60b71027539f71f2eedc43ad21b060e9c39/dict2css-0.3.0.post1.tar.gz", hash = "sha256:89c544c21c4ca7472c3fffb9d37d3d926f606329afdb751dc1de67a411b70719", size = 7845 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/47/290daabcf91628f4fc0e17c75a1690b354ba067066cd14407712600e609f/dict2css-0.3.0.post1-py3-none-any.whl", hash = "sha256:f006a6b774c3e31869015122ae82c491fd25e7de4a75607a62aa3e798f837e0d", size = 25647 },
+]
+
+[[package]]
+name = "dishka"
+version = "1.5.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "exceptiongroup", marker = "python_full_version == '3.10.*'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9b/8d/9626362c36da6fd92dd8a49dd41d0d5ebd1b41803a513c4b5a6716b4f47d/dishka-1.5.3.tar.gz", hash = "sha256:d40c0d879f6662e66de0c72458081fbcbdb55fee5823ca5820b714bc1c690c29", size = 63979 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/68/17770f991f3284d7f8f9b917e7e9c53e17a24acd5219e050df8bc1bc23aa/dishka-1.5.3-py3-none-any.whl", hash = "sha256:838f2c21ad2f39424e326e836fb9dbef127d8e418593b9e9d5187c14479cd079", size = 88579 },
 ]
 
 [[package]]
@@ -3754,15 +3770,15 @@ wheels = [
 
 [[package]]
 name = "pyright"
-version = "1.1.399"
+version = "1.1.400"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nodeenv" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/db/9d/d91d5f6d26b2db95476fefc772e2b9a16d54c6bd0ea6bb5c1b6d635ab8b4/pyright-1.1.399.tar.gz", hash = "sha256:439035d707a36c3d1b443aec980bc37053fbda88158eded24b8eedcf1c7b7a1b", size = 3856954 }
+sdist = { url = "https://files.pythonhosted.org/packages/6c/cb/c306618a02d0ee8aed5fb8d0fe0ecfed0dbf075f71468f03a30b5f4e1fe0/pyright-1.1.400.tar.gz", hash = "sha256:b8a3ba40481aa47ba08ffb3228e821d22f7d391f83609211335858bf05686bdb", size = 3846546 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/b5/380380c9e7a534cb1783c70c3e8ac6d1193c599650a55838d0557586796e/pyright-1.1.399-py3-none-any.whl", hash = "sha256:55f9a875ddf23c9698f24208c764465ffdfd38be6265f7faf9a176e1dc549f3b", size = 5592584 },
+    { url = "https://files.pythonhosted.org/packages/c8/a5/5d285e4932cf149c90e3c425610c5efaea005475d5f96f1bfdb452956c62/pyright-1.1.400-py3-none-any.whl", hash = "sha256:c80d04f98b5a4358ad3a35e241dbf2a408eee33a40779df365644f8054d2517e", size = 5563460 },
 ]
 
 [[package]]
