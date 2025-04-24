@@ -192,6 +192,8 @@ packages = [
   "advanced_alchemy.extensions.litestar",
   "advanced_alchemy.extensions.sanic",
   "advanced_alchemy.extensions.starlette",
+  "advanced_alchemy.extensions.fastapi",
+  "advanced_alchemy.extensions.flask",
 ]
 
 [tool.pytest.ini_options]
