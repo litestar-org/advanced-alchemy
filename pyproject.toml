@@ -315,6 +315,7 @@ ignore = [
   "PLR0917",
   "PGH003",
   "PLC2701",
+  "PLW3201",
 ]
 select = ["ALL"]
 
@@ -437,6 +438,8 @@ module = [
   "fastnanoid",
   "s3fs",
   "s3fs.*",
+  "dishka",
+  "dishka.*",
 ]
 
 [[tool.mypy.overrides]]

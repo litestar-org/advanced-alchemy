@@ -12,7 +12,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
 from pydantic import BaseModel
-from sqlalchemy.orm import Mapped
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
@@ -23,6 +24,7 @@ from advanced_alchemy.extensions.fastapi import (
     repository,
     service,
 )
+from advanced_alchemy.service.typing import ModelDictT, is_dict, schema_dump
 
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
@@ -35,17 +37,25 @@ alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
 author_router = APIRouter()
 
 
-# the SQLAlchemy base includes a declarative model for you to use in your models.
-# The `Base` class includes a `UUID` based primary key (`id`)
+class BookModel(base.UUIDAuditBase):
+    __tablename__ = "book"
+    title: Mapped[str]
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id", ondelete="CASCADE"), nullable=False)
+    author: Mapped["AuthorModel"] = relationship(back_populates="books", lazy="joined", innerjoin=True, uselist=False)
+
+
 class AuthorModel(base.UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[datetime.date]]
+    books: Mapped[list[BookModel]] = relationship(
+        back_populates="author", lazy="selectin", cascade="all, delete-orphan", uselist=True
+    )
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
-    """Author repository."""
+    """Author Service."""
 
     class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
         """Author repository."""
@@ -53,59 +63,101 @@ class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
         model_type = AuthorModel
 
     repository_type = Repo
+    match_fields = ["name"]
+
+    async def to_model_on_create(self, data: "ModelDictT[AuthorModel]") -> "ModelDictT[AuthorModel]":
+        data = schema_dump(data)
+        return await self._add_books(data)
+
+    async def to_model_on_update(self, data: "ModelDictT[AuthorModel]") -> "ModelDictT[AuthorModel]":
+        data = schema_dump(data)
+        return await self._update_books(data)
+
+    async def _add_books(self, data: "ModelDictT[AuthorModel]") -> "ModelDictT[AuthorModel]":
+        if is_dict(data):
+            books = data.pop("books", None)
+            data = await super().to_model(data)
+            if books is not None:
+                data.books.extend([BookModel(title=book) for book in books])
+        return data
+
+    async def _update_books(self, data: "ModelDictT[AuthorModel]") -> "ModelDictT[AuthorModel]":
+        if is_dict(data):
+            books: list[str] = data.pop("books", [])
+            data = await super().to_model(data)
+            if books:
+                existing_books = [book.title for book in data.books]
+                books_to_remove = [book for book in data.books if book.title not in books]
+                books_to_add = [book for book in books if book not in existing_books]
+
+                # First mark books for deletion
+                for book_rm in books_to_remove:
+                    self.repository.session.delete(book_rm)
+
+                # Then remove from collection
+                for book_rm in books_to_remove:
+                    data.books.remove(book_rm)
+
+                # Finally add new books
+                data.books.extend([BookModel(title=book) for book in books_to_add])
+        return data
 
 
-# Pydantic Models
+class AuthorBooks(BaseModel):
+    id: UUID
+    title: str
+
+
 class Author(BaseModel):
     id: Optional[UUID]
     name: str
     dob: Optional[datetime.date]
+    books: list[AuthorBooks]
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: Optional[datetime.date]
+    dob: Optional[datetime.date] = None
+    books: Optional[list[str]] = None
 
 
 class AuthorUpdate(BaseModel):
-    name: Optional[str]
-    dob: Optional[datetime.date]
+    name: Optional[str] = None
+    dob: Optional[datetime.date] = None
+    books: Optional[list[str]] = None
 
 
 @author_router.get(path="/authors", response_model=service.OffsetPagination[Author])
 async def list_authors(
-    authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
+    authors_service: Annotated[
+        AuthorService, Depends(alchemy.provide_service(AuthorService, load=[AuthorModel.books]))
+    ],
     filters: Annotated[
         list[filters.FilterTypes],
         Depends(
-            alchemy.provide_filters(
-                {
-                    "id_filter": UUID,
-                    "pagination_type": "limit_offset",
-                    "search": "name",
-                    "search_ignore_case": True,
-                    "sort_field": "dob",
-                    "sort_order": "desc",
-                }
-            )
+            alchemy.provide_filters({
+                "id_filter": UUID,
+                "pagination_type": "limit_offset",
+                "search": "name",
+                "search_ignore_case": True,
+            })
         ),
     ],
-) -> service.OffsetPagination[AuthorModel]:
+) -> service.OffsetPagination[Author]:
     results, total = await authors_service.list_and_count(*filters)
-    return authors_service.to_schema(results, total, filters=filters)
+    return authors_service.to_schema(results, total, filters=filters, schema_type=Author)
 
 
-@author_router.post(path="/authors")
+@author_router.post(path="/authors", response_model=Author)
 async def create_author(
     authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
     data: AuthorCreate,
-) -> Author:
+) -> AuthorModel:
     obj = await authors_service.create(data)
-    # if you want to have the service return a pydantic model instead of the sqlalchemy model,
-    # you can do so by passing the model to the schema_type argument of the to_schema method
-    return authors_service.to_schema(obj, schema_type=Author)
+    return authors_service.to_schema(obj)
 
 
+# we override the authors_repo to use the version that joins the Books in
 @author_router.get(path="/authors/{author_id}", response_model=Author)
 async def get_author(
     authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],

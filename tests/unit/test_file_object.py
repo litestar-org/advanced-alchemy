@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import pytest
 
+from advanced_alchemy.service.typing import PYDANTIC_INSTALLED, BaseModel
 from advanced_alchemy.types.file_object import FileObject
 from advanced_alchemy.types.file_object.base import StorageBackend
 
@@ -501,3 +502,136 @@ async def test_file_object_sign_async_empty_result_list() -> None:
         # Test sign_async method - should raise RuntimeError when list is empty
         with pytest.raises(RuntimeError, match="No signed URL generated"):
             await obj.sign_async(expires_in=3600)
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
+def test_pydantic_serialization() -> None:
+    """Test serialization of FileObject within a Pydantic model."""
+
+    class FileModel(BaseModel):  # type: ignore[valid-type, misc]
+        file: FileObject
+
+    file_obj = FileObject(
+        backend="mock",
+        filename="test.txt",
+        size=100,
+        content_type="text/plain",
+        last_modified=1234567890.0,
+        etag="etag123",
+        version_id="v1",
+        metadata={"key": "value"},
+    )
+    model = FileModel(file=file_obj)
+
+    # Mock backend for serialization
+    mock_backend = Mock(spec=StorageBackend)
+    mock_backend.key = "mock_backend_key"
+    with patch("advanced_alchemy.types.file_object.storages.get_backend", return_value=mock_backend):
+        serialized_data = model.model_dump()
+
+        # Check if the serialized data matches the output of to_dict()
+        expected_dict = {
+            "filename": "test.txt",
+            "content_type": "text/plain",
+            "size": 100,
+            "last_modified": 1234567890.0,
+            "checksum": None,
+            "etag": "etag123",
+            "version_id": "v1",
+            "metadata": {"key": "value"},
+            "backend": "mock_backend_key",  # Expect backend key here
+        }
+        assert serialized_data == {"file": expected_dict}
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
+def test_pydantic_validation_from_dict() -> None:
+    """Test validation of a dictionary into FileObject via Pydantic."""
+
+    class FileModel(BaseModel):  # type: ignore[valid-type, misc]
+        file: FileObject
+
+    input_dict = {
+        "filename": "validated.txt",
+        "backend": "mock_validate",
+        "size": 200,
+        "content_type": "image/png",
+        "etag": "etag_validate",
+        "metadata": {"source": "validation"},
+    }
+
+    # Mock backend for validation lookup
+    mock_backend = Mock(spec=StorageBackend)
+    mock_backend.key = "mock_validate"
+    with patch("advanced_alchemy.types.file_object.storages.get_backend", return_value=mock_backend):
+        model = FileModel(file=input_dict)  # type: ignore[arg-type]
+
+        # Verify the created FileObject instance
+        assert isinstance(model.file, FileObject)
+        assert model.file.filename == "validated.txt"
+        assert model.file.backend == mock_backend  # Backend should be resolved instance
+        assert model.file.size == 200
+        assert model.file.content_type == "image/png"
+        assert model.file.etag == "etag_validate"
+        assert model.file.metadata == {"source": "validation"}
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
+def test_pydantic_validation_from_instance() -> None:
+    """Test validation when providing an existing FileObject instance."""
+
+    class FileModel(BaseModel):  # type: ignore[valid-type, misc]
+        file: FileObject
+
+    file_obj = FileObject(backend="instance_mock", filename="instance.txt")
+    mock_backend = Mock(spec=StorageBackend)
+    mock_backend.key = "instance_mock"
+
+    with patch("advanced_alchemy.types.file_object.storages.get_backend", return_value=mock_backend):
+        model = FileModel(file=file_obj)
+        assert model.file is file_obj  # Should accept the instance directly
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
+def test_pydantic_validation_error_missing_filename() -> None:
+    """Test Pydantic validation error for missing filename."""
+    from pydantic import ValidationError
+
+    class FileModel(BaseModel):  # type: ignore[valid-type, misc]
+        file: FileObject
+
+    input_dict = {
+        "backend": "mock_error",
+        "size": 100,
+    }
+    with pytest.raises(ValidationError, match="filename"):  # type: ignore[call-arg]
+        FileModel(file=input_dict)  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
+def test_pydantic_validation_error_missing_backend() -> None:
+    """Test Pydantic validation error for missing backend."""
+    from pydantic import ValidationError
+
+    class FileModel(BaseModel):  # type: ignore[valid-type, misc]
+        file: FileObject
+
+    input_dict = {
+        "filename": "no_backend.txt",
+        "size": 100,
+    }
+    with pytest.raises(ValidationError, match="backend"):  # type: ignore
+        FileModel(file=input_dict)  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
+def test_pydantic_schema_generation_no_pydantic_installed() -> None:
+    """Test that __get_pydantic_core_schema__ raises if Pydantic is 'not installed'."""
+    from advanced_alchemy.exceptions import MissingDependencyError
+    from advanced_alchemy.types.file_object import _typing as file_typing
+
+    # Temporarily patch PYDANTIC_INSTALLED to False within the module
+    with patch.object(file_typing, "PYDANTIC_INSTALLED", False):
+        # Accessing the schema should raise MissingDependencyError
+        with pytest.raises(MissingDependencyError, match="pydantic"):
+            FileObject.__get_pydantic_core_schema__(FileObject, Mock())
