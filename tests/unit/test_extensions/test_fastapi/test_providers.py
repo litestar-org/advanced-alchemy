@@ -635,27 +635,32 @@ class SimpleDishkaService(SQLAlchemyAsyncRepositoryService[SimpleDishkaTable]):
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="Dishka integration requires Python 3.10+")
 async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test provide_filters integration with FastAPI and Dishka."""
-    from dishka import (  # pyright: ignore
-        Provider,
-        Scope,
-        make_async_container,
-        provide,
+    from dishka import (  # type: ignore # pyright: ignore
+        Provider,  # type: ignore
+        Scope,  # type: ignore
+        make_async_container,  # type: ignore
+        provide,  # type: ignore
     )
-    from dishka.integrations.fastapi import FastapiProvider, FromDishka, inject, setup_dishka  # pyright: ignore
+    from dishka.integrations.fastapi import (  # type: ignore # pyright: ignore
+        FastapiProvider,  # type: ignore
+        FromDishka,  # type: ignore
+        inject,  # type: ignore
+        setup_dishka,  # type: ignore
+    )
 
     # Clear cache before test
     dep_cache.dependencies.clear()
     sqlalchemy_config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
 
-    class SimpleDishkaProvider(Provider):
-        @provide(scope=Scope.REQUEST)
+    class SimpleDishkaProvider(Provider):  # type: ignore
+        @provide(scope=Scope.REQUEST)  # type: ignore
         async def provide_session(self, request: Request) -> AsyncGenerator[AsyncSession, None]:
             async with sqlalchemy_config.get_session() as session:
                 yield session
 
-        @provide(scope=Scope.REQUEST)
-        async def provide_simple_dishka_service(self, db_session: FromDishka[AsyncSession]) -> SimpleDishkaService:
-            return SimpleDishkaService(session=db_session)
+        @provide(scope=Scope.REQUEST)  # type: ignore
+        async def provide_simple_dishka_service(self, db_session: FromDishka[AsyncSession]) -> SimpleDishkaService:  # type: ignore
+            return SimpleDishkaService(session=db_session)  # type: ignore
 
     filter_deps = provide_filters(
         {
@@ -667,14 +672,14 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     )
 
     app = FastAPI()
-    container = make_async_container(SimpleDishkaProvider(), FastapiProvider())
+    container = make_async_container(SimpleDishkaProvider(), FastapiProvider())  # type: ignore
     setup_dishka(container=container, app=app)
 
     @app.get("/diska-items")
     @inject  # pyright: ignore
     async def get_diska_items(
         filters: Annotated[list[FilterTypes], Depends(filter_deps)],
-        simple_model_service: FromDishka[SimpleDishkaService],
+        simple_model_service: FromDishka[SimpleDishkaService],  # type: ignore
     ) -> dict[str, typing.Any]:
         # Return filter types and dummy service value for verification
         return {
@@ -692,7 +697,7 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     data = response.json()
     assert isinstance(data, dict)
     assert data["simple_model_table_name"] == "simple_dishka_table"
-    filter_types = data.get("filters", [])
+    filter_types = data.get("filters", [])  # type: ignore
     assert isinstance(filter_types, list)
     assert "CollectionFilter" in filter_types
     assert "LimitOffset" in filter_types
@@ -700,7 +705,7 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     assert "BeforeAfter" in filter_types
     # OrderBy is not explicitly configured but might have defaults, let's check if it's NOT there unless configured
     assert "OrderBy" not in filter_types  # OrderBy was not configured in this specific provide_filters call
-    assert len(filter_types) == 4
+    assert len(filter_types) == 4  # type: ignore
 
     # Test case: Only defaults (expect LimitOffset)
     response = client.get("/diska-items")
@@ -708,13 +713,13 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     data = response.json()
     assert isinstance(data, dict)
     assert data["simple_model_table_name"] == "simple_dishka_table"
-    filter_types = data.get("filters", [])
+    filter_types = data.get("filters", [])  # type: ignore
     assert isinstance(filter_types, list)
     assert "LimitOffset" in filter_types  # Default pagination
     assert "CollectionFilter" not in filter_types
     assert "SearchFilter" not in filter_types
     assert "BeforeAfter" not in filter_types
     assert "OrderBy" not in filter_types
-    assert len(filter_types) == 1
+    assert len(filter_types) == 1  # type: ignore
 
     await container.close()

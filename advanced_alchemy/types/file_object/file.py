@@ -1,4 +1,3 @@
-# ruff: noqa: PLR0904, PLR6301
 """Generic unified storage protocol compatible with multiple backend implementations."""
 
 import mimetypes
@@ -8,6 +7,8 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 from sqlalchemy.ext.mutable import MutableList
 from typing_extensions import TypeAlias
 
+from advanced_alchemy.exceptions import MissingDependencyError
+from advanced_alchemy.types.file_object._typing import PYDANTIC_INSTALLED, GetCoreSchemaHandler, core_schema
 from advanced_alchemy.types.file_object.base import AsyncDataLike, DataLike, StorageBackend
 from advanced_alchemy.types.file_object.registry import storages
 
@@ -408,6 +409,94 @@ class FileObject:
         self._pending_source_path = None
 
         return updated_self
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: "GetCoreSchemaHandler",  # Use imported GetCoreSchemaHandler
+    ) -> "core_schema.CoreSchema":  # Use imported core_schema
+        """Get the Pydantic core schema for FileObject.
+
+        This method defines how Pydantic should validate and serialize FileObject instances.
+        It creates a schema that validates dictionaries with the required fields and
+        converts them to FileObject instances.
+
+        Raises:
+            MissingDependencyError: If Pydantic is not installed when this method is called.
+
+        Args:
+            source_type: The source type (FileObject)
+            handler: The Pydantic schema handler
+
+        Returns:
+            A Pydantic core schema for FileObject
+        """
+        if not PYDANTIC_INSTALLED:
+            raise MissingDependencyError(package="pydantic")
+
+        def validate_from_dict(data: dict[str, Any]) -> "FileObject":
+            # We expect a dictionary derived from to_dict()
+            # We need to resolve the backend string back to an instance if needed
+            backend_input = data.get("backend")
+            if backend_input is None:
+                msg = "backend is required"
+                raise TypeError(msg)
+            key = backend_input if isinstance(backend_input, str) else backend_input.key
+            return cls(
+                backend=key,
+                filename=data["filename"],
+                to_filename=data.get("to_filename"),
+                content_type=data.get("content_type"),
+                size=data.get("size"),
+                last_modified=data.get("last_modified"),
+                checksum=data.get("checksum"),
+                etag=data.get("etag"),
+                version_id=data.get("version_id"),
+                metadata=data.get("metadata"),
+            )
+
+        typed_dict_schema = core_schema.typed_dict_schema(
+            {
+                "filename": core_schema.typed_dict_field(core_schema.str_schema()),
+                "backend": core_schema.typed_dict_field(core_schema.str_schema()),
+                "to_filename": core_schema.typed_dict_field(core_schema.str_schema(), required=False),
+                "content_type": core_schema.typed_dict_field(core_schema.str_schema(), required=False),
+                "size": core_schema.typed_dict_field(core_schema.int_schema(), required=False),
+                "last_modified": core_schema.typed_dict_field(core_schema.float_schema(), required=False),
+                "checksum": core_schema.typed_dict_field(core_schema.str_schema(), required=False),
+                "etag": core_schema.typed_dict_field(core_schema.str_schema(), required=False),
+                "version_id": core_schema.typed_dict_field(core_schema.str_schema(), required=False),
+                "metadata": core_schema.typed_dict_field(
+                    core_schema.nullable_schema(
+                        core_schema.dict_schema(core_schema.str_schema(), core_schema.any_schema())
+                    ),
+                    required=False,
+                ),
+            }
+        )
+
+        validation_schema = core_schema.union_schema(
+            [
+                core_schema.is_instance_schema(cls),
+                core_schema.chain_schema(
+                    [
+                        typed_dict_schema,
+                        core_schema.no_info_plain_validator_function(validate_from_dict),
+                    ]
+                ),
+            ]
+        )
+
+        return core_schema.json_or_python_schema(
+            json_schema=validation_schema,
+            python_schema=validation_schema,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda instance: instance.to_dict(),  # pyright: ignore
+                info_arg=False,
+                return_schema=typed_dict_schema,
+            ),  # pyright: ignore
+        )
 
 
 FileObjectList: TypeAlias = MutableList[FileObject]
