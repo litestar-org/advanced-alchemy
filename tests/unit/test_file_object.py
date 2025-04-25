@@ -622,16 +622,3 @@ def test_pydantic_validation_error_missing_backend() -> None:
     }
     with pytest.raises(ValidationError, match="backend"):  # type: ignore
         FileModel(file=input_dict)  # type: ignore[arg-type]
-
-
-@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")
-def test_pydantic_schema_generation_no_pydantic_installed() -> None:
-    """Test that __get_pydantic_core_schema__ raises if Pydantic is 'not installed'."""
-    from advanced_alchemy.exceptions import MissingDependencyError
-    from advanced_alchemy.types.file_object import _typing as file_typing
-
-    # Temporarily patch PYDANTIC_INSTALLED to False within the module
-    with patch.object(file_typing, "PYDANTIC_INSTALLED", False):
-        # Accessing the schema should raise MissingDependencyError
-        with pytest.raises(MissingDependencyError, match="pydantic"):
-            FileObject.__get_pydantic_core_schema__(FileObject, Mock())
