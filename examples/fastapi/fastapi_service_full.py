@@ -135,12 +135,14 @@ async def list_authors(
     filters: Annotated[
         list[filters.FilterTypes],
         Depends(
-            alchemy.provide_filters({
-                "id_filter": UUID,
-                "pagination_type": "limit_offset",
-                "search": "name",
-                "search_ignore_case": True,
-            })
+            alchemy.provide_filters(
+                {
+                    "id_filter": UUID,
+                    "pagination_type": "limit_offset",
+                    "search": "name",
+                    "search_ignore_case": True,
+                }
+            )
         ),
     ],
 ) -> service.OffsetPagination[Author]:
