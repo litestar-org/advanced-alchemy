@@ -48,7 +48,7 @@ jobs:
           && sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
 
       - name: Set up Python
         run: uv python install ${{ inputs.python-version }}
