@@ -491,7 +491,7 @@ class FileObject:
         return core_schema.json_or_python_schema(
             json_schema=validation_schema,
             python_schema=validation_schema,
-            serialization=core_schema.plain_serializer_function_ser_schema(  # type: ignore[operator]
+            serialization=core_schema.plain_serializer_function_ser_schema(
                 lambda instance: instance.to_dict(),  # pyright: ignore
                 info_arg=False,
                 return_schema=typed_dict_schema,
