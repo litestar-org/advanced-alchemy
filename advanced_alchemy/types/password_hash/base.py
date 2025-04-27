@@ -1,11 +1,9 @@
+"""Base classes for password hashing backends."""
+
 import abc
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import Any, Union, cast
 
-from sqlalchemy import BinaryExpression, ColumnElement, String, TypeDecorator
-from sqlalchemy.sql.functions import FunctionElement
-
-if TYPE_CHECKING:
-    from sqlalchemy import BinaryExpression, ColumnElement
+from sqlalchemy import BinaryExpression, ColumnElement, FunctionElement, String, TypeDecorator
 
 
 class HashingBackend(abc.ABC):
@@ -14,6 +12,12 @@ class HashingBackend(abc.ABC):
     This class defines the interface that all password hashing backends must implement.
     Concrete implementations should provide the actual hashing and verification logic.
     """
+
+    @staticmethod
+    def _ensure_bytes(value: Union[str, bytes]) -> bytes:
+        if isinstance(value, str):
+            return value.encode("utf-8")
+        return value
 
     @abc.abstractmethod
     def hash(self, value: "Union[str, bytes]") -> "Union[str, Any]":
@@ -56,6 +60,9 @@ class HashedPassword:
 
     This class holds the hash string and provides a method to verify a plain text password against it.
     """
+
+    def __hash__(self) -> int:
+        return hash(self.hash_string)
 
     def __init__(self, hash_string: str, backend: "HashingBackend") -> None:
         """Initialize a HashedPassword object.

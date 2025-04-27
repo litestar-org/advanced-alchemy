@@ -7,16 +7,12 @@ from advanced_alchemy.types.password_hash.base import HashingBackend
 if TYPE_CHECKING:
     from sqlalchemy import BinaryExpression, ColumnElement
 
-from argon2 import PasswordHasher  # pyright: ignore
+from argon2 import PasswordHasher as Argon2PasswordHasher  # pyright: ignore
 from argon2.exceptions import InvalidHash, VerifyMismatchError  # pyright: ignore
 
 
 class Argon2Hasher(HashingBackend):
-    """Hashing backend using Argon2 via the argon2-cffi library.
-
-    Relies on the `argon2-cffi` package being installed.
-    Install with `pip install argon2-cffi` or `uv pip install argon2-cffi`.
-    """
+    """Hashing backend using Argon2 via the argon2-cffi library."""
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize Argon2Backend.
@@ -26,7 +22,7 @@ class Argon2Hasher(HashingBackend):
                       See argon2-cffi documentation for available parameters (e.g., time_cost,
                       memory_cost, parallelism, hash_len, salt_len, type).
         """
-        self.hasher = PasswordHasher(**kwargs)  # pyright: ignore
+        self.hasher = Argon2PasswordHasher(**kwargs)  # pyright: ignore
 
     def hash(self, value: "Union[str, bytes]") -> str:
         """Hash the password using Argon2.
@@ -37,9 +33,7 @@ class Argon2Hasher(HashingBackend):
         Returns:
             The Argon2 hash string.
         """
-        if isinstance(value, str):
-            value = value.encode("utf-8")
-        return self.hasher.hash(value)
+        return self.hasher.hash(self._ensure_bytes(value))
 
     def verify(self, plain: "Union[str, bytes]", hashed: str) -> bool:
         """Verify a plain text password against an Argon2 hash.
@@ -51,30 +45,14 @@ class Argon2Hasher(HashingBackend):
         Returns:
             True if the password matches the hash, False otherwise.
         """
-        if isinstance(plain, str):
-            plain = plain.encode("utf-8")
         try:
-            self.hasher.verify(hashed, plain)  # pyright: ignore
-        except VerifyMismatchError:  # pyright: ignore
+            self.hasher.verify(hashed, self._ensure_bytes(plain))
+
+        except (VerifyMismatchError, InvalidHash):
             return False
-        except InvalidHash:  # pyright: ignore
-            # Consider logging this case as it might indicate a corrupted hash
+        except Exception:  # noqa: BLE001
             return False
         return True
-
-    @staticmethod
-    def identify(hashed: "Union[str, bytes]") -> bool:
-        """Identify if a hash string is potentially an Argon2 hash.
-
-        Checks for the standard Argon2 prefixes ($argon2i$, $argon2d$, $argon2id$).
-
-        Args:
-            hashed: The potential hash string.
-
-        Returns:
-            True if the hash starts with a known Argon2 prefix, False otherwise.
-        """
-        return isinstance(hashed, str) and hashed.startswith(("$argon2i$", "$argon2d$", "$argon2id$"))
 
     def compare_expression(self, column: "ColumnElement[str]", plain: "Union[str, bytes]") -> "BinaryExpression[bool]":
         """Direct SQL comparison is not supported for Argon2.
@@ -82,5 +60,5 @@ class Argon2Hasher(HashingBackend):
         Raises:
             NotImplementedError: Always raised.
         """
-        msg = "Argon2Backend does not support direct SQL comparison."
+        msg = "Argon2Hasher does not support direct SQL comparison."
         raise NotImplementedError(msg)

@@ -7,7 +7,7 @@ from unittest.mock import NonCallableMagicMock, create_autospec
 import pytest
 from google.cloud import spanner  # pyright: ignore
 from pytest import FixtureRequest
-from sqlalchemy import Dialect, Engine, NullPool, create_engine
+from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -256,7 +256,16 @@ async def asyncmy_engine(mysql_asyncmy_url: str) -> AsyncGenerator[AsyncEngine, 
 
 @pytest.fixture()
 async def asyncpg_engine(postgres_asyncpg_url: str) -> AsyncGenerator[AsyncEngine, None]:
-    yield create_async_engine(postgres_asyncpg_url, poolclass=NullPool)
+    """AsyncPG engine fixture that ensures pgcrypto extension is created."""
+    engine = create_async_engine(postgres_asyncpg_url, poolclass=NullPool)
+    try:
+        # Ensure pgcrypto extension is available
+        async with engine.connect() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+            await conn.commit()  # Commit the extension creation
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture()

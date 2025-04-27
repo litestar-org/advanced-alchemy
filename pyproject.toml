@@ -62,6 +62,7 @@ fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
 obstore = ["obstore"]
 passlib = ["passlib[argon2]"]
+pwdlib = ["pwdlib[argon2]"]
 uuid = ["uuid-utils>=0.6.1"]
 
 [project.scripts]
@@ -374,6 +375,7 @@ classmethod-decorators = [
   "ANN",
   "RUF029",
   "DOC",
+  "UP007",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
