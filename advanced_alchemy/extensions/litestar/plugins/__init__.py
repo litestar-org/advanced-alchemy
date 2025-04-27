@@ -1,8 +1,12 @@
-from collections.abc import Sequence
-from typing import Union
+from collections.abc import AsyncGenerator, Generator, Sequence
+from contextlib import asynccontextmanager, contextmanager
+from typing import Any, Callable, Optional, Union, cast
 
 from litestar.config.app import AppConfig
 from litestar.plugins import InitPluginProtocol
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
 from advanced_alchemy.extensions.litestar.plugins.init import (
@@ -47,6 +51,92 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
         """
         app_config.plugins.extend([SQLAlchemyInitPlugin(config=self._config), SQLAlchemySerializationPlugin()])
         return app_config
+
+    def _get_config(self, key: Optional[str] = None) -> Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]:
+        """Get a configuration by key.
+
+        Args:
+            key: Optional key to identify the configuration. If not provided, uses the first config.
+
+        Raises:
+            ValueError: If no configuration is found.
+
+        Returns:
+            The SQLAlchemy configuration.
+        """
+        if key is None:
+            return self._config[0]
+        for config in self._config:
+            if getattr(config, "key", None) == key:
+                return config
+        msg = f"No configuration found with key {key}"
+        raise ValueError(msg)
+
+    def get_session(
+        self,
+        key: Optional[str] = None,
+    ) -> Union[AsyncGenerator[AsyncSession, None], Generator[Session, None, None]]:
+        """Get a SQLAlchemy session.
+
+        Args:
+            key: Optional key to identify the configuration. If not provided, uses the first config.
+
+        Returns:
+            A SQLAlchemy session.
+        """
+        config = self._get_config(key)
+
+        if isinstance(config, SQLAlchemyAsyncConfig):
+
+            @asynccontextmanager
+            async def async_gen() -> AsyncGenerator[AsyncSession, None]:
+                async with config.get_session() as session:
+                    yield session
+
+            return cast("AsyncGenerator[AsyncSession, None]", async_gen())
+
+        @contextmanager
+        def sync_gen() -> Generator[Session, None, None]:
+            with config.get_session() as session:
+                yield session
+
+        return cast("Generator[Session, None, None]", sync_gen())
+
+    def provide_session(
+        self,
+        key: Optional[str] = None,
+    ) -> Callable[..., Union[AsyncGenerator[AsyncSession, None], Generator[Session, None, None]]]:
+        """Get a session provider for dependency injection.
+
+        Args:
+            key: Optional key to identify the configuration. If not provided, uses the first config.
+
+        Returns:
+            A callable that returns a session provider.
+        """
+
+        def provider(
+            *args: Any,  # noqa: ARG001
+            **kwargs: Any,  # noqa: ARG001
+        ) -> Union[AsyncGenerator[AsyncSession, None], Generator[Session, None, None]]:
+            return self.get_session(key)
+
+        return provider
+
+    def get_engine(
+        self,
+        key: Optional[str] = None,
+    ) -> Union[AsyncEngine, Engine]:
+        """Get the SQLAlchemy engine.
+
+        Args:
+            key: Optional key to identify the configuration. If not provided, uses the first config.
+
+        Returns:
+            The SQLAlchemy engine.
+        """
+        config = self._get_config(key)
+        return config.get_engine()
 
 
 __all__ = (
