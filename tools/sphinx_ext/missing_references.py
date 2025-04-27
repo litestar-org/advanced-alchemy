@@ -1,6 +1,6 @@
 """Sphinx extension for changelog and change directives."""
 
-# ruff: noqa: FIX002 PLR0911 ARG001
+# ruff: noqa: PLR0911, ARG001
 from __future__ import annotations
 
 import ast
@@ -231,75 +231,82 @@ def _resolve_click_reference(target: str) -> bool:
 
 
 def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:
-    """Handle warning for missing references by checking if they are valid type imports."""
     if node.tagname != "pending_xref":  # type: ignore[attr-defined]
         return None
 
     if not hasattr(node, "attributes"):
         return None
 
-    attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
-    target = attributes["reftarget"]
-    ref_type = attributes.get("reftype")
-    module = attributes.get("py:module", "")
-    # Handle TypeVar references
-    if hasattr(target, "__class__") and target.__class__.__name__ == "TypeVar":
-        return True
+    # Wrap the main logic in a try-except to catch potential AttributeErrors (e.g., startswith on None)
+    try:
+        attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
+        target = attributes["reftarget"]  # pyright: ignore
+        ref_type = attributes.get("reftype")  # pyright: ignore
+        module = attributes.get("py:module", "")  # pyright: ignore
 
-    # Handle Advanced Alchemy references
-    if _resolve_advanced_alchemy_reference(target, module):
-        return True
-
-    # Handle SQLAlchemy type system references
-    if ref_type in {"class", "meth", "attr"} and any(
-        x in target for x in ["TypeDecorator", "TypeEngine", "Dialect", "ExternalType", "UserDefinedType"]
-    ):
-        return _resolve_sqlalchemy_type_reference(target)
-
-    # Handle SQLAlchemy core references
-    if target.startswith("sqlalchemy.") or (
-        ref_type in ("class", "attr", "obj", "meth")
-        and target
-        in {
-            "Engine",
-            "Session",
-            "Connection",
-            "MetaData",
-            "AsyncSession",
-            "AsyncEngine",
-            "AsyncConnection",
-            "sessionmaker",
-            "async_sessionmaker",
-        }
-    ):
-        clean_target = target.replace("sqlalchemy.", "")
-        if _resolve_sqlalchemy_reference(clean_target):
+        # Handle TypeVar references
+        if hasattr(target, "__class__") and target.__class__.__name__ == "TypeVar":  # pyright: ignore
             return True
 
-    # Handle Litestar references
-    if ref_type in {"class", "obj"} and (
-        target.startswith(("datastructures.", "config.app."))
-        or target
-        in {
-            "Litestar",
-            "State",
-            "Scope",
-            "Message",
-            "AppConfig",
-            "BeforeMessageSendHookHandler",
-            "FieldDefinition",
-            "ImproperConfigurationError",
-        }
-    ):
-        return _resolve_litestar_reference(target)
+        # Handle Advanced Alchemy references
+        if _resolve_advanced_alchemy_reference(target, module):  # pyright: ignore
+            return True
 
-    # Handle serialization references
-    if ref_type in {"attr", "meth"} and _resolve_serialization_reference(target):
-        return True
+        # Handle SQLAlchemy type system references
+        if ref_type in {"class", "meth", "attr"} and any(
+            x in target for x in ["TypeDecorator", "TypeEngine", "Dialect", "ExternalType", "UserDefinedType"]
+        ):
+            return _resolve_sqlalchemy_type_reference(target)  # pyright: ignore
 
-    # Handle Click references
-    if ref_type == "class" and _resolve_click_reference(target):
-        return True
+        # Handle SQLAlchemy core references
+        if (isinstance(target, str) and target.startswith("sqlalchemy.")) or (
+            ref_type in {"class", "attr", "obj", "meth"}
+            and target
+            in {
+                "Engine",
+                "Session",
+                "Connection",
+                "MetaData",
+                "AsyncSession",
+                "AsyncEngine",
+                "AsyncConnection",
+                "sessionmaker",
+                "async_sessionmaker",
+            }
+        ):
+            # Ensure target is string before replace
+            clean_target = target.replace("sqlalchemy.", "") if isinstance(target, str) else ""
+            if clean_target and _resolve_sqlalchemy_reference(clean_target):
+                return True
+
+        # Handle Litestar references
+        if ref_type in {"class", "obj"} and (
+            (isinstance(target, str) and target.startswith(("datastructures.", "config.app.")))
+            or target
+            in {
+                "Litestar",
+                "State",
+                "Scope",
+                "Message",
+                "AppConfig",
+                "BeforeMessageSendHookHandler",
+                "FieldDefinition",
+                "ImproperConfigurationError",
+            }
+        ):
+            return _resolve_litestar_reference(target)  # pyright: ignore
+
+        # Handle serialization references
+        if ref_type in {"attr", "meth"} and _resolve_serialization_reference(target):  # pyright: ignore
+            return True
+
+        # Handle Click references
+        if ref_type == "class" and _resolve_click_reference(target):  # pyright: ignore
+            return True
+
+    except AttributeError:
+        # Catch the specific error (likely startswith on None) and allow Sphinx to handle the warning normally
+        return None
 
     return None
 

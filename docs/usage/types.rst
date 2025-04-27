@@ -90,8 +90,8 @@ Encryption Backends
 
 Two encryption backends are available:
 
-- :class:`advanced_alchemy.types.FernetBackend`: Uses Python's cryptography library with Fernet encryption
-- :class:`advanced_alchemy.types.PGCryptoBackend`: Uses PostgreSQL's pgcrypto extension (PostgreSQL only)
+- :class:`FernetBackend <advanced_alchemy.types.encrypted_string.FernetBackend>`: Uses Python's `cryptography <https://cryptography.io/>`_ library with Fernet encryption
+- :class:`PGCryptoBackend <advanced_alchemy.types.encrypted_string.PGCryptoBackend>`: Uses PostgreSQL's `pgcrypto <https://www.postgresql.org/docs/current/pgcrypto.html>`_ extension (PostgreSQL only)
 
 GUID
 ----
@@ -147,6 +147,29 @@ A JSON type that uses the most efficient JSON storage for each database:
     class MyModel(DefaultBase):
         data: Mapped[dict] = mapped_column(JsonB)
 
+Password Hash
+-------------
+
+A type for storing password hashes with configurable backends.  Currently supports:
+
+- :class:`~advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher`: Uses `pwdlib <https://github.com/pwdlib/pwdlib>`_
+- :class:`~advanced_alchemy.types.password_hash.argon2.Argon2Hasher`: Uses `argon2-cffi <https://argon2.readthedocs.io/en/stable/>`_
+- :class:`~advanced_alchemy.types.password_hash.passlib.PasslibHasher`: Uses `passlib <https://passlib.readthedocs.io/en/stable/>`_
+
+.. code-block:: python
+
+    from sqlalchemy.orm import Mapped, mapped_column
+    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.types import PasswordHash
+    from advanced_alchemy.types.password_hash.passlib import PasslibHasher
+    from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
+
+    class MyModel(DefaultBase):
+        __tablename__ = "my_model"
+        password: Mapped[str] = mapped_column(
+        PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
+    )
+
 File Object Storage
 -------------------
 
@@ -190,11 +213,10 @@ The FSSpec backend uses the `fsspec <https://filesystem-spec.readthedocs.io/>`_ 
 
     import fsspec
     from advanced_alchemy.types.file_object.backends.fsspec import FSSpecBackend
+    from advanced_alchemy.types.file_object import storages
 
     # Local filesystem
-    fs = fsspec.filesystem("file")
-    backend = FSSpecBackend(fs=fs, key="local")
-
+    storages.register(FSSpecBackend(fs=fsspec.filesystem("file"), key="local"))
     # S3 storage
     fs = fsspec.S3FileSystem(
         anon=False,
@@ -202,7 +224,7 @@ The FSSpec backend uses the `fsspec <https://filesystem-spec.readthedocs.io/>`_ 
         secret="your-secret-key",
         endpoint_url="https://your-s3-endpoint",
     )
-    backend = FSSpecBackend(fs=fs, key="s3", prefix="your-bucket")
+    storages.register(FSSpecBackend(fs=fs, key="s3", prefix="your-bucket"))
 
 Obstore Backend
 ^^^^^^^^^^^^^^^
@@ -212,45 +234,22 @@ The Obstore backend provides a simple interface for object storage:
 .. code-block:: python
 
     from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+    from advanced_alchemy.types.file_object import storages
 
     # Local storage
-    backend = ObstoreBackend(
+    storages.register(ObstoreBackend(
         key="local",
         fs="file:///path/to/storage",
-    )
+    ))
 
     # S3 storage
-    backend = ObstoreBackend(
+    storages.register(ObstoreBackend(
         key="s3",
         fs="s3://your-bucket/",
         aws_access_key_id="your-access-key",
         aws_secret_access_key="your-secret-key",
         aws_endpoint="https://your-s3-endpoint",
-    )
-
-File Operations
-~~~~~~~~~~~~~~~
-
-The FileObject class provides various operations for managing files:
-
-.. code-block:: python
-
-    # Save a file
-    file_obj = FileObject(
-        backend="local_test_store",
-        filename="test.txt",
-        content=b"Hello, World!",
-    )
-    await file_obj.save_async()
-
-    # Get file content
-    content = await file_obj.get_content_async()
-
-    # Delete a file
-    await file_obj.delete_async()
-
-    # Get signed URL
-    url = await file_obj.sign_async(expires_in=3600)  # URL expires in 1 hour
+    ))
 
 Metadata
 ~~~~~~~~
@@ -274,13 +273,19 @@ File objects support metadata storage:
 Automatic Cleanup
 ~~~~~~~~~~~~~~~~~
 
-When a file object is removed from a model or the model is deleted, the associated file is automatically deleted from storage:
+When a file object is removed from a model or the model is deleted, the associated file is automatically saved or deleted from storage:
+
+**Note:** The listener events are automatically configured when using any of the framework adapters.  You may manually configure these events by calling the `configure_listeners` method on the configuration class.
 
 .. code-block:: python
 
     # Update file
-    doc.attachment = new_file_obj
-    await db_session.commit()  # Old file is automatically deleted
+    doc.attachment = FileObject(
+        backend="local_test_store",
+        filename="test.txt",
+        content=b"Hello, World!",
+    )
+    await db_session.commit()  # new file is saved, old file is automatically deleted
 
     # Clear file
     doc.attachment = None
@@ -289,6 +294,32 @@ When a file object is removed from a model or the model is deleted, the associat
     # Delete model
     await db_session.delete(doc)
     await db_session.commit()  # All associated files are automatically deleted
+
+
+Manual File Operations
+~~~~~~~~~~~~~~~~~~~~~~
+
+The FileObject class provides various operations for managing files if you don't want to use the automatic listeners (or can't use them):
+
+.. code-block:: python
+
+    # Save a file
+    file_obj = FileObject(
+        backend="local_test_store",
+        filename="test.txt",
+        content=b"Hello, World!",
+    )
+    await file_obj.save_async()
+
+    # Get file content
+    content = await file_obj.get_content_async()
+
+    # Delete a file
+    await file_obj.delete_async()
+
+    # Get signed URL
+    url = await file_obj.sign_async(expires_in=3600)  # URL expires in 1 hour
+
 
 Using Types with Alembic
 ------------------------
