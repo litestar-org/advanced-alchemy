@@ -1,5 +1,5 @@
 # Configuration file for the Sphinx documentation builder.
-# ruff: noqa: FIX002 PLR0911 ARG001 ERA001
+# ruff: noqa: FIX002
 from __future__ import annotations
 
 import datetime
@@ -156,6 +156,10 @@ autodoc_type_aliases = {
     "Any": "typing.Any",
     "Optional": "typing.Optional",
     "_EchoFlagType": "advanced_alchemy.config._EchoFlagType",
+    "advanced_alchemy.types.encrypted_string.PGCryptoBackend": "advanced_alchemy.types.encrypted_string.PGCryptoBackend",
+    "advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher": "advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher",
+    "advanced_alchemy.types.password_hash.argon2.Argon2Hasher": "advanced_alchemy.types.password_hash.argon2.Argon2Hasher",
+    "advanced_alchemy.types.password_hash.passlib.PasslibHasher": "advanced_alchemy.types.password_hash.passlib.PasslibHasher",
 }
 autodoc_mock_imports = [
     "alembic",
@@ -174,6 +178,10 @@ autodoc_mock_imports = [
     "sqlalchemy.ext.asyncio",
     "sqlalchemy.engine",
     "sqlalchemy.orm",
+    "advanced_alchemy.types.encrypted_string.PGCryptoBackend",
+    "advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher",
+    "advanced_alchemy.types.password_hash.argon2.Argon2Hasher",
+    "advanced_alchemy.types.password_hash.passlib.PasslibHasher",
 ]
 
 

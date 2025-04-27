@@ -1,16 +1,24 @@
 """Tests for the FastAPI DI module."""
 
 import inspect
+import sys  # Import sys
 import typing
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Annotated, Union, cast
 from unittest.mock import patch
 from uuid import UUID
 
-from fastapi import Depends, FastAPI
+import pytest
+from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from sqlalchemy import String
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
 
 # Assuming necessary classes are importable from the new provider module
+from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
     DEPENDENCY_DEFAULTS,
     DependencyCache,
@@ -29,20 +37,9 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.utils.singleton import SingletonMeta
-
-# Define a more specific type for the filters that Pydantic can understand
-FilterType = Union[BeforeAfter, CollectionFilter[str], LimitOffset, OrderBy, SearchFilter]
-
-# --- Test Helper Functions/Fixtures --- #
-
-# No helper needed for these tests
-
-# --- Individual Filter Provider Function Tests (Removed) ---
-# These are now implementation details of the aggregate builder
-# and tested via the aggregate function tests.
-
-# --- Cache Tests --- #
 
 
 def test_dependency_cache_singleton() -> None:
@@ -528,7 +525,7 @@ def test_openapi_schema_edge_cases() -> None:
     @app.get("/no-optionals")
     async def get_no_optionals(
         filters: Annotated[
-            list[FilterType],
+            list[FilterTypes],
             Depends(
                 provide_filters(
                     {
@@ -622,3 +619,107 @@ def test_openapi_schema_edge_cases() -> None:
     assert "OrderBy" in data
     assert "SearchFilter" in data
     assert "BeforeAfter" in data
+
+
+class SimpleDishkaTable(UUIDBase):
+    name: Mapped[str] = mapped_column(String(length=50), index=True)
+
+
+class SimpleDishkaService(SQLAlchemyAsyncRepositoryService[SimpleDishkaTable]):
+    class Repo(SQLAlchemyAsyncRepository[SimpleDishkaTable]):
+        model_type = SimpleDishkaTable
+
+    repository_type = Repo
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="Dishka integration requires Python 3.10+")
+async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test provide_filters integration with FastAPI and Dishka."""
+    from dishka import (  # type: ignore # pyright: ignore
+        Provider,  # type: ignore
+        Scope,  # type: ignore
+        make_async_container,  # type: ignore
+        provide,  # type: ignore
+    )
+    from dishka.integrations.fastapi import (  # type: ignore # pyright: ignore
+        FastapiProvider,  # type: ignore
+        FromDishka,  # type: ignore
+        inject,  # type: ignore
+        setup_dishka,  # type: ignore
+    )
+
+    # Clear cache before test
+    dep_cache.dependencies.clear()
+    sqlalchemy_config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+
+    class SimpleDishkaProvider(Provider):  # type: ignore
+        @provide(scope=Scope.REQUEST)  # type: ignore
+        async def provide_session(self, request: Request) -> AsyncGenerator[AsyncSession, None]:
+            async with sqlalchemy_config.get_session() as session:
+                yield session
+
+        @provide(scope=Scope.REQUEST)  # type: ignore
+        async def provide_simple_dishka_service(self, db_session: FromDishka[AsyncSession]) -> SimpleDishkaService:  # type: ignore
+            return SimpleDishkaService(session=db_session)  # type: ignore
+
+    filter_deps = provide_filters(
+        {
+            "id_filter": UUID,
+            "pagination_type": "limit_offset",
+            "search": "name",
+            "created_at": True,
+        }
+    )
+
+    app = FastAPI()
+    container = make_async_container(SimpleDishkaProvider(), FastapiProvider())  # type: ignore
+    setup_dishka(container=container, app=app)
+
+    @app.get("/diska-items")
+    @inject  # pyright: ignore
+    async def get_diska_items(
+        filters: Annotated[list[FilterTypes], Depends(filter_deps)],
+        simple_model_service: FromDishka[SimpleDishkaService],  # type: ignore
+    ) -> dict[str, typing.Any]:
+        # Return filter types and dummy service value for verification
+        return {
+            "filters": [type(f).__name__ for f in filters],
+            "simple_model_table_name": simple_model_service.model_type.__tablename__,
+        }
+
+    client = TestClient(app)
+
+    # Test case: Apply multiple filters
+    response = client.get(
+        "/diska-items?ids=123e4567-e89b-12d3-a456-426614174000&currentPage=1&pageSize=10&searchString=test&createdAfter=2023-01-01T00:00:00Z"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["simple_model_table_name"] == "simple_dishka_table"
+    filter_types = data.get("filters", [])  # type: ignore
+    assert isinstance(filter_types, list)
+    assert "CollectionFilter" in filter_types
+    assert "LimitOffset" in filter_types
+    assert "SearchFilter" in filter_types
+    assert "BeforeAfter" in filter_types
+    # OrderBy is not explicitly configured but might have defaults, let's check if it's NOT there unless configured
+    assert "OrderBy" not in filter_types  # OrderBy was not configured in this specific provide_filters call
+    assert len(filter_types) == 4  # type: ignore
+
+    # Test case: Only defaults (expect LimitOffset)
+    response = client.get("/diska-items")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["simple_model_table_name"] == "simple_dishka_table"
+    filter_types = data.get("filters", [])  # type: ignore
+    assert isinstance(filter_types, list)
+    assert "LimitOffset" in filter_types  # Default pagination
+    assert "CollectionFilter" not in filter_types
+    assert "SearchFilter" not in filter_types
+    assert "BeforeAfter" not in filter_types
+    assert "OrderBy" not in filter_types
+    assert len(filter_types) == 1  # type: ignore
+
+    await container.close()

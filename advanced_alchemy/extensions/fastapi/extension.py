@@ -9,9 +9,6 @@ from typing import (
 
 from advanced_alchemy.extensions.fastapi.cli import register_database_commands
 from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-from advanced_alchemy.extensions.fastapi.providers import DEPENDENCY_DEFAULTS
-from advanced_alchemy.extensions.fastapi.providers import provide_filters as _provide_filters
-from advanced_alchemy.extensions.fastapi.providers import provide_service as _provide_service
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy as StarletteAdvancedAlchemy
 from advanced_alchemy.service import (
     Empty,
@@ -119,6 +116,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         Returns:
             A callable that returns an async generator for async services or a generator for sync services.
         """
+        from advanced_alchemy.extensions.fastapi.providers import provide_service as _provide_service
 
         return _provide_service(
             service_class,
@@ -147,6 +145,8 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         Returns:
             A callable that returns an async generator for async filters or a generator for sync filters.
         """
+        from advanced_alchemy.extensions.fastapi.providers import DEPENDENCY_DEFAULTS
+        from advanced_alchemy.extensions.fastapi.providers import provide_filters as _provide_filters
 
         if dep_defaults is None:
             dep_defaults = DEPENDENCY_DEFAULTS

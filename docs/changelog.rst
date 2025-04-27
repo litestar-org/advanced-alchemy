@@ -3,6 +3,39 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.0
+    :date: 2025-04-27
+
+    .. change:: PasswordHash field type
+        :type: feature
+        :pr: 452
+
+        Implements a PasswordHash field type with multiple supported backends.
+
+        Includes built-in backends for:
+        - `passlib`
+        - `argon2`
+        - `pwdlib`
+
+
+.. changelog:: 1.3.2
+    :date: 2025-04-25
+
+    .. change:: remove stringified type hint
+        :type: bugfix
+        :pr: 457
+
+        "De-stringifies" the Filter type hints to prevent runtime type resolutions in some cases
+
+    .. change:: FileObject native Pydantic Core integration
+        :type: bugfix
+        :pr: 458
+
+        File object will now serialize properly in pydantic.
+
+        More complete FastAPI examples added.
+
+
 .. changelog:: 1.3.1
     :date: 2025-04-21
 
