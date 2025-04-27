@@ -189,14 +189,14 @@ Basic Usage
 
         # Single file storage
         attachment: Mapped[Optional[FileObject]] = mapped_column(
-            StoredObject(backend="local_test_store"),
-            nullable=True,
+            StoredObject(backend="s3"),
+            nullable=True
         )
 
         # Multiple file storage
         images: Mapped[Optional[FileObjectList]] = mapped_column(
-            StoredObject(backend="local_test_store", multiple=True),
-            nullable=True,
+            StoredObject(backend="s3", multiple=True),
+            nullable=True
         )
 
 Storage Backends

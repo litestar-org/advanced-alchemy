@@ -3,6 +3,21 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.0
+    :date: 2025-04-27
+
+    .. change:: PasswordHash field type
+        :type: feature
+        :pr: 452
+
+        Implements a PasswordHash field type with multiple supported backends.
+
+        Includes built-in backends for:
+        - `passlib`
+        - `argon2`
+        - `pwdlib`
+
+
 .. changelog:: 1.3.2
     :date: 2025-04-25
 
