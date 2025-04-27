@@ -25,10 +25,12 @@ from uuid import UUID
 
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from typing_extensions import NotRequired, TypedDict
 
+from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -51,9 +53,7 @@ from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
 if TYPE_CHECKING:
-    from sqlalchemy import Select
-
-    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 T = TypeVar("T")
 DTorNone = Optional[datetime.datetime]
@@ -155,12 +155,12 @@ class FilterConfig(TypedDict):
 def provide_service(
     service_class: type["AsyncServiceT_co"],
     /,
-    extension: "AdvancedAlchemy",
-    key: "Optional[str]" = None,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
+    extension: AdvancedAlchemy,
+    key: Optional[str] = None,
+    statement: Optional[Select[tuple[ModelT]]] = None,
+    error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+    load: Optional[LoadSpec] = None,
+    execution_options: Optional[dict[str, Any]] = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
 ) -> Callable[..., AsyncGenerator[AsyncServiceT_co, None]]: ...
@@ -170,12 +170,12 @@ def provide_service(
 def provide_service(
     service_class: type["SyncServiceT_co"],
     /,
-    extension: "AdvancedAlchemy",
-    key: "Optional[str]" = None,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
+    extension: AdvancedAlchemy,
+    key: Optional[str] = None,
+    statement: Optional[Select[tuple[ModelT]]] = None,
+    error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+    load: Optional[LoadSpec] = None,
+    execution_options: Optional[dict[str, Any]] = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
@@ -184,15 +184,15 @@ def provide_service(
 def provide_service(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
-    extension: "AdvancedAlchemy",
-    key: "Optional[str]" = None,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
+    extension: AdvancedAlchemy,
+    key: Optional[str] = None,
+    statement: Optional[Select[tuple[ModelT]]] = None,
+    error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+    load: Optional[LoadSpec] = None,
+    execution_options: Optional[dict[str, Any]] = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
-) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
+) -> Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None]]]:
     """Create a dependency provider for a service.
 
     Returns:
@@ -202,7 +202,7 @@ def provide_service(
 
         async def provide_async_service(
             db_session: AsyncSession = Depends(extension.provide_session(key)),  # noqa: B008
-        ) -> "AsyncGenerator[AsyncServiceT_co, None]":  # type: ignore[union-attr,unused-ignore]
+        ) -> AsyncGenerator[AsyncServiceT_co, None]:  # type: ignore[union-attr,unused-ignore]
             async with service_class.new(  # type: ignore[union-attr,unused-ignore]
                 session=db_session,  # type: ignore[arg-type, unused-ignore]
                 statement=statement,
@@ -219,7 +219,7 @@ def provide_service(
 
     def provide_sync_service(
         db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
-    ) -> "Generator[SyncServiceT_co, None, None]":
+    ) -> Generator[SyncServiceT_co, None, None]:
         with service_class.new(
             session=db_session,  # type: ignore[arg-type, unused-ignore]
             statement=statement,

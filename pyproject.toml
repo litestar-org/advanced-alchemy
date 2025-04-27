@@ -44,7 +44,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "1.3.1"
+version = "1.3.2"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -144,6 +144,7 @@ sanic = ["sanic", "sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
+  "dishka ; python_version >= \"3.10\"",
   "pydantic-extra-types",
   "rich-click",
   "coverage>=7.6.1",
@@ -167,7 +168,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.3.1"
+current_version = "1.3.2"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -197,6 +198,8 @@ packages = [
   "advanced_alchemy.extensions.litestar",
   "advanced_alchemy.extensions.sanic",
   "advanced_alchemy.extensions.starlette",
+  "advanced_alchemy.extensions.fastapi",
+  "advanced_alchemy.extensions.flask",
 ]
 
 [tool.pytest.ini_options]
@@ -317,6 +320,7 @@ ignore = [
   "PLR0917",
   "PGH003",
   "PLC2701",
+  "PLW3201",
 ]
 select = ["ALL"]
 
@@ -441,6 +445,8 @@ module = [
   "s3fs.*",
   "argon2",
   "argon2.*",
+  "dishka",
+  "dishka.*",
 ]
 
 [[tool.mypy.overrides]]

@@ -93,8 +93,6 @@ StatementTypeT = TypeVar(
         ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Select[Any], Update, Delete
     ],
 )
-FilterTypes: TypeAlias = "Union[BeforeAfter, OnBeforeAfter, CollectionFilter[Any], LimitOffset, OrderBy, SearchFilter, NotInCollectionFilter[Any], NotInSearchFilter, ExistsFilter, NotExistsFilter, ComparisonFilter, MultiFilter, FilterGroup]"
-"""Aggregate type alias of the types supported for collection filtering."""
 
 logger = logging.getLogger("advanced_alchemy")
 
@@ -1090,3 +1088,22 @@ class MultiFilter(StatementFilter):
                     except Exception:  # noqa: BLE001
                         return None
         return None
+
+
+# Define FilterTypes using direct class references
+FilterTypes: TypeAlias = Union[
+    BeforeAfter,
+    OnBeforeAfter,
+    CollectionFilter[Any],
+    LimitOffset,
+    OrderBy,
+    SearchFilter,
+    NotInCollectionFilter[Any],
+    NotInSearchFilter,
+    ExistsFilter,
+    NotExistsFilter,
+    ComparisonFilter,
+    MultiFilter,
+    FilterGroup,
+]
+"""Aggregate type alias of the types supported for collection filtering."""
