@@ -3,6 +3,25 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.1
+    :date: 2025-04-28
+
+    .. change:: raise if filter operator is not in `operators_map`
+        :type: bugfix
+        :pr: 463
+        :issue: 453
+
+        Raise exception if filter operator does not exist in operators_map
+
+        Fixes #453
+
+    .. change:: `uniquify` respects init method override
+        :type: bugfix
+        :pr: 462
+
+        Passing `uniquify` as an `__init__` argument now works as expected.
+
+
 .. changelog:: 1.4.0
     :date: 2025-04-27
 
