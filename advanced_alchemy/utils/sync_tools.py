@@ -22,145 +22,12 @@ if TYPE_CHECKING:
 try:
     import uvloop  # pyright: ignore[reportMissingImports]
 except ImportError:
-    uvloop = None  # type: ignore[assignment]
+    uvloop = None
 
 
 ReturnT = TypeVar("ReturnT")
 ParamSpecT = ParamSpec("ParamSpecT")
 T = TypeVar("T")
-
-
-class PendingType:
-    def __repr__(self) -> str:
-        return "AsyncPending"
-
-
-Pending = PendingType()
-
-
-class PendingValueError(Exception):
-    """Exception raised when a value is accessed before it is ready."""
-
-
-class SoonValue(Generic[T]):
-    """Holds a value that will be available soon after an async operation."""
-
-    def __init__(self) -> None:
-        self._stored_value: Union[T, PendingType] = Pending
-
-    @property
-    def value(self) -> "T":
-        if isinstance(self._stored_value, PendingType):
-            msg = "The return value of this task is still pending."
-            raise PendingValueError(msg)
-        return self._stored_value
-
-    @property
-    def ready(self) -> bool:
-        return not isinstance(self._stored_value, PendingType)
-
-
-class TaskGroup:
-    """Manages a group of asyncio tasks, allowing them to be run concurrently."""
-
-    def __init__(self) -> None:
-        self._tasks: set[asyncio.Task[Any]] = set()
-        self._exceptions: list[BaseException] = []
-        self._closed = False
-
-    async def __aenter__(self) -> "TaskGroup":
-        if self._closed:
-            msg = "Cannot enter a task group that has already been closed."
-            raise RuntimeError(msg)
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: "Optional[type[BaseException]]",  # noqa: PYI036
-        exc_val: "Optional[BaseException]",  # noqa: PYI036
-        exc_tb: "Optional[TracebackType]",  # noqa: PYI036
-    ) -> None:
-        self._closed = True
-        if exc_val:
-            self._exceptions.append(exc_val)
-
-        if self._tasks:
-            await asyncio.wait(self._tasks)
-
-        if self._exceptions:
-            # Re-raise the first exception encountered.
-            raise self._exceptions[0]
-
-    def create_task(self, coro: "Coroutine[Any, Any, Any]") -> "asyncio.Task[Any]":
-        """Create and add a coroutine as a task to the task group.
-
-        Args:
-            coro (Coroutine): The coroutine to be added as a task.
-
-        Returns:
-            asyncio.Task: The created asyncio task.
-
-        Raises:
-            RuntimeError: If the task group has already been closed.
-        """
-        if self._closed:
-            msg = "Cannot create a task in a task group that has already been closed."
-            raise RuntimeError(msg)
-        task = asyncio.create_task(coro)
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-        task.add_done_callback(self._check_result)
-        return task
-
-    def _check_result(self, task: "asyncio.Task[Any]") -> None:
-        """Check and store exceptions from a completed task.
-
-        Args:
-            task (asyncio.Task): The task to check for exceptions.
-        """
-        try:
-            task.result()  # This will raise the exception if one occurred.
-        except Exception as e:  # noqa: BLE001
-            self._exceptions.append(e)
-
-    def start_soon_(
-        self,
-        async_function: "Callable[ParamSpecT, Awaitable[T]]",
-        name: object = None,
-    ) -> "Callable[ParamSpecT, SoonValue[T]]":
-        """Create a function to start a new task in this task group.
-
-        Args:
-            async_function (Callable): An async function to call soon.
-            name (object, optional): Name of the task for introspection and debugging.
-
-        Returns:
-            Callable: A function that starts the task and returns a SoonValue object.
-        """
-
-        @functools.wraps(async_function)
-        def wrapper(*args: "ParamSpecT.args", **kwargs: "ParamSpecT.kwargs") -> "SoonValue[T]":
-            partial_f = functools.partial(async_function, *args, **kwargs)
-            soon_value: SoonValue[T] = SoonValue()
-
-            @functools.wraps(partial_f)
-            async def value_wrapper(*_args: "Any") -> None:
-                value = await partial_f()
-                soon_value._stored_value = value  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
-
-            self.create_task(value_wrapper)  # type: ignore[arg-type]
-            return soon_value
-
-        return wrapper
-
-
-def create_task_group() -> "TaskGroup":
-    """Create a TaskGroup for managing multiple concurrent async tasks.
-
-    Returns:
-        TaskGroup: A new TaskGroup instance.
-    """
-    return TaskGroup()
 
 
 class CapacityLimiter:
@@ -195,7 +62,7 @@ class CapacityLimiter:
         self.release()
 
 
-_default_limiter = CapacityLimiter(40)
+_default_limiter = CapacityLimiter(15)
 
 
 def run_(async_function: "Callable[ParamSpecT, Coroutine[Any, Any, ReturnT]]") -> "Callable[ParamSpecT, ReturnT]":
@@ -237,6 +104,7 @@ def await_(
     Args:
         async_function (Callable): The async function to convert.
         raise_sync_error (bool, optional): If False, runs in a new event loop if no loop is present.
+                                         If True (default), raises RuntimeError if no loop is running.
 
     Returns:
         Callable: A blocking function that runs the async function.
@@ -248,12 +116,39 @@ def await_(
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = None
-
-        if loop is None and raise_sync_error is False:
+            # No running event loop
+            if raise_sync_error:
+                msg = "await_ called without a running event loop and raise_sync_error=True"
+                raise RuntimeError(msg) from None
             return asyncio.run(partial_f())
-        # Running in an existing event loop
-        return asyncio.run(partial_f())
+        else:
+            # Running in an existing event loop.
+            if loop.is_running():
+                try:
+                    # Check if the current context is within a task managed by this loop
+                    current_task = asyncio.current_task(loop=loop)
+                except RuntimeError:
+                    # Not running inside a task managed by this loop
+                    current_task = None
+
+                if current_task is not None:
+                    # Called from within the event loop's execution context (a task).
+                    # Blocking here would deadlock the loop.
+                    msg = "await_ cannot be called from within an async task running on the same event loop. Use 'await' instead."
+                    raise RuntimeError(msg)
+                # Called from a different thread than the loop's thread.
+                # It's safe to block this thread and wait for the loop.
+                future = asyncio.run_coroutine_threadsafe(partial_f(), loop)
+                # This blocks the *calling* thread, not the loop thread.
+                return future.result()
+            # This case should ideally not happen if get_running_loop() succeeded
+            # but the loop isn't running, but handle defensively.
+            # loop is not running
+            if raise_sync_error:
+                msg = "await_ found a non-running loop via get_running_loop()"
+                raise RuntimeError(msg)
+            # Fallback to running in a new loop
+            return asyncio.run(partial_f())
 
     return wrapper
 
@@ -286,7 +181,7 @@ def async_(
     return wrapper
 
 
-def maybe_async_(
+def ensure_async_(
     function: "Callable[ParamSpecT, Union[Awaitable[ReturnT], ReturnT]]",
 ) -> "Callable[ParamSpecT, Awaitable[ReturnT]]":
     """Convert a function to an async one if it is not already.
@@ -309,24 +204,6 @@ def maybe_async_(
     return wrapper
 
 
-def wrap_sync(fn: "Callable[ParamSpecT, ReturnT]") -> "Callable[ParamSpecT, Awaitable[ReturnT]]":
-    """Convert a sync function to an async one.
-
-    Args:
-        fn (Callable): The function to convert.
-
-    Returns:
-        Callable: An async function that runs the original function.
-    """
-    if inspect.iscoroutinefunction(fn):
-        return fn
-
-    async def wrapped(*args: "ParamSpecT.args", **kwargs: "ParamSpecT.kwargs") -> ReturnT:
-        return await async_(functools.partial(fn, *args, **kwargs))()
-
-    return wrapped
-
-
 class _ContextManagerWrapper(Generic[T]):
     def __init__(self, cm: AbstractContextManager[T]) -> None:
         self._cm = cm
@@ -343,7 +220,7 @@ class _ContextManagerWrapper(Generic[T]):
         return self._cm.__exit__(exc_type, exc_val, exc_tb)
 
 
-def maybe_async_context(
+def with_ensure_async_(
     obj: "Union[AbstractContextManager[T], AbstractAsyncContextManager[T]]",
 ) -> "AbstractAsyncContextManager[T]":
     """Convert a context manager to an async one if it is not already.
