@@ -9,6 +9,8 @@ from advanced_alchemy.types.password_hash.base import HashingBackend
 if TYPE_CHECKING:
     from sqlalchemy import BinaryExpression, ColumnElement
 
+__all__ = ("PasslibHasher",)
+
 
 class PasslibHasher(HashingBackend):
     """Hashing backend using Passlib.
