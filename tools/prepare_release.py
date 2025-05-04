@@ -287,8 +287,8 @@ def build_gh_release_notes(release_info: ReleaseInfo) -> str:
     #    made there depending on how things were merged
     doc = GHReleaseWriter()
 
-    doc.add_line("## Sponsors 🌟")
-    doc.add_line(f"- A huge 'Thank you!' to all sponsors across {_polar}, {_open_collective} and {_github_sponsors}!")
+    # doc.add_line("## Sponsors 🌟")  # noqa: ERA001
+    # doc.add_line(f"- A huge 'Thank you!' to all sponsors across {_polar}, {_open_collective} and {_github_sponsors}!")  # noqa: ERA001
 
     doc.add_line("## What's changed")
     if release_info.first_time_prs:
@@ -299,7 +299,7 @@ def build_gh_release_notes(release_info: ReleaseInfo) -> str:
         doc.add_line("\n### Bugfixes 🐛")
         doc.add_pr_descriptions(fixes)
     if features := release_info.pull_requests.get("feat"):
-        doc.add_line("\nNew features 🚀")
+        doc.add_line("\n### New features 🚀")
         doc.add_pr_descriptions(features)
 
     ignore_sections = {"fix", "feat", "ci", "chore"}

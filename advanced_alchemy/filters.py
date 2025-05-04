@@ -571,12 +571,44 @@ class SearchFilter(StatementFilter):
         return cast("StatementTypeT", statement.where(where_clause))
 
 
+# Regular typed dictionary for operators_map
+operators_map: dict[str, Callable[[Any, Any], ColumnElement[bool]]] = {
+    "eq": op.eq,
+    "ne": op.ne,
+    "gt": op.gt,
+    "ge": op.ge,
+    "lt": op.lt,
+    "le": op.le,
+    "in": op.in_op,
+    "notin": op.notin_op,
+    "between": lambda c, v: c.between(v[0], v[1]),
+    "like": op.like_op,
+    "ilike": op.ilike_op,
+    "startswith": op.startswith_op,
+    "istartswith": lambda c, v: c.ilike(v + "%"),
+    "endswith": op.endswith_op,
+    "iendswith": lambda c, v: c.ilike(v + "%"),
+    "dateeq": lambda c, v: cast("Date", c) == v,
+}
+
+VALID_OPERATORS = set(operators_map.keys())
+"""Set of valid operators that can be used in ComparisonFilter."""
+
+
 @dataclass
 class ComparisonFilter(StatementFilter):
     """Simple comparison filter for equality and inequality operations.
 
     This filter applies basic comparison operators (=, !=, >, >=, <, <=) to a field.
     It provides a generic way to perform common comparison operations.
+
+    Args:
+        field_name: Name of the model attribute to filter on
+        operator: Comparison operator to use (must be one of: 'eq', 'ne', 'gt', 'ge', 'lt', 'le', 'in', 'notin', 'between', 'like', 'ilike', 'startswith', 'istartswith', 'endswith', 'iendswith', 'dateeq')
+        value: Value to compare against
+
+    Raises:
+        ValueError: If an invalid operator is provided
     """
 
     field_name: str
@@ -595,12 +627,16 @@ class ComparisonFilter(StatementFilter):
 
         Returns:
             StatementTypeT: Modified statement with the comparison condition
+
+        Raises:
+            ValueError: If an invalid operator is provided
         """
         field = self._get_instrumented_attr(model, self.field_name)
         operator_func = operators_map.get(self.operator)
 
         if operator_func is None:
-            return statement
+            msg = f"Invalid operator '{self.operator}'. Must be one of: {', '.join(sorted(VALID_OPERATORS))}"
+            raise ValueError(msg)
 
         condition = operator_func(field, self.value)
         return cast("StatementTypeT", statement.where(condition))
@@ -961,27 +997,6 @@ class FilterGroup(StatementFilter):
             combined = self.logical_operator(*expressions)
             return cast("StatementTypeT", statement.where(combined))
         return statement
-
-
-# Regular typed dictionary for operators_map
-operators_map: dict[str, Callable[[Any, Any], ColumnElement[bool]]] = {
-    "eq": op.eq,
-    "ne": op.ne,
-    "gt": op.gt,
-    "ge": op.ge,
-    "lt": op.lt,
-    "le": op.le,
-    "in": op.in_op,
-    "notin": op.notin_op,
-    "between": lambda c, v: c.between(v[0], v[1]),
-    "like": op.like_op,
-    "ilike": op.ilike_op,
-    "startswith": op.startswith_op,
-    "istartswith": lambda c, v: c.ilike(v + "%"),
-    "endswith": op.endswith_op,
-    "iendswith": lambda c, v: c.ilike(v + "%"),
-    "dateeq": lambda c, v: cast("Date", c) == v,
-}
 
 
 @dataclass

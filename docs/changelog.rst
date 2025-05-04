@@ -3,6 +3,59 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.2
+    :date: 2025-05-04
+
+    .. change:: correct type hints for with_for_update to ForUpdateParameter
+        :type: bugfix
+        :pr: 465
+
+        This change fixes the type hint for the `with_for_update` parameter in the repositories.
+
+    .. change:: BigIntPrimaryKey does not respect schema names
+        :type: bugfix
+        :pr: 469
+        :issue: 466
+
+        BigIntPrimaryKey will now respect schema names.
+
+        Fixes #466
+
+
+.. changelog:: 1.4.1
+    :date: 2025-04-28
+
+    .. change:: raise if filter operator is not in `operators_map`
+        :type: bugfix
+        :pr: 463
+        :issue: 453
+
+        Raise exception if filter operator does not exist in operators_map
+
+        Fixes #453
+
+    .. change:: `uniquify` respects init method override
+        :type: bugfix
+        :pr: 462
+
+        Passing `uniquify` as an `__init__` argument now works as expected.
+
+
+.. changelog:: 1.4.0
+    :date: 2025-04-27
+
+    .. change:: PasswordHash field type
+        :type: feature
+        :pr: 452
+
+        Implements a PasswordHash field type with multiple supported backends.
+
+        Includes built-in backends for:
+        - `passlib`
+        - `argon2`
+        - `pwdlib`
+
+
 .. changelog:: 1.3.2
     :date: 2025-04-25
 
