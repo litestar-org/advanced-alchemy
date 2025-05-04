@@ -160,6 +160,7 @@ autodoc_type_aliases = {
     "advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher": "advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher",
     "advanced_alchemy.types.password_hash.argon2.Argon2Hasher": "advanced_alchemy.types.password_hash.argon2.Argon2Hasher",
     "advanced_alchemy.types.password_hash.passlib.PasslibHasher": "advanced_alchemy.types.password_hash.passlib.PasslibHasher",
+    "ForUpdateArg": "sqlalchemy.sql.selectable.ForUpdateArg",
 }
 autodoc_mock_imports = [
     "alembic",

@@ -3,6 +3,25 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.2
+    :date: 2025-05-04
+
+    .. change:: correct type hints for with_for_update to ForUpdateParameter
+        :type: bugfix
+        :pr: 465
+
+        This change fixes the type hint for the `with_for_update` parameter in the repositories.
+
+    .. change:: BigIntPrimaryKey does not respect schema names
+        :type: bugfix
+        :pr: 469
+        :issue: 466
+
+        BigIntPrimaryKey will now respect schema names.
+
+        Fixes #466
+
+
 .. changelog:: 1.4.1
     :date: 2025-04-28
 
