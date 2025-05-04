@@ -6,14 +6,16 @@ from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_colu
 from advanced_alchemy.types import BigIntIdentity
 
 
-def _get_schema(cls: "BigIntPrimaryKey") -> Optional[str]:
+def _get_schema(cls: "BigIntPrimaryKey") -> Optional[str]:  # pragma: nocover
     """Get the schema for the class if set via __table_args__, __table__, or __table_kwargs__."""
-    table_args = getattr(cls, "__table_args__", None)  # type: ignore[attr-defined]
+    table_args = getattr(cls, "__table_args__", None)
     if isinstance(table_args, dict) and "schema" in table_args:
         return table_args["schema"]  # type: ignore
-    if hasattr(cls, "__table__") and hasattr(cls.__table__, "schema"):  # type: ignore[attr-defined]
-        return cls.__table__.schema  # type: ignore
-    table_kwargs = getattr(cls, "__table_kwargs__", None)  # type: ignore[attr-defined]
+    if isinstance(table_args, tuple) and table_args and isinstance(table_args[-1], dict) and "schema" in table_args[-1]:
+        return table_args[-1]["schema"]  # type: ignore
+    if hasattr(cls, "__table__") and hasattr(cls.__table__, "schema"):  # pyright: ignore
+        return cls.__table__.schema  # type: ignore[no-any-return]
+    table_kwargs = getattr(cls, "__table_kwargs__", None)
     if isinstance(table_kwargs, dict) and "schema" in table_kwargs:
         return table_kwargs["schema"]  # type: ignore
     return None
