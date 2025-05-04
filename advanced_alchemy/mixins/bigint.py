@@ -8,9 +8,15 @@ from advanced_alchemy.types import BigIntIdentity
 class BigIntPrimaryKey:
     """BigInt Primary Key Field Mixin."""
 
+    __abstract__ = True
+
     @declared_attr
     def id(cls) -> Mapped[int]:
-        """BigInt Primary key column."""
+        """BigInt Primary key column.
+
+        Returns:
+            BigInt Primary key column.
+        """
         return mapped_column(
             BigIntIdentity,
             Sequence(f"{cls.__tablename__}_id_seq", optional=False),  # type: ignore[attr-defined]

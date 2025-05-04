@@ -26,6 +26,8 @@ class UniqueMixin:
     This is a slightly modified implementation derived from https://github.com/sqlalchemy/sqlalchemy/wiki/UniqueObject
     """
 
+    __abstract__ = True
+
     @classmethod
     @contextmanager
     def _prevent_autoflush(
