@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 from argon2 import PasswordHasher as Argon2PasswordHasher  # pyright: ignore
 from argon2.exceptions import InvalidHash, VerifyMismatchError  # pyright: ignore
 
+__all__ = ("Argon2Hasher",)
+
 
 class Argon2Hasher(HashingBackend):
     """Hashing backend using Argon2 via the argon2-cffi library."""
