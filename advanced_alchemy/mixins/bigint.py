@@ -36,3 +36,21 @@ class BigIntPrimaryKey:
             Sequence(f"{cls.__tablename__}_id_seq", **seq_kwargs),  # type: ignore[attr-defined]
             primary_key=True,
         )
+
+
+@declarative_mixin
+class IdentityPrimaryKey:
+    """Primary Key Field Mixin using database IDENTITY feature.
+
+    This mixin uses the database's native IDENTITY feature rather than a sequence.
+    This can be more efficient for databases that support IDENTITY natively.
+    """
+
+    @declared_attr
+    def id(cls) -> Mapped[int]:
+        """Primary key column using IDENTITY."""
+        return mapped_column(
+            BigIntIdentity,
+            primary_key=True,
+            autoincrement=True,
+        )
