@@ -653,7 +653,6 @@ class SQLAlchemySyncRepositoryService(
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
-            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             Representation of created instances.
