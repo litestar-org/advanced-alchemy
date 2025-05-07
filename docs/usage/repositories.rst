@@ -139,7 +139,7 @@ Create Many
         repository = PostRepository(session=db_session)
 
         # Create posts
-        return await repository.create_many(
+        return await repository.add_many(
             [Post(title=title, content=content, author_id=author_id) for title, content, author_id in data],
             auto_commit=True
         )
