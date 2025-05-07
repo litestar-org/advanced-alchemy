@@ -638,7 +638,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-    ) -> list[ModelT]:
+    ) -> Sequence[ModelT]:
         """Add many `data` to the collection.
 
         Args:
