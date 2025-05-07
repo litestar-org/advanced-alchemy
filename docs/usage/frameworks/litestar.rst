@@ -50,11 +50,12 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
 
 .. code-block:: python
 
+    from __future__ import annotations
     import datetime
     from uuid import UUID
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column, relationship
-    from litestar.plugins.sqlalchemy.base import UUIDAuditBase, UUIDBase
+    from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 
 
     class AuthorModel(UUIDBase):
@@ -122,8 +123,8 @@ Create repository and service classes to interact with the model:
 
     from typing import AsyncGenerator
 
-    from litestar.plugins.sqlalchemy.repository import SQLAlchemyAsyncRepository
-    from litestar.plugins.sqlalchemy.service import SQLAlchemyAsyncRepositoryService
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from sqlalchemy.ext.asyncio import AsyncSession
 
     class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
@@ -144,9 +145,9 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
     from litestar import Controller, get, post, patch, delete
     from litestar.di import Provide
     from litestar.params import Parameter
-    from litestar.plugins.sqlalchemy.filters import FilterTypes
-    from litestar.plugins.sqlalchemy.providers import create_service_dependencies
-    from litestar.plugins.sqlalchemy.service import OffsetPagination
+    from advanced_alchemy.filters import FilterTypes
+    from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
+    from advanced_alchemy.service import OffsetPagination
 
     class AuthorController(Controller):
         """Author CRUD endpoints."""
@@ -227,12 +228,12 @@ Finally, configure your Litestar application with the plugin and dependencies:
 
     from litestar import Litestar
     from litestar.di import Provide
-    from litestar.plugins.sqlalchemy.filters import FilterTypes, LimitOffset
     from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
     )
+    from advanced_alchemy.filters import FilterTypes, LimitOffset
 
     sqlalchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
