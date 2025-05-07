@@ -131,7 +131,7 @@ Bulk Operations
 Repositories support efficient bulk operations:
 
 Add Many
------------
+--------
 
 .. code-block:: python
 
