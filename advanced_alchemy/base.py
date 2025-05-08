@@ -27,6 +27,7 @@ from typing_extensions import Self, TypeVar
 from advanced_alchemy.mixins import (
     AuditColumns,
     BigIntPrimaryKey,
+    IdentityPrimaryKey,
     NanoIDPrimaryKey,
     UUIDPrimaryKey,
     UUIDv6PrimaryKey,
@@ -49,6 +50,9 @@ __all__ = (
     "BigIntBase",
     "BigIntBaseT",
     "CommonTableAttributes",
+    "IdentityAuditBase",
+    "IdentityBase",
+    "IdentityBaseT",
     "ModelProtocol",
     "NanoIDAuditBase",
     "NanoIDBase",
@@ -77,6 +81,8 @@ UUIDBaseT = TypeVar("UUIDBaseT", bound="UUIDBase")
 """Type variable for :class:`UUIDBase`."""
 BigIntBaseT = TypeVar("BigIntBaseT", bound="BigIntBase")
 """Type variable for :class:`BigIntBase`."""
+IdentityBaseT = TypeVar("IdentityBaseT", bound="IdentityBase")
+"""Type variable for :class:`IdentityBase`."""
 UUIDv6BaseT = TypeVar("UUIDv6BaseT", bound="UUIDv6Base")
 """Type variable for :class:`UUIDv6Base`."""
 UUIDv7BaseT = TypeVar("UUIDv7BaseT", bound="UUIDv7Base")
@@ -467,6 +473,39 @@ class BigIntAuditBase(CommonTableAttributes, BigIntPrimaryKey, AuditColumns, Adv
     .. seealso::
         :class:`CommonTableAttributes`
         :class:`advanced_alchemy.mixins.BigIntPrimaryKey`
+        :class:`advanced_alchemy.mixins.AuditColumns`
+        :class:`AdvancedDeclarativeBase`
+        :class:`AsyncAttrs`
+    """
+
+    __abstract__ = True
+
+
+class IdentityBase(IdentityPrimaryKey, CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
+    """Base for all SQLAlchemy declarative models with database IDENTITY primary keys.
+
+    This model uses the database native IDENTITY feature for generating primary keys
+    instead of using database sequences.
+
+    .. seealso::
+        :class:`advanced_alchemy.mixins.IdentityPrimaryKey`
+        :class:`CommonTableAttributes`
+        :class:`AdvancedDeclarativeBase`
+        :class:`AsyncAttrs`
+    """
+
+    __abstract__ = True
+
+
+class IdentityAuditBase(CommonTableAttributes, IdentityPrimaryKey, AuditColumns, AdvancedDeclarativeBase, AsyncAttrs):
+    """Base for declarative models with database IDENTITY primary keys and audit columns.
+
+    This model uses the database native IDENTITY feature for generating primary keys
+    instead of using database sequences.
+
+    .. seealso::
+        :class:`CommonTableAttributes`
+        :class:`advanced_alchemy.mixins.IdentityPrimaryKey`
         :class:`advanced_alchemy.mixins.AuditColumns`
         :class:`AdvancedDeclarativeBase`
         :class:`AsyncAttrs`

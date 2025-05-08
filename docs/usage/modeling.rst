@@ -20,6 +20,10 @@ Advanced Alchemy provides several base classes optimized for different use cases
      - BIGINT primary keys for tables
    * - ``BigIntAuditBase``
      - BIGINT primary keys for tables, Automatic created_at/updated_at timestamps
+   * - ``IdentityBase``
+     - Primary keys using database IDENTITY feature instead of sequences
+   * - ``IdentityAuditBase``
+     - Primary keys using database IDENTITY feature, Automatic created_at/updated_at timestamps
    * - ``UUIDBase``
      - UUID primary keys
    * - ``UUIDv6Base``
@@ -53,6 +57,10 @@ Additionally, Advanced Alchemy provides mixins to enhance model functionality:
    * - ``AuditColumns``
      - | Automatic created_at/updated_at timestamps
        | Tracks record modifications
+   * - ``BigIntPrimaryKey``
+     - | Adds BigInt primary key with sequence
+   * - ``IdentityPrimaryKey``
+     - | Adds primary key using database IDENTITY feature
    * - ``UniqueMixin``
      - | Automatic Select or Create for many-to-many relationships
 
