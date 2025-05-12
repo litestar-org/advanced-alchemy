@@ -3,6 +3,35 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.3
+    :date: 2025-05-12
+
+    .. change:: add __all__ exports for password hashing backends
+        :type: feature
+        :pr: 471
+
+        This update adds __all__ exports for the Argon2, Passlib, and Pwdlib hashing backends, improving module visibility and usability.
+
+    .. change:: Add identity Mixin for Primary Keys
+        :type: feature
+        :pr: 473
+        :issue: 441
+
+        The sequences based BigInt key offers the most compatibility, but many would prefer to use the Identity column when the database supports it.
+
+        This changes implements a basic Identity primary key mixin
+
+    .. change:: `wrap_exceptions` is re-enabled
+        :type: bugfix
+        :pr: 475
+        :issue: 472
+
+        `wrap_exceptions` is now correctly passed into the exception handler context manager.
+
+        Fixes #472
+
+
+
 .. changelog:: 1.4.2
     :date: 2025-05-04
 
