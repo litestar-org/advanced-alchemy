@@ -120,7 +120,7 @@ A platform-independent GUID/UUID type that adapts to different database backends
         id: Mapped[UUID] = mapped_column(GUID, primary_key=True)
 
 BigInt Identity
---------------
+---------------
 
 A BigInteger type that automatically falls back to Integer for SQLite:
 
