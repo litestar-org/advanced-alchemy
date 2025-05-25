@@ -38,7 +38,7 @@ Here's a short example using multiple types:
         avatar: Mapped[Optional[FileObject]] = mapped_column(StoredObject(backend="local_store"))
 
 
-DateTimeUTC
+DateTime UTC
 -----------
 
 - Ensures all datetime values are stored in UTC
@@ -119,7 +119,7 @@ A platform-independent GUID/UUID type that adapts to different database backends
         __tablename__ = "my_model"
         id: Mapped[UUID] = mapped_column(GUID, primary_key=True)
 
-BigIntIdentity
+BigInt Identity
 --------------
 
 A BigInteger type that automatically falls back to Integer for SQLite:
