@@ -39,7 +39,7 @@ Here's a short example using multiple types:
 
 
 DateTime UTC
------------
+------------
 
 - Ensures all datetime values are stored in UTC
 - Requires timezone information for input values
