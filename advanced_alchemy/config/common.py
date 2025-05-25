@@ -302,7 +302,7 @@ class GenericAlembicConfig:
     """Configure the schema to use for the alembic revisions revisions.
     If unset, it defaults to connection's default schema."""
     script_location: str = "migrations"
-    """A path to save generated migrations.    """
+    """A path to save generated migrations."""
     toml_file: "Optional[str]" = None
     """A path to the Alembic pyproject.toml configuration file.
     If left unset, the default configuration will be used.
