@@ -15,6 +15,9 @@ Here's a short example using multiple types:
 
 .. code-block:: python
 
+    from typing import Optional
+    from uuid import UUID
+    from datetime import datetime
     from sqlalchemy.orm import Mapped, mapped_column
     from advanced_alchemy.base import DefaultBase
     from advanced_alchemy.types import (
@@ -23,6 +26,7 @@ Here's a short example using multiple types:
         GUID,
         JsonB,
         StoredObject,
+        FileObject,
     )
 
     class User(DefaultBase):
@@ -44,6 +48,7 @@ DateTimeUTC
 
 .. code-block:: python
 
+    from datetime import datetime
     from sqlalchemy.orm import Mapped, mapped_column
     from advanced_alchemy.base import DefaultBase
     from advanced_alchemy.types import DateTimeUTC
@@ -161,7 +166,7 @@ A type for storing password hashes with configurable backends.  Currently suppor
     from sqlalchemy.orm import Mapped, mapped_column
     from advanced_alchemy.base import DefaultBase
     from advanced_alchemy.types import PasswordHash
-    from advanced_alchemy.types.password_hash.passlib import PasslibHasher
+    from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
     from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
 
     class MyModel(DefaultBase):
@@ -180,9 +185,10 @@ Basic Usage
 
 .. code-block:: python
 
-    from sqlalchemy.orm import Mapped, mapped_column
+    from typing import Optional
     from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.types.file_object import FileObject, StoredObject
+    from advanced_alchemy.types.file_object import FileObject, FileObjectList, StoredObject
+    from sqlalchemy.orm import Mapped, mapped_column
 
     class Document(UUIDBase):
         __tablename__ = "documents"
@@ -216,7 +222,7 @@ The FSSpec backend uses the `fsspec <https://filesystem-spec.readthedocs.io/>`_ 
     from advanced_alchemy.types.file_object import storages
 
     # Local filesystem
-    storages.register(FSSpecBackend(fs=fsspec.filesystem("file"), key="local"))
+    storages.register_backend(FSSpecBackend(fs=fsspec.filesystem("file"), key="local"))
     # S3 storage
     fs = fsspec.S3FileSystem(
         anon=False,
@@ -224,7 +230,7 @@ The FSSpec backend uses the `fsspec <https://filesystem-spec.readthedocs.io/>`_ 
         secret="your-secret-key",
         endpoint_url="https://your-s3-endpoint",
     )
-    storages.register(FSSpecBackend(fs=fs, key="s3", prefix="your-bucket"))
+    storages.register_backend(FSSpecBackend(fs=fs, key="s3", prefix="your-bucket"))
 
 Obstore Backend
 ^^^^^^^^^^^^^^^
@@ -237,13 +243,13 @@ The Obstore backend provides a simple interface for object storage:
     from advanced_alchemy.types.file_object import storages
 
     # Local storage
-    storages.register(ObstoreBackend(
+    storages.register_backend(ObstoreBackend(
         key="local",
         fs="file:///path/to/storage",
     ))
 
     # S3 storage
-    storages.register(ObstoreBackend(
+    storages.register_backend(ObstoreBackend(
         key="s3",
         fs="s3://your-bucket/",
         aws_access_key_id="your-access-key",
