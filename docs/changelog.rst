@@ -3,6 +3,16 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.4
+    :date: 2025-05-26
+
+    .. change:: support for alembic 1.16 `toml_file` configuration
+        :type: bugfix
+        :pr: 479
+
+        Updates the AlembicCommand to use named arguments and support Alembic 1.16's new `toml_file` parameter.
+
+
 .. changelog:: 1.4.3
     :date: 2025-05-12
 
