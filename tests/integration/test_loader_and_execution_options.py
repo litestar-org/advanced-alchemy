@@ -224,7 +224,7 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         update_state_repo = USStateRepository(session=db_session)
         states = await update_state_repo.list()
         assert len(states) == 3
-        updated_state_name = [BigIntState(id=1,name="Updated California"), BigIntState(id=2,name="Updated Oregon")]
+        updated_state_name = [BigIntState(id=1, name="Updated California"), BigIntState(id=2, name="Updated Oregon")]
         updated_states = await update_state_repo.update_many(updated_state_name)
         for state in updated_states:
             assert len(state.to_dict().keys()) == 3
