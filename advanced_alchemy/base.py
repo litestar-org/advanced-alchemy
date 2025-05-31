@@ -50,6 +50,7 @@ __all__ = (
     "BigIntBase",
     "BigIntBaseT",
     "CommonTableAttributes",
+    "DefaultBase",
     "IdentityAuditBase",
     "IdentityBase",
     "IdentityBaseT",
