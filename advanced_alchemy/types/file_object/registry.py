@@ -64,7 +64,7 @@ class StorageRegistry(metaclass=SingletonMeta):
         try:
             return self._registry[key]
         except KeyError as e:
-            msg = f"No storage backend registered with key {key}"
+            msg = f'No storage backend registered with key "{key}"'
             raise ImproperConfigurationError(msg) from e
 
     @overload
