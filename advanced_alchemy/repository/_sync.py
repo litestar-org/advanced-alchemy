@@ -1706,6 +1706,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 ),
             )
             count = count_result.scalar_one()
+            if count == 0:
+                return [], 0
             result = self._execute(statement, uniquify=loader_options_have_wildcard)
             instances: list[ModelT] = []
             for (instance,) in result:
