@@ -1,7 +1,9 @@
+import inspect  # Added import
 import sys
 from typing import TYPE_CHECKING, Any, Optional, TextIO, Union
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from alembic import command as migration_command
 from alembic.config import Config as _AlembicCommandConfig
 from alembic.ddl.impl import DefaultImpl
@@ -39,6 +41,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         version_table_name: str,
         bind_key: "Optional[str]" = None,
         file_: "Union[str, os.PathLike[str], None]" = None,
+        toml_file: "Union[str, os.PathLike[str], None]" = None,
         ini_section: str = "alembic",
         output_buffer: "Optional[TextIO]" = None,
         stdout: "TextIO" = sys.stdout,
@@ -57,7 +60,8 @@ class AlembicCommandConfig(_AlembicCommandConfig):
             engine (sqlalchemy.engine.Engine | sqlalchemy.ext.asyncio.AsyncEngine): The SQLAlchemy engine instance.
             version_table_name (str): The name of the version table.
             bind_key (str | None): The bind key for the metadata.
-            file_ (str | os.PathLike[str] | None): The file path for the alembic configuration.
+            file_ (str | os.PathLike[str] | None): The file path for the alembic .ini configuration.
+            toml_file (str | os.PathLike[str] | None): The file path for the alembic pyproject.toml configuration.
             ini_section (str): The ini section name.
             output_buffer (typing.TextIO | None): The output buffer for alembic commands.
             stdout (typing.TextIO): The standard output stream.
@@ -80,9 +84,33 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         self.compare_type = compare_type
         self.engine = engine
         self.db_url = engine.url.render_as_string(hide_password=False)
-        if config_args is None:
-            config_args = {}
-        super().__init__(file_, ini_section, output_buffer, stdout, cmd_opts, config_args, attributes)
+
+        _config_args = {} if config_args is None else dict(config_args)
+
+        # Prepare kwargs for super().__init__
+        super_init_kwargs: dict[str, Any] = {
+            "file_": file_,
+            "ini_section": ini_section,
+            "output_buffer": output_buffer,
+            "stdout": stdout,
+            "cmd_opts": cmd_opts,
+            "config_args": _config_args,  # Pass the mutable copy
+            "attributes": attributes,
+        }
+
+        # Inspect the parent class __init__ for toml_file parameter
+        parent_init_sig = inspect.signature(super().__init__)
+        if "toml_file" in parent_init_sig.parameters:
+            super_init_kwargs["toml_file"] = toml_file
+        elif toml_file is not None:
+            msg = (
+                "The 'toml_file' parameter is not supported by your current Alembic version. "
+                "Please upgrade Alembic to 1.16.0 or later to use this feature, "
+                "or remove the 'toml_file' argument from AlembicCommandConfig."
+            )
+            raise ImproperConfigurationError(msg)
+
+        super().__init__(**super_init_kwargs)
 
     def get_template_directory(self) -> str:
         """Return the directory where Alembic setup templates are found.
@@ -337,6 +365,8 @@ class AlembicCommands:
             AlembicCommandConfig: The configuration for Alembic commands.
         """
         kwargs: dict[str, Any] = {}
+        if self.sqlalchemy_config.alembic_config.toml_file:
+            kwargs["toml_file"] = self.sqlalchemy_config.alembic_config.toml_file
         if self.sqlalchemy_config.alembic_config.script_config:
             kwargs["file_"] = self.sqlalchemy_config.alembic_config.script_config
         if self.sqlalchemy_config.alembic_config.template_path:

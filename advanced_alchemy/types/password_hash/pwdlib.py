@@ -9,6 +9,8 @@ if TYPE_CHECKING:
 
 from pwdlib.hashers.base import HasherProtocol
 
+__all__ = ("PwdlibHasher",)
+
 
 class PwdlibHasher(HashingBackend):
     """Hashing backend using Pwdlib."""

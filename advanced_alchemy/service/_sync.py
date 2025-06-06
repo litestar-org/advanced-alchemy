@@ -16,6 +16,7 @@ from sqlalchemy import Select
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.sql import ColumnElement
+from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
 
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
@@ -652,7 +653,6 @@ class SQLAlchemySyncRepositoryService(
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
-            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             Representation of created instances.
@@ -676,7 +676,7 @@ class SQLAlchemySyncRepositoryService(
         item_id: Optional[Any] = None,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -794,7 +794,7 @@ class SQLAlchemySyncRepositoryService(
         item_id: Optional[Any] = None,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -905,7 +905,7 @@ class SQLAlchemySyncRepositoryService(
         match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -968,7 +968,7 @@ class SQLAlchemySyncRepositoryService(
         *filters: Union[StatementFilter, ColumnElement[bool]],
         match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,

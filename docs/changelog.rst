@@ -3,6 +3,83 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.4
+    :date: 2025-05-26
+
+    .. change:: support for alembic 1.16 `toml_file` configuration
+        :type: bugfix
+        :pr: 479
+
+        Updates the AlembicCommand to use named arguments and support Alembic 1.16's new `toml_file` parameter.
+
+
+.. changelog:: 1.4.3
+    :date: 2025-05-12
+
+    .. change:: add __all__ exports for password hashing backends
+        :type: feature
+        :pr: 471
+
+        This update adds __all__ exports for the Argon2, Passlib, and Pwdlib hashing backends, improving module visibility and usability.
+
+    .. change:: Add identity Mixin for Primary Keys
+        :type: feature
+        :pr: 473
+        :issue: 441
+
+        The sequences based BigInt key offers the most compatibility, but many would prefer to use the Identity column when the database supports it.
+
+        This changes implements a basic Identity primary key mixin
+
+    .. change:: `wrap_exceptions` is re-enabled
+        :type: bugfix
+        :pr: 475
+        :issue: 472
+
+        `wrap_exceptions` is now correctly passed into the exception handler context manager.
+
+        Fixes #472
+
+
+
+.. changelog:: 1.4.2
+    :date: 2025-05-04
+
+    .. change:: correct type hints for with_for_update to ForUpdateParameter
+        :type: bugfix
+        :pr: 465
+
+        This change fixes the type hint for the `with_for_update` parameter in the repositories.
+
+    .. change:: BigIntPrimaryKey does not respect schema names
+        :type: bugfix
+        :pr: 469
+        :issue: 466
+
+        BigIntPrimaryKey will now respect schema names.
+
+        Fixes #466
+
+
+.. changelog:: 1.4.1
+    :date: 2025-04-28
+
+    .. change:: raise if filter operator is not in `operators_map`
+        :type: bugfix
+        :pr: 463
+        :issue: 453
+
+        Raise exception if filter operator does not exist in operators_map
+
+        Fixes #453
+
+    .. change:: `uniquify` respects init method override
+        :type: bugfix
+        :pr: 462
+
+        Passing `uniquify` as an `__init__` argument now works as expected.
+
+
 .. changelog:: 1.4.0
     :date: 2025-04-27
 

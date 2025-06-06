@@ -130,16 +130,16 @@ Bulk Operations
 
 Repositories support efficient bulk operations:
 
-Create Many
------------
+Add Many
+--------
 
 .. code-block:: python
 
-    async def create_posts(db_session: AsyncSession, data: list[tuple[str, str, UUID]]) -> list[Post]:
+    async def create_posts(db_session: AsyncSession, data: list[tuple[str, str, UUID]]) -> Sequence[Post]:
         repository = PostRepository(session=db_session)
 
         # Create posts
-        return await repository.create_many(
+        return await repository.add_many(
             [Post(title=title, content=content, author_id=author_id) for title, content, author_id in data],
             auto_commit=True
         )

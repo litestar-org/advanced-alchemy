@@ -34,6 +34,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.selectable import ForUpdateParameter
 
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
@@ -210,7 +211,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -225,7 +226,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         *filters: Union[StatementFilter, ColumnElement[bool]],
         match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -250,7 +251,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         data: ModelT,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -284,7 +285,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         data: ModelT,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -470,8 +471,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
-        if uniquify is not None:
-            self.uniquify = uniquify
+        self._uniquify = uniquify if uniquify is not None else self.uniquify
         self.count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
@@ -487,7 +487,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
-        return bool(uniquify) if uniquify is not None else self.uniquify
+        """Get the uniquify value, preferring the method parameter over instance setting.
+
+        Args:
+            uniquify: Optional override for the uniquify setting.
+
+        Returns:
+            bool: The uniquify value to use.
+        """
+        return bool(uniquify) if uniquify is not None else self._uniquify
 
     @staticmethod
     def _get_error_messages(
@@ -580,11 +588,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     ) -> Union[tuple[list[_AbstractLoad], bool], tuple[None, bool]]:
         if loader_options is None:
             # use the defaults set at initialization
-            return self._default_loader_options, self._loader_options_have_wildcards or self.uniquify
+            return self._default_loader_options, self._loader_options_have_wildcards or self._uniquify
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
-            default_options_have_wildcards=self._loader_options_have_wildcards or self.uniquify,
+            default_options_have_wildcards=self._loader_options_have_wildcards or self._uniquify,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
         )
@@ -615,7 +623,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             instance = await self._attach_to_session(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(instance, auto_refresh=auto_refresh)
@@ -646,7 +656,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             self.session.add_all(data)
             await self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
@@ -683,12 +695,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The deleted instance.
 
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             instance = await self.get(
                 item_id,
@@ -734,12 +748,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The deleted instances.
 
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
@@ -833,12 +849,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The deleted instances.
 
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
@@ -989,12 +1007,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The retrieved instance.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1038,12 +1058,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The retrieved instance.
 
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1086,12 +1108,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The retrieved instance or None
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1116,7 +1140,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Union[bool, None] = None,
@@ -1154,12 +1178,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name)
@@ -1205,7 +1231,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         *filters: Union[StatementFilter, ColumnElement[bool]],
         match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -1241,12 +1267,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name)
@@ -1298,12 +1326,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1327,7 +1357,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         data: ModelT,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -1361,12 +1391,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The updated instance.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             item_id = self.get_id_attribute_value(
                 data,
                 id_attribute=id_attribute,
@@ -1416,13 +1448,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The updated instances.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
         data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
@@ -1500,7 +1534,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1544,7 +1578,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         instance: ModelT,
         auto_refresh: Optional[bool],
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
     ) -> None:
         if auto_refresh is None:
             auto_refresh = self.auto_refresh
@@ -1590,7 +1624,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1647,7 +1683,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1695,7 +1733,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         data: ModelT,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -1732,7 +1770,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The updated or created instance.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1755,7 +1793,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
             )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and field != new_field_value:
@@ -1810,7 +1850,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The updated or created instance.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1830,7 +1870,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 ]
                 match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
 
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             existing_objs = await self.list(
                 *match_filter,
                 load=load,
@@ -1930,12 +1972,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Returns:
             The list of instances, after filtering applied.
         """
-        self.uniquify = self._get_uniquify(uniquify)
+        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(error_messages=error_messages, dialect_name=self._dialect.name):
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -2015,7 +2059,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         uniquify: bool = False,
     ) -> Result[Any]:
         result = await self.session.execute(statement)
-        if uniquify or self.uniquify:
+        if uniquify or self._uniquify:
             result = result.unique()
         return result
 
@@ -2089,12 +2133,14 @@ class SQLAlchemyAsyncQueryRepository:
     """
 
     error_messages: Optional[ErrorMessages] = None
+    wrap_exceptions: bool = True
 
     def __init__(
         self,
         *,
         session: Union[AsyncSession, async_scoped_session[AsyncSession]],
         error_messages: Optional[ErrorMessages] = None,
+        wrap_exceptions: bool = True,
         **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
@@ -2102,12 +2148,14 @@ class SQLAlchemyAsyncQueryRepository:
         Args:
             session: Session managing the unit-of-work for the operation.
             error_messages: A set of error messages to use for operations.
+            wrap_exceptions: Whether to wrap exceptions in a SQLAlchemy exception.
             **kwargs: Additional arguments.
 
         """
         super().__init__(**kwargs)
         self.session = session
         self.error_messages = error_messages
+        self.wrap_exceptions = wrap_exceptions
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
 
     async def get_one(
@@ -2124,7 +2172,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The retrieved instance.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return self.check_not_found(instance)
@@ -2143,7 +2191,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             instance = (await self.execute(statement)).scalar_one_or_none()
             return instance or None
@@ -2158,7 +2206,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
                 None,
             )
@@ -2202,7 +2250,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
@@ -2233,7 +2281,7 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             count_result = await self.session.execute(self._get_count_stmt(statement))
             count = count_result.scalar_one()
@@ -2253,7 +2301,7 @@ class SQLAlchemyAsyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             result = await self.execute(statement)
             return list(result.all())

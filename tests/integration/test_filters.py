@@ -567,12 +567,26 @@ def test_comparison_filter(db_session: Session) -> None:
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
-    # Test invalid operator (should be ignored)
+    # Test invalid operator (should raise ValueError)
     invalid_filter = ComparisonFilter(field_name="genre", operator="invalid", value="Action")
-    statement = invalid_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
-    # Should return all movies since invalid operator is ignored
-    assert len(results) == 3
+    with pytest.raises(ValueError) as exc_info:
+        invalid_filter.append_to_statement(select(Movie), Movie)
+    assert "Invalid operator 'invalid'" in str(exc_info.value)
+    assert "Must be one of:" in str(exc_info.value)
+
+    # Test invalid operator with common mistake (using '=' instead of 'eq')
+    invalid_filter = ComparisonFilter(field_name="genre", operator="=", value="Action")
+    with pytest.raises(ValueError) as exc_info:
+        invalid_filter.append_to_statement(select(Movie), Movie)
+    assert "Invalid operator '='" in str(exc_info.value)
+    assert "Must be one of:" in str(exc_info.value)
+
+    # Test invalid operator with empty string
+    invalid_filter = ComparisonFilter(field_name="genre", operator="", value="Action")
+    with pytest.raises(ValueError) as exc_info:
+        invalid_filter.append_to_statement(select(Movie), Movie)
+    assert "Invalid operator ''" in str(exc_info.value)
+    assert "Must be one of:" in str(exc_info.value)
 
 
 def test_collection_filter_prefer_any(db_session: Session) -> None:

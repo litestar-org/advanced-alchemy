@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import ColumnElement
+from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
 
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
@@ -653,7 +654,6 @@ class SQLAlchemyAsyncRepositoryService(
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
-            uniquify: Optionally apply the ``unique()`` method to results before returning.
 
         Returns:
             Representation of created instances.
@@ -677,7 +677,7 @@ class SQLAlchemyAsyncRepositoryService(
         item_id: Optional[Any] = None,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -795,7 +795,7 @@ class SQLAlchemyAsyncRepositoryService(
         item_id: Optional[Any] = None,
         *,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -906,7 +906,7 @@ class SQLAlchemyAsyncRepositoryService(
         match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
@@ -969,7 +969,7 @@ class SQLAlchemyAsyncRepositoryService(
         *filters: Union[StatementFilter, ColumnElement[bool]],
         match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
-        with_for_update: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
