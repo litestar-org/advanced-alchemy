@@ -157,8 +157,8 @@ Password Hash
 
 A type for storing password hashes with configurable backends.  Currently supports:
 
-- :class:`~advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher`: Uses `pwdlib <https://github.com/pwdlib/pwdlib>`_
-- :class:`~advanced_alchemy.types.password_hash.argon2.Argon2Hasher`: Uses `argon2-cffi <https://argon2.readthedocs.io/en/stable/>`_
+- :class:`~advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher`: Uses `pwdlib <https://frankie567.github.io/pwdlib/>`_
+- :class:`~advanced_alchemy.types.password_hash.argon2.Argon2Hasher`: Uses `argon2-cffi <https://argon2-cffi.readthedocs.io/en/stable/>`_
 - :class:`~advanced_alchemy.types.password_hash.passlib.PasslibHasher`: Uses `passlib <https://passlib.readthedocs.io/en/stable/>`_
 
 .. code-block:: python
