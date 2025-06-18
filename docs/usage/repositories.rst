@@ -118,9 +118,11 @@ Pagination
     ) -> tuple[list[Post], int]:
         repository = PostRepository(session=db_session)
 
+        offset = (page - 1) * page_size
+
         # Get page of results and total count
         results, total = await repository.list_and_count(
-            LimitOffset(offset=page, limit=page_size)
+            LimitOffset(offset=offset, limit=page_size)
         )
 
         return results, total
