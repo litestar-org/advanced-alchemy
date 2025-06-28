@@ -1,5 +1,5 @@
 # advanced_alchemy/types/file_object/backends/fsspec.py
-# ruff: noqa: PLR0904, SLF001, PLR1702, PLR6301
+# ruff: noqa: SLF001
 """FSSpec-backed storage backend for file objects."""
 
 import datetime

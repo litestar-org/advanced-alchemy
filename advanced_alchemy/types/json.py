@@ -1,4 +1,3 @@
-# ruff: noqa: FA100
 from typing import Any, Optional, Union, cast
 
 from sqlalchemy import text, util

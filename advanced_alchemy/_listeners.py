@@ -1,4 +1,4 @@
-# ruff: noqa: BLE001, C901, PLR0914, PLR0915
+# ruff: noqa: BLE001, C901, PLR0915
 """Application ORM configuration."""
 
 import asyncio

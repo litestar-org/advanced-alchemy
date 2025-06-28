@@ -1,6 +1,3 @@
-# ruff: noqa: PD011
-
-
 import builtins
 import contextlib
 from collections import defaultdict

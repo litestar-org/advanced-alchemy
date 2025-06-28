@@ -1,4 +1,3 @@
-# ruff: noqa: PLR6301
 import datetime
 import enum
 from typing import Any

@@ -1,4 +1,3 @@
-# ruff: noqa: DOC201, PLR6301
 """This is a simple wrapper around a few important classes in each library.
 
 This is used to ensure compatibility when one or more of the libraries are installed.

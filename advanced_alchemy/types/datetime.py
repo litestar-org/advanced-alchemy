@@ -1,4 +1,3 @@
-# ruff: noqa: FA100
 import datetime
 from typing import Optional
 

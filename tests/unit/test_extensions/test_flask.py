@@ -1,4 +1,3 @@
-# ruff: noqa: RUF029
 """Tests for the Flask extension."""
 
 from __future__ import annotations
