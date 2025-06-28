@@ -1,4 +1,3 @@
-# ruff: noqa: PLC2701 DOC402 ANN201 RUF043
 import logging
 from collections.abc import AsyncGenerator, Generator
 from contextlib import suppress
