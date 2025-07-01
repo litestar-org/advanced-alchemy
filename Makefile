@@ -88,6 +88,7 @@ release:                                           ## Bump version and create re
 	@echo "${INFO} Preparing for release... 📦"
 	@make docs
 	@make clean
+	@uv run python tools/pypi_readme.py
 	@make build
 	@uv run bump-my-version bump $(bump)
 	@uv lock --upgrade-package advanced-alchemy

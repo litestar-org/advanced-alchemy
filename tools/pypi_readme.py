@@ -6,9 +6,10 @@ PYPI_BANNER = '<img src="https://raw.githubusercontent.com/litestar-org/branding
 
 def generate_pypi_readme() -> None:
     source = Path("README.md").read_text(encoding="utf-8")
-    output = re.sub(r"<!-- github-banner-start -->[\w\W]*<!-- github-banner-end -->", PYPI_BANNER, source)
-    output = re.sub(r"<!-- contributors-start -->[\w\W]*<!-- contributors-end -->", "", output)
-    output = re.sub(r"<!-- ALL-CONTRIBUTORS-BADGE:START[\w\W]*<!-- ALL-CONTRIBUTORS-BADGE:END -->", "", output)
+    output = re.sub(r"<!-- github-banner-start -->[\w\W]*?<!-- github-banner-end -->", PYPI_BANNER, source, count=1)
+    output = re.sub(r"<!-- github-banner-start -->[\w\W]*?<!-- github-banner-end -->", "", output)
+    output = re.sub(r"<!-- contributors-start -->[\w\W]*?<!-- contributors-end -->", "", output)
+    output = re.sub(r"<!-- ALL-CONTRIBUTORS-BADGE:START[\w\W]*?<!-- ALL-CONTRIBUTORS-BADGE:END -->", "", output)
 
     # ensure a newline here so the other pre-commit hooks don't complain
     output = output.strip() + "\n"
