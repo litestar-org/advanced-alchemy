@@ -55,10 +55,10 @@ class DocumentModel(base.UUIDBase):
 
 
 class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
-    """Author repository."""
+    """Document repository."""
 
     class Repo(repository.SQLAlchemyAsyncRepository[DocumentModel]):
-        """Author repository."""
+        """Document repository."""
 
         model_type = DocumentModel
 
