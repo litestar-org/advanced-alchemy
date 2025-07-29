@@ -173,3 +173,5 @@ cython_debug/
 .cursorignore
 .zed
 .cursor
+CLAUDE.md
+.todos
