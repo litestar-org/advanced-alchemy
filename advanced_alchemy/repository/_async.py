@@ -48,6 +48,7 @@ from advanced_alchemy.repository._util import (
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
+    column_has_defaults,
     get_abstract_loader_options,
     get_instrumented_attr,
 )
@@ -1491,6 +1492,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         field_name = column.key
                         new_field_value = getattr(data, field_name, MISSING)
                         if new_field_value is not MISSING:
+                            # Skip setting columns with defaults/onupdate to None during updates
+                            # This prevents overwriting columns that should use their defaults
+                            if new_field_value is None and column_has_defaults(column):
+                                continue
                             existing_field_value = getattr(existing_instance, field_name, MISSING)
                             if existing_field_value is not MISSING and existing_field_value != new_field_value:
                                 setattr(existing_instance, field_name, new_field_value)

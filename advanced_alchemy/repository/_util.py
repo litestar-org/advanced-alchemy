@@ -339,3 +339,26 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         if not isinstance(statement, Select):
             return statement
         return statement.order_by(field.desc() if is_desc else field.asc())
+
+
+def column_has_defaults(column: Any) -> bool:
+    """Check if a column has any type of default value or update handler.
+
+    This includes:
+    - Python-side defaults (column.default)
+    - Server-side defaults (column.server_default)
+    - Python-side onupdate handlers (column.onupdate)
+    - Server-side onupdate handlers (column.server_onupdate)
+
+    Args:
+        column: SQLAlchemy column object to check
+
+    Returns:
+        bool: True if the column has any type of default or update handler
+    """
+    return (
+        column.default is not None
+        or column.server_default is not None
+        or column.onupdate is not None
+        or column.server_onupdate is not None
+    )
