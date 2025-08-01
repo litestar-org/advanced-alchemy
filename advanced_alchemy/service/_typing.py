@@ -127,22 +127,14 @@ except ImportError:
     LITESTAR_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 try:
-    from attrs import asdict, define, field, fields, has  # pyright: ignore
-
-    @runtime_checkable
-    class AttrsClass(Protocol):  # pyright: ignore
-        """Protocol for attrs classes when attrs is installed"""
-
-        __attrs_attrs__: "ClassVar[tuple[Any, ...]]"
+    from attrs import AttrsInstance, asdict, define, field, fields, has  # pyright: ignore
 
     ATTRS_INSTALLED = True
 except ImportError:
 
     @runtime_checkable
-    class AttrsClass(Protocol):  # type: ignore[no-redef]
+    class AttrsInstance(Protocol):  # type: ignore[no-redef]
         """Placeholder Implementation for attrs classes"""
-
-        __attrs_attrs__: "ClassVar[tuple[Any, ...]]"
 
     def asdict(*args: Any, **kwargs: Any) -> "dict[str, Any]":  # type: ignore[misc] # noqa: ARG001
         """Placeholder implementation"""
@@ -189,7 +181,7 @@ __all__ = (
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
     "UNSET",
-    "AttrsClass",
+    "AttrsInstance",
     "BaseModel",
     "DTOData",
     "FailFast",

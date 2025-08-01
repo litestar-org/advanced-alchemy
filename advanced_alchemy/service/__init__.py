@@ -23,7 +23,7 @@ from advanced_alchemy.service._util import ResultConverter, find_filter
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
     ATTRS_INSTALLED,
-    AttrsClass,
+    AttrsInstance,
     FilterTypeT,
     ModelDictListT,
     ModelDictT,
@@ -56,7 +56,7 @@ from advanced_alchemy.service.typing import (
 __all__ = (
     "ATTRS_INSTALLED",
     "DEFAULT_ERROR_MESSAGE_TEMPLATES",
-    "AttrsClass",
+    "AttrsInstance",
     "Empty",
     "EmptyType",
     "ErrorMessages",
