@@ -1,9 +1,10 @@
+# ruff: noqa: UP045
 """Integration tests for attrs support in Advanced Alchemy services."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -294,6 +295,8 @@ async def test_async_attrs_service_basic_operations() -> None:
         person_attrs = service.to_schema(created_person, schema_type=PersonAttrs)
         assert isinstance(person_attrs, PersonAttrs)
         assert is_attrs_instance(person_attrs)
+        # Type cast to help pyright understand the specific attrs type
+        person_attrs = cast(PersonAttrs, person_attrs)
         assert person_attrs.name == "Async John"
         assert person_attrs.age == 28
 

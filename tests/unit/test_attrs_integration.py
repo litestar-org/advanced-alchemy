@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
+from attrs import define, field
 
 from advanced_alchemy.service.typing import (
     ATTRS_INSTALLED,
-    AttrsClass,
+    AttrsInstance,
     is_attrs_instance,
     is_attrs_instance_with_field,
     is_attrs_instance_without_field,
@@ -24,11 +25,10 @@ pytestmark = [
 ]
 
 # attrs test classes and fixtures
-from attrs import define, field
 
 
 @define
-class SimpleAttrsClass(AttrsClass):
+class SimpleAttrsInstance:
     """Simple attrs class for testing."""
 
     name: str
@@ -36,16 +36,16 @@ class SimpleAttrsClass(AttrsClass):
 
 
 @define
-class AttrsWithOptional(AttrsClass):
+class AttrsWithOptional:
     """attrs class with optional fields."""
 
     name: str
-    email: Optional[str] = None
+    email: str | None = None
     active: bool = True
 
 
 @define
-class AttrsWithDefaults(AttrsClass):
+class AttrsWithDefaults:
     """attrs class with field defaults."""
 
     title: str
@@ -54,10 +54,10 @@ class AttrsWithDefaults(AttrsClass):
 
 
 @define
-class NestedAttrsClass(AttrsClass):
+class NestedAttrsInstance:
     """attrs class with nested attrs."""
 
-    user: SimpleAttrsClass
+    user: SimpleAttrsInstance
     metadata: dict[str, Any] = field(factory=dict)
 
 
@@ -71,14 +71,14 @@ class TestAttrsDetection:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_attrs_instance_with_attrs_instance(self) -> None:
         """Test is_attrs_instance with actual attrs class instance."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
         assert is_attrs_instance(instance)
 
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_attrs_instance_with_complex_attrs(self) -> None:
         """Test is_attrs_instance with complex attrs instances."""
-        simple_instance = SimpleAttrsClass(name="John", age=25)
-        nested_instance = NestedAttrsClass(user=simple_instance, metadata={"role": "admin"})
+        simple_instance = SimpleAttrsInstance(name="John", age=25)
+        nested_instance = NestedAttrsInstance(user=simple_instance, metadata={"role": "admin"})
 
         assert is_attrs_instance(simple_instance)
         assert is_attrs_instance(nested_instance)
@@ -86,10 +86,10 @@ class TestAttrsDetection:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_attrs_schema_with_attrs_classes(self) -> None:
         """Test is_attrs_schema with attrs class types."""
-        assert is_attrs_schema(SimpleAttrsClass)
+        assert is_attrs_schema(SimpleAttrsInstance)
         assert is_attrs_schema(AttrsWithOptional)
         assert is_attrs_schema(AttrsWithDefaults)
-        assert is_attrs_schema(NestedAttrsClass)
+        assert is_attrs_schema(NestedAttrsInstance)
 
     def test_is_attrs_schema_with_non_attrs_classes(self) -> None:
         """Test is_attrs_schema with non-attrs class types."""
@@ -123,7 +123,7 @@ class TestAttrsDetection:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_attrs_instance_with_field(self) -> None:
         """Test is_attrs_class_with_field function."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
 
         assert is_attrs_instance_with_field(instance, "name")
         assert is_attrs_instance_with_field(instance, "age")
@@ -132,7 +132,7 @@ class TestAttrsDetection:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_attrs_instance_without_field(self) -> None:
         """Test is_attrs_class_without_field function."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
 
         assert not is_attrs_instance_without_field(instance, "name")
         assert not is_attrs_instance_without_field(instance, "age")
@@ -152,13 +152,13 @@ class TestSchemaIntegration:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_schema_with_attrs_class(self) -> None:
         """Test is_schema function includes attrs classes."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
         assert is_schema(instance)
 
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_schema_with_field_attrs(self) -> None:
         """Test is_schema_with_field with attrs classes."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
 
         assert is_schema_with_field(instance, "name")
         assert is_schema_with_field(instance, "age")
@@ -167,7 +167,7 @@ class TestSchemaIntegration:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_is_schema_without_field_attrs(self) -> None:
         """Test is_schema_without_field with attrs classes."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
 
         assert not is_schema_without_field(instance, "name")
         assert not is_schema_without_field(instance, "age")
@@ -180,7 +180,7 @@ class TestSchemaDump:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_schema_dump_simple_attrs(self) -> None:
         """Test schema_dump with simple attrs class."""
-        instance = SimpleAttrsClass(name="John", age=30)
+        instance = SimpleAttrsInstance(name="John", age=30)
         result = schema_dump(instance)
 
         expected = {"name": "John", "age": 30}
@@ -208,8 +208,8 @@ class TestSchemaDump:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_schema_dump_nested_attrs(self) -> None:
         """Test schema_dump with nested attrs classes."""
-        user = SimpleAttrsClass(name="John", age=25)
-        instance = NestedAttrsClass(user=user, metadata={"role": "admin"})
+        user = SimpleAttrsInstance(name="John", age=25)
+        instance = NestedAttrsInstance(user=user, metadata={"role": "admin"})
         result = schema_dump(instance)
 
         expected = {"user": {"name": "John", "age": 25}, "metadata": {"role": "admin"}}
@@ -233,7 +233,7 @@ class TestSchemaDump:
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_schema_dump_exclude_unset_parameter(self) -> None:
         """Test schema_dump exclude_unset parameter (attrs always includes all fields)."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        instance = SimpleAttrsInstance(name="test", age=30)
 
         # attrs.asdict doesn't have exclude_unset concept, should return all fields
         result_with_unset = schema_dump(instance, exclude_unset=True)
@@ -244,26 +244,26 @@ class TestSchemaDump:
         assert result_without_unset == expected
 
 
-class TestAttrsClassProtocol:
-    """Test AttrsClass protocol."""
+class TestAttrsInstanceProtocol:
+    """Test AttrsInstance protocol."""
 
     def test_attrs_class_protocol_exists(self) -> None:
-        """Test that AttrsClass protocol is available."""
-        assert AttrsClass is not None
+        """Test that AttrsInstance protocol is available."""
+        assert AttrsInstance is not None
 
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_attrs_class_protocol_with_real_attrs(self) -> None:
-        """Test AttrsClass protocol with real attrs class."""
-        instance = SimpleAttrsClass(name="test", age=30)
+        """Test AttrsInstance protocol with real attrs class."""
+        instance = SimpleAttrsInstance(name="test", age=30)
 
         # Should have __attrs_attrs__ attribute when attrs is installed
         assert hasattr(instance.__class__, "__attrs_attrs__")
 
     def test_attrs_class_protocol_type_annotation(self) -> None:
-        """Test AttrsClass can be used in type annotations."""
+        """Test AttrsInstance can be used in type annotations."""
 
         # This test ensures the protocol is properly defined for type checking
-        def process_attrs(obj: AttrsClass) -> dict[str, Any]:
+        def process_attrs(obj: AttrsInstance) -> dict[str, Any]:
             return {"processed": True}
 
         # Should not raise type errors
@@ -277,7 +277,7 @@ class TestErrorHandling:
     def test_attrs_functions_when_not_installed(self) -> None:
         """Test attrs functions behave correctly when attrs not installed."""
         # When attrs not installed, detection should return False
-        dummy_obj = SimpleAttrsClass(name="test", age=30)
+        dummy_obj = SimpleAttrsInstance(name="test", age=30)
 
         assert not is_attrs_instance(dummy_obj)
         assert not is_attrs_instance_with_field(dummy_obj, "name")
@@ -286,7 +286,7 @@ class TestErrorHandling:
     @pytest.mark.skipif(ATTRS_INSTALLED, reason="attrs is installed")
     def test_schema_dump_fallback_when_attrs_not_installed(self) -> None:
         """Test schema_dump falls back to __dict__ when attrs not installed."""
-        dummy_obj = SimpleAttrsClass(name="test", age=30)
+        dummy_obj = SimpleAttrsInstance(name="test", age=30)
         result = schema_dump(dummy_obj)
 
         # Should fall back to __dict__ access
