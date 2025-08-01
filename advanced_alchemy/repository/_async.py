@@ -528,8 +528,18 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             except (AttributeError, NotImplementedError):
                 return True
 
-        safe_types = (int, str, bool, float, bytes, datetime.date, datetime.datetime,
-                     datetime.time, datetime.timedelta, decimal.Decimal)
+        safe_types = (
+            int,
+            str,
+            bool,
+            float,
+            bytes,
+            datetime.date,
+            datetime.datetime,
+            datetime.time,
+            datetime.timedelta,
+            decimal.Decimal,
+        )
 
         return any(value is not None and type(value) not in safe_types for value in matched_values)
 

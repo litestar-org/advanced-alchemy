@@ -14,10 +14,10 @@ from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
 from sqlalchemy import Integer, String
-from sqlalchemy.types import TypeEngine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.types import TypeEngine
 
 from advanced_alchemy import base
 from advanced_alchemy.exceptions import IntegrityError, RepositoryError, wrap_sqlalchemy_exception
@@ -870,7 +870,7 @@ class MockTypeWithoutPythonType(TypeEngine[Any]):
     def __init__(self):
         super().__init__()
 
-    @property 
+    @property
     def python_type(self):
         raise NotImplementedError("This type doesn't have a python_type")
 
@@ -992,11 +992,13 @@ async def test_type_must_use_in_sqlalchemy_type_without_python_type(mock_repo: S
     assert result is True  # Should use IN() for safety
 
 
-async def test_type_must_use_in_sqlalchemy_type_with_none_python_type(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+async def test_type_must_use_in_sqlalchemy_type_with_none_python_type(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+) -> None:
     """Test SQLAlchemy type that has None as python_type."""
     mock_type = MagicMock()
     mock_type.python_type = None
-    
+
     # Should fall back to Python type checking
     result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], mock_type)
     assert result is False  # Standard integers should use ANY()
@@ -1008,8 +1010,8 @@ async def test_type_must_use_in_sqlalchemy_type_with_none_python_type(mock_repo:
 async def test_type_must_use_in_missing_python_type_attribute(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test fallback when python_type attribute is missing from type."""
     # Create a mock that doesn't have python_type attribute at all
-    mock_type = type('MockType', (), {})()  # Empty object with no attributes
-    
+    mock_type = type("MockType", (), {})()  # Empty object with no attributes
+
     result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], mock_type)
     assert result is False  # Should fall back to Python type checking for safe types
 

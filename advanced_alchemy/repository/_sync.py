@@ -504,8 +504,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Determine if field.in_() should be used instead of any_() for compatibility.
 
         Uses SQLAlchemy's type introspection to detect types that may have DBAPI
-        serialization issues with the ANY() operator, providing a more reliable
-        and elegant solution than manual type checking.
+        serialization issues with the ANY() operator. Checks if actual values match
+        the column's expected python_type - mismatches indicate complex types that
+        need the safer IN() operator. Falls back to Python type checking when
+        SQLAlchemy type information is unavailable.
 
         Args:
             matched_values: Values to be used in the filter
@@ -517,41 +519,30 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         if not matched_values:
             return False
 
-        # If we have the field type, use SQLAlchemy's type introspection
         if field_type is not None:
-            # Check if the type has a python_type that differs from the actual values
-            # This indicates complex types that may have serialization issues
             try:
                 expected_python_type = getattr(field_type, "python_type", None)
                 if expected_python_type is not None:
-                    # If any value doesn't match the expected python_type exactly,
-                    # it's likely a complex type that needs special handling
                     for value in matched_values:
                         if value is not None and not isinstance(value, expected_python_type):
                             return True
             except (AttributeError, NotImplementedError):
-                # Some types don't implement python_type - treat as potentially complex
                 return True
 
-        # Fallback: Check for complex types using Python type inspection
-        # This handles cases where field_type is not available
-        for value in matched_values:
-            if value is None:
-                continue
+        safe_types = (
+            int,
+            str,
+            bool,
+            float,
+            bytes,
+            datetime.date,
+            datetime.datetime,
+            datetime.time,
+            datetime.timedelta,
+            decimal.Decimal,
+        )
 
-            value_type = type(value)
-
-            # Allow standard Python types that work reliably with ANY()
-            if value_type in (int, str, bool, float, bytes):
-                continue
-
-            if value_type in (datetime.date, datetime.datetime, datetime.time, datetime.timedelta, decimal.Decimal):
-                continue
-
-            # Any other type should use IN() for safety
-            return True
-
-        return False
+        return any(value is not None and type(value) not in safe_types for value in matched_values)
 
     def _get_unique_values(self, values: "list[Any]") -> "list[Any]":
         """Get unique values from a list, handling unhashable types safely.
