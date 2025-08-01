@@ -1050,9 +1050,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = statement.execution_options(**execution_options)
         if supports_returning and statement_type != "select":
             statement = cast("ReturningDelete[tuple[ModelT]]", statement.returning(model_type))  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
-        if self._prefer_any:
-            return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
-        return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
+        use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(id_chunk, id_attribute.type)
+        if use_in:
+            return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
 
     async def get(
         self,
