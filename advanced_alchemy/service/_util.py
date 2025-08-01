@@ -17,6 +17,7 @@ from advanced_alchemy.filters import LimitOffset, StatementFilter
 from advanced_alchemy.repository.typing import ModelOrRowMappingT
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
+    ATTRS_INSTALLED,
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
     BaseModel,
@@ -24,7 +25,10 @@ from advanced_alchemy.service.typing import (
     ModelDTOT,
     Struct,
     convert,
+    fields,
     get_type_adapter,
+    is_attrs_schema,
+    schema_dump,
 )
 
 if TYPE_CHECKING:
@@ -222,10 +226,10 @@ class ResultConverter:
             schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
 
         Raises:
-            AdvancedAlchemyError: If `schema_type` is not a valid Pydantic or Msgspec schema and both libraries are not installed.
+            AdvancedAlchemyError: If `schema_type` is not a valid Pydantic, Msgspec, or attrs schema and all libraries are not installed.
 
         Returns:
-            :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel`
+            :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel` | :class:`attrs class`
         """
         if filters is None:
             filters = []
@@ -286,9 +290,41 @@ class ResultConverter:
                 total=total,
             )
 
-        if not MSGSPEC_INSTALLED and not PYDANTIC_INSTALLED:
-            msg = "Either Msgspec or Pydantic must be installed to use schema conversion"
+        if is_attrs_schema(schema_type):
+            if not isinstance(data, Sequence):
+                # Get the attrs field names for the target schema
+                attrs_field_names = {field.name for field in fields(schema_type)}
+
+                # Convert data to dict using schema_dump
+                data_dict = cast("dict[str, Any]", schema_dump(data))
+
+                # Filter to only include fields that exist in the attrs class
+                filtered_dict = {k: v for k, v in data_dict.items() if k in attrs_field_names}
+                return cast("ModelDTOT", schema_type(**filtered_dict))
+            limit_offset = find_filter(LimitOffset, filters=filters)
+            total = total or len(data)
+            limit_offset = limit_offset if limit_offset is not None else LimitOffset(limit=len(data), offset=0)
+            # Get the attrs field names for the target schema
+            attrs_field_names = {field.name for field in fields(schema_type)}
+
+            items = []
+            for item in data:
+                # Convert item to dict using schema_dump
+                item_dict = cast("dict[str, Any]", schema_dump(item))
+
+                # Filter to only include fields that exist in the attrs class
+                filtered_dict = {k: v for k, v in item_dict.items() if k in attrs_field_names}
+                items.append(schema_type(**filtered_dict))
+            return OffsetPagination[ModelDTOT](
+                items=items,  # type: ignore[arg-type]
+                limit=limit_offset.limit,
+                offset=limit_offset.offset,
+                total=total,
+            )
+
+        if not MSGSPEC_INSTALLED and not PYDANTIC_INSTALLED and not ATTRS_INSTALLED:
+            msg = "Either Msgspec, Pydantic, or attrs must be installed to use schema conversion"
             raise AdvancedAlchemyError(msg)
 
-        msg = "`schema_type` should be a valid Pydantic or Msgspec schema"
+        msg = "`schema_type` should be a valid Pydantic, Msgspec, or attrs schema"
         raise AdvancedAlchemyError(msg)

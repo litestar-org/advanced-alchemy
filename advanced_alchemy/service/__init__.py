@@ -22,11 +22,18 @@ from advanced_alchemy.service._sync import (
 from advanced_alchemy.service._util import ResultConverter, find_filter
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
+    ATTRS_INSTALLED,
+    AttrsClass,
     FilterTypeT,
     ModelDictListT,
     ModelDictT,
     ModelDTOT,
     SupportedSchemaModel,
+    fields,
+    is_attrs_instance,
+    is_attrs_instance_with_field,
+    is_attrs_instance_without_field,
+    is_attrs_schema,
     is_dict,
     is_dict_with_field,
     is_dict_without_field,
@@ -47,7 +54,9 @@ from advanced_alchemy.service.typing import (
 )
 
 __all__ = (
+    "ATTRS_INSTALLED",
     "DEFAULT_ERROR_MESSAGE_TEMPLATES",
+    "AttrsClass",
     "Empty",
     "EmptyType",
     "ErrorMessages",
@@ -68,7 +77,12 @@ __all__ = (
     "SQLAlchemySyncRepositoryReadService",
     "SQLAlchemySyncRepositoryService",
     "SupportedSchemaModel",
+    "fields",
     "find_filter",
+    "is_attrs_instance",
+    "is_attrs_instance_with_field",
+    "is_attrs_instance_without_field",
+    "is_attrs_schema",
     "is_dict",
     "is_dict_with_field",
     "is_dict_without_field",

@@ -126,16 +126,63 @@ except ImportError:
 
     LITESTAR_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
+try:
+    from attrs import asdict, define, field, fields, has  # pyright: ignore
+
+    @runtime_checkable
+    class AttrsClass(Protocol):  # type: ignore[no-redef]
+        """Protocol for attrs classes when attrs is installed"""
+
+        __attrs_attrs__: "ClassVar[tuple[Any, ...]]"
+
+    ATTRS_INSTALLED = True
+except ImportError:
+
+    @runtime_checkable
+    class AttrsClass(Protocol):  # type: ignore[no-redef]
+        """Placeholder Implementation for attrs classes"""
+
+        __attrs_attrs__: "ClassVar[tuple[Any, ...]]"
+
+    def asdict(*args: Any, **kwargs: Any) -> "dict[str, Any]":  # type: ignore[misc] # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    def define(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+        """Placeholder implementation"""
+        return lambda cls: cls  # pyright: ignore[reportUnknownVariableType,reportUnknownLambdaType]
+
+    def field(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+        """Placeholder implementation"""
+        return None
+
+    def fields(*args: Any, **kwargs: Any) -> "tuple[Any, ...]":  # type: ignore[misc] # noqa: ARG001
+        """Placeholder implementation"""
+        return ()
+
+    def has(*args: Any, **kwargs: Any) -> bool:  # type: ignore[misc] # noqa: ARG001
+        """Placeholder implementation"""
+        return False
+
+    ATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
+
 __all__ = (
+    "ATTRS_INSTALLED",
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
     "UNSET",
+    "AttrsClass",
     "BaseModel",
     "DTOData",
     "FailFast",
     "Struct",
     "TypeAdapter",
     "UnsetType",
+    "asdict",
     "convert",
+    "define",
+    "field",
+    "fields",
+    "has",
 )
