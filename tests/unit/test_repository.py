@@ -867,11 +867,11 @@ class MockPostgreSQLRange:
 class MockTypeWithoutPythonType(TypeEngine[Any]):
     """Mock SQLAlchemy type that doesn't implement python_type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     @property
-    def python_type(self):
+    def python_type(self) -> type[Any]:
         raise NotImplementedError("This type doesn't have a python_type")
 
 
@@ -987,7 +987,7 @@ async def test_type_must_use_in_sqlalchemy_type_mismatched(mock_repo: SQLAlchemy
 
 async def test_type_must_use_in_sqlalchemy_type_without_python_type(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test SQLAlchemy type that doesn't implement python_type."""
-    mock_type = MockTypeWithoutPythonType()
+    mock_type: MockTypeWithoutPythonType = MockTypeWithoutPythonType()
     result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], mock_type)
     assert result is True  # Should use IN() for safety
 

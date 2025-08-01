@@ -558,8 +558,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         try:
             # Fast path for hashable types
-            seen = set()
-            unique_values = []
+            seen: set[Any] = set()
+            unique_values: list[Any] = []
             for value in values:
                 if value not in seen:
                     unique_values.append(value)
