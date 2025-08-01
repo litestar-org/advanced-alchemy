@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 from attrs import define, field
@@ -40,7 +40,7 @@ class AttrsWithOptional:
     """attrs class with optional fields."""
 
     name: str
-    email: str | None = None
+    email: Optional[str] = None  # noqa: UP045
     active: bool = True
 
 
