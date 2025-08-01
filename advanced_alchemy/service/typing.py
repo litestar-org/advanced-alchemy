@@ -20,6 +20,7 @@ from typing_extensions import TypeAlias, TypeGuard
 from advanced_alchemy.repository.typing import ModelT
 from advanced_alchemy.service._typing import (
     ATTRS_INSTALLED,
+    CATTRS_INSTALLED,
     LITESTAR_INSTALLED,
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
@@ -30,10 +31,13 @@ from advanced_alchemy.service._typing import (
     FailFast,
     Struct,
     TypeAdapter,
+    UnsetType,
     asdict,
     convert,
     fields,
     has,
+    structure,
+    unstructure,
 )
 
 if TYPE_CHECKING:
@@ -104,6 +108,21 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
             Annotated[f, FailFast()],
         )
     return TypeAdapter(f)
+
+
+@lru_cache(maxsize=128, typed=True)
+def get_attrs_fields(cls: "type[AttrsClass]") -> "tuple[Any, ...]":
+    """Caches and returns attrs fields for a given attrs class.
+
+    Args:
+        cls: attrs class to get fields for.
+
+    Returns:
+        Tuple of attrs fields.
+    """
+    if ATTRS_INSTALLED:
+        return fields(cls)  # type: ignore[no-any-return]
+    return ()
 
 
 def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
@@ -410,6 +429,10 @@ def schema_dump(  # noqa: PLR0911
             return {f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET}
         return {f: getattr(data, f, None) for f in data.__struct_fields__}
     if is_attrs_instance(data):
+        # Use cattrs for enhanced performance and type-aware serialization when available
+        if CATTRS_INSTALLED:
+            return unstructure(data)  # type: ignore[no-any-return]
+        # Fallback to basic attrs.asdict when cattrs is not available
         return asdict(data)
     if is_dto_data(data):
         return cast("dict[str, Any]", data.as_builtins())
@@ -420,6 +443,7 @@ def schema_dump(  # noqa: PLR0911
 
 __all__ = (
     "ATTRS_INSTALLED",
+    "CATTRS_INSTALLED",
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
@@ -442,6 +466,7 @@ __all__ = (
     "asdict",
     "convert",
     "fields",
+    "get_attrs_fields",
     "get_type_adapter",
     "has",
     "is_attrs_instance",
@@ -468,6 +493,8 @@ __all__ = (
     "is_schema_with_field",
     "is_schema_without_field",
     "schema_dump",
+    "structure",
+    "unstructure",
 )
 
 if TYPE_CHECKING:
@@ -490,3 +517,8 @@ if TYPE_CHECKING:
         from advanced_alchemy.service._typing import asdict, has
     else:
         from attrs import asdict, has  # type: ignore[assignment] # noqa: TC004
+
+    if not CATTRS_INSTALLED:
+        from advanced_alchemy.service._typing import structure, unstructure
+    else:
+        from cattrs import structure, unstructure  # type: ignore[assignment,import-not-found] # noqa: TC004

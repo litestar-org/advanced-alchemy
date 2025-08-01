@@ -146,6 +146,7 @@ spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
   "attrs",
+  "cattrs",
   "dishka ; python_version >= \"3.10\"",
   "pydantic-extra-types",
   "rich-click",
@@ -221,6 +222,7 @@ filterwarnings = [
 ]
 markers = [
   "integration: SQLAlchemy integration tests",
+  "unit: Unit tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
   "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
   "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
