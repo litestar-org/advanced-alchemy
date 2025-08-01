@@ -376,6 +376,7 @@ classmethod-decorators = [
   "RUF029",
   "DOC",
   "UP007",
+  "ASYNC230",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
