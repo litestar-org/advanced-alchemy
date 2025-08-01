@@ -1482,12 +1482,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             existing_instance = await self.get(
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
-            mapper = inspect(data)
+            mapper = inspect(self.model_type)
             if mapper is not None:
-                for column in mapper.mapper.columns:
+                for column in mapper.columns:
                     field_name = column.key
                     new_field_value = getattr(data, field_name, MISSING)
-                    if new_field_value is not MISSING:
+                    if new_field_value is not MISSING and new_field_value is not None:
                         existing_field_value = getattr(existing_instance, field_name, MISSING)
                         if existing_field_value is not MISSING and existing_field_value != new_field_value:
                             setattr(existing_instance, field_name, new_field_value)
