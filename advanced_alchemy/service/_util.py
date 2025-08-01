@@ -243,16 +243,13 @@ class ResultConverter:
             )
         if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
             if not isinstance(data, Sequence):
-                return cast(
-                    "ModelDTOT",
-                    convert(
-                        obj=data,
-                        type=schema_type,
-                        from_attributes=True,
-                        dec_hook=partial(
-                            _default_msgspec_deserializer,
-                            type_decoders=DEFAULT_TYPE_DECODERS,
-                        ),
+                return convert(
+                    obj=data,
+                    type=schema_type,
+                    from_attributes=True,
+                    dec_hook=partial(
+                        _default_msgspec_deserializer,
+                        type_decoders=DEFAULT_TYPE_DECODERS,
                     ),
                 )
             limit_offset = find_filter(LimitOffset, filters=filters)

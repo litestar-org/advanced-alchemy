@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import pytest
-from minio import Minio
+from minio import Minio  # type: ignore[import-untyped]
 from pytest_databases.docker.minio import MinioService
 from sqlalchemy import Engine, String, create_engine, event
 from sqlalchemy.exc import InvalidRequestError

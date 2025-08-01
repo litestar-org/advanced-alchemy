@@ -338,4 +338,4 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         """
         if not isinstance(statement, Select):
             return statement
-        return cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))
+        return statement.order_by(field.desc() if is_desc else field.asc())
