@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import decimal
 from collections.abc import AsyncGenerator, Collection, Generator
 from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock
@@ -12,10 +13,11 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import String
+from sqlalchemy import Integer, String
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.types import TypeEngine
 
 from advanced_alchemy import base
 from advanced_alchemy.exceptions import IntegrityError, RepositoryError, wrap_sqlalchemy_exception
@@ -844,6 +846,174 @@ async def test_filter_on_datetime_field(
     statement = filter.append_to_statement(statement, MagicMock(return_value=before or after))  # type:ignore[assignment]
     mock_repo.model_type.updated_at = field_mock
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+# Type compatibility test fixtures and classes
+class MockComplexType:
+    """Mock complex type that would have DBAPI serialization issues."""
+
+    def __init__(self, value: Any):
+        self.value = value
+
+
+class MockPostgreSQLRange:
+    """Mock PostgreSQL Range type."""
+
+    def __init__(self, lower: Any, upper: Any):
+        self.lower = lower
+        self.upper = upper
+
+
+class MockTypeWithoutPythonType(TypeEngine[Any]):
+    """Mock SQLAlchemy type that doesn't implement python_type."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    @property
+    def python_type(self) -> type[Any]:
+        raise NotImplementedError("This type doesn't have a python_type")
+
+
+async def test_type_must_use_in_empty_list(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that empty list returns False."""
+    result = mock_repo._type_must_use_in_instead_of_any([])
+    assert result is False
+
+
+async def test_type_must_use_in_standard_python_types(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that standard Python types can use ANY() operator."""
+    # Test integers
+    result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3])
+    assert result is False
+
+    # Test strings
+    result = mock_repo._type_must_use_in_instead_of_any(["a", "b", "c"])
+    assert result is False
+
+    # Test booleans
+    result = mock_repo._type_must_use_in_instead_of_any([True, False])
+    assert result is False
+
+    # Test floats
+    result = mock_repo._type_must_use_in_instead_of_any([1.1, 2.2])
+    assert result is False
+
+    # Test bytes
+    result = mock_repo._type_must_use_in_instead_of_any([b"test", b"data"])
+    assert result is False
+
+
+async def test_type_must_use_in_safe_datetime_decimal_types(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that datetime and decimal types can use ANY() operator."""
+    # Test datetime.date
+    result = mock_repo._type_must_use_in_instead_of_any([datetime.date(2024, 1, 1)])
+    assert result is False
+
+    # Test datetime.datetime
+    result = mock_repo._type_must_use_in_instead_of_any([datetime.datetime.now()])
+    assert result is False
+
+    # Test datetime.time
+    result = mock_repo._type_must_use_in_instead_of_any([datetime.time(12, 30)])
+    assert result is False
+
+    # Test datetime.timedelta
+    result = mock_repo._type_must_use_in_instead_of_any([datetime.timedelta(days=1)])
+    assert result is False
+
+    # Test decimal.Decimal
+    result = mock_repo._type_must_use_in_instead_of_any([decimal.Decimal("10.5")])
+    assert result is False
+
+
+async def test_type_must_use_in_complex_types(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that complex types must use IN() operator."""
+    # Test mock PostgreSQL Range
+    ranges = [MockPostgreSQLRange(1, 10), MockPostgreSQLRange(20, 30)]
+    result = mock_repo._type_must_use_in_instead_of_any(ranges)
+    assert result is True
+
+    # Test custom complex type
+    complex_types = [MockComplexType("test")]
+    result = mock_repo._type_must_use_in_instead_of_any(complex_types)
+    assert result is True
+
+
+async def test_type_must_use_in_mixed_types_with_complex(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that mixed types containing complex types use IN() operator."""
+    mixed_values = [1, "test", MockComplexType("complex")]
+    result = mock_repo._type_must_use_in_instead_of_any(mixed_values)
+    assert result is True
+
+
+async def test_type_must_use_in_none_values_ignored(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that None values are properly ignored."""
+    values_with_none = [1, None, 3]
+    result = mock_repo._type_must_use_in_instead_of_any(values_with_none)
+    assert result is False
+
+    # Test only None values
+    only_none = [None, None]
+    result = mock_repo._type_must_use_in_instead_of_any(only_none)
+    assert result is False
+
+
+async def test_type_must_use_in_sqlalchemy_type_matching(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test SQLAlchemy type introspection with matching types."""
+    # Test Integer type with integer values
+    int_type = Integer()
+    result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], int_type)
+    assert result is False
+
+    # Test String type with string values
+    str_type = String()
+    result = mock_repo._type_must_use_in_instead_of_any(["a", "b"], str_type)
+    assert result is False
+
+
+async def test_type_must_use_in_sqlalchemy_type_mismatched(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test SQLAlchemy type introspection with mismatched types."""
+    # Test Integer type with string values (mismatch)
+    int_type = Integer()
+    result = mock_repo._type_must_use_in_instead_of_any(["not_an_int"], int_type)
+    assert result is True
+
+    # Test String type with integer values (mismatch)
+    str_type = String()
+    result = mock_repo._type_must_use_in_instead_of_any([123], str_type)
+    assert result is True
+
+
+async def test_type_must_use_in_sqlalchemy_type_without_python_type(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test SQLAlchemy type that doesn't implement python_type."""
+    mock_type: MockTypeWithoutPythonType = MockTypeWithoutPythonType()
+    result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], mock_type)
+    assert result is True  # Should use IN() for safety
+
+
+async def test_type_must_use_in_sqlalchemy_type_with_none_python_type(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+) -> None:
+    """Test SQLAlchemy type that has None as python_type."""
+    mock_type = MagicMock()
+    mock_type.python_type = None
+
+    # Should fall back to Python type checking
+    result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], mock_type)
+    assert result is False  # Standard integers should use ANY()
+
+    result = mock_repo._type_must_use_in_instead_of_any([MockComplexType("test")], mock_type)
+    assert result is True  # Complex types should use IN()
+
+
+async def test_type_must_use_in_missing_python_type_attribute(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test fallback when python_type attribute is missing from type."""
+    # Create a mock that doesn't have python_type attribute at all
+    mock_type = type("MockType", (), {})()  # Empty object with no attributes
+
+    result = mock_repo._type_must_use_in_instead_of_any([1, 2, 3], mock_type)
+    assert result is False  # Should fall back to Python type checking for safe types
 
 
 class MyModel(BaseModel):
