@@ -758,19 +758,20 @@ async def test_sqlalchemy_repo_update(
     """Test the sequence of repo calls for update operation."""
     id_ = 3
     mock_instance = MagicMock()
+    existing_instance = MagicMock()
     mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
-    mocker.patch.object(mock_repo, "get")
-    mock_repo.session.merge.return_value = mock_instance  # pyright: ignore[reportFunctionMemberAccess]
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
 
     instance = await maybe_async(mock_repo.update(mock_instance))
 
-    assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    assert instance is existing_instance
+    mock_repo.session.merge.assert_called_once_with(existing_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.refresh.assert_called_once_with(  # pyright: ignore[reportFunctionMemberAccess]
-        instance=mock_instance,
+        instance=existing_instance,
         attribute_names=None,
         with_for_update=None,
     )
