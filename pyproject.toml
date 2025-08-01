@@ -145,6 +145,8 @@ sanic = ["sanic", "sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
+  "attrs",
+  "cattrs",
   "dishka ; python_version >= \"3.10\"",
   "pydantic-extra-types",
   "rich-click",
@@ -220,6 +222,7 @@ filterwarnings = [
 ]
 markers = [
   "integration: SQLAlchemy integration tests",
+  "unit: Unit tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
   "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
   "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
@@ -344,6 +347,7 @@ classmethod-decorators = [
 
 [tool.ruff.lint.per-file-ignores]
 "advanced_alchemy/repository/*.py" = ['C901']
+"advanced_alchemy/service/*.py" = ["PLR0911"]
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
 "examples/litestar/*.py" = ["PLR6301", "DOC", "B008"]

@@ -126,16 +126,74 @@ except ImportError:
 
     LITESTAR_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
+try:
+    from attrs import AttrsInstance, asdict, define, field, fields, has  # pyright: ignore
+
+    ATTRS_INSTALLED = True
+except ImportError:
+
+    @runtime_checkable
+    class AttrsInstance(Protocol):  # type: ignore[no-redef]
+        """Placeholder Implementation for attrs classes"""
+
+    def asdict(*args: Any, **kwargs: Any) -> "dict[str, Any]":  # type: ignore[misc] # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    def define(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+        """Placeholder implementation"""
+        return lambda cls: cls  # pyright: ignore[reportUnknownVariableType,reportUnknownLambdaType]
+
+    def field(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef] # noqa: ARG001
+        """Placeholder implementation"""
+        return None
+
+    def fields(*args: Any, **kwargs: Any) -> "tuple[Any, ...]":  # type: ignore[misc] # noqa: ARG001
+        """Placeholder implementation"""
+        return ()
+
+    def has(*args: Any, **kwargs: Any) -> bool:  # type: ignore[misc] # noqa: ARG001
+        """Placeholder implementation"""
+        return False
+
+    ATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
+
+try:
+    from cattrs import structure, unstructure  # pyright: ignore # type: ignore[import-not-found]
+
+    CATTRS_INSTALLED = True
+except ImportError:
+
+    def unstructure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    def structure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    CATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
+
 __all__ = (
+    "ATTRS_INSTALLED",
+    "CATTRS_INSTALLED",
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
     "UNSET",
+    "AttrsInstance",
     "BaseModel",
     "DTOData",
     "FailFast",
     "Struct",
     "TypeAdapter",
     "UnsetType",
+    "asdict",
     "convert",
+    "define",
+    "field",
+    "fields",
+    "has",
+    "structure",
+    "unstructure",
 )

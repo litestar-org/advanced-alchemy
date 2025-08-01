@@ -12,11 +12,12 @@ Understanding Services
 Services provide:
 
 - Business logic abstraction
-- Data transformation using Pydantic or Msgspec models
-- Input validation
+- Data transformation using Pydantic, Msgspec, or attrs models
+- Input validation and type-safe schema conversion
 - Complex operations involving multiple repositories
 - Consistent error handling
 - Automatic schema validation and transformation
+- Support for SQLAlchemy query results (Row types) and RowMapping objects
 
 Basic Service Usage
 -------------------
@@ -209,6 +210,91 @@ The code below shows a service coordinating posts and tags.
             if is_dict(data) and "slug" not in data and "name" in data and operation == "update":
                 data["slug"] = await self.repository.get_available_slug(data["name"])
             return await super().to_model(data, operation)
+
+Schema Integration
+------------------
+
+Advanced Alchemy services support multiple schema libraries for data transformation and validation:
+
+Pydantic Models
+***************
+
+.. code-block:: python
+
+    from pydantic import BaseModel
+    from typing import Optional
+
+    class UserSchema(BaseModel):
+        name: str
+        email: str
+        age: Optional[int] = None
+
+        model_config = {"from_attributes": True}
+
+    # Convert database model to Pydantic schema
+    user_data = service.to_schema(user_model, schema_type=UserSchema)
+
+Msgspec Structs
+***************
+
+.. code-block:: python
+
+    from msgspec import Struct
+    from typing import Optional
+
+    class UserStruct(Struct):
+        name: str
+        email: str
+        age: Optional[int] = None
+
+    # Convert database model to Msgspec struct
+    user_data = service.to_schema(user_model, schema_type=UserStruct)
+
+Attrs Classes
+*************
+
+.. code-block:: python
+
+    from attrs import define
+    from typing import Optional
+
+    @define
+    class UserAttrs:
+        name: str
+        email: str
+        age: Optional[int] = None
+
+    # Convert database model to attrs class
+    user_data = service.to_schema(user_model, schema_type=UserAttrs)
+
+.. note::
+
+    **Enhanced attrs Support with cattrs**: When both ``attrs`` and ``cattrs`` are installed,
+    Advanced Alchemy automatically uses ``cattrs.structure()`` and ``cattrs.unstructure()``
+    for improved performance and type-aware serialization. This provides better handling of
+    complex types, nested structures, and custom converters.
+
+SQLAlchemy Query Result Support
+*******************************
+
+Services now provide comprehensive support for SQLAlchemy query results:
+
+.. code-block:: python
+
+    from sqlalchemy import select
+
+    # Direct support for SQLAlchemy Row objects
+    query_results = await session.execute(select(User))
+    rows = query_results.fetchall()  # Returns list[Row[Any]]
+
+    # Convert Row objects to schema types
+    user_data = service.to_schema(rows[0], schema_type=UserSchema)
+    users_paginated = service.to_schema(rows, schema_type=UserSchema)
+
+    # Also supports RowMapping objects
+    row_mapping_results = await session.execute(select(User)).mappings()
+    mapping_data = service.to_schema(row_mapping_results.first(), schema_type=UserSchema)
+
 
 Framework Integration
 ---------------------
