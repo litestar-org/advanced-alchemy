@@ -66,6 +66,8 @@ DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
     decimal.Decimal,
     datetime.date,
     datetime.datetime,
+    datetime.time,
+    datetime.timedelta,
 }
 
 
