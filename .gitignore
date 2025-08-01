@@ -176,3 +176,4 @@ cython_debug/
 CLAUDE.md
 .gitignore
 .todos
+.tmp

@@ -1,3 +1,5 @@
+import datetime
+import decimal
 import random
 import string
 from collections.abc import Iterable, Sequence
@@ -496,6 +498,70 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             bool: The uniquify value to use.
         """
         return bool(uniquify) if uniquify is not None else self._uniquify
+
+    def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
+        """Determine if field.in_() should be used instead of any_() for compatibility.
+
+        Uses SQLAlchemy's type introspection to detect types that may have DBAPI
+        serialization issues with the ANY() operator. Checks if actual values match
+        the column's expected python_type - mismatches indicate complex types that
+        need the safer IN() operator. Falls back to Python type checking when
+        SQLAlchemy type information is unavailable.
+
+        Args:
+            matched_values: Values to be used in the filter
+            field_type: Optional SQLAlchemy TypeEngine from the column
+
+        Returns:
+            bool: True if field.in_() should be used instead of any_()
+        """
+        if not matched_values:
+            return False
+
+        if field_type is not None:
+            try:
+                expected_python_type = getattr(field_type, "python_type", None)
+                if expected_python_type is not None:
+                    for value in matched_values:
+                        if value is not None and not isinstance(value, expected_python_type):
+                            return True
+            except (AttributeError, NotImplementedError):
+                return True
+
+        safe_types = (int, str, bool, float, bytes, datetime.date, datetime.datetime,
+                     datetime.time, datetime.timedelta, decimal.Decimal)
+
+        return any(value is not None and type(value) not in safe_types for value in matched_values)
+
+    def _get_unique_values(self, values: "list[Any]") -> "list[Any]":
+        """Get unique values from a list, handling unhashable types safely.
+
+        Args:
+            values: List of values to deduplicate
+
+        Returns:
+            list[Any]: List of unique values preserving order
+        """
+        if not values:
+            return []
+
+        try:
+            # Fast path for hashable types
+            seen = set()
+            unique_values = []
+            for value in values:
+                if value not in seen:
+                    unique_values.append(value)
+                    seen.add(value)
+        except TypeError:
+            # Fallback for unhashable types (e.g., dicts from JSONB)
+            unique_values = []
+            for value in values:
+                if value not in unique_values:
+                    unique_values.append(value)
+        else:
+            return unique_values
+        return unique_values
 
     @staticmethod
     def _get_error_messages(
@@ -1870,7 +1936,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 matched_values = [
                     field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
                 ]
-                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
+                # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
+                use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(matched_values, field.type)
+                match_filter.append(field.in_(matched_values) if use_in else any_(matched_values) == field)  # type: ignore[arg-type]
 
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
@@ -1883,10 +1951,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
-                matched_values = list(
-                    {getattr(datum, field_name) for datum in existing_objs if datum},  # ensure the list is unique
-                )
-                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
+                # Safe deduplication that handles unhashable types (e.g., JSONB dicts)
+                all_values = [getattr(datum, field_name) for datum in existing_objs if datum]
+                matched_values = self._get_unique_values(all_values)
+                # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
+                use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(matched_values, field.type)
+                match_filter.append(field.in_(matched_values) if use_in else any_(matched_values) == field)  # type: ignore[arg-type]
             existing_ids = self._get_object_ids(existing_objs=existing_objs)
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:
