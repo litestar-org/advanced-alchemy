@@ -107,8 +107,14 @@ async def test_run_with_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
             return True
 
     monkeypatch.setattr("asyncio.get_running_loop", lambda: DummyLoop())
-    with pytest.raises(Exception):
-        sync_func(1)
+
+    # Suppress the expected warning about unawaited coroutine
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine .* was never awaited")
+        with pytest.raises(Exception):
+            sync_func(1)
 
 
 def test_run_with_uvloop(monkeypatch: pytest.MonkeyPatch) -> None:

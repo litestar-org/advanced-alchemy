@@ -76,22 +76,22 @@ class DITestModel(Base):
     name: Mapped[str] = mapped_column(String)
 
 
-class TestSyncService(SQLAlchemySyncRepositoryService[DITestModel]):
-    """Test sync service class."""
+class MockSyncService(SQLAlchemySyncRepositoryService[DITestModel]):
+    """Mock sync service class for testing."""
 
     class Repo(SQLAlchemySyncRepository[DITestModel]):
-        """Test repo class."""
+        """Mock repo class."""
 
         model_type = DITestModel
 
     repository_type = Repo
 
 
-class TestAsyncService(SQLAlchemyAsyncRepositoryService[DITestModel]):
-    """Test async service class."""
+class MockAsyncService(SQLAlchemyAsyncRepositoryService[DITestModel]):
+    """Mock async service class for testing."""
 
     class Repo(SQLAlchemyAsyncRepository[DITestModel]):
-        """Test repo class."""
+        """Mock repo class."""
 
         model_type = DITestModel
 
@@ -166,62 +166,62 @@ def test_global_instance() -> None:
 
 def test_create_sync_service_provider() -> None:
     """Test creating a sync service provider."""
-    provider = create_service_provider(TestSyncService)
+    provider = create_service_provider(MockSyncService)
 
     # Ensure the provider is callable
     assert callable(provider)
     svc = next(provider(db_session=MagicMock()))
-    assert isinstance(svc, TestSyncService)
+    assert isinstance(svc, MockSyncService)
 
 
 def test_create_sync_service_provider_custom() -> None:
     """Test creating a sync service provider."""
-    provider = create_service_provider(TestSyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(MockSyncService, config=MagicMock(session_dependency_key="testing_session"))
 
     # Ensure the provider is callable
     assert callable(provider)
     svc = next(provider(testing_session=MagicMock()))
-    assert isinstance(svc, TestSyncService)
+    assert isinstance(svc, MockSyncService)
 
 
 def test_create_sync_service_provider_positional() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(TestSyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(MockSyncService, config=MagicMock(session_dependency_key="testing_session"))
 
     # Ensure the provider is callable
     assert callable(provider)
     svc = next(provider(MagicMock()))
-    assert isinstance(svc, TestSyncService)
+    assert isinstance(svc, MockSyncService)
 
 
 async def test_create_async_service_provider() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(TestAsyncService)
+    provider = create_service_provider(MockAsyncService)
 
     # Ensure the provider is callable
     assert callable(provider)
     svc = await anext_(provider(db_session=MagicMock()))
-    assert isinstance(svc, TestAsyncService)
+    assert isinstance(svc, MockAsyncService)
 
 
 async def test_create_async_service_provider_custom() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(TestAsyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(MockAsyncService, config=MagicMock(session_dependency_key="testing_session"))
 
     # Ensure the provider is callable
     assert callable(provider)
     svc = await anext_(provider(testing_session=MagicMock()))
-    assert isinstance(svc, TestAsyncService)
+    assert isinstance(svc, MockAsyncService)
 
 
 async def test_create_async_service_provider_positional() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(TestAsyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(MockAsyncService, config=MagicMock(session_dependency_key="testing_session"))
 
     # Ensure the provider is callable
     assert callable(provider)
     svc = await anext_(provider(MagicMock()))
-    assert isinstance(svc, TestAsyncService)
+    assert isinstance(svc, MockAsyncService)
 
 
 def test_create_async_service_dependencies() -> None:
@@ -230,7 +230,7 @@ def test_create_async_service_dependencies() -> None:
         mock_create_provider.return_value = lambda: "async_service"
 
         deps = create_service_dependencies(
-            TestAsyncService,
+            MockAsyncService,
             key="service",
             statement=select(DITestModel),
             config=MagicMock(),
@@ -252,7 +252,7 @@ def test_create_sync_service_dependencies() -> None:
         mock_create_provider.return_value = lambda: "sync_service"
 
         deps = create_service_dependencies(
-            TestSyncService,
+            MockSyncService,
             key="service",
             statement=select(DITestModel),
             config=MagicMock(),
@@ -279,7 +279,7 @@ def test_create_service_dependencies_with_filters() -> None:
             mock_create_filters.return_value = {"filter1": Provide(lambda: "filter1")}
 
             deps = create_service_dependencies(
-                TestSyncService,
+                MockSyncService,
                 key="service",
                 filters={"id_filter": int},
             )
