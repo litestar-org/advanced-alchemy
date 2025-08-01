@@ -2726,3 +2726,56 @@ async def test_service_to_schema(
     assert isinstance(msgspec_dto, Struct)
     assert isinstance(pydantic_dto.name, str)  # pyright: ignore
     assert isinstance(msgspec_dto.name, str)  # pyright: ignore
+
+
+async def test_repository_update_with_id_attribute(author_repo: AnyAuthorRepository) -> None:
+    """Test that update with id_attribute properly updates existing records instead of creating new ones.
+
+    This test verifies the fix for the bug where update() with id_attribute would attempt
+    to INSERT a new record instead of UPDATE the existing one, causing IntegrityError
+    on NOT NULL constraints for fields not included in the update data.
+
+    Args:
+        author_repo: The author repository fixture
+    """
+
+    model_class = author_repo.model_type
+
+    # Create an author with required fields
+    original_author_data = model_class(
+        name="Test Author",
+        string_field="original_value",
+    )
+    original_author = await maybe_async(author_repo.add(original_author_data))
+
+    # Store the original ID and verify required fields are set
+    original_id = original_author.id
+    assert original_author.name == "Test Author"
+    assert original_author.string_field == "original_value"
+
+    # Update using id_attribute (this would previously cause IntegrityError)
+    # Only providing partial data - missing required 'name' field
+    update_data = model_class(
+        id=original_id,  # Include the original ID so update method can find it
+        name="Test Author",  # Need to include required field for model creation
+        string_field="updated_value",
+    )
+
+    updated_author = await maybe_async(
+        author_repo.update(
+            data=update_data,
+            id_attribute="id",  # This is the key parameter that was buggy
+        )
+    )
+
+    # Verify the update worked correctly
+    assert updated_author.id == original_id  # Same ID (not a new record)
+    assert updated_author.name == "Test Author"  # Original name preserved
+    assert updated_author.string_field == "updated_value"  # Field updated
+
+    # Verify in database - should be only one record
+    all_authors = await maybe_async(author_repo.list())
+    matching_authors = [a for a in all_authors if a.name == "Test Author"]
+    assert len(matching_authors) == 1  # Only one record, not two
+    assert matching_authors[0].id == original_id
+    assert matching_authors[0].string_field == "updated_value"

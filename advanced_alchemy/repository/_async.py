@@ -24,6 +24,7 @@ from sqlalchemy import (
     Update,
     any_,
     delete,
+    inspect,
     over,
     select,
     text,
@@ -1478,10 +1479,19 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 data,
                 id_attribute=id_attribute,
             )
-            # this will raise for not found, and will put the item in the session
-            await self.get(item_id, id_attribute=id_attribute, load=load, execution_options=execution_options)
-            # this will merge the inbound data to the instance we just put in the session
-            instance = await self._attach_to_session(data, strategy="merge")
+            existing_instance = await self.get(
+                item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
+            )
+            mapper = inspect(data)
+            if mapper is not None:
+                for column in mapper.mapper.columns:
+                    field_name = column.key
+                    new_field_value = getattr(data, field_name, MISSING)
+                    if new_field_value is not MISSING:
+                        existing_field_value = getattr(existing_instance, field_name, MISSING)
+                        if existing_field_value is not MISSING and existing_field_value != new_field_value:
+                            setattr(existing_instance, field_name, new_field_value)
+            instance = await self._attach_to_session(existing_instance, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 instance,
