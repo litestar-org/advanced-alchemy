@@ -57,6 +57,16 @@ if TYPE_CHECKING:
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
+DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
+    int,
+    float,
+    str,
+    bool,
+    bytes,
+    decimal.Decimal,
+    datetime.date,
+    datetime.datetime,
+}
 
 
 @runtime_checkable
@@ -528,20 +538,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             except (AttributeError, NotImplementedError):
                 return True
 
-        safe_types = (
-            int,
-            str,
-            bool,
-            float,
-            bytes,
-            datetime.date,
-            datetime.datetime,
-            datetime.time,
-            datetime.timedelta,
-            decimal.Decimal,
-        )
-
-        return any(value is not None and type(value) not in safe_types for value in matched_values)
+        return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
 
     def _get_unique_values(self, values: "list[Any]") -> "list[Any]":
         """Get unique values from a list, handling unhashable types safely.
