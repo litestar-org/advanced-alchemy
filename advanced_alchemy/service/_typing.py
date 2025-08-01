@@ -130,7 +130,7 @@ try:
     from attrs import asdict, define, field, fields, has  # pyright: ignore
 
     @runtime_checkable
-    class AttrsClass(Protocol):  # type: ignore[no-redef]
+    class AttrsClass(Protocol):  # pyright: ignore
         """Protocol for attrs classes when attrs is installed"""
 
         __attrs_attrs__: "ClassVar[tuple[Any, ...]]"
@@ -166,8 +166,25 @@ except ImportError:
 
     ATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
+try:
+    from cattrs import structure, unstructure  # pyright: ignore # type: ignore[import-not-found]
+
+    CATTRS_INSTALLED = True
+except ImportError:
+
+    def unstructure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    def structure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+        """Placeholder implementation"""
+        return {}
+
+    CATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
+
 __all__ = (
     "ATTRS_INSTALLED",
+    "CATTRS_INSTALLED",
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
@@ -185,4 +202,6 @@ __all__ = (
     "field",
     "fields",
     "has",
+    "structure",
+    "unstructure",
 )
