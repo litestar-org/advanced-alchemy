@@ -569,8 +569,6 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             for value in values:
                 if value not in unique_values:
                     unique_values.append(value)
-        else:
-            return unique_values
         return unique_values
 
     @staticmethod
