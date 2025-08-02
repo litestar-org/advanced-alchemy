@@ -1487,38 +1487,40 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
             mapper = None
-            with contextlib.suppress(NoInspectionAvailable):
-                mapper = inspect(data)
-                if mapper is not None:
-                    for column in mapper.mapper.columns:
-                        field_name = column.key
-                        new_field_value = getattr(data, field_name, MISSING)
-                        if new_field_value is not MISSING:
-                            # Skip setting columns with defaults/onupdate to None during updates
-                            # This prevents overwriting columns that should use their defaults
-                            if new_field_value is None and column_has_defaults(column):
-                                continue
-                            existing_field_value = getattr(existing_instance, field_name, MISSING)
-                            if existing_field_value is not MISSING and existing_field_value != new_field_value:
-                                setattr(existing_instance, field_name, new_field_value)
+            with self.session.no_autoflush:
+                with contextlib.suppress(NoInspectionAvailable):
+                    mapper = inspect(data)
+                    if mapper is not None:
+                        for column in mapper.mapper.columns:
+                            field_name = column.key
+                            new_field_value = getattr(data, field_name, MISSING)
+                            if new_field_value is not MISSING:
+                                # Skip setting columns with defaults/onupdate to None during updates
+                                # This prevents overwriting columns that should use their defaults
+                                if new_field_value is None and column_has_defaults(column):
+                                    continue
+                                existing_field_value = getattr(existing_instance, field_name, MISSING)
+                                if existing_field_value is not MISSING and existing_field_value != new_field_value:
+                                    setattr(existing_instance, field_name, new_field_value)
 
-            instance = self._attach_to_session(existing_instance, strategy="merge")
+                        # Handle relationships by merging objects into session first
+                        with contextlib.suppress(MissingGreenlet):
+                            for relationship in mapper.mapper.relationships:
+                                if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
+                                    if isinstance(new_value, list):
+                                        merged_values = [  # pyright: ignore
+                                            self.session.merge(item, load=False)  # pyright: ignore
+                                            for item in new_value  # pyright: ignore
+                                        ]
+                                        setattr(existing_instance, relationship.key, merged_values)
+                                    elif new_value is not None:
+                                        merged_value = self.session.merge(new_value, load=False)
+                                        setattr(existing_instance, relationship.key, merged_value)
+                                    else:
+                                        setattr(existing_instance, relationship.key, new_value)
 
-            if mapper is not None:
-                for relationship in mapper.mapper.relationships:
-                    if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
-                        with contextlib.suppress(MissingGreenlet), self.session.no_autoflush:
-                            if isinstance(new_value, list):
-                                merged_values: list[Any] = [
-                                    self.session.merge(item, load=False)  # pyright: ignore
-                                    for item in new_value  # pyright: ignore
-                                ]
-                                setattr(instance, relationship.key, merged_values)
-                            elif new_value is not None:
-                                merged_value: Any = self.session.merge(new_value, load=False)
-                                setattr(instance, relationship.key, merged_value)
-                            else:
-                                setattr(instance, relationship.key, new_value)
+                instance = self._attach_to_session(existing_instance, strategy="merge")
+
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(
                 instance,
