@@ -32,7 +32,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy import func as sql_func
-from sqlalchemy.exc import NoInspectionAvailable
+from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 from sqlalchemy.orm import InstrumentedAttribute
@@ -1485,6 +1485,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             existing_instance = await self.get(
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
+            mapper = None
             with contextlib.suppress(NoInspectionAvailable):
                 mapper = inspect(data)
                 if mapper is not None:
@@ -1501,6 +1502,22 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                                 setattr(existing_instance, field_name, new_field_value)
 
             instance = await self._attach_to_session(existing_instance, strategy="merge")
+
+            if mapper is not None:
+                for relationship in mapper.mapper.relationships:
+                    if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
+                        with contextlib.suppress(MissingGreenlet), self.session.no_autoflush:
+                            if isinstance(new_value, list):
+                                merged_values: list[Any] = [
+                                    await self.session.merge(item, load=False)  # pyright: ignore
+                                    for item in new_value  # pyright: ignore
+                                ]
+                                setattr(instance, relationship.key, merged_values)
+                            elif new_value is not None:
+                                merged_value: Any = await self.session.merge(new_value, load=False)
+                                setattr(instance, relationship.key, merged_value)
+                            else:
+                                setattr(instance, relationship.key, new_value)
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 instance,
