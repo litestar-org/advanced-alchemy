@@ -457,3 +457,394 @@ You can upgrade a database to the latest version by running the following comman
 .. code-block:: shell-session
 
     $ litestar database upgrade
+
+Session Middleware
+------------------
+
+Advanced Alchemy provides SQLAlchemy-based session backends for Litestar's server-side session middleware. This allows you to store session data in your existing SQLAlchemy database instead of using external stores like Redis or file-based storage.
+
+Overview
+^^^^^^^^
+
+The SQLAlchemy session backend provides:
+
+- **Database persistence**: Session data is stored in your SQLAlchemy database
+- **Automatic expiration**: Built-in session expiration handling
+- **Both sync and async support**: Works with both sync and async SQLAlchemy configurations
+- **UUID-based sessions**: Uses UUIDv7 for session identifiers
+- **Timezone-aware timestamps**: Proper handling of session expiration times
+
+Quick Setup
+^^^^^^^^^^^
+
+To use the SQLAlchemy session backend, you need to:
+
+1. Create a session model using the provided mixin
+2. Configure the SQLAlchemy session backend
+3. Register the session middleware with your Litestar application
+
+.. code-block:: python
+
+    from litestar import Litestar
+    from litestar.middleware.session.server_side import ServerSideSessionConfig
+    from litestar.plugins.sqlalchemy import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+    from advanced_alchemy.extensions.litestar.session import (
+        SessionModelMixin,
+        SQLAlchemyAsyncSessionBackend,
+    )
+
+    # 1. Create your session model
+    class UserSession(SessionModelMixin):
+        __tablename__ = "user_sessions"
+
+    # 2. Configure SQLAlchemy
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="postgresql+asyncpg://user:password@localhost/mydb",
+        create_all=True,
+    )
+
+    # 3. Configure session backend
+    session_config = ServerSideSessionConfig(
+        secret="your-secret-key-here",  # Use a secure secret in production
+        max_age=3600,  # 1 hour
+    )
+
+    # 4. Create the session backend
+    session_backend = SQLAlchemyAsyncSessionBackend(
+        config=session_config,
+        alchemy_config=sqlalchemy_config,
+        model=UserSession,
+    )
+
+    # 5. Create your Litestar app
+    app = Litestar(
+        route_handlers=[],
+        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)],
+        middleware=[session_config.middleware],
+    )
+
+Session Model Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The session model must inherit from ``SessionModelMixin``, which provides the required fields and database constraints:
+
+.. code-block:: python
+
+    from advanced_alchemy.extensions.litestar.session import SessionModelMixin
+
+    class UserSession(SessionModelMixin):
+        __tablename__ = "user_sessions"
+
+        # The mixin provides these fields automatically:
+        # - id: UUIDv7 primary key
+        # - session_id: String(255) session identifier
+        # - data: LargeBinary session data
+        # - expires_at: DateTime expiration timestamp
+        # - created_at, updated_at: Audit timestamps
+
+The ``SessionModelMixin`` automatically creates:
+
+- A unique constraint on ``session_id`` (or unique index for Spanner)
+- An index on ``expires_at`` for efficient cleanup
+- Hybrid properties for checking expiration status
+
+Advanced Configuration
+^^^^^^^^^^^^^^^^^^^^^^
+
+**Custom Table Arguments**
+
+You can customize table arguments while keeping the mixin's constraints:
+
+.. code-block:: python
+
+    from sqlalchemy import Index
+    from advanced_alchemy.extensions.litestar.session import SessionModelMixin
+
+    class UserSession(SessionModelMixin):
+        __tablename__ = "user_sessions"
+
+        @declared_attr.directive
+        @classmethod
+        def __table_args__(cls):
+            # Get the mixin's default constraints
+            base_args = super().__table_args__()
+            # Add your custom indexes/constraints
+            return base_args + (
+                Index("ix_user_sessions_custom", cls.session_id, cls.created_at),
+            )
+
+**Sync vs Async Configuration**
+
+For synchronous SQLAlchemy configurations, use ``SQLAlchemySyncSessionBackend``:
+
+.. code-block:: python
+
+    from litestar.plugins.sqlalchemy import SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.litestar.session import SQLAlchemySyncSessionBackend
+
+    # Sync configuration
+    sqlalchemy_config = SQLAlchemySyncConfig(
+        connection_string="postgresql://user:password@localhost/mydb",
+        create_all=True,
+    )
+
+    session_backend = SQLAlchemySyncSessionBackend(
+        config=session_config,
+        alchemy_config=sqlalchemy_config,
+        model=UserSession,
+    )
+
+**Session Cleanup**
+
+Both session backends provide automatic cleanup of expired sessions:
+
+.. code-block:: python
+
+    # Clean up expired sessions
+    await session_backend.delete_expired()  # For async backend
+    # or
+    await session_backend.delete_expired()  # For sync backend (wrapped with async_)
+
+You can set up periodic cleanup using Litestar's task system or external schedulers.
+
+Using Sessions in Routes
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Once configured, sessions work exactly like other Litestar session backends:
+
+.. code-block:: python
+
+    from litestar import Litestar, get, post
+    from litestar.connection import ASGIConnection
+    from litestar.response import Response
+
+    @get("/login")
+    async def login_form() -> str:
+        return "<form method='post'><input name='username'><button>Login</button></form>"
+
+    @post("/login")
+    async def login(request: ASGIConnection) -> Response:
+        form = await request.form()
+        username = form.get("username")
+
+        # Set session data
+        request.set_session({"user_id": 123, "username": username})
+
+        return Response("Logged in!", status_code=200)
+
+    @get("/profile")
+    async def profile(request: ASGIConnection) -> dict:
+        # Access session data
+        user_id = request.session.get("user_id")
+        username = request.session.get("username")
+
+        if not user_id:
+            return {"error": "Not logged in"}
+
+        return {"user_id": user_id, "username": username}
+
+    @post("/logout")
+    async def logout(request: ASGIConnection) -> str:
+        # Clear session
+        request.clear_session()
+        return "Logged out!"
+
+Database Schema
+^^^^^^^^^^^^^^^
+
+The session table created by ``SessionModelMixin`` has the following structure:
+
+.. code-block:: sql
+
+    CREATE TABLE user_sessions (
+        id UUID PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        data BYTEA NOT NULL,
+        expires_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+
+        CONSTRAINT uq_user_sessions_session_id UNIQUE (session_id)
+    );
+
+    CREATE INDEX ix_user_sessions_expires_at ON user_sessions (expires_at);
+    CREATE INDEX ix_user_sessions_session_id_unique ON user_sessions (session_id);
+
+**Session ID Handling**
+
+- Session IDs are limited to 255 characters and automatically truncated if longer
+- UUIDv7 is used for the primary key, providing time-ordered identifiers
+- Expired sessions are automatically filtered out during retrieval
+
+Security Considerations
+^^^^^^^^^^^^^^^^^^^^^^^
+
+**Secret Key Management**
+
+Always use a secure secret key for session encryption:
+
+.. code-block:: python
+
+    import secrets
+
+    # Generate a secure random secret
+    secret_key = secrets.token_urlsafe(32)
+
+    session_config = ServerSideSessionConfig(
+        secret=secret_key,
+        max_age=3600,
+        https_only=True,  # Require HTTPS in production
+        samesite="strict",  # CSRF protection
+    )
+
+**Session Expiration**
+
+Configure appropriate session timeouts:
+
+.. code-block:: python
+
+    session_config = ServerSideSessionConfig(
+        secret="your-secret-key",
+        max_age=1800,  # 30 minutes
+        # Sessions are automatically renewed on each request
+    )
+
+**Database Security**
+
+Ensure your database connection uses proper security:
+
+- Use encrypted connections (SSL/TLS)
+- Restrict database user permissions
+- Regular security updates
+- Consider encrypting session data at rest
+
+Performance Optimization
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Indexing Strategy**
+
+The mixin automatically creates optimal indexes, but you can add application-specific indexes:
+
+.. code-block:: python
+
+    class UserSession(SessionModelMixin):
+        __tablename__ = "user_sessions"
+
+        # Add indexes for common query patterns
+        __table_args__ = SessionModelMixin.__table_args__ + (
+            Index("ix_user_sessions_created_user", "created_at", "session_id"),
+        )
+
+**Connection Pooling**
+
+Configure appropriate connection pooling for session workloads:
+
+.. code-block:: python
+
+    from sqlalchemy.pool import QueuePool
+
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="postgresql+asyncpg://user:password@localhost/mydb",
+        engine_config=EngineConfig(
+            poolclass=QueuePool,
+            pool_size=20,
+            max_overflow=30,
+            pool_pre_ping=True,
+        ),
+    )
+
+**Cleanup Strategy**
+
+Implement regular cleanup of expired sessions:
+
+.. code-block:: python
+
+    from litestar import Litestar
+    from litestar.events import BaseEventEmitter
+
+    async def cleanup_expired_sessions():
+        """Background task to clean expired sessions."""
+        await session_backend.delete_expired()
+
+    # Schedule cleanup every hour
+    app = Litestar(
+        # ... your configuration
+        on_startup=[cleanup_expired_sessions],
+    )
+
+Complete Example
+^^^^^^^^^^^^^^^^
+
+Here's a complete working example:
+
+.. code-block:: python
+
+    from litestar import Litestar, get, post
+    from litestar.connection import ASGIConnection
+    from litestar.middleware.session.server_side import ServerSideSessionConfig
+    from litestar.plugins.sqlalchemy import (
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+        SQLAlchemyPlugin,
+    )
+    from litestar.response import Template
+
+    from advanced_alchemy.extensions.litestar.session import (
+        SessionModelMixin,
+        SQLAlchemyAsyncSessionBackend,
+    )
+
+    # Session model
+    class WebSession(SessionModelMixin):
+        __tablename__ = "web_sessions"
+
+    # Database configuration
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///sessions.db",
+        session_config=AsyncSessionConfig(expire_on_commit=False),
+        create_all=True,
+    )
+
+    # Session configuration
+    session_config = ServerSideSessionConfig(
+        secret="your-super-secret-key-change-in-production",
+        max_age=3600,  # 1 hour
+    )
+
+    # Session backend
+    session_backend = SQLAlchemyAsyncSessionBackend(
+        config=session_config,
+        alchemy_config=sqlalchemy_config,
+        model=WebSession,
+    )
+
+    # Routes
+    @get("/")
+    async def home(request: ASGIConnection) -> dict:
+        username = request.session.get("username")
+        return {"message": f"Hello {username}!" if username else "Hello stranger!"}
+
+    @post("/login")
+    async def login(request: ASGIConnection) -> dict:
+        form = await request.form()
+        username = form.get("username")
+
+        if username:
+            request.set_session({"username": username, "login_time": "now"})
+            return {"message": f"Welcome {username}!"}
+
+        return {"error": "Username required"}
+
+    @post("/logout")
+    async def logout(request: ASGIConnection) -> dict:
+        request.clear_session()
+        return {"message": "Logged out successfully"}
+
+    # Application
+    app = Litestar(
+        route_handlers=[home, login, logout],
+        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)],
+        middleware=[session_config.middleware],
+    )
+
+This example provides a complete session-enabled application using SQLAlchemy for session storage.
