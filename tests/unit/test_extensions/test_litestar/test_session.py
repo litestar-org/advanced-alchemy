@@ -214,7 +214,6 @@ async def test_async_backend_get_existing_not_expired(
 ) -> None:
     """Test getting an existing, non-expired session."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    # Note: now is already set to current UTC time
     expires_at = now + datetime.timedelta(seconds=async_backend.config.max_age)
     session_data = b"session_data"
     session_id = "existing_session"
@@ -241,7 +240,6 @@ async def test_async_backend_get_existing_expired(
 ) -> None:
     """Test getting an expired session returns None and deletes it."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    # Note: now is already set to current UTC time
     expires_at = now - datetime.timedelta(seconds=1)  # Expired
     session_data = b"expired_data"
     session_id = "expired_session"
@@ -279,23 +277,21 @@ async def test_async_backend_set_new_session(
     mock_async_config: MagicMock,
     mock_session_model: type[SessionModelMixin],
     mock_async_session: MagicMock,
+    monkeypatch: MonkeyPatch,
 ) -> None:
     """Test setting a new session."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    # Note: now is already set to current UTC time
-    session_id = "new_session"
-    data = b"new_data"
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", MockDateTime(now))
 
     with patch.object(async_backend, "_get_session_obj", return_value=None) as mock_get_obj:
-        await async_backend.set(session_id, data, store=Mock())
+        await async_backend.set("new_session", b"new_data", store=Mock())
 
-        mock_get_obj.assert_awaited_once_with(db_session=mock_async_session, session_id=session_id)
-        # Check add was called with a new model instance
+        mock_get_obj.assert_awaited_once_with(db_session=mock_async_session, session_id="new_session")
         mock_async_session.add.assert_called_once()
         added_obj = mock_async_session.add.call_args[0][0]
         assert isinstance(added_obj, mock_session_model)
-        assert added_obj.session_id == session_id
-        assert added_obj.data == data
+        assert added_obj.session_id == "new_session"
+        assert added_obj.data == b"new_data"
         assert added_obj.expires_at == now + datetime.timedelta(seconds=async_backend.config.max_age)
         mock_async_session.commit.assert_awaited_once()
 
@@ -305,24 +301,22 @@ async def test_async_backend_set_update_existing_session(
     mock_async_config: MagicMock,
     mock_session_model: type[SessionModelMixin],
     mock_async_session: MagicMock,
+    monkeypatch: MonkeyPatch,
 ) -> None:
     """Test updating an existing session's data and expiry."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    # Note: now is already set to current UTC time
-    session_id = "existing_session_update"
-    old_data = b"old_data"
-    new_data = b"new_data"
-    old_expires_at = now - datetime.timedelta(seconds=10)  # Pretend it was older
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", MockDateTime(now))
 
-    mock_existing_session = mock_session_model(session_id=session_id, data=old_data, expires_at=old_expires_at)
+    mock_existing_session = mock_session_model(
+        session_id="existing_session_update", data=b"old_data", expires_at=now - datetime.timedelta(seconds=10)
+    )
 
     with patch.object(async_backend, "_get_session_obj", return_value=mock_existing_session) as mock_get_obj:
-        await async_backend.set(session_id, new_data, store=Mock())
+        await async_backend.set("existing_session_update", b"new_data", store=Mock())
 
-        mock_get_obj.assert_awaited_once_with(db_session=mock_async_session, session_id=session_id)
-        mock_async_session.add.assert_not_called()  # Should not add new
-        # Check data and expiry were updated on the existing object
-        assert mock_existing_session.data == new_data
+        mock_get_obj.assert_awaited_once_with(db_session=mock_async_session, session_id="existing_session_update")
+        mock_async_session.add.assert_not_called()
+        assert mock_existing_session.data == b"new_data"
         assert mock_existing_session.expires_at == now + datetime.timedelta(seconds=async_backend.config.max_age)
         mock_async_session.commit.assert_awaited_once()
 
@@ -389,7 +383,6 @@ async def test_async_backend_delete_expired(
     mock_async_session.__aenter__.return_value = mock_async_session
     mock_async_session.__aexit__.return_value = None
 
-    # Mock datetime.now used inside the is_expired expression
     fixed_time = datetime.datetime.now(datetime.timezone.utc)
     mock_datetime = MockDateTime(fixed_time)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
@@ -443,7 +436,6 @@ async def test_sync_backend_get_wraps_sync_call(
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
 
-    # Mock the internal sync method to check if it's called
     mock_get_sync = MagicMock(return_value=b"data")
     with patch.object(sync_backend, "_get_sync", mock_get_sync):
         result = await sync_backend.get(session_id, store=Mock())
@@ -548,7 +540,6 @@ def test_sync_backend_internal_get_sync_existing_not_expired(
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
 
-    # Mock _get_session_obj called by _get_sync
     with patch.object(sync_backend, "_get_session_obj", return_value=mock_session_obj) as mock_get_obj:
         result = sync_backend._get_sync(session_id)  # pyright: ignore [reportPrivateUsage]
 

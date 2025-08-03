@@ -276,7 +276,6 @@ async def test_store_get_async(
 
     # Set up the mock to return the expected value directly
     mock_result = MagicMock()
-    # When scalar_one_or_none() is called, it should return the expected value directly, not a coroutine
     mock_result.scalar_one_or_none.return_value = expected_value
     mock_async_session.execute.return_value = mock_result
 
@@ -377,7 +376,6 @@ async def test_store_exists_async(
 
     # Set up the mock to return a value directly
     mock_result = MagicMock()
-    # When scalar_one_or_none() is called, it should return "exists" directly, not a coroutine
     mock_result.scalar_one_or_none.return_value = "exists"
     mock_async_session.execute.return_value = mock_result
 
@@ -407,21 +405,18 @@ async def test_store_expires_in_async(
     async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock, monkeypatch: MonkeyPatch
 ) -> None:
     """Test getting expiration time using async store."""
-    key = "test_key"
     now = datetime.datetime.now(datetime.timezone.utc)
     expires_at = now + datetime.timedelta(seconds=3600)
-    mock_datetime = MockDateTime(now)
-    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", mock_datetime)
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", MockDateTime(now))
 
     # Set up the mock to return the expiration time directly
     mock_result = MagicMock()
-    # When scalar_one_or_none() is called, it should return expires_at directly, not a coroutine
     mock_result.scalar_one_or_none.return_value = expires_at
     mock_async_session.execute.return_value = mock_result
 
     # Use the async context manager to get the session
     async with async_store:
-        result = await async_store.expires_in(key)
+        result = await async_store.expires_in("test_key")
         assert result == 3600
         assert mock_async_session.execute.called
 
