@@ -32,6 +32,7 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
 )
+from advanced_alchemy.repository._util import column_has_defaults
 from advanced_alchemy.service.typing import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -758,19 +759,20 @@ async def test_sqlalchemy_repo_update(
     """Test the sequence of repo calls for update operation."""
     id_ = 3
     mock_instance = MagicMock()
+    existing_instance = MagicMock()
     mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
-    mocker.patch.object(mock_repo, "get")
-    mock_repo.session.merge.return_value = mock_instance  # pyright: ignore[reportFunctionMemberAccess]
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
 
     instance = await maybe_async(mock_repo.update(mock_instance))
 
-    assert instance is mock_instance
-    mock_repo.session.merge.assert_called_once_with(mock_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    assert instance is existing_instance
+    mock_repo.session.merge.assert_called_once_with(existing_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.refresh.assert_called_once_with(  # pyright: ignore[reportFunctionMemberAccess]
-        instance=mock_instance,
+        instance=existing_instance,
         attribute_names=None,
         with_for_update=None,
     )
@@ -1076,3 +1078,243 @@ def test_is_schema_or_dict() -> None:
     assert not is_schema_or_dict_with_field(msgspec_struct, "name2")
     assert is_schema_or_dict_without_field(pydantic_model, "name2")
     assert not is_schema_or_dict_without_field(msgspec_struct, "name")
+
+
+# Tests for new methods added in id-attribute-update branch
+
+
+def test_async_type_must_use_in_empty_values(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test that empty values return False."""
+    assert mock_repo._type_must_use_in_instead_of_any([]) is False
+
+
+def test_sync_type_must_use_in_empty_values(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test that empty values return False."""
+    assert sync_mock_repo._type_must_use_in_instead_of_any([]) is False
+
+
+def test_async_safe_types_with_field_type(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test safe types with valid field type."""
+    # Mock field type with python_type
+    mock_field_type = MagicMock()
+    mock_field_type.python_type = str
+
+    values = ["test", "another_string"]
+    result = mock_repo._type_must_use_in_instead_of_any(values, mock_field_type)
+    assert result is False
+
+
+def test_sync_type_mismatch_with_field_type(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test type mismatch triggers IN() usage."""
+    # Mock field type expecting strings
+    mock_field_type = MagicMock()
+    mock_field_type.python_type = str
+
+    # Pass integers when expecting strings
+    values = [1, 2, 3]
+    result = sync_mock_repo._type_must_use_in_instead_of_any(values, mock_field_type)
+    assert result is True
+
+
+def test_async_field_type_none_python_type(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test behavior when field_type.python_type is None."""
+    mock_field_type = MagicMock()
+    mock_field_type.python_type = None
+
+    values = [{"complex": "object"}]  # Non-safe type
+    result = mock_repo._type_must_use_in_instead_of_any(values, mock_field_type)
+    assert result is True  # Should use fallback logic
+
+
+def test_sync_field_type_no_python_type_attr(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test behavior when field_type has no python_type attribute."""
+    # Create object without python_type attribute
+    mock_field_type = object()
+
+    values = [{"complex": "object"}]  # Non-safe type
+    result = sync_mock_repo._type_must_use_in_instead_of_any(values, mock_field_type)
+    assert result is True  # Should use fallback logic for non-safe types
+
+
+def test_async_no_field_type_safe_values(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test safe values without field type information."""
+    # Test all safe types
+    safe_values = [
+        42,
+        3.14,
+        "string",
+        True,
+        b"bytes",
+        decimal.Decimal("10.5"),
+        datetime.date.today(),
+        datetime.datetime.now(),
+        datetime.time(12, 30),
+        datetime.timedelta(days=1),
+    ]
+
+    result = mock_repo._type_must_use_in_instead_of_any(safe_values)
+    assert result is False
+
+
+def test_sync_no_field_type_unsafe_values(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test unsafe values without field type information."""
+    # Test unsafe types (complex objects)
+    unsafe_values = [{"key": "value"}, [1, 2, 3], {"nested": {"data": True}}]
+
+    result = sync_mock_repo._type_must_use_in_instead_of_any(unsafe_values)
+    assert result is True
+
+
+def test_async_mixed_safe_unsafe_values(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test mixed safe and unsafe values."""
+    # Mix safe and unsafe types
+    mixed_values = ["string", 42, {"unsafe": "dict"}]
+
+    result = mock_repo._type_must_use_in_instead_of_any(mixed_values)
+    assert result is True
+
+
+def test_sync_none_values_handling(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test handling of None values."""
+    # None values should be ignored in type checking
+    values_with_none = [None, "string", None, 42]
+
+    result = sync_mock_repo._type_must_use_in_instead_of_any(values_with_none)
+    assert result is False
+
+
+def test_async_empty_values(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test empty list returns empty list."""
+    result = mock_repo._get_unique_values([])
+    assert result == []
+
+
+def test_sync_hashable_values(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test hashable values deduplication."""
+    values = [1, 2, 1, 3, 2, 4]
+    result = sync_mock_repo._get_unique_values(values)
+    assert result == [1, 2, 3, 4]
+
+
+def test_async_string_values(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test string deduplication."""
+    values = ["a", "b", "a", "c", "b"]
+    result = mock_repo._get_unique_values(values)
+    assert result == ["a", "b", "c"]
+
+
+def test_sync_unhashable_values(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test unhashable values (dicts) deduplication."""
+    values = [
+        {"key": "value1"},
+        {"key": "value2"},
+        {"key": "value1"},  # duplicate
+        {"key": "value3"},
+    ]
+    result = sync_mock_repo._get_unique_values(values)
+    expected = [{"key": "value1"}, {"key": "value2"}, {"key": "value3"}]
+    assert result == expected
+
+
+def test_async_mixed_types(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    """Test mixed hashable and unhashable types."""
+    # Mix strings and dicts to trigger TypeError in set operations
+    values = ["string", {"dict": "value"}, "string", {"other": "dict"}]
+    result = mock_repo._get_unique_values(values)
+    expected = ["string", {"dict": "value"}, {"other": "dict"}]
+    assert result == expected
+
+
+def test_sync_preserves_order(sync_mock_repo: SQLAlchemySyncRepository[Any]) -> None:
+    """Test that order is preserved in deduplication."""
+    values = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]
+    result = sync_mock_repo._get_unique_values(values)
+    assert result == [3, 1, 4, 5, 9, 2, 6]
+
+
+def test_column_with_python_default() -> None:
+    """Test column with Python-side default."""
+    mock_column = MagicMock()
+    mock_column.default = "default_value"
+    mock_column.server_default = None
+    mock_column.onupdate = None
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is True
+
+
+def test_column_with_server_default() -> None:
+    """Test column with server-side default."""
+    mock_column = MagicMock()
+    mock_column.default = None
+    mock_column.server_default = "DEFAULT VALUE"
+    mock_column.onupdate = None
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is True
+
+
+def test_column_with_python_onupdate() -> None:
+    """Test column with Python-side onupdate."""
+    mock_column = MagicMock()
+    mock_column.default = None
+    mock_column.server_default = None
+    mock_column.onupdate = "update_function"
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is True
+
+
+def test_column_with_server_onupdate() -> None:
+    """Test column with server-side onupdate."""
+    mock_column = MagicMock()
+    mock_column.default = None
+    mock_column.server_default = None
+    mock_column.onupdate = None
+    mock_column.server_onupdate = "UPDATE_FUNCTION"
+
+    assert column_has_defaults(mock_column) is True
+
+
+def test_column_with_no_defaults() -> None:
+    """Test column with no defaults."""
+    mock_column = MagicMock()
+    mock_column.default = None
+    mock_column.server_default = None
+    mock_column.onupdate = None
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is False
+
+
+def test_column_with_false_default() -> None:
+    """Test column where default is False (falsy but not None)."""
+    mock_column = MagicMock()
+    mock_column.default = False  # Falsy but not None
+    mock_column.server_default = None
+    mock_column.onupdate = None
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is True
+
+
+def test_column_with_zero_default() -> None:
+    """Test column where default is 0 (falsy but not None)."""
+    mock_column = MagicMock()
+    mock_column.default = 0  # Falsy but not None
+    mock_column.server_default = None
+    mock_column.onupdate = None
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is True
+
+
+def test_column_with_empty_string_default() -> None:
+    """Test column where default is empty string (falsy but not None)."""
+    mock_column = MagicMock()
+    mock_column.default = ""  # Falsy but not None
+    mock_column.server_default = None
+    mock_column.onupdate = None
+    mock_column.server_onupdate = None
+
+    assert column_has_defaults(mock_column) is True

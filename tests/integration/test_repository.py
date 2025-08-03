@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, Table, and_, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 from time_machine import travel
 
 from advanced_alchemy import base
@@ -2032,10 +2032,12 @@ async def test_lazy_load(
     assert len(tags_to_add) > 0  # pyright: ignore
     assert tags_to_add[0].id is not None  # pyright: ignore
     update_data["tags"] = tags_to_add  # type: ignore[assignment]
-    updated_obj = await maybe_async(item_repo.update(item_model(**update_data), auto_refresh=False))
+    await maybe_async(item_repo.update(item_model(**update_data), load=[selectinload(item_repo.model_type.tags)]))
+    # Refresh the object to ensure tags are loaded before assertions
+    refreshed_obj = await maybe_async(item_repo.get(first_item_id, load=[selectinload(item_repo.model_type.tags)]))
     await maybe_async(item_repo.session.commit())
-    assert len(updated_obj.tags) > 0
-    assert updated_obj.tags[0].name == "A new tag"
+    assert len(refreshed_obj.tags) > 0
+    assert refreshed_obj.tags[0].name == "A new tag"
 
 
 async def test_repo_health_check(author_repo: AnyAuthorRepository) -> None:
