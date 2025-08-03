@@ -1,5 +1,6 @@
 import datetime
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union, cast
 
 from litestar.middleware.session.server_side import ServerSideSessionBackend, ServerSideSessionConfig
@@ -35,6 +36,9 @@ if TYPE_CHECKING:
 SQLAlchemyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 SQLAlchemyConfigT = TypeVar("SQLAlchemyConfigT", bound=SQLAlchemyConfig)
 SessionModelT = TypeVar("SessionModelT", bound="SessionModelMixin")
+
+# Session ID field limit as defined in the database schema
+SESSION_ID_MAX_LENGTH = 255
 
 
 @declarative_mixin
@@ -124,6 +128,30 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
         self._config = config
         self._alchemy = alchemy_config
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> "SQLAlchemySessionBackendBase[SQLAlchemyConfigT]":
+        """Custom deepcopy implementation to handle unpicklable SQLAlchemy objects."""
+        # Create a new instance with the same configuration
+        cls = self.__class__
+        # Create a shallow copy first
+        new_obj = cls.__new__(cls)
+        memo[id(self)] = new_obj
+
+        # Copy the ServerSideSessionConfig safely - it should be serializable
+        try:
+            new_obj._config = deepcopy(self.config, memo)  # noqa: SLF001
+        except (TypeError, AttributeError):
+            # If config can't be deep-copied, just reference the original
+            new_obj._config = self.config  # noqa: SLF001
+
+        # Model classes are safe to reference directly
+        new_obj._model = self.model  # noqa: SLF001
+
+        # SQLAlchemy config contains unpicklable objects, so we reference the original
+        # This is safe because configs are typically shared and immutable
+        new_obj._alchemy = self.alchemy  # noqa: SLF001
+
+        return new_obj
+
     def _select_session_obj(self, session_id: str) -> "Select[tuple[SessionModelMixin]]":
         return select(self._model).where(self._model.session_id == session_id)
 
@@ -181,13 +209,16 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
         Returns:
             The session data, if existing, otherwise `None`.
         """
+        session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+
         async with self.alchemy.get_session() as db_session:
             session_obj = await self._get_session_obj(db_session=db_session, session_id=session_id)
             if session_obj:
                 if not session_obj.is_expired:
+                    data = session_obj.data
                     self._update_session_expiry(session_obj)
                     await db_session.commit()
-                    return session_obj.data
+                    return data
                 await db_session.delete(session_obj)
                 await db_session.commit()
         return None
@@ -203,6 +234,8 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
             data: Serialized session data
             store: The store to store the session in (not used in this backend)
         """
+        session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+
         async with self.alchemy.get_session() as db_session:
             session_obj = await self._get_session_obj(db_session=db_session, session_id=session_id)
             if not session_obj:
@@ -219,6 +252,8 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
             session_id: The session-ID
             store: The store to delete the session from (not used in this backend)
         """
+        session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+
         async with self.alchemy.get_session() as db_session:
             await db_session.execute(delete(self._model).where(self._model.session_id == session_id))
             await db_session.commit()
@@ -243,14 +278,17 @@ class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncCo
         return db_session.scalars(self._select_session_obj(session_id)).one_or_none()
 
     def _get_sync(self, session_id: str) -> Optional[bytes]:
+        session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+
         with self.alchemy.get_session() as db_session:
             session_obj = self._get_session_obj(db_session=db_session, session_id=session_id)
 
             if session_obj:
                 if not session_obj.is_expired:
+                    data = session_obj.data
                     self._update_session_expiry(session_obj)
                     db_session.commit()
-                    return session_obj.data
+                    return data
                 db_session.delete(session_obj)
                 db_session.commit()
             return None
@@ -268,6 +306,8 @@ class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncCo
         return await async_(self._get_sync)(session_id)
 
     def _set_sync(self, session_id: str, data: bytes) -> None:
+        session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+
         with self.alchemy.get_session() as db_session:
             session_obj = self._get_session_obj(db_session=db_session, session_id=session_id)
 
@@ -292,6 +332,8 @@ class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncCo
         return await async_(self._set_sync)(session_id, data)
 
     def _delete_sync(self, session_id: str) -> None:
+        session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+
         with self.alchemy.get_session() as db_session:
             db_session.execute(delete(self._model).where(self._model.session_id == session_id))
             db_session.commit()
