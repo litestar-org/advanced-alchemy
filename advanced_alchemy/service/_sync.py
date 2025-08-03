@@ -29,6 +29,8 @@ from advanced_alchemy.service.typing import (
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,
+    asdict,
+    is_attrs_instance,
     is_dict,
     is_dto_data,
     is_msgspec_struct,
@@ -454,6 +456,20 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
         if is_dto_data(data):
             return cast("ModelT", data.create_instance())
+
+        if is_attrs_instance(data):
+            return model_from_dict(
+                model=self.model_type,
+                **asdict(data),
+            )
+
+        # Fallback for objects with __dict__ (e.g., regular classes)
+        if hasattr(data, "__dict__"):
+            return model_from_dict(
+                model=self.model_type,
+                **data.__dict__,
+            )
+
         return cast("ModelT", data)
 
     def list_and_count(
