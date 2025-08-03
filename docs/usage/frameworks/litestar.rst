@@ -27,7 +27,7 @@ First, configure the SQLAlchemy plugin with Litestar. The plugin handles databas
 .. code-block:: python
 
     from litestar import Litestar
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -50,21 +50,21 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
 
 .. code-block:: python
 
-    from __future__ import annotations
     import datetime
+    from typing import Optional
     from uuid import UUID
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column, relationship
-    from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+    from advanced_alchemy.extensions.litestar import base
 
 
-    class AuthorModel(UUIDBase):
+    class AuthorModel(base.UUIDBase):
         __tablename__ = "author"
         name: Mapped[str]
-        dob: Mapped[datetime.date | None]
+        dob: Mapped[Optional[datetime.date]]
         books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
-    class BookModel(UUIDAuditBase):
+    class BookModel(base.UUIDAuditBase):
         __tablename__ = "book"
         title: Mapped[str]
         author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
@@ -78,41 +78,25 @@ Define Pydantic schemas for input validation and response serialization:
 .. code-block:: python
 
     import datetime
-    from pydantic import BaseModel, ConfigDict
+    from pydantic import BaseModel
     from uuid import UUID
     from typing import Optional
 
-    class BaseSchema(BaseModel):
-        """Base Schema with ORM mode enabled."""
-        model_config = ConfigDict(from_attributes=True)
-
-    class Author(BaseSchema):
+    class Author(BaseModel):
         """Author response schema."""
-        id: UUID
+        id: Optional[UUID] = None
         name: str
         dob: Optional[datetime.date] = None
 
-    class AuthorCreate(BaseSchema):
+    class AuthorCreate(BaseModel):
         """Schema for creating authors."""
         name: str
         dob: Optional[datetime.date] = None
 
-    class AuthorUpdate(BaseSchema):
+    class AuthorUpdate(BaseModel):
         """Schema for updating authors."""
         name: Optional[str] = None
         dob: Optional[datetime.date] = None
-
-    class Book(BaseSchema):
-        """Book response schema with author details."""
-        id: UUID
-        title: str
-        author_id: UUID
-        author: Author
-
-    class BookCreate(BaseSchema):
-        """Schema for creating books."""
-        title: str
-        author_id: UUID
 
 Repository and Service Layer
 ----------------------------
@@ -121,15 +105,11 @@ Create repository and service classes to interact with the model:
 
 .. code-block:: python
 
-    from typing import AsyncGenerator
+    from advanced_alchemy.extensions.litestar import repository, service
 
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    class AuthorService(SQLAlchemyAsyncRepositoryService[AuthorModel]):
+    class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
         """Author service."""
-        class Repo(SQLAlchemyAsyncRepository[AuthorModel]):
+        class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
             """Author repository."""
             model_type = AuthorModel
         repository_type = Repo
@@ -145,34 +125,30 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
     from typing import Annotated
 
     from litestar import Controller, get, post, patch, delete
-    from litestar.di import Provide
     from litestar.params import Dependency, Parameter
-    from advanced_alchemy.filters import FilterTypes
-    from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
-    from advanced_alchemy.service import OffsetPagination
+    from advanced_alchemy.extensions.litestar import filters, providers, service
 
     class AuthorController(Controller):
         """Author CRUD endpoints."""
 
-        path = "/authors"
-        dependencies = create_service_dependencies(
+        dependencies = providers.create_service_dependencies(
             AuthorService,
-            key="authors_service",
-            filters={"id_filter": UUID, "pagination_type": "limit_offset", "search": "name"}
+            "authors_service",
+            load=[AuthorModel.books],
+            filters={"pagination_type": "limit_offset", "id_filter": UUID, "search": "name", "search_ignore_case": True},
         )
-        tags = ["Authors"]
 
-        @get()
+        @get(path="/authors")
         async def list_authors(
             self,
             authors_service: AuthorService,
-            filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
-        ) -> OffsetPagination[Author]:
+            filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+        ) -> service.OffsetPagination[Author]:
             """List all authors with pagination."""
             results, total = await authors_service.list_and_count(*filters)
-            return authors_service.to_schema(results, total, filters,schema_type=Author)
+            return authors_service.to_schema(results, total, filters=filters, schema_type=Author)
 
-        @post()
+        @post(path="/authors")
         async def create_author(
             self,
             authors_service: AuthorService,
@@ -180,9 +156,9 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
         ) -> Author:
             """Create a new author."""
             obj = await authors_service.create(data)
-            return authors_service.to_schema(data=obj, schema_type=Author)
+            return authors_service.to_schema(obj, schema_type=Author)
 
-        @get(path="/{author_id:uuid}")
+        @get(path="/authors/{author_id:uuid}")
         async def get_author(
             self,
             authors_service: AuthorService,
@@ -193,9 +169,9 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
         ) -> Author:
             """Get an existing author."""
             obj = await authors_service.get(author_id)
-            return authors_service.to_schema(data=obj, schema_type=Author)
+            return authors_service.to_schema(obj, schema_type=Author)
 
-        @patch(path="/{author_id:uuid}")
+        @patch(path="/authors/{author_id:uuid}")
         async def update_author(
             self,
             authors_service: AuthorService,
@@ -206,10 +182,10 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
             ),
         ) -> Author:
             """Update an author."""
-            obj = await authors_service.update(data=data, item_id=author_id)
+            obj = await authors_service.update(data, item_id=author_id, auto_commit=True)
             return authors_service.to_schema(obj, schema_type=Author)
 
-        @delete(path="/{author_id:uuid}")
+        @delete(path="/authors/{author_id:uuid}")
         async def delete_author(
             self,
             authors_service: AuthorService,
@@ -229,24 +205,22 @@ Finally, configure your Litestar application with the plugin and dependencies:
 .. code-block:: python
 
     from litestar import Litestar
-    from litestar.di import Provide
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
     )
-    from advanced_alchemy.filters import FilterTypes, LimitOffset
 
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+
     app = Litestar(
         route_handlers=[AuthorController],
-        plugins=[alchemy]
+        plugins=[SQLAlchemyPlugin(config=alchemy)],
     )
 
 Database Sessions
@@ -848,3 +822,345 @@ Here's a complete working example:
     )
 
 This example provides a complete session-enabled application using SQLAlchemy for session storage.
+
+File Object Storage
+===================
+
+Advanced Alchemy provides built-in support for file storage with various backends. Here's how to handle file uploads and storage:
+
+.. code-block:: python
+
+    from typing import Annotated, Any, Optional, Union
+    from uuid import UUID
+
+    from litestar import Controller, Litestar, delete, get, patch, post
+    from litestar.datastructures import UploadFile
+    from litestar.params import Dependency
+    from pydantic import BaseModel, Field, computed_field
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.extensions.litestar import (
+        AsyncSessionConfig,
+        SQLAlchemyAsyncConfig,
+        SQLAlchemyPlugin,
+        base,
+        filters,
+        providers,
+        repository,
+        service,
+    )
+    from advanced_alchemy.types import FileObject, storages
+    from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+    from advanced_alchemy.types.file_object.data_type import StoredObject
+
+    # Configure file storage backend
+    s3_backend = ObstoreBackend(
+        key="local",
+        fs="s3://static-files/",
+        aws_endpoint="http://localhost:9000",
+        aws_access_key_id="minioadmin",
+        aws_secret_access_key="minioadmin",
+    )
+    storages.register_backend(s3_backend)
+
+    # Model with file storage
+    class DocumentModel(base.UUIDBase):
+        __tablename__ = "document"
+
+        name: Mapped[str]
+        file: Mapped[FileObject] = mapped_column(StoredObject(backend="local"))
+
+    # Schema with file URL generation
+    class Document(BaseModel):
+        id: Optional[UUID] = None
+        name: str
+        file: Optional[FileObject] = Field(default=None, exclude=True)
+
+        @computed_field
+        def file_url(self) -> Optional[Union[str, list[str]]]:
+            if self.file is None:
+                return None
+            return self.file.sign()
+
+    # Service
+    class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
+        """Document repository."""
+
+        class Repo(repository.SQLAlchemyAsyncRepository[DocumentModel]):
+            """Document repository."""
+            model_type = DocumentModel
+
+        repository_type = Repo
+
+    # Controller with file handling
+    class DocumentController(Controller):
+        path = "/documents"
+        dependencies = providers.create_service_dependencies(
+            DocumentService,
+            "documents_service",
+            load=[DocumentModel.file],
+            filters={
+                "pagination_type": "limit_offset",
+                "id_filter": UUID,
+                "search": "name",
+                "search_ignore_case": True
+            },
+        )
+
+        @get(path="/", response_model=service.OffsetPagination[Document])
+        async def list_documents(
+            self,
+            documents_service: DocumentService,
+            filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+        ) -> service.OffsetPagination[Document]:
+            results, total = await documents_service.list_and_count(*filters)
+            return documents_service.to_schema(results, total, filters=filters, schema_type=Document)
+
+        @post(path="/")
+        async def create_document(
+            self,
+            documents_service: DocumentService,
+            name: str,
+            file: Annotated[Optional[UploadFile], None] = None,
+        ) -> Document:
+            obj = await documents_service.create(
+                DocumentModel(
+                    name=name,
+                    file=FileObject(
+                        backend="local",
+                        filename=file.filename or "uploaded_file",
+                        content_type=file.content_type,
+                        content=await file.read(),
+                    )
+                    if file
+                    else None,
+                )
+            )
+            return documents_service.to_schema(obj, schema_type=Document)
+
+        @get(path="/{document_id:uuid}")
+        async def get_document(
+            self,
+            documents_service: DocumentService,
+            document_id: UUID,
+        ) -> Document:
+            obj = await documents_service.get(document_id)
+            return documents_service.to_schema(obj, schema_type=Document)
+
+        @patch(path="/{document_id:uuid}")
+        async def update_document(
+            self,
+            documents_service: DocumentService,
+            document_id: UUID,
+            name: Optional[str] = None,
+            file: Annotated[Optional[UploadFile], None] = None,
+        ) -> Document:
+            update_data: dict[str, Any] = {}
+            if name is not None:
+                update_data["name"] = name
+            if file is not None:
+                update_data["file"] = FileObject(
+                    backend="local",
+                    filename=file.filename or "uploaded_file",
+                    content_type=file.content_type,
+                    content=await file.read(),
+                )
+
+            obj = await documents_service.update(update_data, item_id=document_id)
+            return documents_service.to_schema(obj, schema_type=Document)
+
+        @delete(path="/{document_id:uuid}")
+        async def delete_document(
+            self,
+            documents_service: DocumentService,
+            document_id: UUID,
+        ) -> None:
+            _ = await documents_service.delete(document_id)
+
+    # Application setup
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///test.sqlite",
+        session_config=AsyncSessionConfig(expire_on_commit=False),
+        before_send_handler="autocommit",
+        create_all=True,
+    )
+    app = Litestar(
+        route_handlers=[DocumentController],
+        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)]
+    )
+
+File storage features:
+
+- **Multiple backends**: Local filesystem, S3, GCS, Azure and other object storage
+- **Automatic URL signing**: Generate secure, time-limited URLs for file access
+- **Content type detection**: Automatic MIME type handling
+- **File validation**: Built-in validation for file types and sizes
+- **Metadata storage**: Store file metadata alongside binary data
+
+**Supported Storage Backends**:
+
+- **Local filesystem**: For development and simple deployments
+- **Cloud Storage Integration**: For production object storage
+- **Memory**: For testing and temporary storage
+- **Custom backends**: Implement your own storage backend
+
+Alternative Patterns
+====================
+
+.. collapse:: Repository-Only Pattern
+
+   If for some reason you don't want to use the service layer abstraction, you can use repositories directly. This approach removes the services abstraction, but still offers the benefits of Advanced Alchemy's repository features:
+
+   .. code-block:: python
+
+       from __future__ import annotations
+
+       import datetime
+       from typing import TYPE_CHECKING, Optional
+       from uuid import UUID
+
+       from litestar import Controller, Litestar, delete, get, patch, post
+       from litestar.di import Provide
+       from litestar.pagination import OffsetPagination
+       from litestar.params import Parameter
+       from pydantic import BaseModel, TypeAdapter
+       from sqlalchemy import ForeignKey
+       from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+       from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+       from advanced_alchemy.config import AsyncSessionConfig
+       from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+       from advanced_alchemy.filters import LimitOffset
+       from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
+       if TYPE_CHECKING:
+           from sqlalchemy.ext.asyncio import AsyncSession
+
+       class BaseModel(BaseModel):
+           """Extend Pydantic's BaseModel to enable ORM mode"""
+           model_config = {"from_attributes": True}
+
+       # Models
+       class AuthorModel(UUIDBase):
+           __tablename__ = "author"
+           name: Mapped[str]
+           dob: Mapped[Optional[datetime.date]]
+           books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+
+       # Repository
+       class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
+           """Author repository."""
+           model_type = AuthorModel
+
+       # Dependency providers
+       async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
+           """This provides the default Authors repository."""
+           return AuthorRepository(session=db_session)
+
+       async def provide_author_details_repo(db_session: AsyncSession) -> AuthorRepository:
+           """Repository with eager loading for author details."""
+           return AuthorRepository(load=[AuthorModel.books], session=db_session)
+
+       def provide_limit_offset_pagination(
+           current_page: int = Parameter(ge=1, query="currentPage", default=1, required=False),
+           page_size: int = Parameter(query="pageSize", ge=1, default=10, required=False),
+       ) -> LimitOffset:
+           """Add offset/limit pagination."""
+           return LimitOffset(page_size, page_size * (current_page - 1))
+
+       # Controller
+       class AuthorController(Controller):
+           """Author CRUD using repository pattern."""
+
+           dependencies = {"authors_repo": Provide(provide_authors_repo)}
+
+           @get(path="/authors")
+           async def list_authors(
+               self,
+               authors_repo: AuthorRepository,
+               limit_offset: LimitOffset,
+           ) -> OffsetPagination[Author]:
+               """List authors with pagination."""
+               results, total = await authors_repo.list_and_count(limit_offset)
+               type_adapter = TypeAdapter(list[Author])
+               return OffsetPagination[Author](
+                   items=type_adapter.validate_python(results),
+                   total=total,
+                   limit=limit_offset.limit,
+                   offset=limit_offset.offset,
+               )
+
+           @post(path="/authors")
+           async def create_author(
+               self,
+               authors_repo: AuthorRepository,
+               data: AuthorCreate,
+           ) -> Author:
+               """Create a new author."""
+               obj = await authors_repo.add(
+                   AuthorModel(**data.model_dump(exclude_unset=True, exclude_none=True)),
+               )
+               await authors_repo.session.commit()
+               return Author.model_validate(obj)
+
+           @get(
+               path="/authors/{author_id:uuid}",
+               dependencies={"authors_repo": Provide(provide_author_details_repo)}
+           )
+           async def get_author(
+               self,
+               authors_repo: AuthorRepository,
+               author_id: UUID = Parameter(title="Author ID", description="The author to retrieve."),
+           ) -> Author:
+               """Get an existing author with details."""
+               obj = await authors_repo.get(author_id)
+               return Author.model_validate(obj)
+
+           @patch(
+               path="/authors/{author_id:uuid}",
+               dependencies={"authors_repo": Provide(provide_author_details_repo)},
+           )
+           async def update_author(
+               self,
+               authors_repo: AuthorRepository,
+               data: AuthorUpdate,
+               author_id: UUID = Parameter(title="Author ID", description="The author to update."),
+           ) -> Author:
+               """Update an author."""
+               raw_obj = data.model_dump(exclude_unset=True, exclude_none=True)
+               raw_obj.update({"id": author_id})
+               obj = await authors_repo.update(AuthorModel(**raw_obj))
+               await authors_repo.session.commit()
+               return Author.model_validate(obj)
+
+           @delete(path="/authors/{author_id:uuid}")
+           async def delete_author(
+               self,
+               authors_repo: AuthorRepository,
+               author_id: UUID = Parameter(title="Author ID", description="The author to delete."),
+           ) -> None:
+               """Delete an author from the system."""
+               _ = await authors_repo.delete(author_id)
+               await authors_repo.session.commit()
+
+       # Application setup
+       session_config = AsyncSessionConfig(expire_on_commit=False)
+       sqlalchemy_config = SQLAlchemyAsyncConfig(
+           connection_string="sqlite+aiosqlite:///test.sqlite",
+           session_config=session_config,
+           create_all=True,
+       )
+       sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
+
+       app = Litestar(
+           route_handlers=[AuthorController],
+           plugins=[sqlalchemy_plugin],
+           dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
+       )
+
+   This pattern is useful when you:
+
+   - Need direct control over database transactions
+   - Want to avoid the service layer abstraction
+   - Have complex repository logic that doesn't fit the service pattern
+   - Are building a smaller application with simpler data access patterns

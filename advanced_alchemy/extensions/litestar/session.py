@@ -105,7 +105,7 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
 
     Notes:
         - Requires `sqlalchemy` which needs to be installed separately, and a configured
-        [SQLAlchemyPlugin][starlite.plugins.sql_alchemy.SQLAlchemyPlugin].
+          SQLAlchemyPlugin.
     """
 
     __slots__ = ("_model", "_session_maker")
