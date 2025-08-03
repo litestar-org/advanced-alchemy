@@ -95,7 +95,7 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
 
     def clear(self) -> None:
         self._pending_removed.update(self)
-        list.clear(self)  # type: ignore[arg-type] # pyright: ignore[reportUnknownMemberType]
+        list.clear(self)  # pyright: ignore[reportUnknownMemberType]
         self.changed()
 
     def sort(self, **kw: "Any") -> None:
@@ -103,7 +103,7 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
         self.changed()
 
     def reverse(self) -> None:
-        list.reverse(self)  # type: ignore[arg-type]  # pyright: ignore[reportUnknownMemberType]
+        list.reverse(self)  # pyright: ignore[reportUnknownMemberType]
         self.changed()
 
     def _finalize_pending(self) -> None:

@@ -22,7 +22,7 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.11.13"
+    rev: "v0.12.7"
     hooks:
       # Run the linter.
       - id: ruff
@@ -39,10 +39,3 @@ repos:
     rev: "v1.0.0"
     hooks:
       - id: sphinx-lint
-  - repo: local
-    hooks:
-      - id: pypi-readme
-        name: pypi-readme
-        language: python
-        entry: python tools/pypi_readme.py
-        types: [markdown]

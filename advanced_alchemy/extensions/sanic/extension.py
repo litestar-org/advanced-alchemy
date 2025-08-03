@@ -1,4 +1,3 @@
-# ruff: noqa: PLR0904
 from collections.abc import AsyncGenerator, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload

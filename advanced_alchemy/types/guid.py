@@ -1,4 +1,3 @@
-# ruff: noqa: FA100
 from base64 import b64decode
 from importlib.util import find_spec
 from typing import Any, Optional, Union, cast

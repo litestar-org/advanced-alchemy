@@ -45,7 +45,7 @@ def checkout(branch: str, skip: bool = False) -> Generator[None]:
         subprocess.run(["git", "checkout", branch], check=True)  # noqa: S603, S607
     yield
     if not skip:
-        subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S603, S607
+        subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S607
 
 
 def load_version_spec() -> VersionSpec:
@@ -61,7 +61,7 @@ def build(output_dir: str, version: str | None) -> None:
     else:
         os.environ["_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION"] = version
 
-    subprocess.run(["make", "docs"], check=True)  # noqa: S603, S607
+    subprocess.run(["make", "docs"], check=True)  # noqa: S607
 
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     Path(output_dir).joinpath(".nojekyll").touch(exist_ok=True)

@@ -64,7 +64,7 @@ def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modifi
         return str(etag)
     if file_object.etag is not None:
         return file_object.etag
-    return create_etag_for_file(file_object.path, modified_time, info.get("size", file_object.size))
+    return create_etag_for_file(file_object.path, modified_time, info.get("size", file_object.size))  # type: ignore[arg-type]
 
 
 def create_etag_for_file(path: "PathLike", modified_time: Optional[float], file_size: int) -> str:

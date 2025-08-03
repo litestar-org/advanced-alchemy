@@ -142,9 +142,11 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
 
 .. code-block:: python
 
+    from typing import Annotated
+
     from litestar import Controller, get, post, patch, delete
     from litestar.di import Provide
-    from litestar.params import Parameter
+    from litestar.params import Dependency, Parameter
     from advanced_alchemy.filters import FilterTypes
     from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
     from advanced_alchemy.service import OffsetPagination
@@ -164,7 +166,7 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
         async def list_authors(
             self,
             authors_service: AuthorService,
-            filters: list[FilterTypes],
+            filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
         ) -> OffsetPagination[Author]:
             """List all authors with pagination."""
             results, total = await authors_service.list_and_count(*filters)

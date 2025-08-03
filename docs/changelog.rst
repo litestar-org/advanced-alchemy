@@ -3,6 +3,23 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.4.5
+    :date: 2025-06-28
+
+    .. change:: add the DefaultBase class to __all__
+        :type: feature
+        :pr: 482
+        :issue: 481
+
+        Adds [`DefaultBase`](https://github.com/litestar-org/advanced-alchemy/blob/6cc26ef8d53bc04f89a070337f8b0ab07a1bac46/advanced_alchemy/base.py#L517) class to `__all__` to match other public classes in the module.
+
+    .. change:: Update list and count
+        :type: bugfix
+        :pr: 487
+
+        Minor adjustment to the list and count method
+
+
 .. changelog:: 1.4.4
     :date: 2025-05-26
 

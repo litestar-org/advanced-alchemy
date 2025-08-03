@@ -1,3 +1,6 @@
+import contextlib
+import datetime
+import decimal
 import random
 import string
 from collections.abc import Iterable, Sequence
@@ -22,12 +25,14 @@ from sqlalchemy import (
     Update,
     any_,
     delete,
+    inspect,
     over,
     select,
     text,
     update,
 )
 from sqlalchemy import func as sql_func
+from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 from sqlalchemy.orm import InstrumentedAttribute
@@ -43,6 +48,7 @@ from advanced_alchemy.repository._util import (
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
+    column_has_defaults,
     get_abstract_loader_options,
     get_instrumented_attr,
 )
@@ -55,6 +61,18 @@ if TYPE_CHECKING:
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
+DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
+    int,
+    float,
+    str,
+    bool,
+    bytes,
+    decimal.Decimal,
+    datetime.date,
+    datetime.datetime,
+    datetime.time,
+    datetime.timedelta,
+}
 
 
 @runtime_checkable
@@ -496,6 +514,65 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             bool: The uniquify value to use.
         """
         return bool(uniquify) if uniquify is not None else self._uniquify
+
+    def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
+        """Determine if field.in_() should be used instead of any_() for compatibility.
+
+        Uses SQLAlchemy's type introspection to detect types that may have DBAPI
+        serialization issues with the ANY() operator. Checks if actual values match
+        the column's expected python_type - mismatches indicate complex types that
+        need the safer IN() operator. Falls back to Python type checking when
+        SQLAlchemy type information is unavailable.
+
+        Args:
+            matched_values: Values to be used in the filter
+            field_type: Optional SQLAlchemy TypeEngine from the column
+
+        Returns:
+            bool: True if field.in_() should be used instead of any_()
+        """
+        if not matched_values:
+            return False
+
+        if field_type is not None:
+            try:
+                expected_python_type = getattr(field_type, "python_type", None)
+                if expected_python_type is not None:
+                    for value in matched_values:
+                        if value is not None and not isinstance(value, expected_python_type):
+                            return True
+            except (AttributeError, NotImplementedError):
+                return True
+
+        return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
+
+    def _get_unique_values(self, values: "list[Any]") -> "list[Any]":
+        """Get unique values from a list, handling unhashable types safely.
+
+        Args:
+            values: List of values to deduplicate
+
+        Returns:
+            list[Any]: List of unique values preserving order
+        """
+        if not values:
+            return []
+
+        try:
+            # Fast path for hashable types
+            seen: set[Any] = set()
+            unique_values: list[Any] = []
+            for value in values:
+                if value not in seen:
+                    unique_values.append(value)
+                    seen.add(value)
+        except TypeError:
+            # Fallback for unhashable types (e.g., dicts from JSONB)
+            unique_values = []
+            for value in values:
+                if value not in unique_values:
+                    unique_values.append(value)
+        return unique_values
 
     @staticmethod
     def _get_error_messages(
@@ -974,9 +1051,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = statement.execution_options(**execution_options)
         if supports_returning and statement_type != "select":
             statement = cast("ReturningDelete[tuple[ModelT]]", statement.returning(model_type))  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
-        if self._prefer_any:
-            return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
-        return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
+        use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(id_chunk, id_attribute.type)
+        if use_in:
+            return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
 
     async def get(
         self,
@@ -1403,10 +1482,45 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 data,
                 id_attribute=id_attribute,
             )
-            # this will raise for not found, and will put the item in the session
-            await self.get(item_id, id_attribute=id_attribute, load=load, execution_options=execution_options)
-            # this will merge the inbound data to the instance we just put in the session
-            instance = await self._attach_to_session(data, strategy="merge")
+            existing_instance = await self.get(
+                item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
+            )
+            mapper = None
+            with (
+                self.session.no_autoflush,
+                contextlib.suppress(MissingGreenlet, NoInspectionAvailable),
+            ):
+                mapper = inspect(data)
+                if mapper is not None:
+                    for column in mapper.mapper.columns:
+                        field_name = column.key
+                        new_field_value = getattr(data, field_name, MISSING)
+                        if new_field_value is not MISSING:
+                            # Skip setting columns with defaults/onupdate to None during updates
+                            # This prevents overwriting columns that should use their defaults
+                            if new_field_value is None and column_has_defaults(column):
+                                continue
+                            existing_field_value = getattr(existing_instance, field_name, MISSING)
+                            if existing_field_value is not MISSING and existing_field_value != new_field_value:
+                                setattr(existing_instance, field_name, new_field_value)
+
+                    # Handle relationships by merging objects into session first
+                    for relationship in mapper.mapper.relationships:
+                        if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
+                            if isinstance(new_value, list):
+                                merged_values = [  # pyright: ignore
+                                    await self.session.merge(item, load=False)  # pyright: ignore
+                                    for item in new_value  # pyright: ignore
+                                ]
+                                setattr(existing_instance, relationship.key, merged_values)
+                            elif new_value is not None:
+                                merged_value = await self.session.merge(new_value, load=False)
+                                setattr(existing_instance, relationship.key, merged_value)
+                            else:
+                                setattr(existing_instance, relationship.key, new_value)
+
+            instance = await self._attach_to_session(existing_instance, strategy="merge")
+
             await self._flush_or_commit(auto_commit=auto_commit)
             await self._refresh(
                 instance,
@@ -1707,6 +1821,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 ),
             )
             count = count_result.scalar_one()
+            if count == 0:
+                return [], 0
             result = await self._execute(statement, uniquify=loader_options_have_wildcard)
             instances: list[ModelT] = []
             for (instance,) in result:
@@ -1868,7 +1984,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 matched_values = [
                     field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
                 ]
-                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
+                # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
+                use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(matched_values, field.type)
+                match_filter.append(field.in_(matched_values) if use_in else any_(matched_values) == field)  # type: ignore[arg-type]
 
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
@@ -1881,10 +1999,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
-                matched_values = list(
-                    {getattr(datum, field_name) for datum in existing_objs if datum},  # ensure the list is unique
-                )
-                match_filter.append(any_(matched_values) == field if self._prefer_any else field.in_(matched_values))  # type: ignore[arg-type]
+                # Safe deduplication that handles unhashable types (e.g., JSONB dicts)
+                all_values = [getattr(datum, field_name) for datum in existing_objs if datum]
+                matched_values = self._get_unique_values(all_values)
+                # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
+                use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(matched_values, field.type)
+                match_filter.append(field.in_(matched_values) if use_in else any_(matched_values) == field)  # type: ignore[arg-type]
             existing_ids = self._get_object_ids(existing_objs=existing_objs)
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:

@@ -1,4 +1,4 @@
-# ruff: noqa: SLF001, ARG001
+# ruff: noqa: ARG001
 """Flask extension for Advanced Alchemy."""
 
 from collections.abc import Generator, Sequence

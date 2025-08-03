@@ -1,4 +1,3 @@
-# ruff: noqa: PLR6301
 """Service object implementation for SQLAlchemy.
 
 RepositoryService object is generic on the domain model type which
@@ -25,12 +24,14 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncQueryRepository,
 )
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
-from advanced_alchemy.repository.typing import ModelT, OrderingPair, SQLAlchemyAsyncRepositoryT
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, SQLAlchemyAsyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,
+    asdict,
+    is_attrs_instance,
     is_dict,
     is_dto_data,
     is_msgspec_struct,
@@ -456,6 +457,20 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
 
         if is_dto_data(data):
             return cast("ModelT", data.create_instance())
+
+        if is_attrs_instance(data):
+            return model_from_dict(
+                model=self.model_type,
+                **asdict(data),
+            )
+
+        # Fallback for objects with __dict__ (e.g., regular classes)
+        if hasattr(data, "__dict__"):
+            return model_from_dict(
+                model=self.model_type,
+                **data.__dict__,
+            )
+
         return cast("ModelT", data)
 
     async def list_and_count(
@@ -714,22 +729,33 @@ class SQLAlchemyAsyncRepositoryService(
         Returns:
             Updated representation.
         """
-        data = await self.to_model(data, "update")
-        if (
-            item_id is None
-            and self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
-                item=data,
-                id_attribute=id_attribute,
+        if is_dict(data) and item_id is not None:
+            existing_instance = await self.repository.get(
+                item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
-            is None
-        ):
-            msg = (
-                "Could not identify ID attribute value.  One of the following is required: "
-                f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
-            )
-            raise RepositoryError(msg)
-        if item_id is not None:
-            data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
+            update_data = await self.to_model_on_update(data)
+            if is_dict(update_data):
+                for key, value in update_data.items():
+                    if getattr(existing_instance, key, MISSING) is not MISSING:
+                        setattr(existing_instance, key, value)
+            data = existing_instance
+        else:
+            data = await self.to_model(data, "update")
+            if (
+                item_id is None
+                and self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
+                    item=data,
+                    id_attribute=id_attribute,
+                )
+                is None
+            ):
+                msg = (
+                    "Could not identify ID attribute value.  One of the following is required: "
+                    f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
+                )
+                raise RepositoryError(msg)
+            if item_id is not None:
+                data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
         return cast(
             "ModelT",
             await self.repository.update(

@@ -42,9 +42,9 @@ maintainers = [
   { name = "Julien Courtes", email = "julien@litestar.dev" },
 ]
 name = "advanced_alchemy"
-readme = "README.md"
+readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.4.4"
+version = "1.4.5"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -145,6 +145,8 @@ sanic = ["sanic", "sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
 sqlite = ["aiosqlite>=0.20.0"]
 test = [
+  "attrs",
+  "cattrs",
   "dishka ; python_version >= \"3.10\"",
   "pydantic-extra-types",
   "rich-click",
@@ -169,7 +171,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.4.4"
+current_version = "1.4.5"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -220,6 +222,7 @@ filterwarnings = [
 ]
 markers = [
   "integration: SQLAlchemy integration tests",
+  "unit: Unit tests",
   "asyncmy: SQLAlchemy MySQL (asyncmy) Tests",
   "asyncpg: SQLAlchemy Postgres (asyncpg) Tests",
   "psycopg_async: SQLAlchemy Postgres (psycopg async) Tests",
@@ -344,6 +347,7 @@ classmethod-decorators = [
 
 [tool.ruff.lint.per-file-ignores]
 "advanced_alchemy/repository/*.py" = ['C901']
+"advanced_alchemy/service/*.py" = ["PLR0911"]
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
 "examples/litestar/*.py" = ["PLR6301", "DOC", "B008"]
@@ -376,6 +380,7 @@ classmethod-decorators = [
   "RUF029",
   "DOC",
   "UP007",
+  "ASYNC230",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]

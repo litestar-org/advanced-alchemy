@@ -1,4 +1,3 @@
-# ruff: noqa: PLR0904, PLC2701
 """Obstore-backed storage backend for file objects."""
 
 import datetime
