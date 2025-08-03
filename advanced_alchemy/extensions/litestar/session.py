@@ -24,7 +24,6 @@ from advanced_alchemy.extensions.litestar.plugins.init import (
     SQLAlchemySyncConfig,
 )
 from advanced_alchemy.utils.sync_tools import async_
-from advanced_alchemy.utils.time import get_utc_now
 
 if TYPE_CHECKING:
     from litestar.stores.base import Store
@@ -89,7 +88,7 @@ class SessionModelMixin(UUIDv7Base):
         Returns:
             `True` if the session has expired, otherwise `False`
         """
-        return get_utc_now() > self.expires_at
+        return datetime.datetime.now(datetime.timezone.utc) > self.expires_at
 
     @is_expired.expression  # type: ignore[no-redef]
     def is_expired(cls) -> "BooleanClauseList":  # noqa: N805
@@ -156,7 +155,9 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
         return select(self._model).where(self._model.session_id == session_id)
 
     def _update_session_expiry(self, session_obj: "SessionModelMixin") -> None:
-        session_obj.expires_at = get_utc_now() + datetime.timedelta(seconds=self.config.max_age)
+        session_obj.expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+            seconds=self.config.max_age
+        )
 
     @abstractmethod
     async def delete_expired(self) -> None:

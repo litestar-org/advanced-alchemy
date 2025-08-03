@@ -14,10 +14,19 @@ from sqlalchemy.orm import Session as SyncSession
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
-from advanced_alchemy.utils.time import get_utc_now
 
 # Type variable for the callable in the patch
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+class MockDateTime:
+    """Mock datetime class for testing time-dependent behavior."""
+
+    def __init__(self, fixed_time: datetime.datetime) -> None:
+        self.fixed_time = fixed_time
+
+    def now(self, tz: datetime.timezone = datetime.timezone.utc) -> datetime.datetime:
+        return self.fixed_time
 
 
 class MockStoreModel(StoreModelMixin):
@@ -101,7 +110,7 @@ def sync_store(mock_sync_config: MagicMock) -> SQLAlchemyStore[SQLAlchemySyncCon
 
 def test_store_model_mixin_is_expired_property() -> None:
     """Test the is_expired hybrid property."""
-    now = get_utc_now()
+    now = datetime.datetime.now(datetime.timezone.utc)
     expired_store = StoreModelMixin(expires_at=now - datetime.timedelta(seconds=1))
     active_store = StoreModelMixin(expires_at=now + datetime.timedelta(seconds=10))
 
@@ -401,7 +410,8 @@ async def test_store_expires_in_async(
     key = "test_key"
     now = datetime.datetime.now(datetime.timezone.utc)
     expires_at = now + datetime.timedelta(seconds=3600)
-    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.get_utc_now", lambda: now)
+    mock_datetime = MockDateTime(now)
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", mock_datetime)
 
     # Set up the mock to return the expiration time directly
     mock_result = MagicMock()
@@ -426,7 +436,8 @@ async def test_store_expires_in_sync(
     key = "test_key"
     now = datetime.datetime.now(datetime.timezone.utc)
     expires_at = now + datetime.timedelta(seconds=3600)
-    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.get_utc_now", lambda: now)
+    mock_datetime = MockDateTime(now)
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", mock_datetime)
     mock_sync_session.execute.return_value.scalar_one_or_none.return_value = expires_at
 
     result = await sync_store_with_mock_async.expires_in(key)

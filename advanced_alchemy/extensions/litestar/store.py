@@ -32,7 +32,6 @@ from advanced_alchemy.extensions.litestar.plugins.init import (
     SQLAlchemySyncConfig,
 )
 from advanced_alchemy.utils.sync_tools import async_
-from advanced_alchemy.utils.time import get_utc_now
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
@@ -104,7 +103,7 @@ class StoreModelMixin(UUIDv7Base):
         Returns:
             `True` if the session has expired, otherwise `False`
         """
-        return get_utc_now() > self.expires_at
+        return datetime.datetime.now(datetime.timezone.utc) > self.expires_at
 
     @is_expired.expression  # type: ignore[no-redef]
     def is_expired(cls) -> "BooleanClauseList":  # noqa: N805
@@ -196,7 +195,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
         serialized_value = value if isinstance(value, bytes) else value.encode("utf-8")
         if expires_in is not None:
             delta = expires_in if isinstance(expires_in, datetime.timedelta) else datetime.timedelta(seconds=expires_in)
-            expires_at = get_utc_now() + delta
+            expires_at = datetime.datetime.now(datetime.timezone.utc) + delta
 
         with self._get_sync_session() as session, session.begin():
             # Simplified upsert logic for sync: select then insert/update
@@ -227,7 +226,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
         expires_at: Optional[datetime.datetime] = None
         if expires_in is not None:
             delta = expires_in if isinstance(expires_in, datetime.timedelta) else datetime.timedelta(seconds=expires_in)
-            expires_at = get_utc_now() + delta
+            expires_at = datetime.datetime.now(datetime.timezone.utc) + delta
 
         async with self._get_async_session() as session, session.begin():
             dialect = session.bind.dialect
@@ -300,7 +299,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
     def _get_sync(self, key: str, renew_for: Optional[Union[int, datetime.timedelta]] = None) -> Optional[bytes]:
         db_key, db_namespace = self._make_key(key)
-        now = get_utc_now()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         with self._get_sync_session() as session, session.begin():
             value = session.execute(
@@ -331,7 +330,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
     async def _get_async(self, key: str, renew_for: Optional[Union[int, datetime.timedelta]] = None) -> Optional[bytes]:
         db_key, db_namespace = self._make_key(key)
-        now = get_utc_now()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         async with self._get_async_session() as session, session.begin():
             value = (
@@ -432,7 +431,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
     def _exists_sync(self, key: str) -> bool:
         db_key, db_namespace = self._make_key(key)
-        now = get_utc_now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         with self._get_sync_session() as session:
             # Use count for potentially better performance if only existence is needed
             stmt = (
@@ -448,7 +447,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
     async def _exists_async(self, key: str) -> bool:
         db_key, db_namespace = self._make_key(key)
-        now = get_utc_now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         async with self._get_async_session() as session:
             # Use count for potentially better performance if only existence is needed
             stmt = (
@@ -478,7 +477,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
     def _expires_in_sync(self, key: str) -> Optional[int]:
         db_key, db_namespace = self._make_key(key)
-        now = get_utc_now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         with self._get_sync_session() as session:
             stmt = select(self._model.expires_at).where(
                 self._model.key == db_key,
@@ -493,7 +492,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
     async def _expires_in_async(self, key: str) -> Optional[int]:
         db_key, db_namespace = self._make_key(key)
-        now = get_utc_now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         async with self._get_async_session() as session:
             stmt = select(self._model.expires_at).where(
                 self._model.key == db_key,
