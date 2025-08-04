@@ -4,14 +4,12 @@ These tests run against actual database instances to verify that session backend
 work correctly across all supported database backends.
 """
 
-from __future__ import annotations
-
 import asyncio
 import datetime
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from unittest.mock import Mock
 
 import pytest
@@ -329,7 +327,7 @@ async def setup_async_database(
         yield
 
 
-def _handle_database_encoding(data: bytes | None, expected: bytes, dialect_name: str) -> None:
+def _handle_database_encoding(data: Optional[bytes], expected: bytes, dialect_name: str) -> None:
     """Handle database-specific encoding issues."""
     if dialect_name.startswith("spanner") and data != expected:
         import base64
@@ -556,20 +554,20 @@ async def test_async_session_middleware_integration(
     )
 
     @get("/set")
-    async def set_session(request: Request) -> dict[str, str]:
+    async def set_session(request: Request) -> "dict[str, str]":
         request.session["user_id"] = "123"
         request.session["username"] = "testuser"
         return {"status": "session set"}
 
     @get("/get")
-    async def get_session(request: Request) -> dict[str, str | None]:
+    async def get_session(request: Request) -> "dict[str, Optional[str]]":
         return {
             "user_id": request.session.get("user_id"),
             "username": request.session.get("username"),
         }
 
     @post("/clear")
-    async def clear_session(request: Request) -> dict[str, str]:
+    async def clear_session(request: Request) -> "dict[str, str]":
         request.clear_session()
         return {"status": "session cleared"}
 
@@ -621,14 +619,14 @@ async def test_sync_session_middleware_integration(
         model=test_session_model,
     )
 
-    @get("/set")
-    def set_session(request: Request) -> dict[str, int]:
+    @get("/set", sync_to_thread=False)
+    def set_session(request: Request) -> "dict[str, int]":
         counter = request.session.get("counter", 0) + 1
         request.session["counter"] = counter
         return {"counter": counter}
 
-    @get("/get")
-    def get_session(request: Request) -> dict[str, int | None]:
+    @get("/get", sync_to_thread=False)
+    def get_session(request: Request) -> "dict[str, Optional[int]]":
         return {"counter": request.session.get("counter")}
 
     app = Litestar(
