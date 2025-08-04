@@ -109,7 +109,7 @@ class TestOnConflictUpsert:
         conflict_columns = ["key", "namespace"]
 
         # Test default (non-Oracle) MERGE
-        merge_stmt = OnConflictUpsert.create_merge_upsert(
+        merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
             table=sample_table,
             values=values,
             conflict_columns=conflict_columns,
@@ -119,9 +119,10 @@ class TestOnConflictUpsert:
         assert merge_stmt.table == sample_table
         assert ":key" in str(merge_stmt.source)  # Check for parameter placeholder
         assert "FROM DUAL" not in str(merge_stmt.source)  # Should not have FROM DUAL by default
+        assert additional_params == {}  # No additional params for non-Oracle
 
         # Test Oracle-specific MERGE
-        oracle_merge_stmt = OnConflictUpsert.create_merge_upsert(
+        oracle_merge_stmt, oracle_additional_params = OnConflictUpsert.create_merge_upsert(
             table=sample_table,
             values=values,
             conflict_columns=conflict_columns,
@@ -132,6 +133,8 @@ class TestOnConflictUpsert:
         assert oracle_merge_stmt.table == sample_table
         assert ":key" in str(oracle_merge_stmt.source)  # Check for parameter placeholder
         assert "FROM DUAL" in str(oracle_merge_stmt.source)  # Oracle should have FROM DUAL
+        # Additional params should be empty for tables without UUID primary keys
+        assert isinstance(oracle_additional_params, dict)
         assert "SELECT" in str(merge_stmt.source)
 
 

@@ -1,3 +1,4 @@
+import base64
 import datetime
 from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING, Any, Final, Generic, Optional, TypeVar, Union, cast
@@ -186,6 +187,20 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
         """Return the key and namespace tuple, handling potential None namespace."""
         return key, self.namespace
 
+    def _decode_base64_value(self, value: Optional[bytes], dialect_name: str) -> Optional[bytes]:
+        """Decode base64 encoded value from Spanner if needed.
+
+        Spanner automatically base64-encodes binary data when storing it,
+        so we need to decode it when retrieving.
+        """
+        if value is None or not dialect_name.startswith("spanner"):
+            return value
+
+        try:
+            return base64.b64decode(value)
+        except Exception:  # noqa: BLE001
+            return value
+
     def _set_sync(
         self, key: str, value: Union[bytes, str], expires_in: Optional[Union[int, datetime.timedelta]] = None
     ) -> None:
@@ -227,14 +242,16 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
             # Use MERGE for Oracle or PostgreSQL 15+ if requested
             elif self.supports_merge(dialect):
-                merge_stmt = OnConflictUpsert.create_merge_upsert(
+                merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
                     table=self._model.__table__,  # type: ignore[arg-type]
                     values=values,
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
                     dialect_name=dialect_name,
                 )
-                session.execute(merge_stmt, values)
+                # Merge additional Oracle parameters with original values
+                merge_values = {**values, **additional_params}
+                session.execute(merge_stmt, merge_values)
 
             else:
                 # Fallback logic: Check existence, then update or insert
@@ -296,14 +313,16 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
 
             # Use MERGE for Oracle or PostgreSQL 15+ if requested
             elif self.supports_merge(dialect):
-                merge_stmt = OnConflictUpsert.create_merge_upsert(
+                merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
                     table=self._model.__table__,  # type: ignore[arg-type]
                     values=values,
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
                     dialect_name=dialect_name,
                 )
-                await session.execute(merge_stmt, values)
+                # Merge additional Oracle parameters with original values
+                merge_values = {**values, **additional_params}
+                await session.execute(merge_stmt, merge_values)
 
             else:
                 # Fallback logic: Check existence, then update or insert
@@ -343,6 +362,11 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
         now = datetime.datetime.now(datetime.timezone.utc)
 
         with self._get_sync_session() as session, session.begin():
+            if session.bind is None:
+                msg = "Database connection is not available"
+                raise ImproperlyConfiguredException(msg)
+            dialect_name = session.bind.dialect.name
+
             value = session.execute(
                 select(self._model.value).where(
                     self._model.key == db_key,
@@ -364,7 +388,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                         .values(expires_at=now + delta)
                     )
                 session.commit()
-                return value
+                return self._decode_base64_value(value, dialect_name)
 
             session.commit()  # Commit even if not found
             return None
@@ -374,6 +398,11 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
         now = datetime.datetime.now(datetime.timezone.utc)
 
         async with self._get_async_session() as session, session.begin():
+            if session.bind is None:  # pyright: ignore[reportUnnecessaryComparison]
+                msg = "Database connection is not available"  # type: ignore[unreachable]
+                raise ImproperlyConfiguredException(msg)
+            dialect_name = session.bind.dialect.name
+
             value = (
                 await session.execute(
                     select(self._model.value).where(
@@ -397,7 +426,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                         .values(expires_at=now + delta)
                     )
                 await session.commit()
-                return value
+                return self._decode_base64_value(value, dialect_name)
 
             await session.commit()  # Commit even if not found
             return None

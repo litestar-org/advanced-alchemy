@@ -572,18 +572,19 @@ async def test_merge_statement_with_oracle_postgres(
         update_columns = ["value", "created_at"]
 
         # Create MERGE statement
-        merge_stmt = OnConflictUpsert.create_merge_upsert(
+        merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
             table=test_table,
             values=upsert_values,
             conflict_columns=conflict_columns,
             update_columns=update_columns,
             dialect_name=dialect_name,
         )
+        merge_values = {**upsert_values, **additional_params}
 
         assert isinstance(merge_stmt, MergeStatement)
 
         # Execute MERGE - should insert
-        await maybe_async(any_session.execute(merge_stmt, upsert_values))
+        await maybe_async(any_session.execute(merge_stmt, merge_values))
         await maybe_async(any_session.commit())
 
         # Verify record was inserted
@@ -600,15 +601,16 @@ async def test_merge_statement_with_oracle_postgres(
         assert row.value == upsert_values["value"]
 
         # Execute MERGE again with updated values - should update
-        update_merge_stmt = OnConflictUpsert.create_merge_upsert(
+        update_merge_stmt, update_additional_params = OnConflictUpsert.create_merge_upsert(
             table=test_table,
             values=updated_values,
             conflict_columns=conflict_columns,
             update_columns=update_columns,
             dialect_name=dialect_name,
         )
+        update_merge_values = {**updated_values, **update_additional_params}
 
-        await maybe_async(any_session.execute(update_merge_stmt, updated_values))
+        await maybe_async(any_session.execute(update_merge_stmt, update_merge_values))
         await maybe_async(any_session.commit())
 
         # Verify record was updated
@@ -672,7 +674,7 @@ async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngin
     values = {"id": 1, "key": "test", "value": "test_value"}
     conflict_columns = ["key"]
 
-    merge_stmt = OnConflictUpsert.create_merge_upsert(
+    merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
         table=test_table,
         values=values,
         conflict_columns=conflict_columns,

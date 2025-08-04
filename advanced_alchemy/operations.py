@@ -26,6 +26,7 @@ See Also:
 """
 
 from typing import Any, Optional, Union
+from uuid import UUID
 
 from sqlalchemy import (
     Insert,
@@ -47,6 +48,8 @@ class MergeStatement(Executable, ClauseElement):
     This provides a high-level interface for MERGE operations that
     can handle both matched and unmatched conditions.
     """
+
+    inherit_cache = True
 
     def __init__(
         self,
@@ -89,9 +92,7 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
     """Compile MERGE statement for Oracle."""
     table_name = element.table.name
 
-    # Handle source - if it's a string, treat it as a SELECT statement
     if isinstance(element.source, str):
-        # Ensure FROM DUAL is present for Oracle SELECT statements
         source_str = element.source
         if source_str.upper().startswith("SELECT") and "FROM DUAL" not in source_str.upper():
             source_str = f"{source_str} FROM DUAL"
@@ -99,12 +100,10 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
     else:
         source_clause = compiler.process(element.source, **kwargs)
 
-    # Build the merge statement
     merge_sql = f"MERGE INTO {table_name} tgt USING {source_clause} src ON ("
     merge_sql += compiler.process(element.on_condition, **kwargs)
     merge_sql += ")"
 
-    # Add WHEN MATCHED clause
     if element.when_matched_update:
         merge_sql += " WHEN MATCHED THEN UPDATE SET "
         updates = []
@@ -116,7 +115,6 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
             updates.append(f"{column} = {compiled_value}")  # pyright: ignore
         merge_sql += ", ".join(updates)  # pyright: ignore
 
-    # Add WHEN NOT MATCHED clause
     if element.when_not_matched_insert:
         columns = list(element.when_not_matched_insert.keys())
         values = list(element.when_not_matched_insert.values())
@@ -141,7 +139,6 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
 @compiles(MergeStatement, "postgresql")
 def compile_merge_postgresql(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
     """Compile MERGE statement for PostgreSQL 15+."""
-    # Check if PostgreSQL version supports MERGE
     dialect = compiler.dialect
     if (
         hasattr(dialect, "server_version_info")
@@ -153,18 +150,15 @@ def compile_merge_postgresql(element: MergeStatement, compiler: SQLCompiler, **k
 
     table_name = element.table.name
 
-    # Handle source
     if isinstance(element.source, str):
         source_clause = f"({element.source})"
     else:
         source_clause = compiler.process(element.source, **kwargs)
 
-    # Build the merge statement (PostgreSQL syntax is similar to Oracle)
     merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} AS src ON ("
     merge_sql += compiler.process(element.on_condition, **kwargs)
     merge_sql += ")"
 
-    # Add WHEN MATCHED clause
     if element.when_matched_update:
         merge_sql += " WHEN MATCHED THEN UPDATE SET "
         updates = []
@@ -176,7 +170,6 @@ def compile_merge_postgresql(element: MergeStatement, compiler: SQLCompiler, **k
             updates.append(f"{column} = {compiled_value}")  # pyright: ignore
         merge_sql += ", ".join(updates)  # pyright: ignore
 
-    # Add WHEN NOT MATCHED clause
     if element.when_not_matched_insert:
         columns = list(element.when_not_matched_insert.keys())
         values = list(element.when_not_matched_insert.values())
@@ -259,9 +252,9 @@ class OnConflictUpsert:
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
-            return mysql_insert_stmt.on_duplicate_key_update(**{
-                col: mysql_insert_stmt.inserted[col] for col in update_columns
-            })
+            return mysql_insert_stmt.on_duplicate_key_update(
+                **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
+            )
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
@@ -273,8 +266,13 @@ class OnConflictUpsert:
         conflict_columns: "list[str]",
         update_columns: "Optional[list[str]]" = None,
         dialect_name: Optional[str] = None,
-    ) -> MergeStatement:
+    ) -> "tuple[MergeStatement, dict[str, Any]]":
         """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
+
+        For Oracle databases, this method automatically generates values for primary key
+        columns that have callable defaults (such as UUID generation functions). This is
+        necessary because Oracle MERGE statements cannot use Python callable defaults
+        directly in the INSERT clause.
 
         Args:
             table: Target table for the upsert
@@ -284,28 +282,64 @@ class OnConflictUpsert:
             dialect_name: Database dialect name (used to determine Oracle-specific syntax)
 
         Returns:
-            A MergeStatement for Oracle/PostgreSQL 15+
+            A tuple of (MergeStatement, additional_params) where additional_params
+            contains any generated values (like Oracle UUID primary keys)
         """
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
 
-        # Create source as a VALUES clause
         source_values = ", ".join([f":{key} as {key}" for key in values])
-        # Oracle requires FROM DUAL for SELECT statements
         source = f"SELECT {source_values} FROM DUAL" if dialect_name == "oracle" else f"SELECT {source_values}"  # noqa: S608
 
-        # Create ON condition
         on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
         on_condition = text(" AND ".join(on_conditions))
 
-        # Prepare update and insert dictionaries
         when_matched_update: dict[str, Any] = {col: bindparam(col) for col in update_columns}
-        when_not_matched_insert: dict[str, Any] = {col: bindparam(col) for col in values}
 
-        return MergeStatement(
+        insert_columns = list(values.keys())
+        additional_params = {}
+
+        if dialect_name == "oracle":
+            for col in table.primary_key.columns:
+                if (
+                    col.name not in values
+                    and hasattr(col, "default")
+                    and col.default is not None
+                    and (hasattr(col.default, "arg") and callable(col.default.arg))  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
+                ):
+                    try:
+                        if hasattr(col.default, "arg"):
+                            try:
+                                default_value = col.default.arg()  # pyright: ignore[reportAttributeAccessIssue]
+                            except TypeError:
+                                default_value = col.default.arg(None)  # pyright: ignore[reportAttributeAccessIssue]
+
+                            # Convert UUID to hex format for Oracle compatibility
+
+                            if isinstance(default_value, UUID):
+                                default_value = default_value.hex
+
+                            additional_params[col.name] = default_value
+                            insert_columns.append(col.name)
+                    except (TypeError, AttributeError, ValueError):
+                        continue
+
+            if additional_params:
+                additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]  # pyright: ignore[reportUnknownVariableType]
+                if source.endswith(" FROM DUAL"):
+                    base_source = source[: -len(" FROM DUAL")]
+                    source = f"{base_source}, {', '.join(additional_selects)} FROM DUAL"
+                else:
+                    source = f"{source}, {', '.join(additional_selects)}"
+
+        when_not_matched_insert: dict[str, Any] = {col: bindparam(col) for col in insert_columns}
+
+        merge_stmt = MergeStatement(
             table=table,
             source=source,
             on_condition=on_condition,
             when_matched_update=when_matched_update,
             when_not_matched_insert=when_not_matched_insert,
         )
+
+        return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
