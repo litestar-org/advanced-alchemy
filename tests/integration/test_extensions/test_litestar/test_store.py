@@ -1,0 +1,569 @@
+"""Integration tests for Litestar store extensions.
+
+These tests run against actual database instances to verify that store implementations
+work correctly across all supported database backends.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncGenerator, Generator
+from typing import TYPE_CHECKING
+
+import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
+
+from advanced_alchemy.base import UUIDv7Base
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
+
+if TYPE_CHECKING:
+    from pytest import FixtureRequest
+    from sqlalchemy import Engine
+
+pytestmark = [
+    pytest.mark.integration,
+]
+
+
+class TestStoreModel(StoreModelMixin, UUIDv7Base):
+    """Test store model for integration tests."""
+
+    __tablename__ = "integration_test_store"
+
+
+@pytest.fixture
+def test_store_model() -> type[StoreModelMixin]:
+    """Return the test store model."""
+    return TestStoreModel
+
+
+# Engine fixtures - explicit parametrization for ALL database backends
+@pytest.fixture(
+    params=[
+        pytest.param(
+            "sqlite_engine",
+            marks=[
+                pytest.mark.sqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "duckdb_engine",
+            marks=[
+                pytest.mark.duckdb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("duckdb"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_engine",
+            marks=[
+                pytest.mark.oracledb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23ai_engine",
+            marks=[
+                pytest.mark.oracledb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_engine",
+            marks=[
+                pytest.mark.psycopg_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "spanner_engine",
+            marks=[
+                pytest.mark.spanner,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("spanner"),
+            ],
+        ),
+        pytest.param(
+            "mssql_engine",
+            marks=[
+                pytest.mark.mssql_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_engine",
+            marks=[
+                pytest.mark.cockroachdb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mock_sync_engine",
+            marks=[
+                pytest.mark.mock_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
+            ],
+        ),
+    ],
+)
+def engine(request: FixtureRequest) -> Engine:
+    """Return a synchronous engine. Parametrized to test all supported database backends."""
+    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            "aiosqlite_engine",
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+            ],
+        ),
+        pytest.param(
+            "asyncmy_engine",
+            marks=[
+                pytest.mark.asyncmy,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mysql"),
+            ],
+        ),
+        pytest.param(
+            "asyncpg_engine",
+            marks=[
+                pytest.mark.asyncpg,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[
+                pytest.mark.psycopg_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[
+                pytest.mark.cockroachdb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23ai_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
+            ],
+        ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[
+                pytest.mark.mock_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
+            ],
+        ),
+    ],
+)
+def async_engine(request: FixtureRequest) -> AsyncEngine:
+    """Return an asynchronous engine. Parametrized to test all supported database backends."""
+    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]
+
+
+@pytest.fixture
+def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None, None]:
+    """Return a synchronous session for the parametrized engine."""
+    if "mock_sync_engine" in request.fixturenames or getattr(engine.dialect, "name", "") == "mock":
+        from unittest.mock import create_autospec
+
+        session_mock = create_autospec(Session, instance=True)
+        session_mock.bind = engine
+        yield session_mock
+    else:
+        session_instance = sessionmaker(bind=engine, expire_on_commit=False)()
+        try:
+            yield session_instance
+        finally:
+            session_instance.rollback()
+            session_instance.close()
+
+
+@pytest.fixture
+async def async_session(async_engine: AsyncEngine, request: FixtureRequest) -> AsyncGenerator[AsyncSession, None]:
+    """Return an asynchronous session for the parametrized async engine."""
+    if "mock_async_engine" in request.fixturenames or getattr(async_engine.dialect, "name", "") == "mock":
+        from unittest.mock import create_autospec
+
+        session_mock = create_autospec(AsyncSession, instance=True)
+        session_mock.bind = async_engine
+        yield session_mock
+    else:
+        session_instance = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
+        try:
+            yield session_instance
+        finally:
+            await session_instance.rollback()
+            await session_instance.close()
+
+
+# Store fixtures
+@pytest.fixture
+def sync_store_config(engine: Engine) -> SQLAlchemySyncConfig:
+    """Create sync config with test engine."""
+    return SQLAlchemySyncConfig(
+        engine_instance=engine,
+        session_dependency_key="db_session",
+    )
+
+
+@pytest.fixture
+async def async_store_config(async_engine: AsyncEngine) -> SQLAlchemyAsyncConfig:
+    """Create async config with test engine."""
+    return SQLAlchemyAsyncConfig(
+        engine_instance=async_engine,
+        session_dependency_key="db_session",
+    )
+
+
+@pytest.fixture
+def sync_store(sync_store_config: SQLAlchemySyncConfig, test_store_model: type[StoreModelMixin]) -> SQLAlchemyStore:
+    """Create sync store."""
+    return SQLAlchemyStore(config=sync_store_config, model=test_store_model, namespace="test")
+
+
+@pytest.fixture
+def async_store(async_store_config: SQLAlchemyAsyncConfig, test_store_model: type[StoreModelMixin]) -> SQLAlchemyStore:
+    """Create async store."""
+    return SQLAlchemyStore(config=async_store_config, model=test_store_model, namespace="test")
+
+
+# Database setup fixtures
+@pytest.fixture
+def setup_sync_database(engine: Engine, test_store_model: type[StoreModelMixin]) -> Generator[None, None, None]:
+    """Set up database tables for sync tests."""
+    dialect_name = getattr(engine.dialect, "name", "")
+    if dialect_name != "mock":
+        test_store_model.metadata.create_all(engine)
+        yield
+        test_store_model.metadata.drop_all(engine, checkfirst=True)
+    else:
+        yield
+
+
+@pytest.fixture
+async def setup_async_database(
+    async_engine: AsyncEngine, test_store_model: type[StoreModelMixin]
+) -> AsyncGenerator[None, None]:
+    """Set up database tables for async tests."""
+    dialect_name = getattr(async_engine.dialect, "name", "")
+    if dialect_name != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(test_store_model.metadata.create_all)
+        yield
+        async with async_engine.begin() as conn:
+            await conn.run_sync(lambda sync_conn: test_store_model.metadata.drop_all(sync_conn, checkfirst=True))
+    else:
+        yield
+
+
+# Store Tests
+async def test_async_store_complete_lifecycle(
+    async_store: SQLAlchemyStore,
+    setup_async_database: None,
+) -> None:
+    """Test complete store lifecycle: set, get, update, delete."""
+    # Skip mock engines
+    if getattr(async_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    key = "test_key"
+    original_value = "test_value"
+    updated_value = "updated_value"
+    expires_in = 3600
+
+    # Set value
+    await async_store.set(key, original_value, expires_in=expires_in)
+
+    # Get value
+    result = await async_store.get(key)
+    assert result == original_value.encode()
+
+    # Update value
+    await async_store.set(key, updated_value, expires_in=expires_in)
+
+    # Verify update
+    result = await async_store.get(key)
+    assert result == updated_value.encode()
+
+    # Check expiration time
+    expires_time = await async_store.expires_in(key)
+    assert expires_time is not None
+    assert expires_time > 3500  # Should be close to 3600 seconds
+
+    # Delete value
+    await async_store.delete(key)
+
+    # Verify deletion
+    result = await async_store.get(key)
+    assert result is None
+
+
+async def test_sync_store_complete_lifecycle(
+    sync_store: SQLAlchemyStore,
+    setup_sync_database: None,
+) -> None:
+    """Test complete store lifecycle with sync store."""
+    # Skip mock engines
+    if getattr(sync_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    key = "sync_key"
+    original_value = "sync_value"
+    updated_value = "sync_updated"
+    expires_in = 3600
+
+    # Set value
+    await sync_store.set(key, original_value, expires_in=expires_in)
+
+    # Get value
+    result = await sync_store.get(key)
+    assert result == original_value.encode()
+
+    # Update value
+    await sync_store.set(key, updated_value, expires_in=expires_in)
+
+    # Verify update
+    result = await sync_store.get(key)
+    assert result == updated_value.encode()
+
+    # Check expiration time
+    expires_time = await sync_store.expires_in(key)
+    assert expires_time is not None
+    assert expires_time > 3500  # Should be close to 3600 seconds
+
+    # Delete value
+    await sync_store.delete(key)
+
+    # Verify deletion
+    result = await sync_store.get(key)
+    assert result is None
+
+
+async def test_async_store_delete_all(
+    async_store: SQLAlchemyStore,
+    setup_async_database: None,
+) -> None:
+    """Test deletion of all store entries."""
+    # Skip mock engines
+    if getattr(async_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    # Set multiple values
+    keys = ["key1", "key2", "key3"]
+    for key in keys:
+        await async_store.set(key, f"value_{key}", expires_in=3600)
+
+    # Verify they exist
+    for key in keys:
+        result = await async_store.get(key)
+        assert result == f"value_{key}".encode()
+
+    # Delete all
+    await async_store.delete_all()
+
+    # Verify all deleted
+    for key in keys:
+        result = await async_store.get(key)
+        assert result is None
+
+
+async def test_sync_store_delete_all(
+    sync_store: SQLAlchemyStore,
+    setup_sync_database: None,
+) -> None:
+    """Test deletion of all store entries with sync store."""
+    # Skip mock engines
+    if getattr(sync_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    # Set multiple values
+    keys = ["sync_key1", "sync_key2", "sync_key3"]
+    for key in keys:
+        await sync_store.set(key, f"sync_value_{key}", expires_in=3600)
+
+    # Verify they exist
+    for key in keys:
+        result = await sync_store.get(key)
+        assert result == f"sync_value_{key}".encode()
+
+    # Delete all
+    await sync_store.delete_all()
+
+    # Verify all deleted
+    for key in keys:
+        result = await sync_store.get(key)
+        assert result is None
+
+
+async def test_store_with_namespace(
+    async_store: SQLAlchemyStore,
+    setup_async_database: None,
+) -> None:
+    """Test store namespace functionality."""
+    # Skip mock engines
+    if getattr(async_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    # Create namespaced store
+    namespaced_store = async_store.with_namespace("sub")
+    assert namespaced_store.namespace == "test_sub"
+
+    # Set value in original store
+    await async_store.set("key", "original", expires_in=3600)
+
+    # Set value in namespaced store
+    await namespaced_store.set("key", "namespaced", expires_in=3600)
+
+    # Verify both values exist independently
+    original_result = await async_store.get("key")
+    namespaced_result = await namespaced_store.get("key")
+
+    assert original_result == b"original"
+    assert namespaced_result == b"namespaced"
+
+
+async def test_store_exists_functionality(
+    async_store: SQLAlchemyStore,
+    setup_async_database: None,
+) -> None:
+    """Test store exists functionality."""
+    # Skip mock engines
+    if getattr(async_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    key = "exists_test"
+    value = "test_exists_value"
+
+    # Key should not exist initially
+    assert await async_store.exists(key) is False
+
+    # Set value
+    await async_store.set(key, value, expires_in=3600)
+
+    # Key should exist now
+    assert await async_store.exists(key) is True
+
+    # Delete key
+    await async_store.delete(key)
+
+    # Key should not exist anymore
+    assert await async_store.exists(key) is False
+
+
+async def test_store_database_upsert_integration(
+    async_store: SQLAlchemyStore,
+    setup_async_database: None,
+) -> None:
+    """Test that store correctly uses upsert operations internally."""
+    # Skip mock engines
+    if getattr(async_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    key = "upsert_test_key"
+    value1 = "initial_value"
+    value2 = "updated_value"
+    expires_in = 3600
+
+    # First set - should insert
+    await async_store.set(key, value1, expires_in=expires_in)
+
+    # Verify insert
+    result = await async_store.get(key)
+    assert result == value1.encode()
+
+    # Second set - should update using upsert
+    await async_store.set(key, value2, expires_in=expires_in)
+
+    # Verify update
+    result = await async_store.get(key)
+    assert result == value2.encode()
+
+    # Verify only one record exists in the store
+    engine = async_store._config.engine_instance
+    model = async_store._model
+
+    if hasattr(engine, "connect"):
+        # Async engine
+        async_session_factory = async_sessionmaker(bind=engine)
+        async with async_session_factory() as session:
+            count_result = await session.execute(
+                select(func.count()).select_from(model).where(model.key == key, model.namespace == "test")
+            )
+            count = count_result.scalar()
+            assert count == 1
+    else:
+        # Sync engine
+        session_factory = sessionmaker(bind=engine)
+        with session_factory() as session:
+            count = session.scalar(
+                select(func.count()).select_from(model).where(model.key == key, model.namespace == "test")
+            )
+            assert count == 1
+
+
+async def test_store_renew_functionality(
+    async_store: SQLAlchemyStore,
+    setup_async_database: None,
+) -> None:
+    """Test store renew functionality."""
+    # Skip mock engines
+    if getattr(async_store._config.engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    key = "renew_test"
+    value = "test_renew_value"
+    initial_expires_in = 3600
+    renew_for = 7200
+
+    # Set value with initial expiration
+    await async_store.set(key, value, expires_in=initial_expires_in)
+
+    # Get value with renewal
+    result = await async_store.get(key, renew_for=renew_for)
+    assert result == value.encode()
+
+    # Check that expiration was extended
+    expires_time = await async_store.expires_in(key)
+    assert expires_time is not None
+    assert expires_time > 6000  # Should be close to 7200 seconds (renewed time)

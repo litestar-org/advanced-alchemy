@@ -17,7 +17,6 @@ from sqlalchemy import (
     func,
     insert,
     select,
-    text,
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +30,7 @@ from advanced_alchemy.extensions.litestar.plugins.init import (
     SQLAlchemyAsyncConfig,
     SQLAlchemySyncConfig,
 )
+from advanced_alchemy.operations import OnConflictUpsert
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
@@ -45,8 +45,6 @@ SQLAlchemyConfigT = TypeVar("SQLAlchemyConfigT", bound=Union[SQLAlchemyAsyncConf
 __all__ = ("SQLAlchemyStore", "StoreModelMixin")
 
 _POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
-
-__all__ = ("SQLAlchemyStore", "StoreModelMixin")
 
 
 @declarative_mixin
@@ -179,7 +177,9 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
     @staticmethod
     def supports_upsert(dialect: Optional[Dialect] = None, force_disable_upsert: bool = False) -> bool:
         return bool(
-            dialect and (dialect.name in {"postgresql", "cockroachdb", "sqlite", "mysql"}) and not force_disable_upsert
+            dialect
+            and (dialect.name in {"postgresql", "cockroachdb", "sqlite", "mysql", "duckdb"})
+            and not force_disable_upsert
         )
 
     def _make_key(self, key: str) -> tuple[str, Optional[str]]:
@@ -198,23 +198,60 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             expires_at = datetime.datetime.now(datetime.timezone.utc) + delta
 
         with self._get_sync_session() as session, session.begin():
-            # Simplified upsert logic for sync: select then insert/update
-            # Dialect-specific optimizations (like ON CONFLICT/MERGE) are harder to generalize here
-            existing = session.execute(
-                select(1).where(self._model.key == db_key, self._model.namespace == db_namespace)
-            ).scalar_one_or_none()
-            if existing:
-                session.execute(
-                    update(self._model)
-                    .where(self._model.key == db_key, self._model.namespace == db_namespace)
-                    .values(value=serialized_value, expires_at=expires_at)
+            if session.bind is None:
+                msg = "Database connection is not available"
+                raise ImproperlyConfiguredException(msg)
+            dialect = session.bind.dialect
+            dialect_name = dialect.name
+
+            # Prepare values for upsert operations
+            values = {
+                "key": db_key,
+                "namespace": db_namespace,
+                "value": serialized_value,
+                "expires_at": expires_at,
+            }
+            conflict_columns = ["key", "namespace"]
+            update_columns = ["value", "expires_at"]
+
+            # Try native upsert operations first (most efficient)
+            if OnConflictUpsert.supports_native_upsert(dialect_name):
+                upsert_stmt = OnConflictUpsert.create_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                    dialect_name=dialect_name,
                 )
+                session.execute(upsert_stmt)
+
+            # Use MERGE for Oracle or PostgreSQL 15+ if requested
+            elif self.supports_merge(dialect):
+                merge_stmt = OnConflictUpsert.create_merge_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                )
+                session.execute(merge_stmt, values)
+
             else:
-                session.execute(
-                    insert(self._model).values(
-                        key=db_key, namespace=db_namespace, value=serialized_value, expires_at=expires_at
+                # Fallback logic: Check existence, then update or insert
+                existing = session.execute(
+                    select(1).where(self._model.key == db_key, self._model.namespace == db_namespace)
+                ).scalar_one_or_none()
+                if existing:
+                    session.execute(
+                        update(self._model)
+                        .where(self._model.key == db_key, self._model.namespace == db_namespace)
+                        .values(value=serialized_value, expires_at=expires_at)
                     )
-                )
+                else:
+                    session.execute(
+                        insert(self._model).values(
+                            key=db_key, namespace=db_namespace, value=serialized_value, expires_at=expires_at
+                        )
+                    )
             session.commit()
 
     async def _set_async(
@@ -229,40 +266,42 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             expires_at = datetime.datetime.now(datetime.timezone.utc) + delta
 
         async with self._get_async_session() as session, session.begin():
+            if session.bind is None:  # pyright: ignore[reportUnnecessaryComparison]
+                msg = "Database connection is not available"  # type: ignore[unreachable]
+                raise ImproperlyConfiguredException(msg)
             dialect = session.bind.dialect
-            if self.supports_merge(dialect):
-                src = f"select :key as key, :namespace as namespace, :value as value, :expires_at as expires_at {'from dual' if dialect.name == 'oracle' else ''}"
-                await session.execute(
-                    text(f"""
-                         merge into {self._model.__tablename__} (key, namespace, value, expires_at) src
-                         using ({src}) tgt
-                         on (src.key = tgt.key and src.namespace = tgt.namespace)
-                         when matched then update set src.value = tgt.value, src.expires_at = tgt.expires_at
-                         when not matched then insert (key, namespace, value, expires_at)
-                         values (tgt.key, tgt.namespace, tgt.value, tgt.expires_at)
-                         """),  # noqa: S608
-                    {
-                        "key": db_key,
-                        "namespace": db_namespace,
-                        "value": serialized_value,
-                        "expires_at": expires_at,
-                    },
+            dialect_name = dialect.name
+
+            # Prepare values for upsert operations
+            values = {
+                "key": db_key,
+                "namespace": db_namespace,
+                "value": serialized_value,
+                "expires_at": expires_at,
+            }
+            conflict_columns = ["key", "namespace"]
+            update_columns = ["value", "expires_at"]
+
+            # Try native upsert operations first (most efficient)
+            if OnConflictUpsert.supports_native_upsert(dialect_name):
+                upsert_stmt = OnConflictUpsert.create_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                    dialect_name=dialect_name,
                 )
-            elif self.supports_upsert(dialect):
-                await session.execute(
-                    text(f"""
-                         insert into {self._model.__tablename__} (key, namespace, value, expires_at)
-                         values (:key, :namespace, :value, :expires_at)
-                         on conflict (key, namespace)
-                         do update set value = :value, expires_at = :expires_at
-                         """),  # noqa: S608
-                    {
-                        "key": db_key,
-                        "namespace": db_namespace,
-                        "value": serialized_value,
-                        "expires_at": expires_at,
-                    },
+                await session.execute(upsert_stmt)
+
+            # Use MERGE for Oracle or PostgreSQL 15+ if requested
+            elif self.supports_merge(dialect):
+                merge_stmt = OnConflictUpsert.create_merge_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
                 )
+                await session.execute(merge_stmt, values)
 
             else:
                 # Fallback logic: Check existence, then update or insert
