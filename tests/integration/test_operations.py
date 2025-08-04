@@ -577,6 +577,7 @@ async def test_merge_statement_with_oracle_postgres(
             values=upsert_values,
             conflict_columns=conflict_columns,
             update_columns=update_columns,
+            dialect_name=dialect_name,
         )
 
         assert isinstance(merge_stmt, MergeStatement)
@@ -604,6 +605,7 @@ async def test_merge_statement_with_oracle_postgres(
             values=updated_values,
             conflict_columns=conflict_columns,
             update_columns=update_columns,
+            dialect_name=dialect_name,
         )
 
         await maybe_async(any_session.execute(update_merge_stmt, updated_values))
@@ -674,6 +676,7 @@ async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngin
         table=test_table,
         values=values,
         conflict_columns=conflict_columns,
+        dialect_name=dialect_name,
     )
 
     # Compile the statement to SQL

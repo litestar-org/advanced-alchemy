@@ -93,7 +93,11 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
 
     # Handle source - if it's a string, treat it as a SELECT statement
     if isinstance(element.source, str):
-        source_clause = f"({element.source})"
+        # Ensure FROM DUAL is present for Oracle SELECT statements
+        source_str = element.source
+        if source_str.upper().startswith("SELECT") and "FROM DUAL" not in source_str.upper():
+            source_str = f"{source_str} FROM DUAL"
+        source_clause = f"({source_str})"
     else:
         source_clause = compiler.process(element.source, **kwargs)
 
@@ -270,6 +274,7 @@ class OnConflictUpsert:
         values: "dict[str, Any]",
         conflict_columns: "list[str]",
         update_columns: "Optional[list[str]]" = None,
+        dialect_name: Optional[str] = None,
     ) -> MergeStatement:
         """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
 
@@ -278,6 +283,7 @@ class OnConflictUpsert:
             values: Values to insert/update
             conflict_columns: Columns that define the matching condition
             update_columns: Columns to update on match (defaults to all non-conflict columns)
+            dialect_name: Database dialect name (used to determine Oracle-specific syntax)
 
         Returns:
             A MergeStatement for Oracle/PostgreSQL 15+
@@ -287,7 +293,8 @@ class OnConflictUpsert:
 
         # Create source as a VALUES clause
         source_values = ", ".join([f":{key} as {key}" for key in values])
-        source = f"SELECT {source_values}"
+        # Oracle requires FROM DUAL for SELECT statements
+        source = f"SELECT {source_values} FROM DUAL" if dialect_name == "oracle" else f"SELECT {source_values}"  # noqa: S608
 
         # Create ON condition
         on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]

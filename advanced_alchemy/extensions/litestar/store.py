@@ -232,6 +232,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     values=values,
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
+                    dialect_name=dialect_name,
                 )
                 session.execute(merge_stmt, values)
 
@@ -300,6 +301,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     values=values,
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
+                    dialect_name=dialect_name,
                 )
                 await session.execute(merge_stmt, values)
 

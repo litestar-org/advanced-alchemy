@@ -108,6 +108,7 @@ class TestOnConflictUpsert:
         values = {"key": "test_key", "namespace": "test_ns", "value": "test_value"}
         conflict_columns = ["key", "namespace"]
 
+        # Test default (non-Oracle) MERGE
         merge_stmt = OnConflictUpsert.create_merge_upsert(
             table=sample_table,
             values=values,
@@ -117,6 +118,20 @@ class TestOnConflictUpsert:
         assert isinstance(merge_stmt, MergeStatement)
         assert merge_stmt.table == sample_table
         assert ":key" in str(merge_stmt.source)  # Check for parameter placeholder
+        assert "FROM DUAL" not in str(merge_stmt.source)  # Should not have FROM DUAL by default
+
+        # Test Oracle-specific MERGE
+        oracle_merge_stmt = OnConflictUpsert.create_merge_upsert(
+            table=sample_table,
+            values=values,
+            conflict_columns=conflict_columns,
+            dialect_name="oracle",
+        )
+
+        assert isinstance(oracle_merge_stmt, MergeStatement)
+        assert oracle_merge_stmt.table == sample_table
+        assert ":key" in str(oracle_merge_stmt.source)  # Check for parameter placeholder
+        assert "FROM DUAL" in str(oracle_merge_stmt.source)  # Oracle should have FROM DUAL
         assert "SELECT" in str(merge_stmt.source)
 
 
