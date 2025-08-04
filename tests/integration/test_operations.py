@@ -299,9 +299,9 @@ async def test_create_upsert_with_supported_dialects(
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
     # Create table
-    if hasattr(any_engine, "connect"):
+    if isinstance(any_engine, AsyncEngine):
         # Async engine
-        async with any_engine.connect() as conn:  # type: ignore[attr-defined]
+        async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
@@ -331,7 +331,7 @@ async def test_create_upsert_with_supported_dialects(
             assert hasattr(upsert_stmt, "on_duplicate_key_update")
 
     finally:
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
@@ -358,9 +358,9 @@ async def test_upsert_insert_then_update_cycle(
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
     # Create table
-    if hasattr(any_engine, "connect"):
+    if isinstance(any_engine, AsyncEngine):
         # Async engine
-        async with any_engine.connect() as conn:  # type: ignore[attr-defined]
+        async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
@@ -427,7 +427,7 @@ async def test_upsert_insert_then_update_cycle(
         assert len(all_rows) == 1
 
     finally:
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
@@ -450,9 +450,9 @@ async def test_batch_upsert_operations(
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
     # Create table
-    if hasattr(any_engine, "connect"):
+    if isinstance(any_engine, AsyncEngine):
         # Async engine
-        async with any_engine.connect() as conn:  # type: ignore[attr-defined]
+        async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
@@ -520,7 +520,7 @@ async def test_batch_upsert_operations(
         assert updated_row.value == "updated_value1"
 
     finally:
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
@@ -558,9 +558,9 @@ async def test_merge_statement_with_oracle_postgres(
         pytest.skip(f"Dialect '{dialect_name}' does not support MERGE statements")
 
     # Create table
-    if hasattr(any_engine, "connect"):
+    if isinstance(any_engine, AsyncEngine):
         # Async engine
-        async with any_engine.connect() as conn:  # type: ignore[attr-defined]
+        async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
@@ -628,7 +628,7 @@ async def test_merge_statement_with_oracle_postgres(
         assert len(all_rows) == 1
 
     finally:
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
@@ -703,9 +703,9 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
         __tablename__ = "test_store_operations"
 
     # Create table
-    if hasattr(any_engine, "connect"):
+    if isinstance(any_engine, AsyncEngine):
         # Async engine
-        async with any_engine.connect() as conn:  # type: ignore[attr-defined]
+        async with any_engine.connect() as conn:
             await conn.run_sync(TestStoreModel.metadata.create_all)
             await conn.commit()
     else:
@@ -714,7 +714,7 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
 
     try:
         # Create store configuration
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig = SQLAlchemyAsyncConfig(engine_instance=any_engine)  # type: ignore[arg-type]
         else:
             config = SQLAlchemySyncConfig(engine_instance=any_engine)  # type: ignore[arg-type]
@@ -737,7 +737,7 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
         assert updated_result == b"updated_value"
 
         # Verify only one record exists in the store
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             # Async
             from sqlalchemy import func
             from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -758,7 +758,7 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
                 assert count == 1
 
     finally:
-        if hasattr(any_engine, "connect"):
+        if isinstance(any_engine, AsyncEngine):
             # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(TestStoreModel.metadata.drop_all)

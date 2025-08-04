@@ -28,7 +28,7 @@ pytestmark = [
 ]
 
 
-class TestStoreModel(StoreModelMixin, UUIDv7Base):
+class IntegrationTestStoreModel(StoreModelMixin, UUIDv7Base):
     """Test store model for integration tests."""
 
     __tablename__ = "integration_test_store"
@@ -37,7 +37,7 @@ class TestStoreModel(StoreModelMixin, UUIDv7Base):
 @pytest.fixture
 def test_store_model() -> type[StoreModelMixin]:
     """Return the test store model."""
-    return TestStoreModel
+    return IntegrationTestStoreModel
 
 
 # Engine fixtures - explicit parametrization for ALL database backends
@@ -523,7 +523,7 @@ async def test_store_database_upsert_integration(
     engine = async_store._config.engine_instance
     model = async_store._model
 
-    if hasattr(engine, "connect"):
+    if isinstance(engine, AsyncEngine):
         # Async engine
         async_session_factory = async_sessionmaker(bind=engine)
         async with async_session_factory() as session:

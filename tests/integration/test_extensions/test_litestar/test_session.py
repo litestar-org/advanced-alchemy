@@ -42,7 +42,7 @@ pytestmark = [
 ]
 
 
-class TestSessionModel(SessionModelMixin, UUIDv7Base):
+class IntegrationTestSessionModel(SessionModelMixin, UUIDv7Base):
     """Test session model for integration tests."""
 
     __tablename__ = "integration_test_sessions"
@@ -51,7 +51,7 @@ class TestSessionModel(SessionModelMixin, UUIDv7Base):
 @pytest.fixture
 def test_session_model() -> type[SessionModelMixin]:
     """Return the test session model."""
-    return TestSessionModel
+    return IntegrationTestSessionModel
 
 
 @pytest.fixture
