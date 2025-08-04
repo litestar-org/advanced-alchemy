@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
@@ -15,6 +16,41 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from pytest import MonkeyPatch
+
+
+@pytest.fixture(scope="session", autouse=True)
+def configure_spanner_logging() -> None:
+    """Configure logging to prevent Google Cloud Spanner emulator logging errors during parallel test execution.
+
+    The Google Cloud Spanner client library tries to write logs during test execution with pytest-xdist,
+    but worker processes have closed file streams, causing "I/O operation on closed file" errors.
+    This fixture configures a safe logging handler to suppress these errors.
+    """
+
+    # Create a safe logging handler that won't fail on closed streams
+    class SafeStreamHandler(logging.StreamHandler):
+        def emit(self, record: logging.LogRecord) -> None:
+            try:
+                super().emit(record)
+            except (ValueError, OSError):
+                # Suppress I/O errors from closed streams during test execution
+                pass
+
+    # Configure Google Cloud loggers to use the safe handler
+    gcp_loggers = [
+        "google.cloud.spanner_v1.database_sessions_manager",
+        "google.cloud.spanner",
+        "google.cloud",
+    ]
+
+    for logger_name in gcp_loggers:
+        logger = logging.getLogger(logger_name)
+        # Remove existing handlers that might cause issues
+        logger.handlers.clear()
+        # Add our safe handler
+        logger.addHandler(SafeStreamHandler())
+        logger.setLevel(logging.WARNING)  # Reduce verbosity
+        logger.propagate = False  # Prevent propagation to root logger
 
 
 @pytest.fixture(autouse=True)

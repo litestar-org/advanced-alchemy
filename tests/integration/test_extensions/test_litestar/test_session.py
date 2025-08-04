@@ -9,7 +9,7 @@ import datetime
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from functools import partial
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from unittest.mock import Mock
 
 import pytest
@@ -18,7 +18,8 @@ from litestar.middleware.session import SessionMiddleware
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.stores.base import Store
 from litestar.testing import AsyncTestClient
-from sqlalchemy import select
+from pytest import FixtureRequest
+from sqlalchemy import Engine, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -30,10 +31,6 @@ from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemyAsyncSessionBackend,
     SQLAlchemySyncSessionBackend,
 )
-
-if TYPE_CHECKING:
-    from pytest import FixtureRequest
-    from sqlalchemy import Engine
 
 pytestmark = [
     pytest.mark.integration,
