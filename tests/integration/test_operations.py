@@ -190,7 +190,7 @@ async def test_upsert_insert_then_update_cycle(
             any_session = async_session_factory()
         else:
             session_factory = sessionmaker(bind=any_engine)
-            any_session = session_factory()
+            any_session = session_factory()  # type: ignore[assignment]
 
         conflict_columns = ["key", "namespace"]
         update_columns = ["value", "created_at"]
@@ -286,7 +286,7 @@ async def test_batch_upsert_operations(any_engine: Engine | AsyncEngine, test_ta
             any_session = async_session_factory()
         else:
             session_factory = sessionmaker(bind=any_engine)
-            any_session = session_factory()
+            any_session = session_factory()  # type: ignore[assignment]
 
         conflict_columns = ["key", "namespace"]
         update_columns = ["value", "created_at"]
@@ -395,7 +395,7 @@ async def test_merge_statement_with_oracle_postgres(
             any_session = async_session_factory()
         else:
             session_factory = sessionmaker(bind=any_engine)
-            any_session = session_factory()
+            any_session = session_factory()  # type: ignore[assignment]
 
         conflict_columns = ["key", "namespace"]
         update_columns = ["value", "created_at"]
@@ -502,7 +502,7 @@ async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngin
     values = {"id": 1, "key": "test", "value": "test_value"}
     conflict_columns = ["key"]
 
-    merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
+    merge_stmt, _ = OnConflictUpsert.create_merge_upsert(
         table=test_table,
         values=values,
         conflict_columns=conflict_columns,
