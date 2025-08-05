@@ -20,9 +20,8 @@ from litestar.stores.base import Store
 from litestar.testing import AsyncTestClient
 from sqlalchemy import Engine, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import DeclarativeBase, Session
 
-from advanced_alchemy.base import UUIDv7Base
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.session import (
@@ -36,15 +35,19 @@ pytestmark = [
 ]
 
 
-class IntegrationTestSessionModel(SessionModelMixin, UUIDv7Base):
-    """Test session model for integration tests."""
-
-    __tablename__ = "integration_test_sessions"
-
-
 @pytest.fixture
-def test_session_model() -> type[SessionModelMixin]:
-    """Return the test session model."""
+def test_session_model(request: pytest.FixtureRequest) -> type[SessionModelMixin]:
+    """Return a unique test session model for each test to prevent metadata pollution."""
+    test_id = id(request.node)
+
+    class TestSessionBase(DeclarativeBase):
+        pass
+
+    class IntegrationTestSessionModel(SessionModelMixin, TestSessionBase):
+        """Test session model for integration tests."""
+
+        __tablename__ = f"integration_test_sessions_{test_id}"
+
     return IntegrationTestSessionModel
 
 

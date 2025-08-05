@@ -12,9 +12,8 @@ from typing import TYPE_CHECKING
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from advanced_alchemy.base import UUIDv7Base
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
@@ -27,15 +26,19 @@ pytestmark = [
 ]
 
 
-class IntegrationTestStoreModel(StoreModelMixin, UUIDv7Base):
-    """Test store model for integration tests."""
-
-    __tablename__ = "integration_test_store"
-
-
 @pytest.fixture
-def test_store_model() -> type[StoreModelMixin]:
-    """Return the test store model."""
+def test_store_model(request: pytest.FixtureRequest) -> type[StoreModelMixin]:
+    """Return a unique test store model for each test to prevent metadata pollution."""
+    test_id = id(request.node)
+
+    class TestStoreBase(DeclarativeBase):
+        pass
+
+    class IntegrationTestStoreModel(StoreModelMixin, TestStoreBase):
+        """Test store model for integration tests."""
+
+        __tablename__ = f"integration_test_store_{test_id}"
+
     return IntegrationTestStoreModel
 
 
