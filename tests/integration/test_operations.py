@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, Table, UniqueConstraint, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from advanced_alchemy.operations import MergeStatement, OnConflictUpsert
 
@@ -119,6 +119,9 @@ async def test_create_upsert_with_supported_dialects(
 
     dialect_name = any_engine.dialect.name
 
+    if dialect_name == "spanner":
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
+
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
@@ -173,6 +176,9 @@ async def test_upsert_insert_then_update_cycle(
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
+
+    if dialect_name == "spanner":
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
 
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
@@ -269,6 +275,9 @@ async def test_batch_upsert_operations(any_engine: Engine | AsyncEngine, test_ta
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
+
+    if dialect_name == "spanner":
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
 
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
@@ -528,9 +537,18 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
-    # Create a test store model
-    class TestStoreModel(StoreModelMixin):
-        __tablename__ = "test_store_operations"
+    dialect_name = getattr(any_engine.dialect, "name", "unknown")
+
+    if dialect_name == "spanner":
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
+    engine_type = "async" if isinstance(any_engine, AsyncEngine) else "sync"
+    table_suffix = f"{dialect_name}_{engine_type}_{id(any_engine)}"
+
+    class TestStoreBase(DeclarativeBase):
+        pass
+
+    class TestStoreModel(StoreModelMixin, TestStoreBase):
+        __tablename__ = f"test_store_operations_{table_suffix}"
 
     # Create table
     if isinstance(any_engine, AsyncEngine):

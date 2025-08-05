@@ -288,51 +288,37 @@ class OnConflictUpsert:
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
 
-        source_values = ", ".join([f":{key} as {key}" for key in values])
-        source = f"SELECT {source_values} FROM DUAL" if dialect_name == "oracle" else f"SELECT {source_values}"  # noqa: S608
+        param_mapping: dict[str, int] = {}
+
+        if dialect_name == "oracle":
+            source_values = ", ".join([f":{key} as {key}" for key in values])
+            source = f"SELECT {source_values} FROM DUAL"  # noqa: S608
+        else:
+            source, param_mapping = _create_postgresql_source(values)
 
         on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
         on_condition = text(" AND ".join(on_conditions))
 
-        when_matched_update: dict[str, Any] = {col: bindparam(col) for col in update_columns}
+        if dialect_name == "oracle":
+            when_matched_update: dict[str, Any] = {col: bindparam(col) for col in update_columns}
+        else:
+            when_matched_update = {
+                col: bindparam(f"${param_mapping[col]}") for col in update_columns if col in param_mapping
+            }
 
         insert_columns = list(values.keys())
-        additional_params = {}
+        additional_params: dict[str, Any] = {}
 
         if dialect_name == "oracle":
-            for col in table.primary_key.columns:
-                if (
-                    col.name not in values
-                    and hasattr(col, "default")
-                    and col.default is not None
-                    and (hasattr(col.default, "arg") and callable(col.default.arg))  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue]
-                ):
-                    try:
-                        if hasattr(col.default, "arg"):
-                            try:
-                                default_value = col.default.arg()  # pyright: ignore[reportAttributeAccessIssue]
-                            except TypeError:
-                                default_value = col.default.arg(None)  # pyright: ignore[reportAttributeAccessIssue]
+            source, additional_params = _create_oracle_additional_params(table, values, source)
+            insert_columns = list(values.keys()) + list(additional_params.keys())
 
-                            # Convert UUID to hex format for Oracle compatibility
-
-                            if isinstance(default_value, UUID):
-                                default_value = default_value.hex
-
-                            additional_params[col.name] = default_value
-                            insert_columns.append(col.name)
-                    except (TypeError, AttributeError, ValueError):
-                        continue
-
-            if additional_params:
-                additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]  # pyright: ignore[reportUnknownVariableType]
-                if source.endswith(" FROM DUAL"):
-                    base_source = source[: -len(" FROM DUAL")]
-                    source = f"{base_source}, {', '.join(additional_selects)} FROM DUAL"
-                else:
-                    source = f"{source}, {', '.join(additional_selects)}"
-
-        when_not_matched_insert: dict[str, Any] = {col: bindparam(col) for col in insert_columns}
+        if dialect_name == "oracle":
+            when_not_matched_insert: dict[str, Any] = {col: bindparam(col) for col in insert_columns}
+        else:
+            when_not_matched_insert = {
+                col: bindparam(f"${param_mapping[col]}") for col in insert_columns if col in param_mapping
+            }
 
         merge_stmt = MergeStatement(
             table=table,
@@ -343,3 +329,56 @@ class OnConflictUpsert:
         )
 
         return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
+
+
+def _create_postgresql_source(values: "dict[str, Any]") -> "tuple[str, dict[str, int]]":
+    """Create PostgreSQL source clause with positional parameters."""
+    param_idx = 1
+    source_parts: list[str] = []
+    param_mapping: dict[str, int] = {}
+    for key in values:
+        source_parts.append(f"${param_idx} as {key}")
+        param_mapping[key] = param_idx
+        param_idx += 1
+    source_values = ", ".join(source_parts)
+    return f"SELECT {source_values}", param_mapping
+
+
+def _create_oracle_additional_params(
+    table: Table, values: "dict[str, Any]", source: str
+) -> "tuple[str, dict[str, Any]]":
+    """Handle Oracle-specific UUID primary key generation."""
+    additional_params = {}
+    insert_columns = list(values.keys())
+
+    for col in table.primary_key.columns:
+        if (
+            col.name not in values
+            and hasattr(col, "default")
+            and col.default is not None
+            and (hasattr(col.default, "arg") and callable(col.default.arg))  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportAttributeAccessIssue]
+        ):
+            try:
+                if hasattr(col.default, "arg"):
+                    try:
+                        default_value = col.default.arg()  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+                    except TypeError:
+                        default_value = col.default.arg(None)  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+
+                    if isinstance(default_value, UUID):
+                        default_value = default_value.hex
+
+                    additional_params[col.name] = default_value
+                    insert_columns.append(col.name)
+            except (TypeError, AttributeError, ValueError):
+                continue
+
+    if additional_params:
+        additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]  # pyright: ignore[reportUnknownVariableType]
+        if source.endswith(" FROM DUAL"):
+            base_source = source[: -len(" FROM DUAL")]
+            source = f"{base_source}, {', '.join(additional_selects)} FROM DUAL"
+        else:
+            source = f"{source}, {', '.join(additional_selects)}"
+
+    return source, additional_params  # pyright: ignore[reportUnknownVariableType]
