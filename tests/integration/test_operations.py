@@ -7,12 +7,12 @@ and MERGE operations work correctly across different database backends.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, Table, UniqueConstraint, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.operations import MergeStatement, OnConflictUpsert
 
@@ -65,22 +65,38 @@ def updated_values() -> dict[str, Any]:
     }
 
 
-@pytest.fixture(params=["sync", "async"], ids=["sync", "async"])
-def any_engine(request: FixtureRequest, engine: Engine, async_engine: AsyncEngine) -> Engine | AsyncEngine:
-    """Return either sync or async engine for combined testing."""
-    return engine if request.param == "sync" else async_engine
-
-
-@pytest.fixture(params=["sync", "async"], ids=["sync", "async"])
-def any_session(request: FixtureRequest, session: Session, async_session: AsyncSession) -> Session | AsyncSession:
-    """Return either sync or async session for combined testing."""
-    return session if request.param == "sync" else async_session
+@pytest.fixture(
+    params=[
+        # Sync engines
+        "sqlite_engine",
+        "duckdb_engine",
+        "psycopg_engine",
+        "mssql_engine",
+        "oracle18c_engine",
+        "oracle23ai_engine",
+        "cockroachdb_engine",
+        "spanner_engine",
+        "mock_sync_engine",
+        # Async engines
+        "aiosqlite_engine",
+        "asyncmy_engine",
+        "asyncpg_engine",
+        "psycopg_async_engine",
+        "cockroachdb_async_engine",
+        "mssql_async_engine",
+        "oracle18c_async_engine",
+        "oracle23ai_async_engine",
+        "mock_async_engine",
+    ]
+)
+def any_engine(request: FixtureRequest) -> Engine | AsyncEngine:
+    """Return any available engine for testing."""
+    return cast("Engine | AsyncEngine", request.getfixturevalue(request.param))
 
 
 async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEngine) -> None:
     """Test dialect support detection against actual engines."""
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
@@ -93,30 +109,24 @@ async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEng
 
 async def test_create_upsert_with_supported_dialects(
     any_engine: Engine | AsyncEngine,
-    any_session: Session | AsyncSession,
     test_table: Table,
     upsert_values: dict[str, Any],
 ) -> None:
     """Test upsert creation against supported database dialects."""
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
 
-    # Skip unsupported dialects
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
-    # Create table
     if isinstance(any_engine, AsyncEngine):
-        # Async engine
         async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
-        # Sync engine
         test_table.create(any_engine)  # type: ignore[arg-type]
 
     try:
@@ -143,18 +153,15 @@ async def test_create_upsert_with_supported_dialects(
 
     finally:
         if isinstance(any_engine, AsyncEngine):
-            # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
                 await conn.commit()
         else:
-            # Sync engine
             test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
 
 
 async def test_upsert_insert_then_update_cycle(
     any_engine: Engine | AsyncEngine,
-    any_session: Session | AsyncSession,
     test_table: Table,
     upsert_values: dict[str, Any],
     updated_values: dict[str, Any],
@@ -162,27 +169,29 @@ async def test_upsert_insert_then_update_cycle(
     """Test complete upsert cycle: insert new, then update existing."""
     from tests.helpers import maybe_async
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
 
-    # Skip unsupported dialects
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
-    # Create table
     if isinstance(any_engine, AsyncEngine):
-        # Async engine
         async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
-        # Sync engine
         test_table.create(any_engine)  # type: ignore[arg-type]
 
     try:
+        if isinstance(any_engine, AsyncEngine):
+            async_session_factory = async_sessionmaker(bind=any_engine)
+            any_session = async_session_factory()
+        else:
+            session_factory = sessionmaker(bind=any_engine)
+            any_session = session_factory()
+
         conflict_columns = ["key", "namespace"]
         update_columns = ["value", "created_at"]
 
@@ -241,44 +250,44 @@ async def test_upsert_insert_then_update_cycle(
         all_rows = count_result.fetchall()  # type: ignore[attr-defined]
         assert len(all_rows) == 1
 
+        await maybe_async(any_session.close())
+
     finally:
         if isinstance(any_engine, AsyncEngine):
-            # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
                 await conn.commit()
         else:
-            # Sync engine
             test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
 
 
-async def test_batch_upsert_operations(
-    any_engine: Engine | AsyncEngine, any_session: Session | AsyncSession, test_table: Table
-) -> None:
+async def test_batch_upsert_operations(any_engine: Engine | AsyncEngine, test_table: Table) -> None:
     """Test batch upsert operations with multiple records."""
     from tests.helpers import maybe_async
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
 
-    # Skip unsupported dialects
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
-    # Create table
     if isinstance(any_engine, AsyncEngine):
-        # Async engine
         async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
-        # Sync engine
         test_table.create(any_engine)  # type: ignore[arg-type]
 
     try:
+        if isinstance(any_engine, AsyncEngine):
+            async_session_factory = async_sessionmaker(bind=any_engine)
+            any_session = async_session_factory()
+        else:
+            session_factory = sessionmaker(bind=any_engine)
+            any_session = session_factory()
+
         conflict_columns = ["key", "namespace"]
         update_columns = ["value", "created_at"]
 
@@ -338,20 +347,19 @@ async def test_batch_upsert_operations(
         assert updated_row is not None
         assert updated_row.value == "updated_value1"
 
+        await maybe_async(any_session.close())
+
     finally:
         if isinstance(any_engine, AsyncEngine):
-            # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
                 await conn.commit()
         else:
-            # Sync engine
             test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
 
 
 async def test_merge_statement_with_oracle_postgres(
     any_engine: Engine | AsyncEngine,
-    any_session: Session | AsyncSession,
     test_table: Table,
     upsert_values: dict[str, Any],
     updated_values: dict[str, Any],
@@ -359,13 +367,11 @@ async def test_merge_statement_with_oracle_postgres(
     """Test MERGE statement operations with Oracle and PostgreSQL 15+."""
     from tests.helpers import maybe_async
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
 
-    # Check if this dialect supports MERGE
     supports_merge = dialect_name == "oracle" or (
         dialect_name == "postgresql"
         and hasattr(any_engine.dialect, "server_version_info")
@@ -376,17 +382,21 @@ async def test_merge_statement_with_oracle_postgres(
     if not supports_merge:
         pytest.skip(f"Dialect '{dialect_name}' does not support MERGE statements")
 
-    # Create table
     if isinstance(any_engine, AsyncEngine):
-        # Async engine
         async with any_engine.connect() as conn:
             await conn.run_sync(test_table.create)
             await conn.commit()
     else:
-        # Sync engine
         test_table.create(any_engine)  # type: ignore[arg-type]
 
     try:
+        if isinstance(any_engine, AsyncEngine):
+            async_session_factory = async_sessionmaker(bind=any_engine)
+            any_session = async_session_factory()
+        else:
+            session_factory = sessionmaker(bind=any_engine)
+            any_session = session_factory()
+
         conflict_columns = ["key", "namespace"]
         update_columns = ["value", "created_at"]
 
@@ -450,27 +460,25 @@ async def test_merge_statement_with_oracle_postgres(
         all_rows = count_result.fetchall()  # type: ignore[attr-defined]
         assert len(all_rows) == 1
 
+        await maybe_async(any_session.close())
+
     finally:
         if isinstance(any_engine, AsyncEngine):
-            # Async engine
             async with any_engine.connect() as conn:  # type: ignore[attr-defined]
                 await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
                 await conn.commit()
         else:
-            # Sync engine
             test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
 
 
 async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngine) -> None:
     """Test MERGE statement compilation for Oracle and PostgreSQL."""
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
 
-    # Check if this dialect supports MERGE
     supports_merge = dialect_name == "oracle" or (
         dialect_name == "postgresql"
         and hasattr(any_engine.dialect, "server_version_info")
@@ -517,7 +525,6 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
     from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
     from tests.helpers import maybe_async
 
-    # Skip mock engines - integration tests should test real databases
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
