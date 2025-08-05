@@ -177,6 +177,7 @@ def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
     mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
     mock.dialect.name = "mock"
+    mock.dialect.server_version_info = None
     yield mock
 
 
@@ -257,8 +258,8 @@ def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
         ),
     ],
 )
-def engine(request: FixtureRequest) -> Generator[Engine, None, None]:
-    yield cast(Engine, request.getfixturevalue(request.param))
+def engine(request: FixtureRequest) -> Engine:
+    return cast(Engine, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
@@ -376,6 +377,7 @@ async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
     mock = cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
     mock.dialect.name = "mock"
+    mock.dialect.server_version_info = None
     yield mock
 
 
@@ -456,9 +458,9 @@ async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
         ),
     ],
 )
-async def async_engine(request: FixtureRequest) -> AsyncGenerator[AsyncEngine, None]:
+def async_engine(request: FixtureRequest) -> AsyncEngine:
     """Parametrized fixture to provide different async SQLAlchemy engines."""
-    yield cast(AsyncEngine, request.getfixturevalue(request.param))
+    return cast(AsyncEngine, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()

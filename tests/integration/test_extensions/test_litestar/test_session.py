@@ -18,10 +18,9 @@ from litestar.middleware.session import SessionMiddleware
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.stores.base import Store
 from litestar.testing import AsyncTestClient
-from pytest import FixtureRequest
 from sqlalchemy import Engine, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.base import UUIDv7Base
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
@@ -53,203 +52,6 @@ def test_session_model() -> type[SessionModelMixin]:
 def mock_store() -> Store:
     """Create a mock store for testing."""
     return Mock(spec=Store)
-
-
-# Engine fixtures - explicit parametrization for ALL database backends
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "sqlite_engine",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-            ],
-        ),
-        pytest.param(
-            "duckdb_engine",
-            marks=[
-                pytest.mark.duckdb,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("duckdb"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23ai_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_engine",
-            marks=[
-                pytest.mark.psycopg_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "spanner_engine",
-            marks=[
-                pytest.mark.spanner,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("spanner"),
-            ],
-        ),
-        pytest.param(
-            "mssql_engine",
-            marks=[
-                pytest.mark.mssql_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_engine",
-            marks=[
-                pytest.mark.cockroachdb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mock_sync_engine",
-            marks=[
-                pytest.mark.mock_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def engine(request: FixtureRequest) -> Engine:
-    """Return a synchronous engine. Parametrized to test all supported database backends."""
-    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]
-
-
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "aiosqlite_engine",
-            marks=[
-                pytest.mark.aiosqlite,
-                pytest.mark.integration,
-            ],
-        ),
-        pytest.param(
-            "asyncmy_engine",
-            marks=[
-                pytest.mark.asyncmy,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mysql"),
-            ],
-        ),
-        pytest.param(
-            "asyncpg_engine",
-            marks=[
-                pytest.mark.asyncpg,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_async_engine",
-            marks=[
-                pytest.mark.psycopg_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_async_engine",
-            marks=[
-                pytest.mark.cockroachdb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mssql_async_engine",
-            marks=[
-                pytest.mark.mssql_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23ai_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "mock_async_engine",
-            marks=[
-                pytest.mark.mock_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def async_engine(request: FixtureRequest) -> AsyncEngine:
-    """Return an asynchronous engine. Parametrized to test all supported database backends."""
-    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]
-
-
-@pytest.fixture
-def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None, None]:
-    """Return a synchronous session for the parametrized engine."""
-    if "mock_sync_engine" in request.fixturenames or getattr(engine.dialect, "name", "") == "mock":
-        from unittest.mock import create_autospec
-
-        session_mock = create_autospec(Session, instance=True)
-        session_mock.bind = engine
-        yield session_mock
-    else:
-        session_instance = sessionmaker(bind=engine, expire_on_commit=False)()
-        try:
-            yield session_instance
-        finally:
-            session_instance.rollback()
-            session_instance.close()
-
-
-@pytest.fixture
-async def async_session(async_engine: AsyncEngine, request: FixtureRequest) -> AsyncGenerator[AsyncSession, None]:
-    """Return an asynchronous session for the parametrized async engine."""
-    if "mock_async_engine" in request.fixturenames or getattr(async_engine.dialect, "name", "") == "mock":
-        from unittest.mock import create_autospec
-
-        session_mock = create_autospec(AsyncSession, instance=True)
-        session_mock.bind = async_engine
-        yield session_mock
-    else:
-        session_instance = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
-        try:
-            yield session_instance
-        finally:
-            await session_instance.rollback()
-            await session_instance.close()
 
 
 # Session backend fixtures
@@ -299,13 +101,9 @@ async def async_session_backend(
 @pytest.fixture
 def setup_sync_database(engine: Engine, test_session_model: type[SessionModelMixin]) -> Generator[None, None, None]:
     """Set up database tables for sync tests."""
-    dialect_name = getattr(engine.dialect, "name", "")
-    if dialect_name != "mock":
-        test_session_model.metadata.create_all(engine)
-        yield
-        test_session_model.metadata.drop_all(engine, checkfirst=True)
-    else:
-        yield
+    test_session_model.metadata.create_all(engine)
+    yield
+    test_session_model.metadata.drop_all(engine, checkfirst=True)
 
 
 @pytest.fixture
@@ -313,15 +111,11 @@ async def setup_async_database(
     async_engine: AsyncEngine, test_session_model: type[SessionModelMixin]
 ) -> AsyncGenerator[None, None]:
     """Set up database tables for async tests."""
-    dialect_name = getattr(async_engine.dialect, "name", "")
-    if dialect_name != "mock":
-        async with async_engine.begin() as conn:
-            await conn.run_sync(test_session_model.metadata.create_all)
-        yield
-        async with async_engine.begin() as conn:
-            await conn.run_sync(lambda sync_conn: test_session_model.metadata.drop_all(sync_conn, checkfirst=True))
-    else:
-        yield
+    async with async_engine.begin() as conn:
+        await conn.run_sync(test_session_model.metadata.create_all)
+    yield
+    async with async_engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: test_session_model.metadata.drop_all(sync_conn, checkfirst=True))
 
 
 def _handle_database_encoding(data: Optional[bytes], expected: bytes, dialect_name: str) -> None:
@@ -352,10 +146,6 @@ async def test_async_session_backend_complete_lifecycle(
     session_id = str(uuid.uuid4())
     original_data = b"test_data_123"
     updated_data = b"updated_data_456"
-
-    # Skip mock engines
-    if getattr(async_session.bind.dialect, "name", "") == "mock":
-        pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = getattr(async_session.bind.dialect, "name", "")
 

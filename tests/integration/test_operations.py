@@ -7,13 +7,12 @@ and MERGE operations work correctly across different database backends.
 from __future__ import annotations
 
 import datetime
-from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, Table, UniqueConstraint, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.operations import MergeStatement, OnConflictUpsert
 
@@ -66,202 +65,6 @@ def updated_values() -> dict[str, Any]:
     }
 
 
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "sqlite_engine",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-            ],
-        ),
-        pytest.param(
-            "duckdb_engine",
-            marks=[
-                pytest.mark.duckdb,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("duckdb"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23ai_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_engine",
-            marks=[
-                pytest.mark.psycopg_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "spanner_engine",
-            marks=[
-                pytest.mark.spanner,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("spanner"),
-            ],
-        ),
-        pytest.param(
-            "mssql_engine",
-            marks=[
-                pytest.mark.mssql_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_engine",
-            marks=[
-                pytest.mark.cockroachdb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mock_sync_engine",
-            marks=[
-                pytest.mark.mock_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def engine(request: FixtureRequest) -> Engine:
-    """Return a synchronous engine. Parametrized to test all supported database backends."""
-    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]
-
-
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "aiosqlite_engine",
-            marks=[
-                pytest.mark.aiosqlite,
-                pytest.mark.integration,
-            ],
-        ),
-        pytest.param(
-            "asyncmy_engine",
-            marks=[
-                pytest.mark.asyncmy,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mysql"),
-            ],
-        ),
-        pytest.param(
-            "asyncpg_engine",
-            marks=[
-                pytest.mark.asyncpg,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_async_engine",
-            marks=[
-                pytest.mark.psycopg_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_async_engine",
-            marks=[
-                pytest.mark.cockroachdb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mssql_async_engine",
-            marks=[
-                pytest.mark.mssql_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23ai_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "mock_async_engine",
-            marks=[
-                pytest.mark.mock_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def async_engine(request: FixtureRequest) -> AsyncEngine:
-    """Return an asynchronous engine. Parametrized to test all supported database backends."""
-    return request.getfixturevalue(request.param)  # type: ignore[no-any-return]
-
-
-@pytest.fixture
-def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None, None]:
-    """Return a synchronous session for the parametrized engine."""
-    if "mock_sync_engine" in request.fixturenames or getattr(engine.dialect, "name", "") == "mock":
-        from unittest.mock import create_autospec
-
-        session_mock = create_autospec(Session, instance=True)
-        session_mock.bind = engine
-        yield session_mock
-    else:
-        session_instance = sessionmaker(bind=engine, expire_on_commit=False)()
-        try:
-            yield session_instance
-        finally:
-            session_instance.rollback()
-            session_instance.close()
-
-
-@pytest.fixture
-async def async_session(async_engine: AsyncEngine, request: FixtureRequest) -> AsyncGenerator[AsyncSession, None]:
-    """Return an asynchronous session for the parametrized async engine."""
-    if "mock_async_engine" in request.fixturenames or getattr(async_engine.dialect, "name", "") == "mock":
-        from unittest.mock import create_autospec
-
-        session_mock = create_autospec(AsyncSession, instance=True)
-        session_mock.bind = async_engine
-        yield session_mock
-    else:
-        session_instance = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
-        try:
-            yield session_instance
-        finally:
-            await session_instance.rollback()
-            await session_instance.close()
-
-
 @pytest.fixture(params=["sync", "async"], ids=["sync", "async"])
 def any_engine(request: FixtureRequest, engine: Engine, async_engine: AsyncEngine) -> Engine | AsyncEngine:
     """Return either sync or async engine for combined testing."""
@@ -276,6 +79,10 @@ def any_session(request: FixtureRequest, session: Session, async_session: AsyncS
 
 async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEngine) -> None:
     """Test dialect support detection against actual engines."""
+
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
     expected_support = dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
@@ -292,10 +99,14 @@ async def test_create_upsert_with_supported_dialects(
 ) -> None:
     """Test upsert creation against supported database dialects."""
 
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
     dialect_name = any_engine.dialect.name
 
-    # Skip mock engines and unsupported dialects
-    if dialect_name == "mock" or not OnConflictUpsert.supports_native_upsert(dialect_name):
+    # Skip unsupported dialects
+    if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
     # Create table
@@ -351,10 +162,14 @@ async def test_upsert_insert_then_update_cycle(
     """Test complete upsert cycle: insert new, then update existing."""
     from tests.helpers import maybe_async
 
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
     dialect_name = any_engine.dialect.name
 
-    # Skip mock engines and unsupported dialects
-    if dialect_name == "mock" or not OnConflictUpsert.supports_native_upsert(dialect_name):
+    # Skip unsupported dialects
+    if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
     # Create table
@@ -443,10 +258,14 @@ async def test_batch_upsert_operations(
     """Test batch upsert operations with multiple records."""
     from tests.helpers import maybe_async
 
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
     dialect_name = any_engine.dialect.name
 
-    # Skip mock engines and unsupported dialects
-    if dialect_name == "mock" or not OnConflictUpsert.supports_native_upsert(dialect_name):
+    # Skip unsupported dialects
+    if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
     # Create table
@@ -540,11 +359,11 @@ async def test_merge_statement_with_oracle_postgres(
     """Test MERGE statement operations with Oracle and PostgreSQL 15+."""
     from tests.helpers import maybe_async
 
-    dialect_name = any_engine.dialect.name
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
 
-    # Skip non-MERGE supporting dialects and mock engines
-    if dialect_name == "mock":
-        pytest.skip("Mock engine cannot test MERGE functionality")
+    dialect_name = any_engine.dialect.name
 
     # Check if this dialect supports MERGE
     supports_merge = dialect_name == "oracle" or (
@@ -644,11 +463,12 @@ async def test_merge_statement_with_oracle_postgres(
 
 async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngine) -> None:
     """Test MERGE statement compilation for Oracle and PostgreSQL."""
-    dialect_name = any_engine.dialect.name
 
-    # Skip non-MERGE supporting dialects and mock engines
-    if dialect_name == "mock":
-        pytest.skip("Mock engine cannot test MERGE compilation")
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
+    dialect_name = any_engine.dialect.name
 
     # Check if this dialect supports MERGE
     supports_merge = dialect_name == "oracle" or (
@@ -697,11 +517,9 @@ async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> Non
     from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
     from tests.helpers import maybe_async
 
-    dialect_name = any_engine.dialect.name
-
-    # Skip mock engines
-    if dialect_name == "mock":
-        pytest.skip("Mock engine cannot test store integration")
+    # Skip mock engines - integration tests should test real databases
+    if getattr(any_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
 
     # Create a test store model
     class TestStoreModel(StoreModelMixin):

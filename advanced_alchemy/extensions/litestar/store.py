@@ -179,7 +179,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
     def supports_upsert(dialect: Optional[Dialect] = None, force_disable_upsert: bool = False) -> bool:
         return bool(
             dialect
-            and (dialect.name in {"postgresql", "cockroachdb", "sqlite", "mysql", "duckdb"})
+            and (dialect.name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"})
             and not force_disable_upsert
         )
 
