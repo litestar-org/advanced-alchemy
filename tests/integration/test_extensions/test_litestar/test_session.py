@@ -143,6 +143,12 @@ async def test_async_session_backend_complete_lifecycle(
     setup_async_database: None,
 ) -> None:
     """Test complete session lifecycle: create, retrieve, update, delete."""
+
+    # Skip mock engines - integration tests should test real databases
+    engine_instance = async_session_backend.alchemy.engine_instance
+    if engine_instance is not None and getattr(engine_instance.dialect, "name", "") == "mock":
+        pytest.skip("Mock engine cannot test real database operations")
+
     session_id = str(uuid.uuid4())
     original_data = b"test_data_123"
     updated_data = b"updated_data_456"

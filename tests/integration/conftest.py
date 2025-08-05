@@ -19,10 +19,10 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def configure_spanner_logging() -> None:
-    """Configure logging to prevent Google Cloud Spanner emulator logging errors during parallel test execution.
+def configure_safe_logging() -> None:
+    """Configure logging to prevent I/O errors during parallel test execution.
 
-    The Google Cloud Spanner client library tries to write logs during test execution with pytest-xdist,
+    Both Google Cloud Spanner and SQLAlchemy try to write logs during test execution with pytest-xdist,
     but worker processes have closed file streams, causing "I/O operation on closed file" errors.
     This fixture configures a safe logging handler to suppress these errors.
     """
@@ -36,14 +36,19 @@ def configure_spanner_logging() -> None:
                 # Suppress I/O errors from closed streams during test execution
                 pass
 
-    # Configure Google Cloud loggers to use the safe handler
-    gcp_loggers = [
+    # Configure loggers that can cause I/O issues during parallel test execution
+    problematic_loggers = [
+        # Google Cloud Spanner loggers
         "google.cloud.spanner_v1.database_sessions_manager",
         "google.cloud.spanner",
         "google.cloud",
+        # SQLAlchemy engine loggers
+        "sqlalchemy.engine.Engine",
+        "sqlalchemy.engine",
+        "sqlalchemy.pool",
     ]
 
-    for logger_name in gcp_loggers:
+    for logger_name in problematic_loggers:
         logger = logging.getLogger(logger_name)
         # Remove existing handlers that might cause issues
         logger.handlers.clear()
