@@ -531,7 +531,8 @@ class AsyncPostgreSQLCleaner(AsyncDatabaseCleaner):
 
         table_list = ", ".join(f'"{table}"' for table in tables)
         # CockroachDB doesn't support RESTART IDENTITY
-        if "cockroach" in str(self.connection.bind.url).lower() if self.connection.bind else False:  # type: ignore[union-attr]
+        # For async connections, check the dialect name directly
+        if self.dialect_name == "cockroach":
             sql = f"TRUNCATE TABLE {table_list} CASCADE"
         else:
             sql = f"TRUNCATE TABLE {table_list} RESTART IDENTITY CASCADE"
@@ -543,7 +544,7 @@ class AsyncPostgreSQLCleaner(AsyncDatabaseCleaner):
     async def _reset_sequences(self) -> None:
         """Reset PostgreSQL sequences asynchronously."""
         # Skip sequence reset for CockroachDB as it doesn't support ALTER SEQUENCE ... RESTART
-        if "cockroach" in str(self.connection.bind.url).lower() if self.connection.bind else False:  # type: ignore[union-attr]
+        if self.dialect_name == "cockroach":
             return
 
         try:
