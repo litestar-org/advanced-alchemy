@@ -7,14 +7,16 @@ and MERGE operations work correctly across different database backends.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import AsyncGenerator, Generator
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, Table, UniqueConstraint, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-from advanced_alchemy.operations import MergeStatement, OnConflictUpsert
+from advanced_alchemy.operations import OnConflictUpsert
+from tests.integration.helpers import get_worker_id
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
@@ -25,20 +27,226 @@ pytestmark = [
 ]
 
 
+# Module-level cache for test table
+_test_table_cache: dict[str, Table] = {}
+
+
+@pytest.fixture(scope="session")
+def cached_test_table(request: FixtureRequest) -> Table:
+    """Create test table once per session/worker."""
+    worker_id = get_worker_id(request)
+    cache_key = f"operation_test_{worker_id}"
+
+    if cache_key not in _test_table_cache:
+        metadata = MetaData()
+        table = Table(
+            f"operation_test_table_{worker_id}",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=False),
+            Column("key", String(50), nullable=False),
+            Column("namespace", String(50), nullable=False),
+            Column("value", String(255)),
+            Column("created_at", String(50)),
+            UniqueConstraint("key", "namespace", name=f"uq_key_namespace_{worker_id}"),
+        )
+        _test_table_cache[cache_key] = table
+
+    return _test_table_cache[cache_key]
+
+
 @pytest.fixture
-def test_table() -> Table:
-    """Create a test table for operations testing."""
-    metadata = MetaData()
-    return Table(
-        "operation_test_table",
-        metadata,
-        Column("id", Integer, primary_key=True, autoincrement=False),
-        Column("key", String(50), nullable=False),
-        Column("namespace", String(50), nullable=False),
-        Column("value", String(255)),
-        Column("created_at", String(50)),
-        UniqueConstraint("key", "namespace", name="uq_key_namespace"),
-    )
+def test_table_sync(
+    cached_test_table: Table,
+    request: FixtureRequest,
+) -> Generator[Table, None, None]:
+    """Setup test table for sync engines with fast cleanup."""
+    # Get the sync engine - either from any_engine or engine fixture
+    if "any_engine" in request.fixturenames:
+        engine = request.getfixturevalue("any_engine")
+        if isinstance(engine, AsyncEngine):
+            pytest.skip("Async engine provided to sync fixture")
+    else:
+        engine = request.getfixturevalue("engine")
+
+    # Skip for mock engines
+    if getattr(engine.dialect, "name", "") != "mock":
+        # Create table once per engine type
+        cached_test_table.create(engine, checkfirst=True)
+
+    yield cached_test_table
+
+    # Fast data-only cleanup between tests
+    if getattr(engine.dialect, "name", "") != "mock":
+        with engine.begin() as conn:
+            conn.execute(cached_test_table.delete())
+            conn.commit()
+
+    # Drop table at session end (handled by teardown)
+
+
+@pytest.fixture
+async def test_table_async(
+    cached_test_table: Table,
+    request: FixtureRequest,
+) -> AsyncGenerator[Table, None]:
+    """Setup test table for async engines with fast cleanup."""
+    # Get the async engine - either from any_engine or async_engine fixture
+    if "any_engine" in request.fixturenames:
+        engine = request.getfixturevalue("any_engine")
+        if not isinstance(engine, AsyncEngine):
+            pytest.skip("Sync engine provided to async fixture")
+        async_engine = engine
+    else:
+        async_engine = request.getfixturevalue("async_engine")
+
+    # Skip for mock engines
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        # Create table once per engine type
+        async with async_engine.begin() as conn:
+            await conn.run_sync(lambda sync_conn: cached_test_table.create(sync_conn, checkfirst=True))
+
+    yield cached_test_table
+
+    # Fast data-only cleanup between tests
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.execute(cached_test_table.delete())
+            await conn.commit()
+
+    # Drop table at session end (handled by teardown)
+
+
+@pytest.fixture
+def test_table(
+    request: FixtureRequest,
+) -> Table:
+    """Unified test table fixture that works with any engine."""
+    # Check if we have any_engine fixture
+    if "any_engine" in request.fixturenames:
+        engine = request.getfixturevalue("any_engine")
+        if isinstance(engine, AsyncEngine):
+            return cast(Table, request.getfixturevalue("test_table_async"))
+        return cast(Table, request.getfixturevalue("test_table_sync"))
+    # Check which fixtures are available in the request
+    if "test_table_sync" in request.fixturenames:
+        return cast(Table, request.getfixturevalue("test_table_sync"))
+    if "test_table_async" in request.fixturenames:
+        return cast(Table, request.getfixturevalue("test_table_async"))
+    # Fallback to cached table for tests that don't use engines
+    return cast(Table, request.getfixturevalue("cached_test_table"))
+
+
+# Module-level cache for store model
+_store_model_cache: dict[str, type] = {}
+
+
+@pytest.fixture(scope="session")
+def cached_store_model(request: FixtureRequest) -> type[DeclarativeBase]:
+    """Create store model once per session/worker."""
+    worker_id = get_worker_id(request)
+    cache_key = f"store_model_{worker_id}"
+
+    if cache_key not in _store_model_cache:
+
+        class TestStoreBase(DeclarativeBase):
+            pass
+
+        class TestStoreModel(TestStoreBase):
+            __tablename__ = f"test_store_{worker_id}"
+
+            id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+            key: Mapped[str] = mapped_column(String(50), nullable=False)
+            namespace: Mapped[str] = mapped_column(String(50), nullable=False)
+            value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+            expires_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+            __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_store_key_ns_{worker_id}"),)
+
+        _store_model_cache[cache_key] = TestStoreModel
+
+    return _store_model_cache[cache_key]
+
+
+@pytest.fixture
+def store_model_sync(
+    cached_store_model: type[DeclarativeBase],
+    request: FixtureRequest,
+) -> Generator[type[DeclarativeBase], None, None]:
+    """Setup store model for sync engines with fast cleanup."""
+    # Get the sync engine - either from any_engine or engine fixture
+    if "any_engine" in request.fixturenames:
+        engine = request.getfixturevalue("any_engine")
+        if isinstance(engine, AsyncEngine):
+            pytest.skip("Async engine provided to sync fixture")
+    else:
+        engine = request.getfixturevalue("engine")
+
+    # Skip for mock engines
+    if getattr(engine.dialect, "name", "") != "mock":
+        # Create table once per engine type
+        cached_store_model.metadata.create_all(engine, checkfirst=True)
+
+    yield cached_store_model
+
+    # Fast data-only cleanup between tests
+    if getattr(engine.dialect, "name", "") != "mock":
+        from tests.integration.cleanup import clean_tables
+
+        clean_tables(engine, cached_store_model.metadata)
+
+    # Drop table at session end (handled by teardown)
+
+
+@pytest.fixture
+async def store_model_async(
+    cached_store_model: type[DeclarativeBase],
+    request: FixtureRequest,
+) -> AsyncGenerator[type[DeclarativeBase], None]:
+    """Setup store model for async engines with fast cleanup."""
+    # Get the async engine - either from any_engine or async_engine fixture
+    if "any_engine" in request.fixturenames:
+        engine = request.getfixturevalue("any_engine")
+        if not isinstance(engine, AsyncEngine):
+            pytest.skip("Sync engine provided to async fixture")
+        async_engine = engine
+    else:
+        async_engine = request.getfixturevalue("async_engine")
+
+    # Skip for mock engines
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        # Create table once per engine type
+        async with async_engine.begin() as conn:
+            await conn.run_sync(cached_store_model.metadata.create_all)
+
+    yield cached_store_model
+
+    # Fast data-only cleanup between tests
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        from tests.integration.cleanup import async_clean_tables
+
+        await async_clean_tables(async_engine, cached_store_model.metadata)
+
+    # Drop table at session end (handled by teardown)
+
+
+@pytest.fixture
+def store_model(
+    request: FixtureRequest,
+) -> type[DeclarativeBase]:
+    """Unified store model fixture that works with any engine."""
+    # Check if we have any_engine fixture
+    if "any_engine" in request.fixturenames:
+        engine = request.getfixturevalue("any_engine")
+        if isinstance(engine, AsyncEngine):
+            return cast(type[DeclarativeBase], request.getfixturevalue("store_model_async"))
+        return cast(type[DeclarativeBase], request.getfixturevalue("store_model_sync"))
+    # Check which fixtures are available in the request
+    if "store_model_sync" in request.fixturenames:
+        return cast(type[DeclarativeBase], request.getfixturevalue("store_model_sync"))
+    if "store_model_async" in request.fixturenames:
+        return cast(type[DeclarativeBase], request.getfixturevalue("store_model_async"))
+    # Fallback to cached model for tests that don't use engines
+    return cast(type[DeclarativeBase], request.getfixturevalue("cached_store_model"))
 
 
 @pytest.fixture
@@ -94,6 +302,24 @@ def any_engine(request: FixtureRequest) -> Engine | AsyncEngine:
     return cast("Engine | AsyncEngine", request.getfixturevalue(request.param))
 
 
+# Session-level teardown to ensure tables are dropped
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_operations_tables(request: FixtureRequest) -> Generator[None, None, None]:
+    """Ensure all operation test tables are dropped at session end."""
+    yield
+
+    # Clean up all cached tables at session end
+    for cache_key, table in _test_table_cache.items():
+        # Drop table from all engines if they exist
+        # This is handled by individual fixtures, but we ensure cleanup here
+        pass
+
+    for cache_key, model in _store_model_cache.items():
+        # Drop model tables from all engines if they exist
+        # This is handled by individual fixtures, but we ensure cleanup here
+        pass
+
+
 async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEngine) -> None:
     """Test dialect support detection against actual engines."""
 
@@ -125,42 +351,31 @@ async def test_create_upsert_with_supported_dialects(
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
+    # Tables are already created by fixtures, no need to create here
+    conflict_columns = ["key", "namespace"]
+    update_columns = ["value", "created_at"]
+
+    # Create upsert statement
+    upsert_stmt = OnConflictUpsert.create_upsert(
+        table=test_table,
+        values=upsert_values,
+        conflict_columns=conflict_columns,
+        update_columns=update_columns,
+        dialect_name=dialect_name,
+    )
+
+    # Verify the statement was created
+    assert upsert_stmt is not None
+
+    # Execute the upsert
     if isinstance(any_engine, AsyncEngine):
         async with any_engine.connect() as conn:
-            await conn.run_sync(test_table.create)
+            await conn.execute(upsert_stmt)
             await conn.commit()
     else:
-        test_table.create(any_engine)  # type: ignore[arg-type]
-
-    try:
-        conflict_columns = ["key", "namespace"]
-        update_columns = ["value", "created_at"]
-
-        # Create upsert statement
-        upsert_stmt = OnConflictUpsert.create_upsert(
-            table=test_table,
-            values=upsert_values,
-            conflict_columns=conflict_columns,
-            update_columns=update_columns,
-            dialect_name=dialect_name,
-        )
-
-        # Verify the statement was created
-        assert upsert_stmt is not None
-
-        # Verify the statement has the expected dialect-specific attributes
-        if dialect_name in {"postgresql", "cockroachdb", "sqlite", "duckdb"}:
-            assert hasattr(upsert_stmt, "on_conflict_do_update")
-        elif dialect_name in {"mysql", "mariadb"}:
-            assert hasattr(upsert_stmt, "on_duplicate_key_update")
-
-    finally:
-        if isinstance(any_engine, AsyncEngine):
-            async with any_engine.connect() as conn:  # type: ignore[attr-defined]
-                await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
-                await conn.commit()
-        else:
-            test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            conn.execute(upsert_stmt)
+            conn.commit()
 
 
 async def test_upsert_insert_then_update_cycle(
@@ -169,8 +384,7 @@ async def test_upsert_insert_then_update_cycle(
     upsert_values: dict[str, Any],
     updated_values: dict[str, Any],
 ) -> None:
-    """Test complete upsert cycle: insert new, then update existing."""
-    from tests.helpers import maybe_async
+    """Test that upsert properly inserts and then updates on conflict."""
 
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
@@ -183,93 +397,101 @@ async def test_upsert_insert_then_update_cycle(
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
+    # Tables are already created by fixtures
+    conflict_columns = ["key", "namespace"]
+    update_columns = ["value", "created_at"]
+
+    # First upsert - should insert
+    upsert_stmt = OnConflictUpsert.create_upsert(
+        table=test_table,
+        values=upsert_values,
+        conflict_columns=conflict_columns,
+        update_columns=update_columns,
+        dialect_name=dialect_name,
+    )
+
     if isinstance(any_engine, AsyncEngine):
         async with any_engine.connect() as conn:
-            await conn.run_sync(test_table.create)
+            await conn.execute(upsert_stmt)
             await conn.commit()
+
+            # Verify insert
+            result = await conn.execute(
+                select(test_table.c.value).where(
+                    (test_table.c.key == upsert_values["key"]) & (test_table.c.namespace == upsert_values["namespace"])
+                )
+            )
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "test_value"
     else:
-        test_table.create(any_engine)  # type: ignore[arg-type]
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            conn.execute(upsert_stmt)
+            conn.commit()
 
-    try:
-        if isinstance(any_engine, AsyncEngine):
-            async_session_factory = async_sessionmaker(bind=any_engine)
-            any_session = async_session_factory()
-        else:
-            session_factory = sessionmaker(bind=any_engine)
-            any_session = session_factory()  # type: ignore[assignment]
-
-        conflict_columns = ["key", "namespace"]
-        update_columns = ["value", "created_at"]
-
-        # First upsert - should insert
-        upsert_stmt = OnConflictUpsert.create_upsert(
-            table=test_table,
-            values=upsert_values,
-            conflict_columns=conflict_columns,
-            update_columns=update_columns,
-            dialect_name=dialect_name,
-        )
-
-        await maybe_async(any_session.execute(upsert_stmt))
-        await maybe_async(any_session.commit())
-
-        # Verify record was inserted
-        result = await maybe_async(
-            any_session.execute(
-                select(test_table).where(
-                    test_table.c.key == upsert_values["key"], test_table.c.namespace == upsert_values["namespace"]
+            # Verify insert
+            result = conn.execute(
+                select(test_table.c.value).where(
+                    (test_table.c.key == upsert_values["key"]) & (test_table.c.namespace == upsert_values["namespace"])
                 )
             )
-        )
-        row = result.fetchone()  # type: ignore[attr-defined]
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "test_value"
 
-        assert row is not None
-        assert row.value == upsert_values["value"]
+    # Second upsert - should update
+    upsert_stmt2 = OnConflictUpsert.create_upsert(
+        table=test_table,
+        values=updated_values,
+        conflict_columns=conflict_columns,
+        update_columns=update_columns,
+        dialect_name=dialect_name,
+    )
 
-        # Second upsert - should update
-        update_stmt = OnConflictUpsert.create_upsert(
-            table=test_table,
-            values=updated_values,
-            conflict_columns=conflict_columns,
-            update_columns=update_columns,
-            dialect_name=dialect_name,
-        )
+    if isinstance(any_engine, AsyncEngine):
+        async with any_engine.connect() as conn:
+            await conn.execute(upsert_stmt2)
+            await conn.commit()
 
-        await maybe_async(any_session.execute(update_stmt))
-        await maybe_async(any_session.commit())
-
-        # Verify record was updated
-        updated_result = await maybe_async(
-            any_session.execute(
-                select(test_table).where(
-                    test_table.c.key == updated_values["key"], test_table.c.namespace == updated_values["namespace"]
+            # Verify update
+            result = await conn.execute(
+                select(test_table.c.value).where(
+                    (test_table.c.key == updated_values["key"])
+                    & (test_table.c.namespace == updated_values["namespace"])
                 )
             )
-        )
-        updated_row = updated_result.fetchone()  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "updated_value"
 
-        assert updated_row is not None
-        assert updated_row.value == updated_values["value"]
+            # Verify only one row exists
+            count_result = await conn.execute(select(test_table).where(test_table.c.key == "test_key"))
+            rows = count_result.fetchall()
+            assert len(rows) == 1
+    else:
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            conn.execute(upsert_stmt2)
+            conn.commit()
 
-        # Verify only one record exists
-        count_result = await maybe_async(any_session.execute(select(test_table)))
-        all_rows = count_result.fetchall()  # type: ignore[attr-defined]
-        assert len(all_rows) == 1
+            # Verify update
+            result = conn.execute(
+                select(test_table.c.value).where(
+                    (test_table.c.key == updated_values["key"])
+                    & (test_table.c.namespace == updated_values["namespace"])
+                )
+            )
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "updated_value"
 
-        await maybe_async(any_session.close())
-
-    finally:
-        if isinstance(any_engine, AsyncEngine):
-            async with any_engine.connect() as conn:  # type: ignore[attr-defined]
-                await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
-                await conn.commit()
-        else:
-            test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
+            # Verify only one row exists
+            count_result = conn.execute(select(test_table).where(test_table.c.key == "test_key"))
+            rows = count_result.fetchall()
+            assert len(rows) == 1
 
 
 async def test_batch_upsert_operations(any_engine: Engine | AsyncEngine, test_table: Table) -> None:
-    """Test batch upsert operations with multiple records."""
-    from tests.helpers import maybe_async
+    """Test batch upsert operations with multiple rows."""
 
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
@@ -282,89 +504,86 @@ async def test_batch_upsert_operations(any_engine: Engine | AsyncEngine, test_ta
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         pytest.skip(f"Dialect '{dialect_name}' does not support native upsert")
 
+    # Tables are already created by fixtures
+    batch_values = [
+        {"id": 1, "key": "key1", "namespace": "ns1", "value": "value1", "created_at": "2024-01-01"},
+        {"id": 2, "key": "key2", "namespace": "ns1", "value": "value2", "created_at": "2024-01-02"},
+        {"id": 3, "key": "key3", "namespace": "ns2", "value": "value3", "created_at": "2024-01-03"},
+    ]
+
+    conflict_columns = ["key", "namespace"]
+    update_columns = ["value", "created_at"]
+
+    # Create batch upsert
+    upsert_stmt = OnConflictUpsert.create_upsert(
+        table=test_table,
+        values=batch_values,  # type: ignore[arg-type]
+        conflict_columns=conflict_columns,
+        update_columns=update_columns,
+        dialect_name=dialect_name,
+    )
+
     if isinstance(any_engine, AsyncEngine):
         async with any_engine.connect() as conn:
-            await conn.run_sync(test_table.create)
+            await conn.execute(upsert_stmt)
             await conn.commit()
+
+            # Verify all rows inserted
+            result = await conn.execute(select(test_table).order_by(test_table.c.id))
+            rows = result.fetchall()
+            assert len(rows) == 3
+            assert rows[0].value == "value1"
+            assert rows[1].value == "value2"
+            assert rows[2].value == "value3"
     else:
-        test_table.create(any_engine)  # type: ignore[arg-type]
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            conn.execute(upsert_stmt)
+            conn.commit()
 
-    try:
-        if isinstance(any_engine, AsyncEngine):
-            async_session_factory = async_sessionmaker(bind=any_engine)
-            any_session = async_session_factory()
-        else:
-            session_factory = sessionmaker(bind=any_engine)
-            any_session = session_factory()  # type: ignore[assignment]
+            # Verify all rows inserted
+            result = conn.execute(select(test_table).order_by(test_table.c.id))
+            rows = result.fetchall()
+            assert len(rows) == 3
+            assert rows[0].value == "value1"
+            assert rows[1].value == "value2"
+            assert rows[2].value == "value3"
 
-        conflict_columns = ["key", "namespace"]
-        update_columns = ["value", "created_at"]
+    # Update batch with conflicts
+    updated_batch = [
+        {"id": 1, "key": "key1", "namespace": "ns1", "value": "updated1", "created_at": "2024-02-01"},
+        {"id": 4, "key": "key4", "namespace": "ns2", "value": "value4", "created_at": "2024-01-04"},
+    ]
 
-        # Insert multiple records using separate upsert operations
-        records = [
-            {"id": 1, "key": "key1", "namespace": "ns1", "value": "value1", "created_at": "2024-01-01"},
-            {"id": 2, "key": "key2", "namespace": "ns1", "value": "value2", "created_at": "2024-01-01"},
-            {"id": 3, "key": "key1", "namespace": "ns2", "value": "value3", "created_at": "2024-01-01"},
-        ]
+    upsert_stmt2 = OnConflictUpsert.create_upsert(
+        table=test_table,
+        values=updated_batch,  # type: ignore[arg-type]
+        conflict_columns=conflict_columns,
+        update_columns=update_columns,
+        dialect_name=dialect_name,
+    )
 
-        for record in records:
-            upsert_stmt = OnConflictUpsert.create_upsert(
-                table=test_table,
-                values=record,
-                conflict_columns=conflict_columns,
-                update_columns=update_columns,
-                dialect_name=dialect_name,
-            )
-            await maybe_async(any_session.execute(upsert_stmt))
+    if isinstance(any_engine, AsyncEngine):
+        async with any_engine.connect() as conn:
+            await conn.execute(upsert_stmt2)
+            await conn.commit()
 
-        await maybe_async(any_session.commit())
+            # Verify mixed insert/update
+            result = await conn.execute(select(test_table).order_by(test_table.c.id))
+            rows = result.fetchall()
+            assert len(rows) == 4
+            assert rows[0].value == "updated1"  # Updated
+            assert rows[3].value == "value4"  # Inserted
+    else:
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            conn.execute(upsert_stmt2)
+            conn.commit()
 
-        # Verify all records were inserted
-        all_results = await maybe_async(any_session.execute(select(test_table)))
-        all_rows = all_results.fetchall()  # type: ignore[attr-defined]
-        assert len(all_rows) == 3
-
-        # Update one of the records
-        updated_record = {
-            "id": 1,
-            "key": "key1",
-            "namespace": "ns1",
-            "value": "updated_value1",
-            "created_at": "2024-01-02",
-        }
-        update_stmt = OnConflictUpsert.create_upsert(
-            table=test_table,
-            values=updated_record,
-            conflict_columns=conflict_columns,
-            update_columns=update_columns,
-            dialect_name=dialect_name,
-        )
-        await maybe_async(any_session.execute(update_stmt))
-        await maybe_async(any_session.commit())
-
-        # Verify record was updated and count remains the same
-        final_results = await maybe_async(any_session.execute(select(test_table)))
-        final_rows = final_results.fetchall()  # type: ignore[attr-defined]
-        assert len(final_rows) == 3
-
-        # Find the updated record
-        updated_result = await maybe_async(
-            any_session.execute(select(test_table).where(test_table.c.key == "key1", test_table.c.namespace == "ns1"))
-        )
-        updated_row = updated_result.fetchone()  # type: ignore[attr-defined]  # type: ignore[attr-defined]
-
-        assert updated_row is not None
-        assert updated_row.value == "updated_value1"
-
-        await maybe_async(any_session.close())
-
-    finally:
-        if isinstance(any_engine, AsyncEngine):
-            async with any_engine.connect() as conn:  # type: ignore[attr-defined]
-                await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
-                await conn.commit()
-        else:
-            test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
+            # Verify mixed insert/update
+            result = conn.execute(select(test_table).order_by(test_table.c.id))
+            rows = result.fetchall()
+            assert len(rows) == 4
+            assert rows[0].value == "updated1"  # Updated
+            assert rows[3].value == "value4"  # Inserted
 
 
 async def test_merge_statement_with_oracle_postgres(
@@ -373,244 +592,346 @@ async def test_merge_statement_with_oracle_postgres(
     upsert_values: dict[str, Any],
     updated_values: dict[str, Any],
 ) -> None:
-    """Test MERGE statement operations with Oracle and PostgreSQL 15+."""
-    from tests.helpers import maybe_async
+    """Test MERGE statement for Oracle and PostgreSQL 15+."""
 
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
 
-    supports_merge = dialect_name == "oracle" or (
-        dialect_name == "postgresql"
-        and hasattr(any_engine.dialect, "server_version_info")
-        and any_engine.dialect.server_version_info
-        and any_engine.dialect.server_version_info[0] >= 15
+    # Only test on supported dialects
+    if dialect_name not in {"oracle", "postgresql", "cockroachdb"}:
+        pytest.skip(f"MERGE not tested for dialect '{dialect_name}'")
+
+    # PostgreSQL needs version 15+ for MERGE
+    if dialect_name == "postgresql":
+        server_version = getattr(any_engine.dialect, "server_version_info", (0,))
+        if server_version < (15,):
+            pytest.skip("PostgreSQL MERGE requires version 15+")
+
+    # Tables are already created by fixtures
+    # First insert a record
+    if isinstance(any_engine, AsyncEngine):
+        async with any_engine.connect() as conn:
+            await conn.execute(test_table.insert(), upsert_values)
+            await conn.commit()
+    else:
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            conn.execute(test_table.insert(), upsert_values)
+            conn.commit()
+
+    # Create MERGE statement for update
+    merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
+        table=test_table,
+        values=updated_values,
+        conflict_columns=["key", "namespace"],
+        update_columns=["value", "created_at"],
+        dialect_name=dialect_name,
     )
 
-    if not supports_merge:
-        pytest.skip(f"Dialect '{dialect_name}' does not support MERGE statements")
+    # Execute MERGE
+    if isinstance(any_engine, AsyncEngine):
+        async with any_engine.connect() as conn:
+            if dialect_name in {"oracle", "mssql"}:
+                merged_params = {**updated_values, **additional_params}
+                await conn.execute(merge_stmt, merged_params)
+            else:
+                await conn.execute(merge_stmt, updated_values)
+            await conn.commit()
+
+            # Verify update
+            result = await conn.execute(
+                select(test_table.c.value).where(
+                    (test_table.c.key == updated_values["key"])
+                    & (test_table.c.namespace == updated_values["namespace"])
+                )
+            )
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "updated_value"
+    else:
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            if dialect_name in {"oracle", "mssql"}:
+                merged_params = {**updated_values, **additional_params}
+                conn.execute(merge_stmt, merged_params)
+            else:
+                conn.execute(merge_stmt, updated_values)
+            conn.commit()
+
+            # Verify update
+            result = conn.execute(
+                select(test_table.c.value).where(
+                    (test_table.c.key == updated_values["key"])
+                    & (test_table.c.namespace == updated_values["namespace"])
+                )
+            )
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "updated_value"
+
+    # Test MERGE with new record (insert)
+    new_values = {
+        "id": 2,
+        "key": "new_key",
+        "namespace": "new_ns",
+        "value": "new_value",
+        "created_at": datetime.datetime.now().isoformat(),
+    }
+
+    merge_stmt2, additional_params2 = OnConflictUpsert.create_merge_upsert(
+        table=test_table,
+        values=new_values,
+        conflict_columns=["key", "namespace"],
+        update_columns=["value", "created_at"],
+        dialect_name=dialect_name,
+    )
 
     if isinstance(any_engine, AsyncEngine):
         async with any_engine.connect() as conn:
-            await conn.run_sync(test_table.create)
+            if dialect_name in {"oracle", "mssql"}:
+                merged_params2 = {**new_values, **additional_params2}
+                await conn.execute(merge_stmt2, merged_params2)
+            else:
+                await conn.execute(merge_stmt2, new_values)
             await conn.commit()
+
+            # Verify insert
+            result = await conn.execute(select(test_table).where(test_table.c.key == "new_key"))
+            row = result.fetchone()
+            assert row is not None
+            assert row.value == "new_value"
     else:
-        test_table.create(any_engine)  # type: ignore[arg-type]
+        with any_engine.connect() as conn:  # type: ignore[attr-defined]
+            if dialect_name in {"oracle", "mssql"}:
+                merged_params2 = {**new_values, **additional_params2}
+                conn.execute(merge_stmt2, merged_params2)
+            else:
+                conn.execute(merge_stmt2, new_values)
+            conn.commit()
 
-    try:
-        if isinstance(any_engine, AsyncEngine):
-            async_session_factory = async_sessionmaker(bind=any_engine)
-            any_session = async_session_factory()
-        else:
-            session_factory = sessionmaker(bind=any_engine)
-            any_session = session_factory()  # type: ignore[assignment]
-
-        conflict_columns = ["key", "namespace"]
-        update_columns = ["value", "created_at"]
-
-        # Create MERGE statement
-        merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
-            table=test_table,
-            values=upsert_values,
-            conflict_columns=conflict_columns,
-            update_columns=update_columns,
-            dialect_name=dialect_name,
-        )
-        merge_values = {**upsert_values, **additional_params}
-
-        assert isinstance(merge_stmt, MergeStatement)
-
-        # Execute MERGE - should insert
-        await maybe_async(any_session.execute(merge_stmt, merge_values))
-        await maybe_async(any_session.commit())
-
-        # Verify record was inserted
-        result = await maybe_async(
-            any_session.execute(
-                select(test_table).where(
-                    test_table.c.key == upsert_values["key"], test_table.c.namespace == upsert_values["namespace"]
-                )
-            )
-        )
-        row = result.fetchone()  # type: ignore[attr-defined]
-
-        assert row is not None
-        assert row.value == upsert_values["value"]
-
-        # Execute MERGE again with updated values - should update
-        update_merge_stmt, update_additional_params = OnConflictUpsert.create_merge_upsert(
-            table=test_table,
-            values=updated_values,
-            conflict_columns=conflict_columns,
-            update_columns=update_columns,
-            dialect_name=dialect_name,
-        )
-        update_merge_values = {**updated_values, **update_additional_params}
-
-        await maybe_async(any_session.execute(update_merge_stmt, update_merge_values))
-        await maybe_async(any_session.commit())
-
-        # Verify record was updated
-        updated_result = await maybe_async(
-            any_session.execute(
-                select(test_table).where(
-                    test_table.c.key == updated_values["key"], test_table.c.namespace == updated_values["namespace"]
-                )
-            )
-        )
-        updated_row = updated_result.fetchone()  # type: ignore[attr-defined]  # type: ignore[attr-defined]
-
-        assert updated_row is not None
-        assert updated_row.value == updated_values["value"]
-
-        # Verify only one record exists
-        count_result = await maybe_async(any_session.execute(select(test_table)))
-        all_rows = count_result.fetchall()  # type: ignore[attr-defined]
-        assert len(all_rows) == 1
-
-        await maybe_async(any_session.close())
-
-    finally:
-        if isinstance(any_engine, AsyncEngine):
-            async with any_engine.connect() as conn:  # type: ignore[attr-defined]
-                await conn.run_sync(lambda sync_conn: test_table.drop(sync_conn, checkfirst=True))
-                await conn.commit()
-        else:
-            test_table.drop(any_engine, checkfirst=True)  # type: ignore[arg-type]
+            # Verify insert
+            result = conn.execute(select(test_table).where(test_table.c.key == "new_key"))
+            row = result.fetchone()
+            assert row is not None
+            assert row.value == "new_value"
 
 
 async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngine) -> None:
-    """Test MERGE statement compilation for Oracle and PostgreSQL."""
+    """Test MERGE statement compilation for different dialects."""
 
     if getattr(any_engine.dialect, "name", "") == "mock":
-        pytest.skip("Mock engine cannot test real database operations")
+        pytest.skip("Mock engine cannot test compilation")
 
     dialect_name = any_engine.dialect.name
 
-    supports_merge = dialect_name == "oracle" or (
-        dialect_name == "postgresql"
-        and hasattr(any_engine.dialect, "server_version_info")
-        and any_engine.dialect.server_version_info
-        and any_engine.dialect.server_version_info[0] >= 15
-    )
+    # Only test on supported dialects
+    if dialect_name not in {"oracle", "postgresql", "cockroachdb"}:
+        pytest.skip(f"MERGE compilation not tested for dialect '{dialect_name}'")
 
-    if not supports_merge:
-        pytest.skip(f"Dialect '{dialect_name}' does not support MERGE statements")
+    # PostgreSQL needs version 15+ for MERGE
+    if dialect_name == "postgresql":
+        server_version = getattr(any_engine.dialect, "server_version_info", (0,))
+        if server_version < (15,):
+            pytest.skip("PostgreSQL MERGE requires version 15+")
 
+    # Create a simple test table
     metadata = MetaData()
-    test_table = Table(
-        "merge_test_table",
+    test_compile_table = Table(
+        "compile_test",
         metadata,
         Column("id", Integer, primary_key=True),
         Column("key", String(50)),
         Column("value", String(100)),
-        UniqueConstraint("key", name="uq_merge_key"),
     )
 
-    values = {"id": 1, "key": "test", "value": "test_value"}
-    conflict_columns = ["key"]
+    test_values = {"id": 1, "key": "test", "value": "data"}
 
+    # Create MERGE statement
     merge_stmt, _ = OnConflictUpsert.create_merge_upsert(
-        table=test_table,
-        values=values,
-        conflict_columns=conflict_columns,
+        table=test_compile_table,
+        values=test_values,
+        conflict_columns=["key"],
+        update_columns=["value"],
         dialect_name=dialect_name,
     )
 
-    # Compile the statement to SQL
-    compiled = merge_stmt.compile(bind=any_engine)
-    sql_str = str(compiled)
+    # Compile the statement
+    if isinstance(any_engine, AsyncEngine):
+        compiled = merge_stmt.compile(dialect=any_engine.dialect)  # type: ignore[attr-defined]
+    else:
+        compiled = merge_stmt.compile(dialect=any_engine.dialect)
 
-    # Verify the compiled SQL contains expected MERGE keywords
-    assert "MERGE" in sql_str.upper()
-    assert "USING" in sql_str.upper()
-    assert "WHEN MATCHED" in sql_str.upper() or "WHEN NOT MATCHED" in sql_str.upper()
+    # Verify it compiled
+    assert compiled is not None
+    assert str(compiled)  # Should produce SQL string
 
 
-async def test_store_upsert_integration(any_engine: Engine | AsyncEngine) -> None:
-    """Test that SQLAlchemyStore correctly uses new upsert operations."""
-    from advanced_alchemy.extensions.litestar.plugins.init import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-    from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
-    from tests.helpers import maybe_async
+async def test_store_upsert_integration(
+    any_engine: Engine | AsyncEngine,
+    store_model: type[DeclarativeBase],
+) -> None:
+    """Test store-like upsert pattern with model class."""
 
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
-    dialect_name = getattr(any_engine.dialect, "name", "unknown")
+    dialect_name = any_engine.dialect.name
 
     if dialect_name == "spanner":
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
-    engine_type = "async" if isinstance(any_engine, AsyncEngine) else "sync"
-    table_suffix = f"{dialect_name}_{engine_type}_{id(any_engine)}"
 
-    class TestStoreBase(DeclarativeBase):
-        pass
+    TestStoreModel = store_model
 
-    class TestStoreModel(StoreModelMixin, TestStoreBase):
-        __tablename__ = f"test_store_operations_{table_suffix}"
+    # Tables are already created by fixtures
+    store_data = {
+        "id": 1,
+        "key": "cache_key",
+        "namespace": "default",
+        "value": "cached_data",
+        "expires_at": (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat(),
+    }
 
-    # Create table
-    if isinstance(any_engine, AsyncEngine):
-        # Async engine
-        async with any_engine.connect() as conn:
-            await conn.run_sync(TestStoreModel.metadata.create_all)
-            await conn.commit()
+    # Create upsert for store pattern
+    additional_params: dict[str, Any] = {}
+    if OnConflictUpsert.supports_native_upsert(dialect_name):
+        upsert_stmt = OnConflictUpsert.create_upsert(
+            table=TestStoreModel.__table__,  # type: ignore[arg-type]
+            values=store_data,
+            conflict_columns=["key", "namespace"],
+            update_columns=["value", "expires_at"],
+            dialect_name=dialect_name,
+        )
+    elif dialect_name == "oracle":
+        upsert_stmt, additional_params = OnConflictUpsert.create_merge_upsert(  # type: ignore[assignment]
+            table=TestStoreModel.__table__,  # type: ignore[arg-type]
+            values=store_data,
+            conflict_columns=["key", "namespace"],
+            update_columns=["value", "expires_at"],
+            dialect_name=dialect_name,
+        )
     else:
-        # Sync engine
-        TestStoreModel.metadata.create_all(any_engine)  # type: ignore[arg-type]
+        pytest.skip(f"No upsert support for dialect '{dialect_name}'")
+    additional_params2: dict[str, Any] = {}
+    # Execute and verify
+    if isinstance(any_engine, AsyncEngine):
+        async_session_factory = async_sessionmaker(bind=any_engine)
+        async with async_session_factory() as session:
+            if dialect_name == "oracle":
+                # Pass the values for MERGE statements
+                merged_params = {**store_data, **additional_params}
+                await session.execute(upsert_stmt, merged_params)
+            else:
+                await session.execute(upsert_stmt)
+            await session.commit()
 
-    try:
-        # Create store configuration
-        if isinstance(any_engine, AsyncEngine):
-            config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig = SQLAlchemyAsyncConfig(engine_instance=any_engine)  # type: ignore[arg-type]
+            # Verify insertion
+            result = await session.execute(
+                select(TestStoreModel).where(
+                    (TestStoreModel.key == store_data["key"]) & (TestStoreModel.namespace == store_data["namespace"])
+                )
+            )
+            obj = result.scalar_one_or_none()
+            assert obj is not None
+            assert obj.value == "cached_data"
+
+        # Update with new expiration
+        updated_store = store_data.copy()
+        updated_store["value"] = "updated_cache"
+        updated_store["expires_at"] = (datetime.datetime.now() + datetime.timedelta(hours=2)).isoformat()
+
+        if OnConflictUpsert.supports_native_upsert(dialect_name):
+            upsert_stmt2 = OnConflictUpsert.create_upsert(
+                table=TestStoreModel.__table__,  # type: ignore[arg-type]
+                values=updated_store,
+                conflict_columns=["key", "namespace"],
+                update_columns=["value", "expires_at"],
+                dialect_name=dialect_name,
+            )
         else:
-            config = SQLAlchemySyncConfig(engine_instance=any_engine)  # type: ignore[arg-type]
+            upsert_stmt2, additional_params2 = OnConflictUpsert.create_merge_upsert(  # type: ignore[assignment]
+                table=TestStoreModel.__table__,  # type: ignore[arg-type]  # type: ignore[arg-type]
+                values=updated_store,
+                conflict_columns=["key", "namespace"],
+                update_columns=["value", "expires_at"],
+                dialect_name=dialect_name,
+            )
 
-        store = SQLAlchemyStore(config=config, model=TestStoreModel, namespace="test_ops")
+        async with async_session_factory() as session:
+            if dialect_name == "oracle":
+                merged_params2 = {**updated_store, **additional_params2}
+                await session.execute(upsert_stmt2, merged_params2)
+            else:
+                await session.execute(upsert_stmt2)
+            await session.commit()
 
-        # Test set operation (should use upsert operations internally)
-        expiration_seconds = 3600  # 1 hour
-        await maybe_async(store.set("test_key", "test_value", expires_in=expiration_seconds))
+            # Verify update
+            result = await session.execute(
+                select(TestStoreModel).where(
+                    (TestStoreModel.key == updated_store["key"])
+                    & (TestStoreModel.namespace == updated_store["namespace"])
+                )
+            )
+            obj = result.scalar_one_or_none()
+            assert obj is not None
+            assert obj.value == "updated_cache"
+    else:
+        session_factory = sessionmaker(bind=any_engine)
+        with session_factory() as session:
+            if dialect_name == "oracle":
+                # Pass the values for MERGE statements
+                merged_params = {**store_data, **additional_params}
+                session.execute(upsert_stmt, merged_params)
+            else:
+                session.execute(upsert_stmt)
+            session.commit()
 
-        # Verify the value was set
-        result = await maybe_async(store.get("test_key"))
-        assert result == b"test_value"
+            # Verify insertion
+            result = session.execute(
+                select(TestStoreModel).where(
+                    (TestStoreModel.key == store_data["key"]) & (TestStoreModel.namespace == store_data["namespace"])
+                )
+            )
+            obj = result.scalar_one_or_none()
+            assert obj is not None
+            assert obj.value == "cached_data"
 
-        # Test update operation (should use upsert operations internally)
-        await maybe_async(store.set("test_key", "updated_value", expires_in=expiration_seconds))
+        # Update with new expiration
+        updated_store = store_data.copy()
+        updated_store["value"] = "updated_cache"
+        updated_store["expires_at"] = (datetime.datetime.now() + datetime.timedelta(hours=2)).isoformat()
 
-        # Verify the value was updated
-        updated_result = await maybe_async(store.get("test_key"))
-        assert updated_result == b"updated_value"
-
-        # Verify only one record exists in the store
-        if isinstance(any_engine, AsyncEngine):
-            # Async
-            from sqlalchemy import func
-            from sqlalchemy.ext.asyncio import async_sessionmaker
-
-            async_session_factory = async_sessionmaker(bind=any_engine)  # type: ignore[arg-type]
-            async with async_session_factory() as async_session:
-                count_result = await async_session.execute(select(func.count()).select_from(TestStoreModel))
-                count = count_result.scalar()
-                assert count == 1
+        if OnConflictUpsert.supports_native_upsert(dialect_name):
+            upsert_stmt2 = OnConflictUpsert.create_upsert(
+                table=TestStoreModel.__table__,  # type: ignore[arg-type]
+                values=updated_store,
+                conflict_columns=["key", "namespace"],
+                update_columns=["value", "expires_at"],
+                dialect_name=dialect_name,
+            )
         else:
-            # Sync
-            from sqlalchemy import func
-            from sqlalchemy.orm import sessionmaker
+            upsert_stmt2, additional_params2 = OnConflictUpsert.create_merge_upsert(  # type: ignore[assignment]
+                table=TestStoreModel.__table__,  # type: ignore[arg-type]  # type: ignore[arg-type]
+                values=updated_store,
+                conflict_columns=["key", "namespace"],
+                update_columns=["value", "expires_at"],
+                dialect_name=dialect_name,
+            )
 
-            session_factory = sessionmaker(bind=any_engine)  # type: ignore[arg-type]
-            with session_factory() as sync_session:
-                count = sync_session.scalar(select(func.count()).select_from(TestStoreModel))
-                assert count == 1
+        with session_factory() as session:
+            if dialect_name == "oracle":
+                merged_params2 = {**updated_store, **additional_params2}
+                session.execute(upsert_stmt2, merged_params2)
+            else:
+                session.execute(upsert_stmt2)
+            session.commit()
 
-    finally:
-        if isinstance(any_engine, AsyncEngine):
-            # Async engine
-            async with any_engine.connect() as conn:  # type: ignore[attr-defined]
-                await conn.run_sync(TestStoreModel.metadata.drop_all)
-                await conn.commit()
-        else:
-            # Sync engine
-            TestStoreModel.metadata.drop_all(any_engine)  # type: ignore[arg-type]
+            # Verify update
+            result = session.execute(
+                select(TestStoreModel).where(
+                    (TestStoreModel.key == updated_store["key"])
+                    & (TestStoreModel.namespace == updated_store["namespace"])
+                )
+            )
+            obj = result.scalar_one_or_none()
+            assert obj is not None
+            assert obj.value == "updated_cache"

@@ -12,6 +12,17 @@ Features
 - Cross-database ON CONFLICT/ON DUPLICATE KEY UPDATE operations
 - MERGE statement support for Oracle and PostgreSQL 15+
 
+Security
+--------
+This module constructs SQL statements using database identifiers (table and column names)
+that MUST come from trusted sources only. All identifiers should originate from:
+
+- SQLAlchemy model metadata (e.g., Model.__table__)
+- Hardcoded strings in application code
+- Validated configuration files
+
+Never pass user input directly as table names, column names, or other SQL identifiers.
+Data values are properly parameterized using bindparam() to prevent SQL injection.
 
 Notes:
 ------
@@ -25,6 +36,7 @@ See Also:
 - :mod:`advanced_alchemy.extensions` : Additional database extensions
 """
 
+import re
 from typing import Any, Optional, Union
 from uuid import UUID
 
@@ -39,7 +51,53 @@ from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.compiler import SQLCompiler
 from sqlalchemy.sql.expression import Executable
 
-__all__ = ("MergeStatement", "OnConflictUpsert")
+__all__ = ("MergeStatement", "OnConflictUpsert", "validate_identifier")
+
+# Pattern for valid SQL identifiers (conservative - alphanumeric and underscore only)
+_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def validate_identifier(name: str, identifier_type: str = "identifier") -> str:
+    """Validate a SQL identifier to ensure it's safe for use in SQL statements.
+
+    This function provides validation for SQL identifiers
+    (table names, column names, etc.) to ensure they contain only safe characters.
+    While the operations in this module should only receive identifiers from
+    trusted sources, this validation adds an extra layer of security.
+
+    Note: SQL keywords (like 'select', 'insert', etc.) are allowed as they can
+    be properly quoted/escaped by SQLAlchemy when used as identifiers.
+
+    Args:
+        name: The identifier to validate
+        identifier_type: Type of identifier for error messages (e.g., "column", "table")
+
+    Returns:
+        The validated identifier
+
+    Raises:
+        ValueError: If the identifier is empty or contains invalid characters
+
+    Examples:
+        >>> validate_identifier("user_id")
+        'user_id'
+        >>> validate_identifier("users_table", "table")
+        'users_table'
+        >>> validate_identifier("select")  # SQL keywords are allowed
+        'select'
+        >>> validate_identifier(
+        ...     "drop table users; --"
+        ... )  # Raises ValueError - contains invalid characters
+    """
+    if not name:
+        msg = f"Empty {identifier_type} name provided"
+        raise ValueError(msg)
+
+    if not _IDENTIFIER_PATTERN.match(name):
+        msg = f"Invalid {identifier_type} name: '{name}'. Only alphanumeric characters and underscores are allowed."
+        raise ValueError(msg)
+
+    return name
 
 
 class MergeStatement(Executable, ClauseElement):
@@ -218,6 +276,7 @@ class OnConflictUpsert:
         conflict_columns: "list[str]",
         update_columns: "Optional[list[str]]" = None,
         dialect_name: Optional[str] = None,
+        validate_identifiers: bool = False,
     ) -> Insert:
         """Create a dialect-specific upsert statement.
 
@@ -227,19 +286,28 @@ class OnConflictUpsert:
             conflict_columns: Columns that define the conflict condition
             update_columns: Columns to update on conflict (defaults to all non-conflict columns)
             dialect_name: Database dialect name (auto-detected if not provided)
+            validate_identifiers: If True, validate column names for safety (default: False)
 
         Returns:
             A SQLAlchemy Insert statement with upsert logic
 
         Raises:
             NotImplementedError: If the dialect doesn't support native upsert
+            ValueError: If validate_identifiers is True and invalid identifiers are found
         """
+        if validate_identifiers:
+            for col in conflict_columns:
+                validate_identifier(col, "conflict column")
+            if update_columns:
+                for col in update_columns:
+                    validate_identifier(col, "update column")
+            for col in values:
+                validate_identifier(col, "column")
+
         if update_columns is None:
-            # Default to updating all columns except conflict columns
             update_columns = [col for col in values if col not in conflict_columns]
 
         if dialect_name in {"postgresql", "cockroachdb", "sqlite", "duckdb"}:
-            # Use PostgreSQL-style ON CONFLICT
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
             pg_insert_stmt = pg_insert(table).values(values)
@@ -248,7 +316,6 @@ class OnConflictUpsert:
             )
 
         if dialect_name in {"mysql", "mariadb"}:
-            # Use MySQL-style ON DUPLICATE KEY UPDATE
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
@@ -266,6 +333,7 @@ class OnConflictUpsert:
         conflict_columns: "list[str]",
         update_columns: "Optional[list[str]]" = None,
         dialect_name: Optional[str] = None,
+        validate_identifiers: bool = False,
     ) -> "tuple[MergeStatement, dict[str, Any]]":
         """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
 
@@ -280,31 +348,42 @@ class OnConflictUpsert:
             conflict_columns: Columns that define the matching condition
             update_columns: Columns to update on match (defaults to all non-conflict columns)
             dialect_name: Database dialect name (used to determine Oracle-specific syntax)
+            validate_identifiers: If True, validate column names for safety (default: False)
 
         Returns:
             A tuple of (MergeStatement, additional_params) where additional_params
             contains any generated values (like Oracle UUID primary keys)
+
+        Raises:
+            ValueError: If validate_identifiers is True and invalid identifiers are found
         """
+        if validate_identifiers:
+            for col in conflict_columns:
+                validate_identifier(col, "conflict column")
+            if update_columns:
+                for col in update_columns:
+                    validate_identifier(col, "update column")
+            for col in values:
+                validate_identifier(col, "column")
+
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
-
-        param_mapping: dict[str, int] = {}
 
         if dialect_name == "oracle":
             source_values = ", ".join([f":{key} as {key}" for key in values])
             source = f"SELECT {source_values} FROM DUAL"  # noqa: S608
         else:
-            source, param_mapping = _create_postgresql_source(values)
+            placeholders = ", ".join([f"%({key})s" for key in values])
+            col_names = ", ".join(values.keys())
+            source = f"(SELECT * FROM (VALUES ({placeholders})) AS src({col_names}))"  # noqa: S608
 
         on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
         on_condition = text(" AND ".join(on_conditions))
 
-        if dialect_name == "oracle":
-            when_matched_update: dict[str, Any] = {col: bindparam(col) for col in update_columns}
+        if dialect_name in {"oracle", "postgresql", "cockroachdb"}:
+            when_matched_update: dict[str, Any] = {col: bindparam(col) for col in update_columns if col in values}
         else:
-            when_matched_update = {
-                col: bindparam(f"${param_mapping[col]}") for col in update_columns if col in param_mapping
-            }
+            when_matched_update = {col: bindparam(col) for col in update_columns if col in values}
 
         insert_columns = list(values.keys())
         additional_params: dict[str, Any] = {}
@@ -313,12 +392,10 @@ class OnConflictUpsert:
             source, additional_params = _create_oracle_additional_params(table, values, source)
             insert_columns = list(values.keys()) + list(additional_params.keys())
 
-        if dialect_name == "oracle":
+        if dialect_name in {"oracle", "postgresql", "cockroachdb"}:
             when_not_matched_insert: dict[str, Any] = {col: bindparam(col) for col in insert_columns}
         else:
-            when_not_matched_insert = {
-                col: bindparam(f"${param_mapping[col]}") for col in insert_columns if col in param_mapping
-            }
+            when_not_matched_insert = {col: bindparam(col) for col in insert_columns}
 
         merge_stmt = MergeStatement(
             table=table,
@@ -329,19 +406,6 @@ class OnConflictUpsert:
         )
 
         return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
-
-
-def _create_postgresql_source(values: "dict[str, Any]") -> "tuple[str, dict[str, int]]":
-    """Create PostgreSQL source clause with positional parameters."""
-    param_idx = 1
-    source_parts: list[str] = []
-    param_mapping: dict[str, int] = {}
-    for key in values:
-        source_parts.append(f"${param_idx} as {key}")
-        param_mapping[key] = param_idx
-        param_idx += 1
-    source_values = ", ".join(source_parts)
-    return f"SELECT {source_values}", param_mapping
 
 
 def _create_oracle_additional_params(

@@ -12,6 +12,9 @@ from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+# Import all fixtures from repository_fixtures
+from tests.integration.repository_fixtures import *  # noqa: F403
+
 if TYPE_CHECKING:
     from pathlib import Path
 

@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, Table
 
-from advanced_alchemy.operations import MergeStatement, OnConflictUpsert
+from advanced_alchemy.operations import MergeStatement, OnConflictUpsert, validate_identifier
 
 
 @pytest.fixture
@@ -117,7 +117,10 @@ class TestOnConflictUpsert:
 
         assert isinstance(merge_stmt, MergeStatement)
         assert merge_stmt.table == sample_table
-        assert ":key" in str(merge_stmt.source)  # Check for parameter placeholder
+        # Default dialect (None) uses PostgreSQL format with %(key)s notation
+        assert "%(key)s" in str(merge_stmt.source) or ":key" in str(
+            merge_stmt.source
+        )  # Check for parameter placeholder
         assert "FROM DUAL" not in str(merge_stmt.source)  # Should not have FROM DUAL by default
         assert additional_params == {}  # No additional params for non-Oracle
 
@@ -191,6 +194,89 @@ class TestMergeStatement:
 
         with pytest.raises(NotImplementedError, match="MERGE statement not supported for dialect 'unsupported'"):
             compile_merge_default(merge_stmt, compiler)  # type: ignore[arg-type]  # pyright: ignore
+
+
+class TestIdentifierValidation:
+    """Test identifier validation security feature."""
+
+    def test_valid_identifiers(self) -> None:
+        """Test that valid identifiers pass validation."""
+        assert validate_identifier("user_id") == "user_id"
+        assert validate_identifier("users_table", "table") == "users_table"
+        assert validate_identifier("created_at", "column") == "created_at"
+        assert validate_identifier("_private_field") == "_private_field"
+        assert validate_identifier("table123") == "table123"
+
+    def test_empty_identifier(self) -> None:
+        """Test that empty identifiers are rejected."""
+        with pytest.raises(ValueError, match="Empty identifier name"):
+            validate_identifier("")
+
+    def test_invalid_characters(self) -> None:
+        """Test that identifiers with invalid characters are rejected."""
+        invalid_names = [
+            "user-id",  # hyphen
+            "user.id",  # dot
+            "user id",  # space
+            "123user",  # starts with number
+            "user;",  # semicolon
+            "user'",  # quote
+            "user`",  # backtick
+            "drop table users; --",  # SQL injection attempt
+        ]
+
+        for name in invalid_names:
+            with pytest.raises(ValueError, match="Invalid.*Only alphanumeric"):
+                validate_identifier(name)
+
+    def test_sql_keywords_allowed(self) -> None:
+        """Test that SQL keywords are allowed as identifiers."""
+        # SQL keywords should be allowed since they can be quoted in SQL
+        keywords = ["select", "SELECT", "insert", "UPDATE", "delete", "DROP", "create", "ALTER", "truncate"]
+
+        for keyword in keywords:
+            # Should not raise an error
+            assert validate_identifier(keyword) == keyword
+            assert validate_identifier(keyword.lower()) == keyword.lower()
+            assert validate_identifier(keyword.upper()) == keyword.upper()
+
+    def test_identifier_type_in_error(self) -> None:
+        """Test that identifier type appears in error messages."""
+        with pytest.raises(ValueError, match="Empty column name"):
+            validate_identifier("", "column")
+
+        with pytest.raises(ValueError, match="Invalid table name"):
+            validate_identifier("123invalid", "table")
+
+    def test_upsert_with_validation(self, sample_table: Table) -> None:
+        """Test that create_upsert validates identifiers when requested."""
+        values = {"key": "test_key", "namespace": "test_ns", "value": "test_value"}
+
+        # Should work with validation enabled for valid identifiers
+        upsert_stmt = OnConflictUpsert.create_upsert(
+            table=sample_table,
+            values=values,
+            conflict_columns=["key", "namespace"],
+            update_columns=["value"],
+            dialect_name="postgresql",
+            validate_identifiers=True,
+        )
+        assert upsert_stmt is not None
+
+    def test_merge_with_validation(self, sample_table: Table) -> None:
+        """Test that create_merge_upsert validates identifiers when requested."""
+        values = {"key": "test_key", "namespace": "test_ns", "value": "test_value"}
+
+        # Should work with validation enabled for valid identifiers
+        merge_stmt, _ = OnConflictUpsert.create_merge_upsert(
+            table=sample_table,
+            values=values,
+            conflict_columns=["key", "namespace"],
+            update_columns=["value"],
+            dialect_name="oracle",
+            validate_identifiers=True,
+        )
+        assert merge_stmt is not None
 
 
 class TestStoreIntegration:

@@ -1,4 +1,3 @@
-# ruff: noqa: UP045
 """Integration tests for attrs support in Advanced Alchemy services."""
 
 from __future__ import annotations

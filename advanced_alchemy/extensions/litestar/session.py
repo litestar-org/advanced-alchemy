@@ -75,11 +75,13 @@ class SessionModelMixin(UUIDv7Base):
 
     @classmethod
     def _create_unique_session_id_index(cls, *_: Any, **kwargs: Any) -> bool:
-        return bool(kwargs["dialect"].name.startswith("spanner"))
+        dialect_name = kwargs.get("dialect", {}).name if "dialect" in kwargs else ""
+        return bool("spanner" in dialect_name.lower())
 
     @classmethod
     def _create_unique_session_id_constraint(cls, *_: Any, **kwargs: Any) -> bool:
-        return not kwargs["dialect"].name.startswith("spanner")
+        dialect_name = kwargs.get("dialect", {}).name if "dialect" in kwargs else ""
+        return "spanner" not in dialect_name.lower()
 
     @hybrid_property
     def is_expired(self) -> bool:  # pyright: ignore

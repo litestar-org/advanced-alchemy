@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timezone
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import String, create_engine, select
-from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy import Engine, String, select
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase
 from advanced_alchemy.filters import (
@@ -25,37 +26,103 @@ from advanced_alchemy.filters import (
     and_,
     or_,
 )
+from tests.integration.cleanup import async_clean_tables, clean_tables
+from tests.integration.helpers import get_worker_id
+
+if TYPE_CHECKING:
+    from pytest import FixtureRequest
 
 
-class Movie(BigIntBase):
-    __tablename__ = "movies"
+# Module-level cache for Movie model
+_movie_model_cache: dict[str, type] = {}
 
-    title: Mapped[str] = mapped_column(String(length=100))
-    release_date: Mapped[datetime] = mapped_column()
-    genre: Mapped[str] = mapped_column(String(length=50))
+
+@pytest.fixture(scope="session")
+def cached_movie_model(request: FixtureRequest) -> type[DeclarativeBase]:
+    """Create Movie model once per session/worker."""
+    worker_id = get_worker_id(request)
+    cache_key = f"movie_{worker_id}"
+
+    if cache_key not in _movie_model_cache:
+
+        class TestBase(DeclarativeBase):
+            pass
+
+        class Movie(BigIntBase, TestBase):
+            __tablename__ = f"test_movies_{worker_id}"
+            __mapper_args__ = {"concrete": True}
+
+            title: Mapped[str] = mapped_column(String(length=100))
+            release_date: Mapped[datetime] = mapped_column()
+            genre: Mapped[str] = mapped_column(String(length=50))
+
+        _movie_model_cache[cache_key] = Movie
+
+    return _movie_model_cache[cache_key]
+
+
+@pytest.fixture
+def movie_model_sync(
+    cached_movie_model: type[DeclarativeBase],
+    engine: Engine,
+) -> Generator[type[DeclarativeBase], None, None]:
+    """Setup movie table for sync engines with fast cleanup."""
+    # Skip for mock engines
+    if getattr(engine.dialect, "name", "") != "mock":
+        # Create table once per engine type
+        cached_movie_model.metadata.create_all(engine)
+
+    yield cached_movie_model
+
+    # Fast data-only cleanup between tests
+    if getattr(engine.dialect, "name", "") != "mock":
+        clean_tables(engine, cached_movie_model.metadata)
+
+
+@pytest.fixture
+async def movie_model_async(
+    cached_movie_model: type[DeclarativeBase],
+    async_engine: AsyncEngine,
+) -> AsyncGenerator[type[DeclarativeBase], None]:
+    """Setup movie table for async engines with fast cleanup."""
+    # Skip for mock engines
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        # Create table once per engine type
+        async with async_engine.begin() as conn:
+            await conn.run_sync(cached_movie_model.metadata.create_all)
+
+    yield cached_movie_model
+
+    # Fast data-only cleanup between tests
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        await async_clean_tables(async_engine, cached_movie_model.metadata)
 
 
 @pytest.fixture()
-def db_session(tmp_path: Path) -> Generator[Session, None, None]:
-    engine = create_engine(f"sqlite:///{tmp_path}/test_filters.sqlite", echo=True)
-    Movie.metadata.create_all(engine)
-    session_factory = sessionmaker(engine, expire_on_commit=False)
-    session = session_factory()
-    # Add test data
-    movie1 = Movie(title="The Matrix", release_date=datetime(1999, 3, 31, tzinfo=timezone.utc), genre="Action")
-    movie2 = Movie(title="The Hangover", release_date=datetime(2009, 6, 1, tzinfo=timezone.utc), genre="Comedy")
-    movie3 = Movie(
-        title="Shawshank Redemption", release_date=datetime(1994, 10, 14, tzinfo=timezone.utc), genre="Drama"
-    )
-    session.add_all([movie1, movie2, movie3])
-    session.commit()
+def db_session(
+    movie_model_sync: type[DeclarativeBase],
+    session: Session,
+) -> Generator[Session, None, None]:
+    """Provide session with test data."""
+    # Skip for mock engines
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        # Add test data
+        Movie = movie_model_sync
+        movie1 = Movie(title="The Matrix", release_date=datetime(1999, 3, 31, tzinfo=timezone.utc), genre="Action")
+        movie2 = Movie(title="The Hangover", release_date=datetime(2009, 6, 1, tzinfo=timezone.utc), genre="Comedy")
+        movie3 = Movie(
+            title="Shawshank Redemption", release_date=datetime(1994, 10, 14, tzinfo=timezone.utc), genre="Drama"
+        )
+        session.add_all([movie1, movie2, movie3])
+        session.commit()
+
     yield session
-    session.close()
-    engine.dispose()
-    Path(tmp_path / "test_filters.sqlite").unlink(missing_ok=True)
+
+    # Cleanup is handled by movie_model_sync fixture
 
 
-def test_before_after_filter(db_session: Session) -> None:
+def test_before_after_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     before_after_filter = BeforeAfter(
         field_name="release_date", before=datetime(1999, 3, 31, tzinfo=timezone.utc), after=None
     )
@@ -64,7 +131,8 @@ def test_before_after_filter(db_session: Session) -> None:
     assert len(results) == 1
 
 
-def test_on_before_after_filter(db_session: Session) -> None:
+def test_on_before_after_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     on_before_after_filter = OnBeforeAfter(
         field_name="release_date", on_or_before=None, on_or_after=datetime(1999, 3, 31, tzinfo=timezone.utc)
     )
@@ -73,21 +141,24 @@ def test_on_before_after_filter(db_session: Session) -> None:
     assert len(results) == 2
 
 
-def test_collection_filter(db_session: Session) -> None:
+def test_collection_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     collection_filter = CollectionFilter(field_name="title", values=["The Matrix", "Shawshank Redemption"])
     statement = collection_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_not_in_collection_filter(db_session: Session) -> None:
+def test_not_in_collection_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     not_in_collection_filter = NotInCollectionFilter(field_name="title", values=["The Hangover"])
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_exists_filter(db_session: Session) -> None:
+def test_exists_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test EXISTS with a condition that is true for at least one row
     # Should return all rows because the subquery finds a match
     exists_filter_1 = ExistsFilter(values=[Movie.genre == "Action"])
@@ -113,7 +184,8 @@ def test_exists_filter(db_session: Session) -> None:
     assert len(results) == 0
 
 
-def test_exists_filter_operators(db_session: Session) -> None:
+def test_exists_filter_operators(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test EXISTS with OR operator - condition is true
     exists_filter_or = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "SciFi"], operator="or")
     # For correlated subquery: Should return rows where EITHER condition is true (only Action movie)
@@ -137,7 +209,8 @@ def test_exists_filter_operators(db_session: Session) -> None:
     assert len(results) == 0
 
 
-def test_not_exists_filter(db_session: Session) -> None:
+def test_not_exists_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test NOT EXISTS with a condition that is true for at least one row
     # Should return no rows because the subquery finds a match
     not_exists_filter_true = NotExistsFilter(values=[Movie.title.like("%Hangover%")])
@@ -155,7 +228,8 @@ def test_not_exists_filter(db_session: Session) -> None:
     assert len(results) == 3
 
 
-def test_not_exists_filter_operators(db_session: Session) -> None:
+def test_not_exists_filter_operators(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test NOT EXISTS with OR operator - Should return rows where NEITHER condition is true
     not_exists_filter_or = NotExistsFilter(values=[Movie.genre == "Comedy", Movie.genre == "SciFi"], operator="or")
     # For correlated subquery: Should return rows where NEITHER condition is true (Action, Drama)
@@ -173,14 +247,16 @@ def test_not_exists_filter_operators(db_session: Session) -> None:
     assert len(results) == 3
 
 
-def test_limit_offset_filter(db_session: Session) -> None:
+def test_limit_offset_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     limit_offset_filter = LimitOffset(limit=2, offset=1)
     statement = limit_offset_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_order_by_filter(db_session: Session) -> None:
+def test_order_by_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     order_by_filter = OrderBy(field_name="release_date", sort_order="asc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
@@ -191,14 +267,16 @@ def test_order_by_filter(db_session: Session) -> None:
     assert results[0].title == "The Hangover"
 
 
-def test_search_filter(db_session: Session) -> None:
+def test_search_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     search_filter = SearchFilter(field_name="title", value="Hangover")
     statement = search_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 1
 
 
-def test_filter_group_logical_operators(db_session: Session) -> None:
+def test_filter_group_logical_operators(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test AND operator
     before_2000 = BeforeAfter(field_name="release_date", before=datetime(2000, 1, 1, tzinfo=timezone.utc), after=None)
     has_the_in_title = SearchFilter(field_name="title", value="The", ignore_case=True)
@@ -229,7 +307,8 @@ def test_filter_group_logical_operators(db_session: Session) -> None:
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_multi_filter_basic(db_session: Session) -> None:
+def test_multi_filter_basic(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test basic MultiFilter with AND condition
     multi_filter = MultiFilter(
         filters={
@@ -271,7 +350,8 @@ def test_multi_filter_basic(db_session: Session) -> None:
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_multi_filter_nested(db_session: Session) -> None:
+def test_multi_filter_nested(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     # Test nested AND/OR conditions
     multi_filter = MultiFilter(
         filters={
@@ -300,7 +380,8 @@ def test_multi_filter_nested(db_session: Session) -> None:
     assert {r.title for r in results} == {"The Matrix", "The Hangover"}
 
 
-def test_multi_filter_empty_filters(db_session: Session) -> None:
+def test_multi_filter_empty_filters(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test MultiFilter with empty filter lists."""
     # Test with empty filter list
     multi_filter = MultiFilter(filters={"and_": []})
@@ -317,7 +398,8 @@ def test_multi_filter_empty_filters(db_session: Session) -> None:
     assert len(results) == 3
 
 
-def test_multi_filter_invalid_filter_type(db_session: Session) -> None:
+def test_multi_filter_invalid_filter_type(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test MultiFilter with invalid filter types."""
     # Test with non-existent filter type
     multi_filter = MultiFilter(
@@ -353,7 +435,8 @@ def test_multi_filter_invalid_filter_type(db_session: Session) -> None:
     assert len(results) == 3
 
 
-def test_multi_filter_invalid_filter_args(db_session: Session) -> None:
+def test_multi_filter_invalid_filter_args(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test MultiFilter with invalid filter arguments."""
     # Test with missing required field
     multi_filter = MultiFilter(
@@ -389,7 +472,8 @@ def test_multi_filter_invalid_filter_args(db_session: Session) -> None:
     assert len(results) == 3
 
 
-def test_multi_filter_invalid_logical_operator(db_session: Session) -> None:
+def test_multi_filter_invalid_logical_operator(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test MultiFilter with invalid logical operators."""
     # Test with non-existent logical operator
     multi_filter = MultiFilter(
@@ -409,7 +493,8 @@ def test_multi_filter_invalid_logical_operator(db_session: Session) -> None:
     assert len(results) == 3
 
 
-def test_multi_filter_complex_nested(db_session: Session) -> None:
+def test_multi_filter_complex_nested(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test MultiFilter with complex nested conditions."""
     multi_filter = MultiFilter(
         filters={
@@ -442,7 +527,8 @@ def test_multi_filter_complex_nested(db_session: Session) -> None:
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_multi_filter_all_filter_types(db_session: Session) -> None:
+def test_multi_filter_all_filter_types(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test MultiFilter with all supported filter types."""
     multi_filter = MultiFilter(
         filters={
@@ -515,7 +601,8 @@ def test_multi_filter_all_filter_types(db_session: Session) -> None:
     assert {r.title for r in results} == {"The Matrix", "The Hangover", "Shawshank Redemption"}
 
 
-def test_comparison_filter(db_session: Session) -> None:
+def test_comparison_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test ComparisonFilter with various operators."""
     # Test equality operator
     eq_filter = ComparisonFilter(field_name="genre", operator="eq", value="Action")
@@ -589,7 +676,8 @@ def test_comparison_filter(db_session: Session) -> None:
     assert "Must be one of:" in str(exc_info.value)
 
 
-def test_collection_filter_prefer_any(db_session: Session) -> None:
+def test_collection_filter_prefer_any(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test CollectionFilter with prefer_any parameter."""
     # Test with prefer_any=False (default, using IN)
     collection_filter: CollectionFilter[str] = CollectionFilter(
@@ -624,7 +712,8 @@ def test_collection_filter_prefer_any(db_session: Session) -> None:
     assert len(results) == 3  # Should return all movies
 
 
-def test_not_in_collection_filter_prefer_any(db_session: Session) -> None:
+def test_not_in_collection_filter_prefer_any(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
     """Test NotInCollectionFilter with prefer_any parameter."""
     # Test with prefer_any=False (default, using NOT IN)
     not_in_collection_filter: NotInCollectionFilter[str] = NotInCollectionFilter(
@@ -657,3 +746,15 @@ def test_not_in_collection_filter_prefer_any(db_session: Session) -> None:
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
     results = db_session.execute(statement).scalars().all()
     assert len(results) == 3  # Should return all movies
+
+
+# Session-level teardown to ensure tables are dropped
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_filter_tables(request: FixtureRequest) -> Generator[None, None, None]:
+    """Ensure all filter test tables are dropped at session end."""
+    yield
+
+    # Clean up all cached tables at session end
+    for cache_key, model in _movie_model_cache.items():
+        # Tables are cleaned up by individual engine fixtures
+        pass

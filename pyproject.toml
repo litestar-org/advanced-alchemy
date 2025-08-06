@@ -380,6 +380,7 @@ classmethod-decorators = [
   "RUF029",
   "DOC",
   "UP007",
+  "UP045",
   "ASYNC230",
 ]
 

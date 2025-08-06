@@ -89,11 +89,13 @@ class StoreModelMixin(UUIDv7Base):
 
     @classmethod
     def _create_unique_store_key_namespace_index(cls, *_: Any, **kwargs: Any) -> bool:
-        return bool(kwargs["dialect"].name.startswith("spanner"))
+        dialect_name = kwargs.get("dialect", {}).name if "dialect" in kwargs else ""
+        return bool("spanner" in dialect_name.lower())
 
     @classmethod
     def _create_unique_store_key_namespace_constraint(cls, *_: Any, **kwargs: Any) -> bool:
-        return not kwargs["dialect"].name.startswith("spanner")
+        dialect_name = kwargs.get("dialect", {}).name if "dialect" in kwargs else ""
+        return "spanner" not in dialect_name.lower()
 
     @hybrid_property
     def is_expired(self) -> bool:  # pyright: ignore
@@ -219,7 +221,6 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             dialect = session.bind.dialect
             dialect_name = dialect.name
 
-            # Prepare values for upsert operations
             values = {
                 "key": db_key,
                 "namespace": db_namespace,
@@ -229,7 +230,6 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             conflict_columns = ["key", "namespace"]
             update_columns = ["value", "expires_at"]
 
-            # Try native upsert operations first (most efficient)
             if OnConflictUpsert.supports_native_upsert(dialect_name):
                 upsert_stmt = OnConflictUpsert.create_upsert(
                     table=self._model.__table__,  # type: ignore[arg-type]
@@ -237,10 +237,10 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
                     dialect_name=dialect_name,
+                    validate_identifiers=False,
                 )
                 session.execute(upsert_stmt)
 
-            # Use MERGE for Oracle or PostgreSQL 15+ if requested
             elif self.supports_merge(dialect):
                 merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
                     table=self._model.__table__,  # type: ignore[arg-type]
@@ -248,6 +248,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
                     dialect_name=dialect_name,
+                    validate_identifiers=False,
                 )
                 # Merge additional Oracle parameters with original values
                 merge_values = {**values, **additional_params}
@@ -290,7 +291,6 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             dialect = session.bind.dialect
             dialect_name = dialect.name
 
-            # Prepare values for upsert operations
             values = {
                 "key": db_key,
                 "namespace": db_namespace,
@@ -300,7 +300,6 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             conflict_columns = ["key", "namespace"]
             update_columns = ["value", "expires_at"]
 
-            # Try native upsert operations first (most efficient)
             if OnConflictUpsert.supports_native_upsert(dialect_name):
                 upsert_stmt = OnConflictUpsert.create_upsert(
                     table=self._model.__table__,  # type: ignore[arg-type]
@@ -308,10 +307,10 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
                     dialect_name=dialect_name,
+                    validate_identifiers=False,
                 )
                 await session.execute(upsert_stmt)
 
-            # Use MERGE for Oracle or PostgreSQL 15+ if requested
             elif self.supports_merge(dialect):
                 merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
                     table=self._model.__table__,  # type: ignore[arg-type]
@@ -319,6 +318,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     conflict_columns=conflict_columns,
                     update_columns=update_columns,
                     dialect_name=dialect_name,
+                    validate_identifiers=False,
                 )
                 # Merge additional Oracle parameters with original values
                 merge_values = {**values, **additional_params}

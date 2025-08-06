@@ -29,26 +29,117 @@ from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemyAsyncSessionBackend,
     SQLAlchemySyncSessionBackend,
 )
+from tests.integration.cleanup import async_clean_tables, clean_tables
 
 pytestmark = [
     pytest.mark.integration,
 ]
 
 
+# Module-level cache for model classes to prevent recreation
+_session_model_cache: "dict[str, type]" = {}
+
+
+@pytest.fixture(scope="session")
+def session_model_class(request: pytest.FixtureRequest) -> "type[SessionModelMixin]":
+    """Create session model class once per session/worker.
+
+    This fixture creates a unique model class per pytest session or xdist worker
+    to prevent metadata conflicts while allowing table reuse across tests.
+    """
+    # Get worker ID for xdist parallel execution
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    cache_key = f"session_{worker_id}"
+
+    if cache_key not in _session_model_cache:
+
+        class TestSessionBase(DeclarativeBase):
+            pass
+
+        class IntegrationTestSessionModel(SessionModelMixin, TestSessionBase):
+            """Test session model for integration tests."""
+
+            __tablename__ = f"integration_test_sessions_{worker_id}"
+
+        _session_model_cache[cache_key] = IntegrationTestSessionModel
+
+    return _session_model_cache[cache_key]
+
+
 @pytest.fixture
-def test_session_model(request: pytest.FixtureRequest) -> type[SessionModelMixin]:
-    """Return a unique test session model for each test to prevent metadata pollution."""
-    test_id = id(request.node)
+def session_tables_setup(
+    engine: Engine, session_model_class: "type[SessionModelMixin]"
+) -> "Generator[type[SessionModelMixin], None, None]":
+    """Create session tables for each test run but reuse model classes.
 
-    class TestSessionBase(DeclarativeBase):
-        pass
+    Tables are created per database engine type but model classes are cached
+    to prevent recreation. Fast data cleanup is used between individual tests.
+    """
+    # Skip table creation for mock engines
+    if getattr(engine.dialect, "name", "") != "mock":
+        session_model_class.metadata.create_all(engine)
 
-    class IntegrationTestSessionModel(SessionModelMixin, TestSessionBase):
-        """Test session model for integration tests."""
+    yield session_model_class
 
-        __tablename__ = f"integration_test_sessions_{test_id}"
+    # Clean up tables at end of test run for this engine
+    if getattr(engine.dialect, "name", "") != "mock":
+        session_model_class.metadata.drop_all(engine, checkfirst=True)
 
-    return IntegrationTestSessionModel
+
+@pytest.fixture
+async def async_session_tables_setup(
+    async_engine: AsyncEngine, session_model_class: "type[SessionModelMixin]"
+) -> "AsyncGenerator[type[SessionModelMixin], None]":
+    """Create async session tables for each test run but reuse model classes.
+
+    Tables are created per database engine type but model classes are cached
+    to prevent recreation. Fast data cleanup is used between individual tests.
+    """
+    # Skip table creation for mock engines
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(session_model_class.metadata.create_all)
+
+    yield session_model_class
+
+    # Clean up tables at end of test run for this engine
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(lambda sync_conn: session_model_class.metadata.drop_all(sync_conn, checkfirst=True))
+
+
+@pytest.fixture
+def test_session_model(
+    session_tables_setup: "type[SessionModelMixin]", engine: Engine
+) -> "Generator[type[SessionModelMixin], None, None]":
+    """Per-test fixture with fast data cleanup.
+
+    This fixture provides the session model class and ensures data cleanup
+    between tests without recreating tables.
+    """
+    model_class = session_tables_setup
+    yield model_class
+
+    # Fast data-only cleanup between tests
+    if getattr(engine.dialect, "name", "") != "mock":
+        clean_tables(engine, model_class.metadata)
+
+
+@pytest.fixture
+async def async_test_session_model(
+    async_session_tables_setup: "type[SessionModelMixin]", async_engine: AsyncEngine
+) -> "AsyncGenerator[type[SessionModelMixin], None]":
+    """Per-test async fixture with fast data cleanup.
+
+    This fixture provides the session model class and ensures data cleanup
+    between tests without recreating tables.
+    """
+    model_class = async_session_tables_setup
+    yield model_class
+
+    # Fast data-only cleanup between tests
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        await async_clean_tables(async_engine, model_class.metadata)
 
 
 @pytest.fixture
@@ -78,7 +169,7 @@ async def async_session_config(async_engine: AsyncEngine) -> SQLAlchemyAsyncConf
 
 @pytest.fixture
 def sync_session_backend(
-    sync_session_config: SQLAlchemySyncConfig, test_session_model: type[SessionModelMixin]
+    sync_session_config: SQLAlchemySyncConfig, test_session_model: "type[SessionModelMixin]"
 ) -> SQLAlchemySyncSessionBackend:
     """Create sync session backend."""
     return SQLAlchemySyncSessionBackend(
@@ -90,35 +181,27 @@ def sync_session_backend(
 
 @pytest.fixture
 async def async_session_backend(
-    async_session_config: SQLAlchemyAsyncConfig, test_session_model: type[SessionModelMixin]
+    async_session_config: SQLAlchemyAsyncConfig, async_test_session_model: "type[SessionModelMixin]"
 ) -> SQLAlchemyAsyncSessionBackend:
     """Create async session backend."""
     return SQLAlchemyAsyncSessionBackend(
         config=ServerSideSessionConfig(max_age=3600),
         alchemy_config=async_session_config,
-        model=test_session_model,
+        model=async_test_session_model,
     )
 
 
-# Database setup fixtures
+# Legacy database setup fixtures - now no-ops since tables are session-scoped
 @pytest.fixture
-def setup_sync_database(engine: Engine, test_session_model: type[SessionModelMixin]) -> Generator[None, None, None]:
-    """Set up database tables for sync tests."""
-    test_session_model.metadata.create_all(engine)
+def setup_sync_database() -> "Generator[None, None, None]":
+    """Legacy fixture - tables are now session-scoped, no setup needed."""
     yield
-    test_session_model.metadata.drop_all(engine, checkfirst=True)
 
 
 @pytest.fixture
-async def setup_async_database(
-    async_engine: AsyncEngine, test_session_model: type[SessionModelMixin]
-) -> AsyncGenerator[None, None]:
-    """Set up database tables for async tests."""
-    async with async_engine.begin() as conn:
-        await conn.run_sync(test_session_model.metadata.create_all)
+async def setup_async_database() -> "AsyncGenerator[None, None]":
+    """Legacy fixture - tables are now session-scoped, no setup needed."""
     yield
-    async with async_engine.begin() as conn:
-        await conn.run_sync(lambda sync_conn: test_session_model.metadata.drop_all(sync_conn, checkfirst=True))
 
 
 def _handle_database_encoding(data: Optional[bytes], expected: bytes, dialect_name: str) -> None:
@@ -221,7 +304,7 @@ async def test_sync_session_backend_complete_lifecycle(
 
 async def test_async_session_backend_expiration(
     async_engine: AsyncEngine,
-    test_session_model: type[SessionModelMixin],
+    async_test_session_model: "type[SessionModelMixin]",
     mock_store: Store,
     setup_async_database: None,
 ) -> None:
@@ -239,7 +322,7 @@ async def test_async_session_backend_expiration(
     backend = SQLAlchemyAsyncSessionBackend(
         config=ServerSideSessionConfig(max_age=1),  # 1 second
         alchemy_config=config,
-        model=test_session_model,
+        model=async_test_session_model,
     )
 
     session_id = str(uuid.uuid4())
@@ -330,7 +413,7 @@ async def test_async_session_backend_delete_expired(
 # Litestar Integration Tests
 async def test_async_session_middleware_integration(
     async_engine: AsyncEngine,
-    test_session_model: type[SessionModelMixin],
+    async_test_session_model: "type[SessionModelMixin]",
     setup_async_database: None,
 ) -> None:
     """Test async session backend with Litestar middleware."""
@@ -346,7 +429,7 @@ async def test_async_session_middleware_integration(
     backend = SQLAlchemyAsyncSessionBackend(
         config=ServerSideSessionConfig(max_age=3600, key="test-session"),
         alchemy_config=config,
-        model=test_session_model,
+        model=async_test_session_model,
     )
 
     @get("/set")
@@ -396,7 +479,7 @@ async def test_async_session_middleware_integration(
 
 async def test_sync_session_middleware_integration(
     engine: Engine,
-    test_session_model: type[SessionModelMixin],
+    test_session_model: "type[SessionModelMixin]",
     setup_sync_database: None,
 ) -> None:
     """Test sync session backend with Litestar middleware."""
