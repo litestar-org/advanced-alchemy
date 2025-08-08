@@ -567,7 +567,10 @@ class SearchFilter(StatementFilter):
         See Also:
             :meth:`sqlalchemy.sql.expression.Select.where`: SQLAlchemy WHERE clause
         """
-        where_clause = self._operator(*self.get_search_clauses(model))
+        search_clauses = self.get_search_clauses(model)
+        if not search_clauses:
+            return statement
+        where_clause = self._operator(*search_clauses)
         return cast("StatementTypeT", statement.where(where_clause))
 
 

@@ -29,7 +29,7 @@ if ATTRS_INSTALLED:
 
         name: str
         age: int
-        email: Optional[str] = None  # noqa: UP045
+        email: Optional[str] = None
 
 
 class TestCattrsIntegration:

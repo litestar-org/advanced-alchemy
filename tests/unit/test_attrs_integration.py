@@ -40,7 +40,7 @@ class AttrsWithOptional:
     """attrs class with optional fields."""
 
     name: str
-    email: Optional[str] = None  # noqa: UP045
+    email: Optional[str] = None
     active: bool = True
 
 

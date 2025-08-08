@@ -9,19 +9,20 @@ providing efficient implementations for common database operations patterns.
 
 Features
 --------
-- Table merging and upsert operations
-- Dynamic table creation from SELECT statements
-- Bulk data import/export operations
-- Optimized copy operations for PostgreSQL
-- Transaction-safe batch operations
+- Cross-database ON CONFLICT/ON DUPLICATE KEY UPDATE operations
+- MERGE statement support for Oracle and PostgreSQL 15+
 
-Todo:
------
-- Implement merge operations with customizable conflict resolution
-- Add CTAS (Create Table As Select) functionality
-- Implement bulk copy operations (COPY TO/FROM) for PostgreSQL
-- Add support for temporary table operations
-- Implement materialized view operations
+Security
+--------
+This module constructs SQL statements using database identifiers (table and column names)
+that MUST come from trusted sources only. All identifiers should originate from:
+
+- SQLAlchemy model metadata (e.g., Model.__table__)
+- Hardcoded strings in application code
+- Validated configuration files
+
+Never pass user input directly as table names, column names, or other SQL identifiers.
+Data values are properly parameterized using bindparam() to prevent SQL injection.
 
 Notes:
 ------
@@ -34,3 +35,463 @@ See Also:
 - :mod:`sqlalchemy.orm` : SQLAlchemy ORM functionality
 - :mod:`advanced_alchemy.extensions` : Additional database extensions
 """
+
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, Any, cast
+from uuid import UUID
+
+from sqlalchemy import Insert, Table, bindparam, literal_column, select, text
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import ClauseElement
+from sqlalchemy.sql.expression import Executable
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from sqlalchemy.sql.compiler import SQLCompiler
+    from sqlalchemy.sql.elements import ColumnElement
+
+__all__ = ("MergeStatement", "OnConflictUpsert", "validate_identifier")
+
+# Pattern for valid SQL identifiers (conservative - alphanumeric and underscore only)
+_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def validate_identifier(name: str, identifier_type: str = "identifier") -> str:
+    """Validate a SQL identifier to ensure it's safe for use in SQL statements.
+
+    This function provides validation for SQL identifiers
+    (table names, column names, etc.) to ensure they contain only safe characters.
+    While the operations in this module should only receive identifiers from
+    trusted sources, this validation adds an extra layer of security.
+
+    Note: SQL keywords (like 'select', 'insert', etc.) are allowed as they can
+    be properly quoted/escaped by SQLAlchemy when used as identifiers.
+
+    Args:
+        name: The identifier to validate
+        identifier_type: Type of identifier for error messages (e.g., "column", "table")
+
+    Returns:
+        The validated identifier
+
+    Raises:
+        ValueError: If the identifier is empty or contains invalid characters
+
+    Examples:
+        >>> validate_identifier("user_id")
+        'user_id'
+        >>> validate_identifier("users_table", "table")
+        'users_table'
+        >>> validate_identifier("select")  # SQL keywords are allowed
+        'select'
+        >>> validate_identifier(
+        ...     "drop table users; --"
+        ... )  # Raises ValueError - contains invalid characters
+    """
+    if not name:
+        msg = f"Empty {identifier_type} name provided"
+        raise ValueError(msg)
+
+    if not _IDENTIFIER_PATTERN.match(name):
+        msg = f"Invalid {identifier_type} name: '{name}'. Only alphanumeric characters and underscores are allowed."
+        raise ValueError(msg)
+
+    return name
+
+
+class MergeStatement(Executable, ClauseElement):
+    """A MERGE statement for Oracle and PostgreSQL 15+.
+
+    This provides a high-level interface for MERGE operations that
+    can handle both matched and unmatched conditions.
+    """
+
+    inherit_cache = True
+
+    def __init__(
+        self,
+        table: Table,
+        source: ClauseElement | str,
+        on_condition: ClauseElement,
+        when_matched_update: dict[str, Any] | None = None,
+        when_not_matched_insert: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize a MERGE statement.
+
+        Args:
+            table: Target table for the merge operation
+            source: Source data (can be a subquery or table)
+            on_condition: Condition for matching rows
+            when_matched_update: Values to update when rows match
+            when_not_matched_insert: Values to insert when rows don't match
+        """
+        self.table = table
+        self.source = source
+        self.on_condition = on_condition
+        self.when_matched_update = when_matched_update or {}
+        self.when_not_matched_insert = when_not_matched_insert or {}
+
+
+# PostgreSQL version constant
+POSTGRES_MERGE_VERSION = 15
+
+
+@compiles(MergeStatement)
+def compile_merge_default(_element: MergeStatement, compiler: SQLCompiler, **_kwargs: Any) -> str:
+    """Default compilation - raises error for unsupported dialects."""
+    dialect_name = compiler.dialect.name
+    msg = f"MERGE statement not supported for dialect '{dialect_name}'"
+    raise NotImplementedError(msg)
+
+
+@compiles(MergeStatement, "oracle")
+def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
+    """Compile MERGE statement for Oracle."""
+    table_name = element.table.name
+
+    if isinstance(element.source, str):
+        source_str = element.source
+        if source_str.upper().startswith("SELECT") and "FROM DUAL" not in source_str.upper():
+            source_str = f"{source_str} FROM DUAL"
+        source_clause = f"({source_str})"
+    else:
+        compiled_source = compiler.process(element.source, **kwargs)
+        source_clause = f"({compiled_source})"
+
+    merge_sql = f"MERGE INTO {table_name} tgt USING {source_clause} src ON ("
+    merge_sql += compiler.process(element.on_condition, **kwargs)
+    merge_sql += ")"
+
+    if element.when_matched_update:
+        merge_sql += " WHEN MATCHED THEN UPDATE SET "
+        updates = []
+        for column, value in element.when_matched_update.items():
+            if hasattr(value, "_compiler_dispatch"):
+                compiled_value = compiler.process(value, **kwargs)
+            else:
+                compiled_value = compiler.process(value, **kwargs)
+            updates.append(f"{column} = {compiled_value}")  # pyright: ignore
+        merge_sql += ", ".join(updates)  # pyright: ignore
+
+    if element.when_not_matched_insert:
+        columns = list(element.when_not_matched_insert.keys())
+        values = list(element.when_not_matched_insert.values())
+
+        merge_sql += " WHEN NOT MATCHED THEN INSERT ("
+        merge_sql += ", ".join(columns)
+        merge_sql += ") VALUES ("
+
+        compiled_values = []
+        for value in values:
+            if hasattr(value, "_compiler_dispatch"):
+                compiled_value = compiler.process(value, **kwargs)
+            else:
+                compiled_value = compiler.process(value, **kwargs)
+            compiled_values.append(compiled_value)  # pyright: ignore
+        merge_sql += ", ".join(compiled_values)  # pyright: ignore
+        merge_sql += ")"
+
+    return merge_sql
+
+
+@compiles(MergeStatement, "postgresql")
+def compile_merge_postgresql(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
+    """Compile MERGE statement for PostgreSQL 15+."""
+    dialect = compiler.dialect
+    if (
+        hasattr(dialect, "server_version_info")
+        and dialect.server_version_info
+        and dialect.server_version_info[0] < POSTGRES_MERGE_VERSION
+    ):
+        msg = "MERGE statement requires PostgreSQL 15 or higher"
+        raise NotImplementedError(msg)
+
+    table_name = element.table.name
+
+    if isinstance(element.source, str):
+        # Wrap raw string source and alias as src
+        source_clause = f"({element.source}) AS src"
+    else:
+        # Ensure the compiled source is parenthesized and has a stable alias 'src'
+        compiled_source = compiler.process(element.source, **kwargs)
+        compiled_trim = compiled_source.strip()
+        if compiled_trim.startswith("("):
+            # Already parenthesized; check for alias after closing paren
+            has_outer_alias = (
+                re.search(r"\)\s+(AS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s*$", compiled_trim, re.IGNORECASE) is not None
+            )
+            source_clause = compiled_trim if has_outer_alias else f"{compiled_trim} AS src"
+        else:
+            # Not parenthesized: wrap and alias
+            source_clause = f"({compiled_trim}) AS src"
+
+    merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} ON ("
+    merge_sql += compiler.process(element.on_condition, **kwargs)
+    merge_sql += ")"
+
+    if element.when_matched_update:
+        merge_sql += " WHEN MATCHED THEN UPDATE SET "
+        updates = []
+        for column, value in element.when_matched_update.items():
+            if hasattr(value, "_compiler_dispatch"):
+                compiled_value = compiler.process(value, **kwargs)
+            else:
+                compiled_value = compiler.process(value, **kwargs)
+            updates.append(f"{column} = {compiled_value}")  # pyright: ignore
+        merge_sql += ", ".join(updates)  # pyright: ignore
+
+    if element.when_not_matched_insert:
+        columns = list(element.when_not_matched_insert.keys())
+        values = list(element.when_not_matched_insert.values())
+
+        merge_sql += " WHEN NOT MATCHED THEN INSERT ("
+        merge_sql += ", ".join(columns)
+        merge_sql += ") VALUES ("
+
+        compiled_values = []
+        for value in values:
+            if hasattr(value, "_compiler_dispatch"):
+                compiled_value = compiler.process(value, **kwargs)
+            else:
+                compiled_value = compiler.process(value, **kwargs)
+            compiled_values.append(compiled_value)  # pyright: ignore
+        merge_sql += ", ".join(compiled_values)  # pyright: ignore
+        merge_sql += ")"
+
+    return merge_sql
+
+
+class OnConflictUpsert:
+    """Cross-database upsert operation using dialect-specific constructs.
+
+    This class provides a unified interface for upsert operations across
+    different database backends using their native ON CONFLICT or
+    ON DUPLICATE KEY UPDATE mechanisms.
+    """
+
+    @staticmethod
+    def supports_native_upsert(dialect_name: str) -> bool:
+        """Check if the dialect supports native upsert operations.
+
+        Args:
+            dialect_name: Name of the database dialect
+
+        Returns:
+            True if native upsert is supported, False otherwise
+        """
+        return dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
+
+    @staticmethod
+    def create_upsert(
+        table: Table,
+        values: dict[str, Any],
+        conflict_columns: list[str],
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
+        validate_identifiers: bool = False,
+    ) -> Insert:
+        """Create a dialect-specific upsert statement.
+
+        Args:
+            table: Target table for the upsert
+            values: Values to insert/update
+            conflict_columns: Columns that define the conflict condition
+            update_columns: Columns to update on conflict (defaults to all non-conflict columns)
+            dialect_name: Database dialect name (auto-detected if not provided)
+            validate_identifiers: If True, validate column names for safety (default: False)
+
+        Returns:
+            A SQLAlchemy Insert statement with upsert logic
+
+        Raises:
+            NotImplementedError: If the dialect doesn't support native upsert
+            ValueError: If validate_identifiers is True and invalid identifiers are found
+        """
+        if validate_identifiers:
+            for col in conflict_columns:
+                validate_identifier(col, "conflict column")
+            if update_columns:
+                for col in update_columns:
+                    validate_identifier(col, "update column")
+            for col in values:
+                validate_identifier(col, "column")
+
+        if update_columns is None:
+            update_columns = [col for col in values if col not in conflict_columns]
+
+        if dialect_name in {"postgresql", "sqlite", "duckdb"}:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            pg_insert_stmt = pg_insert(table).values(values)
+            return pg_insert_stmt.on_conflict_do_update(
+                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
+            )
+        if dialect_name == "cockroachdb":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            pg_insert_stmt = pg_insert(table).values(values)
+            return pg_insert_stmt.on_conflict_do_update(
+                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
+            )
+
+        if dialect_name in {"mysql", "mariadb"}:
+            from sqlalchemy.dialects.mysql import insert as mysql_insert
+
+            mysql_insert_stmt = mysql_insert(table).values(values)
+            return mysql_insert_stmt.on_duplicate_key_update(**{
+                col: mysql_insert_stmt.inserted[col] for col in update_columns
+            })
+
+        msg = f"Native upsert not supported for dialect '{dialect_name}'"
+        raise NotImplementedError(msg)
+
+    @staticmethod
+    def create_merge_upsert(  # noqa: C901
+        table: Table,
+        values: dict[str, Any],
+        conflict_columns: list[str],
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
+        validate_identifiers: bool = False,
+    ) -> tuple[MergeStatement, dict[str, Any]]:
+        """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
+
+        For Oracle databases, this method automatically generates values for primary key
+        columns that have callable defaults (such as UUID generation functions). This is
+        necessary because Oracle MERGE statements cannot use Python callable defaults
+        directly in the INSERT clause.
+
+        Args:
+            table: Target table for the upsert
+            values: Values to insert/update
+            conflict_columns: Columns that define the matching condition
+            update_columns: Columns to update on match (defaults to all non-conflict columns)
+            dialect_name: Database dialect name (used to determine Oracle-specific syntax)
+            validate_identifiers: If True, validate column names for safety (default: False)
+
+        Returns:
+            A tuple of (MergeStatement, additional_params) where additional_params
+            contains any generated values (like Oracle UUID primary keys)
+
+        Raises:
+            ValueError: If validate_identifiers is True and invalid identifiers are found
+        """
+        if validate_identifiers:
+            for col in conflict_columns:
+                validate_identifier(col, "conflict column")
+            if update_columns:
+                for col in update_columns:
+                    validate_identifier(col, "update column")
+            for col in values:
+                validate_identifier(col, "column")
+
+        if update_columns is None:
+            update_columns = [col for col in values if col not in conflict_columns]
+
+        source: ClauseElement | str
+        if dialect_name == "oracle":
+            # Build raw SELECT; we'll convert to TextClause and bind params after
+            source_values = ", ".join([f":{key} as {key}" for key in values])
+            source = f"SELECT {source_values} FROM DUAL"  # noqa: S608
+        elif dialect_name in {"postgresql", "cockroachdb"}:
+            # Build a typed SELECT using bindparams to avoid text()+cast parsing issues
+            labeled_columns: list[ColumnElement[Any]] = []
+            for key, value in values.items():
+                column = table.c[key]
+                bp = bindparam(f"src_{key}", value=value, type_=column.type)
+                labeled_columns.append(bp.label(key))
+            # subquery named 'src' to reference src.<col>
+            # subquery is a valid method on Select; cast helps static checkers
+            source = select(*labeled_columns).subquery("src")
+        else:
+            placeholders = ", ".join([f"%({key})s" for key in values])
+            col_names = ", ".join(values.keys())
+            source = f"(SELECT * FROM (VALUES ({placeholders})) AS src({col_names}))"  # noqa: S608
+
+        on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
+        on_condition = text(" AND ".join(on_conditions))
+
+        # For PostgreSQL/CockroachDB MERGE, we can reference src columns directly
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            # Reference src columns in UPDATE - no need for separate bindparams
+
+            when_matched_update: dict[str, Any] = {
+                col: literal_column(f"src.{col}") for col in update_columns if col in values
+            }
+        else:
+            when_matched_update = {col: bindparam(col) for col in update_columns if col in values}
+
+        insert_columns = list(values.keys())
+        additional_params: dict[str, Any] = {}
+
+        if dialect_name == "oracle" and isinstance(source, str):
+            # Oracle needs special handling for UUID primary keys
+            source, additional_params = _create_oracle_additional_params(table, values, source)
+            insert_columns = list(values.keys()) + list(additional_params.keys())
+            # Convert to TextClause and declare bindparams so the driver receives all placeholders
+            source_text = text(source)
+            clause_binds: list[Any] = []
+            for key, value in values.items():
+                clause_binds.append(bindparam(key, value=value, type_=table.c[key].type))
+            for key, value in additional_params.items():
+                # Only bind scalar defaults; SQL expressions (e.g., sequences) should render directly
+                if not hasattr(value, "_compiler_dispatch"):
+                    type_ = table.c[key].type if key in table.c else None
+                    clause_binds.append(bindparam(key, value=value, type_=type_))
+            source = source_text.bindparams(*clause_binds)
+
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            # Reference src columns in INSERT - no need for separate bindparams
+
+            when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in insert_columns}
+        elif dialect_name == "oracle":
+            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
+        else:
+            when_not_matched_insert = {col: bindparam(col) for col in insert_columns}
+
+        merge_stmt = MergeStatement(
+            table=table,
+            source=source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        )
+
+        return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
+
+
+def _create_oracle_additional_params(table: Table, values: dict[str, Any], source: str) -> tuple[str, dict[str, Any]]:
+    """Handle Oracle-specific UUID primary key generation."""
+    additional_params: dict[str, Any] = {}
+    insert_columns = list(values.keys())
+
+    for col in table.primary_key.columns:
+        if col.name not in values and col.default is not None:
+            if callable(getattr(col.default, "arg", None)):
+                try:
+                    default_value = col.default.arg(None)  # type: ignore[attr-defined]
+                    if isinstance(default_value, UUID):
+                        default_value = default_value.hex
+                    additional_params[col.name] = default_value
+                    insert_columns.append(col.name)
+                except (TypeError, AttributeError, ValueError):
+                    continue
+            elif hasattr(col.default, "next_value"):
+                # Handle sequences - access with a loose cast to satisfy type checkers
+                seq_next = cast("Any", col.default).next_value
+                additional_params[col.name] = seq_next
+                insert_columns.append(col.name)
+
+    if additional_params:
+        additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]
+        if source.endswith(" FROM DUAL"):
+            base_source = source[: -len(" FROM DUAL")]
+            source = f"{base_source}, {', '.join(additional_selects)} FROM DUAL"
+        else:
+            source = f"{source}, {', '.join(additional_selects)}"
+
+    return source, additional_params
+
+
+# Note: helper removed; kept for potential future use if needed.

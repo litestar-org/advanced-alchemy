@@ -24,6 +24,7 @@ from advanced_alchemy.types.file_object.backends.fsspec import FSSpecBackend
 from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.registry import StorageRegistry, storages
 from advanced_alchemy.types.mutables import MutableList
+from tests.integration.helpers import async_clean_tables, clean_tables
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -106,66 +107,88 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
     return storages
 
 
-@pytest.fixture()
-def sync_db_engine(tmp_path: Path) -> Generator[Engine, None, None]:
-    """Provides an SQLite engine scoped to each function."""
-    db_file = tmp_path / "test_file_object_sync.db"
+@pytest.fixture(scope="session")
+def sync_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[Engine, None, None]:
+    """Provides an SQLite engine scoped to the test session."""
+    db_dir = tmp_path_factory.mktemp("file_object_sync_db")
+    db_file = db_dir / "test_file_object_sync.db"
     engine = create_engine(f"sqlite:///{db_file}", execution_options={"enable_file_object_listener": True})
-    yield engine
-    db_file.unlink(missing_ok=True)
+
+    # Create schema once per session
+    Base.metadata.create_all(engine)
+    try:
+        yield engine
+    finally:
+        # Drop schema and clean up
+        Base.metadata.drop_all(engine, checkfirst=True)
+        engine.dispose()
+        db_file.unlink(missing_ok=True)
 
 
-@pytest.fixture()
-def async_db_engine(tmp_path: Path) -> Generator[AsyncEngine, None, None]:
-    """Provides an SQLite engine scoped to each function."""
-    db_file = tmp_path / "test_file_object_async.db"
+@pytest.fixture(scope="session")
+def async_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[AsyncEngine, None, None]:
+    """Provides an SQLite engine scoped to the test session."""
+    db_dir = tmp_path_factory.mktemp("file_object_async_db")
+    db_file = db_dir / "test_file_object_async.db"
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{db_file}", execution_options={"enable_file_object_listener": True}
     )
-    yield engine
-    db_file.unlink(missing_ok=True)
+
+    # Create schema once per session
+    async def _create() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    import asyncio as _asyncio
+
+    _asyncio.get_event_loop().run_until_complete(_create())
+
+    try:
+        yield engine
+    finally:
+
+        async def _drop() -> None:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
+            await engine.dispose()
+
+        _asyncio.get_event_loop().run_until_complete(_drop())
+        db_file.unlink(missing_ok=True)
 
 
 @pytest.fixture()
 def session(
     sync_db_engine: Engine, storage_registry: "StorageRegistry"
 ) -> Generator[Session, None, None]:  # Depend on sqlalchemy_config to ensure setup runs
-    """Provides a SQLAlchemy session scoped to each function."""
-    Base.metadata.create_all(sync_db_engine)
+    """Provides a SQLAlchemy session scoped to each function with fast cleanup."""
     with Session(sync_db_engine) as db_session:
         yield db_session
-    Base.metadata.drop_all(sync_db_engine)
+    # Fast per-test cleanup without dropping schema
+    clean_tables(sync_db_engine, Base.metadata)
 
 
 @pytest.fixture()
 async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
 ) -> AsyncGenerator[AsyncSession, None]:  # Depend on sqlalchemy_config to ensure setup runs
-    """Provides a SQLAlchemy session scoped to each function."""
-    async with async_db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+    """Provides a SQLAlchemy session scoped to each function with fast cleanup."""
     # Create session with flag for listener to identify async operations
     set_async_context(True)
-    # Create session factory
+
     async_session_factory = async_sessionmaker(
         async_db_engine,
         expire_on_commit=False,
     )
 
-    # Create session
     async with async_session_factory() as db_session:
-        # Add flag to session.info dictionary
         db_session.info["enable_file_object_listener"] = True
         logger.debug(f"Created async session: {id(db_session)}, with info: {db_session.info}")
         yield db_session
 
     # Reset async context flag
     set_async_context(False)
-
-    async with async_db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await async_db_engine.dispose()
+    # Fast per-test cleanup without dropping schema
+    await async_clean_tables(async_db_engine, Base.metadata)
 
 
 @pytest.mark.xdist_group("file_object")

@@ -1,8 +1,10 @@
 from __future__ import annotations
+# ruff: noqa: I001
 
+import logging
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, cast
-from unittest.mock import NonCallableMagicMock, create_autospec
+from unittest.mock import create_autospec, NonCallableMagicMock
 
 import pytest
 from google.cloud import spanner  # pyright: ignore
@@ -11,10 +13,56 @@ from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+# Local test helpers and fixtures
+from tests.integration import helpers as test_helpers
+
+# Import all fixtures from repository_fixtures
+from tests.integration.repository_fixtures import *  # noqa: F403
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from pytest import MonkeyPatch
+
+
+@pytest.fixture(scope="session", autouse=True)
+def configure_safe_logging() -> None:
+    """Configure logging to prevent I/O errors during parallel test execution.
+
+    Both Google Cloud Spanner and SQLAlchemy try to write logs during test execution with pytest-xdist,
+    but worker processes have closed file streams, causing "I/O operation on closed file" errors.
+    This fixture configures a safe logging handler to suppress these errors.
+    """
+
+    # Create a safe logging handler that won't fail on closed streams
+    class SafeStreamHandler(logging.StreamHandler):
+        def emit(self, record: logging.LogRecord) -> None:
+            try:
+                super().emit(record)
+            except (ValueError, OSError):
+                # Suppress I/O errors from closed streams during test execution
+                pass
+
+    # Configure loggers that can cause I/O issues during parallel test execution
+    problematic_loggers = [
+        # Google Cloud Spanner loggers
+        "google.cloud.spanner_v1.database_sessions_manager",
+        "google.cloud.spanner",
+        "google.cloud",
+        # SQLAlchemy engine loggers
+        "sqlalchemy.engine.Engine",
+        "sqlalchemy.engine",
+        "sqlalchemy.pool",
+    ]
+
+    for logger_name in problematic_loggers:
+        logger = logging.getLogger(logger_name)
+        # Remove existing handlers that might cause issues
+        logger.handlers.clear()
+        # Add our safe handler
+        logger.addHandler(SafeStreamHandler())
+        logger.setLevel(logging.WARNING)  # Reduce verbosity
+        logger.propagate = False  # Prevent propagation to root logger
 
 
 @pytest.fixture(autouse=True)
@@ -141,6 +189,7 @@ def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
     mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
     mock.dialect.name = "mock"
+    mock.dialect.server_version_info = None
     yield mock
 
 
@@ -221,8 +270,8 @@ def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
         ),
     ],
 )
-def engine(request: FixtureRequest) -> Generator[Engine, None, None]:
-    yield cast(Engine, request.getfixturevalue(request.param))
+def engine(request: FixtureRequest) -> Engine:
+    return cast(Engine, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
@@ -238,6 +287,62 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
         finally:
             session_instance.rollback()
             session_instance.close()
+
+
+# ---------------------------------------------------------------------------
+# Global, per-test cleanup to ensure data isolation between tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
+    """After each test, remove all rows from all tables for sync engine tests.
+
+    Activates only when the test uses the 'engine' fixture, and skips mock engines.
+    Uses the robust dialect-aware cleanup utilities.
+    """
+    yield
+
+    if "engine" not in request.fixturenames:
+        return
+
+    engine = cast(Engine, request.getfixturevalue("engine"))
+    if getattr(engine.dialect, "name", "") == "mock":
+        return
+
+    try:
+        with test_helpers.cleanup_database(engine) as cleaner:
+            # Clean all tables (no include_only filter)
+            cleaner.include_only = None
+            cleaner.cleanup()
+    except test_helpers.CleanupError:
+        # Tests may drop tables; ignore cleanup errors at teardown time
+        pass
+
+
+@pytest.fixture(autouse=True)
+async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
+    """After each test, remove all rows from all tables for async engine tests.
+
+    Activates only when the test uses the 'async_engine' fixture, and skips mock engines.
+    Uses the robust dialect-aware async cleanup utilities.
+    """
+    yield
+
+    if "async_engine" not in request.fixturenames:
+        return
+
+    async_engine = cast(AsyncEngine, request.getfixturevalue("async_engine"))
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        return
+
+    try:
+        async with test_helpers.cleanup_database_async(async_engine) as cleaner:
+            cleaner.include_only = None
+            await cleaner.cleanup()
+    except test_helpers.CleanupError:
+        # Tests may drop tables; ignore cleanup errors at teardown time
+        pass
 
 
 @pytest.fixture()
@@ -340,6 +445,7 @@ async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
     mock = cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
     mock.dialect.name = "mock"
+    mock.dialect.server_version_info = None
     yield mock
 
 
@@ -420,9 +526,9 @@ async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
         ),
     ],
 )
-async def async_engine(request: FixtureRequest) -> AsyncGenerator[AsyncEngine, None]:
+def async_engine(request: FixtureRequest) -> AsyncEngine:
     """Parametrized fixture to provide different async SQLAlchemy engines."""
-    yield cast(AsyncEngine, request.getfixturevalue(request.param))
+    return cast(AsyncEngine, request.getfixturevalue(request.param))
 
 
 @pytest.fixture()
