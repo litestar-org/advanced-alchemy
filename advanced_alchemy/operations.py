@@ -339,9 +339,9 @@ class OnConflictUpsert:
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
-            return mysql_insert_stmt.on_duplicate_key_update(**{
-                col: mysql_insert_stmt.inserted[col] for col in update_columns
-            })
+            return mysql_insert_stmt.on_duplicate_key_update(
+                **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
+            )
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
