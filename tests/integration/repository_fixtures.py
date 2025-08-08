@@ -13,8 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.fixtures.bigint import models as models_bigint
 from tests.fixtures.uuid import models as models_uuid
-from tests.integration.cleanup import async_clean_tables, clean_tables
-from tests.integration.helpers import get_worker_id
+from tests.integration.helpers import async_clean_tables, clean_tables, get_worker_id
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest

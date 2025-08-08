@@ -36,20 +36,20 @@ See Also:
 - :mod:`advanced_alchemy.extensions` : Additional database extensions
 """
 
+from __future__ import annotations
+
 import re
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import (
-    Insert,
-    Table,
-    bindparam,
-    text,
-)
+from sqlalchemy import Insert, Table, bindparam, literal_column, select, text
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ClauseElement
-from sqlalchemy.sql.compiler import SQLCompiler
 from sqlalchemy.sql.expression import Executable
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from sqlalchemy.sql.compiler import SQLCompiler
+    from sqlalchemy.sql.elements import ColumnElement
 
 __all__ = ("MergeStatement", "OnConflictUpsert", "validate_identifier")
 
@@ -112,10 +112,10 @@ class MergeStatement(Executable, ClauseElement):
     def __init__(
         self,
         table: Table,
-        source: Union[ClauseElement, str],
+        source: ClauseElement | str,
         on_condition: ClauseElement,
-        when_matched_update: "Optional[dict[str, Any]]" = None,
-        when_not_matched_insert: "Optional[dict[str, Any]]" = None,
+        when_matched_update: dict[str, Any] | None = None,
+        when_not_matched_insert: dict[str, Any] | None = None,
     ) -> None:
         """Initialize a MERGE statement.
 
@@ -156,7 +156,8 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
             source_str = f"{source_str} FROM DUAL"
         source_clause = f"({source_str})"
     else:
-        source_clause = compiler.process(element.source, **kwargs)
+        compiled_source = compiler.process(element.source, **kwargs)
+        source_clause = f"({compiled_source})"
 
     merge_sql = f"MERGE INTO {table_name} tgt USING {source_clause} src ON ("
     merge_sql += compiler.process(element.on_condition, **kwargs)
@@ -209,11 +210,23 @@ def compile_merge_postgresql(element: MergeStatement, compiler: SQLCompiler, **k
     table_name = element.table.name
 
     if isinstance(element.source, str):
-        source_clause = f"({element.source})"
+        # Wrap raw string source and alias as src
+        source_clause = f"({element.source}) AS src"
     else:
-        source_clause = compiler.process(element.source, **kwargs)
+        # Ensure the compiled source is parenthesized and has a stable alias 'src'
+        compiled_source = compiler.process(element.source, **kwargs)
+        compiled_trim = compiled_source.strip()
+        if compiled_trim.startswith("("):
+            # Already parenthesized; check for alias after closing paren
+            has_outer_alias = (
+                re.search(r"\)\s+(AS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s*$", compiled_trim, re.IGNORECASE) is not None
+            )
+            source_clause = compiled_trim if has_outer_alias else f"{compiled_trim} AS src"
+        else:
+            # Not parenthesized: wrap and alias
+            source_clause = f"({compiled_trim}) AS src"
 
-    merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} AS src ON ("
+    merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} ON ("
     merge_sql += compiler.process(element.on_condition, **kwargs)
     merge_sql += ")"
 
@@ -272,10 +285,10 @@ class OnConflictUpsert:
     @staticmethod
     def create_upsert(
         table: Table,
-        values: "dict[str, Any]",
-        conflict_columns: "list[str]",
-        update_columns: "Optional[list[str]]" = None,
-        dialect_name: Optional[str] = None,
+        values: dict[str, Any],
+        conflict_columns: list[str],
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
         validate_identifiers: bool = False,
     ) -> Insert:
         """Create a dialect-specific upsert statement.
@@ -307,7 +320,14 @@ class OnConflictUpsert:
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
 
-        if dialect_name in {"postgresql", "cockroachdb", "sqlite", "duckdb"}:
+        if dialect_name in {"postgresql", "sqlite", "duckdb"}:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            pg_insert_stmt = pg_insert(table).values(values)
+            return pg_insert_stmt.on_conflict_do_update(
+                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
+            )
+        if dialect_name == "cockroachdb":
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
             pg_insert_stmt = pg_insert(table).values(values)
@@ -327,14 +347,14 @@ class OnConflictUpsert:
         raise NotImplementedError(msg)
 
     @staticmethod
-    def create_merge_upsert(
+    def create_merge_upsert(  # noqa: C901
         table: Table,
-        values: "dict[str, Any]",
-        conflict_columns: "list[str]",
-        update_columns: "Optional[list[str]]" = None,
-        dialect_name: Optional[str] = None,
+        values: dict[str, Any],
+        conflict_columns: list[str],
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
         validate_identifiers: bool = False,
-    ) -> "tuple[MergeStatement, dict[str, Any]]":
+    ) -> tuple[MergeStatement, dict[str, Any]]:
         """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
 
         For Oracle databases, this method automatically generates values for primary key
@@ -369,9 +389,20 @@ class OnConflictUpsert:
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
 
+        source: ClauseElement | str
         if dialect_name == "oracle":
+            # Build raw SELECT; we'll convert to TextClause and bind params after
             source_values = ", ".join([f":{key} as {key}" for key in values])
             source = f"SELECT {source_values} FROM DUAL"  # noqa: S608
+        elif dialect_name in {"postgresql", "cockroachdb"}:
+            # Build a typed SELECT using bindparams to avoid text()+cast parsing issues
+            labeled_columns: list[ColumnElement[Any]] = []
+            for key, value in values.items():
+                column = table.c[key]
+                bp = bindparam(f"src_{key}", value=value, type_=column.type)
+                labeled_columns.append(bp.label(key))
+            # subquery named 'src' to reference src.<col>
+            source = select(*labeled_columns).subquery("src")  # type: ignore[reportUnknownMemberType]
         else:
             placeholders = ", ".join([f"%({key})s" for key in values])
             col_names = ", ".join(values.keys())
@@ -380,20 +411,41 @@ class OnConflictUpsert:
         on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
         on_condition = text(" AND ".join(on_conditions))
 
-        if dialect_name in {"oracle", "postgresql", "cockroachdb"}:
-            when_matched_update: dict[str, Any] = {col: bindparam(col) for col in update_columns if col in values}
+        # For PostgreSQL/CockroachDB MERGE, we can reference src columns directly
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            # Reference src columns in UPDATE - no need for separate bindparams
+
+            when_matched_update: dict[str, Any] = {
+                col: literal_column(f"src.{col}") for col in update_columns if col in values
+            }
         else:
             when_matched_update = {col: bindparam(col) for col in update_columns if col in values}
 
         insert_columns = list(values.keys())
         additional_params: dict[str, Any] = {}
 
-        if dialect_name == "oracle":
+        if dialect_name == "oracle" and isinstance(source, str):
+            # Oracle needs special handling for UUID primary keys
             source, additional_params = _create_oracle_additional_params(table, values, source)
             insert_columns = list(values.keys()) + list(additional_params.keys())
+            # Convert to TextClause and declare bindparams so the driver receives all placeholders
+            source_text = text(source)
+            clause_binds: list[Any] = []
+            for key, value in values.items():
+                clause_binds.append(bindparam(key, value=value, type_=table.c[key].type))
+            for key, value in additional_params.items():
+                # Only bind scalar defaults; SQL expressions (e.g., sequences) should render directly
+                if not hasattr(value, "_compiler_dispatch"):
+                    type_ = table.c[key].type if key in table.c else None
+                    clause_binds.append(bindparam(key, value=value, type_=type_))
+            source = source_text.bindparams(*clause_binds)
 
-        if dialect_name in {"oracle", "postgresql", "cockroachdb"}:
-            when_not_matched_insert: dict[str, Any] = {col: bindparam(col) for col in insert_columns}
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            # Reference src columns in INSERT - no need for separate bindparams
+
+            when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in insert_columns}
+        elif dialect_name == "oracle":
+            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
         else:
             when_not_matched_insert = {col: bindparam(col) for col in insert_columns}
 
@@ -408,41 +460,36 @@ class OnConflictUpsert:
         return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
 
 
-def _create_oracle_additional_params(
-    table: Table, values: "dict[str, Any]", source: str
-) -> "tuple[str, dict[str, Any]]":
+def _create_oracle_additional_params(table: Table, values: dict[str, Any], source: str) -> tuple[str, dict[str, Any]]:
     """Handle Oracle-specific UUID primary key generation."""
-    additional_params = {}
+    additional_params: dict[str, Any] = {}
     insert_columns = list(values.keys())
 
     for col in table.primary_key.columns:
-        if (
-            col.name not in values
-            and hasattr(col, "default")
-            and col.default is not None
-            and (hasattr(col.default, "arg") and callable(col.default.arg))  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportAttributeAccessIssue]
-        ):
-            try:
-                if hasattr(col.default, "arg"):
-                    try:
-                        default_value = col.default.arg()  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
-                    except TypeError:
-                        default_value = col.default.arg(None)  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
-
+        if col.name not in values and col.default is not None:
+            if callable(getattr(col.default, "arg", None)):
+                try:
+                    default_value = col.default.arg(None)  # type: ignore[attr-defined]
                     if isinstance(default_value, UUID):
                         default_value = default_value.hex
-
                     additional_params[col.name] = default_value
                     insert_columns.append(col.name)
-            except (TypeError, AttributeError, ValueError):
-                continue
+                except (TypeError, AttributeError, ValueError):
+                    continue
+            elif hasattr(col.default, "next_value"):
+                # Handle sequences
+                additional_params[col.name] = col.default.next_value  # type: ignore[attr-defined]
+                insert_columns.append(col.name)
 
     if additional_params:
-        additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]  # pyright: ignore[reportUnknownVariableType]
+        additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]
         if source.endswith(" FROM DUAL"):
             base_source = source[: -len(" FROM DUAL")]
             source = f"{base_source}, {', '.join(additional_selects)} FROM DUAL"
         else:
             source = f"{source}, {', '.join(additional_selects)}"
 
-    return source, additional_params  # pyright: ignore[reportUnknownVariableType]
+    return source, additional_params
+
+
+# Note: helper removed; kept for potential future use if needed.

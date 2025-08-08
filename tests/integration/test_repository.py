@@ -9,14 +9,15 @@ import datetime
 import os
 from collections.abc import AsyncGenerator, Generator, Iterator
 from typing import TYPE_CHECKING, Any, Literal, Union, cast
+from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID, uuid4
 
 import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Engine, and_, select, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy import Dialect, Engine, NullPool, and_, create_engine, select, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import Session, selectinload
 from time_machine import travel
 
@@ -52,6 +53,12 @@ from tests.fixtures.uuid import repositories as repositories_uuid
 from tests.fixtures.uuid import services as services_uuid
 from tests.helpers import maybe_async
 
+# Python 3.9 compatibility for typing.TypeAlias
+try:  # Python >= 3.10
+    from typing import TypeAlias  # type: ignore[attr-defined]
+except Exception:  # Python 3.9 fallback
+    from typing_extensions import TypeAlias  # type: ignore[assignment]
+
 if TYPE_CHECKING:
     from pytest import FixtureRequest
     from time_machine import Coordinates
@@ -73,53 +80,309 @@ SlugBookModel = type[Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBoo
 
 
 AnySecret = Union[models_uuid.UUIDSecret, models_bigint.BigIntSecret]
-SecretRepository = SQLAlchemyAsyncRepository[AnySecret]
-SecretService = SQLAlchemyAsyncRepositoryService[AnySecret, SecretRepository]
-SecretMockRepository = SQLAlchemyAsyncMockRepository[AnySecret]
-AnySecretRepository = Union[SecretRepository, SecretMockRepository]
+SecretRepository: TypeAlias = SQLAlchemyAsyncRepository[AnySecret]
+SecretService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnySecret, SecretRepository]
+SecretMockRepository: TypeAlias = SQLAlchemyAsyncMockRepository[AnySecret]
+AnySecretRepository: TypeAlias = Union[SecretRepository, SecretMockRepository]
 
 AnyAuthor = Union[models_uuid.UUIDAuthor, models_bigint.BigIntAuthor]
-AuthorRepository = SQLAlchemyAsyncRepository[AnyAuthor]
-AuthorMockRepository = SQLAlchemyAsyncMockRepository[AnyAuthor]
-AnyAuthorRepository = Union[AuthorRepository, AuthorMockRepository]
-AuthorService = SQLAlchemyAsyncRepositoryService[AnyAuthor, AuthorRepository]
+AuthorRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyAuthor]
+AuthorMockRepository: TypeAlias = SQLAlchemyAsyncMockRepository[AnyAuthor]
+AnyAuthorRepository: TypeAlias = Union[AuthorRepository, AuthorMockRepository]
+AuthorService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnyAuthor, AuthorRepository]
 
 AnyRule = Union[models_uuid.UUIDRule, models_bigint.BigIntRule]
-RuleRepository = SQLAlchemyAsyncRepository[AnyRule]
-RuleService = SQLAlchemyAsyncRepositoryService[AnyRule, RuleRepository]
+RuleRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyRule]
+RuleService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnyRule, RuleRepository]
 
 AnySlugBook = Union[models_uuid.UUIDSlugBook, models_bigint.BigIntSlugBook]
-SlugBookRepository = SQLAlchemyAsyncSlugRepository[AnySlugBook]
-SlugBookService = SQLAlchemyAsyncRepositoryService[AnySlugBook, SlugBookRepository]
+SlugBookRepository: TypeAlias = SQLAlchemyAsyncSlugRepository[AnySlugBook]
+SlugBookService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnySlugBook, SlugBookRepository]
 
 
 AnyBook = Union[models_uuid.UUIDBook, models_bigint.BigIntBook]
-BookRepository = SQLAlchemyAsyncRepository[AnyBook]
-BookService = SQLAlchemyAsyncRepositoryService[AnyBook, BookRepository]
+BookRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyBook]
+BookService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnyBook, BookRepository]
 
 AnyTag = Union[models_uuid.UUIDTag, models_bigint.BigIntTag]
-TagRepository = SQLAlchemyAsyncRepository[AnyTag]
-TagService = SQLAlchemyAsyncRepositoryService[AnyTag, TagRepository]
+TagRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyTag]
+TagService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnyTag, TagRepository]
 
 AnyItem = Union[models_uuid.UUIDItem, models_bigint.BigIntItem]
-ItemRepository = SQLAlchemyAsyncRepository[AnyItem]
-ItemService = SQLAlchemyAsyncRepositoryService[AnyItem, ItemRepository]
+ItemRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyItem]
+ItemService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnyItem, ItemRepository]
 
 AnyModelWithFetchedValue = Union[models_uuid.UUIDModelWithFetchedValue, models_bigint.BigIntModelWithFetchedValue]
-ModelWithFetchedValueRepository = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
-ModelWithFetchedValueService = SQLAlchemyAsyncRepositoryService[
+ModelWithFetchedValueRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyModelWithFetchedValue]
+ModelWithFetchedValueService: TypeAlias = SQLAlchemyAsyncRepositoryService[
     AnyModelWithFetchedValue, ModelWithFetchedValueRepository
 ]
 
 
 FileDocumentModel = type[Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]]
 AnyFileDocument = Union[models_uuid.UUIDFileDocument, models_bigint.BigIntFileDocument]
-FileDocumentRepository = SQLAlchemyAsyncRepository[AnyFileDocument]
-FileDocumentService = SQLAlchemyAsyncRepositoryService[AnyFileDocument]
+FileDocumentRepository: TypeAlias = SQLAlchemyAsyncRepository[AnyFileDocument]
+FileDocumentService: TypeAlias = SQLAlchemyAsyncRepositoryService[AnyFileDocument]
 
 RawRecordData = list[dict[str, Any]]
 
 mock_engines = {"mock_async_engine", "mock_sync_engine"}
+
+
+# Use a persistent tmp dir for this module so SQLite/DuckDB engines share one DB file per session
+@pytest.fixture(scope="session")
+def _repo_tmp_dir(tmp_path_factory: pytest.TempPathFactory) -> os.PathLike[str]:
+    return tmp_path_factory.mktemp("repo_dbs")
+
+
+# Override engine with a session-scoped, parametrized engine matching conftest backends
+@pytest.fixture(
+    scope="session",
+    name="engine",
+    params=[
+        pytest.param(
+            "sqlite_engine",
+            marks=[
+                pytest.mark.sqlite,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
+            ],
+        ),
+        pytest.param(
+            "duckdb_engine",
+            marks=[
+                pytest.mark.duckdb,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("duckdb"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_engine",
+            marks=[
+                pytest.mark.oracledb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23ai_engine",
+            marks=[
+                pytest.mark.oracledb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_engine",
+            marks=[
+                pytest.mark.psycopg_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_engine",
+            marks=[
+                pytest.mark.cockroachdb_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_engine",
+            marks=[
+                pytest.mark.mssql_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "spanner_engine",
+            marks=[
+                pytest.mark.spanner,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("spanner"),
+            ],
+        ),
+        pytest.param(
+            "mock_sync_engine",
+            marks=[
+                pytest.mark.mock_sync,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
+            ],
+        ),
+    ],
+)
+def engine(request: pytest.FixtureRequest, _repo_tmp_dir: os.PathLike[str]) -> Engine:
+    param = request.param
+    if param == "sqlite_engine":
+        db_path = os.fspath(_repo_tmp_dir) + "/repo_sync.sqlite"
+        return create_engine(f"sqlite:///{db_path}", poolclass=NullPool)
+    if param == "duckdb_engine":
+        db_path = os.fspath(_repo_tmp_dir) + "/repo_sync.duckdb"
+        return create_engine(f"duckdb:///{db_path}", poolclass=NullPool)
+    if param == "psycopg_engine":
+        url = request.getfixturevalue("postgres_psycopg_url")
+        return create_engine(url, poolclass=NullPool)
+    if param == "cockroachdb_engine":
+        url = request.getfixturevalue("cockroachdb_psycopg_url")
+        return create_engine(url, poolclass=NullPool)
+    if param == "mssql_engine":
+        url = request.getfixturevalue("mssql_pyodbc_url")
+        return create_engine(url, poolclass=NullPool)
+    if param == "oracle18c_engine":
+        url = request.getfixturevalue("oracle18c_url")
+        return create_engine(url, poolclass=NullPool)
+    if param == "oracle23ai_engine":
+        url = request.getfixturevalue("oracle23ai_url")
+        return create_engine(url, poolclass=NullPool)
+    if param == "spanner_engine":
+        # Match conftest: use explicit URL and pass client via connect_args
+        from google.cloud import spanner as _spanner  # pyright: ignore[reportMissingImports]
+
+        _ = _spanner  # silence unused if type checker strips import
+        spanner_url = request.getfixturevalue("spanner_url")
+        spanner_client = request.getfixturevalue("spanner_connection")
+        return create_engine(spanner_url, poolclass=NullPool, connect_args={"client": spanner_client})
+    if param == "mock_sync_engine":
+        mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
+        mock.dialect = create_autospec(Dialect, instance=True)
+        mock.dialect.name = "mock"
+        mock.dialect.server_version_info = None
+        return mock  # type: ignore[return-value]
+    raise RuntimeError(f"Unknown engine param: {param}")
+
+
+# Override async_engine similarly, session-scoped
+@pytest.fixture(
+    scope="session",
+    name="async_engine",
+    params=[
+        pytest.param(
+            "aiosqlite_engine",
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
+            ],
+        ),
+        pytest.param(
+            "asyncmy_engine",
+            marks=[
+                pytest.mark.asyncmy,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mysql"),
+            ],
+        ),
+        pytest.param(
+            "asyncpg_engine",
+            marks=[
+                pytest.mark.asyncpg,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[
+                pytest.mark.psycopg_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("postgres"),
+            ],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[
+                pytest.mark.cockroachdb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("cockroachdb"),
+            ],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[
+                pytest.mark.mssql_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mssql"),
+            ],
+        ),
+        pytest.param(
+            "oracle18c_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle18"),
+            ],
+        ),
+        pytest.param(
+            "oracle23ai_async_engine",
+            marks=[
+                pytest.mark.oracledb_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("oracle23"),
+            ],
+        ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[
+                pytest.mark.mock_async,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("mock"),
+            ],
+        ),
+    ],
+)
+def async_engine(request: pytest.FixtureRequest, _repo_tmp_dir: os.PathLike[str]) -> AsyncEngine:  # type: ignore[override]
+    param = request.param
+    if param == "aiosqlite_engine":
+        db_path = os.fspath(_repo_tmp_dir) + "/repo_async.sqlite"
+        return create_async_engine(f"sqlite+aiosqlite:///{db_path}", poolclass=NullPool)
+    if param == "asyncmy_engine":
+        url = request.getfixturevalue("mysql_asyncmy_url")
+        return create_async_engine(url, poolclass=NullPool)
+    if param == "asyncpg_engine":
+        url = request.getfixturevalue("postgres_asyncpg_url")
+        engine = create_async_engine(url, poolclass=NullPool)
+
+        # Ensure pgcrypto extension exists, matching conftest behavior
+        async def _ensure_pgcrypto() -> None:
+            async with engine.begin() as conn:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+
+        # schedule setup synchronously during fixture creation
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        loop.run_until_complete(_ensure_pgcrypto())
+        return engine
+    if param == "psycopg_async_engine":
+        url = request.getfixturevalue("postgres_psycopg_url")
+        return create_async_engine(url, poolclass=NullPool)
+    if param == "cockroachdb_async_engine":
+        url = request.getfixturevalue("cockroachdb_asyncpg_url")
+        return create_async_engine(url, poolclass=NullPool)
+    if param == "mssql_async_engine":
+        url = request.getfixturevalue("mssql_aioodbc_url")
+        if "MARS_Connection=yes" not in url:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}MARS_Connection=yes"
+        return create_async_engine(url, poolclass=NullPool)
+    if param == "oracle18c_async_engine":
+        url = request.getfixturevalue("oracle18c_url")
+        return create_async_engine(url, poolclass=NullPool)
+    if param == "oracle23ai_async_engine":
+        url = request.getfixturevalue("oracle23ai_url")
+        return create_async_engine(url, poolclass=NullPool)
+    if param == "mock_async_engine":
+        mock = cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
+        mock.dialect = create_autospec(Dialect, instance=True)
+        mock.dialect.name = "mock"
+        mock.dialect.server_version_info = None
+        return mock  # type: ignore[return-value]
+    raise RuntimeError(f"Unknown async_engine param: {param}")
 
 
 @pytest.fixture(autouse=True)
@@ -598,7 +861,7 @@ def author_repo(
     request: FixtureRequest,
     any_session: AsyncSession | Session,
     repository_module: Any,
-) -> Generator[AuthorRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an AuthorAsyncRepository or AuthorSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.AuthorAsyncMockRepository(session=any_session)
@@ -608,7 +871,7 @@ def author_repo(
         repo = repository_module.AuthorAsyncRepository(session=any_session)
     else:
         repo = repository_module.AuthorSyncRepository(session=any_session)
-    yield cast(AuthorRepository, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
@@ -616,7 +879,7 @@ def secret_repo(
     request: FixtureRequest,
     any_session: AsyncSession | Session,
     repository_module: Any,
-) -> Generator[SecretRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an SecretAsyncRepository or SecretSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.SecretAsyncMockRepository(session=any_session)
@@ -626,7 +889,7 @@ def secret_repo(
         repo = repository_module.SecretAsyncRepository(session=any_session)
     else:
         repo = repository_module.SecretSyncRepository(session=any_session)
-    yield cast(SecretRepository, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
@@ -634,7 +897,7 @@ def author_service(
     any_session: AsyncSession | Session,
     service_module: Any,
     request: FixtureRequest,
-) -> Generator[AuthorService, None, None]:
+) -> Generator[Any, None, None]:
     """Return an AuthorAsyncService or AuthorSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = service_module.AuthorAsyncMockService(session=any_session)
@@ -644,13 +907,13 @@ def author_service(
         repo = service_module.AuthorAsyncService(session=any_session)
     else:
         repo = service_module.AuthorSyncService(session=any_session)
-    yield cast(AuthorService, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def rule_repo(
     any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest
-) -> Generator[RuleRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an RuleAsyncRepository or RuleSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.RuleAsyncMockRepository(session=any_session)
@@ -660,13 +923,13 @@ def rule_repo(
         repo = repository_module.RuleAsyncRepository(session=any_session)
     else:
         repo = repository_module.RuleSyncRepository(session=any_session)
-    yield cast(RuleRepository, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def rule_service(
     any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest
-) -> Generator[RuleService, None, None]:
+) -> Generator[Any, None, None]:
     """Return an RuleAsyncService or RuleSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = service_module.RuleAsyncMockService(session=any_session)
@@ -676,13 +939,13 @@ def rule_service(
         repo = service_module.RuleAsyncService(session=any_session)
     else:
         repo = service_module.RuleSyncService(session=any_session)
-    yield cast(RuleService, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def book_repo(
     any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest
-) -> Generator[BookRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an BookAsyncRepository or BookSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.BookAsyncMockRepository(session=any_session)
@@ -692,13 +955,13 @@ def book_repo(
         repo = repository_module.BookAsyncRepository(session=any_session)
     else:
         repo = repository_module.BookSyncRepository(session=any_session)
-    yield cast(BookRepository, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def book_service(
     any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest
-) -> Generator[BookService, None, None]:
+) -> Generator[Any, None, None]:
     """Return an BookAsyncService or BookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = service_module.BookAsyncMockService(session=any_session)
@@ -708,7 +971,7 @@ def book_service(
         repo = service_module.BookAsyncService(session=any_session)
     else:
         repo = service_module.BookSyncService(session=any_session)
-    yield cast(BookService, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
@@ -716,7 +979,7 @@ def slug_book_repo(
     any_session: AsyncSession | Session,
     repository_module: Any,
     request: FixtureRequest,
-) -> Generator[SlugBookRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an SlugBookAsyncRepository or SlugBookSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.SlugBookAsyncMockRepository(session=any_session)
@@ -726,7 +989,7 @@ def slug_book_repo(
         repo = repository_module.SlugBookAsyncRepository(session=any_session)
     else:
         repo = repository_module.SlugBookSyncRepository(session=any_session)
-    yield cast("SlugBookRepository", repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
@@ -734,7 +997,7 @@ def slug_book_service(
     any_session: AsyncSession | Session,
     service_module: Any,
     request: FixtureRequest,
-) -> Generator[SlugBookService, None, None]:
+) -> Generator[Any, None, None]:
     """Return an SlugBookAsyncService or SlugBookSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         svc = service_module.SlugBookAsyncMockService(session=any_session)
@@ -744,13 +1007,13 @@ def slug_book_service(
         svc = service_module.SlugBookAsyncService(session=any_session)
     else:
         svc = service_module.SlugBookSyncService(session=any_session)
-    yield cast("SlugBookService", svc)
+    yield cast(Any, svc)
 
 
 @pytest.fixture()
 def tag_repo(
     any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest
-) -> Generator[ItemRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an TagAsyncRepository or TagSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.TagAsyncMockRepository(session=any_session)
@@ -761,13 +1024,13 @@ def tag_repo(
     else:
         repo = repository_module.TagSyncRepository(session=any_session)
 
-    yield cast(ItemRepository, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def tag_service(
     any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest
-) -> Generator[TagService, None, None]:
+) -> Generator[Any, None, None]:
     """Return an TagAsyncService or TagSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = service_module.TagAsyncMockService(session=any_session)
@@ -777,13 +1040,13 @@ def tag_service(
         repo = service_module.TagAsyncService(session=any_session)
     else:
         repo = service_module.TagSyncService(session=any_session)
-    yield cast(TagService, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def item_repo(
     any_session: AsyncSession | Session, repository_module: Any, request: FixtureRequest
-) -> Generator[ItemRepository, None, None]:
+) -> Generator[Any, None, None]:
     """Return an ItemAsyncRepository or ItemSyncRepository based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = repository_module.ItemAsyncMockRepository(session=any_session)
@@ -794,13 +1057,13 @@ def item_repo(
     else:
         repo = repository_module.ItemSyncRepository(session=any_session)
 
-    yield cast(ItemRepository, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()
 def item_service(
     any_session: AsyncSession | Session, service_module: Any, request: FixtureRequest
-) -> Generator[ItemService, None, None]:
+) -> Generator[Any, None, None]:
     """Return an ItemAsyncService or ItemSyncService based on the current PK and session type"""
     if "mock_async_engine" in request.fixturenames:
         repo = service_module.ItemAsyncMockService(session=any_session)
@@ -810,7 +1073,7 @@ def item_service(
         repo = service_module.ItemAsyncService(session=any_session)
     else:
         repo = service_module.ItemSyncService(session=any_session)
-    yield cast(ItemService, repo)
+    yield cast(Any, repo)
 
 
 @pytest.fixture()

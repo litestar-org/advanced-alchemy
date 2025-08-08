@@ -29,7 +29,7 @@ from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemyAsyncSessionBackend,
     SQLAlchemySyncSessionBackend,
 )
-from tests.integration.cleanup import async_clean_tables, clean_tables
+from tests.integration.helpers import async_clean_tables, clean_tables
 
 pytestmark = [
     pytest.mark.integration,

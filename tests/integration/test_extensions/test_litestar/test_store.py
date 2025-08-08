@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
-from tests.integration.cleanup import async_clean_tables, clean_tables
+from tests.integration.helpers import async_clean_tables, clean_tables
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine

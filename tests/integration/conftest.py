@@ -1,9 +1,10 @@
 from __future__ import annotations
+# ruff: noqa: I001
 
 import logging
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, cast
-from unittest.mock import NonCallableMagicMock, create_autospec
+from unittest.mock import create_autospec, NonCallableMagicMock
 
 import pytest
 from google.cloud import spanner  # pyright: ignore
@@ -11,6 +12,9 @@ from pytest import FixtureRequest
 from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+# Local test helpers and fixtures
+from tests.integration import helpers as test_helpers
 
 # Import all fixtures from repository_fixtures
 from tests.integration.repository_fixtures import *  # noqa: F403
@@ -283,6 +287,62 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
         finally:
             session_instance.rollback()
             session_instance.close()
+
+
+# ---------------------------------------------------------------------------
+# Global, per-test cleanup to ensure data isolation between tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
+    """After each test, remove all rows from all tables for sync engine tests.
+
+    Activates only when the test uses the 'engine' fixture, and skips mock engines.
+    Uses the robust dialect-aware cleanup utilities.
+    """
+    yield
+
+    if "engine" not in request.fixturenames:
+        return
+
+    engine = cast(Engine, request.getfixturevalue("engine"))
+    if getattr(engine.dialect, "name", "") == "mock":
+        return
+
+    try:
+        with test_helpers.cleanup_database(engine) as cleaner:
+            # Clean all tables (no include_only filter)
+            cleaner.include_only = None
+            cleaner.cleanup()
+    except test_helpers.CleanupError:
+        # Tests may drop tables; ignore cleanup errors at teardown time
+        pass
+
+
+@pytest.fixture(autouse=True)
+async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
+    """After each test, remove all rows from all tables for async engine tests.
+
+    Activates only when the test uses the 'async_engine' fixture, and skips mock engines.
+    Uses the robust dialect-aware async cleanup utilities.
+    """
+    yield
+
+    if "async_engine" not in request.fixturenames:
+        return
+
+    async_engine = cast(AsyncEngine, request.getfixturevalue("async_engine"))
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        return
+
+    try:
+        async with test_helpers.cleanup_database_async(async_engine) as cleaner:
+            cleaner.include_only = None
+            await cleaner.cleanup()
+    except test_helpers.CleanupError:
+        # Tests may drop tables; ignore cleanup errors at teardown time
+        pass
 
 
 @pytest.fixture()

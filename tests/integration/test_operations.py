@@ -1,3 +1,4 @@
+# pyright: ignore[reportMissingTypeArgument,reportOperatorIssue,reportAttributeAccessIssue]
 """Integration tests for advanced_alchemy.operations module.
 
 These tests run against actual database instances to verify that the upsert
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from advanced_alchemy.operations import OnConflictUpsert
-from tests.integration.helpers import get_worker_id
+from tests.integration.helpers import async_clean_tables, clean_tables, get_worker_id
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
@@ -43,10 +44,12 @@ def cached_test_table(request: FixtureRequest) -> Table:
             f"operation_test_table_{worker_id}",
             metadata,
             Column("id", Integer, primary_key=True, autoincrement=False),
-            Column("key", String(50), nullable=False),
-            Column("namespace", String(50), nullable=False),
+            Column("key", String(50), nullable=False, index=True),
+            Column("namespace", String(50), nullable=False, index=True),
             Column("value", String(255)),
             Column("created_at", String(50)),
+            # Note: For Spanner compatibility, we should use unique indexes instead
+            # but for testing purposes, we'll skip Spanner tests that require UniqueConstraint
             UniqueConstraint("key", "namespace", name=f"uq_key_namespace_{worker_id}"),
         )
         _test_table_cache[cache_key] = table
@@ -68,15 +71,19 @@ def test_table_sync(
     else:
         engine = request.getfixturevalue("engine")
 
-    # Skip for mock engines
-    if getattr(engine.dialect, "name", "") != "mock":
+    # Skip for mock and spanner engines (Spanner doesn't support UniqueConstraint)
+    dialect_name = getattr(engine.dialect, "name", "")
+    if "spanner" in dialect_name:
+        # Skip entire test for Spanner - it doesn't support UniqueConstraint
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
+    elif dialect_name != "mock":
         # Create table once per engine type
         cached_test_table.create(engine, checkfirst=True)
 
     yield cached_test_table
 
     # Fast data-only cleanup between tests
-    if getattr(engine.dialect, "name", "") != "mock":
+    if dialect_name not in {"mock", "spanner+spanner"}:
         with engine.begin() as conn:
             conn.execute(cached_test_table.delete())
             conn.commit()
@@ -99,8 +106,12 @@ async def test_table_async(
     else:
         async_engine = request.getfixturevalue("async_engine")
 
-    # Skip for mock engines
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    # Skip for mock and spanner engines (Spanner doesn't support UniqueConstraint)
+    dialect_name = getattr(async_engine.dialect, "name", "")
+    if "spanner" in dialect_name:
+        # Skip table creation for Spanner - it doesn't support UniqueConstraint
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
+    elif dialect_name != "mock":
         # Create table once per engine type
         async with async_engine.begin() as conn:
             await conn.run_sync(lambda sync_conn: cached_test_table.create(sync_conn, checkfirst=True))
@@ -108,7 +119,7 @@ async def test_table_async(
     yield cached_test_table
 
     # Fast data-only cleanup between tests
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    if dialect_name not in {"mock"} and "spanner" not in dialect_name:
         async with async_engine.begin() as conn:
             await conn.execute(cached_test_table.delete())
             await conn.commit()
@@ -143,18 +154,30 @@ _store_model_cache: dict[str, type] = {}
 @pytest.fixture(scope="session")
 def cached_store_model(request: FixtureRequest) -> type[DeclarativeBase]:
     """Create store model once per session/worker."""
+    from advanced_alchemy.base import BigIntBase, UUIDv7Base
+
     worker_id = get_worker_id(request)
     cache_key = f"store_model_{worker_id}"
 
     if cache_key not in _store_model_cache:
+        # Check if we're using Spanner - it's in the worker_id for parallel tests
+        is_spanner = True if "spanner" in worker_id.lower() else False
 
-        class TestStoreBase(DeclarativeBase):
-            pass
-
-        class TestStoreModel(TestStoreBase):
+        # Define distinct local classes to avoid pyright redefinition warnings, then select one
+        class _TestStoreModelUUID(UUIDv7Base):  # pyright: ignore[reportPrivateUsage]
             __tablename__ = f"test_store_{worker_id}"
 
-            id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+            key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+            namespace: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+            value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+            expires_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+            # Spanner doesn't support UniqueConstraint, use indexes instead
+            __table_args__ = ()
+
+        class _TestStoreModelBigInt(BigIntBase):
+            __tablename__ = f"test_store_{worker_id}"
+
             key: Mapped[str] = mapped_column(String(50), nullable=False)
             namespace: Mapped[str] = mapped_column(String(50), nullable=False)
             value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -162,7 +185,10 @@ def cached_store_model(request: FixtureRequest) -> type[DeclarativeBase]:
 
             __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_store_key_ns_{worker_id}"),)
 
-        _store_model_cache[cache_key] = TestStoreModel
+        chosen: type[DeclarativeBase] = cast(
+            type[DeclarativeBase], _TestStoreModelUUID if is_spanner else _TestStoreModelBigInt
+        )
+        _store_model_cache[cache_key] = chosen
 
     return _store_model_cache[cache_key]
 
@@ -181,17 +207,19 @@ def store_model_sync(
     else:
         engine = request.getfixturevalue("engine")
 
-    # Skip for mock engines
-    if getattr(engine.dialect, "name", "") != "mock":
+    # Skip for mock and spanner engines (Spanner doesn't support UniqueConstraint)
+    dialect_name = getattr(engine.dialect, "name", "")
+    if "spanner" in dialect_name:
+        # Skip table creation for Spanner - it doesn't support UniqueConstraint
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
+    elif dialect_name != "mock":
         # Create table once per engine type
         cached_store_model.metadata.create_all(engine, checkfirst=True)
 
     yield cached_store_model
 
     # Fast data-only cleanup between tests
-    if getattr(engine.dialect, "name", "") != "mock":
-        from tests.integration.cleanup import clean_tables
-
+    if dialect_name not in {"mock"} and "spanner" not in dialect_name:
         clean_tables(engine, cached_store_model.metadata)
 
     # Drop table at session end (handled by teardown)
@@ -212,8 +240,12 @@ async def store_model_async(
     else:
         async_engine = request.getfixturevalue("async_engine")
 
-    # Skip for mock engines
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    # Skip for mock and spanner engines (Spanner doesn't support UniqueConstraint)
+    dialect_name = getattr(async_engine.dialect, "name", "")
+    if "spanner" in dialect_name:
+        # Skip table creation for Spanner - it doesn't support UniqueConstraint
+        pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
+    elif dialect_name != "mock":
         # Create table once per engine type
         async with async_engine.begin() as conn:
             await conn.run_sync(cached_store_model.metadata.create_all)
@@ -221,9 +253,7 @@ async def store_model_async(
     yield cached_store_model
 
     # Fast data-only cleanup between tests
-    if getattr(async_engine.dialect, "name", "") != "mock":
-        from tests.integration.cleanup import async_clean_tables
-
+    if dialect_name not in {"mock"} and "spanner" not in dialect_name:
         await async_clean_tables(async_engine, cached_store_model.metadata)
 
     # Drop table at session end (handled by teardown)
@@ -276,25 +306,79 @@ def updated_values() -> dict[str, Any]:
 @pytest.fixture(
     params=[
         # Sync engines
-        "sqlite_engine",
-        "duckdb_engine",
-        "psycopg_engine",
-        "mssql_engine",
-        "oracle18c_engine",
-        "oracle23ai_engine",
-        "cockroachdb_engine",
-        "spanner_engine",
-        "mock_sync_engine",
+        pytest.param(
+            "sqlite_engine",
+            marks=[pytest.mark.sqlite, pytest.mark.integration, pytest.mark.xdist_group("sqlite")],
+        ),
+        pytest.param(
+            "duckdb_engine",
+            marks=[pytest.mark.duckdb, pytest.mark.integration, pytest.mark.xdist_group("duckdb")],
+        ),
+        pytest.param(
+            "psycopg_engine",
+            marks=[pytest.mark.psycopg_sync, pytest.mark.integration, pytest.mark.xdist_group("postgres")],
+        ),
+        pytest.param(
+            "mssql_engine",
+            marks=[pytest.mark.mssql_sync, pytest.mark.integration, pytest.mark.xdist_group("mssql")],
+        ),
+        pytest.param(
+            "oracle18c_engine",
+            marks=[pytest.mark.oracledb_sync, pytest.mark.integration, pytest.mark.xdist_group("oracle18")],
+        ),
+        pytest.param(
+            "oracle23ai_engine",
+            marks=[pytest.mark.oracledb_sync, pytest.mark.integration, pytest.mark.xdist_group("oracle23")],
+        ),
+        pytest.param(
+            "cockroachdb_engine",
+            marks=[pytest.mark.cockroachdb_sync, pytest.mark.integration, pytest.mark.xdist_group("cockroachdb")],
+        ),
+        pytest.param(
+            "spanner_engine",
+            marks=[pytest.mark.spanner, pytest.mark.integration, pytest.mark.xdist_group("spanner")],
+        ),
+        pytest.param(
+            "mock_sync_engine",
+            marks=[pytest.mark.mock_sync, pytest.mark.integration, pytest.mark.xdist_group("mock")],
+        ),
         # Async engines
-        "aiosqlite_engine",
-        "asyncmy_engine",
-        "asyncpg_engine",
-        "psycopg_async_engine",
-        "cockroachdb_async_engine",
-        "mssql_async_engine",
-        "oracle18c_async_engine",
-        "oracle23ai_async_engine",
-        "mock_async_engine",
+        pytest.param(
+            "aiosqlite_engine",
+            marks=[pytest.mark.aiosqlite, pytest.mark.integration, pytest.mark.xdist_group("sqlite")],
+        ),
+        pytest.param(
+            "asyncmy_engine",
+            marks=[pytest.mark.asyncmy, pytest.mark.integration, pytest.mark.xdist_group("mysql")],
+        ),
+        pytest.param(
+            "asyncpg_engine",
+            marks=[pytest.mark.asyncpg, pytest.mark.integration, pytest.mark.xdist_group("postgres")],
+        ),
+        pytest.param(
+            "psycopg_async_engine",
+            marks=[pytest.mark.psycopg_async, pytest.mark.integration, pytest.mark.xdist_group("postgres")],
+        ),
+        pytest.param(
+            "cockroachdb_async_engine",
+            marks=[pytest.mark.cockroachdb_async, pytest.mark.integration, pytest.mark.xdist_group("cockroachdb")],
+        ),
+        pytest.param(
+            "mssql_async_engine",
+            marks=[pytest.mark.mssql_async, pytest.mark.integration, pytest.mark.xdist_group("mssql")],
+        ),
+        pytest.param(
+            "oracle18c_async_engine",
+            marks=[pytest.mark.oracledb_async, pytest.mark.integration, pytest.mark.xdist_group("oracle18")],
+        ),
+        pytest.param(
+            "oracle23ai_async_engine",
+            marks=[pytest.mark.oracledb_async, pytest.mark.integration, pytest.mark.xdist_group("oracle23")],
+        ),
+        pytest.param(
+            "mock_async_engine",
+            marks=[pytest.mark.mock_async, pytest.mark.integration, pytest.mark.xdist_group("mock")],
+        ),
     ]
 )
 def any_engine(request: FixtureRequest) -> Engine | AsyncEngine:
@@ -345,7 +429,7 @@ async def test_create_upsert_with_supported_dialects(
 
     dialect_name = any_engine.dialect.name
 
-    if dialect_name == "spanner":
+    if "spanner" in dialect_name:
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
 
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
@@ -391,7 +475,7 @@ async def test_upsert_insert_then_update_cycle(
 
     dialect_name = any_engine.dialect.name
 
-    if dialect_name == "spanner":
+    if "spanner" in dialect_name:
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
 
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
@@ -498,7 +582,7 @@ async def test_batch_upsert_operations(any_engine: Engine | AsyncEngine, test_ta
 
     dialect_name = any_engine.dialect.name
 
-    if dialect_name == "spanner":
+    if "spanner" in dialect_name:
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
 
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
@@ -599,14 +683,18 @@ async def test_merge_statement_with_oracle_postgres(
 
     dialect_name = any_engine.dialect.name
 
-    # Only test on supported dialects
-    if dialect_name not in {"oracle", "postgresql", "cockroachdb"}:
+    # Only test on supported dialects (CockroachDB doesn't support MERGE)
+    if dialect_name not in {"oracle", "postgresql"}:
         pytest.skip(f"MERGE not tested for dialect '{dialect_name}'")
 
     # PostgreSQL needs version 15+ for MERGE
     if dialect_name == "postgresql":
-        server_version = getattr(any_engine.dialect, "server_version_info", (0,))
-        if server_version < (15,):
+        server_version_info = getattr(any_engine.dialect, "server_version_info", (0,))
+        try:
+            major = int(server_version_info[0]) if isinstance(server_version_info, tuple) and server_version_info else 0
+        except Exception:
+            major = 0
+        if major < 15:
             pytest.skip("PostgreSQL MERGE requires version 15+")
 
     # Tables are already created by fixtures
@@ -635,6 +723,10 @@ async def test_merge_statement_with_oracle_postgres(
             if dialect_name in {"oracle", "mssql"}:
                 merged_params = {**updated_values, **additional_params}
                 await conn.execute(merge_stmt, merged_params)
+            elif dialect_name in {"postgresql", "cockroachdb"}:
+                # PostgreSQL MERGE only needs source parameters (src references are used in UPDATE/INSERT)
+                pg_params = {f"src_{k}": v for k, v in updated_values.items()}
+                await conn.execute(merge_stmt, pg_params)
             else:
                 await conn.execute(merge_stmt, updated_values)
             await conn.commit()
@@ -654,6 +746,16 @@ async def test_merge_statement_with_oracle_postgres(
             if dialect_name in {"oracle", "mssql"}:
                 merged_params = {**updated_values, **additional_params}
                 conn.execute(merge_stmt, merged_params)
+            elif dialect_name in {"postgresql", "cockroachdb"}:
+                # PostgreSQL needs unique parameter names for each clause
+                pg_params = {
+                    **{f"src_{k}": v for k, v in updated_values.items()},  # Source VALUES clause
+                    **{
+                        f"upd_{k}": v for k, v in updated_values.items() if k in ["value", "created_at"]
+                    },  # UPDATE clause
+                    **{f"ins_{k}": v for k, v in updated_values.items()},  # INSERT clause
+                }
+                conn.execute(merge_stmt, pg_params)
             else:
                 conn.execute(merge_stmt, updated_values)
             conn.commit()
@@ -691,6 +793,10 @@ async def test_merge_statement_with_oracle_postgres(
             if dialect_name in {"oracle", "mssql"}:
                 merged_params2 = {**new_values, **additional_params2}
                 await conn.execute(merge_stmt2, merged_params2)
+            elif dialect_name in {"postgresql", "cockroachdb"}:
+                # PostgreSQL MERGE only needs source parameters (src references are used in UPDATE/INSERT)
+                pg_params2 = {f"src_{k}": v for k, v in new_values.items()}
+                await conn.execute(merge_stmt2, pg_params2)
             else:
                 await conn.execute(merge_stmt2, new_values)
             await conn.commit()
@@ -705,6 +811,14 @@ async def test_merge_statement_with_oracle_postgres(
             if dialect_name in {"oracle", "mssql"}:
                 merged_params2 = {**new_values, **additional_params2}
                 conn.execute(merge_stmt2, merged_params2)
+            elif dialect_name in {"postgresql", "cockroachdb"}:
+                # PostgreSQL needs unique parameter names for each clause
+                pg_params2 = {
+                    **{f"src_{k}": v for k, v in new_values.items()},  # Source VALUES clause
+                    **{f"upd_{k}": v for k, v in new_values.items() if k in ["value", "created_at"]},  # UPDATE clause
+                    **{f"ins_{k}": v for k, v in new_values.items()},  # INSERT clause
+                }
+                conn.execute(merge_stmt2, pg_params2)
             else:
                 conn.execute(merge_stmt2, new_values)
             conn.commit()
@@ -724,14 +838,18 @@ async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngin
 
     dialect_name = any_engine.dialect.name
 
-    # Only test on supported dialects
-    if dialect_name not in {"oracle", "postgresql", "cockroachdb"}:
+    # Only test on supported dialects (CockroachDB doesn't support MERGE)
+    if dialect_name not in {"oracle", "postgresql"}:
         pytest.skip(f"MERGE compilation not tested for dialect '{dialect_name}'")
 
     # PostgreSQL needs version 15+ for MERGE
     if dialect_name == "postgresql":
-        server_version = getattr(any_engine.dialect, "server_version_info", (0,))
-        if server_version < (15,):
+        server_version_info = getattr(any_engine.dialect, "server_version_info", (0,))
+        try:
+            major = int(server_version_info[0]) if isinstance(server_version_info, tuple) and server_version_info else 0
+        except Exception:
+            major = 0
+        if major < 15:
             pytest.skip("PostgreSQL MERGE requires version 15+")
 
     # Create a simple test table
@@ -777,14 +895,15 @@ async def test_store_upsert_integration(
 
     dialect_name = any_engine.dialect.name
 
-    if dialect_name == "spanner":
+    if dialect_name == "spanner+spanner":
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
 
-    TestStoreModel = store_model
+    # Cast to Any to avoid pyright attribute errors in test expressions
+    TestStoreModel: Any = store_model
 
     # Tables are already created by fixtures
+    # The base class will handle id generation (integer or UUID)
     store_data = {
-        "id": 1,
         "key": "cache_key",
         "namespace": "default",
         "value": "cached_data",

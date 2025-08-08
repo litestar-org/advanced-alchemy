@@ -26,8 +26,7 @@ from advanced_alchemy.filters import (
     and_,
     or_,
 )
-from tests.integration.cleanup import async_clean_tables, clean_tables
-from tests.integration.helpers import get_worker_id
+from tests.integration.helpers import async_clean_tables, clean_tables, get_worker_id
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
