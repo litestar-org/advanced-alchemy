@@ -39,7 +39,7 @@ See Also:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from sqlalchemy import Insert, Table, bindparam, literal_column, select, text
@@ -339,9 +339,9 @@ class OnConflictUpsert:
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
-            return mysql_insert_stmt.on_duplicate_key_update(
-                **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
-            )
+            return mysql_insert_stmt.on_duplicate_key_update(**{
+                col: mysql_insert_stmt.inserted[col] for col in update_columns
+            })
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
@@ -402,7 +402,8 @@ class OnConflictUpsert:
                 bp = bindparam(f"src_{key}", value=value, type_=column.type)
                 labeled_columns.append(bp.label(key))
             # subquery named 'src' to reference src.<col>
-            source = select(*labeled_columns).subquery("src")  # type: ignore[reportUnknownMemberType]
+            # subquery is a valid method on Select; cast helps static checkers
+            source = select(*labeled_columns).subquery("src")
         else:
             placeholders = ", ".join([f"%({key})s" for key in values])
             col_names = ", ".join(values.keys())
@@ -477,8 +478,9 @@ def _create_oracle_additional_params(table: Table, values: dict[str, Any], sourc
                 except (TypeError, AttributeError, ValueError):
                     continue
             elif hasattr(col.default, "next_value"):
-                # Handle sequences
-                additional_params[col.name] = col.default.next_value  # type: ignore[attr-defined]
+                # Handle sequences - access with a loose cast to satisfy type checkers
+                seq_next = cast("Any", col.default).next_value
+                additional_params[col.name] = seq_next
                 insert_columns.append(col.name)
 
     if additional_params:

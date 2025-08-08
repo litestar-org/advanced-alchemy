@@ -446,7 +446,8 @@ class SyncDatabaseCleaner(DatabaseCleaner):
         retry_delay: float = 0.1,
     ) -> None:
         super().__init__(connection, exclude_tables, include_only, verify_cleanup, max_retries, retry_delay)
-        self.connection = connection  # type: ignore[assignment]
+        # Narrow the connection attribute to the concrete sync type for mypy
+        self.connection: Connection = connection
 
 
 class AsyncDatabaseCleaner(DatabaseCleaner):
@@ -462,7 +463,8 @@ class AsyncDatabaseCleaner(DatabaseCleaner):
         retry_delay: float = 0.1,
     ) -> None:
         super().__init__(connection, exclude_tables, include_only, verify_cleanup, max_retries, retry_delay)
-        self.connection = connection  # type: ignore[assignment]
+        # Narrow the connection attribute to the concrete async type for mypy
+        self.connection: AsyncConnection = connection
 
     async def cleanup(self) -> CleanupStats:  # type: ignore[override]
         """Perform async database cleanup and return statistics.

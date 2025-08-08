@@ -1267,12 +1267,18 @@ async def test_repo_list_and_count_method_with_filters(
     exp_name = raw_authors[0]["name"]
     exp_id = raw_authors[0]["id"]
     if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
-        collection, count = await maybe_async(
-            author_repo.list_and_count(**{author_repo.model_type.name.key: exp_name}),
+        collection, count = cast(
+            tuple[list[Any], int],
+            await maybe_async(
+                author_repo.list_and_count(**{author_repo.model_type.name.key: exp_name}),
+            ),
         )
     else:
-        collection, count = await maybe_async(
-            author_repo.list_and_count(author_repo.model_type.name == exp_name),
+        collection, count = cast(
+            tuple[list[Any], int],
+            await maybe_async(
+                author_repo.list_and_count(author_repo.model_type.name == exp_name),
+            ),
         )
     assert count == 1
     assert isinstance(collection, list)
@@ -1319,12 +1325,14 @@ async def test_repo_created_updated(
 
     if isinstance(author_repo, (SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository)):
         pytest.skip(f"{SQLAlchemyAsyncMockRepository.__name__} does not update created/updated columns")
+    # Note: declare as Any to allow assignment from both async/sync configs in branches
+    config: Any
     if isinstance(author_repo, SQLAlchemyAsyncRepository):  # pyright: ignore[reportUnnecessaryIsInstance]
         config = SQLAlchemyAsyncConfig(
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
-        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+        config = SQLAlchemySyncConfig(
             engine_instance=author_repo.session.get_bind(),
         )
     config.__post_init__()
@@ -1368,13 +1376,15 @@ async def test_repo_created_updated_no_listener(
     with contextlib.suppress(InvalidRequestError):
         event.remove(Session, "before_flush", touch_updated_timestamp)
 
+    # Note: use Any to allow assignment across sync/async branches for tests
+    config: Any
     if isinstance(author_repo, SQLAlchemyAsyncRepository):  # pyright: ignore[reportUnnecessaryIsInstance]
         config = SQLAlchemyAsyncConfig(
             enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),  # type: ignore[arg-type]
         )
     else:
-        config = SQLAlchemySyncConfig(  # type: ignore[unreachable]
+        config = SQLAlchemySyncConfig(
             enable_touch_updated_timestamp_listener=False,
             engine_instance=author_repo.session.get_bind(),
         )
