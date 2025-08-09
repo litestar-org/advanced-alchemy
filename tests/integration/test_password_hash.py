@@ -37,6 +37,8 @@ class User(BigIntBase):
         PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
     )
 
+    __table_args__ = {"info": {"allow_eager": True}}
+
 
 @pytest.mark.xdist_group("sqlite")
 def test_password_hash_sync_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:

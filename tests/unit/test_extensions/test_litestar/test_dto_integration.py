@@ -257,7 +257,7 @@ class Base(DeclarativeBase):
     pass
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "user_table"
     id: Mapped[int] = mapped_column(primary_key=True)
     kw: Mapped[List[Keyword]] = relationship(secondary=lambda: user_keyword_table, info=dto_field("private"))
     # proxy the 'keyword' attribute from the 'kw' relationship

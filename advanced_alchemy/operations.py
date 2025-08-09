@@ -339,15 +339,15 @@ class OnConflictUpsert:
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
-            return mysql_insert_stmt.on_duplicate_key_update(
-                **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
-            )
+            return mysql_insert_stmt.on_duplicate_key_update(**{
+                col: mysql_insert_stmt.inserted[col] for col in update_columns
+            })
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
 
     @staticmethod
-    def create_merge_upsert(  # noqa: C901
+    def create_merge_upsert(  # noqa: C901, PLR0915
         table: Table,
         values: dict[str, Any],
         conflict_columns: list[str],
@@ -389,66 +389,73 @@ class OnConflictUpsert:
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
 
+        additional_params: dict[str, Any] = {}
         source: ClauseElement | str
+        insert_columns: list[str]
+        when_not_matched_insert: dict[str, Any]
+
         if dialect_name == "oracle":
-            # Build raw SELECT; we'll convert to TextClause and bind params after
-            source_values = ", ".join([f":{key} as {key}" for key in values])
-            source = f"SELECT {source_values} FROM DUAL"  # noqa: S608
-        elif dialect_name in {"postgresql", "cockroachdb"}:
-            # Build a typed SELECT using bindparams to avoid text()+cast parsing issues
             labeled_columns: list[ColumnElement[Any]] = []
+            for key, value in values.items():
+                column = table.c[key]
+                labeled_columns.append(bindparam(key, value=value, type_=column.type).label(key))
+
+            pk_col_with_seq = None
+            for col in table.primary_key.columns:
+                if col.name in values or col.default is None:
+                    continue
+                if callable(getattr(col.default, "arg", None)):
+                    try:
+                        default_value = col.default.arg(None)  # type: ignore[attr-defined]
+                        if isinstance(default_value, UUID):
+                            default_value = default_value.hex
+                        additional_params[col.name] = default_value
+                        labeled_columns.append(bindparam(col.name, value=default_value, type_=col.type).label(col.name))
+                    except (TypeError, AttributeError, ValueError):
+                        continue
+                elif hasattr(col.default, "next_value"):
+                    pk_col_with_seq = col
+
+            source = select(*labeled_columns).subquery("src")
+            insert_columns = [c.name for c in labeled_columns]
+            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
+            if pk_col_with_seq is not None:
+                insert_columns.append(pk_col_with_seq.name)
+                when_not_matched_insert[pk_col_with_seq.name] = cast("Any", pk_col_with_seq.default).next_value()
+
+        elif dialect_name in {"postgresql", "cockroachdb"}:
+            labeled_columns = []
             for key, value in values.items():
                 column = table.c[key]
                 bp = bindparam(f"src_{key}", value=value, type_=column.type)
                 labeled_columns.append(bp.label(key))
-            # subquery named 'src' to reference src.<col>
-            # subquery is a valid method on Select; cast helps static checkers
             source = select(*labeled_columns).subquery("src")
+            insert_columns = list(values.keys())
+            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
         else:
             placeholders = ", ".join([f"%({key})s" for key in values])
             col_names = ", ".join(values.keys())
             source = f"(SELECT * FROM (VALUES ({placeholders})) AS src({col_names}))"  # noqa: S608
+            insert_columns = list(values.keys())
+            when_not_matched_insert = {col: bindparam(col) for col in insert_columns}
 
         on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
         on_condition = text(" AND ".join(on_conditions))
 
-        # For PostgreSQL/CockroachDB MERGE, we can reference src columns directly
-        if dialect_name in {"postgresql", "cockroachdb"}:
-            # Reference src columns in UPDATE - no need for separate bindparams
-
+        if dialect_name in {"postgresql", "cockroachdb", "oracle"}:
             when_matched_update: dict[str, Any] = {
                 col: literal_column(f"src.{col}") for col in update_columns if col in values
             }
         else:
             when_matched_update = {col: bindparam(col) for col in update_columns if col in values}
 
-        insert_columns = list(values.keys())
-        additional_params: dict[str, Any] = {}
-
-        if dialect_name == "oracle" and isinstance(source, str):
-            # Oracle needs special handling for UUID primary keys
-            source, additional_params = _create_oracle_additional_params(table, values, source)
-            insert_columns = list(values.keys()) + list(additional_params.keys())
-            # Convert to TextClause and declare bindparams so the driver receives all placeholders
-            source_text = text(source)
-            clause_binds: list[Any] = []
-            for key, value in values.items():
-                clause_binds.append(bindparam(key, value=value, type_=table.c[key].type))
-            for key, value in additional_params.items():
-                # Only bind scalar defaults; SQL expressions (e.g., sequences) should render directly
-                if not hasattr(value, "_compiler_dispatch"):
-                    type_ = table.c[key].type if key in table.c else None
-                    clause_binds.append(bindparam(key, value=value, type_=type_))
-            source = source_text.bindparams(*clause_binds)
-
-        if dialect_name in {"postgresql", "cockroachdb"}:
-            # Reference src columns in INSERT - no need for separate bindparams
-
-            when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in insert_columns}
-        elif dialect_name == "oracle":
-            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
-        else:
-            when_not_matched_insert = {col: bindparam(col) for col in insert_columns}
+        # For Oracle, we need to ensure the keys in when_not_matched_insert match the insert_columns
+        if dialect_name == "oracle":
+            final_insert_mapping = {}
+            for col_name in insert_columns:
+                if col_name in when_not_matched_insert:
+                    final_insert_mapping[col_name] = when_not_matched_insert[col_name]
+            when_not_matched_insert = final_insert_mapping
 
         merge_stmt = MergeStatement(
             table=table,
@@ -461,37 +468,4 @@ class OnConflictUpsert:
         return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
 
 
-def _create_oracle_additional_params(table: Table, values: dict[str, Any], source: str) -> tuple[str, dict[str, Any]]:
-    """Handle Oracle-specific UUID primary key generation."""
-    additional_params: dict[str, Any] = {}
-    insert_columns = list(values.keys())
-
-    for col in table.primary_key.columns:
-        if col.name not in values and col.default is not None:
-            if callable(getattr(col.default, "arg", None)):
-                try:
-                    default_value = col.default.arg(None)  # type: ignore[attr-defined]
-                    if isinstance(default_value, UUID):
-                        default_value = default_value.hex
-                    additional_params[col.name] = default_value
-                    insert_columns.append(col.name)
-                except (TypeError, AttributeError, ValueError):
-                    continue
-            elif hasattr(col.default, "next_value"):
-                # Handle sequences - access with a loose cast to satisfy type checkers
-                seq_next = cast("Any", col.default).next_value
-                additional_params[col.name] = seq_next
-                insert_columns.append(col.name)
-
-    if additional_params:
-        additional_selects = [f":{col_name} as {col_name}" for col_name in additional_params]
-        if source.endswith(" FROM DUAL"):
-            base_source = source[: -len(" FROM DUAL")]
-            source = f"{base_source}, {', '.join(additional_selects)} FROM DUAL"
-        else:
-            source = f"{source}, {', '.join(additional_selects)}"
-
-    return source, additional_params
-
-
-# Note: helper removed; kept for potential future use if needed.
+# Note: Oracle-specific helper removed; inline logic now handles defaults
