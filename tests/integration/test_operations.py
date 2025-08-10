@@ -192,7 +192,7 @@ def cached_store_model(request: FixtureRequest) -> type[DeclarativeBase]:
         if is_spanner:
             __table_args__ = ()
         else:
-            __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_uuid_store_key_ns_{worker_id}"),)
+            __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_uuid_store_key_ns_{worker_id}"),)  # type: ignore[assignment]
 
     class _TestStoreModelBigInt(BigIntBase):
         __tablename__ = f"test_store_{worker_id}"
