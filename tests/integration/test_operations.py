@@ -147,8 +147,8 @@ def test_table(
     return cast(Table, request.getfixturevalue("cached_test_table"))
 
 
-# Module-level cache for store model
-_store_model_cache: dict[str, type] = {}
+# Module-level cache for operations test model classes - separate from other tests
+# Disable caching to prevent cross-test contamination during parametrized runs
 
 
 @pytest.fixture(scope="session")
@@ -157,40 +157,57 @@ def cached_store_model(request: FixtureRequest) -> type[DeclarativeBase]:
     from advanced_alchemy.base import BigIntBase, UUIDv7Base
 
     worker_id = get_worker_id(request)
-    cache_key = f"store_model_{worker_id}"
 
-    if cache_key not in _store_model_cache:
-        # Check if we're using Spanner - it's in the worker_id for parallel tests
-        is_spanner = True if "spanner" in worker_id.lower() else False
+    # Check what database engine is being used by looking at fixture names in the request
+    uses_uuid_pk = False
 
-        # Define distinct local classes to avoid pyright redefinition warnings, then select one
-        class _TestStoreModelUUID(UUIDv7Base):  # pyright: ignore[reportPrivateUsage]
-            __tablename__ = f"test_store_{worker_id}"
+    # Look through all the fixtures that the test is requesting
+    for fixturename in request.fixturenames:
+        if fixturename in ["spanner_engine", "cockroachdb_engine"]:
+            uses_uuid_pk = True
+            break
 
-            key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-            namespace: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-            value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-            expires_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Include fixture names in cache key to differentiate database types
+    fixture_suffix = "_".join(sorted(name for name in request.fixturenames if "engine" in name))
+    _cache_key = f"store_model_{worker_id}_{uses_uuid_pk}_{fixture_suffix}"
 
-            # Spanner doesn't support UniqueConstraint, use indexes instead
+    # Always create new model to prevent cross-test contamination
+    # if cache_key not in _operations_store_model_cache:
+    #     # Clear entire cache to avoid any conflicts with other test model types
+
+    # Determine if we need unique constraint or just indexes
+    is_spanner = any(fixturename == "spanner_engine" for fixturename in request.fixturenames)
+
+    # Define distinct local classes to avoid pyright redefinition warnings, then select one
+    class _TestStoreModelUUID(UUIDv7Base):  # pyright: ignore[reportPrivateUsage]
+        __tablename__ = f"test_store_{worker_id}"
+
+        key: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+        namespace: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+        value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+        expires_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+        # Spanner doesn't support UniqueConstraint, use indexes instead
+        # CockroachDB needs UniqueConstraint for ON CONFLICT
+        if is_spanner:
             __table_args__ = ()
+        else:
+            __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_uuid_store_key_ns_{worker_id}"),)
 
-        class _TestStoreModelBigInt(BigIntBase):
-            __tablename__ = f"test_store_{worker_id}"
+    class _TestStoreModelBigInt(BigIntBase):
+        __tablename__ = f"test_store_{worker_id}"
 
-            key: Mapped[str] = mapped_column(String(50), nullable=False)
-            namespace: Mapped[str] = mapped_column(String(50), nullable=False)
-            value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-            expires_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+        key: Mapped[str] = mapped_column(String(50), nullable=False)
+        namespace: Mapped[str] = mapped_column(String(50), nullable=False)
+        value: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+        expires_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-            __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_store_key_ns_{worker_id}"),)
+        __table_args__ = (UniqueConstraint("key", "namespace", name=f"uq_store_key_ns_{worker_id}"),)
 
-        chosen: type[DeclarativeBase] = cast(
-            type[DeclarativeBase], _TestStoreModelUUID if is_spanner else _TestStoreModelBigInt
-        )
-        _store_model_cache[cache_key] = chosen
-
-    return _store_model_cache[cache_key]
+    chosen: type[DeclarativeBase] = cast(
+        type[DeclarativeBase], _TestStoreModelUUID if uses_uuid_pk else _TestStoreModelBigInt
+    )
+    return chosen  # Return model directly without caching
 
 
 @pytest.fixture
@@ -398,7 +415,7 @@ def cleanup_operations_tables(request: FixtureRequest) -> Generator[None, None, 
         # This is handled by individual fixtures, but we ensure cleanup here
         pass
 
-    for cache_key, model in _store_model_cache.items():
+        # for cache_key, model in _operations_store_model_cache.items():
         # Drop model tables from all engines if they exist
         # This is handled by individual fixtures, but we ensure cleanup here
         pass

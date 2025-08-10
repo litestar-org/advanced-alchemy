@@ -368,7 +368,16 @@ async def bigint_async_setup(
 @pytest.fixture(params=["uuid", "bigint"])
 def repository_pk_type(request: FixtureRequest) -> str:
     """Return the primary key type of the repository."""
-    return str(request.param)  # type: ignore[no-any-return]
+    pk_type = str(request.param)
+
+    # Skip BigInt tests for CockroachDB and Spanner - they only support UUID primary keys
+    if pk_type == "bigint":
+        # Check if we're using CockroachDB or Spanner engines
+        worker_id = get_worker_id(request)
+        if any(dialect in worker_id.lower() for dialect in ["cockroach", "spanner"]):
+            pytest.skip(f"BigInt primary keys not supported for {worker_id}")
+
+    return pk_type  # type: ignore[no-any-return]
 
 
 # Combined fixtures that select based on PK type

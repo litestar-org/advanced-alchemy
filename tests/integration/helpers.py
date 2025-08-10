@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union, cast
 
 import pytest
-from sqlalchemy import Engine, MetaData, exc, insert, inspect, text
+from sqlalchemy import Engine, MetaData, NullPool, create_engine, exc, insert, inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.orm import DeclarativeBase
@@ -992,16 +992,32 @@ class SQLiteCleaner(SyncDatabaseCleaner):
             for table in reversed(tables):
                 for attempt in range(self.max_retries):
                     try:
+                        # Check if we're in a transaction and commit/rollback if needed
+                        if self.connection.in_transaction():
+                            try:
+                                self.connection.commit()
+                            except Exception:
+                                self.connection.rollback()
+
                         self.connection.execute(text(f"DELETE FROM {table}"))
                         break
                     except Exception as e:
                         if "database is locked" in str(e) and attempt < self.max_retries - 1:
                             logger.warning(f"Database locked on table {table}, retrying in {self.retry_delay}s...")
+                            # Rollback any pending transaction
+                            try:
+                                if self.connection.in_transaction():
+                                    self.connection.rollback()
+                            except Exception:
+                                pass
                             time.sleep(self.retry_delay)
                         else:
                             raise
 
-            self.connection.commit()
+            # Final commit after all deletes
+            if self.connection.in_transaction():
+                self.connection.commit()
+
         finally:
             # Re-enable foreign key checks
             self.connection.execute(text("PRAGMA foreign_keys = ON"))
@@ -1010,8 +1026,15 @@ class SQLiteCleaner(SyncDatabaseCleaner):
         """Reset SQLite autoincrement sequences."""
         try:
             # Clear sqlite_sequence table to reset autoincrement counters
+            if self.connection.in_transaction():
+                try:
+                    self.connection.commit()
+                except Exception:
+                    self.connection.rollback()
+
             self.connection.execute(text("DELETE FROM sqlite_sequence"))
-            self.connection.commit()
+            if self.connection.in_transaction():
+                self.connection.commit()
         except Exception as e:
             logger.warning(f"Failed to reset autoincrement: {e}")
 
@@ -2636,8 +2659,12 @@ def _create_cleaner(
         dialect_name = engine_or_connection.dialect.name
         connection = engine_or_connection  # type: ignore[assignment]
 
+    # Handle Spanner which reports as "spanner+spanner"
+    if "spanner" in dialect_name:
+        dialect_name = "spanner"
+
     # Handle CockroachDB which reports as postgresql
-    if dialect_name == "postgresql":
+    elif dialect_name == "postgresql":
         # Check if it's actually CockroachDB by looking for server version info.
         # Some engines expose a server_version_info on the dialect that includes
         # a string with "cockroach" when connected to CockroachDB.
@@ -2801,11 +2828,28 @@ def clean_tables(engine: Engine, metadata: MetaData) -> None:
         engine: SQLAlchemy engine
         metadata: Metadata containing tables to clean
     """
-    with cleanup_database(engine) as cleaner:
-        # Get table names from metadata
-        tables_to_clean = [table.name for table in metadata.sorted_tables]
-        cleaner.include_only = set(tables_to_clean) if tables_to_clean else None
-        cleaner.cleanup()
+    # For SQLite, use a new connection to avoid transaction conflicts
+    if engine.dialect.name == "sqlite":
+        # Create a new engine with a fresh connection for cleanup
+        cleanup_engine = create_engine(
+            engine.url,
+            poolclass=NullPool,  # Force new connections
+            pool_pre_ping=True,
+            connect_args={"timeout": 20},  # Add timeout for locked databases
+        )
+        try:
+            with cleanup_database(cleanup_engine) as cleaner:
+                tables_to_clean = [table.name for table in metadata.sorted_tables]
+                cleaner.include_only = set(tables_to_clean) if tables_to_clean else None
+                cleaner.cleanup()
+        finally:
+            cleanup_engine.dispose()
+    else:
+        with cleanup_database(engine) as cleaner:
+            # Get table names from metadata
+            tables_to_clean = [table.name for table in metadata.sorted_tables]
+            cleaner.include_only = set(tables_to_clean) if tables_to_clean else None
+            cleaner.cleanup()
 
 
 async def async_clean_tables(engine: AsyncEngine, metadata: MetaData) -> None:

@@ -419,7 +419,11 @@ class OnConflictUpsert:
                 elif hasattr(pk_column.default, "next_value"):
                     pk_col_with_seq = pk_column
 
-            source = select(*labeled_columns).subquery("src")
+            # Oracle requires FROM DUAL for SELECT statements without tables
+            source_query = select(*labeled_columns)
+            # Add FROM DUAL for Oracle
+            source_query = source_query.select_from(text("DUAL"))
+            source = source_query.subquery("src")
             insert_columns = [label_col.name for label_col in labeled_columns]
             when_not_matched_insert = {col_name: literal_column(f"src.{col_name}") for col_name in insert_columns}
             if pk_col_with_seq is not None:
