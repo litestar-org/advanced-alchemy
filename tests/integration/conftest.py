@@ -343,27 +343,6 @@ async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, 
         pass
 
 
-@pytest.fixture(autouse=True)
-async def _auto_clean_async_db(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
-    """After each test, remove all rows from all tables for async engine tests.
-
-    Activates only when the test uses the 'async_engine' fixture, and skips mock engines.
-    Uses the robust dialect-aware async cleanup utilities.
-    """
-    yield
-
-    if getattr(async_engine.dialect, "name", "") == "mock":
-        return
-
-    try:
-        async with test_helpers.cleanup_database_async(async_engine) as cleaner:
-            cleaner.include_only = None
-            await cleaner.cleanup()
-    except test_helpers.CleanupError:
-        # Tests may drop tables; ignore cleanup errors at teardown time
-        pass
-
-
 @pytest.fixture()
 async def aiosqlite_engine(tmp_path: Path) -> AsyncGenerator[AsyncEngine, None]:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test.db", poolclass=NullPool)

@@ -47,6 +47,9 @@ __all__ = ("SQLAlchemyStore", "StoreModelMixin")
 
 _POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
+# Temporary toggle to disable PostgreSQL MERGE due to locking concerns
+_DISABLE_POSTGRES_MERGE: Final = True
+
 
 @declarative_mixin
 class StoreModelMixin(UUIDv7Base):
@@ -171,6 +174,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                     dialect.server_version_info is not None
                     and dialect.server_version_info[0] >= _POSTGRES_VERSION_SUPPORTING_MERGE
                     and dialect.name == "postgresql"
+                    and not _DISABLE_POSTGRES_MERGE  # Temporary PostgreSQL MERGE disable
                 )
                 or dialect.name == "oracle"
             )

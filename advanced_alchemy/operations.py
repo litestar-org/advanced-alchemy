@@ -138,8 +138,9 @@ POSTGRES_MERGE_VERSION = 15
 
 
 @compiles(MergeStatement)
-def compile_merge_default(_element: MergeStatement, compiler: SQLCompiler, **_kwargs: Any) -> str:
+def compile_merge_default(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
     """Default compilation - raises error for unsupported dialects."""
+    _ = element, kwargs  # Unused parameters
     dialect_name = compiler.dialect.name
     msg = f"MERGE statement not supported for dialect '{dialect_name}'"
     raise NotImplementedError(msg)
@@ -339,9 +340,9 @@ class OnConflictUpsert:
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
-            return mysql_insert_stmt.on_duplicate_key_update(**{
-                col: mysql_insert_stmt.inserted[col] for col in update_columns
-            })
+            return mysql_insert_stmt.on_duplicate_key_update(
+                **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
+            )
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
@@ -401,24 +402,26 @@ class OnConflictUpsert:
                 labeled_columns.append(bindparam(key, value=value, type_=column.type).label(key))
 
             pk_col_with_seq = None
-            for col in table.primary_key.columns:
-                if col.name in values or col.default is None:
+            for pk_column in table.primary_key.columns:
+                if pk_column.name in values or pk_column.default is None:
                     continue
-                if callable(getattr(col.default, "arg", None)):
+                if callable(getattr(pk_column.default, "arg", None)):
                     try:
-                        default_value = col.default.arg(None)  # type: ignore[attr-defined]
+                        default_value = pk_column.default.arg(None)  # type: ignore[attr-defined]
                         if isinstance(default_value, UUID):
                             default_value = default_value.hex
-                        additional_params[col.name] = default_value
-                        labeled_columns.append(bindparam(col.name, value=default_value, type_=col.type).label(col.name))
+                        additional_params[pk_column.name] = default_value
+                        labeled_columns.append(
+                            bindparam(pk_column.name, value=default_value, type_=pk_column.type).label(pk_column.name)
+                        )
                     except (TypeError, AttributeError, ValueError):
                         continue
-                elif hasattr(col.default, "next_value"):
-                    pk_col_with_seq = col
+                elif hasattr(pk_column.default, "next_value"):
+                    pk_col_with_seq = pk_column
 
             source = select(*labeled_columns).subquery("src")
-            insert_columns = [c.name for c in labeled_columns]
-            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
+            insert_columns = [label_col.name for label_col in labeled_columns]
+            when_not_matched_insert = {col_name: literal_column(f"src.{col_name}") for col_name in insert_columns}
             if pk_col_with_seq is not None:
                 insert_columns.append(pk_col_with_seq.name)
                 when_not_matched_insert[pk_col_with_seq.name] = cast("Any", pk_col_with_seq.default).next_value()

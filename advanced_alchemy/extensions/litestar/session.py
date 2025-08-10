@@ -1,11 +1,13 @@
 import datetime
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Generic, Optional, TypeVar, Union, cast
 
+from litestar.exceptions import ImproperlyConfiguredException
 from litestar.middleware.session.server_side import ServerSideSessionBackend, ServerSideSessionConfig
 from sqlalchemy import (
     BooleanClauseList,
+    Dialect,
     Index,
     LargeBinary,
     ScalarResult,
@@ -23,6 +25,7 @@ from advanced_alchemy.extensions.litestar.plugins.init import (
     SQLAlchemyAsyncConfig,
     SQLAlchemySyncConfig,
 )
+from advanced_alchemy.operations import OnConflictUpsert
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
@@ -38,6 +41,12 @@ SessionModelT = TypeVar("SessionModelT", bound="SessionModelMixin")
 
 # Session ID field limit as defined in the database schema
 SESSION_ID_MAX_LENGTH = 255
+
+# PostgreSQL version supporting MERGE (same as store.py)
+_POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
+
+# Temporary toggle to disable PostgreSQL MERGE due to locking concerns
+_DISABLE_POSTGRES_MERGE: Final = True
 
 
 @declarative_mixin
@@ -161,6 +170,32 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
             seconds=self.config.max_age
         )
 
+    @staticmethod
+    def supports_merge(dialect: "Optional[Dialect]" = None, force_disable_merge: bool = False) -> bool:
+        """Check if the dialect supports MERGE statements for upserts."""
+        return bool(
+            dialect
+            and (
+                (
+                    dialect.server_version_info is not None
+                    and dialect.server_version_info[0] >= _POSTGRES_VERSION_SUPPORTING_MERGE
+                    and dialect.name == "postgresql"
+                    and not _DISABLE_POSTGRES_MERGE  # Temporary PostgreSQL MERGE disable
+                )
+                or dialect.name == "oracle"
+            )
+            and not force_disable_merge
+        )
+
+    @staticmethod
+    def supports_upsert(dialect: "Optional[Dialect]" = None, force_disable_upsert: bool = False) -> bool:
+        """Check if the dialect supports native upsert operations."""
+        return bool(
+            dialect
+            and (dialect.name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"})
+            and not force_disable_upsert
+        )
+
     @abstractmethod
     async def delete_expired(self) -> None:
         """Delete all expired sessions from the database."""
@@ -238,14 +273,56 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
             store: The store to store the session in (not used in this backend)
         """
         session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+        expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=self.config.max_age)
 
         async with self.alchemy.get_session() as db_session:
-            session_obj = await self._get_session_obj(db_session=db_session, session_id=session_id)
-            if not session_obj:
-                session_obj = self._model(session_id=session_id)
-                db_session.add(session_obj)
-            session_obj.data = data
-            self._update_session_expiry(session_obj)
+            if db_session.bind is None:  # pyright: ignore[reportUnnecessaryComparison]
+                msg = "Database connection is not available"  # type: ignore[unreachable]
+                raise ImproperlyConfiguredException(msg)
+            dialect = db_session.bind.dialect
+            dialect_name = dialect.name
+
+            values = {
+                "session_id": session_id,
+                "data": data,
+                "expires_at": expires_at,
+            }
+            conflict_columns = ["session_id"]
+            update_columns = ["data", "expires_at"]
+
+            if OnConflictUpsert.supports_native_upsert(dialect_name):
+                upsert_stmt = OnConflictUpsert.create_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                    dialect_name=dialect_name,
+                    validate_identifiers=False,
+                )
+                await db_session.execute(upsert_stmt)
+
+            elif self.supports_merge(dialect):
+                merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                    dialect_name=dialect_name,
+                    validate_identifiers=False,
+                )
+                # Merge additional Oracle parameters with original values
+                merge_values = {**values, **additional_params}
+                await db_session.execute(merge_stmt, merge_values)
+
+            else:
+                # Fallback logic: Check existence, then update or insert
+                session_obj = await self._get_session_obj(db_session=db_session, session_id=session_id)
+                if not session_obj:
+                    session_obj = self._model(session_id=session_id)
+                    db_session.add(session_obj)
+                session_obj.data = data
+                session_obj.expires_at = expires_at
+
             await db_session.commit()
 
     async def delete(self, /, session_id: str, store: "Store") -> None:
@@ -310,15 +387,56 @@ class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncCo
 
     def _set_sync(self, session_id: str, data: bytes) -> None:
         session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
+        expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=self.config.max_age)
 
         with self.alchemy.get_session() as db_session:
-            session_obj = self._get_session_obj(db_session=db_session, session_id=session_id)
+            if db_session.bind is None:
+                msg = "Database connection is not available"
+                raise ImproperlyConfiguredException(msg)
+            dialect = db_session.bind.dialect
+            dialect_name = dialect.name
 
-            if not session_obj:
-                session_obj = self._model(session_id=session_id)
-                db_session.add(session_obj)
-            session_obj.data = data
-            self._update_session_expiry(session_obj)
+            values = {
+                "session_id": session_id,
+                "data": data,
+                "expires_at": expires_at,
+            }
+            conflict_columns = ["session_id"]
+            update_columns = ["data", "expires_at"]
+
+            if OnConflictUpsert.supports_native_upsert(dialect_name):
+                upsert_stmt = OnConflictUpsert.create_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                    dialect_name=dialect_name,
+                    validate_identifiers=False,
+                )
+                db_session.execute(upsert_stmt)
+
+            elif self.supports_merge(dialect):
+                merge_stmt, additional_params = OnConflictUpsert.create_merge_upsert(
+                    table=self._model.__table__,  # type: ignore[arg-type]
+                    values=values,
+                    conflict_columns=conflict_columns,
+                    update_columns=update_columns,
+                    dialect_name=dialect_name,
+                    validate_identifiers=False,
+                )
+                # Merge additional Oracle parameters with original values
+                merge_values = {**values, **additional_params}
+                db_session.execute(merge_stmt, merge_values)
+
+            else:
+                # Fallback logic: Check existence, then update or insert
+                session_obj = self._get_session_obj(db_session=db_session, session_id=session_id)
+                if not session_obj:
+                    session_obj = self._model(session_id=session_id)
+                    db_session.add(session_obj)
+                session_obj.data = data
+                session_obj.expires_at = expires_at
+
             db_session.commit()
 
     async def set(self, /, session_id: str, data: bytes, store: "Store") -> None:
