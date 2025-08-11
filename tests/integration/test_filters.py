@@ -32,12 +32,14 @@ if TYPE_CHECKING:
     from pytest import FixtureRequest
 
 
-# Module-level cache for Movie model
+# Module-level cache for Movie model and counter for unique names
 _movie_model_cache: dict[str, type] = {}
+_movie_class_counter = 0
 
 
 def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type[DeclarativeBase]:
     """Create appropriate Movie model based on engine dialect."""
+    global _movie_class_counter
     cache_key = f"movie_{worker_id}_{engine_dialect_name}"
 
     if cache_key not in _movie_model_cache:
@@ -48,13 +50,27 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
         # Use UUID base for CockroachDB and Spanner, BigInt for others
         base_class = UUIDAuditBase if engine_dialect_name.startswith(("cockroach", "spanner")) else BigIntBase
 
-        class Movie(base_class, TestBase):  # type: ignore[valid-type,misc]
-            __tablename__ = f"test_movies_{worker_id}_{engine_dialect_name}"
-            __mapper_args__ = {"concrete": True}
-
-            title: Mapped[str] = mapped_column(String(length=100))
-            release_date: Mapped[datetime] = mapped_column()
-            genre: Mapped[str] = mapped_column(String(length=50))
+        # Create class with globally unique name to avoid SQLAlchemy registry conflicts
+        _movie_class_counter += 1
+        class_name = f"Movie_{_movie_class_counter}_{worker_id}_{engine_dialect_name}"
+        
+        # Use globals() to create the class dynamically with a unique name
+        Movie = type(
+            class_name,
+            (base_class, TestBase),
+            {
+                "__tablename__": f"test_movies_{worker_id}_{engine_dialect_name}",
+                "__mapper_args__": {"concrete": True},
+                "__annotations__": {
+                    "title": "Mapped[str]",
+                    "release_date": "Mapped[datetime]", 
+                    "genre": "Mapped[str]",
+                },
+                "title": mapped_column(String(length=100)),
+                "release_date": mapped_column(),
+                "genre": mapped_column(String(length=50)),
+            }
+        )
 
         _movie_model_cache[cache_key] = Movie
 
