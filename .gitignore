@@ -52,6 +52,7 @@ coverage.xml
 .pytest_cache/
 cover/
 test.sqlite
+*.db
 
 # Translations
 *.mo

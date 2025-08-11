@@ -83,8 +83,8 @@ class Document(Base):
     )
 
 
-@pytest.fixture()
-def storage_registry(tmp_path: Path) -> "StorageRegistry":
+@pytest.fixture(scope="session")
+def storage_registry(tmp_path_factory: pytest.TempPathFactory) -> "StorageRegistry":
     """Clears and returns the global storage registry for the module.
 
     Returns:
@@ -97,9 +97,8 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
     if storages.is_registered("local_test_store"):
         storages.unregister_backend("local_test_store")
 
-    # Create the storage directory
-    storage_dir = tmp_path / "file_object_test_storage"
-    storage_dir.mkdir(parents=True, exist_ok=True)
+    # Create the storage directory using tmp_path_factory for session scope
+    storage_dir = tmp_path_factory.mktemp("file_object_test_storage")
 
     storages.register_backend(
         ObstoreBackend(
@@ -168,7 +167,7 @@ def session(sync_db_engine: Engine, storage_registry: "StorageRegistry") -> Gene
         yield db_session
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(loop_scope="session")
 async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
 ) -> AsyncGenerator[AsyncSession, None]:
@@ -1014,6 +1013,24 @@ async def test_obstore_backend_storage_registry_management(storage_registry: Sto
 
     with pytest.raises(ImproperConfigurationError, match="key is not allowed when registering a StorageBackend"):
         storage_registry.register_backend(test_backend, key="invalid_key")  # type: ignore[arg-type]
+
+    # Restore the original backends for session-scoped fixture compatibility
+    from obstore.store import LocalStore, MemoryStore
+    import tempfile
+    
+    # Re-register the memory backend
+    if not storage_registry.is_registered("memory"):
+        storage_registry.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
+    
+    # Re-register the local_test_store backend
+    if not storage_registry.is_registered("local_test_store"):
+        storage_dir = tempfile.mkdtemp(prefix="file_object_test_storage_")
+        storage_registry.register_backend(
+            ObstoreBackend(
+                fs=LocalStore(prefix=storage_dir),
+                key="local_test_store",
+            )
+        )
 
 
 @pytest.mark.xdist_group("file_object")
