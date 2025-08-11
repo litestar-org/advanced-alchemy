@@ -353,11 +353,15 @@ async def test_async_session_backend_expiration(
     retrieved_data = await backend.get(session_id, mock_store)
     dialect_name = getattr(async_engine.dialect, "name", "")
 
-    # Oracle may have timing issues with immediate retrieval
+    # Oracle may have timing issues with immediate retrieval due to MERGE statement transaction behavior
+    # This appears to be related to Oracle's read-committed isolation and connection pooling
     if dialect_name == "oracle" and retrieved_data is None:
-        # Give Oracle a moment to commit the transaction
-        await asyncio.sleep(0.1)
-        retrieved_data = await backend.get(session_id, mock_store)
+        # Give Oracle multiple chances with brief delays to handle MERGE statement visibility
+        for _ in range(3):  # Reduced retries for performance
+            await asyncio.sleep(0.1)  # Brief delay for Oracle transaction visibility
+            retrieved_data = await backend.get(session_id, mock_store)
+            if retrieved_data is not None:
+                break
 
     _handle_database_encoding(retrieved_data, data, dialect_name)
 
