@@ -48,7 +48,7 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
         # Use UUID base for CockroachDB and Spanner, BigInt for others
         base_class = UUIDAuditBase if engine_dialect_name.startswith(("cockroach", "spanner")) else BigIntBase
 
-        class Movie(base_class, TestBase):
+        class Movie(base_class, TestBase):  # type: ignore[valid-type,misc]
             __tablename__ = f"test_movies_{worker_id}_{engine_dialect_name}"
             __mapper_args__ = {"concrete": True}
 
@@ -65,7 +65,7 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
 def cached_movie_model(request: FixtureRequest) -> type[DeclarativeBase]:
     """Create Movie model once per session/worker - placeholder."""
     # This will be replaced by movie_model_sync/async fixtures
-    return None
+    return None  # type: ignore[return-value]
 
 
 @pytest.fixture
