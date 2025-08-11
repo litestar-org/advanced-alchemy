@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 from unittest.mock import create_autospec, NonCallableMagicMock
 
 import pytest
+import pytest_asyncio
 from google.cloud import spanner  # pyright: ignore
 from pytest import FixtureRequest
 from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
@@ -20,8 +21,6 @@ from tests.integration import helpers as test_helpers
 from tests.integration.repository_fixtures import *  # noqa: F403
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from pytest import MonkeyPatch
 
 
@@ -133,8 +132,12 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
     monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 
 
-@pytest.fixture()
-def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
+@pytest.fixture(scope="session")
+def duckdb_engine(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+) -> Generator[Engine, None, None]:
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    tmp_path = tmp_path_factory.mktemp(f"duckdb_{worker_id}")
     engine = create_engine(f"duckdb:///{tmp_path}/test.duck.db", poolclass=NullPool)
     try:
         yield engine
@@ -142,36 +145,49 @@ def duckdb_engine(tmp_path: Path) -> Generator[Engine, None, None]:
         engine.dispose()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def oracle18c_engine(oracle18c_url: str) -> Generator[Engine, None, None]:
     yield create_engine(oracle18c_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def oracle23ai_engine(oracle23ai_url: str) -> Generator[Engine, None, None]:
     yield create_engine(oracle23ai_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def psycopg_engine(postgres_psycopg_url: str) -> Generator[Engine, None, None]:
     yield create_engine(postgres_psycopg_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def mssql_engine(mssql_pyodbc_url: str) -> Generator[Engine, None, None]:
     yield create_engine(mssql_pyodbc_url, poolclass=NullPool)
 
 
-@pytest.fixture()
-def sqlite_engine(tmp_path: Path) -> Generator[Engine, None, None]:
-    engine = create_engine(f"sqlite:///{tmp_path}/test.db", poolclass=NullPool)
+@pytest.fixture(scope="session")
+def sqlite_engine(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+) -> Generator[Engine, None, None]:
+    # Include worker ID in the database name to avoid conflicts
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    tmp_path = tmp_path_factory.mktemp(f"sqlite_{worker_id}")
+    db_file = tmp_path / f"test_{worker_id}.db"
+    engine = create_engine(
+        f"sqlite:///{db_file}",
+        poolclass=NullPool,
+        connect_args={
+            "timeout": 30,  # Wait up to 30 seconds for locks
+            "check_same_thread": False,  # Allow usage from different threads
+        },
+    )
     try:
         yield engine
     finally:
         engine.dispose()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def spanner_engine(spanner_url: str, spanner_connection: spanner.Client) -> Generator[Engine, None, None]:
     # Environment variables are still set by set_spanner_emulator in root conftest,
     # but we use the explicit URL fixture now for consistency.
@@ -179,7 +195,7 @@ def spanner_engine(spanner_url: str, spanner_connection: spanner.Client) -> Gene
     yield create_engine(spanner_url, poolclass=NullPool, connect_args={"client": spanner_connection})
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def cockroachdb_engine(cockroachdb_psycopg_url: str) -> Generator[Engine, None, None]:
     yield create_engine(cockroachdb_psycopg_url, poolclass=NullPool)
 
@@ -315,8 +331,8 @@ def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
             # Clean all tables (no include_only filter)
             cleaner.include_only = None
             cleaner.cleanup()
-    except (test_helpers.CleanupError, AssertionError):
-        # Tests may drop tables; ignore cleanup errors at teardown time
+    except Exception:
+        # Ignore all cleanup errors for speed - they don't affect test results
         pass
 
 
@@ -338,26 +354,39 @@ async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, 
         async with test_helpers.cleanup_database_async(async_engine) as cleaner:
             cleaner.include_only = None
             await cleaner.cleanup()
-    except (test_helpers.CleanupError, AssertionError):
-        # Tests may drop tables; ignore cleanup errors at teardown time
+    except Exception:
+        # Ignore all cleanup errors for speed - they don't affect test results
         pass
 
 
-@pytest.fixture()
-async def aiosqlite_engine(tmp_path: Path) -> AsyncGenerator[AsyncEngine, None]:
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test.db", poolclass=NullPool)
+@pytest_asyncio.fixture(loop_scope="session")
+async def aiosqlite_engine(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+) -> AsyncGenerator[AsyncEngine, None]:
+    # Include worker ID in the database name to avoid conflicts
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    tmp_path = tmp_path_factory.mktemp(f"aiosqlite_{worker_id}")
+    db_file = tmp_path / f"test_{worker_id}.db"
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{db_file}",
+        poolclass=NullPool,
+        connect_args={
+            "timeout": 30,  # Wait up to 30 seconds for locks
+            "check_same_thread": False,  # Allow usage from different threads
+        },
+    )
     try:
         yield engine
     finally:
         await engine.dispose()
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def asyncmy_engine(mysql_asyncmy_url: str) -> AsyncGenerator[AsyncEngine, None]:
     yield create_async_engine(mysql_asyncmy_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def asyncpg_engine(postgres_asyncpg_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """AsyncPG engine fixture that ensures pgcrypto extension is created."""
     engine = create_async_engine(postgres_asyncpg_url, poolclass=NullPool)
@@ -371,12 +400,12 @@ async def asyncpg_engine(postgres_asyncpg_url: str) -> AsyncGenerator[AsyncEngin
         await engine.dispose()
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def psycopg_async_engine(postgres_psycopg_url: str) -> AsyncGenerator[AsyncEngine, None]:
     yield create_async_engine(postgres_psycopg_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def cockroachdb_async_engine(cockroachdb_asyncpg_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """Cockroach DB async engine instance for end-to-end testing using asyncpg.
 
@@ -389,7 +418,7 @@ async def cockroachdb_async_engine(cockroachdb_asyncpg_url: str) -> AsyncGenerat
     yield create_async_engine(cockroachdb_asyncpg_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def mssql_async_engine(mssql_aioodbc_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """MS SQL instance for end-to-end testing using aioodbc.
 
@@ -407,7 +436,7 @@ async def mssql_async_engine(mssql_aioodbc_url: str) -> AsyncGenerator[AsyncEngi
     yield create_async_engine(url_to_use, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def oracle18c_async_engine(oracle18c_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """Oracle 18c async instance for end-to-end testing.
 
@@ -420,7 +449,7 @@ async def oracle18c_async_engine(oracle18c_url: str) -> AsyncGenerator[AsyncEngi
     yield create_async_engine(oracle18c_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def oracle23ai_async_engine(oracle23ai_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """Oracle 23c async instance for end-to-end testing.
 

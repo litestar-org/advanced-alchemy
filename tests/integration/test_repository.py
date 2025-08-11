@@ -9,15 +9,14 @@ import datetime
 import os
 from collections.abc import AsyncGenerator, Generator, Iterator
 from typing import TYPE_CHECKING, Any, Literal, Union, cast
-from unittest.mock import NonCallableMagicMock, create_autospec
 from uuid import UUID, uuid4
 
 import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Dialect, Engine, NullPool, and_, create_engine, select, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy import Engine, and_, select, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session, selectinload
 from time_machine import travel
 
@@ -131,258 +130,14 @@ mock_engines = {"mock_async_engine", "mock_sync_engine"}
 
 # Use a persistent tmp dir for this module so SQLite/DuckDB engines share one DB file per session
 @pytest.fixture(scope="session")
-def _repo_tmp_dir(tmp_path_factory: pytest.TempPathFactory) -> os.PathLike[str]:
-    return tmp_path_factory.mktemp("repo_dbs")
+def _repo_tmp_dir(tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest) -> os.PathLike[str]:
+    # Include worker ID in the path to avoid conflicts in parallel execution
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    return tmp_path_factory.mktemp(f"repo_dbs_{worker_id}")
 
 
-# Override engine with a session-scoped, parametrized engine matching conftest backends
-@pytest.fixture(
-    scope="session",
-    name="engine",
-    params=[
-        pytest.param(
-            "sqlite_engine",
-            marks=[
-                pytest.mark.sqlite,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("sqlite"),
-            ],
-        ),
-        pytest.param(
-            "duckdb_engine",
-            marks=[
-                pytest.mark.duckdb,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("duckdb"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23ai_engine",
-            marks=[
-                pytest.mark.oracledb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_engine",
-            marks=[
-                pytest.mark.psycopg_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_engine",
-            marks=[
-                pytest.mark.cockroachdb_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mssql_engine",
-            marks=[
-                pytest.mark.mssql_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "spanner_engine",
-            marks=[
-                pytest.mark.spanner,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("spanner"),
-            ],
-        ),
-        pytest.param(
-            "mock_sync_engine",
-            marks=[
-                pytest.mark.mock_sync,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def engine(request: pytest.FixtureRequest, _repo_tmp_dir: os.PathLike[str]) -> Engine:
-    param = request.param
-    if param == "sqlite_engine":
-        db_path = os.fspath(_repo_tmp_dir) + "/repo_sync.sqlite"
-        return create_engine(f"sqlite:///{db_path}", poolclass=NullPool)
-    if param == "duckdb_engine":
-        db_path = os.fspath(_repo_tmp_dir) + "/repo_sync.duckdb"
-        return create_engine(f"duckdb:///{db_path}", poolclass=NullPool)
-    if param == "psycopg_engine":
-        url = request.getfixturevalue("postgres_psycopg_url")
-        return create_engine(url, poolclass=NullPool)
-    if param == "cockroachdb_engine":
-        url = request.getfixturevalue("cockroachdb_psycopg_url")
-        return create_engine(url, poolclass=NullPool)
-    if param == "mssql_engine":
-        url = request.getfixturevalue("mssql_pyodbc_url")
-        return create_engine(url, poolclass=NullPool)
-    if param == "oracle18c_engine":
-        url = request.getfixturevalue("oracle18c_url")
-        return create_engine(url, poolclass=NullPool)
-    if param == "oracle23ai_engine":
-        url = request.getfixturevalue("oracle23ai_url")
-        return create_engine(url, poolclass=NullPool)
-    if param == "spanner_engine":
-        # Match conftest: use explicit URL and pass client via connect_args
-        from google.cloud import spanner as _spanner  # pyright: ignore[reportMissingImports]
-
-        _ = _spanner  # silence unused if type checker strips import
-        spanner_url = request.getfixturevalue("spanner_url")
-        spanner_client = request.getfixturevalue("spanner_connection")
-        return create_engine(spanner_url, poolclass=NullPool, connect_args={"client": spanner_client})
-    if param == "mock_sync_engine":
-        mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
-        mock.dialect = create_autospec(Dialect, instance=True)
-        mock.dialect.name = "mock"
-        mock.dialect.server_version_info = None
-        return mock  # type: ignore[return-value]
-    raise RuntimeError(f"Unknown engine param: {param}")
-
-
-# Override async_engine similarly, session-scoped
-@pytest.fixture(
-    scope="session",
-    name="async_engine",
-    params=[
-        pytest.param(
-            "aiosqlite_engine",
-            marks=[
-                pytest.mark.aiosqlite,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("sqlite"),
-            ],
-        ),
-        pytest.param(
-            "asyncmy_engine",
-            marks=[
-                pytest.mark.asyncmy,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mysql"),
-            ],
-        ),
-        pytest.param(
-            "asyncpg_engine",
-            marks=[
-                pytest.mark.asyncpg,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "psycopg_async_engine",
-            marks=[
-                pytest.mark.psycopg_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("postgres"),
-            ],
-        ),
-        pytest.param(
-            "cockroachdb_async_engine",
-            marks=[
-                pytest.mark.cockroachdb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("cockroachdb"),
-            ],
-        ),
-        pytest.param(
-            "mssql_async_engine",
-            marks=[
-                pytest.mark.mssql_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mssql"),
-            ],
-        ),
-        pytest.param(
-            "oracle18c_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle18"),
-            ],
-        ),
-        pytest.param(
-            "oracle23ai_async_engine",
-            marks=[
-                pytest.mark.oracledb_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("oracle23"),
-            ],
-        ),
-        pytest.param(
-            "mock_async_engine",
-            marks=[
-                pytest.mark.mock_async,
-                pytest.mark.integration,
-                pytest.mark.xdist_group("mock"),
-            ],
-        ),
-    ],
-)
-def async_engine(request: pytest.FixtureRequest, _repo_tmp_dir: os.PathLike[str]) -> AsyncEngine:  # type: ignore[override]
-    param = request.param
-    if param == "aiosqlite_engine":
-        db_path = os.fspath(_repo_tmp_dir) + "/repo_async.sqlite"
-        return create_async_engine(f"sqlite+aiosqlite:///{db_path}", poolclass=NullPool)
-    if param == "asyncmy_engine":
-        url = request.getfixturevalue("mysql_asyncmy_url")
-        return create_async_engine(url, poolclass=NullPool)
-    if param == "asyncpg_engine":
-        url = request.getfixturevalue("postgres_asyncpg_url")
-        engine = create_async_engine(url, poolclass=NullPool)
-
-        # Ensure pgcrypto extension exists, matching conftest behavior
-        async def _ensure_pgcrypto() -> None:
-            async with engine.begin() as conn:
-                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
-
-        # schedule setup synchronously during fixture creation
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        loop.run_until_complete(_ensure_pgcrypto())
-        return engine
-    if param == "psycopg_async_engine":
-        url = request.getfixturevalue("postgres_psycopg_url")
-        return create_async_engine(url, poolclass=NullPool)
-    if param == "cockroachdb_async_engine":
-        url = request.getfixturevalue("cockroachdb_asyncpg_url")
-        return create_async_engine(url, poolclass=NullPool)
-    if param == "mssql_async_engine":
-        url = request.getfixturevalue("mssql_aioodbc_url")
-        if "MARS_Connection=yes" not in url:
-            sep = "&" if "?" in url else "?"
-            url = f"{url}{sep}MARS_Connection=yes"
-        return create_async_engine(url, poolclass=NullPool)
-    if param == "oracle18c_async_engine":
-        url = request.getfixturevalue("oracle18c_url")
-        return create_async_engine(url, poolclass=NullPool)
-    if param == "oracle23ai_async_engine":
-        url = request.getfixturevalue("oracle23ai_url")
-        return create_async_engine(url, poolclass=NullPool)
-    if param == "mock_async_engine":
-        mock = cast(NonCallableMagicMock, create_autospec(AsyncEngine, instance=True))
-        mock.dialect = create_autospec(Dialect, instance=True)
-        mock.dialect.name = "mock"
-        mock.dialect.server_version_info = None
-        return mock  # type: ignore[return-value]
-    raise RuntimeError(f"Unknown async_engine param: {param}")
+# Use the parametrized engine fixtures from conftest.py
+# They already handle all the database backends we need
 
 
 @pytest.fixture(autouse=True)

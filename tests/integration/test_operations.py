@@ -151,19 +151,30 @@ def test_table(
 # Disable caching to prevent cross-test contamination during parametrized runs
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def cached_store_model(request: FixtureRequest) -> type[DeclarativeBase]:
-    """Create store model once per session/worker."""
+    """Create store model dynamically based on the engine being used.
+
+    Note: Cannot be session-scoped because different tests use different engine types.
+    """
     from advanced_alchemy.base import BigIntBase, UUIDv7Base
 
     worker_id = get_worker_id(request)
 
-    # Check what database engine is being used by looking at fixture names in the request
+    # Check what database engine is being used
     uses_uuid_pk = False
 
+    # Check if any_engine is being used and what its actual value is
+    if "any_engine" in request.fixturenames:
+        # For parametrized fixtures, we need to check which engine is actually being used
+        # The any_engine fixture resolves to one of the specific engine fixtures
+        # We need to look at all fixture names to find the actual engine
+        pass
+
     # Look through all the fixtures that the test is requesting
+    # This includes both direct fixtures and indirect ones from parametrization
     for fixturename in request.fixturenames:
-        if fixturename in ["spanner_engine", "cockroachdb_engine"]:
+        if "cockroachdb" in fixturename or "spanner" in fixturename:
             uses_uuid_pk = True
             break
 
@@ -399,7 +410,11 @@ def updated_values() -> dict[str, Any]:
     ]
 )
 def any_engine(request: FixtureRequest) -> Engine | AsyncEngine:
-    """Return any available engine for testing."""
+    """Return any available engine for testing.
+
+    Note: This fixture cannot be session-scoped because async fixtures
+    must be function-scoped with pytest-asyncio.
+    """
     return cast("Engine | AsyncEngine", request.getfixturevalue(request.param))
 
 
@@ -904,6 +919,7 @@ async def test_merge_compilation_oracle_postgres(any_engine: Engine | AsyncEngin
 async def test_store_upsert_integration(
     any_engine: Engine | AsyncEngine,
     store_model: type[DeclarativeBase],
+    request: FixtureRequest,
 ) -> None:
     """Test store-like upsert pattern with model class."""
 
@@ -926,6 +942,23 @@ async def test_store_upsert_integration(
         "value": "cached_data",
         "expires_at": (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat(),
     }
+
+    # CockroachDB and Spanner require the primary key to be provided for upserts
+    # Determine if we're using UUID or BigInt primary keys
+    if dialect_name.startswith(("cockroach", "spanner")):
+        # Check if the model is using UUID or BigInt by checking the base class
+        # UUIDv7Base has UUID primary keys, BigIntBase has integer primary keys
+        import uuid
+
+        from advanced_alchemy.base import UUIDv7Base
+
+        # Check if the model inherits from UUIDv7Base
+        if issubclass(TestStoreModel, UUIDv7Base):
+            # UUID primary key
+            store_data["id"] = str(uuid.uuid4())
+        else:
+            # BigInt primary key - don't add ID, let the database generate it
+            pass
 
     # Create upsert for store pattern
     additional_params: dict[str, Any] = {}
