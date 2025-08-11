@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Optional, cast
 
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+import pytest_asyncio
+from sqlalchemy import Engine, create_engine, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session
 
 from advanced_alchemy import base, mixins
@@ -34,6 +36,26 @@ pytestmark = [
 here = Path(__file__).parent
 fixture_path = here.parent.parent / "examples"
 attrs_registry = base.create_registry()
+
+
+@pytest.fixture(scope="session")
+def sync_engine() -> Generator[Engine, None, None]:
+    """Session-scoped sync engine for attrs testing."""
+    engine = create_engine("sqlite://")
+    attrs_registry.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
+    """Session-scoped async engine for attrs testing."""
+    engine = create_async_engine("sqlite+aiosqlite://")
+    async with engine.begin() as conn:
+        await conn.run_sync(attrs_registry.metadata.create_all)
+    yield engine
+    await engine.dispose()
+
 
 if ATTRS_INSTALLED:
     from attrs import define, field
@@ -157,12 +179,9 @@ class StateQuery(base.SQLQuery):
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_sync_attrs_service_basic_operations() -> None:
+def test_sync_attrs_service_basic_operations(sync_engine: Engine) -> None:
     """Test basic service operations with attrs classes."""
-    engine = create_engine("sqlite://")
-    attrs_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         service = PersonSyncService(session=session)
 
         # Test create with dict data first (which works with existing services)
@@ -199,12 +218,9 @@ def test_sync_attrs_service_basic_operations() -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_sync_attrs_with_defaults() -> None:
+def test_sync_attrs_with_defaults(sync_engine: Engine) -> None:
     """Test attrs classes with default values."""
-    engine = create_engine("sqlite://")
-    attrs_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         service = PersonSyncService(session=session)
 
         # Create with dict data and default values
@@ -225,12 +241,9 @@ def test_sync_attrs_with_defaults() -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_sync_query_service_with_attrs() -> None:
+def test_sync_query_service_with_attrs(sync_engine: Engine) -> None:
     """Test query service with attrs schema conversion."""
-    engine = create_engine("sqlite://")
-    attrs_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         state_service = USStateSyncService(session=session)
         query_service = SQLAlchemySyncQueryService(session=session)
 
@@ -269,14 +282,9 @@ def test_sync_query_service_with_attrs() -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-async def test_async_attrs_service_basic_operations() -> None:
+async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine) -> None:
     """Test async service operations with attrs classes."""
-    engine = create_async_engine("sqlite+aiosqlite://")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(attrs_registry.metadata.create_all)
-
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(async_engine) as session:
         service = PersonAsyncService(session=session)
 
         # Test create with dict data
@@ -313,14 +321,9 @@ async def test_async_attrs_service_basic_operations() -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-async def test_async_query_service_with_attrs() -> None:
+async def test_async_query_service_with_attrs(async_engine: AsyncEngine) -> None:
     """Test async query service with attrs schema conversion."""
-    engine = create_async_engine("sqlite+aiosqlite://")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(attrs_registry.metadata.create_all)
-
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(async_engine) as session:
         state_service = USStateAsyncService(session=session)
         query_service = SQLAlchemyAsyncQueryService(session=session)
 
@@ -356,12 +359,9 @@ async def test_async_query_service_with_attrs() -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_attrs_error_handling() -> None:
+def test_attrs_error_handling(sync_engine: Engine) -> None:
     """Test error handling with attrs integration."""
-    engine = create_engine("sqlite://")
-    attrs_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         service = PersonSyncService(session=session)
 
         # Test with invalid attrs-like class (should work with duck typing)
@@ -380,12 +380,9 @@ def test_attrs_error_handling() -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_attrs_mixed_with_other_schemas() -> None:
+def test_attrs_mixed_with_other_schemas(sync_engine: Engine) -> None:
     """Test attrs alongside other schema types."""
-    engine = create_engine("sqlite://")
-    attrs_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         service = PersonSyncService(session=session)
 
         # Create with attrs

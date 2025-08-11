@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import pytest
+import pytest_asyncio
 from minio import Minio  # type: ignore[import-untyped]
 from pytest_databases.docker.minio import MinioService
 from sqlalchemy import Engine, String, create_engine, event
@@ -24,7 +25,6 @@ from advanced_alchemy.types.file_object.backends.fsspec import FSSpecBackend
 from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.registry import StorageRegistry, storages
 from advanced_alchemy.types.mutables import MutableList
-from tests.integration.helpers import async_clean_tables, clean_tables
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -161,22 +161,18 @@ def async_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[Async
         db_file.unlink(missing_ok=True)
 
 
-@pytest.fixture()
-def session(
-    sync_db_engine: Engine, storage_registry: "StorageRegistry"
-) -> Generator[Session, None, None]:  # Depend on sqlalchemy_config to ensure setup runs
-    """Provides a SQLAlchemy session scoped to each function with fast cleanup."""
+@pytest.fixture(scope="session")
+def session(sync_db_engine: Engine, storage_registry: "StorageRegistry") -> Generator[Session, None, None]:
+    """Provides a SQLAlchemy session scoped to the test session."""
     with Session(sync_db_engine) as db_session:
         yield db_session
-    # Fast per-test cleanup without dropping schema
-    clean_tables(sync_db_engine, Base.metadata)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(scope="session")
 async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
-) -> AsyncGenerator[AsyncSession, None]:  # Depend on sqlalchemy_config to ensure setup runs
-    """Provides a SQLAlchemy session scoped to each function with fast cleanup."""
+) -> AsyncGenerator[AsyncSession, None]:
+    """Provides a SQLAlchemy session scoped to the test session."""
     # Create session with flag for listener to identify async operations
     set_async_context(True)
 
@@ -192,8 +188,6 @@ async def async_session(
 
     # Reset async context flag
     set_async_context(False)
-    # Fast per-test cleanup without dropping schema
-    await async_clean_tables(async_db_engine, Base.metadata)
 
 
 @pytest.mark.xdist_group("file_object")

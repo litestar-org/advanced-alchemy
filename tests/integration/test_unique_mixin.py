@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Hashable
+from collections.abc import AsyncGenerator, Generator, Hashable
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import ColumnElement, String, UniqueConstraint, create_engine, func, select
+import pytest_asyncio
+from sqlalchemy import ColumnElement, Engine, String, UniqueConstraint, create_engine, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy.base import BigIntBase, create_registry, orm_registry
+from advanced_alchemy import base, mixins
+from advanced_alchemy.base import create_registry
 from advanced_alchemy.exceptions import MultipleResultsFoundError
 from advanced_alchemy.mixins import UniqueMixin
 
@@ -34,8 +36,32 @@ def generate_mock_data() -> Iterator[list[dict[str, Any]]]:
 custom_registry = create_registry()
 
 
-class BigIntModelWithUniqueValue(UniqueMixin, BigIntBase):
+class CustomBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+    """Base for all SQLAlchemy declarative models with BigInt primary keys using custom registry."""
+
     registry = custom_registry
+
+
+@pytest.fixture(scope="session")
+def sync_engine() -> Generator[Engine, None, None]:
+    """Session-scoped sync engine for unique mixin testing."""
+    engine = create_engine("sqlite://")
+    custom_registry.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
+    """Session-scoped async engine for unique mixin testing."""
+    engine = create_async_engine("sqlite+aiosqlite://")
+    async with engine.begin() as conn:
+        await conn.run_sync(custom_registry.metadata.create_all)
+    yield engine
+    await engine.dispose()
+
+
+class BigIntModelWithUniqueValue(UniqueMixin, CustomBigIntBase):
     col_1: Mapped[int]
     col_2: Mapped[str] = mapped_column(String(50))
     col_3: Mapped[int]
@@ -51,9 +77,7 @@ class BigIntModelWithUniqueValue(UniqueMixin, BigIntBase):
         return (cls.col_1 == col_1) & (cls.col_3 == col_3)
 
 
-class BigIntModelWithMaybeUniqueValue(UniqueMixin, BigIntBase):
-    registry = custom_registry
-
+class BigIntModelWithMaybeUniqueValue(UniqueMixin, CustomBigIntBase):
     col_1: Mapped[int]
     col_2: Mapped[str] = mapped_column(String(50))
     col_3: Mapped[int]
@@ -68,24 +92,20 @@ class BigIntModelWithMaybeUniqueValue(UniqueMixin, BigIntBase):
 
 
 @pytest.mark.xdist_group("unique_mixin")
-def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
-    engine = create_engine("sqlite://")
-
-    orm_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+def test_as_unique_sync(sync_engine: Engine, rows: list[dict[str, Any]]) -> None:
+    with Session(sync_engine) as session:
         session.add_all(BigIntModelWithUniqueValue(**row) for row in rows)
         with pytest.raises(IntegrityError):
             # An exception should be raised when not using ``as_unique_sync``
             session.flush()
 
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         session.add_all(BigIntModelWithUniqueValue.as_unique_sync(session, **row) for row in rows)
         statement = select(func.count()).select_from(BigIntModelWithUniqueValue)
         count = session.scalar(statement)
         assert count == 2
 
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         # Add non unique rows on purpose to check if the mixin triggers ``MultipleResultsFound``
         session.add_all(BigIntModelWithMaybeUniqueValue(**row) for row in rows)
         # flush here so that when the mixin queries the db, the non unique rows are in the transaction
@@ -95,25 +115,20 @@ def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
 
 
 @pytest.mark.xdist_group("unique_mixin")
-async def test_as_unique_async(rows: list[dict[str, Any]]) -> None:
-    engine = create_async_engine("sqlite+aiosqlite://")
-
-    async with engine.begin() as conn:
-        await conn.run_sync(orm_registry.metadata.create_all)
-
-    async with AsyncSession(engine) as session:
+async def test_as_unique_async(async_engine: AsyncEngine, rows: list[dict[str, Any]]) -> None:
+    async with AsyncSession(async_engine) as session:
         session.add_all(BigIntModelWithUniqueValue(**row) for row in rows)
         with pytest.raises(IntegrityError):
             # An exception should be raised when not using ``as_unique_async``
             await session.flush()
 
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(async_engine) as session:
         session.add_all([await BigIntModelWithUniqueValue.as_unique_async(session, **row) for row in rows])
         statement = select(func.count()).select_from(BigIntModelWithUniqueValue)
         count = await session.scalar(statement)
         assert count == 2
 
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(async_engine) as session:
         # Add non unique rows on purpose to check if the mixin triggers ``MultipleResultsFound``
         session.add_all(BigIntModelWithMaybeUniqueValue(**row) for row in rows)
         # flush here so that when the mixin queries the db, the non unique rows are in the transaction

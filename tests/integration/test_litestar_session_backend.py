@@ -9,6 +9,7 @@ from typing import Optional, Union
 from unittest.mock import Mock
 
 import pytest
+import pytest_asyncio
 from litestar import Litestar, Request, get, post
 from litestar.middleware.session import SessionMiddleware
 from litestar.middleware.session.server_side import ServerSideSessionConfig
@@ -45,7 +46,7 @@ class SyncSessionModel(SessionModelMixin, UUIDv7Base):
     __tablename__ = "sync_test_sessions"
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope="session")
 async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
     """Create an async SQLite engine for testing."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -55,7 +56,7 @@ async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
     await engine.dispose()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def sync_engine() -> Generator[Engine, None, None]:
     """Create a sync SQLite engine for testing."""
     import os

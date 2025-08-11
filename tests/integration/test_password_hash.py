@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Optional
 
 import pytest
+import pytest_asyncio
 from passlib.context import CryptContext
 from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
-from sqlalchemy import String, create_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import Engine, String, create_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from advanced_alchemy.base import BigIntBase
@@ -41,16 +42,29 @@ class User(BigIntBase):
     __table_args__ = {"info": {"allow_eager": True}}
 
 
-@pytest.mark.xdist_group("sqlite")
-def test_password_hash_sync_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """Test password hashing with Argon2 and Passlib backends using SQLite."""
-    # Create engine and session
-    engine = create_engine(f"sqlite:///{tmp_path}/test_password.db", echo=False)
-    session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
+@pytest.fixture(scope="session")
+def sync_engine() -> Generator[Engine, None, None]:
+    """Session-scoped sync engine for password hash testing."""
+    engine = create_engine("sqlite:///sync_password_test.db", echo=False)
+    User.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
 
-    # Create tables
-    with engine.begin() as conn:
-        User.metadata.create_all(conn)
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
+    """Session-scoped async engine for password hash testing."""
+    engine = create_async_engine("sqlite+aiosqlite:///async_password_test.db", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(User.metadata.create_all)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.mark.xdist_group("sqlite")
+def test_password_hash_sync_sqlite(sync_engine: Engine, monkeypatch: MonkeyPatch) -> None:
+    """Test password hashing with Argon2 and Passlib backends using SQLite."""
+    session_factory: sessionmaker[Session] = sessionmaker(sync_engine, expire_on_commit=False)
 
     # Test with session
     with session_factory() as db_session:
@@ -110,15 +124,9 @@ def test_password_hash_sync_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> 
 
 
 @pytest.mark.xdist_group("sqlite")
-async def test_password_hash_async_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+async def test_password_hash_async_sqlite(async_engine: AsyncEngine, monkeypatch: MonkeyPatch) -> None:
     """Test password hashing with Argon2 and Passlib backends using async SQLite."""
-    # Create async engine and session
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test_password_async.db", echo=False)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(User.metadata.create_all)
+    session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
 
     # Test with async session
     async with session_factory() as db_session:
