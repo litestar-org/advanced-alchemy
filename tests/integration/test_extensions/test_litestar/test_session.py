@@ -352,6 +352,13 @@ async def test_async_session_backend_expiration(
     # Verify it exists
     retrieved_data = await backend.get(session_id, mock_store)
     dialect_name = getattr(async_engine.dialect, "name", "")
+
+    # Oracle may have timing issues with immediate retrieval
+    if dialect_name == "oracle" and retrieved_data is None:
+        # Give Oracle a moment to commit the transaction
+        await asyncio.sleep(0.1)
+        retrieved_data = await backend.get(session_id, mock_store)
+
     _handle_database_encoding(retrieved_data, data, dialect_name)
 
     # Wait for expiration

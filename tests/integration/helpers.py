@@ -987,6 +987,15 @@ class SQLiteCleaner(SyncDatabaseCleaner):
         # Disable foreign key checks temporarily
         self.connection.execute(text("PRAGMA foreign_keys = OFF"))
 
+        # Set more aggressive locking timeout for better concurrency
+        self.connection.execute(text("PRAGMA busy_timeout = 30000"))  # 30 seconds
+
+        # Try to set WAL mode, but ignore if it fails (e.g., database locked)
+        try:
+            self.connection.execute(text("PRAGMA journal_mode = WAL"))  # Write-Ahead Logging mode
+        except Exception as e:
+            logger.debug(f"Could not set WAL mode: {e}")
+
         try:
             # Delete in reverse dependency order
             for table in reversed(tables):
@@ -1000,6 +1009,10 @@ class SQLiteCleaner(SyncDatabaseCleaner):
                                 self.connection.rollback()
 
                         self.connection.execute(text(f"DELETE FROM {table}"))
+
+                        # Commit immediately after each DELETE to release locks
+                        if self.connection.in_transaction():
+                            self.connection.commit()
                         break
                     except Exception as e:
                         if "database is locked" in str(e) and attempt < self.max_retries - 1:
@@ -1010,13 +1023,10 @@ class SQLiteCleaner(SyncDatabaseCleaner):
                                     self.connection.rollback()
                             except Exception:
                                 pass
-                            time.sleep(self.retry_delay)
+                            # Exponential backoff
+                            time.sleep(self.retry_delay * (2**attempt))
                         else:
                             raise
-
-            # Final commit after all deletes
-            if self.connection.in_transaction():
-                self.connection.commit()
 
         finally:
             # Re-enable foreign key checks
@@ -2835,7 +2845,11 @@ def clean_tables(engine: Engine, metadata: MetaData) -> None:
             engine.url,
             poolclass=NullPool,  # Force new connections
             pool_pre_ping=True,
-            connect_args={"timeout": 20},  # Add timeout for locked databases
+            connect_args={
+                "timeout": 30,  # Increase timeout for locked databases
+                "check_same_thread": False,  # Allow connections from different threads
+                "isolation_level": None,  # Use autocommit mode
+            },
         )
         try:
             with cleanup_database(cleanup_engine) as cleaner:
