@@ -508,16 +508,16 @@ class AsyncDatabaseCleaner(DatabaseCleaner):
 
 
 class PostgreSQLCleaner(SyncDatabaseCleaner):
-    """PostgreSQL/CockroachDB synchronous cleaner using TRUNCATE CASCADE with sequence reset."""
+    """PostgreSQL/CockroachDB synchronous cleaner using DELETE with sequence reset."""
 
     @property
     def dialect_name(self) -> str:
         return "postgresql"
 
     def cleanup(self) -> CleanupStats:
-        """Clean PostgreSQL database using TRUNCATE CASCADE with sequence reset."""
+        """Clean PostgreSQL database using DELETE with sequence reset."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE CASCADE with sequence reset"
+        self.stats.strategy_used = "DELETE with sequence reset"
 
         try:
             tables = self.get_table_list()
@@ -532,7 +532,7 @@ class PostgreSQLCleaner(SyncDatabaseCleaner):
             # Perform cleanup with retry logic
             for attempt in range(self.max_retries + 1):
                 try:
-                    self._perform_truncate_cascade(ordered_tables)
+                    self._perform_delete_cascade(ordered_tables)
                     self._reset_sequences()
                     break
                 except exc.SQLAlchemyError as e:
@@ -575,8 +575,7 @@ class PostgreSQLCleaner(SyncDatabaseCleaner):
     def resolve_dependencies(self, tables: Sequence[str]) -> Sequence[str]:
         """Resolve PostgreSQL foreign key dependencies using topological sort."""
         try:
-            # For PostgreSQL, TRUNCATE CASCADE handles dependencies automatically
-            # But we still want to order by dependencies for better error handling
+            # For PostgreSQL, DELETE requires proper dependency ordering
             inspector = inspect(self.connection)
             dependency_graph: dict[str, list[str]] = {}
 
@@ -595,21 +594,16 @@ class PostgreSQLCleaner(SyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    def _perform_truncate_cascade(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE CASCADE on PostgreSQL tables."""
+    def _perform_delete_cascade(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations on PostgreSQL tables."""
         if not tables:
             return
 
-        # Use TRUNCATE CASCADE to handle all dependencies at once
-        table_list = ", ".join(f'"{table}"' for table in tables)
-        # CockroachDB doesn't support RESTART IDENTITY
-        if "cockroach" in str(self.connection.engine.url).lower():
-            sql = f"TRUNCATE TABLE {table_list} CASCADE"
-        else:
-            sql = f"TRUNCATE TABLE {table_list} RESTART IDENTITY CASCADE"
-
-        logger.debug(f"Executing: {sql}")
-        self.connection.execute(text(sql))
+        # Use DELETE statements in reverse dependency order
+        for table in reversed(tables):
+            sql = f'DELETE FROM "{table}"'
+            logger.debug(f"Executing: {sql}")
+            self.connection.execute(text(sql))
         self.connection.commit()
 
     def _reset_sequences(self) -> None:
@@ -637,7 +631,7 @@ class PostgreSQLCleaner(SyncDatabaseCleaner):
             logger.warning(f"Failed to reset sequences: {e}")
 
     def _fallback_delete(self, tables: Sequence[str]) -> None:
-        """Fallback to DELETE statements if TRUNCATE fails."""
+        """Fallback to DELETE statements if primary delete fails."""
         logger.info("Using DELETE fallback strategy")
         self.stats.strategy_used = "DELETE fallback"
 
@@ -697,16 +691,16 @@ class PostgreSQLCleaner(SyncDatabaseCleaner):
 
 
 class AsyncPostgreSQLCleaner(AsyncDatabaseCleaner):
-    """PostgreSQL/CockroachDB asynchronous cleaner using TRUNCATE CASCADE with sequence reset."""
+    """PostgreSQL/CockroachDB asynchronous cleaner using DELETE with sequence reset."""
 
     @property
     def dialect_name(self) -> str:
         return "postgresql"
 
     async def _perform_cleanup(self) -> CleanupStats:
-        """Clean PostgreSQL database asynchronously using TRUNCATE CASCADE."""
+        """Clean PostgreSQL database asynchronously using DELETE."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE CASCADE with sequence reset"
+        self.stats.strategy_used = "DELETE with sequence reset"
 
         try:
             tables = await self.get_table_list()
@@ -721,7 +715,7 @@ class AsyncPostgreSQLCleaner(AsyncDatabaseCleaner):
             # Perform cleanup with retry logic
             for attempt in range(self.max_retries + 1):
                 try:
-                    await self._perform_truncate_cascade(ordered_tables)
+                    await self._perform_delete_cascade(ordered_tables)
                     await self._reset_sequences()
                     break
                 except exc.SQLAlchemyError as e:
@@ -795,21 +789,16 @@ class AsyncPostgreSQLCleaner(AsyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    async def _perform_truncate_cascade(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE CASCADE on PostgreSQL tables asynchronously."""
+    async def _perform_delete_cascade(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations on PostgreSQL tables asynchronously."""
         if not tables:
             return
 
-        table_list = ", ".join(f'"{table}"' for table in tables)
-        # CockroachDB doesn't support RESTART IDENTITY
-        # For async connections, check the dialect name directly
-        if self.dialect_name == "cockroach":
-            sql = f"TRUNCATE TABLE {table_list} CASCADE"
-        else:
-            sql = f"TRUNCATE TABLE {table_list} RESTART IDENTITY CASCADE"
-
-        logger.debug(f"Executing: {sql}")
-        await self.connection.execute(text(sql))
+        # Use DELETE statements in reverse dependency order
+        for table in reversed(tables):
+            sql = f'DELETE FROM "{table}"'
+            logger.debug(f"Executing: {sql}")
+            await self.connection.execute(text(sql))
         await self.connection.commit()
 
     async def _reset_sequences(self) -> None:
@@ -836,7 +825,7 @@ class AsyncPostgreSQLCleaner(AsyncDatabaseCleaner):
             logger.warning(f"Failed to reset sequences: {e}")
 
     async def _fallback_delete(self, tables: Sequence[str]) -> None:
-        """Fallback to DELETE statements if TRUNCATE fails."""
+        """Fallback to DELETE statements if primary delete fails."""
         logger.info("Using DELETE fallback strategy")
         self.stats.strategy_used = "DELETE fallback"
 
@@ -930,7 +919,7 @@ class SQLiteCleaner(SyncDatabaseCleaner):
             ordered_tables = self.resolve_dependencies(tables)
             self.stats.tables_cleaned = len(ordered_tables)
 
-            # SQLite doesn't support TRUNCATE, use DELETE
+            # SQLite cleanup using DELETE operations
             self._perform_delete(ordered_tables)
             self._reset_autoincrement()
 
@@ -1226,16 +1215,16 @@ class AsyncSQLiteCleaner(AsyncDatabaseCleaner):
 
 
 class MySQLCleaner(SyncDatabaseCleaner):
-    """MySQL/MariaDB synchronous cleaner using TRUNCATE with FK bypass and AUTO_INCREMENT reset."""
+    """MySQL/MariaDB synchronous cleaner using DELETE with FK bypass and AUTO_INCREMENT reset."""
 
     @property
     def dialect_name(self) -> str:
         return "mysql"
 
     def cleanup(self) -> CleanupStats:
-        """Clean MySQL database using TRUNCATE with foreign key bypass."""
+        """Clean MySQL database using DELETE with foreign key bypass."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE with FK bypass and AUTO_INCREMENT reset"
+        self.stats.strategy_used = "DELETE with FK bypass and AUTO_INCREMENT reset"
 
         try:
             tables = self.get_table_list()
@@ -1249,7 +1238,7 @@ class MySQLCleaner(SyncDatabaseCleaner):
             # MySQL cleanup with retry
             for attempt in range(self.max_retries + 1):
                 try:
-                    self._perform_truncate(ordered_tables)
+                    self._perform_delete(ordered_tables)
                     break
                 except exc.SQLAlchemyError as e:
                     self.stats.errors_encountered += 1
@@ -1317,14 +1306,16 @@ class MySQLCleaner(SyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE operations on MySQL tables."""
+    def _perform_delete(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations on MySQL tables."""
         # Disable foreign key checks
         self.connection.execute(text("SET foreign_key_checks = 0"))
 
         try:
-            for table in tables:
-                self.connection.execute(text(f"TRUNCATE TABLE `{table}`"))
+            for table in reversed(tables):
+                self.connection.execute(text(f"DELETE FROM `{table}`"))
+                # Reset AUTO_INCREMENT manually
+                self.connection.execute(text(f"ALTER TABLE `{table}` AUTO_INCREMENT = 1"))
 
             self.connection.commit()
         finally:
@@ -1332,7 +1323,7 @@ class MySQLCleaner(SyncDatabaseCleaner):
             self.connection.execute(text("SET foreign_key_checks = 1"))
 
     def _fallback_delete(self, tables: Sequence[str]) -> None:
-        """Fallback to DELETE if TRUNCATE fails."""
+        """Fallback to DELETE statements if primary delete fails."""
         logger.info("Using DELETE fallback strategy")
         self.stats.strategy_used = "DELETE fallback"
 
@@ -1391,7 +1382,7 @@ class MySQLCleaner(SyncDatabaseCleaner):
 
 
 class AsyncMySQLCleaner(AsyncDatabaseCleaner):
-    """MySQL/MariaDB asynchronous cleaner using TRUNCATE with FK bypass."""
+    """MySQL/MariaDB asynchronous cleaner using DELETE with FK bypass."""
 
     @property
     def dialect_name(self) -> str:
@@ -1400,7 +1391,7 @@ class AsyncMySQLCleaner(AsyncDatabaseCleaner):
     async def _perform_cleanup(self) -> CleanupStats:
         """Clean MySQL database asynchronously."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE with FK bypass and AUTO_INCREMENT reset"
+        self.stats.strategy_used = "DELETE with FK bypass and AUTO_INCREMENT reset"
 
         try:
             tables = await self.get_table_list()
@@ -1413,7 +1404,7 @@ class AsyncMySQLCleaner(AsyncDatabaseCleaner):
 
             for attempt in range(self.max_retries + 1):
                 try:
-                    await self._perform_truncate(ordered_tables)
+                    await self._perform_delete(ordered_tables)
                     break
                 except exc.SQLAlchemyError as e:
                     self.stats.errors_encountered += 1
@@ -1481,20 +1472,21 @@ class AsyncMySQLCleaner(AsyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    async def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE operations asynchronously."""
+    async def _perform_delete(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations asynchronously."""
         await self.connection.execute(text("SET foreign_key_checks = 0"))
 
         try:
-            for table in tables:
-                await self.connection.execute(text(f"TRUNCATE TABLE `{table}`"))
+            for table in reversed(tables):
+                await self.connection.execute(text(f"DELETE FROM `{table}`"))
+                await self.connection.execute(text(f"ALTER TABLE `{table}` AUTO_INCREMENT = 1"))
 
             await self.connection.commit()
         finally:
             await self.connection.execute(text("SET foreign_key_checks = 1"))
 
     async def _fallback_delete(self, tables: Sequence[str]) -> None:
-        """Fallback to DELETE if TRUNCATE fails."""
+        """Fallback to DELETE statements if primary delete fails."""
         logger.info("Using DELETE fallback strategy")
         self.stats.strategy_used = "DELETE fallback"
 
@@ -1552,16 +1544,16 @@ class AsyncMySQLCleaner(AsyncDatabaseCleaner):
 
 
 class OracleCleaner(SyncDatabaseCleaner):
-    """Oracle synchronous cleaner using TRUNCATE with constraint management."""
+    """Oracle synchronous cleaner using DELETE with constraint management."""
 
     @property
     def dialect_name(self) -> str:
         return "oracle"
 
     def cleanup(self) -> CleanupStats:
-        """Clean Oracle database using TRUNCATE with constraint management."""
+        """Clean Oracle database using DELETE with constraint management."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE with constraint management"
+        self.stats.strategy_used = "DELETE with constraint management"
 
         try:
             tables = self.get_table_list()
@@ -1574,7 +1566,7 @@ class OracleCleaner(SyncDatabaseCleaner):
 
             for attempt in range(self.max_retries + 1):
                 try:
-                    self._perform_truncate(ordered_tables)
+                    self._perform_delete(ordered_tables)
                     break
                 except exc.SQLAlchemyError as e:
                     self.stats.errors_encountered += 1
@@ -1643,11 +1635,11 @@ class OracleCleaner(SyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform DELETE operations on Oracle tables (TRUNCATE avoided due to table locking issues)."""
+    def _perform_delete(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations on Oracle tables."""
         for table in reversed(tables):
             try:
-                # Use DELETE instead of TRUNCATE to avoid table locking issues with reserved words
+                # Use DELETE operations with proper quoting for reserved words
                 self.connection.execute(text(f'DELETE FROM "{table}"'))
             except Exception as e:
                 logger.warning(f"Failed to delete from {table}: {e}")
@@ -1708,7 +1700,7 @@ class OracleCleaner(SyncDatabaseCleaner):
 
 
 class AsyncOracleCleaner(AsyncDatabaseCleaner):
-    """Oracle asynchronous cleaner using TRUNCATE with constraint management."""
+    """Oracle asynchronous cleaner using DELETE with constraint management."""
 
     @property
     def dialect_name(self) -> str:
@@ -1717,7 +1709,7 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
     async def _perform_cleanup(self) -> CleanupStats:
         """Clean Oracle database asynchronously."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE with constraint management"
+        self.stats.strategy_used = "DELETE with constraint management"
 
         try:
             tables = await self.get_table_list()
@@ -1730,7 +1722,7 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
 
             for attempt in range(self.max_retries + 1):
                 try:
-                    await self._perform_truncate(ordered_tables)
+                    await self._perform_delete(ordered_tables)
                     break
                 except exc.SQLAlchemyError as e:
                     self.stats.errors_encountered += 1
@@ -1799,11 +1791,11 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    async def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform DELETE operations asynchronously (TRUNCATE avoided due to table locking issues)."""
+    async def _perform_delete(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations asynchronously."""
         for table in reversed(tables):
             try:
-                # Use DELETE instead of TRUNCATE to avoid table locking issues with reserved words
+                # Use DELETE operations with proper quoting for reserved words
                 await self.connection.execute(text(f'DELETE FROM "{table}"'))
             except Exception as e:
                 logger.warning(f"Failed to delete from {table}: {e}")
@@ -1864,16 +1856,16 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
 
 
 class MSSQLCleaner(SyncDatabaseCleaner):
-    """MS SQL Server synchronous cleaner using TRUNCATE with IDENTITY reset."""
+    """MS SQL Server synchronous cleaner using DELETE with IDENTITY reset."""
 
     @property
     def dialect_name(self) -> str:
         return "mssql"
 
     def cleanup(self) -> CleanupStats:
-        """Clean MS SQL Server database using TRUNCATE with IDENTITY reset."""
+        """Clean MS SQL Server database using DELETE with IDENTITY reset."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE with IDENTITY reset"
+        self.stats.strategy_used = "DELETE with IDENTITY reset"
 
         try:
             tables = self.get_table_list()
@@ -1886,7 +1878,7 @@ class MSSQLCleaner(SyncDatabaseCleaner):
 
             for attempt in range(self.max_retries + 1):
                 try:
-                    self._perform_truncate(ordered_tables)
+                    self._perform_delete(ordered_tables)
                     break
                 except exc.SQLAlchemyError as e:
                     self.stats.errors_encountered += 1
@@ -1957,21 +1949,16 @@ class MSSQLCleaner(SyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE operations on MS SQL Server tables."""
+    def _perform_delete(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations on MS SQL Server tables."""
         # Disable foreign key constraints
         self.connection.execute(text("EXEC sp_MSForEachTable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL'"))
 
         try:
             for table in reversed(tables):
-                try:
-                    # Try TRUNCATE first (resets IDENTITY automatically)
-                    self.connection.execute(text(f"TRUNCATE TABLE [{table}]"))
-                except Exception as e:
-                    logger.warning(f"Failed to truncate {table}: {e}, using DELETE")
-                    # Fallback to DELETE with manual IDENTITY reset
-                    self.connection.execute(text(f"DELETE FROM [{table}]"))
-                    self.connection.execute(text(f"DBCC CHECKIDENT('{table}', RESEED, 0)"))
+                self.connection.execute(text(f"DELETE FROM [{table}]"))
+                # Reset IDENTITY manually
+                self.connection.execute(text(f"DBCC CHECKIDENT('{table}', RESEED, 0)"))
 
             self.connection.commit()
         finally:
@@ -1979,7 +1966,7 @@ class MSSQLCleaner(SyncDatabaseCleaner):
             self.connection.execute(text("EXEC sp_MSForEachTable 'ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL'"))
 
     def _fallback_delete(self, tables: Sequence[str]) -> None:
-        """Fallback to DELETE for MS SQL Server tables."""
+        """Fallback to DELETE statements if primary delete fails."""
         logger.info("Using DELETE fallback strategy")
         self.stats.strategy_used = "DELETE fallback"
 
@@ -2032,7 +2019,7 @@ class MSSQLCleaner(SyncDatabaseCleaner):
 
 
 class AsyncMSSQLCleaner(AsyncDatabaseCleaner):
-    """MS SQL Server asynchronous cleaner using TRUNCATE with IDENTITY reset."""
+    """MS SQL Server asynchronous cleaner using DELETE with IDENTITY reset."""
 
     @property
     def dialect_name(self) -> str:
@@ -2041,7 +2028,7 @@ class AsyncMSSQLCleaner(AsyncDatabaseCleaner):
     async def _perform_cleanup(self) -> CleanupStats:
         """Clean MS SQL Server database asynchronously."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE with IDENTITY reset"
+        self.stats.strategy_used = "DELETE with IDENTITY reset"
 
         try:
             tables = await self.get_table_list()
@@ -2054,7 +2041,7 @@ class AsyncMSSQLCleaner(AsyncDatabaseCleaner):
 
             for attempt in range(self.max_retries + 1):
                 try:
-                    await self._perform_truncate(ordered_tables)
+                    await self._perform_delete(ordered_tables)
                     break
                 except exc.SQLAlchemyError as e:
                     self.stats.errors_encountered += 1
@@ -2125,18 +2112,14 @@ class AsyncMSSQLCleaner(AsyncDatabaseCleaner):
             logger.warning(f"Failed to resolve dependencies: {e}, using original order")
             return list(tables)
 
-    async def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE operations asynchronously."""
+    async def _perform_delete(self, tables: Sequence[str]) -> None:
+        """Perform DELETE operations asynchronously."""
         await self.connection.execute(text("EXEC sp_MSForEachTable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL'"))
 
         try:
             for table in reversed(tables):
-                try:
-                    await self.connection.execute(text(f"TRUNCATE TABLE [{table}]"))
-                except Exception as e:
-                    logger.warning(f"Failed to truncate {table}: {e}, using DELETE")
-                    await self.connection.execute(text(f"DELETE FROM [{table}]"))
-                    await self.connection.execute(text(f"DBCC CHECKIDENT('{table}', RESEED, 0)"))
+                await self.connection.execute(text(f"DELETE FROM [{table}]"))
+                await self.connection.execute(text(f"DBCC CHECKIDENT('{table}', RESEED, 0)"))
 
             await self.connection.commit()
         finally:
@@ -2145,7 +2128,7 @@ class AsyncMSSQLCleaner(AsyncDatabaseCleaner):
             )
 
     async def _fallback_delete(self, tables: Sequence[str]) -> None:
-        """Fallback to DELETE for MS SQL Server tables."""
+        """Fallback to DELETE statements if primary delete fails."""
         logger.info("Using DELETE fallback strategy")
         self.stats.strategy_used = "DELETE fallback"
 
@@ -2198,16 +2181,16 @@ class AsyncMSSQLCleaner(AsyncDatabaseCleaner):
 
 
 class DuckDBCleaner(SyncDatabaseCleaner):
-    """DuckDB synchronous cleaner using simple TRUNCATE/DELETE."""
+    """DuckDB synchronous cleaner using simple DELETE."""
 
     @property
     def dialect_name(self) -> str:
         return "duckdb"
 
     def cleanup(self) -> CleanupStats:
-        """Clean DuckDB database using simple TRUNCATE or DELETE."""
+        """Clean DuckDB database using simple DELETE."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE/DELETE"
+        self.stats.strategy_used = "DELETE"
 
         try:
             tables = self.get_table_list()
@@ -2257,17 +2240,12 @@ class DuckDBCleaner(SyncDatabaseCleaner):
 
     def _perform_cleanup_operations(self, tables: Sequence[str]) -> None:
         """Perform cleanup operations on DuckDB tables."""
-        for table in tables:
+        for table in reversed(tables):
             try:
-                # Try TRUNCATE first
-                self.connection.execute(text(f'TRUNCATE TABLE "{table}"'))
-            except Exception as e:
-                logger.warning(f"TRUNCATE failed for {table}: {e}, using DELETE")
-                try:
-                    self.connection.execute(text(f'DELETE FROM "{table}"'))
-                except Exception as delete_e:
-                    logger.error(f"Failed to clean table {table}: {delete_e}")
-                    self.stats.errors_encountered += 1
+                self.connection.execute(text(f'DELETE FROM "{table}"'))
+            except Exception as delete_e:
+                logger.error(f"Failed to clean table {table}: {delete_e}")
+                self.stats.errors_encountered += 1
 
         self.connection.commit()
 
@@ -2286,7 +2264,7 @@ class DuckDBCleaner(SyncDatabaseCleaner):
 
 
 class AsyncDuckDBCleaner(AsyncDatabaseCleaner):
-    """DuckDB asynchronous cleaner using simple TRUNCATE/DELETE."""
+    """DuckDB asynchronous cleaner using simple DELETE."""
 
     @property
     def dialect_name(self) -> str:
@@ -2295,7 +2273,7 @@ class AsyncDuckDBCleaner(AsyncDatabaseCleaner):
     async def _perform_cleanup(self) -> CleanupStats:
         """Clean DuckDB database asynchronously."""
         start_time = time.time()
-        self.stats.strategy_used = "TRUNCATE/DELETE"
+        self.stats.strategy_used = "DELETE"
 
         try:
             tables = await self.get_table_list()
@@ -2345,16 +2323,12 @@ class AsyncDuckDBCleaner(AsyncDatabaseCleaner):
 
     async def _perform_cleanup_operations(self, tables: Sequence[str]) -> None:
         """Perform cleanup operations asynchronously."""
-        for table in tables:
+        for table in reversed(tables):
             try:
-                await self.connection.execute(text(f'TRUNCATE TABLE "{table}"'))
-            except Exception as e:
-                logger.warning(f"TRUNCATE failed for {table}: {e}, using DELETE")
-                try:
-                    await self.connection.execute(text(f'DELETE FROM "{table}"'))
-                except Exception as delete_e:
-                    logger.error(f"Failed to clean table {table}: {delete_e}")
-                    self.stats.errors_encountered += 1
+                await self.connection.execute(text(f'DELETE FROM "{table}"'))
+            except Exception as delete_e:
+                logger.error(f"Failed to clean table {table}: {delete_e}")
+                self.stats.errors_encountered += 1
 
         await self.connection.commit()
 
@@ -2373,7 +2347,7 @@ class AsyncDuckDBCleaner(AsyncDatabaseCleaner):
 
 
 class SpannerCleaner(SyncDatabaseCleaner):
-    """Google Cloud Spanner synchronous cleaner using DELETE (no TRUNCATE support)."""
+    """Google Cloud Spanner synchronous cleaner using DELETE operations."""
 
     @property
     def dialect_name(self) -> str:
@@ -2382,7 +2356,7 @@ class SpannerCleaner(SyncDatabaseCleaner):
     def cleanup(self) -> CleanupStats:
         """Clean Spanner database using DELETE statements."""
         start_time = time.time()
-        self.stats.strategy_used = "DELETE (no TRUNCATE support)"
+        self.stats.strategy_used = "DELETE operations"
 
         try:
             tables = self.get_table_list()
@@ -2514,7 +2488,7 @@ class AsyncSpannerCleaner(AsyncDatabaseCleaner):
     async def _perform_cleanup(self) -> CleanupStats:
         """Clean Spanner database asynchronously."""
         start_time = time.time()
-        self.stats.strategy_used = "DELETE (no TRUNCATE support)"
+        self.stats.strategy_used = "DELETE operations"
 
         try:
             tables = await self.get_table_list()

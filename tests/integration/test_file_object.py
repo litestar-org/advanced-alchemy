@@ -1015,13 +1015,14 @@ async def test_obstore_backend_storage_registry_management(storage_registry: Sto
         storage_registry.register_backend(test_backend, key="invalid_key")  # type: ignore[arg-type]
 
     # Restore the original backends for session-scoped fixture compatibility
-    from obstore.store import LocalStore, MemoryStore
     import tempfile
-    
+
+    from obstore.store import LocalStore, MemoryStore
+
     # Re-register the memory backend
     if not storage_registry.is_registered("memory"):
         storage_registry.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
-    
+
     # Re-register the local_test_store backend
     if not storage_registry.is_registered("local_test_store"):
         storage_dir = tempfile.mkdtemp(prefix="file_object_test_storage_")
