@@ -331,9 +331,12 @@ def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
             # Clean all tables (no include_only filter)
             cleaner.include_only = None
             cleaner.cleanup()
-    except Exception:
-        # Ignore all cleanup errors for speed - they don't affect test results
-        pass
+    except Exception as e:
+        # Log cleanup errors to understand what's failing but continue
+        import logging
+
+        logging.getLogger(__name__).debug(f"Cleanup failed for engine: {e}")
+        # Continue without raising to maintain test performance
 
 
 @pytest.fixture(autouse=True)
@@ -347,16 +350,21 @@ async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, 
 
     if "async_engine" not in request.fixturenames:
         return
+
     try:
         async_engine = cast(AsyncEngine, request.getfixturevalue("async_engine"))
         if getattr(async_engine.dialect, "name", "") == "mock":
             return
+
         async with test_helpers.cleanup_database_async(async_engine) as cleaner:
             cleaner.include_only = None
             await cleaner.cleanup()
-    except Exception:
-        # Ignore all cleanup errors for speed - they don't affect test results
-        pass
+    except Exception as e:
+        # Log cleanup errors to understand what's failing but continue
+        import logging
+
+        logging.getLogger(__name__).debug(f"Async cleanup failed: {e}")
+        # Continue without raising to maintain test performance
 
 
 @pytest_asyncio.fixture(loop_scope="session")

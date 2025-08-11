@@ -9,7 +9,7 @@ from sqlalchemy import Engine, String, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy.base import BigIntBase
+from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
     BeforeAfter,
     CollectionFilter,
@@ -36,19 +36,20 @@ if TYPE_CHECKING:
 _movie_model_cache: dict[str, type] = {}
 
 
-@pytest.fixture(scope="session")
-def cached_movie_model(request: FixtureRequest) -> type[DeclarativeBase]:
-    """Create Movie model once per session/worker."""
-    worker_id = get_worker_id(request)
-    cache_key = f"movie_{worker_id}"
+def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type[DeclarativeBase]:
+    """Create appropriate Movie model based on engine dialect."""
+    cache_key = f"movie_{worker_id}_{engine_dialect_name}"
 
     if cache_key not in _movie_model_cache:
-
+        # Create unique base class with its own metadata for each engine
         class TestBase(DeclarativeBase):
             pass
 
-        class Movie(BigIntBase, TestBase):
-            __tablename__ = f"test_movies_{worker_id}"
+        # Use UUID base for CockroachDB and Spanner, BigInt for others
+        base_class = UUIDAuditBase if engine_dialect_name.startswith(("cockroach", "spanner")) else BigIntBase
+
+        class Movie(base_class, TestBase):
+            __tablename__ = f"test_movies_{worker_id}_{engine_dialect_name}"
             __mapper_args__ = {"concrete": True}
 
             title: Mapped[str] = mapped_column(String(length=100))
@@ -60,22 +61,35 @@ def cached_movie_model(request: FixtureRequest) -> type[DeclarativeBase]:
     return _movie_model_cache[cache_key]
 
 
+@pytest.fixture(scope="session")
+def cached_movie_model(request: FixtureRequest) -> type[DeclarativeBase]:
+    """Create Movie model once per session/worker - placeholder."""
+    # This will be replaced by movie_model_sync/async fixtures
+    return None
+
+
 @pytest.fixture
 def movie_model_sync(
-    cached_movie_model: type[DeclarativeBase],
     engine: Engine,
+    request: FixtureRequest,
 ) -> Generator[type[DeclarativeBase], None, None]:
     """Setup movie table for sync engines with fast cleanup."""
-    # Skip for mock engines
-    if getattr(engine.dialect, "name", "") != "mock":
-        # Create table once per engine type
-        cached_movie_model.metadata.create_all(engine)
+    worker_id = get_worker_id(request)
+    engine_dialect_name = getattr(engine.dialect, "name", "mock")
 
-    yield cached_movie_model
+    # Get the appropriate model for this engine type
+    movie_model = get_movie_model_for_engine(engine_dialect_name, worker_id)
+
+    # Skip for mock engines
+    if engine_dialect_name != "mock":
+        # Create table once per engine type
+        movie_model.metadata.create_all(engine)
+
+    yield movie_model
 
     # Fast data-only cleanup between tests
-    if getattr(engine.dialect, "name", "") != "mock":
-        clean_tables(engine, cached_movie_model.metadata)
+    if engine_dialect_name != "mock":
+        clean_tables(engine, movie_model.metadata)
 
 
 @pytest.fixture
@@ -97,73 +111,160 @@ async def movie_model_async(
         await async_clean_tables(async_engine, cached_movie_model.metadata)
 
 
-@pytest.fixture()
-def db_session(
-    movie_model_sync: type[DeclarativeBase],
-    session: Session,
-) -> Generator[Session, None, None]:
-    """Provide session with test data."""
-    # Skip for mock engines
-    if getattr(session.bind.dialect, "name", "") != "mock":
-        # Add test data
-        Movie = movie_model_sync
-        movie1 = Movie(title="The Matrix", release_date=datetime(1999, 3, 31, tzinfo=timezone.utc), genre="Action")
-        movie2 = Movie(title="The Hangover", release_date=datetime(2009, 6, 1, tzinfo=timezone.utc), genre="Comedy")
-        movie3 = Movie(
-            title="Shawshank Redemption", release_date=datetime(1994, 10, 14, tzinfo=timezone.utc), genre="Drama"
-        )
-        session.add_all([movie1, movie2, movie3])
-        session.commit()
+def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> None:
+    """Add test data to the session."""
+    dialect_name = getattr(session.bind.dialect, "name", "")
+    if dialect_name == "mock":
+        # For mock engines, configure the mock to return expected data
+        mock_movies = [
+            type(
+                "Movie",
+                (),
+                {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
+            ),
+            type(
+                "Movie",
+                (),
+                {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc), "genre": "Comedy"},
+            ),
+            type(
+                "Movie",
+                (),
+                {
+                    "title": "Shawshank Redemption",
+                    "release_date": datetime(1994, 10, 14, tzinfo=timezone.utc),
+                    "genre": "Drama",
+                },
+            ),
+        ]
+        session.execute.return_value.scalars.return_value.all.return_value = mock_movies
+        return
 
-    yield session
+    Movie = movie_model
 
-    # Cleanup is handled by movie_model_sync fixture
+    # CockroachDB and Spanner require UUID primary keys to be provided
+    dialect_name = getattr(session.bind.dialect, "name", "")
+    movie_data = [
+        {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
+        {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc), "genre": "Comedy"},
+        {
+            "title": "Shawshank Redemption",
+            "release_date": datetime(1994, 10, 14, tzinfo=timezone.utc),
+            "genre": "Drama",
+        },
+    ]
+
+    if dialect_name.startswith(("cockroach", "spanner")):
+        # For UUID-based models, generate IDs
+        from advanced_alchemy.base import UUIDAuditBase
+
+        if issubclass(Movie, UUIDAuditBase):
+            import uuid
+
+            for data in movie_data:
+                data["id"] = str(uuid.uuid4())
+
+    movies = [Movie(**data) for data in movie_data]
+    session.add_all(movies)
+    session.commit()
 
 
-def test_before_after_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_before_after_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
     before_after_filter = BeforeAfter(
         field_name="release_date", before=datetime(1999, 3, 31, tzinfo=timezone.utc), after=None
     )
     statement = before_after_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
 
 
-def test_on_before_after_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_on_before_after_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
     on_before_after_filter = OnBeforeAfter(
         field_name="release_date", on_or_before=None, on_or_after=datetime(1999, 3, 31, tzinfo=timezone.utc)
     )
     statement = on_before_after_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_collection_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_collection_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     collection_filter = CollectionFilter(field_name="title", values=["The Matrix", "Shawshank Redemption"])
     statement = collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_not_in_collection_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_not_in_collection_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     not_in_collection_filter = NotInCollectionFilter(field_name="title", values=["The Hangover"])
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_exists_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_exists_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test EXISTS with a condition that is true for at least one row
     # Should return all rows because the subquery finds a match
     exists_filter_1 = ExistsFilter(values=[Movie.genre == "Action"])
     # For correlated subquery: Should return only rows where the condition is true
     statement = exists_filter_1.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
 
     # Test EXISTS with multiple conditions using AND (default) that are true for different rows
@@ -171,7 +272,7 @@ def test_exists_filter(db_session: Session, movie_model_sync: type[DeclarativeBa
     exists_filter_2 = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "Drama"])
     # For correlated subquery: Should return only rows where BOTH conditions are true (none)
     statement = exists_filter_2.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 0
 
     # Test EXISTS with a condition that is never true
@@ -179,23 +280,33 @@ def test_exists_filter(db_session: Session, movie_model_sync: type[DeclarativeBa
     exists_filter_3 = ExistsFilter(values=[Movie.genre == "SciFi"])
     # For correlated subquery: Should return only rows where the condition is true (none)
     statement = exists_filter_3.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 0
 
 
-def test_exists_filter_operators(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_exists_filter_operators(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test EXISTS with OR operator - condition is true
     exists_filter_or = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "SciFi"], operator="or")
     # For correlated subquery: Should return rows where EITHER condition is true (only Action movie)
     statement = exists_filter_or.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
 
     exists_filter_or_2 = ExistsFilter(values=[Movie.genre == "Action", Movie.genre == "Drama"], operator="or")
     # For correlated subquery: Should return rows where EITHER condition is true (only Action movie)
     statement = exists_filter_or_2.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
     # Test EXISTS with AND operator - conditions never true simultaneously
@@ -204,18 +315,28 @@ def test_exists_filter_operators(db_session: Session, movie_model_sync: type[Dec
     )
     # For correlated subquery: Should return rows where BOTH conditions are true (none)
     statement = exists_filter_and.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 0
 
 
-def test_not_exists_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_not_exists_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test NOT EXISTS with a condition that is true for at least one row
     # Should return no rows because the subquery finds a match
     not_exists_filter_true = NotExistsFilter(values=[Movie.title.like("%Hangover%")])
     # For correlated subquery: Should return rows where condition is FALSE (Matrix, Shawshank)
     statement = not_exists_filter_true.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
     # Test NOT EXISTS with a condition that is never true
@@ -223,17 +344,27 @@ def test_not_exists_filter(db_session: Session, movie_model_sync: type[Declarati
     not_exists_filter_false = NotExistsFilter(values=[Movie.title == "NonExistentMovie"])
     # For correlated subquery: Should return rows where condition is FALSE (all movies)
     statement = not_exists_filter_false.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 3
 
 
-def test_not_exists_filter_operators(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_not_exists_filter_operators(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test NOT EXISTS with OR operator - Should return rows where NEITHER condition is true
     not_exists_filter_or = NotExistsFilter(values=[Movie.genre == "Comedy", Movie.genre == "SciFi"], operator="or")
     # For correlated subquery: Should return rows where NEITHER condition is true (Action, Drama)
     statement = not_exists_filter_or.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
     # Test NOT EXISTS with AND operator - Should return rows where NOT BOTH conditions are true
@@ -242,40 +373,80 @@ def test_not_exists_filter_operators(db_session: Session, movie_model_sync: type
     )
     # For correlated subquery: Should return rows where NOT BOTH conditions are true (all)
     statement = not_exists_filter_and.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 3
 
 
-def test_limit_offset_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_limit_offset_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     limit_offset_filter = LimitOffset(limit=2, offset=1)
     statement = limit_offset_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
 
-def test_order_by_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_order_by_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     order_by_filter = OrderBy(field_name="release_date", sort_order="asc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert results[0].title == "Shawshank Redemption"
     order_by_filter = OrderBy(field_name="release_date", sort_order="desc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert results[0].title == "The Hangover"
 
 
-def test_search_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     search_filter = SearchFilter(field_name="title", value="Hangover")
     statement = search_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
 
 
-def test_filter_group_logical_operators(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_filter_group_logical_operators(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test AND operator
     before_2000 = BeforeAfter(field_name="release_date", before=datetime(2000, 1, 1, tzinfo=timezone.utc), after=None)
     has_the_in_title = SearchFilter(field_name="title", value="The", ignore_case=True)
@@ -287,7 +458,7 @@ def test_filter_group_logical_operators(db_session: Session, movie_model_sync: t
     )
 
     statement = and_filter_group.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
     assert results[0].title == "The Matrix"
 
@@ -301,13 +472,23 @@ def test_filter_group_logical_operators(db_session: Session, movie_model_sync: t
     )
 
     statement = or_filter_group.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_multi_filter_basic(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_basic(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test basic MultiFilter with AND condition
     multi_filter = MultiFilter(
         filters={
@@ -324,7 +505,7 @@ def test_multi_filter_basic(db_session: Session, movie_model_sync: type[Declarat
     )
 
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
     assert results[0].title == "The Matrix"
 
@@ -344,13 +525,23 @@ def test_multi_filter_basic(db_session: Session, movie_model_sync: type[Declarat
     )
 
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_multi_filter_nested(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_nested(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     # Test nested AND/OR conditions
     multi_filter = MultiFilter(
         filters={
@@ -374,31 +565,51 @@ def test_multi_filter_nested(db_session: Session, movie_model_sync: type[Declara
     )
 
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "The Hangover"}
 
 
-def test_multi_filter_empty_filters(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_empty_filters(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test MultiFilter with empty filter lists."""
     # Test with empty filter list
     multi_filter = MultiFilter(filters={"and_": []})
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since no filters are applied
     assert len(results) == 3
 
     # Test with empty filters dict
     multi_filter = MultiFilter(filters={})
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since no filters are applied
     assert len(results) == 3
 
 
-def test_multi_filter_invalid_filter_type(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_invalid_filter_type(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test MultiFilter with invalid filter types."""
     # Test with non-existent filter type
     multi_filter = MultiFilter(
@@ -413,7 +624,7 @@ def test_multi_filter_invalid_filter_type(db_session: Session, movie_model_sync:
         }
     )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since invalid filter is ignored
     assert len(results) == 3
 
@@ -429,13 +640,23 @@ def test_multi_filter_invalid_filter_type(db_session: Session, movie_model_sync:
         }
     )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since invalid filter is ignored
     assert len(results) == 3
 
 
-def test_multi_filter_invalid_filter_args(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_invalid_filter_args(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test MultiFilter with invalid filter arguments."""
     # Test with missing required field
     multi_filter = MultiFilter(
@@ -450,7 +671,7 @@ def test_multi_filter_invalid_filter_args(db_session: Session, movie_model_sync:
         }
     )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since invalid filter is ignored
     assert len(results) == 3
 
@@ -466,13 +687,23 @@ def test_multi_filter_invalid_filter_args(db_session: Session, movie_model_sync:
         }
     )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since invalid filter is ignored
     assert len(results) == 3
 
 
-def test_multi_filter_invalid_logical_operator(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_invalid_logical_operator(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test MultiFilter with invalid logical operators."""
     # Test with non-existent logical operator
     multi_filter = MultiFilter(
@@ -487,13 +718,23 @@ def test_multi_filter_invalid_logical_operator(db_session: Session, movie_model_
         }
     )
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should return all movies since invalid operator is ignored
     assert len(results) == 3
 
 
-def test_multi_filter_complex_nested(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_complex_nested(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test MultiFilter with complex nested conditions."""
     multi_filter = MultiFilter(
         filters={
@@ -519,15 +760,25 @@ def test_multi_filter_complex_nested(db_session: Session, movie_model_sync: type
     )
 
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should match "The Matrix" (before 2000 AND has "The" in title)
     # and "Shawshank Redemption" (before 2000 AND is a drama)
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
 
-def test_multi_filter_all_filter_types(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_multi_filter_all_filter_types(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test MultiFilter with all supported filter types."""
     multi_filter = MultiFilter(
         filters={
@@ -594,26 +845,36 @@ def test_multi_filter_all_filter_types(db_session: Session, movie_model_sync: ty
     )
 
     statement = multi_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     # Should match all movies since at least one condition is true for each
     assert len(results) == 3
     assert {r.title for r in results} == {"The Matrix", "The Hangover", "Shawshank Redemption"}
 
 
-def test_comparison_filter(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_comparison_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test ComparisonFilter with various operators."""
     # Test equality operator
     eq_filter = ComparisonFilter(field_name="genre", operator="eq", value="Action")
     statement = eq_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
     assert results[0].title == "The Matrix"
 
     # Test inequality operator
     ne_filter = ComparisonFilter(field_name="genre", operator="ne", value="Action")
     statement = ne_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Hangover", "Shawshank Redemption"}
 
@@ -622,7 +883,7 @@ def test_comparison_filter(db_session: Session, movie_model_sync: type[Declarati
         field_name="release_date", operator="gt", value=datetime(2000, 1, 1, tzinfo=timezone.utc)
     )
     statement = gt_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 1
     assert results[0].title == "The Hangover"
 
@@ -631,7 +892,7 @@ def test_comparison_filter(db_session: Session, movie_model_sync: type[Declarati
         field_name="release_date", operator="lt", value=datetime(2000, 1, 1, tzinfo=timezone.utc)
     )
     statement = lt_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
@@ -640,7 +901,7 @@ def test_comparison_filter(db_session: Session, movie_model_sync: type[Declarati
         field_name="release_date", operator="ge", value=datetime(1999, 3, 31, tzinfo=timezone.utc)
     )
     statement = ge_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "The Hangover"}
 
@@ -649,7 +910,7 @@ def test_comparison_filter(db_session: Session, movie_model_sync: type[Declarati
         field_name="release_date", operator="le", value=datetime(1999, 3, 31, tzinfo=timezone.utc)
     )
     statement = le_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
@@ -675,15 +936,25 @@ def test_comparison_filter(db_session: Session, movie_model_sync: type[Declarati
     assert "Must be one of:" in str(exc_info.value)
 
 
-def test_collection_filter_prefer_any(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_collection_filter_prefer_any(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test CollectionFilter with prefer_any parameter."""
     # Test with prefer_any=False (default, using IN)
     collection_filter: CollectionFilter[str] = CollectionFilter(
         field_name="title", values=["The Matrix", "Shawshank Redemption"]
     )
     statement = collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
@@ -691,35 +962,45 @@ def test_collection_filter_prefer_any(db_session: Session, movie_model_sync: typ
     # Skip this test for SQLite since it doesn't support the ANY function
     from sqlalchemy.dialects import sqlite
 
-    if not isinstance(db_session.get_bind().dialect, sqlite.dialect):
+    if not isinstance(session.get_bind().dialect, sqlite.dialect):
         collection_filter = CollectionFilter[str](field_name="title", values=["The Matrix", "Shawshank Redemption"])
         statement = collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
-        results = db_session.execute(statement).scalars().all()
+        results = session.execute(statement).scalars().all()
         assert len(results) == 2
         assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
     # Test with empty collection
     collection_filter = CollectionFilter[str](field_name="title", values=[])
     statement = collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 0
 
     # Test with None values
     collection_filter = CollectionFilter[str](field_name="title", values=None)
     statement = collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 3  # Should return all movies
 
 
-def test_not_in_collection_filter_prefer_any(db_session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+def test_not_in_collection_filter_prefer_any(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
     """Test NotInCollectionFilter with prefer_any parameter."""
     # Test with prefer_any=False (default, using NOT IN)
     not_in_collection_filter: NotInCollectionFilter[str] = NotInCollectionFilter(
         field_name="title", values=["The Hangover"]
     )
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
@@ -727,23 +1008,23 @@ def test_not_in_collection_filter_prefer_any(db_session: Session, movie_model_sy
     # Skip this test for SQLite since it doesn't support the ANY function
     from sqlalchemy.dialects import sqlite
 
-    if not isinstance(db_session.get_bind().dialect, sqlite.dialect):
+    if not isinstance(session.get_bind().dialect, sqlite.dialect):
         not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=["The Hangover"])
         statement = not_in_collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
-        results = db_session.execute(statement).scalars().all()
+        results = session.execute(statement).scalars().all()
         assert len(results) == 2
         assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
     # Test with empty collection
     not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=[])
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 3  # Should return all movies
 
     # Test with None values
     not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=None)
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
-    results = db_session.execute(statement).scalars().all()
+    results = session.execute(statement).scalars().all()
     assert len(results) == 3  # Should return all movies
 
 
