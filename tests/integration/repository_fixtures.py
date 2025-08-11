@@ -388,8 +388,8 @@ def repository_models_sync(
 ) -> dict[str, type]:
     """Get the correct models based on PK type for sync tests."""
     if repository_pk_type == "uuid":
-        return request.getfixturevalue("uuid_sync_setup")
-    return request.getfixturevalue("bigint_sync_setup")
+        return request.getfixturevalue("uuid_sync_setup")  # type: ignore[no-any-return]
+    return request.getfixturevalue("bigint_sync_setup")  # type: ignore[no-any-return]
 
 
 @pytest.fixture
@@ -399,5 +399,5 @@ async def repository_models_async(
 ) -> dict[str, type]:
     """Get the correct models based on PK type for async tests."""
     if repository_pk_type == "uuid":
-        return request.getfixturevalue("uuid_async_setup")
-    return request.getfixturevalue("bigint_async_setup")
+        return request.getfixturevalue("uuid_async_setup")  # type: ignore[no-any-return]
+    return request.getfixturevalue("bigint_async_setup")  # type: ignore[no-any-return]
