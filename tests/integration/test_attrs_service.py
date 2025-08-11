@@ -155,6 +155,7 @@ class StateQuery(base.SQLQuery):
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 def test_sync_attrs_service_basic_operations() -> None:
     """Test basic service operations with attrs classes."""
     engine = create_engine("sqlite://")
@@ -196,6 +197,7 @@ def test_sync_attrs_service_basic_operations() -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 def test_sync_attrs_with_defaults() -> None:
     """Test attrs classes with default values."""
     engine = create_engine("sqlite://")
@@ -221,6 +223,7 @@ def test_sync_attrs_with_defaults() -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 def test_sync_query_service_with_attrs() -> None:
     """Test query service with attrs schema conversion."""
     engine = create_engine("sqlite://")
@@ -264,6 +267,7 @@ def test_sync_query_service_with_attrs() -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 async def test_async_attrs_service_basic_operations() -> None:
     """Test async service operations with attrs classes."""
     engine = create_async_engine("sqlite+aiosqlite://")
@@ -307,6 +311,7 @@ async def test_async_attrs_service_basic_operations() -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 async def test_async_query_service_with_attrs() -> None:
     """Test async query service with attrs schema conversion."""
     engine = create_async_engine("sqlite+aiosqlite://")
@@ -349,6 +354,7 @@ async def test_async_query_service_with_attrs() -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 def test_attrs_error_handling() -> None:
     """Test error handling with attrs integration."""
     engine = create_engine("sqlite://")
@@ -372,6 +378,7 @@ def test_attrs_error_handling() -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
 def test_attrs_mixed_with_other_schemas() -> None:
     """Test attrs alongside other schema types."""
     engine = create_engine("sqlite://")

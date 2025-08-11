@@ -62,6 +62,7 @@ class BigIntModelWithMaybeUniqueValue(UniqueMixin, BigIntBase):
         return (cls.col_1 == col_1) & (cls.col_3 == col_3)
 
 
+@pytest.mark.xdist_group("unique_mixin")
 def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
     engine = create_engine("sqlite://")
 
@@ -88,6 +89,7 @@ def test_as_unique_sync(rows: list[dict[str, Any]]) -> None:
             session.add_all(BigIntModelWithMaybeUniqueValue.as_unique_sync(session, **row) for row in rows)
 
 
+@pytest.mark.xdist_group("unique_mixin")
 async def test_as_unique_async(rows: list[dict[str, Any]]) -> None:
     engine = create_async_engine("sqlite+aiosqlite://")
 

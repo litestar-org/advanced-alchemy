@@ -89,6 +89,7 @@ def mock_store() -> Store:
     return Mock(spec=Store)
 
 
+@pytest.mark.xdist_group("litestar_session")
 class TestAsyncSessionBackendIntegration:
     """Integration tests for async session backend."""
 
@@ -295,6 +296,7 @@ class TestAsyncSessionBackendIntegration:
         assert final_data.startswith(b"data_")
 
 
+@pytest.mark.xdist_group("litestar_session")
 class TestSyncSessionBackendIntegration:
     """Integration tests for sync session backend."""
 
@@ -396,6 +398,7 @@ class TestSyncSessionBackendIntegration:
             assert remaining_ids == set(active_ids)
 
 
+@pytest.mark.xdist_group("litestar_session")
 class TestLitestarIntegration:
     """Test session backend integration with Litestar."""
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from sqlalchemy import Engine, String, select
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
@@ -53,7 +53,7 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
         # Create class with globally unique name to avoid SQLAlchemy registry conflicts
         _movie_class_counter += 1
         class_name = f"Movie_{_movie_class_counter}_{worker_id}_{engine_dialect_name}"
-        
+
         # Use globals() to create the class dynamically with a unique name
         Movie = type(
             class_name,
@@ -63,13 +63,13 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
                 "__mapper_args__": {"concrete": True},
                 "__annotations__": {
                     "title": "Mapped[str]",
-                    "release_date": "Mapped[datetime]", 
+                    "release_date": "Mapped[datetime]",
                     "genre": "Mapped[str]",
                 },
                 "title": mapped_column(String(length=100)),
                 "release_date": mapped_column(),
                 "genre": mapped_column(String(length=50)),
-            }
+            },
         )
 
         _movie_model_cache[cache_key] = Movie

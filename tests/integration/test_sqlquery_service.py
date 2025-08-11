@@ -105,6 +105,7 @@ class StateQueryBaseModel(BaseModel):
     state_name: str
 
 
+@pytest.mark.xdist_group("sqlquery")
 def test_sync_fixture_and_query() -> None:
     engine = create_engine("sqlite://")
 
@@ -182,6 +183,7 @@ def test_sync_fixture_and_query() -> None:
         assert _get_one_or_none is None
 
 
+@pytest.mark.xdist_group("sqlquery")
 async def test_async_fixture_and_query() -> None:
     engine = create_async_engine("sqlite+aiosqlite://")
 

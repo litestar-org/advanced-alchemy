@@ -240,6 +240,7 @@ async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, 
         alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
 
 
+@pytest.mark.xdist_group("alembic_drop_all")  # Isolate destructive test to prevent race conditions
 async def test_drop_all(
     alembic_commands: commands.AlembicCommands,
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
