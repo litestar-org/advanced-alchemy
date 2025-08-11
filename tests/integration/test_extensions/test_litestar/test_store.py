@@ -66,8 +66,13 @@ def store_tables_setup(
     Tables are created per database engine type but model classes are cached
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
+    # Skip for Spanner - doesn't support UNIQUE constraints directly
+    dialect_name = getattr(engine.dialect, "name", "")
+    if dialect_name == "spanner+spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
+
     # Skip table creation for mock engines
-    if getattr(engine.dialect, "name", "") != "mock":
+    if dialect_name != "mock":
         store_model_class.metadata.create_all(engine)
 
     yield store_model_class
@@ -86,8 +91,13 @@ async def async_store_tables_setup(
     Tables are created per database engine type but model classes are cached
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
+    # Skip for Spanner - doesn't support UNIQUE constraints directly
+    dialect_name = getattr(async_engine.dialect, "name", "")
+    if dialect_name == "spanner+spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
+
     # Skip table creation for mock engines
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    if dialect_name != "mock":
         async with async_engine.begin() as conn:
             await conn.run_sync(store_model_class.metadata.create_all)
 

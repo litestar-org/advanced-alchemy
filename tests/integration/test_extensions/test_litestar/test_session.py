@@ -75,8 +75,13 @@ def session_tables_setup(
     Tables are created per database engine type but model classes are cached
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
+    # Skip for Spanner - doesn't support UNIQUE constraints directly
+    dialect_name = getattr(engine.dialect, "name", "")
+    if dialect_name == "spanner+spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
+
     # Skip table creation for mock engines
-    if getattr(engine.dialect, "name", "") != "mock":
+    if dialect_name != "mock":
         session_model_class.metadata.create_all(engine)
 
     yield session_model_class
@@ -95,8 +100,13 @@ async def async_session_tables_setup(
     Tables are created per database engine type but model classes are cached
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
+    # Skip for Spanner - doesn't support UNIQUE constraints directly
+    dialect_name = getattr(async_engine.dialect, "name", "")
+    if dialect_name == "spanner+spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
+
     # Skip table creation for mock engines
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    if dialect_name != "mock":
         async with async_engine.begin() as conn:
             await conn.run_sync(session_model_class.metadata.create_all)
 
@@ -235,6 +245,10 @@ async def test_async_session_backend_complete_lifecycle(
     if engine_instance is not None and getattr(engine_instance.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if async_session.bind is not None and getattr(async_session.bind.dialect, "name", "") == "spanner+spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints creation. Create UNIQUE indexes instead.")
+
     session_id = str(uuid.uuid4())
     original_data = b"test_data_123"
     updated_data = b"updated_data_456"
@@ -277,6 +291,10 @@ async def test_sync_session_backend_complete_lifecycle(
     # Skip mock engines
     if session.bind is not None and getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if session.bind is not None and getattr(session.bind.dialect, "name", "") == "spanner+spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints creation. Create UNIQUE indexes instead.")
 
     dialect_name = getattr(session.bind.dialect, "name", "") if session.bind is not None else ""
 

@@ -384,18 +384,20 @@ def repository_pk_type(request: FixtureRequest) -> str:
 @pytest.fixture
 def repository_models_sync(
     repository_pk_type: str,
-    uuid_sync_setup: dict[str, type],
-    bigint_sync_setup: dict[str, type],
+    request: FixtureRequest,
 ) -> dict[str, type]:
     """Get the correct models based on PK type for sync tests."""
-    return uuid_sync_setup if repository_pk_type == "uuid" else bigint_sync_setup
+    if repository_pk_type == "uuid":
+        return request.getfixturevalue("uuid_sync_setup")
+    return request.getfixturevalue("bigint_sync_setup")
 
 
 @pytest.fixture
 async def repository_models_async(
     repository_pk_type: str,
-    uuid_async_setup: dict[str, type],
-    bigint_async_setup: dict[str, type],
+    request: FixtureRequest,
 ) -> dict[str, type]:
     """Get the correct models based on PK type for async tests."""
-    return uuid_async_setup if repository_pk_type == "uuid" else bigint_async_setup
+    if repository_pk_type == "uuid":
+        return request.getfixturevalue("uuid_async_setup")
+    return request.getfixturevalue("bigint_async_setup")
