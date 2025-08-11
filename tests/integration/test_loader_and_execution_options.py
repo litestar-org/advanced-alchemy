@@ -15,6 +15,11 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyn
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("loader_execution"),
+]
+
 
 @pytest.mark.xdist_group("loader")
 def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:

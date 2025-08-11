@@ -29,6 +29,7 @@ TagModel = type[models_uuid.UUIDTag]
 
 pytestmark = [
     pytest.mark.integration,
+    pytest.mark.xdist_group("alembic_commands"),
 ]
 
 

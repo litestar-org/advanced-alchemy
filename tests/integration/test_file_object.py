@@ -29,7 +29,10 @@ from tests.integration.helpers import async_clean_tables, clean_tables
 # Setup logger
 logger = logging.getLogger(__name__)
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("file_object"),
+]
 
 
 def remove_listeners() -> None:
@@ -141,7 +144,8 @@ def async_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[Async
 
     import asyncio as _asyncio
 
-    _asyncio.get_event_loop().run_until_complete(_create())
+    # Use asyncio.run() for better isolation instead of get_event_loop()
+    _asyncio.run(_create())
 
     try:
         yield engine
@@ -152,7 +156,8 @@ def async_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[Async
                 await conn.run_sync(Base.metadata.drop_all)
             await engine.dispose()
 
-        _asyncio.get_event_loop().run_until_complete(_drop())
+        # Use asyncio.run() for better isolation instead of get_event_loop()
+        _asyncio.run(_drop())
         db_file.unlink(missing_ok=True)
 
 

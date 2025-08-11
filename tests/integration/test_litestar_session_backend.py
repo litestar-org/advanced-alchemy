@@ -27,6 +27,11 @@ from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemySyncSessionBackend,
 )
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("litestar_session_backend"),
+]
+
 
 class AsyncSessionModel(SessionModelMixin, UUIDv7Base):
     """Test session model for async tests."""

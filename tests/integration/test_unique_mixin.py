@@ -17,6 +17,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import Any
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("unique_mixin"),
+]
+
 
 @pytest.fixture(name="rows")
 def generate_mock_data() -> Iterator[list[dict[str, Any]]]:

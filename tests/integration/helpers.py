@@ -1008,7 +1008,7 @@ class SQLiteCleaner(SyncDatabaseCleaner):
                             except Exception:
                                 self.connection.rollback()
 
-                        self.connection.execute(text(f"DELETE FROM {table}"))
+                        self.connection.execute(text(f'DELETE FROM "{table}"'))
 
                         # Commit immediately after each DELETE to release locks
                         if self.connection.in_transaction():
@@ -1052,7 +1052,7 @@ class SQLiteCleaner(SyncDatabaseCleaner):
         """Verify that all tables are actually empty."""
         for table in tables:
             try:
-                result = self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -1166,7 +1166,7 @@ class AsyncSQLiteCleaner(AsyncDatabaseCleaner):
             for table in reversed(tables):
                 for attempt in range(self.max_retries):
                     try:
-                        await self.connection.execute(text(f"DELETE FROM {table}"))
+                        await self.connection.execute(text(f'DELETE FROM "{table}"'))
                         break
                     except Exception as e:
                         if "database is locked" in str(e) and attempt < self.max_retries - 1:
@@ -1191,7 +1191,7 @@ class AsyncSQLiteCleaner(AsyncDatabaseCleaner):
         """Verify that all tables are empty asynchronously."""
         for table in tables:
             try:
-                result = await self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = await self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -1644,14 +1644,14 @@ class OracleCleaner(SyncDatabaseCleaner):
             return list(tables)
 
     def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE operations on Oracle tables."""
+        """Perform DELETE operations on Oracle tables (TRUNCATE avoided due to table locking issues)."""
         for table in reversed(tables):
             try:
-                self.connection.execute(text(f"TRUNCATE TABLE {table}"))
+                # Use DELETE instead of TRUNCATE to avoid table locking issues with reserved words
+                self.connection.execute(text(f'DELETE FROM "{table}"'))
             except Exception as e:
-                logger.warning(f"Failed to truncate {table}: {e}")
-                # Try DELETE as fallback for this table
-                self.connection.execute(text(f"DELETE FROM {table}"))
+                logger.warning(f"Failed to delete from {table}: {e}")
+                # Skip table if DELETE fails
 
         self.connection.commit()
 
@@ -1662,7 +1662,7 @@ class OracleCleaner(SyncDatabaseCleaner):
 
         for table in reversed(tables):
             try:
-                self.connection.execute(text(f"DELETE FROM {table}"))
+                self.connection.execute(text(f'DELETE FROM "{table}"'))
             except Exception as e:
                 logger.error(f"Failed to delete from {table}: {e}")
                 self.stats.errors_encountered += 1
@@ -1673,7 +1673,7 @@ class OracleCleaner(SyncDatabaseCleaner):
         """Verify that all tables are empty."""
         for table in tables:
             try:
-                result = self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -1800,13 +1800,14 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
             return list(tables)
 
     async def _perform_truncate(self, tables: Sequence[str]) -> None:
-        """Perform TRUNCATE operations asynchronously."""
+        """Perform DELETE operations asynchronously (TRUNCATE avoided due to table locking issues)."""
         for table in reversed(tables):
             try:
-                await self.connection.execute(text(f"TRUNCATE TABLE {table}"))
+                # Use DELETE instead of TRUNCATE to avoid table locking issues with reserved words
+                await self.connection.execute(text(f'DELETE FROM "{table}"'))
             except Exception as e:
-                logger.warning(f"Failed to truncate {table}: {e}")
-                await self.connection.execute(text(f"DELETE FROM {table}"))
+                logger.warning(f"Failed to delete from {table}: {e}")
+                # Skip table if DELETE fails
 
         await self.connection.commit()
 
@@ -1817,7 +1818,7 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
 
         for table in reversed(tables):
             try:
-                await self.connection.execute(text(f"DELETE FROM {table}"))
+                await self.connection.execute(text(f'DELETE FROM "{table}"'))
             except Exception as e:
                 logger.error(f"Failed to delete from {table}: {e}")
                 self.stats.errors_encountered += 1
@@ -1828,7 +1829,7 @@ class AsyncOracleCleaner(AsyncDatabaseCleaner):
         """Verify that all tables are empty asynchronously."""
         for table in tables:
             try:
-                result = await self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = await self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -2259,11 +2260,11 @@ class DuckDBCleaner(SyncDatabaseCleaner):
         for table in tables:
             try:
                 # Try TRUNCATE first
-                self.connection.execute(text(f"TRUNCATE TABLE {table}"))
+                self.connection.execute(text(f'TRUNCATE TABLE "{table}"'))
             except Exception as e:
                 logger.warning(f"TRUNCATE failed for {table}: {e}, using DELETE")
                 try:
-                    self.connection.execute(text(f"DELETE FROM {table}"))
+                    self.connection.execute(text(f'DELETE FROM "{table}"'))
                 except Exception as delete_e:
                     logger.error(f"Failed to clean table {table}: {delete_e}")
                     self.stats.errors_encountered += 1
@@ -2274,7 +2275,7 @@ class DuckDBCleaner(SyncDatabaseCleaner):
         """Verify that all tables are empty."""
         for table in tables:
             try:
-                result = self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -2346,11 +2347,11 @@ class AsyncDuckDBCleaner(AsyncDatabaseCleaner):
         """Perform cleanup operations asynchronously."""
         for table in tables:
             try:
-                await self.connection.execute(text(f"TRUNCATE TABLE {table}"))
+                await self.connection.execute(text(f'TRUNCATE TABLE "{table}"'))
             except Exception as e:
                 logger.warning(f"TRUNCATE failed for {table}: {e}, using DELETE")
                 try:
-                    await self.connection.execute(text(f"DELETE FROM {table}"))
+                    await self.connection.execute(text(f'DELETE FROM "{table}"'))
                 except Exception as delete_e:
                     logger.error(f"Failed to clean table {table}: {delete_e}")
                     self.stats.errors_encountered += 1
@@ -2361,7 +2362,7 @@ class AsyncDuckDBCleaner(AsyncDatabaseCleaner):
         """Verify that all tables are empty asynchronously."""
         for table in tables:
             try:
-                result = await self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = await self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -2469,7 +2470,7 @@ class SpannerCleaner(SyncDatabaseCleaner):
         """Verify that all tables are empty."""
         for table in tables:
             try:
-                result = self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")
@@ -2599,7 +2600,7 @@ class AsyncSpannerCleaner(AsyncDatabaseCleaner):
         """Verify that all tables are empty asynchronously."""
         for table in tables:
             try:
-                result = await self.connection.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = await self.connection.execute(text(f'SELECT COUNT(*) FROM "{table}"'))
                 count = result.scalar()
                 if count and count > 0:
                     raise CleanupError(f"table {table} still contains {count} rows after cleanup")

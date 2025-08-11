@@ -64,6 +64,7 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.integration,
+    pytest.mark.xdist_group("repository"),
 ]
 xfail = pytest.mark.xfail
 

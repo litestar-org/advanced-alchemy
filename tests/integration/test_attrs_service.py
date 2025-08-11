@@ -28,6 +28,7 @@ from advanced_alchemy.service.typing import (
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed"),
+    pytest.mark.xdist_group("attrs_service"),
 ]
 
 here = Path(__file__).parent

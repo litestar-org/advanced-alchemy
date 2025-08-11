@@ -29,6 +29,7 @@ from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
 pytestmark = [  # type: ignore
     pytest.mark.integration,
+    pytest.mark.xdist_group("sqlquery_service"),
 ]
 here = Path(__file__).parent
 fixture_path = here.parent.parent / "examples"

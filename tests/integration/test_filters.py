@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from sqlalchemy import Engine, String, select
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
@@ -31,6 +31,11 @@ from tests.integration.helpers import async_clean_tables, clean_tables, get_work
 if TYPE_CHECKING:
     from pytest import FixtureRequest
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("filters"),
+]
+
 
 # Module-level cache for Movie model and counter for unique names
 _movie_model_cache: dict[str, type] = {}
@@ -52,25 +57,20 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
 
         # Create class with globally unique name to avoid SQLAlchemy registry conflicts
         _movie_class_counter += 1
-        class_name = f"Movie_{_movie_class_counter}_{worker_id}_{engine_dialect_name}"
+        unique_suffix = f"{_movie_class_counter}_{worker_id}_{engine_dialect_name}"
 
-        # Use globals() to create the class dynamically with a unique name
-        Movie = type(
-            class_name,
-            (base_class, TestBase),
-            {
-                "__tablename__": f"test_movies_{worker_id}_{engine_dialect_name}",
-                "__mapper_args__": {"concrete": True},
-                "__annotations__": {
-                    "title": "Mapped[str]",
-                    "release_date": "Mapped[datetime]",
-                    "genre": "Mapped[str]",
-                },
-                "title": mapped_column(String(length=100)),
-                "release_date": mapped_column(),
-                "genre": mapped_column(String(length=50)),
-            },
-        )
+        # Create the class normally, not with type() to ensure proper annotation resolution
+        class Movie(base_class, TestBase):  # type: ignore[valid-type,misc]
+            __tablename__ = f"test_movies_{worker_id}_{engine_dialect_name}"
+            __mapper_args__ = {"concrete": True}
+
+            title: Mapped[str] = mapped_column(String(length=100))
+            release_date: Mapped[datetime] = mapped_column()
+            genre: Mapped[str] = mapped_column(String(length=50))
+
+        # Set unique name to avoid registry conflicts
+        Movie.__name__ = f"Movie_{unique_suffix}"
+        Movie.__qualname__ = f"Movie_{unique_suffix}"
 
         _movie_model_cache[cache_key] = Movie
 

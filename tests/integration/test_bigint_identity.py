@@ -12,6 +12,11 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, session
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("bigint_identity"),
+]
+
 
 @pytest.mark.xdist_group("loader")
 def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:

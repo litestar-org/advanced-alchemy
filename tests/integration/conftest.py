@@ -52,6 +52,8 @@ def configure_safe_logging() -> None:
         "sqlalchemy.engine.Engine",
         "sqlalchemy.engine",
         "sqlalchemy.pool",
+        # Test helpers that log cleanup operations
+        "tests.integration.helpers",
     ]
 
     for logger_name in problematic_loggers:
@@ -310,9 +312,12 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=False)  # Disabled for session-scoped fixtures to prevent deadlocks
 def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
     """After each test, remove all rows from all tables for sync engine tests.
+
+    NOTE: Disabled when using session-scoped fixtures as per-test cleanup defeats
+    the purpose and causes deadlocks with parallel test execution.
 
     Activates only when the test uses the 'engine' fixture, and skips mock engines.
     Uses the robust dialect-aware cleanup utilities.
@@ -339,9 +344,12 @@ def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
         # Continue without raising to maintain test performance
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=False)  # Disabled for session-scoped fixtures to prevent deadlocks
 async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
     """After each test, remove all rows from all tables for async engine tests.
+
+    NOTE: Disabled when using session-scoped fixtures as per-test cleanup defeats
+    the purpose and causes deadlocks with parallel test execution.
 
     Activates only when the test uses the 'async_engine' fixture, and skips mock engines.
     Uses the robust dialect-aware async cleanup utilities.
