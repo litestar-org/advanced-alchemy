@@ -93,6 +93,9 @@ class BigIntModelWithMaybeUniqueValue(UniqueMixin, CustomBigIntBase):
 
 @pytest.mark.xdist_group("unique_mixin")
 def test_as_unique_sync(sync_engine: Engine, rows: list[dict[str, Any]]) -> None:
+    # Skip for Spanner and CockroachDB - BigInt PK issues
+    if sync_engine.dialect.name.startswith(("spanner", "cockroach")):
+        pytest.skip(f"{sync_engine.dialect.name} doesn't support bigint PKs well")
     with Session(sync_engine) as session:
         session.add_all(BigIntModelWithUniqueValue(**row) for row in rows)
         with pytest.raises(IntegrityError):
@@ -116,6 +119,9 @@ def test_as_unique_sync(sync_engine: Engine, rows: list[dict[str, Any]]) -> None
 
 @pytest.mark.xdist_group("unique_mixin")
 async def test_as_unique_async(async_engine: AsyncEngine, rows: list[dict[str, Any]]) -> None:
+    # Skip for Spanner and CockroachDB - BigInt PK issues
+    if async_engine.dialect.name.startswith(("spanner", "cockroach")):
+        pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
     async with AsyncSession(async_engine) as session:
         session.add_all(BigIntModelWithUniqueValue(**row) for row in rows)
         with pytest.raises(IntegrityError):

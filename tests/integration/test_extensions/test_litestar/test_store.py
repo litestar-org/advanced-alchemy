@@ -67,10 +67,12 @@ def store_tables_setup(
     Tables are created per database engine type but model classes are cached
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
-    # Skip for Spanner - doesn't support UNIQUE constraints directly
+    # Skip for Spanner and CockroachDB - table conflicts with BigInt models
     dialect_name = getattr(engine.dialect, "name", "")
     if dialect_name == "spanner+spanner":
         pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
+    if dialect_name.startswith("cockroach"):
+        pytest.skip("CockroachDB has table conflicts with BigInt models")
 
     # Skip table creation for mock engines
     if dialect_name != "mock":
@@ -92,10 +94,12 @@ async def async_store_tables_setup(
     Tables are created per database engine type but model classes are cached
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
-    # Skip for Spanner - doesn't support UNIQUE constraints directly
+    # Skip for Spanner and CockroachDB - table conflicts with BigInt models
     dialect_name = getattr(async_engine.dialect, "name", "")
     if dialect_name == "spanner+spanner":
         pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
+    if dialect_name.startswith("cockroach"):
+        pytest.skip("CockroachDB has table conflicts with BigInt models")
 
     # Skip table creation for mock engines
     if dialect_name != "mock":

@@ -269,7 +269,7 @@ def test_exists_filter(session: Session, movie_model_sync: type[DeclarativeBase]
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-    
+
     # Skip Spanner Emulator - EXISTS filters have constraints in emulator
     if getattr(session.bind.dialect, "name", "") == "spanner+spanner":
         pytest.skip("Spanner Emulator has constraints with EXISTS filters")

@@ -261,7 +261,16 @@ def uuid_sync_setup(
                         # Create author table first (no dependencies)
                         uuid_models["author"].__table__.create(engine, checkfirst=True)
                         # Then create other tables that might depend on author
-                        for model_name in ["rule", "secret", "book", "item", "tag", "slug_book", "model_with_fetched_value", "file_document"]:
+                        for model_name in [
+                            "rule",
+                            "secret",
+                            "book",
+                            "item",
+                            "tag",
+                            "slug_book",
+                            "model_with_fetched_value",
+                            "file_document",
+                        ]:
                             if model_name in uuid_models:
                                 uuid_models[model_name].__table__.create(engine, checkfirst=True)
                     except Exception:
@@ -343,17 +352,31 @@ async def uuid_async_setup(
             if "cockroach" in async_engine.dialect.name:
                 try:
                     async with async_engine.begin() as conn:
-                        await conn.run_sync(lambda sync_conn: base_model.metadata.create_all(sync_conn, checkfirst=True))
+                        await conn.run_sync(
+                            lambda sync_conn: base_model.metadata.create_all(sync_conn, checkfirst=True)
+                        )
                 except Exception as e:
                     # If there are dependency issues, create tables individually
                     try:
                         async with async_engine.begin() as conn:
                             # Create author table first (no dependencies)
-                            await conn.run_sync(lambda sync_conn: uuid_models["author"].__table__.create(sync_conn, checkfirst=True))
+                            await conn.run_sync(
+                                lambda sync_conn: uuid_models["author"].__table__.create(sync_conn, checkfirst=True)
+                            )
                             # Then create other tables that might depend on author
-                            for model_name in ["rule", "secret", "book", "item", "tag", "slug_book", "model_with_fetched_value", "file_document"]:
+                            for model_name in [
+                                "rule",
+                                "secret",
+                                "book",
+                                "item",
+                                "tag",
+                                "slug_book",
+                                "model_with_fetched_value",
+                                "file_document",
+                            ]:
                                 if model_name in uuid_models:
-                                    await conn.run_sync(lambda sync_conn, mn=model_name: uuid_models[mn].__table__.create(sync_conn, checkfirst=True))
+                                    table = uuid_models[model_name].__table__
+                                    await conn.run_sync(lambda sync_conn, t=table: t.create(sync_conn, checkfirst=True))  # type: ignore[misc,unused-ignore]
                     except Exception:
                         # If individual creation also fails, use the original error
                         raise e
