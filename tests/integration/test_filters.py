@@ -422,7 +422,9 @@ def test_limit_offset_filter(session: Session, movie_model_sync: type[Declarativ
         session.commit()
     setup_movie_data(session, Movie)
     limit_offset_filter = LimitOffset(limit=2, offset=1)
-    statement = limit_offset_filter.append_to_statement(select(Movie), Movie)
+    # Add ORDER BY for MSSQL compatibility (required when using OFFSET)
+    statement = select(Movie).order_by(Movie.id)
+    statement = limit_offset_filter.append_to_statement(statement, Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 2
 

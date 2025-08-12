@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
 # Local test helpers and fixtures
-from tests.integration import helpers as test_helpers
 
 # Import all fixtures from repository_fixtures
 from tests.integration.repository_fixtures import *  # noqa: F403
@@ -239,6 +238,7 @@ def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
 
 
 @pytest.fixture(
+    scope="session",
     name="engine",
     params=[
         pytest.param(
@@ -339,70 +339,83 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)  # Re-enabled with proper scoping to prevent deadlocks
+@pytest.fixture(autouse=True)
 def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
     """After each test, remove all rows from all tables for sync engine tests.
 
-    NOTE: Disabled when using session-scoped fixtures as per-test cleanup defeats
-    the purpose and causes deadlocks with parallel test execution.
-
-    Activates only when the test uses the 'engine' fixture, and skips mock engines.
-    Uses the robust dialect-aware cleanup utilities.
+    With session-scoped engines, we need to clean data after each test
+    to prevent unique constraint violations.
     """
     yield
 
-    if "engine" not in request.fixturenames:
-        return
+    # Clean up after test completes
+    if "engine" in request.fixturenames:
+        from tests.integration import helpers as test_helpers
 
-    try:
-        engine = cast(Engine, request.getfixturevalue("engine"))
+        engine = request.getfixturevalue("engine")
+
+        # Skip cleanup for mock engines
         if getattr(engine.dialect, "name", "") == "mock":
             return
 
-        with test_helpers.cleanup_database(engine) as cleaner:
-            # Clean all tables (no include_only filter)
-            cleaner.include_only = None
-            cleaner.cleanup()
-    except Exception as e:
-        # Log cleanup errors to understand what's failing but continue
-        import logging
+        # Get the appropriate base model based on what was used
+        base_model = None
+        if "uuid_sync_setup" in request.fixturenames:
+            uuid_models = request.getfixturevalue("uuid_models")
+            base_model = uuid_models["base"]
+        elif "bigint_sync_setup" in request.fixturenames:
+            bigint_models = request.getfixturevalue("bigint_models")
+            base_model = bigint_models["base"]
 
-        logging.getLogger(__name__).debug(f"Cleanup failed for engine: {e}")
-        # Continue without raising to maintain test performance
+        if base_model:
+            try:
+                test_helpers.clean_tables(engine, base_model.metadata)
+            except Exception:
+                # Ignore cleanup errors
+                pass
 
 
-@pytest.fixture(autouse=True)  # Re-enabled with proper scoping to prevent deadlocks
+@pytest.fixture(autouse=True)
 async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
     """After each test, remove all rows from all tables for async engine tests.
 
-    NOTE: Disabled when using session-scoped fixtures as per-test cleanup defeats
-    the purpose and causes deadlocks with parallel test execution.
-
-    Activates only when the test uses the 'async_engine' fixture, and skips mock engines.
-    Uses the robust dialect-aware async cleanup utilities.
+    With session-scoped engines, we need to clean data after each test
+    to prevent unique constraint violations.
     """
     yield
 
-    if "async_engine" not in request.fixturenames:
-        return
+    # Clean up after test completes
+    if "async_engine" in request.fixturenames:
+        from tests.integration import helpers as test_helpers
 
-    try:
-        async_engine = cast(AsyncEngine, request.getfixturevalue("async_engine"))
+        try:
+            async_engine = request.getfixturevalue("async_engine")
+        except Exception:
+            # Fixture might be torn down already
+            return
+
+        # Skip cleanup for mock engines
         if getattr(async_engine.dialect, "name", "") == "mock":
             return
 
-        async with test_helpers.cleanup_database_async(async_engine) as cleaner:
-            cleaner.include_only = None
-            await cleaner.cleanup()
-    except Exception as e:
-        # Log cleanup errors to understand what's failing but continue
-        import logging
+        # Get the appropriate base model based on what was used
+        base_model = None
+        if "uuid_async_setup" in request.fixturenames:
+            uuid_models = request.getfixturevalue("uuid_models")
+            base_model = uuid_models["base"]
+        elif "bigint_async_setup" in request.fixturenames:
+            bigint_models = request.getfixturevalue("bigint_models")
+            base_model = bigint_models["base"]
 
-        logging.getLogger(__name__).debug(f"Async cleanup failed: {e}")
-        # Continue without raising to maintain test performance
+        if base_model:
+            try:
+                await test_helpers.async_clean_tables(async_engine, base_model.metadata)
+            except Exception:
+                # Ignore cleanup errors
+                pass
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def aiosqlite_engine(
     tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -424,12 +437,12 @@ async def aiosqlite_engine(
         await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def asyncmy_engine(mysql_asyncmy_url: str, mysql_service: MySQLService) -> AsyncGenerator[AsyncEngine, None]:
     yield create_async_engine(mysql_asyncmy_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def asyncpg_engine(
     postgres_asyncpg_url: str, postgres_service: PostgresService
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -445,14 +458,14 @@ async def asyncpg_engine(
         await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def psycopg_async_engine(
     postgres_psycopg_url: str, postgres_service: PostgresService
 ) -> AsyncGenerator[AsyncEngine, None]:
     yield create_async_engine(postgres_psycopg_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def cockroachdb_async_engine(
     cockroachdb_asyncpg_url: str, cockroachdb_service: CockroachDBService
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -467,7 +480,7 @@ async def cockroachdb_async_engine(
     yield create_async_engine(cockroachdb_asyncpg_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def mssql_async_engine(mssql_aioodbc_url: str, mssql_service: MSSQLService) -> AsyncGenerator[AsyncEngine, None]:
     """MS SQL instance for end-to-end testing using aioodbc.
 
@@ -485,7 +498,7 @@ async def mssql_async_engine(mssql_aioodbc_url: str, mssql_service: MSSQLService
     yield create_async_engine(url_to_use, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def oracle18c_async_engine(
     oracle18c_url: str, oracle_18c_service: OracleService
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -500,7 +513,7 @@ async def oracle18c_async_engine(
     yield create_async_engine(oracle18c_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def oracle23ai_async_engine(
     oracle23ai_url: str, oracle_23ai_service: OracleService
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -515,7 +528,7 @@ async def oracle23ai_async_engine(
     yield create_async_engine(oracle23ai_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
     """Return a mocked AsyncEngine instance.
 
@@ -611,7 +624,7 @@ def async_engine(request: FixtureRequest) -> AsyncEngine:
     return cast(AsyncEngine, request.getfixturevalue(request.param))
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture()
 async def async_session(
     async_engine: AsyncEngine,
     request: FixtureRequest,

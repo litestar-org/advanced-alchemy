@@ -65,6 +65,10 @@ def test_password_hash_sync(engine: Engine, password_test_tables: None, monkeypa
     # Skip mock engine - it doesn't support auto-generated primary keys
     if engine.dialect.name == "mock":
         pytest.skip("Mock engine doesn't support auto-generated primary keys")
+
+    # Skip CockroachDB - it doesn't support BigInt primary keys
+    if engine.dialect.name.startswith("cockroach"):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     # Test with session
@@ -135,6 +139,10 @@ async def test_password_hash_async(
     # Skip mock engine - it doesn't support auto-generated primary keys
     if async_engine.dialect.name == "mock":
         pytest.skip("Mock engine doesn't support auto-generated primary keys")
+
+    # Skip CockroachDB - it doesn't support BigInt primary keys
+    if async_engine.dialect.name.startswith("cockroach"):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
     session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
 
     # Test with async session

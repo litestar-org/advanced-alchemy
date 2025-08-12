@@ -9,7 +9,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Engine, insert
+from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.fixtures.bigint import models as models_bigint
@@ -73,6 +73,40 @@ class RepositoryModelRegistry:
         return _bigint_model_cache[cache_key]
 
 
+def reseed_data_sync(engine: Engine, models: dict[str, type], pk_type: str) -> None:
+    """Reseed data to original state for sync test isolation."""
+    from sqlalchemy import delete, insert
+
+    seed_data = get_seed_data(pk_type)
+
+    with engine.begin() as conn:
+        # Delete existing data in reverse dependency order
+        for table in reversed(models["base"].metadata.sorted_tables):
+            conn.execute(delete(table))
+
+        # Re-insert seed data
+        conn.execute(insert(models["author"]), seed_data["authors"])
+        conn.execute(insert(models["rule"]), seed_data["rules"])
+        conn.execute(insert(models["secret"]), seed_data["secrets"])
+
+
+async def reseed_data_async(async_engine: AsyncEngine, models: dict[str, type], pk_type: str) -> None:
+    """Reseed data to original state for async test isolation."""
+    from sqlalchemy import delete, insert
+
+    seed_data = get_seed_data(pk_type)
+
+    async with async_engine.begin() as conn:
+        # Delete existing data in reverse dependency order
+        for table in reversed(models["base"].metadata.sorted_tables):
+            await conn.execute(delete(table))
+
+        # Re-insert seed data
+        await conn.execute(insert(models["author"]), seed_data["authors"])
+        await conn.execute(insert(models["rule"]), seed_data["rules"])
+        await conn.execute(insert(models["secret"]), seed_data["secrets"])
+
+
 def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
     """Get seed data for the given PK type."""
     if pk_type == "uuid":
@@ -82,7 +116,7 @@ def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
                     "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
                     "name": "Agatha Christie",
                     "dob": datetime.date(1890, 9, 15),
-                    "created_at": datetime.datetime(2023, 5, 1, tzinfo=datetime.timezone.utc),
+                    "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
                     "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
                 },
                 {
@@ -90,7 +124,7 @@ def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
                     "name": "Leo Tolstoy",
                     "dob": datetime.date(1828, 9, 9),
                     "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 12, tzinfo=datetime.timezone.utc),
+                    "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
                 },
             ],
             "rules": [
@@ -124,7 +158,7 @@ def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
                 "id": 2023,
                 "name": "Agatha Christie",
                 "dob": datetime.date(1890, 9, 15),
-                "created_at": datetime.datetime(2023, 5, 1, tzinfo=datetime.timezone.utc),
+                "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
                 "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
             },
             {
@@ -132,7 +166,7 @@ def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
                 "name": "Leo Tolstoy",
                 "dob": datetime.date(1828, 9, 9),
                 "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                "updated_at": datetime.datetime(2023, 5, 12, tzinfo=datetime.timezone.utc),
+                "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
             },
         ],
         "rules": [
@@ -238,6 +272,8 @@ def bigint_slug_book_model(bigint_models: dict[str, type]) -> type:
 
 
 # Sync Setup Fixtures
+# These are function-scoped to ensure data is inserted for each test
+# while engines remain session-scoped for performance
 @pytest.fixture
 def uuid_sync_setup(
     uuid_models: dict[str, type],
@@ -280,22 +316,11 @@ def uuid_sync_setup(
                 base_model.metadata.create_all(engine)
             _tables_created_sync[engine_key] = True
 
-        # Insert seed data
-        seed_data = get_seed_data("uuid")
-        with engine.begin() as conn:
-            conn.execute(insert(uuid_models["author"]), seed_data["authors"])
-            conn.execute(insert(uuid_models["rule"]), seed_data["rules"])
-            conn.execute(insert(uuid_models["secret"]), seed_data["secrets"])
+        # Always reseed data to ensure fresh state for each test
+        reseed_data_sync(engine, uuid_models, "uuid")
 
     yield uuid_models
-
-    # Clean data between tests - ignore cleanup failures for speed
-    if getattr(engine.dialect, "name", "") != "mock":
-        try:
-            clean_tables(engine, uuid_models["base"].metadata)
-        except Exception:
-            # Ignore cleanup errors - they don't affect test results
-            pass
+    # Cleanup is handled by auto-clean fixtures in conftest.py
 
 
 @pytest.fixture
@@ -308,31 +333,45 @@ def bigint_sync_setup(
     if engine.dialect.name.startswith(("spanner", "cockroach")):
         pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
 
-    if getattr(engine.dialect, "name", "") != "mock":
-        base_model = bigint_models["base"]
-        engine_key = f"bigint_{engine.dialect.name}_{id(engine)}"
+    # Skip mock engines - they don't support proper BigInt operations
+    if engine.dialect.name == "mock":
+        pytest.skip("Mock engines don't support BigInt operations")
 
-        # Create tables once per engine type
-        if engine_key not in _tables_created_sync:
-            base_model.metadata.create_all(engine)
-            _tables_created_sync[engine_key] = True
+    base_model = bigint_models["base"]
+    engine_key = f"bigint_{engine.dialect.name}_{id(engine)}"
 
-        # Insert seed data
-        seed_data = get_seed_data("bigint")
-        with engine.begin() as conn:
-            conn.execute(insert(bigint_models["author"]), seed_data["authors"])
-            conn.execute(insert(bigint_models["rule"]), seed_data["rules"])
-            conn.execute(insert(bigint_models["secret"]), seed_data["secrets"])
+    # Create tables once per engine type
+    if engine_key not in _tables_created_sync:
+        base_model.metadata.create_all(engine)
+        _tables_created_sync[engine_key] = True
+
+    # Always clean and re-insert seed data to ensure fresh state for each test
+    try:
+        clean_tables(engine, base_model.metadata)
+    except Exception:
+        # Ignore cleanup errors - tables might not exist yet
+        pass
+
+    # For Oracle, try a more aggressive cleanup approach
+    if engine.dialect.name == "oracle":
+        try:
+            with engine.begin() as conn:
+                # Use DELETE instead of TRUNCATE for better compatibility
+                for table in reversed(base_model.metadata.sorted_tables):
+                    try:
+                        conn.execute(table.delete())
+                    except Exception:
+                        # Ignore individual table errors
+                        pass
+        except Exception:
+            # Ignore cleanup errors
+            pass
+
+    # Always reseed data to ensure fresh state for each test
+    reseed_data_sync(engine, bigint_models, "bigint")
 
     yield bigint_models
-
-    # Clean data between tests - ignore cleanup failures for speed
-    if getattr(engine.dialect, "name", "") != "mock":
-        try:
-            clean_tables(engine, bigint_models["base"].metadata)
-        except Exception:
-            # Ignore cleanup errors - they don't affect test results
-            pass
+    # Cleanup is handled by auto-clean fixtures in conftest.py
 
 
 # Async Setup Fixtures
@@ -385,22 +424,33 @@ async def uuid_async_setup(
                     await conn.run_sync(base_model.metadata.create_all)
             _tables_created_async[engine_key] = True
 
-        # Insert seed data
-        seed_data = get_seed_data("uuid")
-        async with async_engine.begin() as conn:
-            await conn.execute(insert(uuid_models["author"]), seed_data["authors"])
-            await conn.execute(insert(uuid_models["rule"]), seed_data["rules"])
-            await conn.execute(insert(uuid_models["secret"]), seed_data["secrets"])
+        # Always clean and re-insert seed data to ensure fresh state for each test
+        try:
+            await async_clean_tables(async_engine, base_model.metadata)
+        except Exception:
+            # Ignore cleanup errors - tables might not exist yet
+            pass
+
+        # For Oracle, try a more aggressive cleanup approach
+        if async_engine.dialect.name == "oracle":
+            try:
+                async with async_engine.begin() as conn:
+                    # Use DELETE instead of TRUNCATE for better compatibility
+                    for table in reversed(base_model.metadata.sorted_tables):
+                        try:
+                            await conn.execute(table.delete())
+                        except Exception:
+                            # Ignore individual table errors
+                            pass
+            except Exception:
+                # Ignore cleanup errors
+                pass
+
+        # Always reseed data to ensure fresh state for each test
+        await reseed_data_async(async_engine, uuid_models, "uuid")
 
     yield uuid_models
-
-    # Clean data between tests - ignore cleanup failures for speed
-    if getattr(async_engine.dialect, "name", "") != "mock":
-        try:
-            await async_clean_tables(async_engine, uuid_models["base"].metadata)
-        except Exception:
-            # Ignore cleanup errors - they don't affect test results
-            pass
+    # Cleanup is handled by auto-clean fixtures in conftest.py
 
 
 @pytest_asyncio.fixture()
@@ -413,32 +463,46 @@ async def bigint_async_setup(
     if async_engine.dialect.name.startswith(("spanner", "cockroach")):
         pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
 
-    if getattr(async_engine.dialect, "name", "") != "mock":
-        base_model = bigint_models["base"]
-        engine_key = f"bigint_{async_engine.dialect.name}_{id(async_engine)}"
+    # Skip mock engines - they don't support proper BigInt operations
+    if async_engine.dialect.name == "mock":
+        pytest.skip("Mock engines don't support BigInt operations")
 
-        # Create tables once per engine type
-        if engine_key not in _tables_created_async:
-            async with async_engine.begin() as conn:
-                await conn.run_sync(base_model.metadata.create_all)
-            _tables_created_async[engine_key] = True
+    base_model = bigint_models["base"]
+    engine_key = f"bigint_{async_engine.dialect.name}_{id(async_engine)}"
 
-        # Insert seed data
-        seed_data = get_seed_data("bigint")
+    # Create tables once per engine type
+    if engine_key not in _tables_created_async:
         async with async_engine.begin() as conn:
-            await conn.execute(insert(bigint_models["author"]), seed_data["authors"])
-            await conn.execute(insert(bigint_models["rule"]), seed_data["rules"])
-            await conn.execute(insert(bigint_models["secret"]), seed_data["secrets"])
+            await conn.run_sync(base_model.metadata.create_all)
+        _tables_created_async[engine_key] = True
+
+    # Always clean and re-insert seed data to ensure fresh state for each test
+    try:
+        await async_clean_tables(async_engine, base_model.metadata)
+    except Exception:
+        # Ignore cleanup errors - tables might not exist yet
+        pass
+
+    # For Oracle, try a more aggressive cleanup approach
+    if async_engine.dialect.name == "oracle":
+        try:
+            async with async_engine.begin() as conn:
+                # Use DELETE instead of TRUNCATE for better compatibility
+                for table in reversed(base_model.metadata.sorted_tables):
+                    try:
+                        await conn.execute(table.delete())
+                    except Exception:
+                        # Ignore individual table errors
+                        pass
+        except Exception:
+            # Ignore cleanup errors
+            pass
+
+    # Always reseed data to ensure fresh state for each test
+    await reseed_data_async(async_engine, bigint_models, "bigint")
 
     yield bigint_models
-
-    # Clean data between tests - ignore cleanup failures for speed
-    if getattr(async_engine.dialect, "name", "") != "mock":
-        try:
-            await async_clean_tables(async_engine, bigint_models["base"].metadata)
-        except Exception:
-            # Ignore cleanup errors - they don't affect test results
-            pass
+    # Cleanup is handled by auto-clean fixtures in conftest.py
 
 
 # Primary key type fixture

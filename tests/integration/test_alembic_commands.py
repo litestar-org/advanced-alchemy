@@ -34,6 +34,7 @@ pytestmark = [
 
 
 @pytest.fixture(
+    scope="session",
     params=[
         pytest.param(
             "sqlite_engine",
@@ -111,6 +112,7 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncC
 
 
 @pytest.fixture(
+    scope="session",
     params=[
         pytest.param(
             "aiosqlite_engine",
@@ -190,6 +192,7 @@ def async_sqlalchemy_config(
 
 
 @pytest.fixture(
+    scope="session",
     params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
@@ -211,7 +214,7 @@ def alembic_commands(
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Generator[Path, None, None]:
     path = tmp_path / "project_dir"
     path.mkdir(exist_ok=True)
