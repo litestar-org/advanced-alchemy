@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Optional
 
 import pytest
-import pytest_asyncio
 from passlib.context import CryptContext
 from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
-from sqlalchemy import Engine, String, create_engine
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy import Engine, String
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from advanced_alchemy.base import BigIntBase
@@ -17,6 +15,7 @@ from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from advanced_alchemy.types.password_hash.base import HashedPassword
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
 from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
+from tests.integration.test_models import DatabaseCapabilities
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
@@ -42,29 +41,27 @@ class User(BigIntBase):
     __table_args__ = {"info": {"allow_eager": True}}
 
 
-@pytest.fixture(scope="session")
-def sync_engine() -> Generator[Engine, None, None]:
-    """Session-scoped sync engine for password hash testing."""
-    engine = create_engine("sqlite:///sync_password_test.db", echo=False)
-    User.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
+@pytest.fixture()
+def password_test_tables(engine: Engine) -> None:
+    """Create password test tables for sync engines."""
+    if getattr(engine.dialect, "name", "") != "mock":
+        User.metadata.create_all(engine)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """Session-scoped async engine for password hash testing."""
-    engine = create_async_engine("sqlite+aiosqlite:///async_password_test.db", echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(User.metadata.create_all)
-    yield engine
-    await engine.dispose()
+@pytest.fixture()
+async def password_test_tables_async(async_engine: AsyncEngine) -> None:
+    """Create password test tables for async engines."""
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(User.metadata.create_all)
 
 
-@pytest.mark.xdist_group("sqlite")
-def test_password_hash_sync_sqlite(sync_engine: Engine, monkeypatch: MonkeyPatch) -> None:
-    """Test password hashing with Argon2 and Passlib backends using SQLite."""
-    session_factory: sessionmaker[Session] = sessionmaker(sync_engine, expire_on_commit=False)
+def test_password_hash_sync(engine: Engine, password_test_tables: None, monkeypatch: MonkeyPatch) -> None:
+    """Test password hashing with Argon2 and Passlib backends using sync engines."""
+    # Skip for unsupported backends
+    if DatabaseCapabilities.should_skip_bigint(engine.dialect.name):
+        pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
+    session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     # Test with session
     with session_factory() as db_session:
@@ -123,9 +120,13 @@ def test_password_hash_sync_sqlite(sync_engine: Engine, monkeypatch: MonkeyPatch
         assert user2.argon2_password is None
 
 
-@pytest.mark.xdist_group("sqlite")
-async def test_password_hash_async_sqlite(async_engine: AsyncEngine, monkeypatch: MonkeyPatch) -> None:
-    """Test password hashing with Argon2 and Passlib backends using async SQLite."""
+async def test_password_hash_async(
+    async_engine: AsyncEngine, password_test_tables_async: None, monkeypatch: MonkeyPatch
+) -> None:
+    """Test password hashing with Argon2 and Passlib backends using async engines."""
+    # Skip for unsupported backends
+    if DatabaseCapabilities.should_skip_bigint(async_engine.dialect.name):
+        pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
     session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
 
     # Test with async session

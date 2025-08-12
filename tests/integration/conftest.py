@@ -10,6 +10,12 @@ import pytest
 import pytest_asyncio
 from google.cloud import spanner  # pyright: ignore
 from pytest import FixtureRequest
+from pytest_databases.docker.cockroachdb import CockroachDBService
+from pytest_databases.docker.mssql import MSSQLService
+from pytest_databases.docker.mysql import MySQLService
+from pytest_databases.docker.oracle import OracleService
+from pytest_databases.docker.postgres import PostgresService
+from pytest_databases.docker.spanner import SpannerService
 from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -25,7 +31,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def configure_safe_logging() -> None:
+def configure_safe_logging(request: pytest.FixtureRequest) -> None:
     """Configure logging to prevent I/O errors during parallel test execution.
 
     Both Google Cloud Spanner and SQLAlchemy try to write logs during test execution with pytest-xdist,
@@ -54,6 +60,9 @@ def configure_safe_logging() -> None:
         "sqlalchemy.pool",
         # Test helpers that log cleanup operations
         "tests.integration.helpers",
+        # Pytest-xdist workers
+        "xdist.remote",
+        "xdist",
     ]
 
     for logger_name in problematic_loggers:
@@ -64,6 +73,20 @@ def configure_safe_logging() -> None:
         logger.addHandler(SafeStreamHandler())
         logger.setLevel(logging.WARNING)  # Reduce verbosity
         logger.propagate = False  # Prevent propagation to root logger
+
+    # Add finalizer to ensure clean shutdown
+    def cleanup() -> None:
+        # Flush all handlers before pytest-xdist tears down
+        for logger_name in problematic_loggers:
+            logger = logging.getLogger(logger_name)
+            for handler in logger.handlers:
+                try:
+                    handler.flush()
+                    handler.close()
+                except Exception:
+                    pass
+
+    request.addfinalizer(cleanup)
 
 
 @pytest.fixture(autouse=True)
@@ -148,22 +171,22 @@ def duckdb_engine(
 
 
 @pytest.fixture(scope="session")
-def oracle18c_engine(oracle18c_url: str) -> Generator[Engine, None, None]:
+def oracle18c_engine(oracle18c_url: str, oracle_18c_service: OracleService) -> Generator[Engine, None, None]:
     yield create_engine(oracle18c_url, poolclass=NullPool)
 
 
 @pytest.fixture(scope="session")
-def oracle23ai_engine(oracle23ai_url: str) -> Generator[Engine, None, None]:
+def oracle23ai_engine(oracle23ai_url: str, oracle_23ai_service: OracleService) -> Generator[Engine, None, None]:
     yield create_engine(oracle23ai_url, poolclass=NullPool)
 
 
 @pytest.fixture(scope="session")
-def psycopg_engine(postgres_psycopg_url: str) -> Generator[Engine, None, None]:
+def psycopg_engine(postgres_psycopg_url: str, postgres_service: PostgresService) -> Generator[Engine, None, None]:
     yield create_engine(postgres_psycopg_url, poolclass=NullPool)
 
 
 @pytest.fixture(scope="session")
-def mssql_engine(mssql_pyodbc_url: str) -> Generator[Engine, None, None]:
+def mssql_engine(mssql_pyodbc_url: str, mssql_service: MSSQLService) -> Generator[Engine, None, None]:
     yield create_engine(mssql_pyodbc_url, poolclass=NullPool)
 
 
@@ -190,7 +213,9 @@ def sqlite_engine(
 
 
 @pytest.fixture(scope="session")
-def spanner_engine(spanner_url: str, spanner_connection: spanner.Client) -> Generator[Engine, None, None]:
+def spanner_engine(
+    spanner_url: str, spanner_connection: spanner.Client, spanner_service: SpannerService
+) -> Generator[Engine, None, None]:
     # Environment variables are still set by set_spanner_emulator in root conftest,
     # but we use the explicit URL fixture now for consistency.
 
@@ -198,11 +223,13 @@ def spanner_engine(spanner_url: str, spanner_connection: spanner.Client) -> Gene
 
 
 @pytest.fixture(scope="session")
-def cockroachdb_engine(cockroachdb_psycopg_url: str) -> Generator[Engine, None, None]:
+def cockroachdb_engine(
+    cockroachdb_psycopg_url: str, cockroachdb_service: CockroachDBService
+) -> Generator[Engine, None, None]:
     yield create_engine(cockroachdb_psycopg_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def mock_sync_engine() -> Generator[NonCallableMagicMock, None, None]:
     mock = cast(NonCallableMagicMock, create_autospec(Engine, instance=True))
     mock.dialect = create_autospec(Dialect, instance=True)
@@ -312,7 +339,7 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=False)  # Disabled for session-scoped fixtures to prevent deadlocks
+@pytest.fixture(autouse=True)  # Re-enabled with proper scoping to prevent deadlocks
 def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
     """After each test, remove all rows from all tables for sync engine tests.
 
@@ -344,7 +371,7 @@ def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
         # Continue without raising to maintain test performance
 
 
-@pytest.fixture(autouse=False)  # Disabled for session-scoped fixtures to prevent deadlocks
+@pytest.fixture(autouse=True)  # Re-enabled with proper scoping to prevent deadlocks
 async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
     """After each test, remove all rows from all tables for async engine tests.
 
@@ -375,7 +402,7 @@ async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, 
         # Continue without raising to maintain test performance
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def aiosqlite_engine(
     tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -397,13 +424,15 @@ async def aiosqlite_engine(
         await engine.dispose()
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def asyncmy_engine(mysql_asyncmy_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def asyncmy_engine(mysql_asyncmy_url: str, mysql_service: MySQLService) -> AsyncGenerator[AsyncEngine, None]:
     yield create_async_engine(mysql_asyncmy_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def asyncpg_engine(postgres_asyncpg_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def asyncpg_engine(
+    postgres_asyncpg_url: str, postgres_service: PostgresService
+) -> AsyncGenerator[AsyncEngine, None]:
     """AsyncPG engine fixture that ensures pgcrypto extension is created."""
     engine = create_async_engine(postgres_asyncpg_url, poolclass=NullPool)
     try:
@@ -416,13 +445,17 @@ async def asyncpg_engine(postgres_asyncpg_url: str) -> AsyncGenerator[AsyncEngin
         await engine.dispose()
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def psycopg_async_engine(postgres_psycopg_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def psycopg_async_engine(
+    postgres_psycopg_url: str, postgres_service: PostgresService
+) -> AsyncGenerator[AsyncEngine, None]:
     yield create_async_engine(postgres_psycopg_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def cockroachdb_async_engine(cockroachdb_asyncpg_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def cockroachdb_async_engine(
+    cockroachdb_asyncpg_url: str, cockroachdb_service: CockroachDBService
+) -> AsyncGenerator[AsyncEngine, None]:
     """Cockroach DB async engine instance for end-to-end testing using asyncpg.
 
     Args:
@@ -434,8 +467,8 @@ async def cockroachdb_async_engine(cockroachdb_asyncpg_url: str) -> AsyncGenerat
     yield create_async_engine(cockroachdb_asyncpg_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def mssql_async_engine(mssql_aioodbc_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def mssql_async_engine(mssql_aioodbc_url: str, mssql_service: MSSQLService) -> AsyncGenerator[AsyncEngine, None]:
     """MS SQL instance for end-to-end testing using aioodbc.
 
     Args:
@@ -452,8 +485,10 @@ async def mssql_async_engine(mssql_aioodbc_url: str) -> AsyncGenerator[AsyncEngi
     yield create_async_engine(url_to_use, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def oracle18c_async_engine(oracle18c_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def oracle18c_async_engine(
+    oracle18c_url: str, oracle_18c_service: OracleService
+) -> AsyncGenerator[AsyncEngine, None]:
     """Oracle 18c async instance for end-to-end testing.
 
     Args:
@@ -465,8 +500,10 @@ async def oracle18c_async_engine(oracle18c_url: str) -> AsyncGenerator[AsyncEngi
     yield create_async_engine(oracle18c_url, poolclass=NullPool)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def oracle23ai_async_engine(oracle23ai_url: str) -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture(scope="function")
+async def oracle23ai_async_engine(
+    oracle23ai_url: str, oracle_23ai_service: OracleService
+) -> AsyncGenerator[AsyncEngine, None]:
     """Oracle 23c async instance for end-to-end testing.
 
     Args:
@@ -478,7 +515,7 @@ async def oracle23ai_async_engine(oracle23ai_url: str) -> AsyncGenerator[AsyncEn
     yield create_async_engine(oracle23ai_url, poolclass=NullPool)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(scope="function")
 async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
     """Return a mocked AsyncEngine instance.
 

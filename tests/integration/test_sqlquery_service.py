@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from msgspec import Struct
 from pydantic import BaseModel
-from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy import Engine, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session
 
 from advanced_alchemy import base, mixins
@@ -38,23 +36,19 @@ fixture_path = here.parent.parent / "examples"
 state_registry = base.create_registry()
 
 
-@pytest.fixture(scope="session")
-def sync_engine() -> Generator[Engine, None, None]:
-    """Session-scoped sync engine for sqlquery testing."""
-    engine = create_engine("sqlite://")
-    state_registry.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
+@pytest.fixture()
+def sqlquery_test_tables(engine: Engine) -> None:
+    """Create sqlquery test tables for sync engines."""
+    if getattr(engine.dialect, "name", "") != "mock":
+        state_registry.metadata.create_all(engine)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """Session-scoped async engine for sqlquery testing."""
-    engine = create_async_engine("sqlite+aiosqlite://")
-    async with engine.begin() as conn:
-        await conn.run_sync(state_registry.metadata.create_all)
-    yield engine
-    await engine.dispose()
+@pytest.fixture()
+async def sqlquery_test_tables_async(async_engine: AsyncEngine) -> None:
+    """Create sqlquery test tables for async engines."""
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(state_registry.metadata.create_all)
 
 
 class UUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
@@ -128,8 +122,12 @@ class StateQueryBaseModel(BaseModel):
 
 
 @pytest.mark.xdist_group("sqlquery")
-def test_sync_fixture_and_query(sync_engine: Engine) -> None:
-    with Session(sync_engine) as session:
+def test_sync_fixture_and_query(engine: Engine, sqlquery_test_tables: None) -> None:
+    # Skip mock engines as they don't support proper query operations
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support proper query operations")
+
+    with Session(engine) as session:
         state_service = USStateSyncService(session=session)
         query_service = SQLAlchemySyncQueryService(session=session)
         fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
@@ -202,7 +200,11 @@ def test_sync_fixture_and_query(sync_engine: Engine) -> None:
 
 
 @pytest.mark.xdist_group("sqlquery")
-async def test_async_fixture_and_query(async_engine: AsyncEngine) -> None:
+async def test_async_fixture_and_query(async_engine: AsyncEngine, sqlquery_test_tables_async: None) -> None:
+    # Skip mock engines as they don't support proper query operations
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support proper query operations")
+
     async with AsyncSession(async_engine) as session:
         state_service = USStateAsyncService(session=session)
 

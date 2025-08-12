@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 import pytest
-from sqlalchemy import ForeignKey, String, create_engine
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import Engine, ForeignKey, String
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, noload, relationship, selectinload, sessionmaker
 
 from advanced_alchemy.base import BigIntBase, UUIDBase
@@ -22,7 +21,7 @@ pytestmark = [
 
 
 @pytest.mark.xdist_group("loader")
-def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
     from advanced_alchemy import base, mixins
 
     orm_registry = base.create_registry()
@@ -40,12 +39,14 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
     class UUIDCountry(UUIDBase):
+        __tablename__ = "uuid_country_test_loader"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[UUIDState]] = relationship(back_populates="country", uselist=True, lazy="noload")
 
     class UUIDState(UUIDBase):
+        __tablename__ = "uuid_state_test_loader"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[UUID] = mapped_column(ForeignKey(UUIDCountry.id))
+        country_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_country_test_loader.id"))
 
         country: Mapped[UUIDCountry] = relationship(uselist=False, back_populates="states", lazy="raise")
 
@@ -55,7 +56,6 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     class CountryRepository(SQLAlchemySyncRepository[UUIDCountry]):
         model_type = UUIDCountry
 
-    engine = create_engine(f"sqlite:///{tmp_path}/test.sqlite1.db", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
@@ -126,7 +126,7 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.xdist_group("loader")
-async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+async def test_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
     from advanced_alchemy import base, mixins
 
     orm_registry = base.create_registry()
@@ -144,12 +144,14 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
     class BigIntCountry(BigIntBase):
+        __tablename__ = "bigint_country_async_loader"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[BigIntState]] = relationship(back_populates="country", uselist=True)
 
     class BigIntState(BigIntBase):
+        __tablename__ = "bigint_state_async_loader"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountry.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey("bigint_country_async_loader.id"))
 
         country: Mapped[BigIntCountry] = relationship(uselist=False, back_populates="states", lazy="raise")
 
@@ -159,10 +161,9 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     class CountryRepository(SQLAlchemyAsyncRepository[BigIntCountry]):
         model_type = BigIntCountry
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test.sqlite2.db", echo=True)
-    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(async_engine, expire_on_commit=False)
 
-    async with engine.begin() as conn:
+    async with async_engine.begin() as conn:
         await conn.run_sync(BigIntState.metadata.create_all)
 
     async with session_factory() as db_session:
@@ -228,7 +229,7 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.xdist_group("loader")
-def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_default_overrides_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
     from advanced_alchemy import base, mixins
 
     orm_registry = base.create_registry()
@@ -246,12 +247,14 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
     class UUIDCountryTest(UUIDBase):
+        __tablename__ = "uuid_country_test_override"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[UUIDStateTest]] = relationship(back_populates="country", uselist=True, lazy="selectin")
 
     class UUIDStateTest(UUIDBase):
+        __tablename__ = "uuid_state_test_override"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[UUID] = mapped_column(ForeignKey(UUIDCountryTest.id))
+        country_id: Mapped[UUID] = mapped_column(ForeignKey("uuid_country_test_override.id"))
 
         country: Mapped[UUIDCountryTest] = relationship(uselist=False, back_populates="states", lazy="noload")
 
@@ -264,7 +267,6 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
         inherit_lazy_relationships = False
         model_type = UUIDCountryTest
 
-    engine = create_engine(f"sqlite:///{tmp_path}/test_loader.sqlite.db", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
@@ -301,7 +303,7 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
 
 
 @pytest.mark.xdist_group("loader")
-async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
     from advanced_alchemy import base, mixins
 
     orm_registry = base.create_registry()
@@ -317,18 +319,21 @@ async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, tmp_path
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
     class BigIntCountryTest(BigIntBase):
+        __tablename__ = "bigint_country_test_async_override"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[BigIntStateTest]] = relationship(back_populates="country", uselist=True, lazy="selectin")
         notes: Mapped[list[BigIntCountryNote]] = relationship(back_populates="country", uselist=True, lazy="selectin")
 
     class BigIntCountryNote(BigIntBase):
+        __tablename__ = "bigint_country_note_async_override"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountryTest.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey("bigint_country_test_async_override.id"))
         country: Mapped[BigIntCountryTest] = relationship(uselist=False, back_populates="notes", lazy="raise")
 
     class BigIntStateTest(BigIntBase):
+        __tablename__ = "bigint_state_test_async_override"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountryTest.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey("bigint_country_test_async_override.id"))
 
         country: Mapped[BigIntCountryTest] = relationship(uselist=False, back_populates="states", lazy="raise")
 
@@ -340,10 +345,9 @@ async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, tmp_path
         merge_loader_options = False
         loader_options = [noload(BigIntCountryTest.states), noload(BigIntCountryTest.notes)]
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test_loader.sqlite2.db", echo=True)
-    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(async_engine, expire_on_commit=False)
 
-    async with engine.begin() as conn:
+    async with async_engine.begin() as conn:
         await conn.run_sync(BigIntStateTest.metadata.create_all)
 
     async with session_factory() as db_session:

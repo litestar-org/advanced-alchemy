@@ -3,20 +3,18 @@
 import asyncio
 import datetime
 import uuid
-from collections.abc import AsyncGenerator, Generator
 from functools import partial
 from typing import Optional, Union
 from unittest.mock import Mock
 
 import pytest
-import pytest_asyncio
 from litestar import Litestar, Request, get, post
 from litestar.middleware.session import SessionMiddleware
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.stores.base import Store
 from litestar.testing import AsyncTestClient
-from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import Engine, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy.base import UUIDv7Base
@@ -46,47 +44,33 @@ class SyncSessionModel(SessionModelMixin, UUIDv7Base):
     __tablename__ = "sync_test_sessions"
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """Create an async SQLite engine for testing."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(UUIDv7Base.metadata.create_all)
-    yield engine
-    await engine.dispose()
-
-
-@pytest.fixture(scope="session")
-def sync_engine() -> Generator[Engine, None, None]:
-    """Create a sync SQLite engine for testing."""
-    import os
-    import tempfile
-
-    # Create a temporary file for the database
-    fd, db_path = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-
-    try:
-        engine = create_engine(f"sqlite:///{db_path}")
-        UUIDv7Base.metadata.create_all(engine)
-        yield engine
-        engine.dispose()
-    finally:
-        # Clean up the temporary file
-        if os.path.exists(db_path):
-            os.unlink(db_path)
+@pytest.fixture()
+async def litestar_test_tables_async(async_engine: AsyncEngine) -> None:
+    """Create litestar session test tables for async engines."""
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(UUIDv7Base.metadata.create_all)
 
 
 @pytest.fixture()
-async def async_session_factory(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+def litestar_test_tables_sync(engine: Engine) -> None:
+    """Create litestar session test tables for sync engines."""
+    if getattr(engine.dialect, "name", "") != "mock":
+        UUIDv7Base.metadata.create_all(engine)
+
+
+@pytest.fixture()
+async def async_session_factory(
+    async_engine: AsyncEngine, litestar_test_tables_async: None
+) -> async_sessionmaker[AsyncSession]:
     """Create async session factory."""
     return async_sessionmaker(async_engine, expire_on_commit=False)
 
 
 @pytest.fixture()
-def sync_session_factory(sync_engine: Engine) -> sessionmaker[Session]:
+def sync_session_factory(engine: Engine, litestar_test_tables_sync: None) -> sessionmaker[Session]:
     """Create sync session factory."""
-    return sessionmaker(sync_engine, expire_on_commit=False)
+    return sessionmaker(engine, expire_on_commit=False)
 
 
 @pytest.fixture()
@@ -123,6 +107,11 @@ class TestAsyncSessionBackendIntegration:
         mock_store: Store,
     ) -> None:
         """Test complete session lifecycle: create, retrieve, update, delete."""
+        # Skip mock engines as they don't support server-side cursors properly
+        if hasattr(async_backend, "_config") and hasattr(async_backend._config, "engine_instance"):
+            engine = async_backend._config.engine_instance
+            if getattr(engine.dialect, "name", "") == "mock":
+                pytest.skip("Mock engines don't support server-side cursors")
         session_id = str(uuid.uuid4())
         original_data = b"test_data_123"
         updated_data = b"updated_data_456"
@@ -307,10 +296,10 @@ class TestSyncSessionBackendIntegration:
     """Integration tests for sync session backend."""
 
     @pytest.fixture()
-    def sync_config(self, sync_engine: Engine) -> SQLAlchemySyncConfig:
+    def sync_config(self, engine: Engine) -> SQLAlchemySyncConfig:
         """Create sync config with test engine."""
         return SQLAlchemySyncConfig(
-            engine_instance=sync_engine,
+            engine_instance=engine,
             session_dependency_key="db_session",
         )
 

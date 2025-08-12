@@ -336,7 +336,7 @@ def bigint_sync_setup(
 
 
 # Async Setup Fixtures
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture()
 async def uuid_async_setup(
     uuid_models: dict[str, type],
     async_engine: AsyncEngine,
@@ -403,7 +403,7 @@ async def uuid_async_setup(
             pass
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture()
 async def bigint_async_setup(
     bigint_models: dict[str, type],
     async_engine: AsyncEngine,
@@ -469,7 +469,7 @@ def repository_models_sync(
     return request.getfixturevalue("bigint_sync_setup")  # type: ignore[no-any-return]
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture()
 async def repository_models_async(
     repository_pk_type: str,
     uuid_async_setup: dict[str, type],

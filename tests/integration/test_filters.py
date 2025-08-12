@@ -991,10 +991,9 @@ def test_collection_filter_prefer_any(session: Session, movie_model_sync: type[D
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
     # Test with prefer_any=True (using ANY)
-    # Skip this test for SQLite since it doesn't support the ANY function
-    from sqlalchemy.dialects import sqlite
-
-    if not isinstance(session.get_bind().dialect, sqlite.dialect):
+    # Only PostgreSQL properly supports the ANY operator with array parameters
+    dialect_name = getattr(session.bind.dialect, "name", "")
+    if dialect_name in ("postgresql", "psycopg", "asyncpg", "cockroachdb"):
         collection_filter = CollectionFilter[str](field_name="title", values=["The Matrix", "Shawshank Redemption"])
         statement = collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
         results = session.execute(statement).scalars().all()
@@ -1037,10 +1036,9 @@ def test_not_in_collection_filter_prefer_any(session: Session, movie_model_sync:
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
     # Test with prefer_any=True (using != ANY)
-    # Skip this test for SQLite since it doesn't support the ANY function
-    from sqlalchemy.dialects import sqlite
-
-    if not isinstance(session.get_bind().dialect, sqlite.dialect):
+    # Only PostgreSQL properly supports the ANY operator with array parameters
+    dialect_name = getattr(session.bind.dialect, "name", "")
+    if dialect_name in ("postgresql", "psycopg", "asyncpg"):
         not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=["The Hangover"])
         statement = not_in_collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
         results = session.execute(statement).scalars().all()

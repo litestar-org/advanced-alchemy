@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Optional, cast
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session
+from sqlalchemy import Engine, String, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy import base, mixins
 from advanced_alchemy.repository import (
@@ -38,23 +36,19 @@ fixture_path = here.parent.parent / "examples"
 attrs_registry = base.create_registry()
 
 
-@pytest.fixture(scope="session")
-def sync_engine() -> Generator[Engine, None, None]:
-    """Session-scoped sync engine for attrs testing."""
-    engine = create_engine("sqlite://")
-    attrs_registry.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
+@pytest.fixture()
+def attrs_test_tables(engine: Engine) -> None:
+    """Create attrs test tables for sync engines."""
+    if getattr(engine.dialect, "name", "") != "mock":
+        attrs_registry.metadata.create_all(engine)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """Session-scoped async engine for attrs testing."""
-    engine = create_async_engine("sqlite+aiosqlite://")
-    async with engine.begin() as conn:
-        await conn.run_sync(attrs_registry.metadata.create_all)
-    yield engine
-    await engine.dispose()
+@pytest.fixture()
+async def attrs_test_tables_async(async_engine: AsyncEngine) -> None:
+    """Create attrs test tables for async engines."""
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(attrs_registry.metadata.create_all)
 
 
 if ATTRS_INSTALLED:
@@ -102,17 +96,17 @@ class Person(UUIDBase):
     """Person model for testing attrs integration."""
 
     __tablename__ = "person"
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(255))
     age: Mapped[int]
-    email: Mapped[Optional[str]]
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 
 class USState(UUIDBase):
     """US State model for testing."""
 
     __tablename__ = "us_state_lookup"
-    abbreviation: Mapped[str]
-    name: Mapped[str]
+    abbreviation: Mapped[str] = mapped_column(String(10))
+    name: Mapped[str] = mapped_column(String(255))
 
 
 class PersonSyncRepository(SQLAlchemySyncRepository[Person]):
@@ -179,9 +173,13 @@ class StateQuery(base.SQLQuery):
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_sync_attrs_service_basic_operations(sync_engine: Engine) -> None:
+def test_sync_attrs_service_basic_operations(engine: Engine, attrs_test_tables: None) -> None:
     """Test basic service operations with attrs classes."""
-    with Session(sync_engine) as session:
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
+    with Session(engine) as session:
         service = PersonSyncService(session=session)
 
         # Test create with dict data first (which works with existing services)
@@ -218,9 +216,13 @@ def test_sync_attrs_service_basic_operations(sync_engine: Engine) -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_sync_attrs_with_defaults(sync_engine: Engine) -> None:
+def test_sync_attrs_with_defaults(engine: Engine, attrs_test_tables: None) -> None:
     """Test attrs classes with default values."""
-    with Session(sync_engine) as session:
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
+    with Session(engine) as session:
         service = PersonSyncService(session=session)
 
         # Create with dict data and default values
@@ -241,9 +243,13 @@ def test_sync_attrs_with_defaults(sync_engine: Engine) -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_sync_query_service_with_attrs(sync_engine: Engine) -> None:
+def test_sync_query_service_with_attrs(engine: Engine, attrs_test_tables: None) -> None:
     """Test query service with attrs schema conversion."""
-    with Session(sync_engine) as session:
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
+    with Session(engine) as session:
         state_service = USStateSyncService(session=session)
         query_service = SQLAlchemySyncQueryService(session=session)
 
@@ -282,8 +288,12 @@ def test_sync_query_service_with_attrs(sync_engine: Engine) -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine) -> None:
+async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine, attrs_test_tables_async: None) -> None:
     """Test async service operations with attrs classes."""
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
     async with AsyncSession(async_engine) as session:
         service = PersonAsyncService(session=session)
 
@@ -321,8 +331,12 @@ async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine) -
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-async def test_async_query_service_with_attrs(async_engine: AsyncEngine) -> None:
+async def test_async_query_service_with_attrs(async_engine: AsyncEngine, attrs_test_tables_async: None) -> None:
     """Test async query service with attrs schema conversion."""
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
     async with AsyncSession(async_engine) as session:
         state_service = USStateAsyncService(session=session)
         query_service = SQLAlchemyAsyncQueryService(session=session)
@@ -359,9 +373,13 @@ async def test_async_query_service_with_attrs(async_engine: AsyncEngine) -> None
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_attrs_error_handling(sync_engine: Engine) -> None:
+def test_attrs_error_handling(engine: Engine, attrs_test_tables: None) -> None:
     """Test error handling with attrs integration."""
-    with Session(sync_engine) as session:
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+    
+    with Session(engine) as session:
         service = PersonSyncService(session=session)
 
         # Test with invalid attrs-like class (should work with duck typing)
@@ -380,9 +398,13 @@ def test_attrs_error_handling(sync_engine: Engine) -> None:
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 @pytest.mark.xdist_group("attrs")
-def test_attrs_mixed_with_other_schemas(sync_engine: Engine) -> None:
+def test_attrs_mixed_with_other_schemas(engine: Engine, attrs_test_tables: None) -> None:
     """Test attrs alongside other schema types."""
-    with Session(sync_engine) as session:
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+    
+    with Session(engine) as session:
         service = PersonSyncService(session=session)
 
         # Create with attrs

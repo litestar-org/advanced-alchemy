@@ -8,9 +8,9 @@ import pytest
 import pytest_asyncio
 from minio import Minio  # type: ignore[import-untyped]
 from pytest_databases.docker.minio import MinioService
-from sqlalchemy import Engine, String, create_engine, event
+from sqlalchemy import Engine, String, event
 from sqlalchemy.exc import InvalidRequestError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
@@ -109,55 +109,54 @@ def storage_registry(tmp_path_factory: pytest.TempPathFactory) -> "StorageRegist
     return storages
 
 
-@pytest.fixture(scope="session")
-def sync_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[Engine, None, None]:
-    """Provides an SQLite engine scoped to the test session."""
-    db_dir = tmp_path_factory.mktemp("file_object_sync_db")
-    db_file = db_dir / "test_file_object_sync.db"
-    engine = create_engine(f"sqlite:///{db_file}", execution_options={"enable_file_object_listener": True})
+@pytest.fixture(scope="function")
+def sync_db_engine(engine: Engine) -> Generator[Engine, None, None]:
+    """Provides a sync engine with file object listener execution options."""
+    # Set the execution option for file object listener
+    engine = engine.execution_options(enable_file_object_listener=True)
 
-    # Create schema once per session
-    Base.metadata.create_all(engine)
-    try:
-        yield engine
-    finally:
-        # Drop schema and clean up
-        Base.metadata.drop_all(engine, checkfirst=True)
-        engine.dispose()
-        db_file.unlink(missing_ok=True)
-
-
-@pytest.fixture(scope="session")
-def async_db_engine(tmp_path_factory: pytest.TempPathFactory) -> Generator[AsyncEngine, None, None]:
-    """Provides an SQLite engine scoped to the test session."""
-    db_dir = tmp_path_factory.mktemp("file_object_async_db")
-    db_file = db_dir / "test_file_object_async.db"
-    engine = create_async_engine(
-        f"sqlite+aiosqlite:///{db_file}", execution_options={"enable_file_object_listener": True}
-    )
-
-    # Create schema once per session
-    async def _create() -> None:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    import asyncio as _asyncio
-
-    # Use asyncio.run() for better isolation instead of get_event_loop()
-    _asyncio.run(_create())
+    # Skip metadata creation if using mock engine
+    if getattr(engine.dialect, "name", "") != "mock":
+        Base.metadata.create_all(engine)
 
     try:
         yield engine
     finally:
+        # Clean up metadata if not mock
+        if getattr(engine.dialect, "name", "") != "mock":
+            Base.metadata.drop_all(engine, checkfirst=True)
 
-        async def _drop() -> None:
+
+@pytest.fixture(scope="function")
+def async_db_engine(async_engine: AsyncEngine) -> Generator[AsyncEngine, None, None]:
+    """Provides an async engine with file object listener execution options."""
+    # Set the execution option for file object listener
+    engine = async_engine.execution_options(enable_file_object_listener=True)
+
+    # Skip metadata creation if using mock engine
+    if getattr(engine.dialect, "name", "") != "mock":
+
+        async def _create() -> None:
             async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.drop_all)
-            await engine.dispose()
+                await conn.run_sync(Base.metadata.create_all)
 
-        # Use asyncio.run() for better isolation instead of get_event_loop()
-        _asyncio.run(_drop())
-        db_file.unlink(missing_ok=True)
+        import asyncio as _asyncio
+
+        _asyncio.run(_create())
+
+    try:
+        yield engine
+    finally:
+        # Clean up metadata if not mock
+        if getattr(engine.dialect, "name", "") != "mock":
+
+            async def _drop() -> None:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.drop_all)
+
+            import asyncio as _asyncio
+
+            _asyncio.run(_drop())
 
 
 @pytest.fixture(scope="session")
@@ -167,7 +166,7 @@ def session(sync_db_engine: Engine, storage_registry: "StorageRegistry") -> Gene
         yield db_session
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
 ) -> AsyncGenerator[AsyncSession, None]:
