@@ -22,17 +22,20 @@ pytestmark = [
 
 @pytest.mark.xdist_group("loader")
 def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
+    import uuid
+
     from advanced_alchemy import base, mixins
 
-    orm_registry = base.create_registry()
+    # Use a unique bind key for this test to avoid metadata conflicts
+    bind_key = f"test_loader_{uuid.uuid4().hex[:8]}"
 
     class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
         __abstract__ = True
-        registry = orm_registry
+        __bind_key__ = bind_key
 
     class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
         __abstract__ = True
-        registry = orm_registry
+        __bind_key__ = bind_key
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
 
@@ -59,7 +62,8 @@ def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
-        UUIDState.metadata.create_all(conn)
+        # Use the metadata from the bind key
+        NewUUIDBase.metadata.create_all(conn)
 
     with session_factory() as db_session:
         usa = UUIDCountry(name="United States of America")
