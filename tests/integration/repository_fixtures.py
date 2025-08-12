@@ -250,7 +250,25 @@ def uuid_sync_setup(
 
         # Create tables once per engine type
         if engine_key not in _tables_created_sync:
-            base_model.metadata.create_all(engine)
+            # For CockroachDB, ensure careful table ordering due to foreign key constraints
+            if "cockroach" in engine.dialect.name:
+                try:
+                    # Create tables with foreign key dependency order for CockroachDB
+                    base_model.metadata.create_all(engine, checkfirst=True)
+                except Exception as e:
+                    # If there are dependency issues, create tables individually
+                    try:
+                        # Create author table first (no dependencies)
+                        uuid_models["author"].__table__.create(engine, checkfirst=True)
+                        # Then create other tables that might depend on author
+                        for model_name in ["rule", "secret", "book", "item", "tag", "slug_book", "model_with_fetched_value", "file_document"]:
+                            if model_name in uuid_models:
+                                uuid_models[model_name].__table__.create(engine, checkfirst=True)
+                    except Exception:
+                        # If individual creation also fails, use the original error
+                        raise e
+            else:
+                base_model.metadata.create_all(engine)
             _tables_created_sync[engine_key] = True
 
         # Insert seed data
@@ -321,8 +339,27 @@ async def uuid_async_setup(
 
         # Create tables once per engine type
         if engine_key not in _tables_created_async:
-            async with async_engine.begin() as conn:
-                await conn.run_sync(base_model.metadata.create_all)
+            # For CockroachDB, ensure careful table ordering due to foreign key constraints
+            if "cockroach" in async_engine.dialect.name:
+                try:
+                    async with async_engine.begin() as conn:
+                        await conn.run_sync(lambda sync_conn: base_model.metadata.create_all(sync_conn, checkfirst=True))
+                except Exception as e:
+                    # If there are dependency issues, create tables individually
+                    try:
+                        async with async_engine.begin() as conn:
+                            # Create author table first (no dependencies)
+                            await conn.run_sync(lambda sync_conn: uuid_models["author"].__table__.create(sync_conn, checkfirst=True))
+                            # Then create other tables that might depend on author
+                            for model_name in ["rule", "secret", "book", "item", "tag", "slug_book", "model_with_fetched_value", "file_document"]:
+                                if model_name in uuid_models:
+                                    await conn.run_sync(lambda sync_conn, mn=model_name: uuid_models[mn].__table__.create(sync_conn, checkfirst=True))
+                    except Exception:
+                        # If individual creation also fails, use the original error
+                        raise e
+            else:
+                async with async_engine.begin() as conn:
+                    await conn.run_sync(base_model.metadata.create_all)
             _tables_created_async[engine_key] = True
 
         # Insert seed data

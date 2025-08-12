@@ -29,6 +29,7 @@ from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemyAsyncSessionBackend,
     SQLAlchemySyncSessionBackend,
 )
+from tests.integration.helpers import cleanup_database, cleanup_database_async
 
 pytestmark = [
     pytest.mark.integration,
@@ -88,7 +89,15 @@ def session_tables_setup(
 
     # Clean up tables at end of test run for this engine
     if getattr(engine.dialect, "name", "") != "mock":
-        session_model_class.metadata.drop_all(engine, checkfirst=True)
+        try:
+            with cleanup_database(engine) as cleaner:
+                # Get table names from metadata
+                tables_to_clean = [table.name for table in session_model_class.metadata.sorted_tables]
+                cleaner.include_only = set(tables_to_clean) if tables_to_clean else None
+                cleaner.cleanup()
+        except Exception:
+            # Ignore cleanup errors - they don't affect test results
+            pass
 
 
 @pytest.fixture
@@ -114,8 +123,15 @@ async def async_session_tables_setup(
 
     # Clean up tables at end of test run for this engine
     if getattr(async_engine.dialect, "name", "") != "mock":
-        async with async_engine.begin() as conn:
-            await conn.run_sync(lambda sync_conn: session_model_class.metadata.drop_all(sync_conn, checkfirst=True))
+        try:
+            async with cleanup_database_async(async_engine) as cleaner:
+                # Get table names from metadata
+                tables_to_clean = [table.name for table in session_model_class.metadata.sorted_tables]
+                cleaner.include_only = set(tables_to_clean) if tables_to_clean else None
+                await cleaner.cleanup()
+        except Exception:
+            # Ignore cleanup errors - they don't affect test results
+            pass
 
 
 @pytest.fixture
