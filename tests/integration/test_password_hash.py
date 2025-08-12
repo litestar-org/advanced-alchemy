@@ -61,6 +61,10 @@ def test_password_hash_sync(engine: Engine, password_test_tables: None, monkeypa
     # Skip for unsupported backends
     if DatabaseCapabilities.should_skip_bigint(engine.dialect.name):
         pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
+
+    # Skip mock engine - it doesn't support auto-generated primary keys
+    if engine.dialect.name == "mock":
+        pytest.skip("Mock engine doesn't support auto-generated primary keys")
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     # Test with session
@@ -127,6 +131,10 @@ async def test_password_hash_async(
     # Skip for unsupported backends
     if DatabaseCapabilities.should_skip_bigint(async_engine.dialect.name):
         pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
+
+    # Skip mock engine - it doesn't support auto-generated primary keys
+    if async_engine.dialect.name == "mock":
+        pytest.skip("Mock engine doesn't support auto-generated primary keys")
     session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
 
     # Test with async session
