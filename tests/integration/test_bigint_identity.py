@@ -29,6 +29,8 @@ def test_ap_sync(monkeypatch: MonkeyPatch, engine: Engine) -> None:
         pytest.skip("Oracle has issues with BIGSERIAL syntax")
     if dialect_name == "mssql":
         pytest.skip("MSSQL requires VARCHAR length specification")
+    if dialect_name.startswith(("spanner", "cockroach")):
+        pytest.skip(f"{dialect_name} doesn't support Identity/BigInt primary keys")
 
     from sqlalchemy.orm import DeclarativeBase
 
@@ -115,6 +117,8 @@ async def test_ap_async(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> 
         pytest.skip("Oracle has issues with BIGSERIAL syntax")
     if dialect_name in ("mssql", "asyncmy"):
         pytest.skip("MSSQL and MySQL require VARCHAR length specification")
+    if dialect_name.startswith(("spanner", "cockroach")):
+        pytest.skip(f"{dialect_name} doesn't support Identity/BigInt primary keys")
 
     from sqlalchemy.orm import DeclarativeBase
 

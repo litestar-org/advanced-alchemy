@@ -140,6 +140,9 @@ async def test_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine)
     # Skip mock engines as they don't support multi-row inserts with RETURNING
     if getattr(async_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engines don't support multi-row inserts with RETURNING")
+    # Skip CockroachDB as it doesn't support BigInt primary keys
+    if "cockroach" in getattr(async_engine.dialect, "name", ""):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
 
     from sqlalchemy.orm import DeclarativeBase
 
@@ -341,6 +344,9 @@ async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, async_en
     # Skip mock engines as they don't support multi-row inserts with RETURNING
     if getattr(async_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engines don't support multi-row inserts with RETURNING")
+    # Skip CockroachDB as it doesn't support BigInt primary keys
+    if "cockroach" in getattr(async_engine.dialect, "name", ""):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
 
     from sqlalchemy.orm import DeclarativeBase
 

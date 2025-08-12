@@ -128,8 +128,18 @@ def sync_db_engine(engine: Engine) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture(scope="function")
-def async_db_engine(async_engine: AsyncEngine) -> Generator[AsyncEngine, None, None]:
+def async_db_engine(request: pytest.FixtureRequest) -> Generator[AsyncEngine, None, None]:
     """Provides an async engine with file object listener execution options."""
+    # Try to get async_engine, fall back to specific engine fixtures
+    if "async_engine" in request.fixturenames:
+        async_engine = request.getfixturevalue("async_engine")
+    elif "aiosqlite_engine" in request.fixturenames:
+        async_engine = request.getfixturevalue("aiosqlite_engine")
+    elif "asyncpg_engine" in request.fixturenames:
+        async_engine = request.getfixturevalue("asyncpg_engine")
+    else:
+        pytest.skip("No async engine fixture available")
+
     # Set the execution option for file object listener
     engine = async_engine.execution_options(enable_file_object_listener=True)
 

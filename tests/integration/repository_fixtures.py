@@ -449,10 +449,28 @@ def repository_pk_type(request: FixtureRequest) -> str:
 
     # Skip BigInt tests for CockroachDB and Spanner - they only support UUID primary keys
     if pk_type == "bigint":
-        # Check if we're using CockroachDB or Spanner engines
-        worker_id = get_worker_id(request)
-        if any(dialect in worker_id.lower() for dialect in ["cockroach", "spanner"]):
-            pytest.skip(f"BigInt primary keys not supported for {worker_id}")
+        # Try to determine the engine being used from fixture names
+        # This is not ideal but works with the current architecture
+        fixture_names = request.fixturenames
+
+        # Check for known unsupported engines in fixture names
+        if any("cockroach" in name for name in fixture_names):
+            pytest.skip("BigInt primary keys not supported for CockroachDB")
+        elif any("spanner" in name for name in fixture_names):
+            pytest.skip("BigInt primary keys not supported for Spanner")
+
+        # Also check if we can get the session to check the dialect
+        # This works when any_session is available
+        if "any_session" in fixture_names:
+            try:
+                session = request.getfixturevalue("any_session")
+                if hasattr(session, "bind") and session.bind:
+                    dialect_name = getattr(session.bind.dialect, "name", "")
+                    if "cockroach" in dialect_name or "spanner" in dialect_name:
+                        pytest.skip(f"BigInt primary keys not supported for {dialect_name}")
+            except Exception:
+                # If we can't get the session, continue with other checks
+                pass
 
     return pk_type  # type: ignore[no-any-return]
 

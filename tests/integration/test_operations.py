@@ -241,7 +241,14 @@ def store_model_sync(
     if "spanner" in dialect_name:
         # Skip table creation for Spanner - it doesn't support UniqueConstraint
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
-    elif dialect_name != "mock":
+
+    # Skip BigInt models for CockroachDB - it only supports UUID primary keys
+    from advanced_alchemy.base import BigIntBase
+
+    if dialect_name.startswith("cockroach") and issubclass(cached_store_model, BigIntBase):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
+
+    if dialect_name != "mock":
         # Create table once per engine type
         cached_store_model.metadata.create_all(engine, checkfirst=True)
 
@@ -274,7 +281,14 @@ async def store_model_async(
     if "spanner" in dialect_name:
         # Skip table creation for Spanner - it doesn't support UniqueConstraint
         pytest.skip("Spanner does not support UniqueConstraint - requires unique indexes")
-    elif dialect_name != "mock":
+
+    # Skip BigInt models for CockroachDB - it only supports UUID primary keys
+    from advanced_alchemy.base import BigIntBase
+
+    if dialect_name.startswith("cockroach") and issubclass(cached_store_model, BigIntBase):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
+
+    if dialect_name != "mock":
         # Create table once per engine type
         async with async_engine.begin() as conn:
             await conn.run_sync(cached_store_model.metadata.create_all)
