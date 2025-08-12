@@ -378,7 +378,7 @@ def test_attrs_error_handling(engine: Engine, attrs_test_tables: None) -> None:
     # Skip mock engines as they don't support auto-generated primary keys
     if getattr(engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engines don't support auto-generated primary keys")
-    
+
     with Session(engine) as session:
         service = PersonSyncService(session=session)
 
@@ -403,7 +403,7 @@ def test_attrs_mixed_with_other_schemas(engine: Engine, attrs_test_tables: None)
     # Skip mock engines as they don't support auto-generated primary keys
     if getattr(engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engines don't support auto-generated primary keys")
-    
+
     with Session(engine) as session:
         service = PersonSyncService(session=session)
 
