@@ -3,6 +3,38 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.5.0
+    :date: 2025-08-13
+
+    .. change:: correct typing issue in `litestar` example
+        :type: bugfix
+        :pr: 498
+
+    .. change:: correctly handle `id_attribute` with `update`
+        :type: bugfix
+        :pr: 502
+
+        Correctly merge attributes onto existing instance when using `id_attribute` and `update`
+
+    .. change:: gzip and zipped fixture support
+        :type: feature
+        :pr: 500
+
+        Contains support for automatically extracting and loading data from zipped fixture files
+
+    .. change:: match against complex types
+        :type: feature
+        :pr: 501
+
+        Correctly handle complex data types for matching fields
+
+    .. change:: `attrs` integration
+        :type: feature
+        :pr: 503
+
+        Adds `attrs` support into the `ResultConverter` mixin.  This enables `to_schema` and `schema_dump` to natively understand `attrs`.
+
+
 .. changelog:: 1.4.5
     :date: 2025-06-28
 
