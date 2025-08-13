@@ -49,7 +49,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
         # Define UUID models using patched bases with unique class names
 
-        class UUIDAuthor(BaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDAuthor(BaseClass):  # type: ignore[valid-type,misc]
             """The Author domain object."""
 
             __tablename__ = f"uuid_author_{worker_id}"
@@ -59,7 +59,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             string_field: Mapped[Optional[str]] = mapped_column(String(20), default="static value", nullable=True)
             dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)
 
-        class UUIDBook(SimpleBaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDBook(SimpleBaseClass):  # type: ignore[valid-type,misc]
             """The Book domain object."""
 
             __tablename__ = f"uuid_book_{worker_id}"
@@ -69,15 +69,17 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             author_id: Mapped[UUID] = mapped_column(ForeignKey(f"uuid_author_{worker_id}.id"))
 
         # Define relationships after both classes exist to avoid forward references
-        UUIDAuthor.books = relationship(
-            UUIDBook,
+        IntegrationUUIDAuthor.books = relationship(
+            IntegrationUUIDBook,
             lazy="selectin",
             back_populates="author",
             cascade="all, delete",
         )
-        UUIDBook.author = relationship(UUIDAuthor, lazy="joined", innerjoin=True, back_populates="books")
+        IntegrationUUIDBook.author = relationship(
+            IntegrationUUIDAuthor, lazy="joined", innerjoin=True, back_populates="books"
+        )
 
-        class UUIDRule(BaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDRule(BaseClass):  # type: ignore[valid-type,misc]
             """The rule domain object."""
 
             __tablename__ = f"uuid_rule_{worker_id}"
@@ -86,7 +88,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             name: Mapped[str] = mapped_column(String(length=250))
             config: Mapped[dict] = mapped_column(JsonB, default=lambda: {})
 
-        class UUIDSecret(SecretBaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDSecret(SecretBaseClass):  # type: ignore[valid-type,misc]
             """The secret domain object."""
 
             __tablename__ = f"uuid_secret_{worker_id}"
@@ -95,7 +97,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             secret: Mapped[str] = mapped_column(EncryptedString(key="test_secret_key"))
             long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
-        class UUIDSlugBook(BaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDSlugBook(BaseClass):  # type: ignore[valid-type,misc]
             """The SlugBook domain object."""
 
             __tablename__ = f"uuid_slug_book_{worker_id}"
@@ -104,7 +106,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             title: Mapped[str] = mapped_column(String(length=250))
             slug: Mapped[str] = mapped_column(String(100), unique=True)
 
-        class UUIDItem(BaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDItem(BaseClass):  # type: ignore[valid-type,misc]
             """The Item domain object."""
 
             __tablename__ = f"uuid_item_{worker_id}"
@@ -112,7 +114,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             name: Mapped[str] = mapped_column(String(length=50))
 
-        class UUIDTag(BaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDTag(BaseClass):  # type: ignore[valid-type,misc]
             """The Tag domain object."""
 
             __tablename__ = f"uuid_tag_{worker_id}"
@@ -129,10 +131,14 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
         )
 
         # Define many-to-many relationships after classes and table exist
-        UUIDItem.tags = relationship(UUIDTag, secondary=uuid_item_tag_table, back_populates="items")
-        UUIDTag.items = relationship(UUIDItem, secondary=uuid_item_tag_table, back_populates="tags")
+        IntegrationUUIDItem.tags = relationship(
+            IntegrationUUIDTag, secondary=uuid_item_tag_table, back_populates="items"
+        )
+        IntegrationUUIDTag.items = relationship(
+            IntegrationUUIDItem, secondary=uuid_item_tag_table, back_populates="tags"
+        )
 
-        class UUIDModelWithFetchedValue(FetchedValueBaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDModelWithFetchedValue(FetchedValueBaseClass):  # type: ignore[valid-type,misc]
             """Model with fetched value."""
 
             __tablename__ = f"uuid_model_with_fetched_value_{worker_id}"
@@ -142,7 +148,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             # Use a simple default instead of random() to avoid MSSQL compatibility issues
             val: Mapped[int] = mapped_column(FetchedValue(), server_default=text("1"))
 
-        class UUIDFileDocument(BaseClass):  # type: ignore[valid-type,misc]
+        class IntegrationUUIDFileDocument(BaseClass):  # type: ignore[valid-type,misc]
             """FileDocument with JsonB storage for cross-database compatibility."""
 
             __tablename__ = f"uuid_file_document_{worker_id}"
@@ -270,16 +276,16 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
     # Return all models
     if base_type == "uuid":
         return {
-            "base": UUIDAuthor,  # Use Author as base since it has the metadata
-            "author": UUIDAuthor,
-            "book": UUIDBook,
-            "rule": UUIDRule,
-            "secret": UUIDSecret,
-            "slug_book": UUIDSlugBook,
-            "item": UUIDItem,
-            "tag": UUIDTag,
-            "model_with_fetched_value": UUIDModelWithFetchedValue,
-            "file_document": UUIDFileDocument,
+            "base": IntegrationUUIDAuthor,  # Use Author as base since it has the metadata
+            "author": IntegrationUUIDAuthor,
+            "book": IntegrationUUIDBook,
+            "rule": IntegrationUUIDRule,
+            "secret": IntegrationUUIDSecret,
+            "slug_book": IntegrationUUIDSlugBook,
+            "item": IntegrationUUIDItem,
+            "tag": IntegrationUUIDTag,
+            "model_with_fetched_value": IntegrationUUIDModelWithFetchedValue,
+            "file_document": IntegrationUUIDFileDocument,
         }
     # bigint
     return {
