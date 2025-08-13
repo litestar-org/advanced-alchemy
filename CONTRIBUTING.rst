@@ -66,8 +66,8 @@ Creating a new release
 
 1. **Set up your environment**
 
-   - Ensure you have the `gh` CLI installed and logged in to GitHub.
-   - Switch to the `main` branch.
+   - Ensure you have the ``gh`` CLI installed and logged in to GitHub.
+   - Switch to the ``main`` branch.
 
 2. **Install and update dependencies**
 
@@ -94,7 +94,7 @@ Creating a new release
 
         make release bump=patch
 
-   - Use `bump=minor` or `bump=major` if you need to bump the minor or major version instead.
+   - Use ``bump=minor`` or ``bump=major`` if you need to bump the minor or major version instead.
 
 5. **Prepare the release**
 
@@ -146,7 +146,7 @@ Creating a new release
 
 9. **Open a pull request**
 
-   - Push the branch and create a PR into `main`.
+   - Push the branch and create a PR into ``main``.
    - Merge once CI checks pass.
 
 10. **Verify the release draft**
