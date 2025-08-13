@@ -47,6 +47,15 @@ def mock_async_session() -> MagicMock:
     session = MagicMock(spec=AsyncSession)
     session.__aenter__.return_value = session  # Simulate async context manager
     session.__aexit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     return session
 
 
@@ -62,6 +71,15 @@ def mock_sync_session() -> MagicMock:
     session = MagicMock(spec=SyncSession)
     session.__enter__.return_value = session  # Simulate sync context manager
     session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     return session
 
 
@@ -127,8 +145,8 @@ def test_backend_config_backend_class_sync(
 def test_session_model_mixin_is_expired_property() -> None:
     """Test the is_expired hybrid property."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    expired_session = SessionModelMixin(expires_at=now - datetime.timedelta(seconds=1))
-    active_session = SessionModelMixin(expires_at=now + datetime.timedelta(seconds=10))
+    expired_session = MockSessionModel(expires_at=now - datetime.timedelta(seconds=1))
+    active_session = MockSessionModel(expires_at=now + datetime.timedelta(seconds=10))
 
     assert expired_session.is_expired is True
     assert active_session.is_expired is False
@@ -619,6 +637,15 @@ def test_sync_backend_internal_set_sync_new(
     mock_sync_session = MagicMock(spec=SyncSession)
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    mock_sync_session.bind = mock_bind
+
     mock_sync_config.get_session.return_value = mock_sync_session
 
     with patch.object(sync_backend, "_get_session_obj", return_value=None) as mock_get_obj:
@@ -657,6 +684,15 @@ def test_sync_backend_internal_set_sync_update(
     mock_sync_session = MagicMock(spec=SyncSession)
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    mock_sync_session.bind = mock_bind
+
     mock_sync_config.get_session.return_value = mock_sync_session
 
     with patch.object(sync_backend, "_get_session_obj", return_value=mock_existing_session) as mock_get_obj:
@@ -680,6 +716,14 @@ def test_sync_backend_internal_delete_sync(
     mock_sync_session = MagicMock(spec=SyncSession)
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "sqlite"
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    mock_sync_session.bind = mock_bind
+
     mock_sync_config.get_session.return_value = mock_sync_session
 
     sync_backend._delete_sync(session_id)  # pyright: ignore [reportPrivateUsage]
@@ -702,6 +746,14 @@ def test_sync_backend_internal_delete_all_sync(
     mock_sync_session = MagicMock(spec=SyncSession)
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "sqlite"
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    mock_sync_session.bind = mock_bind
+
     mock_sync_config.get_session.return_value = mock_sync_session
 
     sync_backend._delete_all_sync()  # pyright: ignore [reportPrivateUsage]
@@ -724,6 +776,14 @@ def test_sync_backend_internal_delete_expired_sync(
     mock_sync_session = MagicMock(spec=SyncSession)
     mock_sync_session.__enter__.return_value = mock_sync_session
     mock_sync_session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "sqlite"
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    mock_sync_session.bind = mock_bind
+
     mock_sync_config.get_session.return_value = mock_sync_session
 
     fixed_time = datetime.datetime.now(datetime.timezone.utc)
@@ -799,6 +859,15 @@ def mock_async_config_errors() -> MagicMock:
     session = AsyncMock(spec=AsyncSession)
     session.__aenter__.return_value = session
     session.__aexit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     config.get_session.return_value = session
     return config
 
@@ -906,6 +975,15 @@ def mock_sync_config_errors() -> MagicMock:
     session = MagicMock(spec=SyncSession)
     session.__enter__.return_value = session
     session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     config.get_session.return_value = session
     return config
 
@@ -968,6 +1046,15 @@ def test_backend_with_minimal_max_age() -> None:
     session = MagicMock(spec=AsyncSession)
     session.__aenter__.return_value = session
     session.__aexit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     config.get_session.return_value = session
 
     backend = SQLAlchemyAsyncSessionBackend(
@@ -1055,6 +1142,15 @@ async def test_async_backend_large_data(large_data: bytes) -> None:
     session = MagicMock(spec=AsyncSession)
     session.__aenter__.return_value = session
     session.__aexit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     config.get_session.return_value = session
 
     backend = SQLAlchemyAsyncSessionBackend(
@@ -1070,7 +1166,7 @@ async def test_async_backend_large_data(large_data: bytes) -> None:
         return mock_result
 
     session.scalars = mock_scalars
-    session.commit = AsyncMock()
+    session.commit = AsyncMock(return_value=None)
 
     await backend.set("large_session", large_data, Mock())
 
@@ -1085,6 +1181,15 @@ def test_sync_backend_large_data(large_data: bytes) -> None:
     session = MagicMock(spec=SyncSession)
     session.__enter__.return_value = session
     session.__exit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     config.get_session.return_value = session
 
     backend = SQLAlchemySyncSessionBackend(
@@ -1126,6 +1231,15 @@ async def test_various_session_ids(session_id: str) -> None:
     session = MagicMock(spec=AsyncSession)
     session.__aenter__.return_value = session
     session.__aexit__.return_value = None
+
+    # Add mock bind and dialect to avoid AttributeError in session backend
+    mock_dialect = MagicMock()
+    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.server_version_info = None  # Ensure no merge support
+    mock_bind = MagicMock()
+    mock_bind.dialect = mock_dialect
+    session.bind = mock_bind
+
     config.get_session.return_value = session
 
     backend = SQLAlchemyAsyncSessionBackend(
@@ -1141,7 +1255,7 @@ async def test_various_session_ids(session_id: str) -> None:
         return mock_result
 
     session.scalars = mock_scalars
-    session.commit = AsyncMock()
+    session.commit = AsyncMock(return_value=None)
 
     await backend.set(session_id, b"data", Mock())
 

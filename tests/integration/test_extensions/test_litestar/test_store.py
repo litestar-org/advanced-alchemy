@@ -68,6 +68,7 @@ def store_tables_setup(
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
     # Skip for Spanner and CockroachDB - table conflicts with BigInt models
+    # Skip for MSSQL - doesn't support random() function used in store backends
     dialect_name = getattr(engine.dialect, "name", "")
     if dialect_name == "spanner+spanner":
         pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")
@@ -95,6 +96,7 @@ async def async_store_tables_setup(
     to prevent recreation. Fast data cleanup is used between individual tests.
     """
     # Skip for Spanner and CockroachDB - table conflicts with BigInt models
+    # Skip for MSSQL - doesn't support random() function used in store backends
     dialect_name = getattr(async_engine.dialect, "name", "")
     if dialect_name == "spanner+spanner":
         pytest.skip("Spanner doesn't support direct UNIQUE constraints creation")

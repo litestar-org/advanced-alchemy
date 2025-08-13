@@ -1,29 +1,469 @@
-"""Session-scoped fixtures for repository tests to minimize DDL operations."""
+"""Comprehensive fixture system for session-based testing with data isolation.
 
-from __future__ import annotations
+This module provides a two-tier fixture architecture that separates DDL operations
+from DML operations, ensuring proper test isolation and preventing metadata conflicts.
+"""
 
 import datetime
 from collections.abc import AsyncGenerator, Generator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional, Union
 from uuid import UUID
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine
 
-from tests.fixtures.bigint import models as models_bigint
-from tests.fixtures.uuid import models as models_uuid
-from tests.integration.helpers import async_clean_tables, clean_tables, get_worker_id
+# Import at module level for SQLAlchemy annotation resolution
+from sqlalchemy import Column, Engine, FetchedValue, ForeignKey, MetaData, String, Table, delete, insert, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+
+# Import types for annotations
+from advanced_alchemy.types.json import JsonB
+from tests.integration.helpers import get_worker_id
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
 
+
+def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") -> dict[str, type]:
+    """Create model classes using the current patched base classes.
+
+    This function must be called during test execution after _patch_bases
+    has run to ensure we use the correct registry.
+
+    Args:
+        base_type: Primary key type ("uuid" or "bigint")
+        worker_id: Worker ID to ensure unique class names across parallel test workers
+    """
+    # Create unique suffix for class names to avoid registry conflicts
+    from advanced_alchemy import base
+    from advanced_alchemy.types import EncryptedString, EncryptedText
+
+    if base_type == "uuid":
+        # Use the patched UUID base classes - all should use the same registry
+        # So we'll use the same UUIDAuditBase for all models to ensure same registry
+        BaseClass = base.UUIDAuditBase
+        SimpleBaseClass = base.UUIDAuditBase  # Changed from UUIDBase
+        SecretBaseClass = base.UUIDAuditBase  # Changed from UUIDv7Base
+        FetchedValueBaseClass = base.UUIDAuditBase  # Changed from UUIDv6Base
+
+        # Define UUID models using patched bases with unique class names
+
+        class UUIDAuthor(BaseClass):  # type: ignore[valid-type,misc]
+            """The Author domain object."""
+
+            __tablename__ = f"uuid_author_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_author_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=100))
+            string_field: Mapped[Optional[str]] = mapped_column(String(20), default="static value", nullable=True)
+            dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)
+
+        class UUIDBook(SimpleBaseClass):  # type: ignore[valid-type,misc]
+            """The Book domain object."""
+
+            __tablename__ = f"uuid_book_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_book_{worker_id}"}
+
+            title: Mapped[str] = mapped_column(String(length=250))
+            author_id: Mapped[UUID] = mapped_column(ForeignKey(f"uuid_author_{worker_id}.id"))
+
+        # Define relationships after both classes exist to avoid forward references
+        UUIDAuthor.books = relationship(
+            UUIDBook,
+            lazy="selectin",
+            back_populates="author",
+            cascade="all, delete",
+        )
+        UUIDBook.author = relationship(UUIDAuthor, lazy="joined", innerjoin=True, back_populates="books")
+
+        class UUIDRule(BaseClass):  # type: ignore[valid-type,misc]
+            """The rule domain object."""
+
+            __tablename__ = f"uuid_rule_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_rule_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=250))
+            config: Mapped[dict] = mapped_column(JsonB, default=lambda: {})
+
+        class UUIDSecret(SecretBaseClass):  # type: ignore[valid-type,misc]
+            """The secret domain object."""
+
+            __tablename__ = f"uuid_secret_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_secret_{worker_id}"}
+
+            secret: Mapped[str] = mapped_column(EncryptedString(key="test_secret_key"))
+            long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+
+        class UUIDSlugBook(BaseClass):  # type: ignore[valid-type,misc]
+            """The SlugBook domain object."""
+
+            __tablename__ = f"uuid_slug_book_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_slug_book_{worker_id}"}
+
+            title: Mapped[str] = mapped_column(String(length=250))
+            slug: Mapped[str] = mapped_column(String(100), unique=True)
+
+        class UUIDItem(BaseClass):  # type: ignore[valid-type,misc]
+            """The Item domain object."""
+
+            __tablename__ = f"uuid_item_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_item_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50))
+
+        class UUIDTag(BaseClass):  # type: ignore[valid-type,misc]
+            """The Tag domain object."""
+
+            __tablename__ = f"uuid_tag_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_tag_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50), unique=True)
+
+        # Define association table for many-to-many relationship
+        uuid_item_tag_table = Table(
+            f"uuid_item_tag_{worker_id}",
+            BaseClass.metadata,
+            Column("item_id", ForeignKey(f"uuid_item_{worker_id}.id"), primary_key=True),
+            Column("tag_id", ForeignKey(f"uuid_tag_{worker_id}.id"), primary_key=True),
+        )
+
+        # Define many-to-many relationships after classes and table exist
+        UUIDItem.tags = relationship(UUIDTag, secondary=uuid_item_tag_table, back_populates="items")
+        UUIDTag.items = relationship(UUIDItem, secondary=uuid_item_tag_table, back_populates="tags")
+
+        class UUIDModelWithFetchedValue(FetchedValueBaseClass):  # type: ignore[valid-type,misc]
+            """Model with fetched value."""
+
+            __tablename__ = f"uuid_model_with_fetched_value_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_model_with_fetched_value_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50))
+            # Use a simple default instead of random() to avoid MSSQL compatibility issues
+            val: Mapped[int] = mapped_column(FetchedValue(), server_default=text("1"))
+
+        class UUIDFileDocument(BaseClass):  # type: ignore[valid-type,misc]
+            """FileDocument with JsonB storage for cross-database compatibility."""
+
+            __tablename__ = f"uuid_file_document_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"uuid_file_document_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50))
+            # Use JsonB for better database compatibility instead of BLOB storage
+            file_data: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
+            files_data: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
+            file_metadata: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
+
+    else:  # bigint
+        # Use the patched BigInt base classes - all should use the same registry
+        BaseClass = base.BigIntAuditBase  # type: ignore[assignment]
+        SimpleBaseClass = base.BigIntAuditBase  # type: ignore[assignment]
+        SecretBaseClass = base.BigIntAuditBase  # type: ignore[assignment]
+        FetchedValueBaseClass = base.BigIntAuditBase  # type: ignore[assignment]
+
+        # Define BigInt models using patched bases with unique class names
+        class BigIntAuthor(BaseClass):  # type: ignore[valid-type,misc]
+            """The Author domain object."""
+
+            __tablename__ = f"bigint_author_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_author_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=100))
+            string_field: Mapped[Optional[str]] = mapped_column(String(20), default="static value", nullable=True)
+            dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)
+
+        class BigIntBook(SimpleBaseClass):  # type: ignore[valid-type,misc]
+            """The Book domain object."""
+
+            __tablename__ = f"bigint_book_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_book_{worker_id}"}
+
+            title: Mapped[str] = mapped_column(String(length=250))
+            author_id: Mapped[int] = mapped_column(ForeignKey(f"bigint_author_{worker_id}.id"))
+
+        # Define relationships after both classes exist to avoid forward references
+        BigIntAuthor.books = relationship(
+            BigIntBook,
+            lazy="selectin",
+            back_populates="author",
+            cascade="all, delete",
+        )
+        BigIntBook.author = relationship(BigIntAuthor, lazy="joined", innerjoin=True, back_populates="books")
+
+        class BigIntRule(BaseClass):  # type: ignore[valid-type,misc]
+            """The rule domain object."""
+
+            __tablename__ = f"bigint_rule_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_rule_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=250))
+            config: Mapped[dict] = mapped_column(JsonB, default=lambda: {})
+
+        class BigIntSecret(SecretBaseClass):  # type: ignore[valid-type,misc]
+            """The secret domain object."""
+
+            __tablename__ = f"bigint_secret_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_secret_{worker_id}"}
+
+            secret: Mapped[str] = mapped_column(EncryptedString(key="test_secret_key"))
+            long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+
+        class BigIntSlugBook(BaseClass):  # type: ignore[valid-type,misc]
+            """The SlugBook domain object."""
+
+            __tablename__ = f"bigint_slug_book_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_slug_book_{worker_id}"}
+
+            title: Mapped[str] = mapped_column(String(length=250))
+            slug: Mapped[str] = mapped_column(String(100), unique=True)
+
+        class BigIntItem(BaseClass):  # type: ignore[valid-type,misc]
+            """The Item domain object."""
+
+            __tablename__ = f"bigint_item_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_item_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50))
+
+        class BigIntTag(BaseClass):  # type: ignore[valid-type,misc]
+            """The Tag domain object."""
+
+            __tablename__ = f"bigint_tag_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_tag_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50), unique=True)
+
+        # Define association table for many-to-many relationship
+        bigint_item_tag_table = Table(
+            f"bigint_item_tag_{worker_id}",
+            BaseClass.metadata,
+            Column("item_id", ForeignKey(f"bigint_item_{worker_id}.id"), primary_key=True),
+            Column("tag_id", ForeignKey(f"bigint_tag_{worker_id}.id"), primary_key=True),
+        )
+
+        # Define many-to-many relationships after classes and table exist
+        BigIntItem.tags = relationship(BigIntTag, secondary=bigint_item_tag_table, back_populates="items")
+        BigIntTag.items = relationship(BigIntItem, secondary=bigint_item_tag_table, back_populates="tags")
+
+        class BigIntModelWithFetchedValue(FetchedValueBaseClass):  # type: ignore[valid-type,misc]
+            """Model with fetched value."""
+
+            __tablename__ = f"bigint_model_with_fetched_value_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_model_with_fetched_value_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50))
+            # Use a simple default instead of random() to avoid MSSQL compatibility issues
+            val: Mapped[int] = mapped_column(FetchedValue(), server_default=text("1"))
+
+        class BigIntFileDocument(BaseClass):  # type: ignore[valid-type,misc]
+            """FileDocument with JsonB storage for cross-database compatibility."""
+
+            __tablename__ = f"bigint_file_document_{worker_id}"
+            __mapper_args__ = {"polymorphic_identity": f"bigint_file_document_{worker_id}"}
+
+            name: Mapped[str] = mapped_column(String(length=50))
+            # Use JsonB for better database compatibility instead of BLOB storage
+            file_data: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
+            files_data: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
+            file_metadata: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
+
+    # Return all models
+    if base_type == "uuid":
+        return {
+            "base": UUIDAuthor,  # Use Author as base since it has the metadata
+            "author": UUIDAuthor,
+            "book": UUIDBook,
+            "rule": UUIDRule,
+            "secret": UUIDSecret,
+            "slug_book": UUIDSlugBook,
+            "item": UUIDItem,
+            "tag": UUIDTag,
+            "model_with_fetched_value": UUIDModelWithFetchedValue,
+            "file_document": UUIDFileDocument,
+        }
+    # bigint
+    return {
+        "base": BigIntAuthor,  # Use Author as base since it has the metadata
+        "author": BigIntAuthor,
+        "book": BigIntBook,
+        "rule": BigIntRule,
+        "secret": BigIntSecret,
+        "slug_book": BigIntSlugBook,
+        "item": BigIntItem,
+        "tag": BigIntTag,
+        "model_with_fetched_value": BigIntModelWithFetchedValue,
+        "file_document": BigIntFileDocument,
+    }
+
+
+class TestDataManager:
+    """Manages test data seeding and cleanup for both sync and async sessions."""
+
+    @staticmethod
+    def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
+        """Get base seed data for the given PK type."""
+        if pk_type == "uuid":
+            return {
+                "authors": [
+                    {
+                        "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
+                        "name": "Agatha Christie",
+                        "dob": datetime.date(1890, 9, 15),
+                        "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                        "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
+                    },
+                    {
+                        "id": UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"),
+                        "name": "Leo Tolstoy",
+                        "dob": datetime.date(1828, 9, 9),
+                        "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
+                        "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
+                    },
+                ],
+                "rules": [
+                    {
+                        "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
+                        "name": "Initial loading rule.",
+                        "config": {"url": "https://example.org", "setting_123": 1},
+                        "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    },
+                    {
+                        "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea34b"),
+                        "name": "Secondary loading rule.",
+                        "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
+                        "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    },
+                ],
+                "secrets": [
+                    {
+                        "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
+                        "secret": "I'm a secret!",
+                        "long_secret": "It's clobbering time.",
+                    },
+                ],
+            }
+        # bigint
+        return {
+            "authors": [
+                {
+                    "id": 2023,
+                    "name": "Agatha Christie",
+                    "dob": datetime.date(1890, 9, 15),
+                    "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                    "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
+                },
+                {
+                    "id": 2024,
+                    "name": "Leo Tolstoy",
+                    "dob": datetime.date(1828, 9, 9),
+                    "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
+                    "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
+                },
+            ],
+            "rules": [
+                {
+                    "id": 2025,
+                    "name": "Initial loading rule.",
+                    "config": {"url": "https://example.org", "setting_123": 1},
+                    "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                },
+                {
+                    "id": 2026,
+                    "name": "Secondary loading rule.",
+                    "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
+                    "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                },
+            ],
+            "secrets": [
+                {
+                    "id": 2025,
+                    "secret": "I'm a secret!",
+                    "long_secret": "It's clobbering time.",
+                },
+            ],
+        }
+
+    @classmethod
+    def clean_and_seed_sync(cls, session: Session, models: dict[str, type], pk_type: str) -> None:
+        """Clean all data and insert fresh seed data for sync session."""
+        metadata = models["base"].metadata
+        seed_data = cls.get_seed_data(pk_type)
+
+        # Clean all tables in reverse dependency order
+        for table in reversed(metadata.sorted_tables):
+            try:
+                session.execute(delete(table))
+            except Exception:
+                # Ignore deletion errors for non-existent data
+                pass
+
+        # Insert fresh seed data
+        if "author" in models:
+            session.execute(insert(models["author"]), seed_data["authors"])
+        if "rule" in models:
+            session.execute(insert(models["rule"]), seed_data["rules"])
+        if "secret" in models:
+            session.execute(insert(models["secret"]), seed_data["secrets"])
+
+        session.flush()  # Ensure data is written but don't commit yet
+
+    @classmethod
+    async def clean_and_seed_async(cls, session: AsyncSession, models: dict[str, type], pk_type: str) -> None:
+        """Clean all data and insert fresh seed data for async session."""
+        metadata = models["base"].metadata
+        seed_data = cls.get_seed_data(pk_type)
+
+        # Clean all tables in reverse dependency order
+        for table in reversed(metadata.sorted_tables):
+            try:
+                await session.execute(delete(table))
+            except Exception:
+                # Ignore deletion errors for non-existent data
+                pass
+
+        # Insert fresh seed data
+        if "author" in models:
+            await session.execute(insert(models["author"]), seed_data["authors"])
+        if "rule" in models:
+            await session.execute(insert(models["rule"]), seed_data["rules"])
+        if "secret" in models:
+            await session.execute(insert(models["secret"]), seed_data["secrets"])
+
+        await session.flush()  # Ensure data is written but don't commit yet
+
+
+class SchemaManager:
+    """Manages schema creation and destruction for test databases."""
+
+    _created_schemas: dict[str, bool] = {}
+
+    @classmethod
+    def ensure_schema_sync(cls, engine: Engine, metadata: MetaData, schema_key: str) -> None:
+        """Ensure schema exists for sync engine."""
+        if schema_key not in cls._created_schemas:
+            metadata.create_all(engine, checkfirst=True)
+            cls._created_schemas[schema_key] = True
+
+    @classmethod
+    async def ensure_schema_async(cls, engine: AsyncEngine, metadata: MetaData, schema_key: str) -> None:
+        """Ensure schema exists for async engine."""
+        if schema_key not in cls._created_schemas:
+            async with engine.begin() as conn:
+                await conn.run_sync(metadata.create_all, checkfirst=True)
+            cls._created_schemas[schema_key] = True
+
+
+# ============================================================================
+# Model Registry and Caching System
+# ============================================================================
+
 # Module-level caches for model classes
 _uuid_model_cache: dict[str, dict[str, type]] = {}
 _bigint_model_cache: dict[str, dict[str, type]] = {}
-_tables_created_sync: dict[str, bool] = {}
-_tables_created_async: dict[str, bool] = {}
 
 
 class RepositoryModelRegistry:
@@ -34,20 +474,8 @@ class RepositoryModelRegistry:
         """Get all UUID-based models for a worker."""
         cache_key = f"uuid_{worker_id}"
         if cache_key not in _uuid_model_cache:
-            # Simply reuse the existing models - they already have proper structure
-            # Use the Author model as the base since it has metadata
-            _uuid_model_cache[cache_key] = {
-                "base": models_uuid.UUIDAuthor,  # Use a model that has the metadata
-                "author": models_uuid.UUIDAuthor,
-                "book": models_uuid.UUIDBook,
-                "rule": models_uuid.UUIDRule,
-                "secret": models_uuid.UUIDSecret,
-                "slug_book": models_uuid.UUIDSlugBook,
-                "item": models_uuid.UUIDItem,
-                "tag": models_uuid.UUIDTag,
-                "model_with_fetched_value": models_uuid.UUIDModelWithFetchedValue,
-                "file_document": models_uuid.UUIDFileDocument,
-            }
+            # Create models using the patched base classes
+            _uuid_model_cache[cache_key] = create_dynamic_models("uuid", worker_id)
 
         return _uuid_model_cache[cache_key]
 
@@ -56,153 +484,416 @@ class RepositoryModelRegistry:
         """Get all BigInt-based models for a worker."""
         cache_key = f"bigint_{worker_id}"
         if cache_key not in _bigint_model_cache:
-            # Simply reuse the existing models - they already have proper structure
-            _bigint_model_cache[cache_key] = {
-                "base": models_bigint.BigIntAuthor,  # Use a model that has the metadata
-                "author": models_bigint.BigIntAuthor,
-                "book": models_bigint.BigIntBook,
-                "rule": models_bigint.BigIntRule,
-                "secret": models_bigint.BigIntSecret,
-                "slug_book": models_bigint.BigIntSlugBook,
-                "item": models_bigint.BigIntItem,
-                "tag": models_bigint.BigIntTag,
-                "model_with_fetched_value": models_bigint.BigIntModelWithFetchedValue,
-                "file_document": models_bigint.BigIntFileDocument,
-            }
+            # Create models using the patched base classes
+            _bigint_model_cache[cache_key] = create_dynamic_models("bigint", worker_id)
 
         return _bigint_model_cache[cache_key]
 
 
-def reseed_data_sync(engine: Engine, models: dict[str, type], pk_type: str) -> None:
-    """Reseed data to original state for sync test isolation."""
-    from sqlalchemy import delete, insert
-
-    seed_data = get_seed_data(pk_type)
-
-    with engine.begin() as conn:
-        # Delete existing data in reverse dependency order
-        for table in reversed(models["base"].metadata.sorted_tables):
-            conn.execute(delete(table))
-
-        # Re-insert seed data
-        conn.execute(insert(models["author"]), seed_data["authors"])
-        conn.execute(insert(models["rule"]), seed_data["rules"])
-        conn.execute(insert(models["secret"]), seed_data["secrets"])
+# ============================================================================
+# DBA Fixtures - Session Scoped DDL Management
+# ============================================================================
 
 
-async def reseed_data_async(async_engine: AsyncEngine, models: dict[str, type], pk_type: str) -> None:
-    """Reseed data to original state for async test isolation."""
-    from sqlalchemy import delete, insert
-
-    seed_data = get_seed_data(pk_type)
-
-    async with async_engine.begin() as conn:
-        # Delete existing data in reverse dependency order
-        for table in reversed(models["base"].metadata.sorted_tables):
-            await conn.execute(delete(table))
-
-        # Re-insert seed data
-        await conn.execute(insert(models["author"]), seed_data["authors"])
-        await conn.execute(insert(models["rule"]), seed_data["rules"])
-        await conn.execute(insert(models["secret"]), seed_data["secrets"])
-
-
-def get_seed_data(pk_type: str) -> dict[str, list[dict[str, Any]]]:
-    """Get seed data for the given PK type."""
-    if pk_type == "uuid":
-        return {
-            "authors": [
-                {
-                    "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
-                    "name": "Agatha Christie",
-                    "dob": datetime.date(1890, 9, 15),
-                    "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
-                },
-                {
-                    "id": UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"),
-                    "name": "Leo Tolstoy",
-                    "dob": datetime.date(1828, 9, 9),
-                    "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
-                },
-            ],
-            "rules": [
-                {
-                    "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
-                    "name": "Initial loading rule.",
-                    "config": {"url": "https://example.org", "setting_123": 1},
-                    "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                },
-                {
-                    "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea34b"),
-                    "name": "Secondary loading rule.",
-                    "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-                    "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                },
-            ],
-            "secrets": [
-                {
-                    "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
-                    "secret": "I'm a secret!",
-                    "long_secret": "It's clobbering time.",
-                },
-            ],
-        }
-    # bigint
-    return {
-        "authors": [
-            {
-                "id": 2023,
-                "name": "Agatha Christie",
-                "dob": datetime.date(1890, 9, 15),
-                "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
-                "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
-            },
-            {
-                "id": 2024,
-                "name": "Leo Tolstoy",
-                "dob": datetime.date(1828, 9, 9),
-                "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
-            },
-        ],
-        "rules": [
-            {
-                "id": 2025,
-                "name": "Initial loading rule.",
-                "config": {"url": "https://example.org", "setting_123": 1},
-                "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-            },
-            {
-                "id": 2026,
-                "name": "Secondary loading rule.",
-                "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-                "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-            },
-        ],
-        "secrets": [
-            {
-                "id": 2025,
-                "secret": "I'm a secret!",
-                "long_secret": "It's clobbering time.",
-            },
-        ],
-    }
-
-
-# UUID Model Fixtures
 @pytest.fixture(scope="session")
-def uuid_models(request: FixtureRequest) -> dict[str, type]:
+def uuid_models_dba(request: "FixtureRequest") -> "dict[str, type]":
+    """Session-scoped UUID models for DDL operations."""
+    worker_id = get_worker_id(request)
+    return RepositoryModelRegistry.get_uuid_models(worker_id)
+
+
+@pytest.fixture(scope="session")
+def bigint_models_dba(request: "FixtureRequest") -> dict[str, type]:
+    """Session-scoped BigInt models for DDL operations."""
+    worker_id = get_worker_id(request)
+    return RepositoryModelRegistry.get_bigint_models(worker_id)
+
+
+@pytest.fixture(scope="session")
+def uuid_schema_sync(engine: Engine, uuid_models_dba: dict[str, type], request: "FixtureRequest") -> None:
+    """Ensure UUID schema exists for sync engine."""
+    if getattr(engine.dialect, "name", "") != "mock":
+        worker_id = get_worker_id(request)
+        schema_key = f"uuid_sync_{engine.dialect.name}_{worker_id}"
+        SchemaManager.ensure_schema_sync(engine, uuid_models_dba["base"].metadata, schema_key)
+
+
+@pytest.fixture(scope="session")
+def bigint_schema_sync(engine: Engine, bigint_models_dba: dict[str, type], request: "FixtureRequest") -> None:
+    """Ensure BigInt schema exists for sync engine."""
+    # Skip for engines that don't support BigInt PKs well
+    if engine.dialect.name.startswith(("spanner", "cockroach", "mock")):
+        pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
+
+    worker_id = get_worker_id(request)
+    schema_key = f"bigint_sync_{engine.dialect.name}_{worker_id}"
+    SchemaManager.ensure_schema_sync(engine, bigint_models_dba["base"].metadata, schema_key)
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def uuid_schema_async(
+    async_engine: AsyncEngine, uuid_models_dba: dict[str, type], request: "FixtureRequest"
+) -> None:
+    """Ensure UUID schema exists for async engine."""
+    if getattr(async_engine.dialect, "name", "") != "mock":
+        worker_id = get_worker_id(request)
+        schema_key = f"uuid_async_{async_engine.dialect.name}_{worker_id}"
+        await SchemaManager.ensure_schema_async(async_engine, uuid_models_dba["base"].metadata, schema_key)
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def bigint_schema_async(
+    async_engine: AsyncEngine, bigint_models_dba: dict[str, type], request: "FixtureRequest"
+) -> None:
+    """Ensure BigInt schema exists for async engine."""
+    # Skip for engines that don't support BigInt PKs well
+    if async_engine.dialect.name.startswith(("spanner", "cockroach", "mock")):
+        pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
+
+    worker_id = get_worker_id(request)
+    schema_key = f"bigint_async_{async_engine.dialect.name}_{worker_id}"
+    await SchemaManager.ensure_schema_async(async_engine, bigint_models_dba["base"].metadata, schema_key)
+
+
+# ============================================================================
+# Per-Test Fixtures - Function Scoped DML Management with Transaction Isolation
+# ============================================================================
+
+
+def supports_savepoints(engine: "Union[Engine, AsyncEngine]") -> bool:
+    """Check if the database engine supports savepoints reliably."""
+    dialect_name = engine.dialect.name.lower()
+    # SQLite and DuckDB don't support nested savepoints reliably
+    # Spanner doesn't support savepoints in our test scenario
+    return dialect_name not in ("sqlite", "duckdb", "spanner")
+
+
+@pytest.fixture
+def uuid_test_session_sync(
+    engine: Engine,
+    uuid_models_dba: dict[str, type],
+    uuid_schema_sync: None,
+    request: "FixtureRequest",
+) -> Generator[tuple[Session, dict[str, type]], None, None]:
+    """Per-test sync session with UUID data isolation using transactions."""
+    if getattr(engine.dialect, "name", "") == "mock":
+        # Mock engine handling
+        from unittest.mock import create_autospec
+
+        session_mock = create_autospec(Session, instance=True)
+        session_mock.bind = engine
+        yield session_mock, uuid_models_dba
+        return
+
+    # Real database session with transaction isolation
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    try:
+        # Create session bound to this connection
+        session = Session(bind=connection, expire_on_commit=False)
+
+        savepoint = None
+        if supports_savepoints(engine):
+            # Create savepoint for test isolation (PostgreSQL, MySQL, etc.)
+            savepoint = connection.begin_nested()
+
+        try:
+            # Just yield clean session - no automatic seeding
+
+            yield session, uuid_models_dba
+
+        finally:
+            # Cleanup in proper order
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+            try:
+                session.close()
+            except Exception:
+                pass
+
+            if savepoint and savepoint.is_active:
+                try:
+                    savepoint.rollback()
+                except Exception:
+                    pass
+
+    finally:
+        # Rollback the main transaction and close connection
+        try:
+            if transaction.is_active:
+                transaction.rollback()
+        except Exception:
+            pass
+
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+
+@pytest.fixture
+def bigint_test_session_sync(
+    engine: Engine,
+    bigint_models_dba: dict[str, type],
+    bigint_schema_sync: None,
+    request: "FixtureRequest",
+) -> Generator[tuple[Session, dict[str, type]], None, None]:
+    """Per-test sync session with BigInt data isolation using transactions."""
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support BigInt operations")
+
+    # Real database session with transaction isolation
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    try:
+        # Create session bound to this connection
+        session = Session(bind=connection, expire_on_commit=False)
+
+        savepoint = None
+        if supports_savepoints(engine):
+            # Create savepoint for test isolation (PostgreSQL, MySQL, etc.)
+            savepoint = connection.begin_nested()
+
+        try:
+            # Just yield clean session - no automatic seeding
+
+            yield session, bigint_models_dba
+
+        finally:
+            # Cleanup in proper order
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+            try:
+                session.close()
+            except Exception:
+                pass
+
+            if savepoint and savepoint.is_active:
+                try:
+                    savepoint.rollback()
+                except Exception:
+                    pass
+
+    finally:
+        # Rollback the main transaction and close connection
+        try:
+            if transaction.is_active:
+                transaction.rollback()
+        except Exception:
+            pass
+
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def uuid_test_session_async(
+    async_engine: AsyncEngine,
+    uuid_models_dba: dict[str, type],
+    uuid_schema_async: None,
+    request: "FixtureRequest",
+) -> AsyncGenerator[tuple[AsyncSession, dict[str, type]], None]:
+    """Per-test async session with UUID data isolation using transactions."""
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        # Mock engine handling
+        from unittest.mock import create_autospec
+
+        session_mock = create_autospec(AsyncSession, instance=True)
+        session_mock.bind = async_engine
+        yield session_mock, uuid_models_dba
+        return
+
+    # Real database session with transaction isolation
+    connection = await async_engine.connect()
+    transaction = await connection.begin()
+
+    try:
+        # Create session bound to this connection
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+
+        session_factory = async_sessionmaker(bind=connection, expire_on_commit=False)
+        session = session_factory()
+
+        savepoint = None
+        if supports_savepoints(async_engine):
+            # Create savepoint for test isolation (PostgreSQL, MySQL, etc.)
+            savepoint = await connection.begin_nested()
+
+        try:
+            # Just yield clean session - no automatic seeding
+
+            yield session, uuid_models_dba
+
+        finally:
+            # Cleanup in proper order
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+
+            try:
+                await session.close()
+            except Exception:
+                pass
+
+            if savepoint and savepoint.is_active:
+                try:
+                    await savepoint.rollback()
+                except Exception:
+                    pass
+
+    finally:
+        # Rollback the main transaction and close connection
+        try:
+            if transaction.is_active:
+                await transaction.rollback()
+        except Exception:
+            pass
+
+        try:
+            await connection.close()
+        except Exception:
+            pass
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def bigint_test_session_async(
+    async_engine: AsyncEngine,
+    bigint_models_dba: dict[str, type],
+    bigint_schema_async: None,
+    request: "FixtureRequest",
+) -> AsyncGenerator[tuple[AsyncSession, dict[str, type]], None]:
+    """Per-test async session with BigInt data isolation using transactions."""
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support BigInt operations")
+
+    # Real database session with transaction isolation
+    connection = await async_engine.connect()
+    transaction = await connection.begin()
+
+    try:
+        # Create session bound to this connection
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+
+        session_factory = async_sessionmaker(bind=connection, expire_on_commit=False)
+        session = session_factory()
+
+        savepoint = None
+        if supports_savepoints(async_engine):
+            # Create savepoint for test isolation (PostgreSQL, MySQL, etc.)
+            savepoint = await connection.begin_nested()
+
+        try:
+            # Just yield clean session - no automatic seeding
+
+            yield session, bigint_models_dba
+
+        finally:
+            # Cleanup in proper order
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+
+            try:
+                await session.close()
+            except Exception:
+                pass
+
+            if savepoint and savepoint.is_active:
+                try:
+                    await savepoint.rollback()
+                except Exception:
+                    pass
+
+    finally:
+        # Rollback the main transaction and close connection
+        try:
+            if transaction.is_active:
+                await transaction.rollback()
+        except Exception:
+            pass
+
+        try:
+            await connection.close()
+        except Exception:
+            pass
+
+
+# ============================================================================
+# Unified Fixtures for Test Consumption
+# ============================================================================
+
+
+@pytest.fixture(params=["uuid", "bigint"])
+def repository_pk_type(request: "FixtureRequest") -> str:
+    """Determine which primary key type to use for repository tests."""
+    pk_type = str(request.param)
+
+    # Skip BigInt tests for engines that don't support them well
+    if pk_type == "bigint":
+        fixture_names = request.fixturenames
+        if any("cockroach" in name or "spanner" in name for name in fixture_names):
+            pytest.skip(f"BigInt primary keys not supported for {pk_type}")
+
+    return pk_type
+
+
+@pytest.fixture
+def test_session_sync(
+    repository_pk_type: str,
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+    bigint_test_session_sync: tuple[Session, dict[str, type]],
+) -> tuple[Session, dict[str, type]]:
+    """Get the appropriate session and models for sync tests based on PK type."""
+    if repository_pk_type == "uuid":
+        return uuid_test_session_sync
+    return bigint_test_session_sync
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def test_session_async(
+    repository_pk_type: str,
+    uuid_test_session_async: tuple[AsyncSession, dict[str, type]],
+    bigint_test_session_async: tuple[AsyncSession, dict[str, type]],
+) -> tuple[AsyncSession, dict[str, type]]:
+    """Get the appropriate session and models for async tests based on PK type."""
+    if repository_pk_type == "uuid":
+        return uuid_test_session_async
+    return bigint_test_session_async
+
+
+# ============================================================================
+# Legacy Compatibility Fixtures
+# ============================================================================
+
+
+# Keep these for backward compatibility during migration
+@pytest.fixture(scope="session")
+def uuid_models(request: "FixtureRequest") -> dict[str, type]:
     """Get all UUID models for the current worker."""
     worker_id = get_worker_id(request)
     return RepositoryModelRegistry.get_uuid_models(worker_id)
 
 
+@pytest.fixture(scope="session")
+def bigint_models(request: "FixtureRequest") -> dict[str, type]:
+    """Get all BigInt models for the current worker."""
+    worker_id = get_worker_id(request)
+    return RepositoryModelRegistry.get_bigint_models(worker_id)
+
+
+# Individual model fixtures for backward compatibility
 @pytest.fixture(scope="session")
 def uuid_author_model(uuid_models: dict[str, type]) -> type:
     """Get UUID Author model."""
@@ -231,14 +922,6 @@ def uuid_secret_model(uuid_models: dict[str, type]) -> type:
 def uuid_slug_book_model(uuid_models: dict[str, type]) -> type:
     """Get UUID SlugBook model."""
     return uuid_models["slug_book"]
-
-
-# BigInt Model Fixtures
-@pytest.fixture(scope="session")
-def bigint_models(request: FixtureRequest) -> dict[str, type]:
-    """Get all BigInt models for the current worker."""
-    worker_id = get_worker_id(request)
-    return RepositoryModelRegistry.get_bigint_models(worker_id)
 
 
 @pytest.fixture(scope="session")
@@ -271,293 +954,54 @@ def bigint_slug_book_model(bigint_models: dict[str, type]) -> type:
     return bigint_models["slug_book"]
 
 
-# Sync Setup Fixtures
-# These are function-scoped to ensure data is inserted for each test
-# while engines remain session-scoped for performance
-@pytest.fixture
-def uuid_sync_setup(
-    uuid_models: dict[str, type],
-    engine: Engine,
-) -> Generator[dict[str, type], None, None]:
-    """Setup UUID tables and seed data for sync tests."""
-    if getattr(engine.dialect, "name", "") != "mock":
-        base_model = uuid_models["base"]
-        engine_key = f"uuid_{engine.dialect.name}_{id(engine)}"
+# ============================================================================
+# Data Seeding Helpers
+# ============================================================================
 
-        # Create tables once per engine type
-        if engine_key not in _tables_created_sync:
-            # For CockroachDB, ensure careful table ordering due to foreign key constraints
-            if "cockroach" in engine.dialect.name:
-                try:
-                    # Create tables with foreign key dependency order for CockroachDB
-                    base_model.metadata.create_all(engine, checkfirst=True)
-                except Exception as e:
-                    # If there are dependency issues, create tables individually
-                    try:
-                        # Create author table first (no dependencies)
-                        uuid_models["author"].__table__.create(engine, checkfirst=True)
-                        # Then create other tables that might depend on author
-                        for model_name in [
-                            "rule",
-                            "secret",
-                            "book",
-                            "item",
-                            "tag",
-                            "slug_book",
-                            "model_with_fetched_value",
-                            "file_document",
-                        ]:
-                            if model_name in uuid_models:
-                                uuid_models[model_name].__table__.create(engine, checkfirst=True)
-                    except Exception:
-                        # If individual creation also fails, use the original error
-                        raise e
-            else:
-                base_model.metadata.create_all(engine)
-            _tables_created_sync[engine_key] = True
 
-        # Always reseed data to ensure fresh state for each test
-        reseed_data_sync(engine, uuid_models, "uuid")
+async def seed_test_data_async(session: AsyncSession, models: "dict[str, type]", pk_type: str) -> None:
+    """Simple helper to seed test data when needed - call this in tests that need data."""
+    seed_data = TestDataManager.get_seed_data(pk_type)
 
-    yield uuid_models
-    # Cleanup is handled by auto-clean fixtures in conftest.py
+    # Insert fresh seed data
+    if "author" in models:
+        await session.execute(insert(models["author"]), seed_data["authors"])
+    if "rule" in models:
+        await session.execute(insert(models["rule"]), seed_data["rules"])
+    if "secret" in models:
+        await session.execute(insert(models["secret"]), seed_data["secrets"])
+    await session.flush()  # Ensure data is written but don't commit yet
+
+
+def seed_test_data_sync(session: Session, models: "dict[str, type]", pk_type: str) -> None:
+    """Simple helper to seed test data when needed - call this in tests that need data."""
+    seed_data = TestDataManager.get_seed_data(pk_type)
+
+    # Insert fresh seed data
+    if "author" in models:
+        session.execute(insert(models["author"]), seed_data["authors"])
+    if "rule" in models:
+        session.execute(insert(models["rule"]), seed_data["rules"])
+    if "secret" in models:
+        session.execute(insert(models["secret"]), seed_data["secrets"])
+    session.flush()  # Ensure data is written but don't commit yet
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def seeded_test_session_async(
+    test_session_async: "tuple[AsyncSession, dict[str, type]]", repository_pk_type: str
+) -> "tuple[AsyncSession, dict[str, type]]":
+    """Auto-seeded async session for tests that need data."""
+    session, models = test_session_async
+    await seed_test_data_async(session, models, repository_pk_type)
+    return session, models
 
 
 @pytest.fixture
-def bigint_sync_setup(
-    bigint_models: dict[str, type],
-    engine: Engine,
-) -> Generator[dict[str, type], None, None]:
-    """Setup BigInt tables and seed data for sync tests."""
-    # Skip for Spanner and CockroachDB
-    if engine.dialect.name.startswith(("spanner", "cockroach")):
-        pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
-
-    # Skip mock engines - they don't support proper BigInt operations
-    if engine.dialect.name == "mock":
-        pytest.skip("Mock engines don't support BigInt operations")
-
-    base_model = bigint_models["base"]
-    engine_key = f"bigint_{engine.dialect.name}_{id(engine)}"
-
-    # Create tables once per engine type
-    if engine_key not in _tables_created_sync:
-        base_model.metadata.create_all(engine)
-        _tables_created_sync[engine_key] = True
-
-    # Always clean and re-insert seed data to ensure fresh state for each test
-    try:
-        clean_tables(engine, base_model.metadata)
-    except Exception:
-        # Ignore cleanup errors - tables might not exist yet
-        pass
-
-    # For Oracle, try a more aggressive cleanup approach
-    if engine.dialect.name == "oracle":
-        try:
-            with engine.begin() as conn:
-                # Use DELETE instead of TRUNCATE for better compatibility
-                for table in reversed(base_model.metadata.sorted_tables):
-                    try:
-                        conn.execute(table.delete())
-                    except Exception:
-                        # Ignore individual table errors
-                        pass
-        except Exception:
-            # Ignore cleanup errors
-            pass
-
-    # Always reseed data to ensure fresh state for each test
-    reseed_data_sync(engine, bigint_models, "bigint")
-
-    yield bigint_models
-    # Cleanup is handled by auto-clean fixtures in conftest.py
-
-
-# Async Setup Fixtures
-@pytest_asyncio.fixture()
-async def uuid_async_setup(
-    uuid_models: dict[str, type],
-    async_engine: AsyncEngine,
-) -> AsyncGenerator[dict[str, type], None]:
-    """Setup UUID tables and seed data for async tests."""
-    if getattr(async_engine.dialect, "name", "") != "mock":
-        base_model = uuid_models["base"]
-        engine_key = f"uuid_{async_engine.dialect.name}_{id(async_engine)}"
-
-        # Create tables once per engine type
-        if engine_key not in _tables_created_async:
-            # For CockroachDB, ensure careful table ordering due to foreign key constraints
-            if "cockroach" in async_engine.dialect.name:
-                try:
-                    async with async_engine.begin() as conn:
-                        await conn.run_sync(
-                            lambda sync_conn: base_model.metadata.create_all(sync_conn, checkfirst=True)
-                        )
-                except Exception as e:
-                    # If there are dependency issues, create tables individually
-                    try:
-                        async with async_engine.begin() as conn:
-                            # Create author table first (no dependencies)
-                            await conn.run_sync(
-                                lambda sync_conn: uuid_models["author"].__table__.create(sync_conn, checkfirst=True)
-                            )
-                            # Then create other tables that might depend on author
-                            for model_name in [
-                                "rule",
-                                "secret",
-                                "book",
-                                "item",
-                                "tag",
-                                "slug_book",
-                                "model_with_fetched_value",
-                                "file_document",
-                            ]:
-                                if model_name in uuid_models:
-                                    table = uuid_models[model_name].__table__
-                                    await conn.run_sync(lambda sync_conn, t=table: t.create(sync_conn, checkfirst=True))  # type: ignore[misc,unused-ignore]
-                    except Exception:
-                        # If individual creation also fails, use the original error
-                        raise e
-            else:
-                async with async_engine.begin() as conn:
-                    await conn.run_sync(base_model.metadata.create_all)
-            _tables_created_async[engine_key] = True
-
-        # Always clean and re-insert seed data to ensure fresh state for each test
-        try:
-            await async_clean_tables(async_engine, base_model.metadata)
-        except Exception:
-            # Ignore cleanup errors - tables might not exist yet
-            pass
-
-        # For Oracle, try a more aggressive cleanup approach
-        if async_engine.dialect.name == "oracle":
-            try:
-                async with async_engine.begin() as conn:
-                    # Use DELETE instead of TRUNCATE for better compatibility
-                    for table in reversed(base_model.metadata.sorted_tables):
-                        try:
-                            await conn.execute(table.delete())
-                        except Exception:
-                            # Ignore individual table errors
-                            pass
-            except Exception:
-                # Ignore cleanup errors
-                pass
-
-        # Always reseed data to ensure fresh state for each test
-        await reseed_data_async(async_engine, uuid_models, "uuid")
-
-    yield uuid_models
-    # Cleanup is handled by auto-clean fixtures in conftest.py
-
-
-@pytest_asyncio.fixture()
-async def bigint_async_setup(
-    bigint_models: dict[str, type],
-    async_engine: AsyncEngine,
-) -> AsyncGenerator[dict[str, type], None]:
-    """Setup BigInt tables and seed data for async tests."""
-    # Skip for Spanner and CockroachDB
-    if async_engine.dialect.name.startswith(("spanner", "cockroach")):
-        pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
-
-    # Skip mock engines - they don't support proper BigInt operations
-    if async_engine.dialect.name == "mock":
-        pytest.skip("Mock engines don't support BigInt operations")
-
-    base_model = bigint_models["base"]
-    engine_key = f"bigint_{async_engine.dialect.name}_{id(async_engine)}"
-
-    # Create tables once per engine type
-    if engine_key not in _tables_created_async:
-        async with async_engine.begin() as conn:
-            await conn.run_sync(base_model.metadata.create_all)
-        _tables_created_async[engine_key] = True
-
-    # Always clean and re-insert seed data to ensure fresh state for each test
-    try:
-        await async_clean_tables(async_engine, base_model.metadata)
-    except Exception:
-        # Ignore cleanup errors - tables might not exist yet
-        pass
-
-    # For Oracle, try a more aggressive cleanup approach
-    if async_engine.dialect.name == "oracle":
-        try:
-            async with async_engine.begin() as conn:
-                # Use DELETE instead of TRUNCATE for better compatibility
-                for table in reversed(base_model.metadata.sorted_tables):
-                    try:
-                        await conn.execute(table.delete())
-                    except Exception:
-                        # Ignore individual table errors
-                        pass
-        except Exception:
-            # Ignore cleanup errors
-            pass
-
-    # Always reseed data to ensure fresh state for each test
-    await reseed_data_async(async_engine, bigint_models, "bigint")
-
-    yield bigint_models
-    # Cleanup is handled by auto-clean fixtures in conftest.py
-
-
-# Primary key type fixture
-@pytest.fixture(params=["uuid", "bigint"])
-def repository_pk_type(request: FixtureRequest) -> str:
-    """Return the primary key type of the repository."""
-    pk_type = str(request.param)
-
-    # Skip BigInt tests for CockroachDB and Spanner - they only support UUID primary keys
-    if pk_type == "bigint":
-        # Try to determine the engine being used from fixture names
-        # This is not ideal but works with the current architecture
-        fixture_names = request.fixturenames
-
-        # Check for known unsupported engines in fixture names
-        if any("cockroach" in name for name in fixture_names):
-            pytest.skip("BigInt primary keys not supported for CockroachDB")
-        elif any("spanner" in name for name in fixture_names):
-            pytest.skip("BigInt primary keys not supported for Spanner")
-
-        # Also check if we can get the session to check the dialect
-        # This works when any_session is available
-        if "any_session" in fixture_names:
-            try:
-                session = request.getfixturevalue("any_session")
-                if hasattr(session, "bind") and session.bind:
-                    dialect_name = getattr(session.bind.dialect, "name", "")
-                    if "cockroach" in dialect_name or "spanner" in dialect_name:
-                        pytest.skip(f"BigInt primary keys not supported for {dialect_name}")
-            except Exception:
-                # If we can't get the session, continue with other checks
-                pass
-
-    return pk_type  # type: ignore[no-any-return]
-
-
-# Combined fixtures that select based on PK type
-@pytest.fixture
-def repository_models_sync(
-    repository_pk_type: str,
-    request: FixtureRequest,
-) -> dict[str, type]:
-    """Get the correct models based on PK type for sync tests."""
-    if repository_pk_type == "uuid":
-        return request.getfixturevalue("uuid_sync_setup")  # type: ignore[no-any-return]
-    return request.getfixturevalue("bigint_sync_setup")  # type: ignore[no-any-return]
-
-
-@pytest_asyncio.fixture()
-async def repository_models_async(
-    repository_pk_type: str,
-    uuid_async_setup: dict[str, type],
-    bigint_async_setup: dict[str, type],
-) -> dict[str, type]:
-    """Get the correct models based on PK type for async tests."""
-    if repository_pk_type == "uuid":
-        return uuid_async_setup
-    return bigint_async_setup
+def seeded_test_session_sync(
+    test_session_sync: "tuple[Session, dict[str, type]]", repository_pk_type: str
+) -> "tuple[Session, dict[str, type]]":
+    """Auto-seeded sync session for tests that need data."""
+    session, models = test_session_sync
+    seed_test_data_sync(session, models, repository_pk_type)
+    return session, models

@@ -18,7 +18,7 @@ from pytest_databases.docker.postgres import PostgresService
 from pytest_databases.docker.spanner import SpannerService
 from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 # Local test helpers and fixtures
 
@@ -326,12 +326,93 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
         session_mock.bind = engine
         yield session_mock
     else:
-        session_instance = sessionmaker(bind=engine, expire_on_commit=False)()
-        try:
-            yield session_instance
-        finally:
-            session_instance.rollback()
-            session_instance.close()
+        # Use improved transaction management to avoid savepoint issues
+        # Spanner uses "spanner+spanner" as dialect name, CockroachDB uses "cockroachdb"
+        dialect_name = engine.dialect.name
+        supports_savepoints = not any(
+            dialect_name.startswith(prefix) for prefix in ("sqlite", "duckdb", "spanner", "cockroachdb")
+        )
+
+        if supports_savepoints:
+            # Use savepoint-based isolation for databases that support it
+            connection = engine.connect()
+            transaction = connection.begin()
+
+            try:
+                # Create session bound to this connection
+                session_instance = Session(bind=connection, expire_on_commit=False)
+
+                # Create savepoint for test isolation
+                savepoint = connection.begin_nested()
+
+                try:
+                    yield session_instance
+                finally:
+                    # Cleanup order: session operations first, then transaction management
+                    try:
+                        session_instance.rollback()  # Rollback any pending changes
+                    except Exception:
+                        pass  # Ignore rollback errors
+                    finally:
+                        try:
+                            session_instance.close()  # Close session first
+                        except Exception:
+                            pass
+
+                    # Now handle savepoint cleanup
+                    try:
+                        if savepoint.is_active:
+                            savepoint.rollback()
+                    except Exception:
+                        pass  # Ignore savepoint rollback errors
+
+            finally:
+                # Rollback the main transaction and close connection
+                try:
+                    if transaction.is_active:
+                        transaction.rollback()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
+        else:
+            # For SQLite/DuckDB: use simple transaction-based isolation without savepoints
+            connection = engine.connect()
+            transaction = connection.begin()
+
+            try:
+                # Create session bound to this connection
+                session_instance = Session(bind=connection, expire_on_commit=False)
+
+                try:
+                    yield session_instance
+                finally:
+                    # Cleanup: session first, then transaction
+                    try:
+                        session_instance.rollback()  # Rollback any changes
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            session_instance.close()
+                        except Exception:
+                            pass
+
+            finally:
+                # Always rollback transaction to clean up
+                try:
+                    if transaction.is_active:
+                        transaction.rollback()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
 
 
 # ---------------------------------------------------------------------------
@@ -341,81 +422,156 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
 
 @pytest.fixture(autouse=True)
 def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
-    """After each test, remove all rows from all tables for sync engine tests.
+    """Universal cleanup fixture for sync engine tests.
 
-    With session-scoped engines, we need to clean data after each test
-    to prevent unique constraint violations.
+    Handles cleanup for all test types including:
+    - Repository fixture tests (uuid/bigint session-based)
+    - Filter tests (movie model)
+    - Legacy tests with manual cleanup
+
+    Only runs cleanup when appropriate and avoids conflicts.
     """
     yield
 
-    # Clean up after test completes
-    if "engine" in request.fixturenames:
-        from tests.integration import helpers as test_helpers
+    # Skip cleanup for mock engines or if no sync engine available
+    if "engine" not in request.fixturenames:
+        return
 
+    try:
         engine = request.getfixturevalue("engine")
+    except Exception:
+        return
 
-        # Skip cleanup for mock engines
-        if getattr(engine.dialect, "name", "") == "mock":
+    # Skip cleanup for mock engines
+    if getattr(engine.dialect, "name", "") == "mock":
+        return
+
+    from tests.integration import helpers as test_helpers
+
+    try:
+        # 1. Handle repository fixture tests - these use transaction-based cleanup
+        if any(
+            fixture in request.fixturenames
+            for fixture in ["test_session_sync", "uuid_test_session_sync", "bigint_test_session_sync"]
+        ):
+            # These fixtures handle their own transaction-based cleanup
+            # No additional cleanup needed
             return
 
-        # Get the appropriate base model based on what was used
-        base_model = None
-        if "uuid_sync_setup" in request.fixturenames:
-            uuid_models = request.getfixturevalue("uuid_models")
-            base_model = uuid_models["base"]
-        elif "bigint_sync_setup" in request.fixturenames:
-            bigint_models = request.getfixturevalue("bigint_models")
-            base_model = bigint_models["base"]
-
-        if base_model:
+        # 2. Handle filter tests with movie models
+        if "movie_model_sync" in request.fixturenames:
             try:
-                test_helpers.clean_tables(engine, base_model.metadata)
+                movie_model = request.getfixturevalue("movie_model_sync")
+                test_helpers.clean_tables(engine, movie_model.metadata)
+            except Exception as e:
+                # Log but don't fail on cleanup errors
+                import logging
+
+                logging.getLogger(__name__).warning(f"Movie model cleanup failed: {e}")
+            return
+
+        # 3. Handle legacy tests with repository models
+        base_model = None
+        if "uuid_models" in request.fixturenames:
+            try:
+                uuid_models = request.getfixturevalue("uuid_models")
+                base_model = uuid_models["base"]
             except Exception:
-                # Ignore cleanup errors
+                pass
+        elif "bigint_models" in request.fixturenames:
+            try:
+                bigint_models = request.getfixturevalue("bigint_models")
+                base_model = bigint_models["base"]
+            except Exception:
                 pass
 
+        if base_model:
+            test_helpers.clean_tables(engine, base_model.metadata)
 
-@pytest.fixture(autouse=True)
+    except Exception as e:
+        # Log but don't fail the test on cleanup errors
+        import logging
+
+        logging.getLogger(__name__).warning(f"Sync cleanup failed: {e}")
+
+
+@pytest_asyncio.fixture(autouse=True, loop_scope="function")
 async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
-    """After each test, remove all rows from all tables for async engine tests.
+    """Universal cleanup fixture for async engine tests.
 
-    With session-scoped engines, we need to clean data after each test
-    to prevent unique constraint violations.
+    Handles cleanup for all async test types including:
+    - Repository fixture tests (uuid/bigint session-based)
+    - Filter tests (movie model)
+    - Legacy tests with manual cleanup
+
+    Only runs cleanup when appropriate and avoids conflicts.
     """
     yield
 
-    # Clean up after test completes
-    if "async_engine" in request.fixturenames:
-        from tests.integration import helpers as test_helpers
+    # Skip cleanup if no async engine available
+    if "async_engine" not in request.fixturenames:
+        return
 
-        try:
-            async_engine = request.getfixturevalue("async_engine")
-        except Exception:
-            # Fixture might be torn down already
+    try:
+        async_engine = request.getfixturevalue("async_engine")
+    except Exception:
+        # Fixture might be torn down already
+        return
+
+    # Skip cleanup for mock engines
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        return
+
+    from tests.integration import helpers as test_helpers
+
+    try:
+        # 1. Handle repository fixture tests - these use transaction-based cleanup
+        if any(
+            fixture in request.fixturenames
+            for fixture in ["test_session_async", "uuid_test_session_async", "bigint_test_session_async"]
+        ):
+            # These fixtures handle their own transaction-based cleanup
+            # No additional cleanup needed
             return
 
-        # Skip cleanup for mock engines
-        if getattr(async_engine.dialect, "name", "") == "mock":
-            return
-
-        # Get the appropriate base model based on what was used
-        base_model = None
-        if "uuid_async_setup" in request.fixturenames:
-            uuid_models = request.getfixturevalue("uuid_models")
-            base_model = uuid_models["base"]
-        elif "bigint_async_setup" in request.fixturenames:
-            bigint_models = request.getfixturevalue("bigint_models")
-            base_model = bigint_models["base"]
-
-        if base_model:
+        # 2. Handle filter tests with movie models
+        if "movie_model_async" in request.fixturenames:
             try:
-                await test_helpers.async_clean_tables(async_engine, base_model.metadata)
+                movie_model = request.getfixturevalue("cached_movie_model")
+                await test_helpers.async_clean_tables(async_engine, movie_model.metadata)
+            except Exception as e:
+                # Log but don't fail on cleanup errors
+                import logging
+
+                logging.getLogger(__name__).warning(f"Async movie model cleanup failed: {e}")
+            return
+
+        # 3. Handle legacy tests with repository models
+        base_model = None
+        if "uuid_models" in request.fixturenames:
+            try:
+                uuid_models = request.getfixturevalue("uuid_models")
+                base_model = uuid_models["base"]
             except Exception:
-                # Ignore cleanup errors
+                pass
+        elif "bigint_models" in request.fixturenames:
+            try:
+                bigint_models = request.getfixturevalue("bigint_models")
+                base_model = bigint_models["base"]
+            except Exception:
                 pass
 
+        if base_model:
+            await test_helpers.async_clean_tables(async_engine, base_model.metadata)
 
-@pytest_asyncio.fixture(scope="session")
+    except Exception as e:
+        # Log but don't fail the test on cleanup errors
+        import logging
+
+        logging.getLogger(__name__).warning(f"Async cleanup failed: {e}")
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def aiosqlite_engine(
     tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
 ) -> AsyncGenerator[AsyncEngine, None]:
@@ -543,6 +699,7 @@ async def mock_async_engine() -> AsyncGenerator[NonCallableMagicMock, None]:
 
 
 @pytest.fixture(
+    scope="session",
     name="async_engine",
     params=[
         pytest.param(
@@ -624,7 +781,7 @@ def async_engine(request: FixtureRequest) -> AsyncEngine:
     return cast(AsyncEngine, request.getfixturevalue(request.param))
 
 
-@pytest_asyncio.fixture()
+@pytest_asyncio.fixture(loop_scope="function")
 async def async_session(
     async_engine: AsyncEngine,
     request: FixtureRequest,
@@ -635,9 +792,92 @@ async def async_session(
         session_mock.bind = async_engine
         yield session_mock
     else:
-        session_instance = async_sessionmaker(bind=async_engine, expire_on_commit=False)()
-        try:
-            yield session_instance
-        finally:
-            await session_instance.rollback()
-            await session_instance.close()
+        # Use improved transaction management to avoid savepoint issues
+        # Spanner uses "spanner+spanner" as dialect name, CockroachDB uses "cockroachdb"
+        dialect_name = async_engine.dialect.name
+        supports_savepoints = not any(
+            dialect_name.startswith(prefix) for prefix in ("sqlite", "duckdb", "spanner", "cockroachdb")
+        )
+
+        if supports_savepoints:
+            # Use savepoint-based isolation for databases that support it
+            connection = await async_engine.connect()
+            transaction = await connection.begin()
+
+            try:
+                # Create session bound to this connection
+                session_factory = async_sessionmaker(bind=connection, expire_on_commit=False)
+                session_instance = session_factory()
+
+                # Create savepoint for test isolation
+                savepoint = await connection.begin_nested()
+
+                try:
+                    yield session_instance
+                finally:
+                    # Cleanup order: session operations first, then transaction management
+                    try:
+                        await session_instance.rollback()  # Rollback any pending changes
+                    except Exception:
+                        pass  # Ignore rollback errors
+                    finally:
+                        try:
+                            await session_instance.close()  # Close session first
+                        except Exception:
+                            pass
+
+                    # Now handle savepoint cleanup
+                    try:
+                        if savepoint.is_active:
+                            await savepoint.rollback()
+                    except Exception:
+                        pass  # Ignore savepoint rollback errors
+
+            finally:
+                # Rollback the main transaction and close connection
+                try:
+                    if transaction.is_active:
+                        await transaction.rollback()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        await connection.close()
+                    except Exception:
+                        pass
+        else:
+            # For SQLite/DuckDB: use simple transaction-based isolation without savepoints
+            connection = await async_engine.connect()
+            transaction = await connection.begin()
+
+            try:
+                # Create session bound to this connection
+                session_factory = async_sessionmaker(bind=connection, expire_on_commit=False)
+                session_instance = session_factory()
+
+                try:
+                    yield session_instance
+                finally:
+                    # Cleanup: session first, then transaction
+                    try:
+                        await session_instance.rollback()  # Rollback any changes
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            await session_instance.close()
+                        except Exception:
+                            pass
+
+            finally:
+                # Always rollback transaction to clean up
+                try:
+                    if transaction.is_active:
+                        await transaction.rollback()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        await connection.close()
+                    except Exception:
+                        pass

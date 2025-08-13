@@ -139,70 +139,6 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Sequence[ModelOrRowMappingT]",
-        *,
-        schema_type: None = None,
-    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "ModelOrRowMappingT",
-        total: "int",
-    ) -> "ModelOrRowMappingT": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "ModelProtocol",
-        total: "int",
-    ) -> "ModelProtocol": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "RowMapping",
-        total: "int",
-    ) -> "RowMapping": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "Row[Any]",
-        total: "int",
-    ) -> "Row[Any]": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "dict[str, Any]",
-        total: "int",
-    ) -> "dict[str, Any]": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "Sequence[ModelOrRowMappingT]",
-        total: "int",
-    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "Sequence[ModelProtocol]",
-        total: "int",
-    ) -> "OffsetPagination[ModelProtocol]": ...
-
-    @overload
-    def to_schema(
-        self,
-        data: "Sequence[RowMapping]",
-        total: "int",
-    ) -> "OffsetPagination[RowMapping]": ...
-
-    @overload
-    def to_schema(
-        self,
         data: "Sequence[Row[Any]]",
         total: "int",
     ) -> "OffsetPagination[Row[Any]]": ...
@@ -210,9 +146,10 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Sequence[dict[str, Any]]",
-        total: "int",
-    ) -> "OffsetPagination[dict[str, Any]]": ...
+        data: "Sequence[ModelOrRowMappingT]",
+        *,
+        schema_type: None = None,
+    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
 
     @overload
     def to_schema(

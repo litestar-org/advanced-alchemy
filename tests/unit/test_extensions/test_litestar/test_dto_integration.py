@@ -271,7 +271,7 @@ class Keyword(Base):
 user_keyword_table: Final[Table] = Table(
     "user_keyword",
     Base.metadata,
-    Column("user_id", Integer, ForeignKey("user.id"), primary_key=True),
+    Column("user_id", Integer, ForeignKey("user_table.id"), primary_key=True),
     Column("keyword_id", Integer, ForeignKey("keyword.id"), primary_key=True),
 )
 

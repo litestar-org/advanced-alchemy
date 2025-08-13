@@ -250,6 +250,11 @@ class DatabaseCapabilities:
         return not cls.supports_feature(dialect_name, "supports_exists_filters")
 
     @classmethod
+    def should_skip_unique_constraints(cls, dialect_name: str) -> bool:
+        """Check if unique constraint tests should be skipped for this dialect."""
+        return not cls.supports_feature(dialect_name, "supports_unique_constraints")
+
+    @classmethod
     def _normalize_dialect_name(cls, dialect_name: str) -> str:
         """Normalize dialect names to handle variations."""
         if "spanner" in dialect_name.lower():

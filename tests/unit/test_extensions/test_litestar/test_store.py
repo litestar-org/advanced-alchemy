@@ -111,8 +111,8 @@ def sync_store(mock_sync_config: MagicMock) -> SQLAlchemyStore[SQLAlchemySyncCon
 def test_store_model_mixin_is_expired_property() -> None:
     """Test the is_expired hybrid property."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    expired_store = StoreModelMixin(expires_at=now - datetime.timedelta(seconds=1))
-    active_store = StoreModelMixin(expires_at=now + datetime.timedelta(seconds=10))
+    expired_store = MockStoreModel(expires_at=now - datetime.timedelta(seconds=1))
+    active_store = MockStoreModel(expires_at=now + datetime.timedelta(seconds=10))
 
     assert expired_store.is_expired is True
     assert active_store.is_expired is False
@@ -146,11 +146,11 @@ def test_supports_merge() -> None:
     """Test merge support detection for different dialects."""
     store = SQLAlchemyStore(config=MagicMock(spec=SQLAlchemyAsyncConfig), model=MockStoreModel)
 
-    # PostgreSQL >= 15  # noqa: ERA001
+    # PostgreSQL >= 15 (currently disabled via _DISABLE_POSTGRES_MERGE)
     postgres_dialect = MagicMock(spec=Dialect)
     postgres_dialect.name = "postgresql"
     postgres_dialect.server_version_info = (15, 0)
-    assert store.supports_merge(postgres_dialect) is True
+    assert store.supports_merge(postgres_dialect) is False  # Disabled due to _DISABLE_POSTGRES_MERGE = True
 
     # PostgreSQL < 15
     postgres_dialect.server_version_info = (14, 0)

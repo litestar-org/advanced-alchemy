@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 from msgspec import Struct
 from pydantic import BaseModel
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, String, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy import base, mixins
 from advanced_alchemy.repository import (
@@ -59,8 +59,8 @@ class UUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBas
 
 class USState(UUIDBase):
     __tablename__ = "us_state_lookup"  # type: ignore[assignment]
-    abbreviation: Mapped[str]
-    name: Mapped[str]
+    abbreviation: Mapped[str] = mapped_column(String(5))
+    name: Mapped[str] = mapped_column(String(50))
 
 
 class USStateStruct(Struct):

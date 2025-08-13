@@ -45,6 +45,9 @@ class CustomBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, Decl
 @pytest.fixture()
 def unique_test_tables(engine: Engine) -> None:
     """Create unique mixin test tables for sync engines."""
+    # Skip for databases that don't support unique constraints
+    if DatabaseCapabilities.should_skip_unique_constraints(engine.dialect.name):
+        pytest.skip(f"{engine.dialect.name} doesn't support unique constraints")
     if getattr(engine.dialect, "name", "") != "mock":
         custom_registry.metadata.create_all(engine)
 
@@ -52,6 +55,9 @@ def unique_test_tables(engine: Engine) -> None:
 @pytest.fixture()
 async def unique_test_tables_async(async_engine: AsyncEngine) -> None:
     """Create unique mixin test tables for async engines."""
+    # Skip for databases that don't support unique constraints
+    if DatabaseCapabilities.should_skip_unique_constraints(async_engine.dialect.name):
+        pytest.skip(f"{async_engine.dialect.name} doesn't support unique constraints")
     if getattr(async_engine.dialect, "name", "") != "mock":
         async with async_engine.begin() as conn:
             await conn.run_sync(custom_registry.metadata.create_all)
@@ -88,9 +94,15 @@ class BigIntModelWithMaybeUniqueValue(UniqueMixin, CustomBigIntBase):
 
 
 def test_as_unique_sync(engine: Engine, unique_test_tables: None, rows: list[dict[str, Any]]) -> None:
+    # Skip for databases that don't support unique constraints
+    if DatabaseCapabilities.should_skip_unique_constraints(engine.dialect.name):
+        pytest.skip(f"{engine.dialect.name} doesn't support unique constraints")
     # Skip for Spanner and CockroachDB - BigInt PK issues
     if DatabaseCapabilities.should_skip_bigint(engine.dialect.name):
         pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
+    # Skip for mock engines - they don't handle multi-row INSERT properly
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support multi-row INSERT for unique mixin tests")
     with Session(engine) as session:
         session.add_all(BigIntModelWithUniqueValue(**row) for row in rows)
         with pytest.raises(IntegrityError):
@@ -115,9 +127,15 @@ def test_as_unique_sync(engine: Engine, unique_test_tables: None, rows: list[dic
 async def test_as_unique_async(
     async_engine: AsyncEngine, unique_test_tables_async: None, rows: list[dict[str, Any]]
 ) -> None:
+    # Skip for databases that don't support unique constraints
+    if DatabaseCapabilities.should_skip_unique_constraints(async_engine.dialect.name):
+        pytest.skip(f"{async_engine.dialect.name} doesn't support unique constraints")
     # Skip for Spanner and CockroachDB - BigInt PK issues
     if DatabaseCapabilities.should_skip_bigint(async_engine.dialect.name):
         pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
+    # Skip for mock engines - they don't handle multi-row INSERT properly
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support multi-row INSERT for unique mixin tests")
     async with AsyncSession(async_engine) as session:
         session.add_all(BigIntModelWithUniqueValue(**row) for row in rows)
         with pytest.raises(IntegrityError):

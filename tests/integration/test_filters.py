@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from sqlalchemy import Engine, String, select
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
@@ -26,7 +26,7 @@ from advanced_alchemy.filters import (
     and_,
     or_,
 )
-from tests.integration.helpers import async_clean_tables, clean_tables, get_worker_id
+from tests.integration.helpers import get_worker_id
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
@@ -59,18 +59,22 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
         _movie_class_counter += 1
         unique_suffix = f"{_movie_class_counter}_{worker_id}_{engine_dialect_name}"
 
-        # Create the class normally, not with type() to ensure proper annotation resolution
-        class Movie(base_class, TestBase):  # type: ignore[valid-type,misc]
-            __tablename__ = f"test_movies_{worker_id}_{engine_dialect_name}"
-            __mapper_args__ = {"concrete": True}
+        # Create the class with unique name from the start to avoid registry conflicts
+        class_name = f"Movie_{unique_suffix}"
 
-            title: Mapped[str] = mapped_column(String(length=100))
-            release_date: Mapped[datetime] = mapped_column()
-            genre: Mapped[str] = mapped_column(String(length=50))
-
-        # Set unique name to avoid registry conflicts
-        Movie.__name__ = f"Movie_{unique_suffix}"
-        Movie.__qualname__ = f"Movie_{unique_suffix}"
+        Movie = type(
+            class_name,
+            (base_class, TestBase),
+            {
+                "__tablename__": f"test_movies_{worker_id}_{engine_dialect_name}",
+                "__mapper_args__": {"concrete": True},
+                "__module__": __name__,  # Set proper module
+                "title": mapped_column(String(length=100)),
+                "release_date": mapped_column(),
+                "genre": mapped_column(String(length=50)),
+                "__annotations__": {"title": "Mapped[str]", "release_date": "Mapped[datetime]", "genre": "Mapped[str]"},
+            },
+        )  # type: ignore[valid-type,misc]
 
         _movie_model_cache[cache_key] = Movie
 
@@ -89,9 +93,13 @@ def movie_model_sync(
     engine: Engine,
     request: FixtureRequest,
 ) -> Generator[type[DeclarativeBase], None, None]:
-    """Setup movie table for sync engines with fast cleanup."""
+    """Setup movie table for sync engines."""
     worker_id = get_worker_id(request)
     engine_dialect_name = getattr(engine.dialect, "name", "mock")
+
+    # Skip Spanner, CockroachDB, and MSSQL due to database-specific issues
+    if engine_dialect_name.startswith(("spanner", "cockroach", "mssql")):
+        pytest.skip(f"Filter tests are not supported on {engine_dialect_name}")
 
     # Get the appropriate model for this engine type
     movie_model = get_movie_model_for_engine(engine_dialect_name, worker_id)
@@ -103,9 +111,7 @@ def movie_model_sync(
 
     yield movie_model
 
-    # Fast data-only cleanup between tests
-    if engine_dialect_name != "mock":
-        clean_tables(engine, movie_model.metadata)
+    # Cleanup is handled by _auto_clean_sync_db fixture
 
 
 @pytest.fixture
@@ -113,18 +119,22 @@ async def movie_model_async(
     cached_movie_model: type[DeclarativeBase],
     async_engine: AsyncEngine,
 ) -> AsyncGenerator[type[DeclarativeBase], None]:
-    """Setup movie table for async engines with fast cleanup."""
+    """Setup movie table for async engines."""
+    engine_dialect_name = getattr(async_engine.dialect, "name", "mock")
+
+    # Skip Spanner, CockroachDB, and MSSQL due to database-specific issues
+    if engine_dialect_name.startswith(("spanner", "cockroach", "mssql")):
+        pytest.skip(f"Filter tests are not supported on {engine_dialect_name}")
+
     # Skip for mock engines
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    if engine_dialect_name != "mock":
         # Create table once per engine type
         async with async_engine.begin() as conn:
             await conn.run_sync(cached_movie_model.metadata.create_all)
 
     yield cached_movie_model
 
-    # Fast data-only cleanup between tests
-    if getattr(async_engine.dialect, "name", "") != "mock":
-        await async_clean_tables(async_engine, cached_movie_model.metadata)
+    # Cleanup is handled by _auto_clean_async_db fixture
 
 
 def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> None:
