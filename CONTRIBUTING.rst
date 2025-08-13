@@ -99,12 +99,7 @@ Creating a new release
 
    - Replace ``{current_version}`` with the current version (e.g., ``1.2.3``).
    - Replace ``{new_version}`` with the new version (e.g., ``1.2.4``).
-
-   **Example:**
-
-   .. code-block:: bash
-
-      uv run tools/prepare_release.py -c -i --base v1.4.4 1.4.5
+   - Example: ``uv run tools/prepare_release.py -c -i --base v1.4.4 1.4.5``
 
 5. **Run linters and formatters**
 
