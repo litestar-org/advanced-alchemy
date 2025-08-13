@@ -64,8 +64,6 @@ Then you can serve the documentation with ``make docs-serve``, or build them wit
 Creating a new release
 ----------------------
 
-Follow these steps to create and publish a new release.
-
 1. **Set up your environment**
 
    - Ensure you have the `gh` CLI installed and logged in to GitHub.
