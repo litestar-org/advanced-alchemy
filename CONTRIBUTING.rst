@@ -139,9 +139,9 @@ Creating a new release
 
 9.  **Verify the release draft**
 
-    - Once merged, a draft release will be created under **Releases** on GitHub.
+    - Once merged, a draft release will be created under ``Releases`` on GitHub.
     - Edit and publish it.
 
 10. **Publish to PyPI**
 
-    - Approve the **Latest Release** workflow under **Actions** to publish the package to PyPI.
+    - Approve the ``Latest Release`` workflow under ``Actions`` to publish the package to PyPI.
