@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
 
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import NANOID_INSTALLED
@@ -17,13 +17,5 @@ else:
 class NanoIDPrimaryKey(SentinelMixin):
     """Nano ID Primary Key Field Mixin."""
 
-    __abstract__ = True
-
-    @declared_attr
-    def id(cls) -> Mapped[str]:
-        """Nano ID Primary key column.
-
-        Returns:
-            Nano ID Primary key column.
-        """
-        return mapped_column(default=nanoid, primary_key=True)
+    id: Mapped[str] = mapped_column(default=nanoid, primary_key=True)
+    """Nano ID Primary key column."""

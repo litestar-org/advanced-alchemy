@@ -11,15 +11,9 @@ if TYPE_CHECKING:
 class SlugKey:
     """Slug unique Field Model Mixin."""
 
-    __abstract__ = True
-
     @declared_attr
     def slug(cls) -> Mapped[str]:
-        """Slug field.
-
-        Returns:
-            Slug field.
-        """
+        """Slug field."""
         return mapped_column(
             String(length=100),
             nullable=False,

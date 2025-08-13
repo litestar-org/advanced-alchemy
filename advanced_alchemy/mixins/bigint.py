@@ -25,15 +25,9 @@ def _get_schema(cls: "BigIntPrimaryKey") -> Optional[str]:  # pragma: nocover
 class BigIntPrimaryKey:
     """BigInt Primary Key Field Mixin."""
 
-    __abstract__ = True
-
     @declared_attr
     def id(cls) -> Mapped[int]:
-        """BigInt Primary key column.
-
-        Returns:
-            BigInt Primary key column.
-        """
+        """BigInt Primary key column."""
         seq_kwargs: dict[str, Any] = {"optional": False}
         if schema := _get_schema(cls):
             seq_kwargs["schema"] = schema
