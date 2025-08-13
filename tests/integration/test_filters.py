@@ -1,13 +1,11 @@
-from __future__ import annotations
-
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 import pytest
+from pytest import FixtureRequest
 from sqlalchemy import Engine, String, select
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
@@ -27,9 +25,6 @@ from advanced_alchemy.filters import (
     or_,
 )
 from tests.integration.helpers import get_worker_id
-
-if TYPE_CHECKING:
-    from pytest import FixtureRequest
 
 pytestmark = [
     pytest.mark.integration,
@@ -72,7 +67,7 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
                 "title": mapped_column(String(length=100)),
                 "release_date": mapped_column(),
                 "genre": mapped_column(String(length=50)),
-                "__annotations__": {"title": "Mapped[str]", "release_date": "Mapped[datetime]", "genre": "Mapped[str]"},
+                "__annotations__": {"title": Mapped[str], "release_date": Mapped[datetime], "genre": Mapped[str]},
             },
         )  # type: ignore[valid-type,misc]
 

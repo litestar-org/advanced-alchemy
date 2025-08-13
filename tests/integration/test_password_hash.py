@@ -66,6 +66,10 @@ def test_password_hash_sync(engine: Engine, password_test_tables: None, monkeypa
     if engine.dialect.name == "mock":
         pytest.skip("Mock engine doesn't support auto-generated primary keys")
 
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if engine.dialect.name.startswith("spanner"):
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     # Skip CockroachDB - it doesn't support BigInt primary keys
     if engine.dialect.name.startswith("cockroach"):
         pytest.skip("CockroachDB doesn't support BigInt primary keys")
@@ -139,6 +143,10 @@ async def test_password_hash_async(
     # Skip mock engine - it doesn't support auto-generated primary keys
     if async_engine.dialect.name == "mock":
         pytest.skip("Mock engine doesn't support auto-generated primary keys")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if async_engine.dialect.name.startswith("spanner"):
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     # Skip CockroachDB - it doesn't support BigInt primary keys
     if async_engine.dialect.name.startswith("cockroach"):
