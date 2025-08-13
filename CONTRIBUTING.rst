@@ -77,16 +77,9 @@ Creating a new release
 
         make install   # Install all dependencies
         make upgrade   # Update dependencies to the latest versions
+        make docs      # Verify documentation builds
 
-3. **Verify documentation builds**
-
-   - Run:
-
-     .. code-block:: bash
-
-        make docs
-
-4. **Bump the version**
+3. **Bump the version**
 
    - Run:
 
@@ -96,7 +89,7 @@ Creating a new release
 
    - Use ``bump=minor`` or ``bump=major`` if you need to bump the minor or major version instead.
 
-5. **Prepare the release**
+4. **Prepare the release**
 
    - Run:
 
@@ -113,7 +106,7 @@ Creating a new release
 
       uv run tools/prepare_release.py -c -i --base v1.4.4 1.4.5
 
-6. **Run linters and formatters**
+5. **Run linters and formatters**
 
    - Ensure code style compliance:
 
@@ -121,7 +114,7 @@ Creating a new release
 
         make lint
 
-7. **Clean up the changelog**
+6. **Clean up the changelog**
 
    - Open ``docs/changelog.rst`` and remove any placeholder comments, such as:
 
@@ -130,7 +123,7 @@ Creating a new release
         <!-- By submitting this pull request, you agree to ... -->
         <!-- Please add in issue numbers this pull request will close ... -->
 
-8. **Commit the release**
+7. **Commit the release**
 
    - Create a new branch:
 
@@ -144,16 +137,16 @@ Creating a new release
 
         git commit -am "chore(release): bump to v{new_version}"
 
-9. **Open a pull request**
+8. **Open a pull request**
 
    - Push the branch and create a PR into ``main``.
    - Merge once CI checks pass.
 
-10. **Verify the release draft**
+9.  **Verify the release draft**
 
     - Once merged, a draft release will be created under **Releases** on GitHub.
     - Edit and publish it.
 
-11. **Publish to PyPI**
+10. **Publish to PyPI**
 
     - Approve the **Latest Release** workflow under **Actions** to publish the package to PyPI.
