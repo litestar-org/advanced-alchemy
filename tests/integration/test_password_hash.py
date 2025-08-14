@@ -44,14 +44,16 @@ class User(BigIntBase):
 @pytest.fixture()
 def password_test_tables(engine: Engine) -> None:
     """Create password test tables for sync engines."""
-    if getattr(engine.dialect, "name", "") != "mock":
+    if getattr(engine.dialect, "name", "") != "mock" and not getattr(engine.dialect, "name", "").startswith("spanner"):
         User.metadata.create_all(engine)
 
 
 @pytest.fixture()
 async def password_test_tables_async(async_engine: AsyncEngine) -> None:
     """Create password test tables for async engines."""
-    if getattr(async_engine.dialect, "name", "") != "mock":
+    if getattr(async_engine.dialect, "name", "") != "mock" and not getattr(async_engine.dialect, "name", "").startswith(
+        "spanner"
+    ):
         async with async_engine.begin() as conn:
             await conn.run_sync(User.metadata.create_all)
 
