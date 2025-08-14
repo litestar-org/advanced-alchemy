@@ -380,6 +380,7 @@ classmethod-decorators = [
   "RUF029",
   "DOC",
   "UP007",
+  "UP045",
   "ASYNC230",
 ]
 
@@ -585,5 +586,5 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.codespell]
-ignore-words-list = "selectin"
-skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg'
+ignore-words-list = "selectin,fo,froms,notin"
+skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg, docs/changelog.rst, advanced_alchemy/types/file_object/file.py'

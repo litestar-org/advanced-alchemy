@@ -92,7 +92,7 @@ class Book(Base):
     bar: Mapped[str] = mapped_column(default="Hello")
     SPAM: Mapped[str] = mapped_column(default="Bye")
     spam_bar: Mapped[str] = mapped_column(default="Goodbye")
-    number_of_reviews: Mapped[Optional[int]] = column_property(  # noqa: UP045
+    number_of_reviews: Mapped[Optional[int]] = column_property(
         select(func.count(BookReview.id)).where(BookReview.book_id == id).scalar_subquery(),  # type: ignore
     )
 
@@ -211,7 +211,7 @@ model_with_func_query = select(ConcreteBase, func_result_query.label("func_resul
 
 class ModelWithFunc(Base):
     __table__ = model_with_func_query
-    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)  # noqa: UP045
+    func_result: Mapped[Optional[int]] = column_property(model_with_func_query.c.func_result)
 
 
 def test_model_using_func() -> None:
@@ -257,7 +257,7 @@ class Base(DeclarativeBase):
     pass
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "user_table"
     id: Mapped[int] = mapped_column(primary_key=True)
     kw: Mapped[List[Keyword]] = relationship(secondary=lambda: user_keyword_table, info=dto_field("private"))
     # proxy the 'keyword' attribute from the 'kw' relationship
@@ -271,7 +271,7 @@ class Keyword(Base):
 user_keyword_table: Final[Table] = Table(
     "user_keyword",
     Base.metadata,
-    Column("user_id", Integer, ForeignKey("user.id"), primary_key=True),
+    Column("user_id", Integer, ForeignKey("user_table.id"), primary_key=True),
     Column("keyword_id", Integer, ForeignKey("keyword.id"), primary_key=True),
 )
 

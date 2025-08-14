@@ -139,6 +139,13 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
+        data: "Sequence[Row[Any]]",
+        total: "int",
+    ) -> "OffsetPagination[Row[Any]]": ...
+
+    @overload
+    def to_schema(
+        self,
         data: "Sequence[ModelOrRowMappingT]",
         *,
         schema_type: None = None,

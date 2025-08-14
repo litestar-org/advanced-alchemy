@@ -1,4 +1,5 @@
 import contextlib
+import logging
 from collections.abc import Generator
 
 import pytest
@@ -22,6 +23,27 @@ pytest_plugins = [
     "pytest_databases.docker.mssql",
     "pytest_databases.docker.bigquery",
 ]
+
+
+@pytest.fixture(autouse=True, scope="session")
+def configure_logging() -> None:
+    """Configure logging levels to suppress verbose database output."""
+    # Suppress Spanner multiplexed session creation messages - try broader patterns
+    logging.getLogger().setLevel(logging.WARNING)  # Set root logger to WARNING to suppress INFO messages
+
+    # Specifically target known Spanner loggers
+    for logger_name in [
+        "projects.emulator-test-project.instances.emulator-test-instance.databases.emulator-test-database",
+        "google.cloud.spanner_v1.session",
+        "google.cloud.spanner_v1",
+        "google.cloud.spanner",
+        "google.cloud.spanner_dbapi",
+        "google.cloud.spanner_dbapi.connection",
+        "google.cloud.spanner_dbapi.cursor",
+        # Try to catch the database sessions manager
+        "database_sessions_manager",
+    ]:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 
 @pytest.fixture(scope="session")

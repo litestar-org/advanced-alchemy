@@ -1,14 +1,12 @@
-# ruff: noqa: UP045
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import pytest
 from passlib.context import CryptContext
 from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
-from sqlalchemy import String, create_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import Engine, String
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from advanced_alchemy.base import BigIntBase
@@ -17,12 +15,14 @@ from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from advanced_alchemy.types.password_hash.base import HashedPassword
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
 from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
+from tests.integration.test_models import DatabaseCapabilities
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
 pytestmark = [
     pytest.mark.integration,
+    pytest.mark.xdist_group("password_hash"),
 ]
 
 
@@ -38,17 +38,44 @@ class User(BigIntBase):
         PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
     )
 
+    __table_args__ = {"info": {"allow_eager": True}}
 
-@pytest.mark.xdist_group("sqlite")
-def test_password_hash_sync_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """Test password hashing with Argon2 and Passlib backends using SQLite."""
-    # Create engine and session
-    engine = create_engine(f"sqlite:///{tmp_path}/test_password.db", echo=False)
+
+@pytest.fixture()
+def password_test_tables(engine: Engine) -> None:
+    """Create password test tables for sync engines."""
+    if getattr(engine.dialect, "name", "") != "mock" and not getattr(engine.dialect, "name", "").startswith("spanner"):
+        User.metadata.create_all(engine)
+
+
+@pytest.fixture()
+async def password_test_tables_async(async_engine: AsyncEngine) -> None:
+    """Create password test tables for async engines."""
+    if getattr(async_engine.dialect, "name", "") != "mock" and not getattr(async_engine.dialect, "name", "").startswith(
+        "spanner"
+    ):
+        async with async_engine.begin() as conn:
+            await conn.run_sync(User.metadata.create_all)
+
+
+def test_password_hash_sync(engine: Engine, password_test_tables: None, monkeypatch: MonkeyPatch) -> None:
+    """Test password hashing with Argon2 and Passlib backends using sync engines."""
+    # Skip for unsupported backends
+    if DatabaseCapabilities.should_skip_bigint(engine.dialect.name):
+        pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
+
+    # Skip mock engine - it doesn't support auto-generated primary keys
+    if engine.dialect.name == "mock":
+        pytest.skip("Mock engine doesn't support auto-generated primary keys")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if engine.dialect.name.startswith("spanner"):
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
+    # Skip CockroachDB - it doesn't support BigInt primary keys
+    if engine.dialect.name.startswith("cockroach"):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
-
-    # Create tables
-    with engine.begin() as conn:
-        User.metadata.create_all(conn)
 
     # Test with session
     with session_factory() as db_session:
@@ -107,16 +134,26 @@ def test_password_hash_sync_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> 
         assert user2.argon2_password is None
 
 
-@pytest.mark.xdist_group("sqlite")
-async def test_password_hash_async_sqlite(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """Test password hashing with Argon2 and Passlib backends using async SQLite."""
-    # Create async engine and session
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test_password_async.db", echo=False)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+async def test_password_hash_async(
+    async_engine: AsyncEngine, password_test_tables_async: None, monkeypatch: MonkeyPatch
+) -> None:
+    """Test password hashing with Argon2 and Passlib backends using async engines."""
+    # Skip for unsupported backends
+    if DatabaseCapabilities.should_skip_bigint(async_engine.dialect.name):
+        pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
 
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(User.metadata.create_all)
+    # Skip mock engine - it doesn't support auto-generated primary keys
+    if async_engine.dialect.name == "mock":
+        pytest.skip("Mock engine doesn't support auto-generated primary keys")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if async_engine.dialect.name.startswith("spanner"):
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
+    # Skip CockroachDB - it doesn't support BigInt primary keys
+    if async_engine.dialect.name.startswith("cockroach"):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
+    session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
 
     # Test with async session
     async with session_factory() as db_session:

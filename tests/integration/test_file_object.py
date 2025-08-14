@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Optional
 
 import pytest
+import pytest_asyncio
 from minio import Minio  # type: ignore[import-untyped]
 from pytest_databases.docker.minio import MinioService
-from sqlalchemy import Engine, String, create_engine, event
+from sqlalchemy import Engine, String, event
 from sqlalchemy.exc import InvalidRequestError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
@@ -28,7 +29,10 @@ from advanced_alchemy.types.mutables import MutableList
 # Setup logger
 logger = logging.getLogger(__name__)
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("file_object"),
+]
 
 
 def remove_listeners() -> None:
@@ -79,8 +83,8 @@ class Document(Base):
     )
 
 
-@pytest.fixture()
-def storage_registry(tmp_path: Path) -> "StorageRegistry":
+@pytest.fixture(scope="session")
+def storage_registry(tmp_path_factory: pytest.TempPathFactory) -> "StorageRegistry":
     """Clears and returns the global storage registry for the module.
 
     Returns:
@@ -93,9 +97,8 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
     if storages.is_registered("local_test_store"):
         storages.unregister_backend("local_test_store")
 
-    # Create the storage directory
-    storage_dir = tmp_path / "file_object_test_storage"
-    storage_dir.mkdir(parents=True, exist_ok=True)
+    # Create the storage directory using tmp_path_factory for session scope
+    storage_dir = tmp_path_factory.mktemp("file_object_test_storage")
 
     storages.register_backend(
         ObstoreBackend(
@@ -106,66 +109,116 @@ def storage_registry(tmp_path: Path) -> "StorageRegistry":
     return storages
 
 
-@pytest.fixture()
-def sync_db_engine(tmp_path: Path) -> Generator[Engine, None, None]:
-    """Provides an SQLite engine scoped to each function."""
-    db_file = tmp_path / "test_file_object_sync.db"
-    engine = create_engine(f"sqlite:///{db_file}", execution_options={"enable_file_object_listener": True})
-    yield engine
-    db_file.unlink(missing_ok=True)
+@pytest.fixture(scope="function")
+def sync_db_engine(engine: Engine) -> Generator[Engine, None, None]:
+    """Provides a sync engine with file object listener execution options."""
+    dialect_name = getattr(engine.dialect, "name", "")
+
+    # Skip engines that don't support file object operations properly
+    if dialect_name == "mock":
+        pytest.skip("Mock engines don't support file object operations")
+    elif dialect_name == "duckdb":
+        pytest.skip("DuckDB doesn't support SERIAL type")
+    elif dialect_name == "mssql":
+        pytest.skip("MSSQL has issues with file object operations")
+    elif dialect_name.startswith("spanner"):
+        pytest.skip("Spanner has issues with file object operations")
+    elif dialect_name.startswith("oracle"):
+        pytest.skip("Oracle requires explicit ID values, not auto-generated")
+    elif dialect_name == "mysql":
+        pytest.skip("MySQL has issues with file object operations")
+
+    # Set the execution option for file object listener
+    engine = engine.execution_options(enable_file_object_listener=True)
+    Base.metadata.create_all(engine)
+
+    try:
+        yield engine
+    finally:
+        # Clean up metadata
+        Base.metadata.drop_all(engine, checkfirst=True)
 
 
-@pytest.fixture()
-def async_db_engine(tmp_path: Path) -> Generator[AsyncEngine, None, None]:
-    """Provides an SQLite engine scoped to each function."""
-    db_file = tmp_path / "test_file_object_async.db"
-    engine = create_async_engine(
-        f"sqlite+aiosqlite:///{db_file}", execution_options={"enable_file_object_listener": True}
-    )
-    yield engine
-    db_file.unlink(missing_ok=True)
+@pytest.fixture(scope="function")
+def async_db_engine(request: pytest.FixtureRequest) -> Generator[AsyncEngine, None, None]:
+    """Provides an async engine with file object listener execution options."""
+    # Try to get async_engine, fall back to specific engine fixtures
+    if "async_engine" in request.fixturenames:
+        async_engine = request.getfixturevalue("async_engine")
+    elif "aiosqlite_engine" in request.fixturenames:
+        async_engine = request.getfixturevalue("aiosqlite_engine")
+    elif "asyncpg_engine" in request.fixturenames:
+        async_engine = request.getfixturevalue("asyncpg_engine")
+    else:
+        pytest.skip("No async engine fixture available")
+
+    dialect_name = getattr(async_engine.dialect, "name", "")
+
+    # Skip engines that don't support file object operations properly
+    if dialect_name == "mock":
+        pytest.skip("Mock engines don't support file object operations")
+    elif dialect_name == "duckdb":
+        pytest.skip("DuckDB doesn't support SERIAL type")
+    elif dialect_name == "mssql":
+        pytest.skip("MSSQL has issues with file object operations")
+    elif dialect_name.startswith("spanner"):
+        pytest.skip("Spanner has issues with file object operations")
+    elif dialect_name.startswith("oracle"):
+        pytest.skip("Oracle requires explicit ID values, not auto-generated")
+    elif dialect_name in ("mysql", "asyncmy"):
+        pytest.skip("MySQL has issues with file object operations")
+
+    # Set the execution option for file object listener
+    engine = async_engine.execution_options(enable_file_object_listener=True)
+
+    async def _create() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    import asyncio as _asyncio
+
+    _asyncio.run(_create())
+
+    try:
+        yield engine
+    finally:
+        # Clean up metadata
+        async def _drop() -> None:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
+
+        import asyncio as _asyncio
+
+        _asyncio.run(_drop())
 
 
-@pytest.fixture()
-def session(
-    sync_db_engine: Engine, storage_registry: "StorageRegistry"
-) -> Generator[Session, None, None]:  # Depend on sqlalchemy_config to ensure setup runs
-    """Provides a SQLAlchemy session scoped to each function."""
-    Base.metadata.create_all(sync_db_engine)
+@pytest.fixture(scope="function")
+def session(sync_db_engine: Engine, storage_registry: "StorageRegistry") -> Generator[Session, None, None]:
+    """Provides a SQLAlchemy session scoped to the test session."""
     with Session(sync_db_engine) as db_session:
         yield db_session
-    Base.metadata.drop_all(sync_db_engine)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(scope="function")
 async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
-) -> AsyncGenerator[AsyncSession, None]:  # Depend on sqlalchemy_config to ensure setup runs
-    """Provides a SQLAlchemy session scoped to each function."""
-    async with async_db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+) -> AsyncGenerator[AsyncSession, None]:
+    """Provides a SQLAlchemy session scoped to the test session."""
     # Create session with flag for listener to identify async operations
     set_async_context(True)
-    # Create session factory
+
     async_session_factory = async_sessionmaker(
         async_db_engine,
         expire_on_commit=False,
     )
 
-    # Create session
     async with async_session_factory() as db_session:
-        # Add flag to session.info dictionary
         db_session.info["enable_file_object_listener"] = True
         logger.debug(f"Created async session: {id(db_session)}, with info: {db_session.info}")
         yield db_session
 
     # Reset async context flag
     set_async_context(False)
-
-    async with async_db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await async_db_engine.dispose()
 
 
 @pytest.mark.xdist_group("file_object")
@@ -992,6 +1045,25 @@ async def test_obstore_backend_storage_registry_management(storage_registry: Sto
 
     with pytest.raises(ImproperConfigurationError, match="key is not allowed when registering a StorageBackend"):
         storage_registry.register_backend(test_backend, key="invalid_key")  # type: ignore[arg-type]
+
+    # Restore the original backends for session-scoped fixture compatibility
+    import tempfile
+
+    from obstore.store import LocalStore, MemoryStore
+
+    # Re-register the memory backend
+    if not storage_registry.is_registered("memory"):
+        storage_registry.register_backend(ObstoreBackend(fs=MemoryStore(), key="memory"))
+
+    # Re-register the local_test_store backend
+    if not storage_registry.is_registered("local_test_store"):
+        storage_dir = tempfile.mkdtemp(prefix="file_object_test_storage_")
+        storage_registry.register_backend(
+            ObstoreBackend(
+                fs=LocalStore(prefix=storage_dir),
+                key="local_test_store",
+            )
+        )
 
 
 @pytest.mark.xdist_group("file_object")

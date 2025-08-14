@@ -1,20 +1,35 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import Column, ForeignKey, String, Table, create_engine, select
+from sqlalchemy import Column, Engine, ForeignKey, String, Table, select
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, sessionmaker
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("bigint_identity"),
+]
+
 
 @pytest.mark.xdist_group("loader")
-def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_ap_sync(monkeypatch: MonkeyPatch, engine: Engine) -> None:
+    # Skip problematic engines
+    dialect_name = getattr(engine.dialect, "name", "")
+    if dialect_name == "duckdb":
+        pytest.skip("DuckDB doesn't support BIGSERIAL type")
+    if dialect_name == "mock":
+        pytest.skip("Mock engines don't properly support multi-row inserts with RETURNING")
+    if "oracle" in dialect_name:
+        pytest.skip("Oracle has issues with BIGSERIAL syntax")
+    if dialect_name.startswith(("spanner", "cockroach")):
+        pytest.skip(f"{dialect_name} doesn't support Identity/BigInt primary keys")
+
     from sqlalchemy.orm import DeclarativeBase
 
     from advanced_alchemy import base, mixins
@@ -27,14 +42,15 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(base, "IdentityBase", NewIdentityBase)
 
     product_tag_table = Table(
-        "product_tag",
+        "product_tag_identity_sync",
         orm_registry.metadata,
-        Column("product_id", ForeignKey("product.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
-        Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
+        Column("product_id", ForeignKey("product_identity_sync.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
+        Column("tag_id", ForeignKey("tag_identity_sync.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
     )
 
     class Tag(NewIdentityBase):
-        name: Mapped[str] = mapped_column(index=True)
+        __tablename__ = "tag_identity_sync"
+        name: Mapped[str] = mapped_column(String(100), index=True)
         products: Mapped[list[Product]] = relationship(
             secondary=lambda: product_tag_table,
             back_populates="product_tags",
@@ -44,6 +60,7 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         )
 
     class Product(NewIdentityBase):
+        __tablename__ = "product_identity_sync"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         product_tags: Mapped[list[Tag]] = relationship(
             secondary=lambda: product_tag_table,
@@ -58,7 +75,6 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             creator=lambda name: Tag(name=name),  # pyright: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
         )
 
-    engine = create_engine(f"sqlite:///{tmp_path}/test.sqlite1.db", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
@@ -88,7 +104,18 @@ def test_ap_sync(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.xdist_group("loader")
-async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+async def test_ap_async(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
+    # Skip problematic engines
+    dialect_name = getattr(async_engine.dialect, "name", "")
+    if dialect_name == "duckdb":
+        pytest.skip("DuckDB doesn't support BIGSERIAL type")
+    if dialect_name == "mock":
+        pytest.skip("Mock engines don't properly support multi-row inserts with RETURNING")
+    if "oracle" in dialect_name:
+        pytest.skip("Oracle has issues with BIGSERIAL syntax")
+    if dialect_name.startswith(("spanner", "cockroach")):
+        pytest.skip(f"{dialect_name} doesn't support Identity/BigInt primary keys")
+
     from sqlalchemy.orm import DeclarativeBase
 
     from advanced_alchemy import base, mixins
@@ -101,14 +128,15 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(base, "IdentityBase", NewIdentityBase)
 
     product_tag_table = Table(
-        "product_tag",
+        "product_tag_identity_async",
         orm_registry.metadata,
-        Column("product_id", ForeignKey("product.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
-        Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
+        Column("product_id", ForeignKey("product_identity_async.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
+        Column("tag_id", ForeignKey("tag_identity_async.id", ondelete="CASCADE"), primary_key=True),  # pyright: ignore[reportUnknownArgumentType]
     )
 
     class Tag(NewIdentityBase):
-        name: Mapped[str] = mapped_column(index=True)
+        __tablename__ = "tag_identity_async"
+        name: Mapped[str] = mapped_column(String(100), index=True)
         products: Mapped[list[Product]] = relationship(
             secondary=lambda: product_tag_table,
             back_populates="product_tags",
@@ -118,6 +146,7 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         )
 
     class Product(NewIdentityBase):
+        __tablename__ = "product_identity_async"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         product_tags: Mapped[list[Tag]] = relationship(
             secondary=lambda: product_tag_table,
@@ -132,10 +161,9 @@ async def test_ap_async(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             creator=lambda name: Tag(name=name),  # pyright: ignore[reportUnknownArgumentType,reportUnknownLambdaType]
         )
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test.sqlite2.db", echo=True)
-    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(async_engine, expire_on_commit=False)
 
-    async with engine.begin() as conn:
+    async with async_engine.begin() as conn:
         await conn.run_sync(Tag.metadata.create_all)
 
     async with session_factory() as db_session:

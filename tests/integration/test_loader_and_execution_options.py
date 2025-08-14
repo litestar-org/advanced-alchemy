@@ -1,46 +1,65 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 import pytest
-from sqlalchemy import ForeignKey, String, create_engine
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import Engine, ForeignKey, String
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, noload, relationship, selectinload, sessionmaker
 
-from advanced_alchemy.base import BigIntBase, UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("loader_execution"),
+]
+
 
 @pytest.mark.xdist_group("loader")
-def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
+    # Skip mock engines as they don't support multi-row inserts with RETURNING
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support multi-row inserts with RETURNING")
+
+    # Skip CockroachDB as it has issues with loader options and BigInt primary keys
+    if "cockroach" in getattr(engine.dialect, "name", ""):
+        pytest.skip("CockroachDB has issues with loader options and BigInt primary keys")
+
+    from sqlalchemy.orm import DeclarativeBase
+
     from advanced_alchemy import base, mixins
 
+    # Create a completely isolated registry for this test
     orm_registry = base.create_registry()
 
-    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    # Use engine driver name in table names to avoid conflicts between engines sharing the same database
+    # (e.g., asyncpg and psycopg both report dialect.name as "postgresql")
+    engine_name = getattr(engine.dialect, "driver", getattr(engine.dialect, "name", "unknown")).replace("+", "_")
+
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         __abstract__ = True
         registry = orm_registry
 
-    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         __abstract__ = True
         registry = orm_registry
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
-
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
-    class UUIDCountry(UUIDBase):
+    class UUIDCountry(NewUUIDBase):
+        __tablename__ = f"uuid_country_loader_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[UUIDState]] = relationship(back_populates="country", uselist=True, lazy="noload")
 
-    class UUIDState(UUIDBase):
+    class UUIDState(NewUUIDBase):
+        __tablename__ = f"uuid_state_loader_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[UUID] = mapped_column(ForeignKey(UUIDCountry.id))
+        country_id: Mapped[UUID] = mapped_column(ForeignKey(f"uuid_country_loader_{engine_name}.id"))
 
         country: Mapped[UUIDCountry] = relationship(uselist=False, back_populates="states", lazy="raise")
 
@@ -50,11 +69,11 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     class CountryRepository(SQLAlchemySyncRepository[UUIDCountry]):
         model_type = UUIDCountry
 
-    engine = create_engine(f"sqlite:///{tmp_path}/test.sqlite1.db", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
-        UUIDState.metadata.create_all(conn)
+        # Create tables using the registry metadata
+        orm_registry.metadata.create_all(conn)
 
     with session_factory() as db_session:
         usa = UUIDCountry(name="United States of America")
@@ -121,30 +140,48 @@ def test_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.xdist_group("loader")
-async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+async def test_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
+    # Skip mock engines as they don't support multi-row inserts with RETURNING
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support multi-row inserts with RETURNING")
+
+    # Skip CockroachDB as it has issues with loader options and BigInt primary keys
+    if "cockroach" in getattr(async_engine.dialect, "name", ""):
+        pytest.skip("CockroachDB has issues with loader options and BigInt primary keys")
+
+    from sqlalchemy.orm import DeclarativeBase
+
     from advanced_alchemy import base, mixins
 
+    # Create a completely isolated registry for this test
     orm_registry = base.create_registry()
 
-    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    # Use engine driver name in table names to avoid conflicts between engines sharing the same database
+    # (e.g., asyncpg and psycopg both report dialect.name as "postgresql")
+    engine_name = getattr(async_engine.dialect, "driver", getattr(async_engine.dialect, "name", "unknown")).replace(
+        "+", "_"
+    )
+
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         __abstract__ = True
         registry = orm_registry
 
-    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         __abstract__ = True
         registry = orm_registry
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
-
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
-    class BigIntCountry(BigIntBase):
+    class BigIntCountry(NewBigIntBase):
+        __tablename__ = f"bigint_country_async_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[BigIntState]] = relationship(back_populates="country", uselist=True)
 
-    class BigIntState(BigIntBase):
+    class BigIntState(NewBigIntBase):
+        __tablename__ = f"bigint_state_async_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountry.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey(f"bigint_country_async_{engine_name}.id"))
 
         country: Mapped[BigIntCountry] = relationship(uselist=False, back_populates="states", lazy="raise")
 
@@ -154,11 +191,11 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     class CountryRepository(SQLAlchemyAsyncRepository[BigIntCountry]):
         model_type = BigIntCountry
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test.sqlite2.db", echo=True)
-    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(async_engine, expire_on_commit=False)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(BigIntState.metadata.create_all)
+    async with async_engine.begin() as conn:
+        # Create tables using the registry metadata
+        await conn.run_sync(orm_registry.metadata.create_all)
 
     async with session_factory() as db_session:
         usa = BigIntCountry(name="United States of America")
@@ -223,30 +260,46 @@ async def test_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.mark.xdist_group("loader")
-def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_default_overrides_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
+    # Skip mock engines as they don't support multi-row inserts with RETURNING
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support multi-row inserts with RETURNING")
+
+    # Skip CockroachDB as it has issues with loader options and BigInt primary keys
+    if "cockroach" in getattr(engine.dialect, "name", ""):
+        pytest.skip("CockroachDB has issues with loader options and BigInt primary keys")
+
+    from sqlalchemy.orm import DeclarativeBase
+
     from advanced_alchemy import base, mixins
 
+    # Create a completely isolated registry for this test
     orm_registry = base.create_registry()
 
-    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    # Use engine driver name in table names to avoid conflicts between engines sharing the same database
+    # (e.g., asyncpg and psycopg both report dialect.name as "postgresql")
+    engine_name = getattr(engine.dialect, "driver", getattr(engine.dialect, "name", "unknown")).replace("+", "_")
+
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         __abstract__ = True
         registry = orm_registry
 
-    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
         __abstract__ = True
         registry = orm_registry
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
-
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
-    class UUIDCountryTest(UUIDBase):
+    class UUIDCountryTest(NewUUIDBase):
+        __tablename__ = f"uuid_country_override_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[UUIDStateTest]] = relationship(back_populates="country", uselist=True, lazy="selectin")
 
-    class UUIDStateTest(UUIDBase):
+    class UUIDStateTest(NewUUIDBase):
+        __tablename__ = f"uuid_state_override_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[UUID] = mapped_column(ForeignKey(UUIDCountryTest.id))
+        country_id: Mapped[UUID] = mapped_column(ForeignKey(f"uuid_country_override_{engine_name}.id"))
 
         country: Mapped[UUIDCountryTest] = relationship(uselist=False, back_populates="states", lazy="noload")
 
@@ -259,11 +312,11 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
         inherit_lazy_relationships = False
         model_type = UUIDCountryTest
 
-    engine = create_engine(f"sqlite:///{tmp_path}/test_loader.sqlite.db", echo=True)
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
 
     with engine.begin() as conn:
-        UUIDStateTest.metadata.create_all(conn)
+        # Create tables using the registry metadata
+        orm_registry.metadata.create_all(conn)
 
     with session_factory() as db_session:
         usa = UUIDCountryTest(name="United States of America")
@@ -296,34 +349,55 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> N
 
 
 @pytest.mark.xdist_group("loader")
-async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
+    # Skip mock engines as they don't support multi-row inserts with RETURNING
+    if getattr(async_engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support multi-row inserts with RETURNING")
+
+    # Skip CockroachDB as it has issues with loader options and BigInt primary keys
+    if "cockroach" in getattr(async_engine.dialect, "name", ""):
+        pytest.skip("CockroachDB has issues with loader options and BigInt primary keys")
+
+    from sqlalchemy.orm import DeclarativeBase
+
     from advanced_alchemy import base, mixins
 
+    # Create a completely isolated registry for this test
     orm_registry = base.create_registry()
 
-    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    # Use engine driver name in table names to avoid conflicts between engines sharing the same database
+    # (e.g., asyncpg and psycopg both report dialect.name as "postgresql")
+    engine_name = getattr(async_engine.dialect, "driver", getattr(async_engine.dialect, "name", "unknown")).replace(
+        "+", "_"
+    )
+
+    class NewUUIDBase(mixins.UUIDPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+        __abstract__ = True
         registry = orm_registry
 
-    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, base.AdvancedDeclarativeBase):
+    class NewBigIntBase(mixins.BigIntPrimaryKey, base.CommonTableAttributes, DeclarativeBase):
+        __abstract__ = True
         registry = orm_registry
 
     monkeypatch.setattr(base, "UUIDBase", NewUUIDBase)
-
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
 
-    class BigIntCountryTest(BigIntBase):
+    class BigIntCountryTest(NewBigIntBase):
+        __tablename__ = f"bigint_country_override_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
         states: Mapped[list[BigIntStateTest]] = relationship(back_populates="country", uselist=True, lazy="selectin")
         notes: Mapped[list[BigIntCountryNote]] = relationship(back_populates="country", uselist=True, lazy="selectin")
 
-    class BigIntCountryNote(BigIntBase):
+    class BigIntCountryNote(NewBigIntBase):
+        __tablename__ = f"bigint_note_override_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountryTest.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey(f"bigint_country_override_{engine_name}.id"))
         country: Mapped[BigIntCountryTest] = relationship(uselist=False, back_populates="notes", lazy="raise")
 
-    class BigIntStateTest(BigIntBase):
+    class BigIntStateTest(NewBigIntBase):
+        __tablename__ = f"bigint_state_override_{engine_name}"
         name: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
-        country_id: Mapped[int] = mapped_column(ForeignKey(BigIntCountryTest.id))
+        country_id: Mapped[int] = mapped_column(ForeignKey(f"bigint_country_override_{engine_name}.id"))
 
         country: Mapped[BigIntCountryTest] = relationship(uselist=False, back_populates="states", lazy="raise")
 
@@ -335,11 +409,11 @@ async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, tmp_path
         merge_loader_options = False
         loader_options = [noload(BigIntCountryTest.states), noload(BigIntCountryTest.notes)]
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/test_loader.sqlite2.db", echo=True)
-    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(async_engine, expire_on_commit=False)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(BigIntStateTest.metadata.create_all)
+    async with async_engine.begin() as conn:
+        # Create tables using the registry metadata
+        await conn.run_sync(orm_registry.metadata.create_all)
 
     async with session_factory() as db_session:
         usa = BigIntCountryTest(name="United States of America")

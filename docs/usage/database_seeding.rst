@@ -502,9 +502,10 @@ Best Practices
 Tips for Efficient Seeding
 --------------------------
 
-- Use :func:`add_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepository.add_many>` / :func:`add_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepository.add_many>` instead of adding objects one by one for better performance.
-- Use :func:`upsert_many (async) <advanced_alchemy.repository.SQLAlchemyAsyncRepository.upsert_many>` / :func:`upsert_many (sync) <advanced_alchemy.repository.SQLAlchemySyncRepository.upsert_many>` to update your data if you are updating prices for example.
+- Use ``add_many()`` instead of adding objects one by one for better performance.
+- Use ``upsert_many()`` to update your data if you are updating prices for example.
 - You can use the database seeding from your cli, app startup or any route.
 - For large datasets, consider chunking the data into smaller batches.
+- **Compressed Fixtures**: Large fixture files can be automatically compressed using gzip or zip formats. The system will automatically detect and decompress ``.gz`` and ``.zip`` files when loading fixtures, making it easier to manage large datasets while reducing storage space.
 - When dealing with relationships, seed parent records before child records.
 - Consider using factory libraries like `Polyfactory <https://github.com/litestar-org/polyfactory>`__ for generating test data.

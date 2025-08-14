@@ -55,3 +55,4 @@ Additional API References
     dto
     plugins
     cli
+    session
