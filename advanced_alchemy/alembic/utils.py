@@ -2,7 +2,7 @@ from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
-from sqlalchemy import Engine, MetaData, Table
+from sqlalchemy import Column, Engine, MetaData, String, Table
 from typing_extensions import TypeIs
 
 from advanced_alchemy.exceptions import MissingDependencyError
@@ -42,7 +42,15 @@ async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str
             console.rule("[bold red]Dropping the db", align="left")
             metadata.drop_all(db)
             console.rule("[bold red]Dropping the version table", align="left")
-            Table(version_table_name, metadata).drop(db, checkfirst=True)
+            # Create a properly defined Alembic version table with required column structure
+            # Using a temporary metadata instance prevents modifying the shared metadata object
+            temp_metadata = MetaData()
+            alembic_version_table = Table(
+                version_table_name,
+                temp_metadata,
+                Column("version_num", String(32), primary_key=True, nullable=False),
+            )
+            alembic_version_table.drop(db, checkfirst=True)
         console.rule("[bold yellow]Successfully dropped all objects", align="left")
 
     async def _drop_tables_async(engine: "AsyncEngine") -> None:
@@ -51,7 +59,15 @@ async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str
             console.rule("[bold red]Dropping the db", align="left")
             await db.run_sync(metadata.drop_all)
             console.rule("[bold red]Dropping the version table", align="left")
-            await db.run_sync(Table(version_table_name, metadata).drop, checkfirst=True)
+            # Create a properly defined Alembic version table with required column structure
+            # Using a temporary metadata instance prevents modifying the shared metadata object
+            temp_metadata = MetaData()
+            alembic_version_table = Table(
+                version_table_name,
+                temp_metadata,
+                Column("version_num", String(32), primary_key=True, nullable=False),
+            )
+            await db.run_sync(alembic_version_table.drop, checkfirst=True)
         console.rule("[bold yellow]Successfully dropped all objects", align="left")
 
     if _is_sync(engine):
