@@ -64,13 +64,84 @@ Then you can serve the documentation with ``make docs-serve``, or build them wit
 Creating a new release
 ----------------------
 
-1. Increment the version in `pyproject.toml <https://github.com/litestar-org/advanced-alchemy/blob/main/pyproject.toml>`_.
-    .. note:: The version should follow `semantic versioning <https://semver.org/>`_ and `PEP 440 <https://www.python.org/dev/peps/pep-0440/>`_.
-2. `Draft a new release <https://github.com/litestar-org/advanced-alchemy/releases/new>`_ on GitHub
+1. **Set up your environment**
 
-   * Use ``vMAJOR.MINOR.PATCH`` (e.g. ``v1.2.3``) as both the tag and release title
-   * Fill in the release description. You can use the "Generate release notes" function to get a draft for this
-3. Commit your changes and push to ``main``
-4. Publish the release
-5. Go to `Actions <https://github.com/litestar-org/advanced-alchemy/actions>`_ and approve the release workflow
-6. Check that the workflow runs successfully
+   - Ensure you have the ``gh`` CLI installed and logged in to GitHub.
+   - Switch to the ``main`` branch.
+
+2. **Install and update dependencies**
+
+   - Run:
+
+     .. code-block:: bash
+
+        make install   # Install all dependencies
+        make upgrade   # Update dependencies to the latest versions
+        make docs      # Verify documentation builds
+
+3. **Bump the version**
+
+   - Run:
+
+     .. code-block:: bash
+
+        make release bump=patch
+
+   - Use ``bump=minor`` or ``bump=major`` if you need to bump the minor or major version instead.
+
+4. **Prepare the release**
+
+   - Run:
+
+     .. code-block:: bash
+
+        uv run tools/prepare_release.py -c -i --base v{current_version} {new_version}
+
+   - Replace ``{current_version}`` with the current version (e.g., ``1.2.3``).
+   - Replace ``{new_version}`` with the new version (e.g., ``1.2.4``).
+   - Example: ``uv run tools/prepare_release.py -c -i --base v1.4.4 1.4.5``
+
+5. **Run linters and formatters**
+
+   - Ensure code style compliance:
+
+     .. code-block:: bash
+
+        make lint
+
+6. **Clean up the changelog**
+
+   - Open ``docs/changelog.rst`` and remove any placeholder comments, such as:
+
+     .. code-block:: rst
+
+        <!-- By submitting this pull request, you agree to ... -->
+        <!-- Please add in issue numbers this pull request will close ... -->
+
+7. **Commit the release**
+
+   - Create a new branch:
+
+     .. code-block:: bash
+
+        git checkout -b v{new_version}
+
+   - Commit the changes:
+
+     .. code-block:: bash
+
+        git commit -am "chore(release): bump to v{new_version}"
+
+8. **Open a pull request**
+
+   - Push the branch and create a PR into ``main``.
+   - Merge once CI checks pass.
+
+9.  **Verify the release draft**
+
+    - Once merged, a draft release will be created under ``Releases`` on GitHub.
+    - Edit and publish it.
+
+10. **Publish to PyPI**
+
+    - Approve the ``Latest Release`` workflow under ``Actions`` to publish the package to PyPI.
