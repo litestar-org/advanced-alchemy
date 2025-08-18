@@ -32,7 +32,7 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
 )
-from advanced_alchemy.repository._util import column_has_defaults
+from advanced_alchemy.repository._util import column_has_defaults, model_from_dict
 from advanced_alchemy.service.typing import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -1318,3 +1318,77 @@ def test_column_with_empty_string_default() -> None:
     mock_column.server_onupdate = None
 
     assert column_has_defaults(mock_column) is True
+
+
+def test_model_from_dict_includes_relationship_attributes() -> None:
+    """Test that model_from_dict includes relationship attributes from __mapper__.attrs.keys()."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    # Verify that attrs.keys() includes relationships while columns.keys() doesn't
+    columns_keys = list(UUIDAuthor.__mapper__.columns.keys())
+    attrs_keys = list(UUIDAuthor.__mapper__.attrs.keys())
+
+    assert "books" not in columns_keys, "books relationship should NOT be in columns.keys()"
+    assert "books" in attrs_keys, "books relationship should be in attrs.keys()"
+
+
+def test_model_from_dict_with_relationship_data() -> None:
+    """Test that model_from_dict can handle relationship data."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    # Create test data with relationship
+    book1 = UUIDBook(title="Test Book 1", author_id="dummy-uuid")
+    book2 = UUIDBook(title="Test Book 2", author_id="dummy-uuid")
+
+    author_data = {"name": "Test Author", "string_field": "test value", "books": [book1, book2]}
+
+    # model_from_dict should handle the relationship attribute
+    author = model_from_dict(UUIDAuthor, **author_data)
+
+    assert author.name == "Test Author"
+    assert author.string_field == "test value"
+    assert hasattr(author, "books"), "Author should have books attribute"
+    assert len(author.books) == 2
+    assert author.books[0].title == "Test Book 1"
+    assert author.books[1].title == "Test Book 2"
+
+
+def test_model_from_dict_backward_compatibility() -> None:
+    """Test that model_from_dict maintains backward compatibility with column-only data."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    author_data = {"name": "Compatible Author", "string_field": "compatibility test"}
+
+    author = model_from_dict(UUIDAuthor, **author_data)
+
+    assert author.name == "Compatible Author"
+    assert author.string_field == "compatibility test"
+
+
+def test_model_from_dict_ignores_unknown_attributes() -> None:
+    """Test that model_from_dict still ignores unknown attributes."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    author_data = {"name": "Test Author", "unknown_attribute": "should be ignored", "another_unknown": 12345}
+
+    author = model_from_dict(UUIDAuthor, **author_data)
+
+    assert author.name == "Test Author"
+    assert not hasattr(author, "unknown_attribute")
+    assert not hasattr(author, "another_unknown")
+
+
+def test_model_from_dict_empty_relationship() -> None:
+    """Test that model_from_dict handles empty relationship lists."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    author_data = {
+        "name": "Author Without Books",
+        "books": [],  # Empty relationship
+    }
+
+    author = model_from_dict(UUIDAuthor, **author_data)
+
+    assert author.name == "Author Without Books"
+    assert hasattr(author, "books")
+    assert author.books == []
