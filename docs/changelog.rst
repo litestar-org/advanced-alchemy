@@ -3,6 +3,25 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.6.0
+    :date: 2025-08-18
+
+    .. change:: server side session backend
+        :type: feature
+        :pr: 429
+
+        Implements a server side session backend using SQLAlchemy. Works with an Async or Sync configuration.
+
+    .. change:: handle relationship data in model_from_dict for service.create()
+        :type: bugfix
+        :pr: 512
+
+        Fixed regression where service.create() method stopped handling relationship data correctly when passed SQLAlchemy model instances. Changed model_from_dict() in _util.py to use `__mapper__.attrs.keys()` instead of `__mapper__.columns.keys()` to include relationship attributes alongside column attributes.
+         - Use `attrs.keys()` to include both columns and relationships
+         - Add comprehensive tests for relationship handling in model_from_dict
+         - Verify unknown attributes are still ignored
+
+
 .. changelog:: 1.5.0
     :date: 2025-08-13
 
