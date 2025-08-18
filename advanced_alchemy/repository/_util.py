@@ -97,9 +97,9 @@ def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
         ModelT: A new instance of the model populated with the provided values.
     """
     data = {
-        column_name: kwargs[column_name]
-        for column_name in model.__mapper__.columns.keys()  # noqa: SIM118  # pyright: ignore[reportUnknownMemberType]
-        if column_name in kwargs
+        attr_name: kwargs[attr_name]
+        for attr_name in model.__mapper__.attrs.keys()  # noqa: SIM118  # pyright: ignore[reportUnknownMemberType]
+        if attr_name in kwargs
     }
     return model(**data)
 
