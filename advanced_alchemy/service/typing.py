@@ -543,9 +543,9 @@ if TYPE_CHECKING:
         from litestar.dto import DTOData  # type: ignore[assignment] # noqa: TC004
 
     if not ATTRS_INSTALLED:
-        from advanced_alchemy.service._typing import asdict, has
+        from advanced_alchemy.service._typing import AttrsInstance, asdict, has
     else:
-        from attrs import asdict, has  # type: ignore[assignment] # noqa: TC004
+        from attrs import AttrsInstance, asdict, has  # type: ignore[assignment] # noqa: TC004
 
     if not CATTRS_INSTALLED:
         from advanced_alchemy.service._typing import structure, unstructure
