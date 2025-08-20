@@ -219,6 +219,7 @@ filterwarnings = [
   "ignore::DeprecationWarning:google",
   "ignore::DeprecationWarning:websockets.connection",
   "ignore::DeprecationWarning:websockets.legacy",
+  "ignore:Accessing argon2.__version__ is deprecated:DeprecationWarning:passlib.handlers.argon2",
 ]
 markers = [
   "integration: SQLAlchemy integration tests",
