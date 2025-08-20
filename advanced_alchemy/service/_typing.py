@@ -1,22 +1,26 @@
 # ruff: noqa: RUF100, PLR0913, A002, DOC201, PLR6301, PLR0917, ARG004, ARG002, ARG001
-"""This is a simple wrapper around a few important classes in each library.
-
-This is used to ensure compatibility when one or more of the libraries are installed.
-"""
+"""Wrapper around library classes for compatibility when libraries are installed."""
 
 import enum
-from typing import (
-    Any,
-    ClassVar,
-    Final,
-    Optional,
-    Protocol,
-    Union,
-    cast,
-    runtime_checkable,
-)
+from dataclasses import dataclass
+from typing import Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
 
 from typing_extensions import Literal, TypeVar, dataclass_transform
+
+
+@runtime_checkable
+class DataclassProtocol(Protocol):
+    """Protocol for instance checking dataclasses."""
+
+    __dataclass_fields__: "ClassVar[dict[str, Any]]"
+
+
+@runtime_checkable
+class DictProtocol(Protocol):
+    """Protocol for objects with a __dict__ attribute."""
+
+    __dict__: dict[str, Any]
+
 
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
@@ -24,7 +28,7 @@ T_co = TypeVar("T_co", covariant=True)
 # Always define stub types for type checking
 
 
-class BaseModelStub:
+class BaseModelLike:
     """Placeholder implementation."""
 
     model_fields: ClassVar[dict[str, Any]] = {}
@@ -99,20 +103,25 @@ class TypeAdapterStub:
         return object
 
 
+@dataclass
 class FailFastStub:
     """Placeholder implementation for FailFast."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Init."""
+    fail_fast: bool = True
 
 
 # Try to import real implementations at runtime
 try:
-    from pydantic import BaseModel, FailFast, TypeAdapter
+    from pydantic import BaseModel as _RealBaseModel
+    from pydantic import FailFast as _RealFailFast
+    from pydantic import TypeAdapter as _RealTypeAdapter
 
+    BaseModel = _RealBaseModel
+    TypeAdapter = _RealTypeAdapter
+    FailFast = _RealFailFast
     PYDANTIC_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
-    BaseModel = BaseModelStub  # type: ignore[assignment,misc]
+    BaseModel = BaseModelLike  # type: ignore[assignment,misc]
     TypeAdapter = TypeAdapterStub  # type: ignore[assignment,misc]
     FailFast = FailFastStub  # type: ignore[assignment,misc]
     PYDANTIC_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
@@ -121,7 +130,7 @@ except ImportError:
 
 
 @dataclass_transform()
-class StructStub:
+class StructLike:
     """Placeholder implementation."""
 
     __struct_fields__: ClassVar[tuple[str, ...]] = ()
@@ -154,11 +163,18 @@ UNSET_STUB = UnsetTypeStub.UNSET
 
 # Try to import real implementations at runtime
 try:
-    from msgspec import UNSET, Struct, UnsetType, convert
+    from msgspec import UNSET as _REAL_UNSET
+    from msgspec import Struct as _RealStruct
+    from msgspec import UnsetType as _RealUnsetType
+    from msgspec import convert as _real_convert
 
+    Struct = _RealStruct
+    UnsetType = _RealUnsetType
+    UNSET = _REAL_UNSET
+    convert = _real_convert
     MSGSPEC_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
-    Struct = StructStub  # type: ignore[assignment,misc]
+    Struct = StructLike  # type: ignore[assignment,misc]
     UnsetType = UnsetTypeStub  # type: ignore[assignment,misc]
     UNSET = UNSET_STUB  # type: ignore[assignment] # pyright: ignore[reportConstantRedefinition]
     convert = convert_stub
@@ -167,7 +183,7 @@ except ImportError:
 
 # Always define stub type for DTOData
 @runtime_checkable
-class DTODataStub(Protocol[T]):
+class DTODataLike(Protocol[T]):
     """Placeholder implementation."""
 
     __slots__ = ("_backend", "_data_as_builtins")
@@ -189,17 +205,18 @@ class DTODataStub(Protocol[T]):
 
 # Try to import real implementation at runtime
 try:
-    from litestar.dto.data_structures import DTOData
+    from litestar.dto.data_structures import DTOData as _RealDTOData  # pyright: ignore[reportUnknownVariableType]
 
+    DTOData = _RealDTOData
     LITESTAR_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
-    DTOData = DTODataStub  # type: ignore[assignment,misc]
+    DTOData = DTODataLike  # type: ignore[assignment,misc]
     LITESTAR_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 
 # Always define stub types for attrs
 @dataclass_transform()
-class AttrsInstanceStub:
+class AttrsLike:
     """Placeholder Implementation for attrs classes"""
 
     __attrs_attrs__: ClassVar[tuple[Any, ...]] = ()
@@ -213,60 +230,72 @@ class AttrsInstanceStub:
         return f"{self.__class__.__name__}()"
 
 
-def asdict_stub(*args: Any, **kwargs: Any) -> "dict[str, Any]":  # noqa: ARG001
+def attrs_asdict_stub(*args: Any, **kwargs: Any) -> "dict[str, Any]":  # noqa: ARG001
     """Placeholder implementation"""
     return {}
 
 
-def define_stub(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+def attrs_define_stub(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
     """Placeholder implementation"""
     return lambda cls: cls  # pyright: ignore[reportUnknownVariableType,reportUnknownLambdaType]
 
 
-def field_stub(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+def attrs_field_stub(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
     """Placeholder implementation"""
     return None
 
 
-def fields_stub(*args: Any, **kwargs: Any) -> "tuple[Any, ...]":  # noqa: ARG001
+def attrs_fields_stub(*args: Any, **kwargs: Any) -> "tuple[Any, ...]":  # noqa: ARG001
     """Placeholder implementation"""
     return ()
 
 
-def has_stub(*args: Any, **kwargs: Any) -> bool:  # noqa: ARG001
+def attrs_has_stub(*args: Any, **kwargs: Any) -> bool:  # noqa: ARG001
     """Placeholder implementation"""
     return False
 
 
 # Try to import real implementations at runtime
 try:
-    from attrs import AttrsInstance, asdict, define, field, fields, has
+    from attrs import AttrsInstance as _RealAttrsInstance  # pyright: ignore
+    from attrs import asdict as _real_attrs_asdict
+    from attrs import define as _real_attrs_define
+    from attrs import field as _real_attrs_field
+    from attrs import fields as _real_attrs_fields
+    from attrs import has as _real_attrs_has
 
+    AttrsInstance = _RealAttrsInstance
+    attrs_asdict = _real_attrs_asdict
+    attrs_define = _real_attrs_define
+    attrs_field = _real_attrs_field
+    attrs_fields = _real_attrs_fields
+    attrs_has = _real_attrs_has
     ATTRS_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
-    AttrsInstance = AttrsInstanceStub  # type: ignore[misc]
-    asdict = asdict_stub
-    define = define_stub
-    field = field_stub
-    fields = fields_stub
-    has = has_stub  # type: ignore[assignment]
+    AttrsInstance = AttrsLike  # type: ignore[misc]
+    attrs_asdict = attrs_asdict_stub
+    attrs_define = attrs_define_stub
+    attrs_field = attrs_field_stub
+    attrs_fields = attrs_fields_stub
+    attrs_has = attrs_has_stub  # type: ignore[assignment]
     ATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 try:
-    from cattrs import structure, unstructure
+    from cattrs import structure as cattrs_structure
+    from cattrs import unstructure as cattrs_unstructure
 
     CATTRS_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
 
-    def unstructure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+    def cattrs_unstructure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
         """Placeholder implementation"""
         return {}
 
-    def structure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
+    def cattrs_structure(*args: Any, **kwargs: Any) -> Any:  # noqa: ARG001
         """Placeholder implementation"""
         return {}
 
-    CATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]  # pyright: ignore[reportConstantRedefinition]
+    CATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 
 class EmptyEnum(enum.Enum):
@@ -287,34 +316,38 @@ __all__ = (
     "UNSET",
     "UNSET_STUB",
     "AttrsInstance",
-    "AttrsInstanceStub",
+    "AttrsLike",
     "BaseModel",
-    "BaseModelStub",
+    "BaseModelLike",
     "DTOData",
-    "DTODataStub",
+    "DTODataLike",
+    "DataclassProtocol",
+    "DictProtocol",
     "Empty",
     "EmptyEnum",
     "EmptyType",
     "FailFast",
     "FailFastStub",
     "Struct",
-    "StructStub",
+    "StructLike",
+    "T",
+    "T_co",
     "TypeAdapter",
     "TypeAdapterStub",
     "UnsetType",
     "UnsetTypeStub",
-    "asdict",
-    "asdict_stub",
+    "attrs_asdict",
+    "attrs_asdict_stub",
+    "attrs_define",
+    "attrs_define_stub",
+    "attrs_field",
+    "attrs_field_stub",
+    "attrs_fields",
+    "attrs_fields_stub",
+    "attrs_has",
+    "attrs_has_stub",
+    "cattrs_structure",
+    "cattrs_unstructure",
     "convert",
     "convert_stub",
-    "define",
-    "define_stub",
-    "field",
-    "field_stub",
-    "fields",
-    "fields_stub",
-    "has",
-    "has_stub",
-    "structure",
-    "unstructure",
 )

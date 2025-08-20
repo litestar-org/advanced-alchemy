@@ -15,6 +15,7 @@ from typing import (
     overload,
 )
 
+from sqlalchemy import RowMapping
 from typing_extensions import TypeAlias, TypeGuard
 
 from advanced_alchemy.service._typing import (
@@ -25,33 +26,36 @@ from advanced_alchemy.service._typing import (
     PYDANTIC_INSTALLED,
     UNSET,
     AttrsInstance,
+    AttrsLike,
     BaseModel,
+    BaseModelLike,
+    DictProtocol,
     DTOData,
+    DTODataLike,
     FailFast,
     Struct,
+    StructLike,
+    T,
     TypeAdapter,
     UnsetType,
-    asdict,
     convert,
-    fields,
-    has,
-    structure,
-    unstructure,
 )
+from advanced_alchemy.service._typing import attrs_asdict as asdict
+from advanced_alchemy.service._typing import attrs_fields as fields
+from advanced_alchemy.service._typing import attrs_has as has
+from advanced_alchemy.service._typing import cattrs_structure as structure
+from advanced_alchemy.service._typing import cattrs_unstructure as unstructure
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from sqlalchemy import RowMapping
     from sqlalchemy.engine.row import Row
 
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository.typing import ModelT
 
+
 PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
-
-
-T = TypeVar("T")
 
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
@@ -61,10 +65,10 @@ FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 """
 
 
-SupportedSchemaModel: TypeAlias = Union[Struct, BaseModel, AttrsInstance]
+SupportedSchemaModel: TypeAlias = Union[StructLike, BaseModelLike, AttrsLike]
 """Type alias for objects that support schema conversion methods (model_dump, asdict, etc.)."""
 
-ModelDTOT = TypeVar("ModelDTOT", bound="SupportedSchemaModel")
+ModelDTOT = TypeVar("ModelDTOT", bound="Union[SupportedSchemaModel, Any]")
 """Type variable for model DTOs.
 
 :class:`msgspec.Struct`|:class:`pydantic.BaseModel`|:class:`attrs class`
@@ -74,13 +78,13 @@ PydanticOrMsgspecT = SupportedSchemaModel
 
 :class:`msgspec.Struct` or :class:`pydantic.BaseModel` or :class:`attrs class`
 """
-ModelDictT: TypeAlias = "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT]]"
+ModelDictT: TypeAlias = "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTODataLike[ModelT], Any]"
 """Type alias for model dictionaries.
 
 Represents:
 - :type:`dict[str, Any]` | :class:`~advanced_alchemy.base.ModelProtocol` | :class:`msgspec.Struct` |  :class:`pydantic.BaseModel` | :class:`attrs class` | :class:`litestar.dto.data_structures.DTOData` | :class:`~advanced_alchemy.base.ModelProtocol`
 """
-ModelDictListT: TypeAlias = "Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]]"
+ModelDictListT: TypeAlias = "Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel, Any]]"
 """Type alias for model dictionary lists.
 
 A list or sequence of any of the following:
@@ -88,7 +92,7 @@ A list or sequence of any of the following:
 
 """
 BulkModelDictT: TypeAlias = (
-    "Union[Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel]], DTOData[list[ModelT]]]"
+    "Union[Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel, Any]], DTODataLike[list[ModelT]]]"
 )
 """Type alias for bulk model dictionaries.
 
@@ -97,7 +101,7 @@ BulkModelDictT: TypeAlias = (
 
 
 @lru_cache(typed=True)
-def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
+def get_type_adapter(f: "type[T]") -> Any:
     """Caches and returns a pydantic type adapter.
 
     Args:
@@ -107,14 +111,12 @@ def get_type_adapter(f: type[T]) -> TypeAdapter[T]:
         :class:`pydantic.TypeAdapter`[:class:`typing.TypeVar`[T]]
     """
     if PYDANTIC_USE_FAILFAST:
-        return TypeAdapter(
-            Annotated[f, FailFast()],
-        )
+        return TypeAdapter(Annotated[f, FailFast()])  # pyright: ignore
     return TypeAdapter(f)
 
 
 @lru_cache(maxsize=128, typed=True)
-def get_attrs_fields(cls: "type[AttrsInstance]") -> "tuple[Any, ...]":
+def get_attrs_fields(cls: Any) -> "tuple[Any, ...]":
     """Caches and returns attrs fields for a given attrs class.
 
     Args:
@@ -128,7 +130,7 @@ def get_attrs_fields(cls: "type[AttrsInstance]") -> "tuple[Any, ...]":
     return ()
 
 
-def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
+def is_dto_data(v: Any) -> TypeGuard[DTODataLike[Any]]:
     """Check if a value is a Litestar DTOData object.
 
     Args:
@@ -140,7 +142,7 @@ def is_dto_data(v: Any) -> TypeGuard[DTOData[Any]]:
     return LITESTAR_INSTALLED and isinstance(v, DTOData)
 
 
-def is_pydantic_model(v: Any) -> TypeGuard[BaseModel]:
+def is_pydantic_model(v: Any) -> TypeGuard[BaseModelLike]:
     """Check if a value is a pydantic model.
 
     Args:
@@ -149,10 +151,17 @@ def is_pydantic_model(v: Any) -> TypeGuard[BaseModel]:
     Returns:
         bool
     """
-    return PYDANTIC_INSTALLED and isinstance(v, BaseModel)
+    if not PYDANTIC_INSTALLED:
+        return False
+    if isinstance(v, type):
+        try:
+            return issubclass(v, BaseModel)
+        except TypeError:
+            return False
+    return isinstance(v, BaseModel)
 
 
-def is_msgspec_struct(v: Any) -> TypeGuard[Struct]:
+def is_msgspec_struct(v: Any) -> TypeGuard[StructLike]:
     """Check if a value is a msgspec struct.
 
     Args:
@@ -164,19 +173,19 @@ def is_msgspec_struct(v: Any) -> TypeGuard[Struct]:
     return MSGSPEC_INSTALLED and isinstance(v, Struct)
 
 
-def is_attrs_instance(v: Any) -> TypeGuard[AttrsInstance]:
+def is_attrs_instance(obj: Any) -> TypeGuard[AttrsLike]:
     """Check if a value is an attrs class instance.
 
     Args:
-        v: Value to check.
+        obj: Value to check.
 
     Returns:
         bool
     """
-    return ATTRS_INSTALLED and has(v.__class__)
+    return ATTRS_INSTALLED and has(obj.__class__)
 
 
-def is_attrs_schema(cls: Any) -> TypeGuard["type[AttrsInstance]"]:
+def is_attrs_schema(cls: Any) -> TypeGuard["type[AttrsLike]"]:
     """Check if a class type is an attrs schema.
 
     Args:
@@ -203,7 +212,7 @@ def is_dataclass_without_field(obj: Any, field_name: str) -> TypeGuard[object]:
     return is_dataclass(obj) and not hasattr(obj, field_name)
 
 
-def is_attrs_instance_with_field(v: Any, field_name: str) -> TypeGuard[AttrsInstance]:
+def is_attrs_instance_with_field(v: Any, field_name: str) -> TypeGuard[AttrsLike]:
     """Check if an attrs instance has a specific field.
 
     Args:
@@ -216,7 +225,7 @@ def is_attrs_instance_with_field(v: Any, field_name: str) -> TypeGuard[AttrsInst
     return is_attrs_instance(v) and hasattr(v, field_name)
 
 
-def is_attrs_instance_without_field(v: Any, field_name: str) -> TypeGuard[AttrsInstance]:
+def is_attrs_instance_without_field(v: Any, field_name: str) -> TypeGuard[AttrsLike]:
     """Check if an attrs instance does not have a specific field.
 
     Args:
@@ -241,6 +250,19 @@ def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
     return isinstance(v, dict)
 
 
+def has_dict_attribute(obj: Any) -> "TypeGuard[DictProtocol]":
+    """Check if an object has a __dict__ attribute.
+
+    Args:
+        obj: Value to check.
+
+    Returns:
+        bool
+    """
+
+    return isinstance(obj, DictProtocol)
+
+
 def is_row_mapping(v: Any) -> TypeGuard["RowMapping"]:
     """Check if a value is a SQLAlchemy RowMapping.
 
@@ -250,13 +272,8 @@ def is_row_mapping(v: Any) -> TypeGuard["RowMapping"]:
     Returns:
         bool
     """
-    try:
-        from sqlalchemy import RowMapping
 
-        return isinstance(v, RowMapping)
-    except ImportError:
-        # Fallback check if SQLAlchemy not available - check for RowMapping interface
-        return hasattr(v, "keys") and hasattr(v, "values") and hasattr(v, "items") and not isinstance(v, dict)
+    return isinstance(v, RowMapping)
 
 
 def is_dict_with_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
@@ -285,7 +302,7 @@ def is_dict_without_field(v: Any, field_name: str) -> TypeGuard[dict[str, Any]]:
     return is_dict(v) and field_name not in v
 
 
-def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
+def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModelLike]:
     """Check if a pydantic model has a specific field.
 
     Args:
@@ -298,7 +315,7 @@ def is_pydantic_model_with_field(v: Any, field_name: str) -> TypeGuard[BaseModel
     return is_pydantic_model(v) and hasattr(v, field_name)
 
 
-def is_pydantic_model_without_field(v: Any, field_name: str) -> TypeGuard[BaseModel]:
+def is_pydantic_model_without_field(v: Any, field_name: str) -> TypeGuard[BaseModelLike]:
     """Check if a pydantic model does not have a specific field.
 
     Args:
@@ -311,7 +328,7 @@ def is_pydantic_model_without_field(v: Any, field_name: str) -> TypeGuard[BaseMo
     return is_pydantic_model(v) and not hasattr(v, field_name)
 
 
-def is_msgspec_struct_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
+def is_msgspec_struct_with_field(v: Any, field_name: str) -> TypeGuard[StructLike]:
     """Check if a msgspec struct has a specific field.
 
     Args:
@@ -324,7 +341,7 @@ def is_msgspec_struct_with_field(v: Any, field_name: str) -> TypeGuard[Struct]:
     return is_msgspec_struct(v) and hasattr(v, field_name)
 
 
-def is_msgspec_struct_without_field(v: Any, field_name: str) -> "TypeGuard[Struct]":
+def is_msgspec_struct_without_field(v: Any, field_name: str) -> "TypeGuard[StructLike]":
     """Check if a msgspec struct does not have a specific field.
 
     Args:
@@ -428,13 +445,22 @@ def schema_dump(data: "Row[Any]", exclude_unset: bool = True) -> "dict[str, Any]
 
 
 @overload
+def schema_dump(data: "DTODataLike[Any]", exclude_unset: bool = True) -> "dict[str, Any]": ...
+
+
+@overload
+def schema_dump(data: "ModelT", exclude_unset: bool = True) -> "ModelT": ...  # pyright: ignore[reportOverlappingOverload]
+
+
+@overload
 def schema_dump(
-    data: "Union[dict[str, Any], Struct, BaseModel, AttrsInstance, DTOData[ModelT], ModelT]", exclude_unset: bool = True
-) -> "Union[dict[str, Any], ModelT]": ...
+    data: Any,
+    exclude_unset: bool = True,
+) -> "dict[str, Any]": ...
 
 
 def schema_dump(
-    data: "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTOData[ModelT], RowMapping, Row[Any]]",
+    data: "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTODataLike[ModelT], RowMapping, Row[Any]]",
     exclude_unset: bool = True,
 ) -> "Union[dict[str, Any], ModelT]":
     """Dump a data object to a dictionary.
@@ -464,7 +490,7 @@ def schema_dump(
         return asdict(data)
     if is_dto_data(data):
         return cast("dict[str, Any]", data.as_builtins())
-    if hasattr(data, "__dict__"):
+    if has_dict_attribute(data):
         return data.__dict__
     return cast("ModelT", data)  # type: ignore[no-return-any]
 
@@ -478,9 +504,12 @@ __all__ = (
     "PYDANTIC_USE_FAILFAST",
     "UNSET",
     "AttrsInstance",
+    "AttrsLike",
     "BaseModel",
+    "BaseModelLike",
     "BulkModelDictT",
     "DTOData",
+    "DTODataLike",
     "FailFast",
     "FilterTypeT",
     "ModelDTOT",
@@ -488,6 +517,7 @@ __all__ = (
     "ModelDictT",
     "PydanticOrMsgspecT",
     "Struct",
+    "StructLike",
     "SupportedSchemaModel",
     "TypeAdapter",
     "UnsetType",
@@ -525,29 +555,3 @@ __all__ = (
     "structure",
     "unstructure",
 )
-
-if TYPE_CHECKING:
-    if not PYDANTIC_INSTALLED:
-        from advanced_alchemy.service._typing import BaseModel, FailFast, TypeAdapter
-    else:
-        from pydantic import BaseModel, FailFast, TypeAdapter  # type: ignore[assignment] # noqa: TC004
-
-    if not MSGSPEC_INSTALLED:
-        from advanced_alchemy.service._typing import UNSET, Struct, UnsetType, convert
-    else:
-        from msgspec import UNSET, Struct, UnsetType, convert  # type: ignore[assignment]  # noqa: TC004
-
-    if not LITESTAR_INSTALLED:
-        from advanced_alchemy.service._typing import DTOData
-    else:
-        from litestar.dto import DTOData  # type: ignore[assignment] # noqa: TC004
-
-    if not ATTRS_INSTALLED:
-        from advanced_alchemy.service._typing import AttrsInstance, asdict, has
-    else:
-        from attrs import AttrsInstance, asdict, has  # type: ignore[assignment] # noqa: TC004
-
-    if not CATTRS_INSTALLED:
-        from advanced_alchemy.service._typing import structure, unstructure
-    else:
-        from cattrs import structure, unstructure  # type: ignore[assignment,import-not-found] # noqa: TC004
