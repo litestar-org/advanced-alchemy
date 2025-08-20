@@ -80,10 +80,11 @@ def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
         france = UUIDCountry(name="France")
         db_session.add(usa)
         db_session.add(france)
+        db_session.flush()  # Ensure countries are in session before creating states
 
-        california = UUIDState(name="California", country=usa)
-        oregon = UUIDState(name="Oregon", country=usa)
-        ile_de_france = UUIDState(name="Île-de-France", country=france)
+        california = UUIDState(name="California", country_id=usa.id)
+        oregon = UUIDState(name="Oregon", country_id=usa.id)
+        ile_de_france = UUIDState(name="Île-de-France", country_id=france.id)
 
         repo = USStateRepository(session=db_session)
         repo.add(california)
@@ -202,10 +203,11 @@ async def test_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine)
         france = BigIntCountry(name="France")
         db_session.add(usa)
         db_session.add(france)
+        await db_session.flush()  # Ensure countries are in session before creating states
 
-        california = BigIntState(name="California", country=usa)
-        oregon = BigIntState(name="Oregon", country=usa)
-        ile_de_france = BigIntState(name="Île-de-France", country=france)
+        california = BigIntState(name="California", country_id=usa.id)
+        oregon = BigIntState(name="Oregon", country_id=usa.id)
+        ile_de_france = BigIntState(name="Île-de-France", country_id=france.id)
 
         repo = USStateRepository(session=db_session)
         await repo.add(california)
@@ -323,10 +325,11 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, engine: Engine) -> N
         france = UUIDCountryTest(name="France")
         db_session.add(usa)
         db_session.add(france)
+        db_session.flush()  # Ensure countries are in session before creating states
 
-        california = UUIDStateTest(name="California", country=usa)
-        oregon = UUIDStateTest(name="Oregon", country=usa)
-        ile_de_france = UUIDStateTest(name="Île-de-France", country=france)
+        california = UUIDStateTest(name="California", country_id=usa.id)
+        oregon = UUIDStateTest(name="Oregon", country_id=usa.id)
+        ile_de_france = UUIDStateTest(name="Île-de-France", country_id=france.id)
 
         repo = USStateRepository(session=db_session)
         repo.add(california)
@@ -421,10 +424,11 @@ async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, async_en
         france = BigIntCountryTest(name="France")
         db_session.add(usa)
         db_session.add(france)
+        await db_session.flush()  # Ensure countries are in session before creating states
 
-        california = BigIntStateTest(name="California", country=usa)
-        oregon = BigIntStateTest(name="Oregon", country=usa)
-        ile_de_france = BigIntStateTest(name="Île-de-France", country=france)
+        california = BigIntStateTest(name="California", country_id=usa.id)
+        oregon = BigIntStateTest(name="Oregon", country_id=usa.id)
+        ile_de_france = BigIntStateTest(name="Île-de-France", country_id=france.id)
 
         repo = USStateRepository(session=db_session)
         await repo.add(california)
