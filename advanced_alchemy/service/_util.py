@@ -215,13 +215,16 @@ class ResultConverter:
             )
         if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
             if not isinstance(data, Sequence):
-                return convert(
-                    obj=data,
-                    type=schema_type,
-                    from_attributes=True,
-                    dec_hook=partial(
-                        _default_msgspec_deserializer,
-                        type_decoders=DEFAULT_TYPE_DECODERS,
+                return cast(  # type: ignore[redundant-cast]
+                    "ModelDTOT",
+                    convert(
+                        obj=data,
+                        type=schema_type,
+                        from_attributes=True,
+                        dec_hook=partial(
+                            _default_msgspec_deserializer,
+                            type_decoders=DEFAULT_TYPE_DECODERS,
+                        ),
                     ),
                 )
             converted_items = convert(
@@ -251,7 +254,7 @@ class ResultConverter:
 
         if ATTRS_INSTALLED and is_attrs_schema(schema_type):
             # Cache field names for performance
-            field_names = _get_attrs_field_names(schema_type)
+            field_names = _get_attrs_field_names(schema_type)  # type: ignore[arg-type]
 
             if not isinstance(data, Sequence):
                 return cast("ModelDTOT", _convert_attrs_item(data, schema_type, field_names))
