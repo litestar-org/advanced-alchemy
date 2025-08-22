@@ -220,7 +220,7 @@ Finally, configure your Litestar application with the plugin and dependencies:
 
     app = Litestar(
         route_handlers=[AuthorController],
-        plugins=[SQLAlchemyPlugin(config=alchemy)],
+        plugins=[alchemy],
     )
 
 Database Sessions
