@@ -24,14 +24,14 @@ from advanced_alchemy.extensions.fastapi import (
     service,
 )
 
-sqlalchemy_config = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=AsyncSessionConfig(expire_on_commit=False),
     commit_mode="autocommit",
     create_all=True,
 )
 app = FastAPI()
-alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
+alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 author_router = APIRouter()
 
 

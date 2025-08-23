@@ -56,8 +56,8 @@ class AuthorSchema(Struct):
 
 
 app = Flask(__name__)
-config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
-alchemy = AdvancedAlchemy(config, app)
+alchemy_config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
+alchemy = AdvancedAlchemy(alchemy_config, app)
 
 
 @app.route("/authors", methods=["GET"])

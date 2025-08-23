@@ -92,11 +92,11 @@ def provide_limit_offset_pagination(
 # #######################
 
 session_config = AsyncSessionConfig(expire_on_commit=False)
-sqlalchemy_config = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=session_config,
 )  # Create 'db_session' dependency.
 app = Sanic("AlchemySanicApp")
-alchemy = AdvancedAlchemy(sqlalchemy_config=sqlalchemy_config)
+alchemy = AdvancedAlchemy(sqlalchemy_config=alchemy_config)
 alchemy.register(app)
 alchemy.add_session_dependency(AsyncSession)

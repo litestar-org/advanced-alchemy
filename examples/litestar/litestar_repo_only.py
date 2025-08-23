@@ -194,16 +194,15 @@ class AuthorController(Controller):
 
 
 session_config = AsyncSessionConfig(expire_on_commit=False)
-sqlalchemy_config = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=session_config,
     create_all=True,
-)  # Create 'db_session' dependency.
-sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
+)  # Auto creates 'db_session' dependency.
 
 
 app = Litestar(
     route_handlers=[AuthorController],
-    plugins=[sqlalchemy_plugin],
+    plugins=[SQLAlchemyPlugin(config=alchemy_config)],
     dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
 )

@@ -137,7 +137,7 @@ class AuthorController(Controller):
         _ = await authors_service.delete(author_id)
 
 
-alchemy = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     before_send_handler="autocommit",
     session_config=AsyncSessionConfig(expire_on_commit=False),
@@ -146,5 +146,5 @@ alchemy = SQLAlchemyAsyncConfig(
 
 app = Litestar(
     route_handlers=[AuthorController],
-    plugins=[SQLAlchemyPlugin(config=alchemy)],
+    plugins=[SQLAlchemyPlugin(config=alchemy_config)],
 )

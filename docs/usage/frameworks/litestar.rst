@@ -34,13 +34,13 @@ First, configure the SQLAlchemy plugin with Litestar. The plugin handles databas
     )
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=session_config,
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+    alchemy = SQLAlchemyPlugin(config=alchemy_config)
 
 
 SQLAlchemy Models
@@ -211,7 +211,7 @@ Finally, configure your Litestar application with the plugin and dependencies:
         SQLAlchemyPlugin,
     )
 
-    alchemy = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=AsyncSessionConfig(expire_on_commit=False),
@@ -220,7 +220,7 @@ Finally, configure your Litestar application with the plugin and dependencies:
 
     app = Litestar(
         route_handlers=[AuthorController],
-        plugins=[SQLAlchemyPlugin(config=alchemy)],
+        plugins=[SQLAlchemyPlugin(config=alchemy_config)],
     )
 
 Database Sessions
@@ -243,13 +243,12 @@ By default, the session key is named "db_session". You can change this by settin
     )
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=session_config,
         create_all=True,
-    )  # Create 'db_session' dependency.
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+    )  # Auto creates 'db_session' dependency.
 
     @get("/my-endpoint")
     async def my_controller(db_session: AsyncSession) -> str:
@@ -258,7 +257,7 @@ By default, the session key is named "db_session". You can change this by settin
 
     app = Litestar(
         route_handlers=[my_controller],
-        plugins=[alchemy],
+        plugins=[SQLAlchemyPlugin(config=alchemy_config)],
     )
 
 Sessions in Application
@@ -283,17 +282,17 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     from sqlalchemy import text
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=session_config,
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+    alchemy = SQLAlchemyPlugin(config=alchemy_config)
 
 
     async def my_guard(connection: ASGIConnection[Any, Any, Any, Any], _: BaseRouteHandler) -> None:
-        db_session = sqlalchemy_config.provide_session(connection.app.state, connection.scope)
+        db_session = alchemy_config.provide_session(connection.app.state, connection.scope)
         a_value = await db_session.execute(text("SELECT 1"))
 
     @get("/", guards=[my_guard])
@@ -327,7 +326,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
             def check_db_status() -> None:
                 import anyio
                 async def _check_db_status() -> None:
-                    async with sqlalchemy_config.get_session() as db_session:
+                    async with alchemy_config.get_session() as db_session:
                         a_value = await db_session.execute(text("SELECT 1"))
                         if a_value.scalar_one() == 1:
                             print("Database is healthy")
@@ -336,13 +335,13 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
                 anyio.run(_check_db_status)
 
 
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+    alchemy = SQLAlchemyPlugin(config=alchemy_config)
     app = Litestar(plugins=[alchemy, ApplicationCore()])
 
 Database Migrations
@@ -472,7 +471,7 @@ To use the SQLAlchemy session backend, you need to:
         __tablename__ = "user_sessions"
 
     # 2. Configure SQLAlchemy
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="postgresql+asyncpg://user:password@localhost/mydb",
         create_all=True,
     )
@@ -486,14 +485,14 @@ To use the SQLAlchemy session backend, you need to:
     # 4. Create the session backend
     session_backend = SQLAlchemyAsyncSessionBackend(
         config=session_config,
-        alchemy_config=sqlalchemy_config,
+        alchemy_config=alchemy_config,
         model=UserSession,
     )
 
     # 5. Create your Litestar app
     app = Litestar(
         route_handlers=[],
-        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)],
+        plugins=[SQLAlchemyPlugin(config=alchemy_config)],
         middleware=[session_config.middleware],
     )
 
@@ -557,14 +556,14 @@ For synchronous SQLAlchemy configurations, use ``SQLAlchemySyncSessionBackend``:
     from advanced_alchemy.extensions.litestar.session import SQLAlchemySyncSessionBackend
 
     # Sync configuration
-    sqlalchemy_config = SQLAlchemySyncConfig(
+    alchemy_config = SQLAlchemySyncConfig(
         connection_string="postgresql://user:password@localhost/mydb",
         create_all=True,
     )
 
     session_backend = SQLAlchemySyncSessionBackend(
         config=session_config,
-        alchemy_config=sqlalchemy_config,
+        alchemy_config=alchemy_config,
         model=UserSession,
     )
 
@@ -717,7 +716,7 @@ Configure appropriate connection pooling for session workloads:
 
     from sqlalchemy.pool import QueuePool
 
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="postgresql+asyncpg://user:password@localhost/mydb",
         engine_config=EngineConfig(
             poolclass=QueuePool,
@@ -773,7 +772,7 @@ Here's a complete working example:
         __tablename__ = "web_sessions"
 
     # Database configuration
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///sessions.db",
         session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
@@ -788,7 +787,7 @@ Here's a complete working example:
     # Session backend
     session_backend = SQLAlchemyAsyncSessionBackend(
         config=session_config,
-        alchemy_config=sqlalchemy_config,
+        alchemy_config=alchemy_config,
         model=WebSession,
     )
 
@@ -817,7 +816,7 @@ Here's a complete working example:
     # Application
     app = Litestar(
         route_handlers=[home, login, logout],
-        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)],
+        plugins=[SQLAlchemyPlugin(config=alchemy_config)],
         middleware=[session_config.middleware],
     )
 
@@ -978,7 +977,7 @@ Advanced Alchemy provides built-in support for file storage with various backend
             _ = await documents_service.delete(document_id)
 
     # Application setup
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         session_config=AsyncSessionConfig(expire_on_commit=False),
         before_send_handler="autocommit",
@@ -986,7 +985,7 @@ Advanced Alchemy provides built-in support for file storage with various backend
     )
     app = Litestar(
         route_handlers=[DocumentController],
-        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)]
+        plugins=[SQLAlchemyPlugin(config=alchemy_config)]
     )
 
 File storage features:
@@ -1009,158 +1008,158 @@ Alternative Patterns
 
 .. collapse:: Repository-Only Pattern
 
-   If for some reason you don't want to use the service layer abstraction, you can use repositories directly. This approach removes the services abstraction, but still offers the benefits of Advanced Alchemy's repository features:
+    If for some reason you don't want to use the service layer abstraction, you can use repositories directly. This approach removes the services abstraction, but still offers the benefits of Advanced Alchemy's repository features:
 
-   .. code-block:: python
+    .. code-block:: python
 
-       from __future__ import annotations
+        from __future__ import annotations
 
-       import datetime
-       from typing import TYPE_CHECKING, Optional
-       from uuid import UUID
+        import datetime
+        from typing import TYPE_CHECKING, Optional
+        from uuid import UUID
 
-       from litestar import Controller, Litestar, delete, get, patch, post
-       from litestar.di import Provide
-       from litestar.pagination import OffsetPagination
-       from litestar.params import Parameter
-       from pydantic import BaseModel, TypeAdapter
-       from sqlalchemy import ForeignKey
-       from sqlalchemy.orm import Mapped, mapped_column, relationship
+        from litestar import Controller, Litestar, delete, get, patch, post
+        from litestar.di import Provide
+        from litestar.pagination import OffsetPagination
+        from litestar.params import Parameter
+        from pydantic import BaseModel, TypeAdapter
+        from sqlalchemy import ForeignKey
+        from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-       from advanced_alchemy.base import UUIDAuditBase, UUIDBase
-       from advanced_alchemy.config import AsyncSessionConfig
-       from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
-       from advanced_alchemy.filters import LimitOffset
-       from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+        from advanced_alchemy.base import UUIDAuditBase, UUIDBase
+        from advanced_alchemy.config import AsyncSessionConfig
+        from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+        from advanced_alchemy.filters import LimitOffset
+        from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
-       if TYPE_CHECKING:
-           from sqlalchemy.ext.asyncio import AsyncSession
+        if TYPE_CHECKING:
+            from sqlalchemy.ext.asyncio import AsyncSession
 
-       class BaseModel(BaseModel):
-           """Extend Pydantic's BaseModel to enable ORM mode"""
-           model_config = {"from_attributes": True}
+        class BaseModel(BaseModel):
+            """Extend Pydantic's BaseModel to enable ORM mode"""
+            model_config = {"from_attributes": True}
 
-       # Models
-       class AuthorModel(UUIDBase):
-           __tablename__ = "author"
-           name: Mapped[str]
-           dob: Mapped[Optional[datetime.date]]
-           books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+        # Models
+        class AuthorModel(UUIDBase):
+            __tablename__ = "author"
+            name: Mapped[str]
+            dob: Mapped[Optional[datetime.date]]
+            books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
-       # Repository
-       class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
-           """Author repository."""
-           model_type = AuthorModel
+        # Repository
+        class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
+            """Author repository."""
+            model_type = AuthorModel
 
-       # Dependency providers
-       async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
-           """This provides the default Authors repository."""
-           return AuthorRepository(session=db_session)
+        # Dependency providers
+        async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
+            """This provides the default Authors repository."""
+            return AuthorRepository(session=db_session)
 
-       async def provide_author_details_repo(db_session: AsyncSession) -> AuthorRepository:
-           """Repository with eager loading for author details."""
-           return AuthorRepository(load=[AuthorModel.books], session=db_session)
+        async def provide_author_details_repo(db_session: AsyncSession) -> AuthorRepository:
+            """Repository with eager loading for author details."""
+            return AuthorRepository(load=[AuthorModel.books], session=db_session)
 
-       def provide_limit_offset_pagination(
-           current_page: int = Parameter(ge=1, query="currentPage", default=1, required=False),
-           page_size: int = Parameter(query="pageSize", ge=1, default=10, required=False),
-       ) -> LimitOffset:
-           """Add offset/limit pagination."""
-           return LimitOffset(page_size, page_size * (current_page - 1))
+        def provide_limit_offset_pagination(
+            current_page: int = Parameter(ge=1, query="currentPage", default=1, required=False),
+            page_size: int = Parameter(query="pageSize", ge=1, default=10, required=False),
+        ) -> LimitOffset:
+            """Add offset/limit pagination."""
+            return LimitOffset(page_size, page_size * (current_page - 1))
 
-       # Controller
-       class AuthorController(Controller):
-           """Author CRUD using repository pattern."""
+        # Controller
+        class AuthorController(Controller):
+            """Author CRUD using repository pattern."""
 
-           dependencies = {"authors_repo": Provide(provide_authors_repo)}
+            dependencies = {"authors_repo": Provide(provide_authors_repo)}
 
-           @get(path="/authors")
-           async def list_authors(
-               self,
-               authors_repo: AuthorRepository,
-               limit_offset: LimitOffset,
-           ) -> OffsetPagination[Author]:
-               """List authors with pagination."""
-               results, total = await authors_repo.list_and_count(limit_offset)
-               type_adapter = TypeAdapter(list[Author])
-               return OffsetPagination[Author](
-                   items=type_adapter.validate_python(results),
-                   total=total,
-                   limit=limit_offset.limit,
-                   offset=limit_offset.offset,
-               )
+            @get(path="/authors")
+            async def list_authors(
+                self,
+                authors_repo: AuthorRepository,
+                limit_offset: LimitOffset,
+            ) -> OffsetPagination[Author]:
+                """List authors with pagination."""
+                results, total = await authors_repo.list_and_count(limit_offset)
+                type_adapter = TypeAdapter(list[Author])
+                return OffsetPagination[Author](
+                    items=type_adapter.validate_python(results),
+                    total=total,
+                    limit=limit_offset.limit,
+                    offset=limit_offset.offset,
+                )
 
-           @post(path="/authors")
-           async def create_author(
-               self,
-               authors_repo: AuthorRepository,
-               data: AuthorCreate,
-           ) -> Author:
-               """Create a new author."""
-               obj = await authors_repo.add(
-                   AuthorModel(**data.model_dump(exclude_unset=True, exclude_none=True)),
-               )
-               await authors_repo.session.commit()
-               return Author.model_validate(obj)
+            @post(path="/authors")
+            async def create_author(
+                self,
+                authors_repo: AuthorRepository,
+                data: AuthorCreate,
+            ) -> Author:
+                """Create a new author."""
+                obj = await authors_repo.add(
+                    AuthorModel(**data.model_dump(exclude_unset=True, exclude_none=True)),
+                )
+                await authors_repo.session.commit()
+                return Author.model_validate(obj)
 
-           @get(
-               path="/authors/{author_id:uuid}",
-               dependencies={"authors_repo": Provide(provide_author_details_repo)}
-           )
-           async def get_author(
-               self,
-               authors_repo: AuthorRepository,
-               author_id: UUID = Parameter(title="Author ID", description="The author to retrieve."),
-           ) -> Author:
-               """Get an existing author with details."""
-               obj = await authors_repo.get(author_id)
-               return Author.model_validate(obj)
+            @get(
+                path="/authors/{author_id:uuid}",
+                dependencies={"authors_repo": Provide(provide_author_details_repo)}
+            )
+            async def get_author(
+                self,
+                authors_repo: AuthorRepository,
+                author_id: UUID = Parameter(title="Author ID", description="The author to retrieve."),
+            ) -> Author:
+                """Get an existing author with details."""
+                obj = await authors_repo.get(author_id)
+                return Author.model_validate(obj)
 
-           @patch(
-               path="/authors/{author_id:uuid}",
-               dependencies={"authors_repo": Provide(provide_author_details_repo)},
-           )
-           async def update_author(
-               self,
-               authors_repo: AuthorRepository,
-               data: AuthorUpdate,
-               author_id: UUID = Parameter(title="Author ID", description="The author to update."),
-           ) -> Author:
-               """Update an author."""
-               raw_obj = data.model_dump(exclude_unset=True, exclude_none=True)
-               raw_obj.update({"id": author_id})
-               obj = await authors_repo.update(AuthorModel(**raw_obj))
-               await authors_repo.session.commit()
-               return Author.model_validate(obj)
+            @patch(
+                path="/authors/{author_id:uuid}",
+                dependencies={"authors_repo": Provide(provide_author_details_repo)},
+            )
+            async def update_author(
+                self,
+                authors_repo: AuthorRepository,
+                data: AuthorUpdate,
+                author_id: UUID = Parameter(title="Author ID", description="The author to update."),
+            ) -> Author:
+                """Update an author."""
+                raw_obj = data.model_dump(exclude_unset=True, exclude_none=True)
+                raw_obj.update({"id": author_id})
+                obj = await authors_repo.update(AuthorModel(**raw_obj))
+                await authors_repo.session.commit()
+                return Author.model_validate(obj)
 
-           @delete(path="/authors/{author_id:uuid}")
-           async def delete_author(
-               self,
-               authors_repo: AuthorRepository,
-               author_id: UUID = Parameter(title="Author ID", description="The author to delete."),
-           ) -> None:
-               """Delete an author from the system."""
-               _ = await authors_repo.delete(author_id)
-               await authors_repo.session.commit()
+            @delete(path="/authors/{author_id:uuid}")
+            async def delete_author(
+                self,
+                authors_repo: AuthorRepository,
+                author_id: UUID = Parameter(title="Author ID", description="The author to delete."),
+            ) -> None:
+                """Delete an author from the system."""
+                _ = await authors_repo.delete(author_id)
+                await authors_repo.session.commit()
 
-       # Application setup
-       session_config = AsyncSessionConfig(expire_on_commit=False)
-       sqlalchemy_config = SQLAlchemyAsyncConfig(
-           connection_string="sqlite+aiosqlite:///test.sqlite",
-           session_config=session_config,
-           create_all=True,
-       )
-       sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
+        # Application setup
+        session_config = AsyncSessionConfig(expire_on_commit=False)
+        alchemy_config = SQLAlchemyAsyncConfig(
+            connection_string="sqlite+aiosqlite:///test.sqlite",
+            session_config=session_config,
+            create_all=True,
+        )
+        sqlalchemy_plugin = SQLAlchemyPlugin(config=alchemy_config)
 
-       app = Litestar(
-           route_handlers=[AuthorController],
-           plugins=[sqlalchemy_plugin],
-           dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
-       )
+        app = Litestar(
+            route_handlers=[AuthorController],
+            plugins=[sqlalchemy_plugin],
+            dependencies={"limit_offset": Provide(provide_limit_offset_pagination, sync_to_thread=False)},
+        )
 
-   This pattern is useful when you:
+    This pattern is useful when you:
 
-   - Need direct control over database transactions
-   - Want to avoid the service layer abstraction
-   - Have complex repository logic that doesn't fit the service pattern
-   - Are building a smaller application with simpler data access patterns
+    - Need direct control over database transactions
+    - Want to avoid the service layer abstraction
+    - Have complex repository logic that doesn't fit the service pattern
+    - Are building a smaller application with simpler data access patterns

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Mapped
 
 here = Path(__file__).parent
-config = SQLAlchemySyncConfig(
+alchemy_config = SQLAlchemySyncConfig(
     engine_instance=create_engine("duckdb:///:memory:"), session_config=SyncSessionConfig(expire_on_commit=False)
 )
 
@@ -38,10 +38,10 @@ def run_script() -> None:
     """Load data from a fixture."""
 
     # Initializes the database.
-    with config.get_engine().begin() as conn:
+    with alchemy_config.get_engine().begin() as conn:
         USState.metadata.create_all(conn)
 
-    with config.get_session() as db_session:
+    with alchemy_config.get_session() as db_session:
         # 1) Load the JSON data into the US States table.
         repo = USStateRepository(session=db_session)
         fixture = open_fixture(here, USStateRepository.model_type.__tablename__)

@@ -26,7 +26,7 @@ class ItemRepository(SQLAlchemyAsyncRepository[Item]):
     model_type = Item
 
 
-config = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     engine_instance=create_async_engine("postgresql+psycopg://app:super-secret@localhost:5432/app"),
     session_config=AsyncSessionConfig(expire_on_commit=False),
 )
@@ -34,9 +34,9 @@ config = SQLAlchemyAsyncConfig(
 
 async def run_script() -> None:
     # Initializes the database.
-    async with config.get_engine().begin() as conn:
+    async with alchemy_config.get_engine().begin() as conn:
         await conn.run_sync(Item.metadata.create_all)
-    async with config.get_session() as db_session:
+    async with alchemy_config.get_session() as db_session:
         repo = ItemRepository(session=db_session)
         # Add some data
         await repo.add_many(
@@ -57,7 +57,7 @@ async def run_script() -> None:
             auto_commit=True,
         )
 
-    async with config.get_session() as db_session:
+    async with alchemy_config.get_session() as db_session:
         repo = ItemRepository(session=db_session)
         # Do some queries with JSON operations
         assert await repo.exists(Item.data["price"].as_float() == 599.99, Item.data["brand"].as_string() == "XYZ")
