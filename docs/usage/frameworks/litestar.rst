@@ -40,7 +40,6 @@ First, configure the SQLAlchemy plugin with Litestar. The plugin handles databas
         session_config=session_config,
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
 SQLAlchemy Models
@@ -211,7 +210,7 @@ Finally, configure your Litestar application with the plugin and dependencies:
         SQLAlchemyPlugin,
     )
 
-    alchemy = SQLAlchemyAsyncConfig(
+    sqlalchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         before_send_handler="autocommit",
         session_config=AsyncSessionConfig(expire_on_commit=False),
@@ -220,7 +219,7 @@ Finally, configure your Litestar application with the plugin and dependencies:
 
     app = Litestar(
         route_handlers=[AuthorController],
-        plugins=[alchemy],
+        plugins=[SQLAlchemyPlugin(sqlalchemy_config)],
     )
 
 Database Sessions
@@ -249,7 +248,6 @@ By default, the session key is named "db_session". You can change this by settin
         session_config=session_config,
         create_all=True,
     )  # Create 'db_session' dependency.
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
     @get("/my-endpoint")
     async def my_controller(db_session: AsyncSession) -> str:
@@ -258,7 +256,7 @@ By default, the session key is named "db_session". You can change this by settin
 
     app = Litestar(
         route_handlers=[my_controller],
-        plugins=[alchemy],
+        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)],
     )
 
 Sessions in Application
@@ -289,7 +287,6 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
         session_config=session_config,
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
 
 
     async def my_guard(connection: ASGIConnection[Any, Any, Any, Any], _: BaseRouteHandler) -> None:
@@ -303,7 +300,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
 
     app = Litestar(
         route_handlers=[hello],
-        plugins=[alchemy],
+        plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)],
     )
 
 - ``get_session`` is useful anywhere outside of the request lifecycle in your application. This includes command line tasks and background jobs.
@@ -342,8 +339,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
         session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
-    app = Litestar(plugins=[alchemy, ApplicationCore()])
+    app = Litestar(plugins=[SQLAlchemyPlugin(config=sqlalchemy_config), ApplicationCore()])
 
 Database Migrations
 -------------------
