@@ -823,7 +823,7 @@ Here's a complete working example:
 This example provides a complete session-enabled application using SQLAlchemy for session storage.
 
 File Object Storage
-===================
+-------------------
 
 Advanced Alchemy provides built-in support for file storage with various backends. Here's how to handle file uploads and storage:
 
@@ -1004,7 +1004,7 @@ File storage features:
 - **Custom backends**: Implement your own storage backend
 
 Alternative Patterns
-====================
+--------------------
 
 .. collapse:: Repository-Only Pattern
 
