@@ -24,8 +24,8 @@ Here's a basic example of using Advanced Alchemy with Flask:
     )
 
     app = Flask(__name__)
-    db_config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
-    alchemy = AdvancedAlchemy(db_config, app)
+    alchemy_config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
+    alchemy = AdvancedAlchemy(alchemy_config, app)
 
     # Use standard SQLAlchemy session in your routes
     @app.route("/users")
@@ -74,8 +74,8 @@ Advanced Alchemy supports async SQLAlchemy with Flask:
     from sqlalchemy import select
 
     app = Flask(__name__)
-    db_config = SQLAlchemyAsyncConfig(connection_string="postgresql+asyncpg://user:pass@localhost/db", create_all=True)
-    alchemy = AdvancedAlchemy(db_config, app)
+    alchemy_config = SQLAlchemyAsyncConfig(connection_string="postgresql+asyncpg://user:pass@localhost/db", create_all=True)
+    alchemy = AdvancedAlchemy(alchemy_config, app)
 
     # Use async session in your routes
     @app.route("/users")
@@ -186,8 +186,8 @@ Here's an example of a service that uses the ``FlaskServiceMixin`` with all CRUD
         repository_type = Repo
 
     app = Flask(__name__)
-    config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
-    alchemy = AdvancedAlchemy(config, app)
+    alchemy_config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
+    alchemy = AdvancedAlchemy(alchemy_config, app)
 
 
     @app.route("/authors", methods=["GET"])

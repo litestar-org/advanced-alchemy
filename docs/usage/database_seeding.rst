@@ -73,7 +73,7 @@ Synchronous Loading
     # Database connection string
     DATABASE_URL = "sqlite:///db.sqlite3"
 
-    config = SQLAlchemySyncConfig(
+    alchemy_config = SQLAlchemySyncConfig(
         engine_instance=create_engine(DATABASE_URL),
         session_config=SyncSessionConfig(expire_on_commit=False)
     )
@@ -101,7 +101,7 @@ Synchronous Loading
     def initialize_database():
         """Initialize the database and create tables."""
         print("Creating database tables...")
-        with config.get_engine().begin() as conn:
+        with alchemy_config.get_engine().begin() as conn:
             UUIDBase.metadata.create_all(conn)
         print("Tables created successfully")
 
@@ -111,7 +111,7 @@ Synchronous Loading
         print("Seeding database...")
 
         # Create a session
-        with config.get_session() as db_session:
+        with alchemy_config.get_session() as db_session:
             # Create repository for product model
             product_repo = ProductRepository(session=db_session)
 
@@ -155,7 +155,7 @@ Asynchronous Loading
     # Database connection string
     DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
 
-    config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         engine_instance=create_async_engine(DATABASE_URL),
         session_config=AsyncSessionConfig(expire_on_commit=False)
     )
@@ -183,7 +183,7 @@ Asynchronous Loading
     async def initialize_database():
         """Initialize the database and create tables."""
         print("Creating database tables...")
-        async with config.get_engine().begin() as conn:
+        async with alchemy_config.get_engine().begin() as conn:
             await conn.run_sync(UUIDBase.metadata.create_all)
         print("Tables created successfully")
 
@@ -193,7 +193,7 @@ Asynchronous Loading
         print("Seeding database...")
 
         # Create a session
-        async with config.get_session() as db_session:
+        async with alchemy_config.get_session() as db_session:
             # Create repository for product model
             product_repo = ProductRepository(session=db_session)
 
@@ -256,13 +256,13 @@ Litestar
     fixtures_path = Path(__file__).parent / "fixtures"
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string=DATABASE_URL,
         before_send_handler="autocommit",
         session_config=session_config,
         create_all=True,
     )
-    alchemy = SQLAlchemyPlugin(config=sqlalchemy_config)
+    alchemy = SQLAlchemyPlugin(config=alchemy_config)
 
 
     class Product(UUIDBase):
@@ -287,7 +287,7 @@ Litestar
         print("Running startup routine...")
 
         # Create a session and seed data
-        async with sqlalchemy_config.get_session() as db_session:
+        async with alchemy_config.get_session() as db_session:
             # Create repository for product model
             product_repo = ProductRepository(session=db_session)
             # Load and add product data
@@ -368,7 +368,7 @@ FastAPI
         print("Running startup routine...")
 
         # Create a session and seed data
-        async with sqlalchemy_config.get_session() as db_session:
+        async with alchemy_config.get_session() as db_session:
             # Create repository for product model
             product_repo = ProductRepository(session=db_session)
             # Load and add product data
@@ -394,7 +394,7 @@ FastAPI
 
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string=DATABASE_URL,
         commit_mode="autocommit",
         session_config=session_config,
@@ -404,7 +404,7 @@ FastAPI
     # Create the FastAPI application with lifespan
     app = FastAPI(lifespan=lifespan)
 
-    alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
+    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 
     if __name__ == "__main__":
         uvicorn.run(app, host="0.0.0.0", port=8000)
@@ -454,7 +454,7 @@ Flask
 
     app = Flask(__name__)
 
-    sqlalchemy_config = SQLAlchemySyncConfig(
+    alchemy_config = SQLAlchemySyncConfig(
         connection_string=DATABASE_URL,
         commit_mode="autocommit",
         session_config=SyncSessionConfig(
@@ -463,8 +463,8 @@ Flask
         create_all=True
     )
 
-    db = AdvancedAlchemy(config=sqlalchemy_config)
-    db.init_app(app)
+    alchemy = AdvancedAlchemy(config=alchemy_config)
+    alchemy.init_app(app)
 
     with app.app_context():  # noqa: SIM117
         # Seed data

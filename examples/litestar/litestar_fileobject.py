@@ -147,13 +147,13 @@ class DocumentController(Controller):
         _ = await documents_service.delete(document_id)
 
 
-sqlalchemy_config = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=AsyncSessionConfig(expire_on_commit=False),
     before_send_handler="autocommit",
     create_all=True,
 )
-app = Litestar(route_handlers=[DocumentController], plugins=[SQLAlchemyPlugin(config=sqlalchemy_config)])
+app = Litestar(route_handlers=[DocumentController], plugins=[SQLAlchemyPlugin(config=alchemy_config)])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)  # noqa: S104

@@ -29,6 +29,8 @@
         :type: bugfix
         :pr: 498
 
+        Fixed typing issue in `Litestar` usage documentation
+
     .. change:: correctly handle `id_attribute` with `update`
         :type: bugfix
         :pr: 502

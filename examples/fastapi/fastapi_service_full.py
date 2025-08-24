@@ -26,14 +26,14 @@ from advanced_alchemy.extensions.fastapi import (
 )
 from advanced_alchemy.service.typing import ModelDictT, is_dict, schema_dump
 
-sqlalchemy_config = SQLAlchemyAsyncConfig(
+alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=AsyncSessionConfig(expire_on_commit=False),
     commit_mode="autocommit",
     create_all=True,
 )
 app = FastAPI()
-alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
+alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 author_router = APIRouter()
 
 

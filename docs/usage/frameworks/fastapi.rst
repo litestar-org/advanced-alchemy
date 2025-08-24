@@ -17,7 +17,7 @@ Configure SQLAlchemy with FastAPI:
 
     from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, AsyncSessionConfig, SQLAlchemyAsyncConfig
 
-    sqlalchemy_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
         session_config=AsyncSessionConfig(expire_on_commit=False),
         create_all=True,
@@ -25,7 +25,7 @@ Configure SQLAlchemy with FastAPI:
     )
 
     app = FastAPI()
-    alchemy = AdvancedAlchemy(config=sqlalchemy_config, app=app)
+    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 
 Models and Schemas
 ------------------
