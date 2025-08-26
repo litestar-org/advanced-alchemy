@@ -3,6 +3,28 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.6.1
+    :date: 2025-08-26
+
+    .. change:: `to_schema` and `attrs` type hint correction
+        :type: bugfix
+        :pr: 516
+
+        Corrects an issue where the type hint was incorrect when `attrs` or `cattrs` were not installed.
+
+    .. change:: suppress `passlib` caused pytest warnings and other session warnings
+        :type: bugfix
+        :pr: 518
+
+        Suppress warnings caused by `passlib` during testing.
+
+    .. change:: `IdentityPrimaryKey` correctly generates an `IDENTITY` DDL
+        :type: bugfix
+        :pr: 523
+
+        Ensure that the `IdentityPrimaryKey` correctly generates `IDENTITY` DDL across multiple database dialects, including PostgreSQL, Oracle, and SQL Server. Update dependencies and add tests to verify the functionality.
+
+
 .. changelog:: 1.6.0
     :date: 2025-08-18
 
