@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from sqlalchemy import Sequence
+from sqlalchemy import Identity, Sequence
 from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
 
 from advanced_alchemy.types import BigIntIdentity
@@ -51,6 +51,6 @@ class IdentityPrimaryKey:
         """Primary key column using IDENTITY."""
         return mapped_column(
             BigIntIdentity,
+            Identity(start=1, increment=1),
             primary_key=True,
-            autoincrement=True,
         )
