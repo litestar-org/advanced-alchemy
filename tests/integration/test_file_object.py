@@ -1810,6 +1810,7 @@ async def test_obstore_content_type_and_metadata_passing(storage_registry: Stora
     
     # Verify the backend actually stored the attributes by checking the head info
     info = await backend.fs.head_async(file_path)
+    
     # For MemoryStore, the attributes should be in the metadata
     stored_metadata = info.get("metadata", {})
     assert stored_metadata.get("Content-Type") == "application/json"
