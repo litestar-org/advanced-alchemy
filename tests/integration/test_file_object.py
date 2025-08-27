@@ -1774,3 +1774,89 @@ async def test_obstore_backend_listener_delete_multiple_removed_async(
         await backend.get_content_async(path1)
     with pytest.raises(FileNotFoundError):
         await backend.get_content_async(path2)
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_content_type_and_metadata_passing(storage_registry: StorageRegistry) -> None:
+    """Test that content_type and custom metadata are properly passed to obstore backend."""
+    remove_listeners()
+    backend = storage_registry.get_backend("memory")  # Use memory store for faster testing
+    
+    test_content = b"Hello Storage with metadata!"
+    file_path = "test_metadata.json"
+    
+    # Create FileObject with specific content_type and custom metadata
+    custom_metadata = {
+        "Cache-Control": "no-cache",
+        "Content-Disposition": "attachment; filename=test.json",
+        "x-custom-field": "custom-value"
+    }
+    
+    obj = FileObject(
+        backend=backend,
+        filename=file_path,
+        content_type="application/json",
+        metadata=custom_metadata
+    )
+    
+    # Save the object
+    updated_obj = await backend.save_object_async(obj, test_content)
+    
+    # Verify the content_type was set correctly
+    assert updated_obj.content_type == "application/json"
+    
+    # Verify custom metadata was preserved
+    assert updated_obj.metadata == custom_metadata
+    
+    # Verify the backend actually stored the attributes by checking the head info
+    info = await backend.fs.head_async(file_path)
+    # For MemoryStore, the attributes should be in the metadata
+    stored_metadata = info.get("metadata", {})
+    assert stored_metadata.get("Content-Type") == "application/json"
+    assert stored_metadata.get("Cache-Control") == "no-cache"
+    assert stored_metadata.get("Content-Disposition") == "attachment; filename=test.json"
+    assert stored_metadata.get("x-custom-field") == "custom-value"
+    
+    # Test the same with sync method
+    file_path_sync = "test_metadata_sync.json"
+    obj_sync = FileObject(
+        backend=backend,
+        filename=file_path_sync,
+        content_type="application/json",
+        metadata=custom_metadata
+    )
+    
+    updated_obj_sync = backend.save_object(obj_sync, test_content)
+    
+    assert updated_obj_sync.content_type == "application/json"
+    assert updated_obj_sync.metadata == custom_metadata
+    
+    # Verify the backend actually stored the attributes for sync version too
+    info_sync = backend.fs.head(file_path_sync)
+    stored_metadata_sync = info_sync.get("metadata", {})
+    assert stored_metadata_sync.get("Content-Type") == "application/json"
+    assert stored_metadata_sync.get("Cache-Control") == "no-cache"
+    assert stored_metadata_sync.get("Content-Disposition") == "attachment; filename=test.json"
+    assert stored_metadata_sync.get("x-custom-field") == "custom-value"
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_content_type_guessing(storage_registry: StorageRegistry) -> None:
+    """Test that content_type is properly guessed when not explicitly set."""
+    remove_listeners()
+    backend = storage_registry.get_backend("memory")
+    
+    test_content = b"<html><body>Hello HTML!</body></html>"
+    file_path = "test.html"
+    
+    # Create FileObject without explicit content_type
+    obj = FileObject(backend=backend, filename=file_path)
+    
+    # The content_type should be guessed from the filename
+    assert obj.content_type == "text/html"
+    
+    # Save the object
+    updated_obj = await backend.save_object_async(obj, test_content)
+    
+    # Verify the guessed content_type is preserved
+    assert updated_obj.content_type == "text/html"

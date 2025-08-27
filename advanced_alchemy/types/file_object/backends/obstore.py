@@ -124,9 +124,19 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
+        # Prepare attributes with content_type and custom metadata
+        attributes: dict[str, Any] = {}
+        if file_object.content_type:
+            attributes["Content-Type"] = file_object.content_type
+        
+        # Add any custom metadata from file_object.metadata
+        if file_object.metadata:
+            attributes.update(file_object.metadata)
+
         _ = self.fs.put(
             file_object.path,
             data,
+            attributes=attributes if attributes else None,
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
@@ -166,9 +176,19 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
+        # Prepare attributes with content_type and custom metadata
+        attributes: dict[str, Any] = {}
+        if file_object.content_type:
+            attributes["Content-Type"] = file_object.content_type
+        
+        # Add any custom metadata from file_object.metadata
+        if file_object.metadata:
+            attributes.update(file_object.metadata)
+
         _ = await self.fs.put_async(
             file_object.path,
             data,
+            attributes=attributes if attributes else None,
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
