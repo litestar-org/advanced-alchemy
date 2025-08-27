@@ -128,7 +128,7 @@ class ObstoreBackend(StorageBackend):
         attributes: dict[str, Any] = {}
         if file_object.content_type:
             attributes["Content-Type"] = file_object.content_type
-        
+
         # Add any custom metadata from file_object.metadata
         if file_object.metadata:
             attributes.update(file_object.metadata)
@@ -180,7 +180,7 @@ class ObstoreBackend(StorageBackend):
         attributes: dict[str, Any] = {}
         if file_object.content_type:
             attributes["Content-Type"] = file_object.content_type
-        
+
         # Add any custom metadata from file_object.metadata
         if file_object.metadata:
             attributes.update(file_object.metadata)
