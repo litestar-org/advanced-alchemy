@@ -10,7 +10,11 @@ if NANOID_INSTALLED and not TYPE_CHECKING:
         generate as nanoid,
     )
 else:
+    import logging
     from uuid import uuid4 as nanoid  # type: ignore[assignment,unused-ignore]
+
+    logger = logging.getLogger("advanced_alchemy")
+    logger.warning("`fastnanoid` not installed, falling back to `uuid4` for NanoID generation.")
 
 
 @declarative_mixin
