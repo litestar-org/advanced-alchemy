@@ -230,6 +230,17 @@ class TestSchemaDump:
         dict_data = {"name": "test", "age": 30}
         assert schema_dump(dict_data) == dict_data
 
+    def test_schema_dump_none_value(self) -> None:
+        """Test that schema_dump correctly handles None values.
+
+        schema_dump should gracefully handle None input values without raising
+        AttributeError, returning None as-is through the fallback mechanism.
+        This is important for nullable database fields that may contain None.
+        """
+        # schema_dump should handle None without raising AttributeError
+        result = schema_dump(None)
+        assert result is None
+
     @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
     def test_schema_dump_exclude_unset_parameter(self) -> None:
         """Test schema_dump exclude_unset parameter (attrs always includes all fields)."""
