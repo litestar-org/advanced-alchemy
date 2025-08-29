@@ -834,7 +834,8 @@ Advanced Alchemy provides built-in support for file storage with various backend
 
     from litestar import Controller, Litestar, delete, get, patch, post
     from litestar.datastructures import UploadFile
-    from litestar.params import Dependency
+    from litestar.enums import RequestEncodingType
+    from litestar.params import Body, Dependency
     from pydantic import BaseModel, Field, computed_field
     from sqlalchemy.orm import Mapped, mapped_column
 
@@ -881,6 +882,19 @@ Advanced Alchemy provides built-in support for file storage with various backend
                 return None
             return self.file.sign()
 
+    # Schema for creating and updating documents
+    class CreateDocument(BaseModel):
+        model_config = {"arbitrary_types_allowed": True}
+
+        name: str
+        file: Optional[UploadFile] = None
+
+    class PatchDocument(BaseModel):
+        model_config = {"arbitrary_types_allowed": True}
+
+        name: Optional[str] = None
+        file: Optional[UploadFile] = None
+
     # Service
     class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
         """Document repository."""
@@ -918,20 +932,19 @@ Advanced Alchemy provides built-in support for file storage with various backend
         @post(path="/")
         async def create_document(
             self,
+            data: Annotated[CreateDocument, Body(media_type=RequestEncodingType.MULTI_PART)],
             documents_service: DocumentService,
-            name: str,
-            file: Annotated[Optional[UploadFile], None] = None,
         ) -> Document:
             obj = await documents_service.create(
                 DocumentModel(
-                    name=name,
+                    name=data.name,
                     file=FileObject(
                         backend="local",
-                        filename=file.filename or "uploaded_file",
-                        content_type=file.content_type,
-                        content=await file.read(),
+                        filename=data.file.filename or "uploaded_file",
+                        content_type=data.file.content_type,
+                        content=await data.file.read(),
                     )
-                    if file
+                    if data.file
                     else None,
                 )
             )
@@ -949,20 +962,19 @@ Advanced Alchemy provides built-in support for file storage with various backend
         @patch(path="/{document_id:uuid}")
         async def update_document(
             self,
-            documents_service: DocumentService,
             document_id: UUID,
-            name: Optional[str] = None,
-            file: Annotated[Optional[UploadFile], None] = None,
+            data: Annotated[PatchDocument, Body(media_type=RequestEncodingType.MULTI_PART)],
+            documents_service: DocumentService,
         ) -> Document:
             update_data: dict[str, Any] = {}
-            if name is not None:
-                update_data["name"] = name
-            if file is not None:
+            if data.name:
+                update_data["name"] = data.name
+            if data.file:
                 update_data["file"] = FileObject(
                     backend="local",
-                    filename=file.filename or "uploaded_file",
-                    content_type=file.content_type,
-                    content=await file.read(),
+                    filename=data.file.filename or "uploaded_file",
+                    content_type=data.file.content_type,
+                    content=await data.file.read(),
                 )
 
             obj = await documents_service.update(update_data, item_id=document_id)
