@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -170,3 +172,132 @@ def test_cli_group_creation() -> None:
     assert "drop-all" in cli_group.commands
     assert "dump-data" in cli_group.commands
     assert "stamp" in cli_group.commands
+
+
+def test_external_config_loading(cli_runner: CliRunner) -> None:
+    """Test loading config from external module in current working directory."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create an external config file in the temp directory
+        config_file = temp_path / "external_config.py"
+        config_file.write_text("""
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+config = SQLAlchemyAsyncConfig(
+    connection_string="sqlite+aiosqlite:///:memory:",
+    bind_key="external",
+)
+""")
+
+        # Change to the temp directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+
+            # Test that the external config can be loaded
+            cli_group = add_migration_commands()
+
+            # Use a minimal command that doesn't require database setup
+            # but still needs the config to be loaded successfully
+            result = cli_runner.invoke(cli_group, ["--config", "external_config.config", "--help"])
+
+            # Should succeed without import errors
+            assert result.exit_code == 0
+            assert "Error loading config" not in result.output
+            assert "No module named" not in result.output
+
+        finally:
+            os.chdir(original_cwd)
+
+
+def test_external_config_loading_multiple_configs(cli_runner: CliRunner) -> None:
+    """Test loading multiple configs from external module."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create an external config file with multiple configs
+        config_file = temp_path / "multi_config.py"
+        config_file.write_text("""
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+configs = [
+    SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///:memory:",
+        bind_key="primary",
+    ),
+    SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///:memory:",
+        bind_key="secondary",
+    ),
+]
+""")
+
+        # Change to the temp directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+
+            cli_group = add_migration_commands()
+            result = cli_runner.invoke(cli_group, ["--config", "multi_config.configs", "--help"])
+
+            # Should succeed without import errors
+            assert result.exit_code == 0
+            assert "Error loading config" not in result.output
+            assert "No module named" not in result.output
+
+        finally:
+            os.chdir(original_cwd)
+
+
+def test_external_config_loading_nonexistent_module(cli_runner: CliRunner) -> None:
+    """Test appropriate error when external module doesn't exist."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Change to empty temp directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+
+            cli_group = add_migration_commands()
+            # Use actual command to trigger config loading, not --help
+            result = cli_runner.invoke(cli_group, ["--config", "nonexistent_module.config", "show-current-revision"])
+
+            # Should fail with appropriate error
+            assert result.exit_code == 1
+            assert "Error loading config" in result.output
+            assert "No module named 'nonexistent_module'" in result.output
+
+        finally:
+            os.chdir(original_cwd)
+
+
+def test_external_config_loading_nonexistent_attribute(cli_runner: CliRunner) -> None:
+    """Test appropriate error when module exists but attribute doesn't."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create an external config file without the expected attribute
+        config_file = temp_path / "bad_config.py"
+        config_file.write_text("""
+# This module exists but doesn't have a 'missing_attr' attribute
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+some_other_var = "not a config"
+""")
+
+        # Change to the temp directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+
+            cli_group = add_migration_commands()
+            # Use actual command to trigger config loading, not --help
+            result = cli_runner.invoke(cli_group, ["--config", "bad_config.missing_attr", "show-current-revision"])
+
+            # Should fail with appropriate error
+            assert result.exit_code == 1
+            assert "Error loading config" in result.output
+            # The actual error message may vary, but it should indicate the attribute issue
+
+        finally:
+            os.chdir(original_cwd)

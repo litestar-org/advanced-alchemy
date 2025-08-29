@@ -124,13 +124,27 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
-        _ = self.fs.put(
-            file_object.path,
-            data,
-            use_multipart=use_multipart,
-            chunk_size=chunk_size,
-            max_concurrency=max_concurrency,
-        )
+        from obstore.store import LocalStore
+
+        # Prepare attributes with content_type and custom metadata
+        attributes: dict[str, Any] = {}
+        if file_object.content_type:
+            attributes["Content-Type"] = file_object.content_type
+
+        # Add any custom metadata from file_object.metadata
+        if file_object.metadata:
+            attributes.update(file_object.metadata)
+
+        # LocalStore doesn't support attributes parameter - skip it for local filesystem
+        put_params: dict[str, Any] = {
+            "use_multipart": use_multipart,
+            "chunk_size": chunk_size,
+            "max_concurrency": max_concurrency,
+        }
+        if not isinstance(self.fs, LocalStore):
+            put_params["attributes"] = attributes if attributes else None
+
+        _ = self.fs.put(file_object.path, data, **put_params)
         info = self.fs.head(file_object.path)
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
@@ -166,13 +180,27 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
-        _ = await self.fs.put_async(
-            file_object.path,
-            data,
-            use_multipart=use_multipart,
-            chunk_size=chunk_size,
-            max_concurrency=max_concurrency,
-        )
+        from obstore.store import LocalStore
+
+        # Prepare attributes with content_type and custom metadata
+        attributes: dict[str, Any] = {}
+        if file_object.content_type:
+            attributes["Content-Type"] = file_object.content_type
+
+        # Add any custom metadata from file_object.metadata
+        if file_object.metadata:
+            attributes.update(file_object.metadata)
+
+        # LocalStore doesn't support attributes parameter - skip it for local filesystem
+        put_params: dict[str, Any] = {
+            "use_multipart": use_multipart,
+            "chunk_size": chunk_size,
+            "max_concurrency": max_concurrency,
+        }
+        if not isinstance(self.fs, LocalStore):
+            put_params["attributes"] = attributes if attributes else None
+
+        _ = await self.fs.put_async(file_object.path, data, **put_params)
         info = await self.fs.head_async(file_object.path)
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (

@@ -42,12 +42,20 @@ def get_alchemy_group() -> "Group":
     @click.pass_context
     def alchemy_group(ctx: "click.Context", config: str) -> None:
         """Advanced Alchemy CLI commands."""
+        from pathlib import Path
+
         from rich import get_console
 
         from advanced_alchemy.utils import module_loader
 
         console = get_console()
         ctx.ensure_object(dict)
+
+        # Add current working directory to sys.path to allow loading local config modules
+        cwd = str(Path.cwd())
+        if cwd not in sys.path:
+            sys.path.insert(0, cwd)
+
         try:
             config_instance = module_loader.import_string(config)
             if isinstance(config_instance, Sequence):
@@ -57,6 +65,10 @@ def get_alchemy_group() -> "Group":
         except ImportError as e:
             console.print(f"[red]Error loading config: {e}[/]")
             ctx.exit(1)
+        finally:
+            # Clean up: remove the cwd from sys.path if we added it
+            if cwd in sys.path and sys.path[0] == cwd:
+                sys.path.remove(cwd)
 
     return alchemy_group
 
