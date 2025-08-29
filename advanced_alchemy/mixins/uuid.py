@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING
+import logging
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
@@ -18,6 +19,8 @@ else:
     uuid6 = uuid4  # type: ignore[assignment, unused-ignore]
     uuid7 = uuid4  # type: ignore[assignment, unused-ignore]
 
+logger = logging.getLogger("advanced_alchemy")
+
 
 @declarative_mixin
 class UUIDPrimaryKey(SentinelMixin):
@@ -31,6 +34,11 @@ class UUIDPrimaryKey(SentinelMixin):
 class UUIDv6PrimaryKey(SentinelMixin):
     """UUID v6 Primary Key Field Mixin."""
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
+            logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v6 generation.")
+
     id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True)
     """UUID Primary key column."""
 
@@ -38,6 +46,11 @@ class UUIDv6PrimaryKey(SentinelMixin):
 @declarative_mixin
 class UUIDv7PrimaryKey(SentinelMixin):
     """UUID v7 Primary Key Field Mixin."""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
+            logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v7 generation.")
 
     id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True)
     """UUID Primary key column."""
