@@ -1509,7 +1509,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     for relationship in mapper.mapper.relationships:
                         if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
                             # Skip relationships that cannot be handled by generic merge operations
-                            if relationship.viewonly or relationship.lazy in {
+                            if relationship.viewonly or relationship.lazy in {  # pragma: no cover
                                 "write_only",
                                 "dynamic",
                                 "raise",
