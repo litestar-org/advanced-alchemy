@@ -18,7 +18,7 @@
         :pr: 533
 
         Correctly handle `viewownly` and `lazy` loaded relationships during update.
-    
+
     .. change:: prevent AttributeError when schema_dump receives None values
         :type: bugfix
         :pr: 530
