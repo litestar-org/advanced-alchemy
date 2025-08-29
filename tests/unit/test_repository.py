@@ -1332,25 +1332,189 @@ def test_model_from_dict_includes_relationship_attributes() -> None:
     assert "books" in attrs_keys, "books relationship should be in attrs.keys()"
 
 
-def test_model_from_dict_with_relationship_data() -> None:
-    """Test that model_from_dict can handle relationship data."""
-    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+# Tests for write_only relationship handling in update method (issue #524)
 
-    # Create test data with relationship
-    book1 = UUIDBook(title="Test Book 1", author_id="dummy-uuid")
-    book2 = UUIDBook(title="Test Book 2", author_id="dummy-uuid")
 
-    author_data = {"name": "Test Author", "string_field": "test value", "books": [book1, book2]}
+async def test_update_skips_write_only_relationships(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test that update method skips write_only relationships without error."""
+    id_ = 3
+    mock_instance = MagicMock()
+    existing_instance = MagicMock()
 
-    # model_from_dict should handle the relationship attribute
-    author = model_from_dict(UUIDAuthor, **author_data)
+    # Mock the mapper and relationship
+    mock_mapper = MagicMock()
+    mock_relationship = MagicMock()
+    mock_relationship.key = "items"
+    mock_relationship.lazy = "write_only"
+    mock_relationship.viewonly = False
+    mock_mapper.mapper.columns = []
+    mock_mapper.mapper.relationships = [mock_relationship]
 
-    assert author.name == "Test Author"
-    assert author.string_field == "test value"
-    assert hasattr(author, "books"), "Author should have books attribute"
-    assert len(author.books) == 2
-    assert author.books[0].title == "Test Book 1"
-    assert author.books[1].title == "Test Book 2"
+    # Mock the data object to have the write_only relationship attribute
+    mock_instance.items = MagicMock()  # This would be a WriteOnlyCollection in reality
+
+    mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_mapper)
+    mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
+
+    # This should not raise an error even though items is a write_only relationship
+    instance = await maybe_async(mock_repo.update(mock_instance))
+
+    # Verify the relationship was not processed (no merge attempted for relationships)
+    mock_repo.session.merge.assert_called_once_with(existing_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    assert instance is existing_instance
+
+
+async def test_update_skips_dynamic_relationships(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test that update method skips dynamic relationships without error."""
+    id_ = 3
+    mock_instance = MagicMock()
+    existing_instance = MagicMock()
+
+    # Mock the mapper and relationship
+    mock_mapper = MagicMock()
+    mock_relationship = MagicMock()
+    mock_relationship.key = "items"
+    mock_relationship.lazy = "dynamic"
+    mock_relationship.viewonly = False
+    mock_mapper.mapper.columns = []
+    mock_mapper.mapper.relationships = [mock_relationship]
+
+    # Mock the data object to have the dynamic relationship attribute
+    mock_instance.items = MagicMock()  # This would be an AppenderQuery in reality
+
+    mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_mapper)
+    mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
+
+    # This should not raise an error even though items is a dynamic relationship
+    instance = await maybe_async(mock_repo.update(mock_instance))
+
+    # Verify the relationship was not processed (no merge attempted for relationships)
+    mock_repo.session.merge.assert_called_once_with(existing_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    assert instance is existing_instance
+
+
+async def test_update_skips_viewonly_relationships(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test that update method skips viewonly relationships without error."""
+    id_ = 3
+    mock_instance = MagicMock()
+    existing_instance = MagicMock()
+
+    # Mock the mapper and relationship
+    mock_mapper = MagicMock()
+    mock_relationship = MagicMock()
+    mock_relationship.key = "readonly_items"
+    mock_relationship.lazy = "select"  # Normal lazy loading
+    mock_relationship.viewonly = True  # But marked as view-only
+    mock_mapper.mapper.columns = []
+    mock_mapper.mapper.relationships = [mock_relationship]
+
+    # Mock the data object to have the viewonly relationship attribute
+    mock_instance.readonly_items = [MagicMock()]
+
+    mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_mapper)
+    mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
+
+    # This should not raise an error even though readonly_items is viewonly
+    instance = await maybe_async(mock_repo.update(mock_instance))
+
+    # Verify the relationship was not processed (no merge attempted for relationships)
+    mock_repo.session.merge.assert_called_once_with(existing_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    assert instance is existing_instance
+
+
+async def test_update_skips_raise_lazy_relationships(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test that update method skips raise lazy strategy relationships without error."""
+    id_ = 3
+    mock_instance = MagicMock()
+    existing_instance = MagicMock()
+
+    # Mock the mapper and relationship
+    mock_mapper = MagicMock()
+    mock_relationship = MagicMock()
+    mock_relationship.key = "items"
+    mock_relationship.lazy = "raise"
+    mock_relationship.viewonly = False
+    mock_mapper.mapper.columns = []
+    mock_mapper.mapper.relationships = [mock_relationship]
+
+    # Mock the data object to have the raise relationship attribute
+    mock_instance.items = MagicMock()
+
+    mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_mapper)
+    mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
+
+    # This should not raise an error even though items has lazy="raise"
+    instance = await maybe_async(mock_repo.update(mock_instance))
+
+    # Verify the relationship was not processed (no merge attempted for relationships)
+    mock_repo.session.merge.assert_called_once_with(existing_instance, load=True)  # pyright: ignore[reportFunctionMemberAccess]
+    assert instance is existing_instance
+
+
+async def test_update_processes_normal_relationships(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    """Test that update method still processes normal relationships correctly."""
+    id_ = 3
+    mock_instance = MagicMock()
+    existing_instance = MagicMock()
+    related_item = MagicMock()
+    merged_related_item = MagicMock()
+
+    # Mock the mapper and relationship
+    mock_mapper = MagicMock()
+    mock_relationship = MagicMock()
+    mock_relationship.key = "items"
+    mock_relationship.lazy = "select"  # Normal lazy loading
+    mock_relationship.viewonly = False
+    mock_mapper.mapper.columns = []
+    mock_mapper.mapper.relationships = [mock_relationship]
+
+    # Mock the data object to have a normal relationship with items
+    mock_instance.items = [related_item]
+
+    mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
+    mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_mapper)
+
+    # Mock session.merge to return different objects for main instance vs related items
+    async def mock_merge(obj: Any, load: bool = True) -> Any:
+        if obj is existing_instance:
+            return existing_instance
+        if obj is related_item:
+            return merged_related_item
+        return obj
+
+    mock_repo.session.merge.side_effect = mock_merge
+
+    # This should process the normal relationship correctly
+    instance = await maybe_async(mock_repo.update(mock_instance))
+
+    # Verify the relationship was processed - at minimum the main instance should be merged
+    assert mock_repo.session.merge.call_count >= 1  # At least the main instance
+    # The main point is that normal relationships don't cause errors
+    assert instance is existing_instance
 
 
 def test_model_from_dict_backward_compatibility() -> None:

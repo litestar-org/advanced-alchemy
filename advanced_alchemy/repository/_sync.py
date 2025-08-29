@@ -1508,6 +1508,16 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     # Handle relationships by merging objects into session first
                     for relationship in mapper.mapper.relationships:
                         if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
+                            # Skip relationships that cannot be handled by generic merge operations
+                            if relationship.viewonly or relationship.lazy in {  # pragma: no cover
+                                "write_only",
+                                "dynamic",
+                                "raise",
+                                "raise_on_sql",
+                            }:
+                                # Skip relationships with incompatible lazy loading strategies
+                                continue
+
                             if isinstance(new_value, list):
                                 merged_values = [  # pyright: ignore
                                     self.session.merge(item, load=False)  # pyright: ignore
