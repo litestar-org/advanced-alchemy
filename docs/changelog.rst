@@ -3,6 +3,51 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.6.2
+    :date: 2025-08-29
+
+    .. change:: enable loading config from working directory
+        :type: feature
+        :pr: 527
+        :issue: 491
+
+        Correctly allow loading configuration from the current directory
+
+    .. change:: correctly handle lazy attributes on update
+        :type: bugfix
+        :pr: 533
+
+        Correctly handle `viewownly` and `lazy` loaded relationships during update.
+
+    .. change:: prevent AttributeError when schema_dump receives None values
+        :type: bugfix
+        :pr: 530
+
+        - `advanced_alchemy/service/typing.py`: Fixed `has_dict_attribute()` function
+        - `tests/unit/test_attrs_integration.py`: Added test case for `None` value handling
+
+    .. change:: add warning message when using fallback value for a primary key
+        :type: bugfix
+        :pr: 529
+
+        - Add warning message when using `uuid` instead of `nanoid`
+        - Add warning message when using `uuid4` instead of `uuid6` or `uuid7`
+
+    .. change:: litestar fileobject example
+        :type: bugfix
+        :pr: 531
+
+        Fix litestar fileobject example
+
+    .. change:: pass Content-Type and metadata to backend storage
+        :type: bugfix
+        :pr: 528
+
+        - Modified `save_object` and `save_object_async` methods to collect attributes from `FileObject`
+        - Pass `content_type` as `"Content-Type"` in the `attributes` parameter
+        - Include any custom metadata from `FileObject.metadata`
+        - Added proper typing for the attributes dictionary
+
 .. changelog:: 1.6.1
     :date: 2025-08-26
 
