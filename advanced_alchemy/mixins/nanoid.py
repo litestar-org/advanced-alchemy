@@ -22,7 +22,7 @@ class NanoIDPrimaryKey(SentinelMixin):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not NANOID_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):
+        if not NANOID_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
             logger.warning("`fastnanoid` not installed, falling back to `uuid4` for NanoID generation.")
 
     id: Mapped[str] = mapped_column(default=nanoid, primary_key=True)

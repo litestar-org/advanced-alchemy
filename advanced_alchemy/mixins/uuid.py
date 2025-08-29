@@ -36,7 +36,7 @@ class UUIDv6PrimaryKey(SentinelMixin):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):
+        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
             logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v6 generation.")
 
     id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True)
@@ -49,7 +49,7 @@ class UUIDv7PrimaryKey(SentinelMixin):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):
+        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
             logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v7 generation.")
 
     id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True)
