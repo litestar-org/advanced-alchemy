@@ -101,10 +101,13 @@ class AuthorController(Controller):
     async def get_author(
         self,
         authors_service: AuthorService,
-        author_id: UUID = Parameter(
-            title="Author ID",
-            description="The author to retrieve.",
-        ),
+        author_id: Annotated[
+            UUID,
+            Parameter(
+                title="Author ID",
+                description="The author to retrieve.",
+            ),
+        ],
     ) -> Author:
         """Get an existing author."""
         obj = await authors_service.get(author_id)
@@ -115,10 +118,13 @@ class AuthorController(Controller):
         self,
         authors_service: AuthorService,
         data: AuthorUpdate,
-        author_id: UUID = Parameter(
-            title="Author ID",
-            description="The author to update.",
-        ),
+        author_id: Annotated[
+            UUID,
+            Parameter(
+                title="Author ID",
+                description="The author to update.",
+            ),
+        ],
     ) -> Author:
         """Update an author."""
         obj = await authors_service.update(data, item_id=author_id, auto_commit=True)
@@ -128,10 +134,13 @@ class AuthorController(Controller):
     async def delete_author(
         self,
         authors_service: AuthorService,
-        author_id: UUID = Parameter(
-            title="Author ID",
-            description="The author to delete.",
-        ),
+        author_id: Annotated[
+            UUID,
+            Parameter(
+                title="Author ID",
+                description="The author to delete.",
+            ),
+        ],
     ) -> None:
         """Delete a author from the system."""
         _ = await authors_service.delete(author_id)
