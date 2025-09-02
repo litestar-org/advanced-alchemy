@@ -743,11 +743,11 @@ class SQLAlchemySyncRepositoryService(
             existing_instance = self.repository.get(
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
-            # Convert schema objects to dicts for partial updates
             update_data = self.to_model_on_update(data) if is_dict(data) else schema_dump(data, exclude_unset=True)
+
             if is_dict(update_data):
                 for key, value in update_data.items():
-                    if getattr(existing_instance, key, MISSING) is not MISSING:  # type: ignore[assignment]
+                    if getattr(existing_instance, key, MISSING) is not MISSING:
                         setattr(existing_instance, key, value)
             data = existing_instance
         else:

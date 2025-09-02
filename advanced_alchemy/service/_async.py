@@ -744,10 +744,10 @@ class SQLAlchemyAsyncRepositoryService(
             existing_instance = await self.repository.get(
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
-            if is_dict(data):
-                update_data = await self.to_model_on_update(data)
-            else:
-                update_data = schema_dump(data, exclude_unset=True)
+            update_data = (
+                await self.to_model_on_update(data) if is_dict(data) else schema_dump(data, exclude_unset=True)
+            )
+
             if is_dict(update_data):
                 for key, value in update_data.items():
                     if getattr(existing_instance, key, MISSING) is not MISSING:
