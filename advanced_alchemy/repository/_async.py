@@ -53,6 +53,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, T
+from advanced_alchemy.service.typing import schema_dump
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
@@ -1577,7 +1578,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        data_to_update: list[dict[str, Any]] = [v.to_dict() if isinstance(v, self.model_type) else v for v in data]  # type: ignore[misc]
+        data_to_update: list[dict[str, Any]] = []
+        for v in data:
+            if isinstance(v, self.model_type):
+                # Use schema_dump for safer model-to-dict conversion
+                data_to_update.append(cast("dict[str, Any]", schema_dump(v)))
+            else:
+                data_to_update.append(v)  # type: ignore[arg-type]
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
@@ -1606,7 +1613,17 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 return instances
             await self.session.execute(statement, data_to_update, execution_options=execution_options)
             await self._flush_or_commit(auto_commit=auto_commit)
-            return data
+
+            # For non-RETURNING backends, fetch updated instances from database
+            updated_ids = [self.get_id_attribute_value(item) for item in data]
+            updated_instances = await self.list(
+                getattr(self.model_type, self.id_attribute).in_(updated_ids),
+                load=loader_options,
+                execution_options=execution_options,
+            )
+            for instance in updated_instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+            return updated_instances
 
     def _get_update_many_statement(
         self,

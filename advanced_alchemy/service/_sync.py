@@ -30,6 +30,7 @@ from advanced_alchemy.service.typing import (
     ModelDictListT,
     ModelDictT,
     asdict,
+    attrs_nothing,
     is_attrs_instance,
     is_dict,
     is_dto_data,
@@ -458,9 +459,13 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             return cast("ModelT", data.create_instance())
 
         if is_attrs_instance(data):
+            # Filter out attrs.NOTHING values for partial updates
+            def filter_unset(attr: Any, value: Any) -> bool:  # noqa: ARG001
+                return value is not attrs_nothing
+
             return model_from_dict(
                 model=self.model_type,
-                **asdict(data),
+                **asdict(data, filter=filter_unset),
             )
 
         # Fallback for objects with __dict__ (e.g., regular classes)

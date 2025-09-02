@@ -38,6 +38,7 @@ from advanced_alchemy.service._typing import (
     T,
     TypeAdapter,
     UnsetType,
+    attrs_nothing,
     convert,
 )
 from advanced_alchemy.service._typing import attrs_asdict as asdict
@@ -522,6 +523,7 @@ __all__ = (
     "TypeAdapter",
     "UnsetType",
     "asdict",
+    "attrs_nothing",
     "convert",
     "fields",
     "get_attrs_fields",
