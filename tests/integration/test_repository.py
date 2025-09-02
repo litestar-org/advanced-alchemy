@@ -21,7 +21,6 @@ from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
     SQLAlchemySyncMockRepository,
 )
-from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 from tests.helpers import maybe_async
 
 # Python 3.9 compatibility for typing.TypeAlias
@@ -75,6 +74,17 @@ def create_repository(
             model_instance = data
         return await self.add(model_instance, **kwargs)
 
+    # Add a create_many method that handles list of dict data
+    async def create_many(self: Any, data: "list[Any]", **kwargs: Any) -> "list[Any]":
+        # Convert dict items to model instances
+        model_instances = []
+        for item in data:
+            if isinstance(item, dict):
+                model_instances.append(model_type(**item))
+            else:
+                model_instances.append(item)
+        return await self.add_many(model_instances, **kwargs)  # type: ignore[no-any-return]
+
     def create_sync(self: Any, data: Any, **kwargs: Any) -> Any:
         # Sync version for sync repositories
         if isinstance(data, dict):
@@ -83,11 +93,25 @@ def create_repository(
             model_instance = data
         return self.add(model_instance, **kwargs)
 
-    # Choose the right create method based on repository type
+    # Sync version of create_many
+    def create_many_sync(self: Any, data: "list[Any]", **kwargs: Any) -> "list[Any]":
+        # Convert dict items to model instances
+        model_instances = []
+        for item in data:
+            if isinstance(item, dict):
+                model_instances.append(model_type(**item))
+            else:
+                model_instances.append(item)
+        return self.add_many(model_instances, **kwargs)  # type: ignore[no-any-return]
+
+    # Choose the right create methods based on repository type
     create_method = create if isinstance(session, AsyncSession) else create_sync
+    create_many_method = create_many if isinstance(session, AsyncSession) else create_many_sync
 
     DynamicRepository = type(
-        repository_class_name, (base_repository_class,), {"model_type": model_type, "create": create_method}
+        repository_class_name,
+        (base_repository_class,),
+        {"model_type": model_type, "create": create_method, "create_many": create_many_method},
     )
 
     return DynamicRepository(session=session)
@@ -587,15 +611,15 @@ async def test_service_pydantic_partial_update_github_535(
     author = await maybe_async(author_service.create({"name": "Original Name", "dob": datetime.date(1990, 1, 1)}))
     original_dob = author.dob
 
-    # Create a Pydantic model for partial update with UNSET field
+    # Create a Pydantic model for partial update with optional fields
     class AuthorUpdateSchema(pydantic.BaseModel):  # type: ignore[name-defined,misc]
-        name: "Optional[str]" = pydantic.Field(default=pydantic.UNSET)
-        dob: "Optional[datetime.date]" = pydantic.Field(default=pydantic.UNSET)
+        name: "Optional[str]" = None
+        dob: "Optional[datetime.date]" = None
 
-    # Partial update with only name field set (dob is UNSET)
+    # Partial update with only name field set (dob is unset)
     partial_update = AuthorUpdateSchema(name="Updated Name")
     assert partial_update.name == "Updated Name"
-    assert partial_update.dob is pydantic.UNSET
+    assert "dob" not in partial_update.model_fields_set
 
     # Update via service - should only update name, leave dob unchanged
     updated_author = await maybe_async(author_service.update(partial_update, item_id=author.id))
@@ -655,15 +679,24 @@ async def test_service_update_many_schema_types_github_535(
     original_dob1 = author1.dob
     original_dob2 = author2.dob
 
-    # Create Pydantic schema for partial updates
+    # Get ID type from model for dynamic schema creation
+    # For Pydantic compatibility, we need to map database-specific types to Python types
+    from uuid import UUID as PythonUUID
+
+    actual_id_type = type(author1.id)
+    if hasattr(actual_id_type, "__name__") and "UUID" in actual_id_type.__name__:
+        id_type = PythonUUID  # Use standard UUID for database UUID types
+    else:
+        id_type = int  # type: ignore[assignment]
+
     class AuthorUpdateSchema(pydantic.BaseModel):  # type: ignore[name-defined,misc]
-        id: int
-        name: "Optional[str]" = pydantic.Field(default=pydantic.UNSET)
-        dob: "Optional[datetime.date]" = pydantic.Field(default=pydantic.UNSET)
+        id: id_type  # type: ignore[valid-type]
+        name: "Optional[str]" = None
+        dob: "Optional[datetime.date]" = None
 
     # Create msgspec schema for partial updates
     class AuthorUpdateMsgspecSchema(msgspec.Struct):  # type: ignore[name-defined,misc]
-        id: int
+        id: id_type  # type: ignore[valid-type]
         name: "str" = msgspec.UNSET
         dob: "datetime.date" = msgspec.UNSET
 
@@ -700,12 +733,10 @@ async def test_repo_update_many_non_returning_backend_refresh(
 
     # Create multiple authors
     authors = await maybe_async(
-        author_repo.create_many(
-            [
-                {"name": "Author A", "dob": datetime.date(1990, 1, 1)},
-                {"name": "Author B", "dob": datetime.date(1991, 2, 2)},
-            ]
-        )
+        author_repo.create_many([
+            {"name": "Author A", "dob": datetime.date(1990, 1, 1)},
+            {"name": "Author B", "dob": datetime.date(1991, 2, 2)},
+        ])
     )
 
     # Prepare update data with partial changes
@@ -741,23 +772,31 @@ async def test_service_mixed_input_types_update_many(
 
     # Create multiple authors
     authors = await maybe_async(
-        author_service.create_many(
-            [
-                {"name": "Author 1", "dob": datetime.date(1990, 1, 1)},
-                {"name": "Author 2", "dob": datetime.date(1991, 2, 2)},
-                {"name": "Author 3", "dob": datetime.date(1992, 3, 3)},
-            ]
-        )
+        author_service.create_many([
+            {"name": "Author 1", "dob": datetime.date(1990, 1, 1)},
+            {"name": "Author 2", "dob": datetime.date(1991, 2, 2)},
+            {"name": "Author 3", "dob": datetime.date(1992, 3, 3)},
+        ])
     )
+
+    # Get ID type from model for dynamic schema creation
+    # For Pydantic compatibility, we need to map database-specific types to Python types
+    from uuid import UUID as PythonUUID
+
+    actual_id_type = type(authors[0].id)
+    if hasattr(actual_id_type, "__name__") and "UUID" in actual_id_type.__name__:
+        id_type = PythonUUID  # Use standard UUID for database UUID types
+    else:
+        id_type = int  # Use int for bigint types
 
     # Create schema classes
     class AuthorUpdatePydantic(pydantic.BaseModel):  # type: ignore[name-defined,misc]
-        id: int
-        name: "Optional[str]" = pydantic.Field(default=pydantic.UNSET)
-        dob: "Optional[datetime.date]" = pydantic.Field(default=pydantic.UNSET)
+        id: id_type  # type: ignore[valid-type]
+        name: "Optional[str]" = None
+        dob: "Optional[datetime.date]" = None
 
     class AuthorUpdateMsgspec(msgspec.Struct):  # type: ignore[name-defined,misc]
-        id: int
+        id: id_type  # type: ignore[valid-type]
         name: "str" = msgspec.UNSET
         dob: "datetime.date" = msgspec.UNSET
 
@@ -774,12 +813,13 @@ async def test_service_mixed_input_types_update_many(
     # Verify all updates worked correctly
     assert len(updated_authors) == 3
 
-    # Sort by ID for consistent comparison
-    updated_authors.sort(key=lambda a: a.id)
+    # Create a mapping by ID for verification
+    updated_by_id = {author.id: author for author in updated_authors}
 
-    assert updated_authors[0].name == "Dict Updated"
-    assert updated_authors[1].name == "Pydantic Updated"
-    assert updated_authors[2].name == "Msgspec Updated"
+    # Verify each update matches the expected result
+    assert updated_by_id[authors[0].id].name == "Dict Updated"
+    assert updated_by_id[authors[1].id].name == "Pydantic Updated"
+    assert updated_by_id[authors[2].id].name == "Msgspec Updated"
 
     # Verify all attributes are properly populated (not stale/None)
     for author in updated_authors:

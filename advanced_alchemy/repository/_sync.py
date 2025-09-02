@@ -1579,7 +1579,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        data_to_update: list[dict[str, Any]] = [cast("dict[str, Any]", schema_dump(v)) for v in data]
+        data_to_update: list[dict[str, Any]] = []
+        for v in data:
+            if isinstance(v, self.model_type) or (hasattr(v, "to_dict") and callable(v.to_dict)):
+                data_to_update.append(v.to_dict())
+            else:
+                data_to_update.append(cast("dict[str, Any]", schema_dump(v)))
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
@@ -1610,10 +1615,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._flush_or_commit(auto_commit=auto_commit)
 
             # For non-RETURNING backends, fetch updated instances from database
-            updated_ids: list[Any] = [
-                item.get(self.id_attribute) if isinstance(item, dict) else self.get_id_attribute_value(item)
-                for item in data
-            ]
+            updated_ids: list[Any] = [item[self.id_attribute] for item in data_to_update]
             updated_instances = self.list(
                 getattr(self.model_type, self.id_attribute).in_(updated_ids),
                 load=loader_options,

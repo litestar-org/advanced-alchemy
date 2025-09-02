@@ -447,9 +447,10 @@ def test_attrs_partial_update_with_nothing_values(engine: Engine, attrs_test_tab
         """attrs class for partial updates with NOTHING sentinel values."""
 
         # For partial updates, use Any to avoid type issues with NOTHING
-        name: Any = field(default=NOTHING)
-        age: Any = field(default=NOTHING)
-        email: Any = field(default=NOTHING)
+        # Use factory to properly make fields optional with NOTHING defaults
+        name: Any = field(factory=lambda: NOTHING)
+        age: Any = field(factory=lambda: NOTHING)
+        email: Any = field(factory=lambda: NOTHING)
 
     with Session(engine) as session:
         service = PersonSyncService(session=session)
@@ -500,10 +501,11 @@ def test_attrs_update_many_with_nothing_values(engine: Engine, attrs_test_tables
         """attrs class for bulk partial updates."""
 
         # For partial updates, use Any to avoid type issues with NOTHING
-        id: Any = field(default=NOTHING)  # Still need ID for updates
-        name: Any = field(default=NOTHING)
-        age: Any = field(default=NOTHING)
-        email: Any = field(default=NOTHING)
+        # Use factory to properly make fields optional with NOTHING defaults
+        id: Any = field(factory=lambda: NOTHING)  # Still need ID for updates
+        name: Any = field(factory=lambda: NOTHING)
+        age: Any = field(factory=lambda: NOTHING)
+        email: Any = field(factory=lambda: NOTHING)
 
     with Session(engine) as session:
         service = PersonSyncService(session=session)
