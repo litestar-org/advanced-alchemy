@@ -290,7 +290,7 @@ except ImportError:
     attrs_field = attrs_field_stub
     attrs_fields = attrs_fields_stub
     attrs_has = attrs_has_stub  # type: ignore[assignment]
-    attrs_nothing = ATTRS_NOTHING_STUB
+    attrs_nothing = ATTRS_NOTHING_STUB  # type: ignore[assignment]
     ATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 try:
