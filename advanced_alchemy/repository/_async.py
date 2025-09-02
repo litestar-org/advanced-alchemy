@@ -2271,6 +2271,7 @@ class SQLAlchemyAsyncQueryRepository:
         session: Union[AsyncSession, async_scoped_session[AsyncSession]],
         error_messages: Optional[ErrorMessages] = None,
         wrap_exceptions: bool = True,
+        **kwargs: Any,
     ) -> None:
         """Repository pattern for SQLAlchemy models.
 
@@ -2278,6 +2279,7 @@ class SQLAlchemyAsyncQueryRepository:
             session: Session managing the unit-of-work for the operation.
             error_messages: A set of error messages to use for operations.
             wrap_exceptions: Whether to wrap exceptions in a SQLAlchemy exception.
+            **kwargs: Additional arguments (ignored).
 
         """
         self.session = session
