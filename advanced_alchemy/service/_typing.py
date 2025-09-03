@@ -255,8 +255,19 @@ def attrs_has_stub(*args: Any, **kwargs: Any) -> bool:  # noqa: ARG001
     return False
 
 
+class AttrsNothingStub:
+    """Placeholder for attrs.NOTHING sentinel value"""
+
+    def __repr__(self) -> str:
+        return "NOTHING"
+
+
+ATTRS_NOTHING_STUB = AttrsNothingStub()
+
+
 # Try to import real implementations at runtime
 try:
+    from attrs import NOTHING as _real_attrs_nothing  # noqa: N811
     from attrs import AttrsInstance as _RealAttrsInstance  # pyright: ignore
     from attrs import asdict as _real_attrs_asdict
     from attrs import define as _real_attrs_define
@@ -270,6 +281,7 @@ try:
     attrs_field = _real_attrs_field
     attrs_fields = _real_attrs_fields
     attrs_has = _real_attrs_has
+    attrs_nothing = _real_attrs_nothing
     ATTRS_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
     AttrsInstance = AttrsLike  # type: ignore[misc]
@@ -278,6 +290,7 @@ except ImportError:
     attrs_field = attrs_field_stub
     attrs_fields = attrs_fields_stub
     attrs_has = attrs_has_stub  # type: ignore[assignment]
+    attrs_nothing = ATTRS_NOTHING_STUB  # type: ignore[assignment]
     ATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 try:
@@ -309,6 +322,7 @@ Empty: Final = EmptyEnum.EMPTY
 
 __all__ = (
     "ATTRS_INSTALLED",
+    "ATTRS_NOTHING_STUB",
     "CATTRS_INSTALLED",
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
@@ -317,6 +331,7 @@ __all__ = (
     "UNSET_STUB",
     "AttrsInstance",
     "AttrsLike",
+    "AttrsNothingStub",
     "BaseModel",
     "BaseModelLike",
     "DTOData",
@@ -346,6 +361,7 @@ __all__ = (
     "attrs_fields_stub",
     "attrs_has",
     "attrs_has_stub",
+    "attrs_nothing",
     "cattrs_structure",
     "cattrs_unstructure",
     "convert",

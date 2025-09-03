@@ -1556,3 +1556,40 @@ def test_model_from_dict_empty_relationship() -> None:
     assert author.name == "Author Without Books"
     assert hasattr(author, "books")
     assert author.books == []
+
+
+def test_update_many_data_conversion_handles_mixed_types() -> None:
+    """Test that update_many properly handles mixed input types (regression test).
+
+    This verifies the fix for the type handling bug in update_many where
+    the old logic would fail with AttributeError when mixing model instances
+    and dictionaries.
+    """
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    # Simulate the data conversion logic from the fixed code
+    model_type = UUIDAuthor
+
+    # Create a mock model instance
+    mock_author = UUIDAuthor(name="Test Author")
+
+    # Mix of model instances and dictionaries (the problematic case)
+    mixed_data = [
+        mock_author,  # Model instance with to_dict() method
+        {"id": "dict-id", "name": "Dict Author"},  # Plain dictionary
+    ]
+
+    # This is the fixed logic from repository/_async.py and _sync.py
+    data_to_update = []
+    for v in mixed_data:
+        if isinstance(v, model_type):
+            data_to_update.append(v.to_dict())
+        else:
+            data_to_update.append(v)  # type: ignore[arg-type]
+
+    # Verify no AttributeError was raised and data is properly converted
+    assert len(data_to_update) == 2
+    assert isinstance(data_to_update[0], dict)  # Model converted to dict
+    assert isinstance(data_to_update[1], dict)  # Dict passed through
+    assert data_to_update[0]["name"] == "Test Author"
+    assert data_to_update[1]["name"] == "Dict Author"

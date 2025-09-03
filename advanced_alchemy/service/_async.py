@@ -27,15 +27,18 @@ from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, SQLAlchemyAsyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
+    UNSET,
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,
     asdict,
+    attrs_nothing,
     is_attrs_instance,
     is_dict,
     is_dto_data,
     is_msgspec_struct,
     is_pydantic_model,
+    schema_dump,
 )
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
@@ -448,20 +451,26 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             )
 
         if is_msgspec_struct(data):
-            from msgspec import UNSET
-
             return model_from_dict(
                 model=self.model_type,
-                **{f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET},
+                **{
+                    f: getattr(data, f)
+                    for f in data.__struct_fields__
+                    if hasattr(data, f) and getattr(data, f) is not UNSET
+                },
             )
 
         if is_dto_data(data):
             return cast("ModelT", data.create_instance())
 
         if is_attrs_instance(data):
+            # Filter out attrs.NOTHING values for partial updates
+            def filter_unset(attr: Any, value: Any) -> bool:  # noqa: ARG001
+                return value is not attrs_nothing
+
             return model_from_dict(
                 model=self.model_type,
-                **asdict(data),
+                **asdict(data, filter=filter_unset),
             )
 
         # Fallback for objects with __dict__ (e.g., regular classes)
@@ -729,11 +738,16 @@ class SQLAlchemyAsyncRepositoryService(
         Returns:
             Updated representation.
         """
-        if is_dict(data) and item_id is not None:
+        if (
+            is_dict(data) or is_pydantic_model(data) or is_msgspec_struct(data) or is_attrs_instance(data)
+        ) and item_id is not None:
             existing_instance = await self.repository.get(
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
-            update_data = await self.to_model_on_update(data)
+            update_data = (
+                await self.to_model_on_update(data) if is_dict(data) else schema_dump(data, exclude_unset=True)
+            )
+
             if is_dict(update_data):
                 for key, value in update_data.items():
                     if getattr(existing_instance, key, MISSING) is not MISSING:

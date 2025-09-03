@@ -38,6 +38,7 @@ from advanced_alchemy.service._typing import (
     T,
     TypeAdapter,
     UnsetType,
+    attrs_nothing,
     convert,
 )
 from advanced_alchemy.service._typing import attrs_asdict as asdict
@@ -480,9 +481,20 @@ def schema_dump(
         return data.model_dump(exclude_unset=exclude_unset)
     if is_msgspec_struct(data):
         if exclude_unset:
-            return {f: val for f in data.__struct_fields__ if (val := getattr(data, f, None)) != UNSET}
+            return {
+                f: getattr(data, f)
+                for f in data.__struct_fields__
+                if hasattr(data, f) and getattr(data, f) is not UNSET
+            }
         return {f: getattr(data, f, None) for f in data.__struct_fields__}
     if is_attrs_instance(data):
+        if exclude_unset:
+            # Filter out attrs.NOTHING values for partial updates
+            def filter_unset_attrs(attr: Any, value: Any) -> bool:  # noqa: ARG001
+                return value is not attrs_nothing
+
+            return asdict(data, filter=filter_unset_attrs)
+
         # Use cattrs for enhanced performance and type-aware serialization when available
         if CATTRS_INSTALLED:
             return unstructure(data)  # type: ignore[no-any-return]
@@ -522,6 +534,7 @@ __all__ = (
     "TypeAdapter",
     "UnsetType",
     "asdict",
+    "attrs_nothing",
     "convert",
     "fields",
     "get_attrs_fields",

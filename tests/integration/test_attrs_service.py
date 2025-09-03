@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 import pytest
 from sqlalchemy import Engine, String, select
@@ -427,3 +427,114 @@ def test_attrs_mixed_with_other_schemas(engine: Engine, attrs_test_tables: None)
         assert isinstance(dict_to_attrs_result, PersonAttrs)
         assert is_attrs_instance(attrs_result)
         assert is_attrs_instance(dict_to_attrs_result)
+
+
+@pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
+def test_attrs_partial_update_with_nothing_values(engine: Engine, attrs_test_tables: None) -> None:
+    """Test attrs partial updates with NOTHING values (GitHub Issue #535)."""
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
+    try:
+        from attrs import NOTHING, define, field
+    except ImportError:
+        pytest.skip("attrs not installed")
+
+    @define
+    class PersonPartialUpdate:
+        """attrs class for partial updates with NOTHING sentinel values."""
+
+        # For partial updates, use Any to avoid type issues with NOTHING
+        # Use factory to properly make fields optional with NOTHING defaults
+        name: Any = field(factory=lambda: NOTHING)
+        age: Any = field(factory=lambda: NOTHING)
+        email: Any = field(factory=lambda: NOTHING)
+
+    with Session(engine) as session:
+        service = PersonSyncService(session=session)
+
+        # Create initial person
+        initial_data = {"name": "Initial Name", "age": 30, "email": "initial@example.com"}
+        created_person = service.create(initial_data)
+        person_id = created_person.id
+
+        # Test partial update with NOTHING values (only update name)
+        # This was broken in v1.5.0+ and should work now
+        partial_update = PersonPartialUpdate(name="Updated Name")  # age and email default to NOTHING
+
+        # This should not raise IntegrityError and should only update the name field
+        updated_person = service.update(partial_update, item_id=person_id)  # type: ignore[arg-type]
+
+        # Verify the update worked correctly
+        assert updated_person.name == "Updated Name"  # This should be updated
+        assert updated_person.age == 30  # This should remain unchanged
+        assert updated_person.email == "initial@example.com"  # This should remain unchanged
+        assert updated_person.id == person_id  # ID should be same
+
+        # Test another partial update (only update age and email)
+        partial_update2 = PersonPartialUpdate(name=NOTHING, age=35, email="updated@example.com")
+        updated_person2 = service.update(partial_update2, item_id=person_id)  # type: ignore[arg-type]
+
+        # Verify this update
+        assert updated_person2.name == "Updated Name"  # Should remain from previous update
+        assert updated_person2.age == 35  # This should be updated
+        assert updated_person2.email == "updated@example.com"  # This should be updated
+
+
+@pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+@pytest.mark.xdist_group("attrs")
+def test_attrs_update_many_with_nothing_values(engine: Engine, attrs_test_tables: None) -> None:
+    """Test attrs update_many with NOTHING values for partial updates."""
+    # Skip mock engines as they don't support auto-generated primary keys
+    if getattr(engine.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines don't support auto-generated primary keys")
+
+    try:
+        from attrs import NOTHING, define, field
+    except ImportError:
+        pytest.skip("attrs not installed")
+
+    @define
+    class PersonBulkUpdate:
+        """attrs class for bulk partial updates."""
+
+        # For partial updates, use Any to avoid type issues with NOTHING
+        # Use factory to properly make fields optional with NOTHING defaults
+        id: Any = field(factory=lambda: NOTHING)  # Still need ID for updates
+        name: Any = field(factory=lambda: NOTHING)
+        age: Any = field(factory=lambda: NOTHING)
+        email: Any = field(factory=lambda: NOTHING)
+
+    with Session(engine) as session:
+        service = PersonSyncService(session=session)
+
+        # Create two people
+        person1 = service.create({"name": "Person 1", "age": 25, "email": "person1@example.com"})
+        person2 = service.create({"name": "Person 2", "age": 30, "email": "person2@example.com"})
+
+        # Bulk update with NOTHING values (partial updates)
+        bulk_updates = [
+            PersonBulkUpdate(id=person1.id, name="Updated Person 1"),  # age and email default to NOTHING
+            PersonBulkUpdate(id=person2.id, age=35, email="updated2@example.com"),  # name defaults to NOTHING
+        ]
+
+        # This should work correctly with the attrs NOTHING filtering
+        updated_people = service.update_many(bulk_updates)  # type: ignore[arg-type]
+
+        # Verify updates
+        assert len(updated_people) == 2
+
+        person1_updated = next(p for p in updated_people if p.id == person1.id)
+        person2_updated = next(p for p in updated_people if p.id == person2.id)
+
+        # Person 1: only name should be updated
+        assert person1_updated.name == "Updated Person 1"
+        assert person1_updated.age == 25  # unchanged
+        assert person1_updated.email == "person1@example.com"  # unchanged
+
+        # Person 2: age and email should be updated
+        assert person2_updated.name == "Person 2"  # unchanged
+        assert person2_updated.age == 35
+        assert person2_updated.email == "updated2@example.com"

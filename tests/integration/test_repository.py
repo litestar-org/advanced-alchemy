@@ -43,7 +43,7 @@ xfail = pytest.mark.xfail
 RawRecordData: TypeAlias = "list[dict[str, Any]]"
 RepositoryPKType = Literal["uuid", "bigint"]
 AnyRepository: TypeAlias = "Union[SQLAlchemyAsyncRepository[Any], SQLAlchemyAsyncMockRepository[Any]]"
-AnyService: TypeAlias = "SQLAlchemyAsyncRepositoryService[Any, AnyRepository]"
+AnyService: TypeAlias = SQLAlchemyAsyncRepositoryService[Any, "AnyRepository"]  # pyright: ignore
 
 mock_engines = {"mock_async_engine", "mock_sync_engine"}
 
@@ -75,6 +75,17 @@ def create_repository(
             model_instance = data
         return await self.add(model_instance, **kwargs)
 
+    # Add a create_many method that handles list of dict data
+    async def create_many(self: Any, data: "list[Any]", **kwargs: Any) -> "list[Any]":
+        # Convert dict items to model instances
+        model_instances = []
+        for item in data:
+            if isinstance(item, dict):
+                model_instances.append(model_type(**item))
+            else:
+                model_instances.append(item)
+        return await self.add_many(model_instances, **kwargs)  # type: ignore[no-any-return]
+
     def create_sync(self: Any, data: Any, **kwargs: Any) -> Any:
         # Sync version for sync repositories
         if isinstance(data, dict):
@@ -83,11 +94,25 @@ def create_repository(
             model_instance = data
         return self.add(model_instance, **kwargs)
 
-    # Choose the right create method based on repository type
+    # Sync version of create_many
+    def create_many_sync(self: Any, data: "list[Any]", **kwargs: Any) -> "list[Any]":
+        # Convert dict items to model instances
+        model_instances = []
+        for item in data:
+            if isinstance(item, dict):
+                model_instances.append(model_type(**item))
+            else:
+                model_instances.append(item)
+        return self.add_many(model_instances, **kwargs)  # type: ignore[no-any-return]
+
+    # Choose the right create methods based on repository type
     create_method = create if isinstance(session, AsyncSession) else create_sync
+    create_many_method = create_many if isinstance(session, AsyncSession) else create_many_sync
 
     DynamicRepository = type(
-        repository_class_name, (base_repository_class,), {"model_type": model_type, "create": create_method}
+        repository_class_name,
+        (base_repository_class,),
+        {"model_type": model_type, "create": create_method, "create_many": create_many_method},
     )
 
     return DynamicRepository(session=session)
@@ -324,6 +349,70 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
     assert updated_author.name != original_name
 
 
+async def test_repo_update_many_method_stale_data_fix(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test repository update_many returns refreshed data from database (Issue #1)."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+
+    # Get first two authors
+    authors = await maybe_async(author_repo.list())
+    authors = authors[:2]
+
+    # Create update data that only updates name, leaving other fields unchanged
+    update_data = [{"id": authors[0].id, "name": "Updated Author 1"}, {"id": authors[1].id, "name": "Updated Author 2"}]
+
+    # Store original created_at/updated_at for comparison
+    original_created_at = authors[0].created_at
+    original_updated_at = authors[0].updated_at
+
+    # Update using update_many
+    updated_authors = await maybe_async(author_repo.update_many(update_data))
+
+    # Critical test: returned objects should have ALL attributes populated from database
+    # This was the bug - returned objects had None for non-updated fields
+    assert len(updated_authors) == 2
+    for updated_author in updated_authors:
+        # These should be updated
+        assert updated_author.name in ["Updated Author 1", "Updated Author 2"]
+
+        # These should still be populated from database (not None)
+        assert updated_author.created_at is not None
+        assert updated_author.updated_at is not None
+        assert updated_author.id is not None
+
+        # updated_at should be newer than before
+        if updated_author.id == authors[0].id:
+            assert updated_author.created_at == original_created_at
+            assert updated_author.updated_at >= original_updated_at
+
+
+async def test_repo_update_many_mixed_types(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
+    """Test repository update_many with mixed input types (dicts and model instances)."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+
+    # Get authors to update
+    authors = await maybe_async(author_repo.list())
+    authors = authors[:2]
+
+    # Test mixed input types: dict and model instance
+    authors[1].name = "Updated via Model Instance"
+    update_data = [
+        {"id": authors[0].id, "name": "Updated via Dict"},  # Dict
+        authors[1],  # Model instance
+    ]
+
+    # This should not raise AttributeError (Issue #3)
+    updated_authors = await maybe_async(author_repo.update_many(update_data))
+
+    assert len(updated_authors) == 2
+    updated_names = {author.name for author in updated_authors}
+    assert "Updated via Dict" in updated_names
+    assert "Updated via Model Instance" in updated_names
+
+
 async def test_repo_delete_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository delete method."""
     session, models = seeded_test_session_async
@@ -507,3 +596,238 @@ async def test_repo_error_messages(seeded_test_session_async: "tuple[AsyncSessio
 
     with pytest.raises(NotFoundError):
         await maybe_async(author_repo.get(non_existent_id))
+
+
+# Comprehensive tests for GitHub issue #535 and bug_fix.md issues
+async def test_service_pydantic_partial_update_github_535(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service update with Pydantic models using exclude_unset for partial updates (GitHub Issue #535)."""
+    pydantic = pytest.importorskip("pydantic")
+
+    session, models = seeded_test_session_async
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    # Create an author
+    author = await maybe_async(author_service.create({"name": "Original Name", "dob": datetime.date(1990, 1, 1)}))
+    original_dob = author.dob
+
+    # Create a Pydantic model for partial update with optional fields
+    class AuthorUpdateSchema(pydantic.BaseModel):  # type: ignore[name-defined,misc]
+        name: "Optional[str]" = None
+        dob: "Optional[datetime.date]" = None
+
+    # Partial update with only name field set (dob is unset)
+    partial_update = AuthorUpdateSchema(name="Updated Name")
+    assert partial_update.name == "Updated Name"
+    assert "dob" not in partial_update.model_fields_set
+
+    # Update via service - should only update name, leave dob unchanged
+    updated_author = await maybe_async(author_service.update(partial_update, item_id=author.id))
+
+    # Verify: name was updated, but dob remains unchanged
+    assert updated_author.name == "Updated Name"
+    assert updated_author.dob == original_dob  # Should be unchanged
+    assert updated_author.id == author.id
+
+
+async def test_service_msgspec_partial_update_github_535(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service update with msgspec structs using UNSET for partial updates (GitHub Issue #535)."""
+    msgspec = pytest.importorskip("msgspec")
+
+    session, models = seeded_test_session_async
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    # Create an author
+    author = await maybe_async(author_service.create({"name": "Original Name", "dob": datetime.date(1990, 1, 1)}))
+    original_dob = author.dob
+
+    # Create a msgspec struct for partial update with UNSET field
+    class AuthorUpdateSchema(msgspec.Struct):  # type: ignore[name-defined,misc]
+        name: "str" = msgspec.UNSET
+        dob: "datetime.date" = msgspec.UNSET
+
+    # Partial update with only name field set (dob is UNSET)
+    partial_update = AuthorUpdateSchema(name="Updated Name")
+    assert partial_update.name == "Updated Name"
+    assert partial_update.dob is msgspec.UNSET
+
+    # Update via service - should only update name, leave dob unchanged
+    updated_author = await maybe_async(author_service.update(partial_update, item_id=author.id))
+
+    # Verify: name was updated, but dob remains unchanged
+    assert updated_author.name == "Updated Name"
+    assert updated_author.dob == original_dob  # Should be unchanged
+    assert updated_author.id == author.id
+
+
+async def test_service_update_many_schema_types_github_535(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service update_many with different schema types (GitHub Issue #535)."""
+    pydantic = pytest.importorskip("pydantic")
+    msgspec = pytest.importorskip("msgspec")
+
+    session, models = seeded_test_session_async
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    # Create multiple authors
+    author1 = await maybe_async(author_service.create({"name": "Author One", "dob": datetime.date(1990, 1, 1)}))
+    author2 = await maybe_async(author_service.create({"name": "Author Two", "dob": datetime.date(1991, 2, 2)}))
+
+    original_dob1 = author1.dob
+    original_dob2 = author2.dob
+
+    # Get ID type from model for dynamic schema creation
+    # For Pydantic compatibility, we need to map database-specific types to Python types
+    from uuid import UUID as PythonUUID
+
+    actual_id_type = type(author1.id)
+    if hasattr(actual_id_type, "__name__") and "UUID" in actual_id_type.__name__:
+        id_type = PythonUUID  # Use standard UUID for database UUID types
+    else:
+        id_type = int  # type: ignore[assignment]
+
+    class AuthorUpdateSchema(pydantic.BaseModel):  # type: ignore[name-defined,misc]
+        id: id_type  # type: ignore[valid-type]
+        name: "Optional[str]" = None
+        dob: "Optional[datetime.date]" = None
+
+    # Create msgspec schema for partial updates
+    class AuthorUpdateMsgspecSchema(msgspec.Struct):  # type: ignore[name-defined,misc]
+        id: id_type  # type: ignore[valid-type]
+        name: "str" = msgspec.UNSET
+        dob: "datetime.date" = msgspec.UNSET
+
+    # Test update_many with mixed schema types (Pydantic, msgspec, dict)
+    update_data = [
+        AuthorUpdateSchema(id=author1.id, name="Updated Author One"),  # Pydantic with UNSET dob
+        AuthorUpdateMsgspecSchema(id=author2.id, name="Updated Author Two"),  # msgspec with UNSET dob
+    ]
+
+    # Update via service - should only update names, leave dobs unchanged
+    updated_authors = await maybe_async(author_service.update_many(update_data))
+
+    # Verify updates
+    assert len(updated_authors) == 2
+
+    # Find updated authors by ID
+    updated_author1 = next(a for a in updated_authors if a.id == author1.id)
+    updated_author2 = next(a for a in updated_authors if a.id == author2.id)
+
+    # Verify: names were updated, but dobs remain unchanged
+    assert updated_author1.name == "Updated Author One"
+    assert updated_author1.dob == original_dob1  # Should be unchanged
+
+    assert updated_author2.name == "Updated Author Two"
+    assert updated_author2.dob == original_dob2  # Should be unchanged
+
+
+async def test_repo_update_many_non_returning_backend_refresh(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test repository update_many refreshes data on non-RETURNING backends (Issue #1 from bug_fix.md)."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+
+    # Create multiple authors
+    authors = await maybe_async(
+        author_repo.create_many(
+            [
+                {"name": "Author A", "dob": datetime.date(1990, 1, 1)},
+                {"name": "Author B", "dob": datetime.date(1991, 2, 2)},
+            ]
+        )
+    )
+
+    # Prepare update data with partial changes
+    update_data = [
+        {"id": authors[0].id, "name": "Updated Author A"},  # Only updating name
+        {"id": authors[1].id, "name": "Updated Author B"},  # Only updating name
+    ]
+
+    # Update via repository
+    updated_authors = await maybe_async(author_repo.update_many(update_data))
+
+    # Verify returned objects have ALL attributes populated (not just updated ones)
+    assert len(updated_authors) == 2
+
+    for updated_author in updated_authors:
+        # Verify all attributes are populated from database, not just updated ones
+        assert updated_author.name is not None and "Updated" in updated_author.name
+        assert updated_author.dob is not None  # Should be populated from database, not None
+        assert updated_author.id is not None
+        assert updated_author.created_at is not None  # Audit fields should be populated
+        assert updated_author.updated_at is not None
+
+
+async def test_service_mixed_input_types_update_many(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service update_many with mixed input types (dicts, Pydantic models, msgspec structs)."""
+    pydantic = pytest.importorskip("pydantic")
+    msgspec = pytest.importorskip("msgspec")
+
+    session, models = seeded_test_session_async
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    # Create multiple authors
+    authors = await maybe_async(
+        author_service.create_many(
+            [
+                {"name": "Author 1", "dob": datetime.date(1990, 1, 1)},
+                {"name": "Author 2", "dob": datetime.date(1991, 2, 2)},
+                {"name": "Author 3", "dob": datetime.date(1992, 3, 3)},
+            ]
+        )
+    )
+
+    # Get ID type from model for dynamic schema creation
+    # For Pydantic compatibility, we need to map database-specific types to Python types
+    from uuid import UUID as PythonUUID
+
+    actual_id_type = type(authors[0].id)
+    if hasattr(actual_id_type, "__name__") and "UUID" in actual_id_type.__name__:
+        id_type = PythonUUID  # Use standard UUID for database UUID types
+    else:
+        id_type = int  # type: ignore[assignment]
+
+    # Create schema classes
+    class AuthorUpdatePydantic(pydantic.BaseModel):  # type: ignore[name-defined,misc]
+        id: id_type  # type: ignore[valid-type]
+        name: "Optional[str]" = None
+        dob: "Optional[datetime.date]" = None
+
+    class AuthorUpdateMsgspec(msgspec.Struct):  # type: ignore[name-defined,misc]
+        id: id_type  # type: ignore[valid-type]
+        name: "str" = msgspec.UNSET
+        dob: "datetime.date" = msgspec.UNSET
+
+    # Test with mixed input types
+    mixed_update_data = [
+        {"id": authors[0].id, "name": "Dict Updated"},  # Dictionary
+        AuthorUpdatePydantic(id=authors[1].id, name="Pydantic Updated"),  # Pydantic model
+        AuthorUpdateMsgspec(id=authors[2].id, name="Msgspec Updated"),  # msgspec struct
+    ]
+
+    # Update via service
+    updated_authors = await maybe_async(author_service.update_many(mixed_update_data))
+
+    # Verify all updates worked correctly
+    assert len(updated_authors) == 3
+
+    # Create a mapping by ID for verification
+    updated_by_id = {author.id: author for author in updated_authors}
+
+    # Verify each update matches the expected result
+    assert updated_by_id[authors[0].id].name == "Dict Updated"
+    assert updated_by_id[authors[1].id].name == "Pydantic Updated"
+    assert updated_by_id[authors[2].id].name == "Msgspec Updated"
+
+    # Verify all attributes are properly populated (not stale/None)
+    for author in updated_authors:
+        assert author.dob is not None
+        assert author.created_at is not None
+        assert author.updated_at is not None
