@@ -2295,10 +2295,9 @@ class SQLAlchemyAsyncQueryRepository:
             session: Session managing the unit-of-work for the operation.
             error_messages: A set of error messages to use for operations.
             wrap_exceptions: Whether to wrap exceptions in a SQLAlchemy exception.
-            **kwargs: Additional arguments.
+            **kwargs: Additional arguments (ignored).
 
         """
-        super().__init__(**kwargs)
         self.session = session
         self.error_messages = error_messages
         self.wrap_exceptions = wrap_exceptions

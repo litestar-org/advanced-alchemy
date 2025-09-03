@@ -275,3 +275,73 @@ async def test_async_fixture_and_query(async_engine: AsyncEngine, sqlquery_test_
         )
         assert not is_msgspec_struct_without_field(_msgspec_obj, "state_abbreviation")
         assert _get_one_or_none is None
+
+
+@pytest.mark.xdist_group("sqlquery")
+async def test_async_query_repository_instantiation(async_engine: AsyncEngine) -> None:
+    """Test that SQLAlchemyAsyncQueryRepository can be instantiated without super().__init__() error."""
+    from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
+
+    async with AsyncSession(async_engine) as session:
+        # Test direct instantiation - this should not raise TypeError
+        repository = SQLAlchemyAsyncQueryRepository(session=session)
+        assert repository is not None
+        assert repository.session == session
+        assert repository.error_messages is None
+        assert repository.wrap_exceptions is True
+
+        # Test with optional parameters
+        repository_with_params = SQLAlchemyAsyncQueryRepository(
+            session=session, error_messages={"not_found": "Custom not found"}, wrap_exceptions=False
+        )
+        assert repository_with_params.session == session
+        assert repository_with_params.error_messages == {"not_found": "Custom not found"}
+        assert repository_with_params.wrap_exceptions is False
+
+
+@pytest.mark.xdist_group("sqlquery")
+def test_sync_query_repository_instantiation(engine: Engine) -> None:
+    """Test that SQLAlchemySyncQueryRepository can be instantiated without super().__init__() error."""
+    from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
+
+    with Session(engine) as session:
+        # Test direct instantiation - this should not raise TypeError
+        repository = SQLAlchemySyncQueryRepository(session=session)
+        assert repository is not None
+        assert repository.session == session
+        assert repository.error_messages is None
+        assert repository.wrap_exceptions is True
+
+        # Test with optional parameters
+        repository_with_params = SQLAlchemySyncQueryRepository(
+            session=session, error_messages={"not_found": "Custom not found"}, wrap_exceptions=False
+        )
+        assert repository_with_params.session == session
+        assert repository_with_params.error_messages == {"not_found": "Custom not found"}
+        assert repository_with_params.wrap_exceptions is False
+
+
+@pytest.mark.xdist_group("sqlquery")
+async def test_async_query_service_with_repository_instantiation(async_engine: AsyncEngine) -> None:
+    """Test that SQLAlchemyAsyncQueryService using the repository works correctly."""
+    from advanced_alchemy.service import SQLAlchemyAsyncQueryService
+
+    async with AsyncSession(async_engine) as session:
+        # This should not raise TypeError when creating the repository internally
+        query_service = SQLAlchemyAsyncQueryService(session=session)
+        assert query_service is not None
+        assert query_service.repository is not None
+        assert query_service.repository.session == session
+
+
+@pytest.mark.xdist_group("sqlquery")
+def test_sync_query_service_with_repository_instantiation(engine: Engine) -> None:
+    """Test that SQLAlchemySyncQueryService using the repository works correctly."""
+    from advanced_alchemy.service import SQLAlchemySyncQueryService
+
+    with Session(engine) as session:
+        # This should not raise TypeError when creating the repository internally
+        query_service = SQLAlchemySyncQueryService(session=session)
+        assert query_service is not None
+        assert query_service.repository is not None
+        assert query_service.repository.session == session
