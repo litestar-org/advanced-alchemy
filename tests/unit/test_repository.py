@@ -1320,6 +1320,60 @@ def test_column_with_empty_string_default() -> None:
     assert column_has_defaults(mock_column) is True
 
 
+def test_column_property_label_object() -> None:
+    """Test column_property Label objects return False for column_has_defaults."""
+    from sqlalchemy.sql.elements import Label
+
+    # Create a Label object similar to what column_property creates
+    mock_label = MagicMock(spec=Label)
+
+    # Label objects don't have default/onupdate attributes, but if they did,
+    # they would raise AttributeError when accessed
+    assert column_has_defaults(mock_label) is False
+
+
+def test_column_property_with_real_label() -> None:
+    """Test column_has_defaults with an actual Label object from SQLAlchemy."""
+    from sqlalchemy import literal_column
+    from sqlalchemy.sql.elements import Label
+
+    # Create a real Label object like column_property would create
+    label_obj = literal_column("test_value").label("test_column")  # type: ignore[var-annotated]
+    assert isinstance(label_obj, Label)
+
+    # This should return False and not raise AttributeError
+    assert column_has_defaults(label_obj) is False
+
+
+def test_column_object_without_default_attributes() -> None:
+    """Test column_has_defaults with object missing some attributes."""
+
+    # Create an object that only has some of the expected attributes
+    class PartialColumn:
+        def __init__(self) -> None:
+            self.default = "test_default"
+            # Missing server_default, onupdate, server_onupdate attributes
+
+    partial_column = PartialColumn()
+
+    # Should return True based on the default attribute, even though others are missing
+    assert column_has_defaults(partial_column) is True
+
+
+def test_column_object_with_no_default_attributes() -> None:
+    """Test column_has_defaults with object missing all attributes."""
+
+    # Create an object that has none of the expected attributes
+    class MinimalColumn:
+        def __init__(self) -> None:
+            self.name = "test_column"
+
+    minimal_column = MinimalColumn()
+
+    # Should return False since no default attributes are present
+    assert column_has_defaults(minimal_column) is False
+
+
 def test_model_from_dict_includes_relationship_attributes() -> None:
     """Test that model_from_dict includes relationship attributes from __mapper__.attrs.keys()."""
     from tests.fixtures.uuid.models import UUIDAuthor

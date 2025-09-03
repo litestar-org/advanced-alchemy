@@ -22,6 +22,7 @@ from sqlalchemy.orm.strategy_options import (
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.elements import Label
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.base import ModelProtocol
@@ -356,9 +357,14 @@ def column_has_defaults(column: Any) -> bool:
     Returns:
         bool: True if the column has any type of default or update handler
     """
+    # Label objects (from column_property) don't have default/onupdate attributes
+    # Return False for these as they represent computed values, not defaulted columns
+    if isinstance(column, Label):
+        return False
+    # Use defensive attribute checking for safety with other column-like objects
     return (
-        column.default is not None
-        or column.server_default is not None
-        or column.onupdate is not None
-        or column.server_onupdate is not None
+        getattr(column, "default", None) is not None
+        or getattr(column, "server_default", None) is not None
+        or getattr(column, "onupdate", None) is not None
+        or getattr(column, "server_onupdate", None) is not None
     )
