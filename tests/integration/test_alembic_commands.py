@@ -7,6 +7,7 @@ from uuid import UUID
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
+from alembic.util.exc import CommandError
 from pytest import CaptureFixture, FixtureRequest
 from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, ForeignKey, String
@@ -17,7 +18,6 @@ from advanced_alchemy import base
 from advanced_alchemy.alembic import commands
 from advanced_alchemy.alembic.utils import drop_all, dump_tables
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-from alembic.util.exc import CommandError
 from tests.fixtures.uuid import models as models_uuid
 from tests.helpers import maybe_async
 

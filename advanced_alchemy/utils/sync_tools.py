@@ -1,17 +1,19 @@
+# ruff: noqa: PYI036, SLF001, ARG001
+"""Utilities for async/sync interoperability in SQLSpec.
+
+This module provides utilities for converting between async and sync functions,
+managing concurrency limits, and handling context managers. Used primarily
+for adapter implementations that need to support both sync and async patterns.
+"""
+
 import asyncio
+import concurrent.futures
 import functools
 import inspect
 import sys
+import threading
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Generic,
-    Optional,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union, cast
 
 from typing_extensions import ParamSpec
 
@@ -22,7 +24,37 @@ if TYPE_CHECKING:
 try:
     import uvloop  # pyright: ignore[reportMissingImports]
 except ImportError:
-    uvloop = None  # type: ignore[assignment]
+    uvloop = None  # type: ignore[assignment,unused-ignore]
+
+
+class _ThreadLocalState:
+    """Thread-local state for tracking context manager state.
+
+    Uses typed attributes instead of dynamic attribute access for MyPyC compatibility.
+    """
+
+    __slots__ = ("in_thread_consistent_context",)
+
+    def __init__(self) -> None:
+        self.in_thread_consistent_context: bool = False
+
+
+# Thread-local storage to track when we're in a thread-consistent context
+_thread_local = threading.local()
+
+
+def _get_thread_state() -> _ThreadLocalState:
+    """Get or create thread-local state.
+
+    Returns:
+        Thread-local state object with typed attributes.
+    """
+    try:
+        return _thread_local.state  # type: ignore[no-any-return]
+    except AttributeError:
+        state = _ThreadLocalState()
+        _thread_local.state = state
+        return state
 
 
 ReturnT = TypeVar("ReturnT")
@@ -30,35 +62,63 @@ ParamSpecT = ParamSpec("ParamSpecT")
 T = TypeVar("T")
 
 
+class NoValue:
+    """Sentinel class for missing values."""
+
+
+NO_VALUE = NoValue()
+
+
 class CapacityLimiter:
     """Limits the number of concurrent operations using a semaphore."""
 
     def __init__(self, total_tokens: int) -> None:
-        self._semaphore = asyncio.Semaphore(total_tokens)
+        """Initialize the capacity limiter.
+
+        Args:
+            total_tokens: Maximum number of concurrent operations allowed
+        """
+        self._total_tokens = total_tokens
+        self._semaphore_instance: Optional[asyncio.Semaphore] = None
+
+    @property
+    def _semaphore(self) -> asyncio.Semaphore:
+        """Lazy initialization of asyncio.Semaphore for Python 3.9 compatibility."""
+        if self._semaphore_instance is None:
+            self._semaphore_instance = asyncio.Semaphore(self._total_tokens)
+        return self._semaphore_instance
 
     async def acquire(self) -> None:
+        """Acquire a token from the semaphore."""
         await self._semaphore.acquire()
 
     def release(self) -> None:
+        """Release a token back to the semaphore."""
         self._semaphore.release()
 
     @property
     def total_tokens(self) -> int:
-        return self._semaphore._value  # noqa: SLF001
+        """Get the number of tokens currently available."""
+        if self._semaphore_instance is None:
+            return self._total_tokens
+        return self._semaphore_instance._value
 
     @total_tokens.setter
     def total_tokens(self, value: int) -> None:
-        self._semaphore = asyncio.Semaphore(value)
+        self._total_tokens = value
+        self._semaphore_instance = None
 
     async def __aenter__(self) -> None:
+        """Async context manager entry."""
         await self.acquire()
 
     async def __aexit__(
         self,
-        exc_type: "Optional[type[BaseException]]",  # noqa: PYI036
-        exc_val: "Optional[BaseException]",  # noqa: PYI036
-        exc_tb: "Optional[TracebackType]",  # noqa: PYI036
+        exc_type: "Optional[type[BaseException]]",
+        exc_val: "Optional[BaseException]",
+        exc_tb: "Optional[TracebackType]",
     ) -> None:
+        """Async context manager exit."""
         self.release()
 
 
@@ -69,11 +129,10 @@ def run_(async_function: "Callable[ParamSpecT, Coroutine[Any, Any, ReturnT]]") -
     """Convert an async function to a blocking function using asyncio.run().
 
     Args:
-        async_function (Callable): The async function to convert.
+        async_function: The async function to convert.
 
     Returns:
-        Callable: A blocking function that runs the async function.
-
+        A blocking function that runs the async function.
     """
 
     @functools.wraps(async_function)
@@ -85,9 +144,14 @@ def run_(async_function: "Callable[ParamSpecT, Coroutine[Any, Any, ReturnT]]") -
             loop = None
 
         if loop is not None:
-            # Running in an existing event loop
-            return asyncio.run(partial_f())
-        # Create a new event loop and run the function
+            if loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, partial_f())
+                    return future.result()
+            else:
+                return asyncio.run(partial_f())
         if uvloop and sys.platform != "win32":
             uvloop.install()  # pyright: ignore[reportUnknownMemberType]
         return asyncio.run(partial_f())
@@ -96,18 +160,17 @@ def run_(async_function: "Callable[ParamSpecT, Coroutine[Any, Any, ReturnT]]") -
 
 
 def await_(
-    async_function: "Callable[ParamSpecT, Coroutine[Any, Any, ReturnT]]",
-    raise_sync_error: bool = True,
+    async_function: "Callable[ParamSpecT, Coroutine[Any, Any, ReturnT]]", raise_sync_error: bool = True
 ) -> "Callable[ParamSpecT, ReturnT]":
     """Convert an async function to a blocking one, running in the main async loop.
 
     Args:
-        async_function (Callable): The async function to convert.
-        raise_sync_error (bool, optional): If False, runs in a new event loop if no loop is present.
-                                         If True (default), raises RuntimeError if no loop is running.
+        async_function: The async function to convert.
+        raise_sync_error: If False, runs in a new event loop if no loop is present.
+                         If True (default), raises RuntimeError if no loop is running.
 
     Returns:
-        Callable: A blocking function that runs the async function.
+        A blocking function that runs the async function.
     """
 
     @functools.wraps(async_function)
@@ -116,63 +179,51 @@ def await_(
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # No running event loop
             if raise_sync_error:
                 msg = "await_ called without a running event loop and raise_sync_error=True"
                 raise RuntimeError(msg) from None
             return asyncio.run(partial_f())
         else:
-            # Running in an existing event loop.
             if loop.is_running():
                 try:
-                    # Check if the current context is within a task managed by this loop
                     current_task = asyncio.current_task(loop=loop)
                 except RuntimeError:
-                    # Not running inside a task managed by this loop
                     current_task = None
 
                 if current_task is not None:
-                    # Called from within the event loop's execution context (a task).
-                    # Blocking here would deadlock the loop.
-                    msg = "await_ cannot be called from within an async task running on the same event loop. Use 'await' instead."
-                    raise RuntimeError(msg)
-                # Called from a different thread than the loop's thread.
-                # It's safe to block this thread and wait for the loop.
+                    # This is a workaround for sync-over-async calls from within a running loop.
+                    # It creates a future and then manually drives the event loop
+                    # until that future is resolved. This is not ideal and uses a
+                    # private API (`_run_once`), but it avoids deadlocking the loop.
+                    task = asyncio.ensure_future(partial_f(), loop=loop)
+                    while not task.done() and loop.is_running():
+                        loop._run_once()  # type: ignore[attr-defined]
+                    return task.result()
                 future = asyncio.run_coroutine_threadsafe(partial_f(), loop)
-                # This blocks the *calling* thread, not the loop thread.
                 return future.result()
-            # This case should ideally not happen if get_running_loop() succeeded
-            # but the loop isn't running, but handle defensively.
-            # loop is not running
             if raise_sync_error:
                 msg = "await_ found a non-running loop via get_running_loop()"
                 raise RuntimeError(msg)
-            # Fallback to running in a new loop
             return asyncio.run(partial_f())
 
     return wrapper
 
 
 def async_(
-    function: "Callable[ParamSpecT, ReturnT]",
-    *,
-    limiter: "Optional[CapacityLimiter]" = None,
+    function: "Callable[ParamSpecT, ReturnT]", *, limiter: "Optional[CapacityLimiter]" = None
 ) -> "Callable[ParamSpecT, Awaitable[ReturnT]]":
     """Convert a blocking function to an async one using asyncio.to_thread().
 
     Args:
-        function (Callable): The blocking function to convert.
-        cancellable (bool, optional): Allow cancellation of the operation.
-        limiter (CapacityLimiter, optional): Limit the total number of threads.
+        function: The blocking function to convert.
+        limiter: Limit the total number of threads.
 
     Returns:
-        Callable: An async function that runs the original function in a thread.
+        An async function that runs the original function in a thread.
     """
 
-    async def wrapper(
-        *args: "ParamSpecT.args",
-        **kwargs: "ParamSpecT.kwargs",
-    ) -> "ReturnT":
+    @functools.wraps(function)
+    async def wrapper(*args: "ParamSpecT.args", **kwargs: "ParamSpecT.kwargs") -> "ReturnT":
         partial_f = functools.partial(function, *args, **kwargs)
         used_limiter = limiter or _default_limiter
         async with used_limiter:
@@ -187,19 +238,31 @@ def ensure_async_(
     """Convert a function to an async one if it is not already.
 
     Args:
-        function (Callable): The function to convert.
+        function: The function to convert.
 
     Returns:
-        Callable: An async function that runs the original function.
+        An async function that runs the original function.
     """
     if inspect.iscoroutinefunction(function):
         return function
 
+    @functools.wraps(function)
     async def wrapper(*args: "ParamSpecT.args", **kwargs: "ParamSpecT.kwargs") -> "ReturnT":
         result = function(*args, **kwargs)
         if inspect.isawaitable(result):
             return await result
-        return await async_(lambda: result)()
+        # Check if we're in an async context already
+        try:
+            # If we can get the current event loop, we're in async context
+            _ = asyncio.get_running_loop()
+            state = _get_thread_state()
+            if state.in_thread_consistent_context:
+                return result
+
+        except RuntimeError:
+            # No event loop, need to run in thread
+            return await async_(lambda: result)()
+        return result
 
     return wrapper
 
@@ -207,17 +270,51 @@ def ensure_async_(
 class _ContextManagerWrapper(Generic[T]):
     def __init__(self, cm: AbstractContextManager[T]) -> None:
         self._cm = cm
+        self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
 
     async def __aenter__(self) -> T:
-        return self._cm.__enter__()
+        # Use a single thread executor to ensure same thread for enter/exit
+
+        loop = asyncio.get_running_loop()
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        def _enter_with_flag() -> T:
+            # Set thread-local flag to indicate we're in a thread-consistent context
+            state = _get_thread_state()
+            state.in_thread_consistent_context = True
+            return self._cm.__enter__()
+
+        future = loop.run_in_executor(self._executor, _enter_with_flag)
+        return await future
 
     async def __aexit__(
         self,
-        exc_type: "Optional[type[BaseException]]",  # noqa: PYI036
-        exc_val: "Optional[BaseException]",  # noqa: PYI036
-        exc_tb: "Optional[TracebackType]",  # noqa: PYI036
+        exc_type: "Optional[type[BaseException]]",
+        exc_val: "Optional[BaseException]",
+        exc_tb: "Optional[TracebackType]",
     ) -> "Optional[bool]":
-        return self._cm.__exit__(exc_type, exc_val, exc_tb)
+        # Use the same executor to ensure same thread
+        if self._executor is None:
+            # Fallback to any thread if executor wasn't created
+            return await asyncio.to_thread(self._cm.__exit__, exc_type, exc_val, exc_tb)
+
+        loop = asyncio.get_running_loop()
+        try:
+
+            def _exit_with_flag_clear() -> "Optional[bool]":
+                try:
+                    return self._cm.__exit__(exc_type, exc_val, exc_tb)
+                finally:
+                    # Clear thread-local flag when exiting
+                    state = _get_thread_state()
+                    state.in_thread_consistent_context = False
+
+            future = loop.run_in_executor(self._executor, _exit_with_flag_clear)
+            return await future
+        finally:
+            # Clean up the executor
+            self._executor.shutdown(wait=False)
+            self._executor = None
 
 
 def with_ensure_async_(
@@ -226,12 +323,36 @@ def with_ensure_async_(
     """Convert a context manager to an async one if it is not already.
 
     Args:
-        obj (AbstractContextManager[T] or AbstractAsyncContextManager[T]): The context manager to convert.
+        obj: The context manager to convert.
 
     Returns:
-        AbstractAsyncContextManager[T]: An async context manager that runs the original context manager.
+        An async context manager that runs the original context manager.
     """
-
     if isinstance(obj, AbstractContextManager):
         return cast("AbstractAsyncContextManager[T]", _ContextManagerWrapper(obj))
     return obj
+
+
+async def get_next(iterable: Any, default: Any = NO_VALUE, *args: Any) -> Any:  # pragma: no cover
+    """Return the next item from an async iterator.
+
+    Args:
+        iterable: An async iterable.
+        default: An optional default value to return if the iterable is empty.
+        *args: The remaining args
+
+    Returns:
+        The next value of the iterable.
+
+    Raises:
+        StopAsyncIteration: The iterable given is not async.
+    """
+    has_default = bool(not isinstance(default, NoValue))
+    try:
+        return await iterable.__anext__()
+
+    except StopAsyncIteration as exc:
+        if has_default:
+            return default
+
+        raise StopAsyncIteration from exc

@@ -112,7 +112,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self.uniquify = bool(uniquify)
 
     def __init_subclass__(cls) -> None:
-        cls.__database_registry__[cls] = cls.__database__  # pyright: ignore[reportGeneralTypeIssues,reportUnknownMemberType]
+        cls.__database_registry__[cls] = cls.__database__  # type: ignore[index]
 
     @staticmethod
     def _get_error_messages(
@@ -131,7 +131,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
 
     @classmethod
     def __database_add__(cls, identity: Any, data: ModelT) -> ModelT:
-        return cast("ModelT", cls.__database__.add(identity, data))  # pyright: ignore[reportUnnecessaryCast,reportGeneralTypeIssues]
+        return cast("ModelT", cls.__database__.add(identity, data))  # type: ignore[redundant-cast]
 
     @classmethod
     def __database_clear__(cls) -> None:

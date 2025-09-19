@@ -447,7 +447,7 @@ async def test_repo_health_check(seeded_test_session_async: "tuple[AsyncSession,
 # Service tests using new session-based pattern
 async def test_service_count_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service count method."""
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     count = await maybe_async(author_service.count())
@@ -456,7 +456,7 @@ async def test_service_count_method(seeded_test_session_async: "tuple[AsyncSessi
 
 async def test_service_list_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service list method."""
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     authors = await maybe_async(author_service.list())
@@ -465,7 +465,7 @@ async def test_service_list_method(seeded_test_session_async: "tuple[AsyncSessio
 
 async def test_service_get_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service get method."""
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Get first author ID
@@ -478,7 +478,7 @@ async def test_service_get_method(seeded_test_session_async: "tuple[AsyncSession
 
 async def test_service_create_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service create method."""
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     new_author_data = {"name": "Service Test Author", "dob": datetime.datetime.now(datetime.timezone.utc).date()}
@@ -490,7 +490,7 @@ async def test_service_create_method(seeded_test_session_async: "tuple[AsyncSess
 
 async def test_service_update_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service update method."""
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Get first author
@@ -507,7 +507,7 @@ async def test_service_update_method(seeded_test_session_async: "tuple[AsyncSess
 
 async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service delete method."""
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Get first author
@@ -572,7 +572,7 @@ async def test_service_paginated_list(seeded_test_session_async: "tuple[AsyncSes
     """Test service paginated list."""
     from advanced_alchemy.filters import LimitOffset
 
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Test pagination using LimitOffset filter with consistent ordering
@@ -605,7 +605,7 @@ async def test_service_pydantic_partial_update_github_535(
     """Test service update with Pydantic models using exclude_unset for partial updates (GitHub Issue #535)."""
     pydantic = pytest.importorskip("pydantic")
 
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create an author
@@ -637,7 +637,7 @@ async def test_service_msgspec_partial_update_github_535(
     """Test service update with msgspec structs using UNSET for partial updates (GitHub Issue #535)."""
     msgspec = pytest.importorskip("msgspec")
 
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create an author
@@ -670,7 +670,7 @@ async def test_service_update_many_schema_types_github_535(
     pydantic = pytest.importorskip("pydantic")
     msgspec = pytest.importorskip("msgspec")
 
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create multiple authors
@@ -770,7 +770,7 @@ async def test_service_mixed_input_types_update_many(
     pydantic = pytest.importorskip("pydantic")
     msgspec = pytest.importorskip("msgspec")
 
-    session, models = seeded_test_session_async
+    _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create multiple authors

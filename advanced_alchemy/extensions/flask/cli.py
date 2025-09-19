@@ -50,7 +50,7 @@ def database_group() -> None:
     This command group provides database management commands like migrations.
     """
 
-    ctx = click.get_current_context()
+    ctx = cast("click.Context", click.get_current_context())
     app = ctx.obj.load_app()
     ctx.obj = {"app": app, "configs": get_database_migration_plugin(app).config}
 

@@ -108,13 +108,9 @@ async def test_run_with_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("asyncio.get_running_loop", lambda: DummyLoop())
 
-    # Suppress the expected warning about unawaited coroutine
-    import warnings
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine .* was never awaited")
-        with pytest.raises(Exception):
-            sync_func(1)
+    # The new implementation should handle running loops correctly using ThreadPoolExecutor
+    result = sync_func(1)
+    assert result == 2
 
 
 def test_run_with_uvloop(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,7 +135,7 @@ def test_await_no_loop_raises() -> None:
     orig = asyncio.get_running_loop
     asyncio.get_running_loop = lambda: (_ for _ in ()).throw(RuntimeError())
     try:
-        with pytest.raises(RuntimeError, match="await_ called without a running event loop"):
+        with pytest.raises(RuntimeError, match="await_ called without a running event loop and raise_sync_error=True"):
             sync_func(1)
     finally:
         asyncio.get_running_loop = orig
@@ -154,20 +150,46 @@ def test_await_in_async_task(monkeypatch: pytest.MonkeyPatch) -> None:
     sync_func = await_(async_func, raise_sync_error=True)
 
     class DummyLoop:
+        def __init__(self) -> None:
+            self.running = True
+
         def is_running(self) -> bool:
-            return True
+            return self.running
+
+        def _run_once(self) -> None:
+            # Simulate loop iteration
+            self.running = False
 
     class DummyTask:
         pass
 
-    monkeypatch.setattr("asyncio.get_running_loop", lambda: DummyLoop())
+    class DummyFuture:
+        def __init__(self) -> None:
+            self._done = False
+            self._result = 4
+
+        def done(self) -> bool:
+            return self._done
+
+        def result(self) -> int:
+            self._done = True
+            return self._result
+
+    loop = DummyLoop()
+    monkeypatch.setattr("asyncio.get_running_loop", lambda: loop)
 
     def dummy_current_task(loop: Optional[object] = None) -> DummyTask:
         return DummyTask()
 
+    def dummy_ensure_future(coro: object, loop: object = None) -> DummyFuture:
+        return DummyFuture()
+
     monkeypatch.setattr("asyncio.current_task", dummy_current_task)
-    with pytest.raises(RuntimeError, match="await_ cannot be called from within an async task"):
-        sync_func(1)
+    monkeypatch.setattr("asyncio.ensure_future", dummy_ensure_future)
+
+    # The new implementation uses _run_once() workaround and should succeed
+    result = sync_func(1)
+    assert result == 4
 
 
 def test_await_non_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -181,7 +203,7 @@ def test_await_non_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
             return False
 
     monkeypatch.setattr("asyncio.get_running_loop", lambda: DummyLoop())
-    with pytest.raises(RuntimeError, match="await_ found a non-running loop"):
+    with pytest.raises(RuntimeError, match="await_ found a non-running loop via get_running_loop"):
         sync_func(1)
 
 

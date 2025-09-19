@@ -1,12 +1,12 @@
 import asyncio
 from typing import TYPE_CHECKING, cast
 
+from alembic.autogenerate import rewriter
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 
 from advanced_alchemy.base import metadata_registry
 from alembic import context
-from alembic.autogenerate import rewriter
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
