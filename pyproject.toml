@@ -132,7 +132,6 @@ lint = [
   "types-python-dateutil",
   "types-pytz",
   "types-ujson",
-  "types-passlib",
   "types-cryptography",
   "types-passlib",
 ]

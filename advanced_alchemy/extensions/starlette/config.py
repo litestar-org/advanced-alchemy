@@ -29,6 +29,24 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
+try:
+    from fastapi_cli.utils.cli import get_rich_toolkit
+
+    _has_rich_toolkit = True
+except ImportError:
+    from click import echo
+
+    _has_rich_toolkit = False
+
+
+def _echo(message: str) -> None:
+    """Echo a message using either rich toolkit or click echo."""
+    if _has_rich_toolkit:
+        with get_rich_toolkit() as toolkit:  # pyright: ignore[reportPossiblyUnboundVariable]
+            toolkit.print(message, tag="INFO")
+    else:
+        echo(message)
+
 
 def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cover
     """Generates a unique state key for the Starlette application.
@@ -116,9 +134,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 )
                 await conn.commit()
             except OperationalError as exc:
-                echo(f" * Could not create target metadata. Reason: {exc}")
+                _echo(f"Could not create target metadata. Reason: {exc}")
             else:
-                echo(" * Created target metadata.")
+                _echo("Created target metadata.")
 
     def init_app(self, app: "Starlette") -> None:
         """Initialize the Starlette application with this configuration.
@@ -259,7 +277,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                     metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all, conn
                 )
             except OperationalError as exc:
-                echo(f" * Could not create target metadata. Reason: {exc}")
+                _echo(f"Could not create target metadata. Reason: {exc}")
 
     def init_app(self, app: "Starlette") -> None:
         """Initialize the Starlette application with this configuration.
