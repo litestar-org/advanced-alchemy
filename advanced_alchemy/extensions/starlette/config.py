@@ -6,9 +6,9 @@ including both synchronous and asynchronous database configurations.
 
 import contextlib
 from dataclasses import dataclass, field
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from click import echo
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -28,6 +28,22 @@ if TYPE_CHECKING:
     from starlette.middleware.base import RequestResponseEndpoint
     from starlette.requests import Request
     from starlette.responses import Response
+
+
+FASTAPI_CLI_INSTALLED = bool(find_spec("fastapi_cli"))
+
+
+def _echo(message: str) -> None:  # pragma: no cover
+    """Echo a message using either rich toolkit or click echo."""
+    if FASTAPI_CLI_INSTALLED:
+        from fastapi_cli.utils.cli import get_rich_toolkit
+
+        with get_rich_toolkit() as toolkit:
+            toolkit.print(message, tag="INFO")
+    else:
+        from click import echo
+
+        echo(message)
 
 
 def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cover
@@ -116,9 +132,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 )
                 await conn.commit()
             except OperationalError as exc:
-                echo(f" * Could not create target metadata. Reason: {exc}")
+                _echo(f" * Could not create target metadata. Reason: {exc}")
             else:
-                echo(" * Created target metadata.")
+                _echo(" * Created target metadata.")
 
     def init_app(self, app: "Starlette") -> None:
         """Initialize the Starlette application with this configuration.
@@ -259,7 +275,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                     metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all, conn
                 )
             except OperationalError as exc:
-                echo(f" * Could not create target metadata. Reason: {exc}")
+                _echo(f" * Could not create target metadata. Reason: {exc}")
 
     def init_app(self, app: "Starlette") -> None:
         """Initialize the Starlette application with this configuration.
