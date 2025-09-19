@@ -6,9 +6,9 @@ including both synchronous and asynchronous database configurations.
 
 import contextlib
 from dataclasses import dataclass, field
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from click import echo
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -29,22 +29,20 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-try:
-    from fastapi_cli.utils.cli import get_rich_toolkit
 
-    _has_rich_toolkit = True
-except ImportError:
-    from click import echo
-
-    _has_rich_toolkit = False
+FASTAPI_CLI_INSTALLED = bool(find_spec("fastapi_cli"))
 
 
 def _echo(message: str) -> None:
     """Echo a message using either rich toolkit or click echo."""
-    if _has_rich_toolkit:
+    if FASTAPI_CLI_INSTALLED:
+        from fastapi_cli.utils.cli import get_rich_toolkit
+
         with get_rich_toolkit() as toolkit:  # pyright: ignore[reportPossiblyUnboundVariable]
             toolkit.print(message, tag="INFO")
     else:
+        from click import echo
+
         echo(message)
 
 
