@@ -160,6 +160,26 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
 def duckdb_engine(
     tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
 ) -> Generator[Engine, None, None]:
+    # Workaround for DuckDB 1.4.0 unhashable DuckDBPyType
+    # This is fixed in DuckDB 1.4.1 - can be removed once that's released
+    # See: https://github.com/Mause/duckdb_engine/issues/1338
+    try:
+        import duckdb
+
+        if hasattr(duckdb, "__version__") and duckdb.__version__.startswith("1.4.0"):
+            from _duckdb import typing as duckdb_typing
+
+            if hasattr(duckdb_typing, "DuckDBPyType"):
+                # Test if the existing __hash__ method works
+                try:
+                    test_type = duckdb_typing.DuckDBPyType("INTEGER")
+                    hash(test_type)
+                except TypeError:
+                    # Replace the broken __hash__ method with a working one
+                    duckdb_typing.DuckDBPyType.__hash__ = lambda self: hash(str(self))
+    except ImportError:
+        pass
+
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
     tmp_path = tmp_path_factory.mktemp(f"duckdb_{worker_id}")
     engine = create_engine(f"duckdb:///{tmp_path}/test.duck.db", poolclass=NullPool)
