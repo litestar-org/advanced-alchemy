@@ -38,7 +38,7 @@ def _echo(message: str) -> None:  # pragma: no cover
     if FASTAPI_CLI_INSTALLED:
         from fastapi_cli.utils.cli import get_rich_toolkit
 
-        with get_rich_toolkit() as toolkit:  # pyright: ignore[reportPossiblyUnboundVariable]
+        with get_rich_toolkit() as toolkit:
             toolkit.print(message, tag="INFO")
     else:
         from click import echo
