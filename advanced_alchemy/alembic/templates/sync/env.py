@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING, cast
 
+from alembic.autogenerate import rewriter
 from sqlalchemy import Engine, engine_from_config, pool
 
 from advanced_alchemy.base import metadata_registry
 from alembic import context
-from alembic.autogenerate import rewriter
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection

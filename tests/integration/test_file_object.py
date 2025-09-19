@@ -1377,7 +1377,7 @@ def test_file_object_save_no_data(storage_registry: StorageRegistry) -> None:
     obj = FileObject(backend=backend, filename="test.txt")
 
     # Saving with no data should raise a TypeError
-    with pytest.raises(TypeError, match="No data provided and no pending content/path found to save."):
+    with pytest.raises(TypeError, match=r"No data provided and no pending content/path found to save."):
         obj.save()
 
 
@@ -1390,7 +1390,7 @@ async def test_file_object_save_async_no_data(storage_registry: StorageRegistry)
     obj = FileObject(backend=backend, filename="test.txt")
 
     # Saving with no data should raise a TypeError
-    with pytest.raises(TypeError, match="No data provided and no pending content/path found to save."):
+    with pytest.raises(TypeError, match=r"No data provided and no pending content/path found to save."):
         await obj.save_async()
 
 

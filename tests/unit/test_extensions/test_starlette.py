@@ -467,7 +467,7 @@ def test_multiple_instances(app: Starlette) -> None:
         session_2 = alchemy_1.get_async_session(request, key="other")
         engine_2 = alchemy_1.get_async_engine(key="other")
         assert session_1 is not session_2  # type: ignore
-        assert engine_1 is not engine_2
+        assert engine_1 is not engine_2  # type: ignore
         mock(session=session_1, engine=engine_1)
         mock(session=session_2, engine=engine_2)
         return Response(status_code=200)
@@ -477,7 +477,7 @@ def test_multiple_instances(app: Starlette) -> None:
     with TestClient(app=app) as client:
         client.get("/")
 
-        assert alchemy_1.get_sync_engine() is not alchemy_1.get_async_engine("other")
+        assert alchemy_1.get_sync_engine() is not alchemy_1.get_async_engine("other")  # type: ignore
 
 
 async def test_lifespan_startup_shutdown_called_starlette(

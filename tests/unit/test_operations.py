@@ -226,7 +226,7 @@ class TestIdentifierValidation:
         ]
 
         for name in invalid_names:
-            with pytest.raises(ValueError, match="Invalid.*Only alphanumeric"):
+            with pytest.raises(ValueError, match=r"Invalid.*Only alphanumeric"):
                 validate_identifier(name)
 
     def test_sql_keywords_allowed(self) -> None:

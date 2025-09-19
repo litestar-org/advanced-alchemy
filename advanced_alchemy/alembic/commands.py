@@ -2,11 +2,12 @@ import inspect  # Added import
 import sys
 from typing import TYPE_CHECKING, Any, Optional, TextIO, Union
 
+from alembic.config import Config as _AlembicCommandConfig
+from alembic.ddl.impl import DefaultImpl
+
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from alembic import command as migration_command
-from alembic.config import Config as _AlembicCommandConfig
-from alembic.ddl.impl import DefaultImpl
 
 if TYPE_CHECKING:
     import os
@@ -14,12 +15,12 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from alembic.runtime.environment import ProcessRevisionDirectiveFn
+    from alembic.script.base import Script
     from sqlalchemy import Engine
     from sqlalchemy.ext.asyncio import AsyncEngine
 
     from advanced_alchemy.config.sync import SQLAlchemySyncConfig
-    from alembic.runtime.environment import ProcessRevisionDirectiveFn
-    from alembic.script.base import Script
 
 
 class AlembicSpannerImpl(DefaultImpl):
