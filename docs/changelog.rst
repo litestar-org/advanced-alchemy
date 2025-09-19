@@ -3,6 +3,35 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.6.3
+    :date: 2025-09-19
+
+    .. change:: additional update and update_many corrections.
+        :type: bugfix
+        :pr: 537
+        :issue: 464, 535
+
+        Updates `update` and `update_many` to properly handle relationships and returning support.
+
+    .. change:: TypeError when initializing SQLAlchemyAsyncQueryRepository
+        :type: bugfix
+        :pr: 538
+        :issue: 534
+
+        Corrects a TypeError reported from the init method of `SQLAlchemyAsyncQueryRepository`
+
+    .. change:: property correction
+        :type: bugfix
+        :pr: 539
+
+        Property correction for updates
+
+    .. change:: improve `sync_tools` thread handling and update dependencies
+        :type: bugfix
+        :pr: 545
+
+        Enhance thread management in `sync_tools` to improve performance and reliability.
+
 .. changelog:: 1.6.2
     :date: 2025-08-29
 
