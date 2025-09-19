@@ -44,7 +44,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.6.2"
+version = "1.6.3"
 
 [project.urls]
 Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
@@ -132,7 +132,6 @@ lint = [
   "types-python-dateutil",
   "types-pytz",
   "types-ujson",
-  "types-passlib",
   "types-cryptography",
   "types-passlib",
 ]
@@ -171,7 +170,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.6.2"
+current_version = "1.6.3"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"

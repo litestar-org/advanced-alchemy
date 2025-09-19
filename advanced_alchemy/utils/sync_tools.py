@@ -1,5 +1,5 @@
 # ruff: noqa: PYI036, SLF001, ARG001
-"""Utilities for async/sync interoperability in SQLSpec.
+"""Utilities for async/sync interoperability in Advanced Alchemy.
 
 This module provides utilities for converting between async and sync functions,
 managing concurrency limits, and handling context managers. Used primarily
