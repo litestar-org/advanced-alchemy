@@ -164,10 +164,10 @@ def duckdb_engine(
     # This is fixed in DuckDB 1.4.1 - can be removed once that's released
     # See: https://github.com/Mause/duckdb_engine/issues/1338
     try:
-        import duckdb
+        import duckdb  # type: ignore[import-untyped]
 
         if hasattr(duckdb, "__version__") and duckdb.__version__.startswith("1.4.0"):
-            from _duckdb import typing as duckdb_typing
+            from _duckdb import typing as duckdb_typing  # type: ignore[import-not-found]
 
             if hasattr(duckdb_typing, "DuckDBPyType"):
                 # Test if the existing __hash__ method works
