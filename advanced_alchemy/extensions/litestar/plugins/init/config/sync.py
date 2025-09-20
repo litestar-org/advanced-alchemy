@@ -54,9 +54,6 @@ def default_handler_maker(
         Args:
             message: ASGI-``Message``
             scope: An ASGI-``Scope``
-
-        Returns:
-            None
         """
         session = cast("Optional[Session]", get_aa_scope_state(scope, session_scope_key))
         if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
