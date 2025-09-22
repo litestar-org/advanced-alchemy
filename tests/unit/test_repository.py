@@ -1647,3 +1647,65 @@ def test_update_many_data_conversion_handles_mixed_types() -> None:
     assert isinstance(data_to_update[1], dict)  # Dict passed through
     assert data_to_update[0]["name"] == "Test Author"
     assert data_to_update[1]["name"] == "Dict Author"
+
+
+def test_compare_values_handles_numpy_arrays() -> None:
+    """Test that compare_values properly handles numpy arrays.
+
+    This is a regression test for the issue where comparing numpy arrays
+    (like pgvector's Vector type) would raise:
+    ValueError: The truth value of an array with more than one element is ambiguous
+    """
+    from advanced_alchemy.repository._util import compare_values
+
+    # Test with regular values (should work as before)
+    assert compare_values("same", "same") is True
+    assert compare_values("different", "other") is False
+    assert compare_values(None, None) is True
+    assert compare_values(None, "value") is False
+    assert compare_values("value", None) is False
+
+    # Test with mock numpy arrays (when numpy is not installed)
+    class MockNumpyArray:
+        """Mock numpy array for testing when numpy is not available."""
+
+        def __init__(self, data: list[float]) -> None:
+            self.data = data
+            self.dtype = "float64"  # Required for is_numpy_array detection
+
+        def __array__(self) -> list[float]:
+            """Required for is_numpy_array detection."""
+            return self.data
+
+        def __eq__(self, other: object) -> list[bool]:  # type: ignore[override]
+            """Simulate numpy's element-wise comparison that causes the issue."""
+            if isinstance(other, MockNumpyArray):
+                return [a == b for a, b in zip(self.data, other.data)]
+            return [False] * len(self.data)
+
+    # Create mock arrays
+    array1 = MockNumpyArray([1.0, 2.0, 3.0])
+    array2 = MockNumpyArray([1.0, 2.0, 3.0])  # Same data
+    array3 = MockNumpyArray([4.0, 5.0, 6.0])  # Different data
+
+    # Test array comparisons (these would previously raise ValueError)
+    # Without numpy installed, arrays_equal_stub returns False (safe fallback)
+    result_same = compare_values(array1, array2)
+    result_different = compare_values(array1, array3)
+    result_mixed = compare_values(array1, "not_an_array")
+
+    # When numpy is not installed, the stub returns False for safety
+    # This may cause unnecessary updates but prevents crashes
+    assert isinstance(result_same, bool)  # Should not raise ValueError
+    assert isinstance(result_different, bool)  # Should not raise ValueError
+    assert result_mixed is False  # Array vs non-array is always False
+
+    # Test with values that would cause comparison errors
+    class ProblematicValue:
+        def __eq__(self, other: object) -> None:  # type: ignore[override]
+            raise TypeError("Cannot compare")
+
+    problematic = ProblematicValue()
+    # Should handle comparison errors gracefully
+    assert compare_values(problematic, "other") is False
+    assert compare_values("other", problematic) is False

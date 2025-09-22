@@ -34,6 +34,7 @@ from advanced_alchemy.filters import (
     StatementFilter,
     StatementTypeT,
 )
+from advanced_alchemy.repository._typing import arrays_equal, is_numpy_array
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 
 WhereClauseT = ColumnExpressionArgument[bool]
@@ -368,3 +369,39 @@ def column_has_defaults(column: Any) -> bool:
         or getattr(column, "onupdate", None) is not None
         or getattr(column, "server_onupdate", None) is not None
     )
+
+
+def compare_values(existing_value: Any, new_value: Any) -> bool:
+    """Safely compare two values, handling numpy arrays and other special types.
+
+    This function handles the comparison of values that may include numpy arrays
+    (such as pgvector's Vector type) which cannot be directly compared using
+    standard equality operators due to their element-wise comparison behavior.
+
+    Args:
+        existing_value: The current value to compare.
+        new_value: The new value to compare against.
+
+    Returns:
+        bool: True if values are equal, False otherwise.
+    """
+    # Handle None comparisons
+    if existing_value is None and new_value is None:
+        return True
+    if existing_value is None or new_value is None:
+        return False
+
+    # Handle numpy arrays or array-like objects
+    if is_numpy_array(existing_value) or is_numpy_array(new_value):
+        # Both values must be arrays for them to be considered equal
+        if not (is_numpy_array(existing_value) and is_numpy_array(new_value)):
+            return False
+        return arrays_equal(existing_value, new_value)
+
+    # Standard equality comparison for all other types
+    try:
+        return bool(existing_value == new_value)
+    except (ValueError, TypeError):
+        # If comparison fails for any reason, consider them different
+        # This is a safe fallback that will trigger updates when unsure
+        return False

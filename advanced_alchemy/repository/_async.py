@@ -49,6 +49,7 @@ from advanced_alchemy.repository._util import (
     FilterableRepositoryProtocol,
     LoadSpec,
     column_has_defaults,
+    compare_values,
     get_abstract_loader_options,
     get_instrumented_attr,
 )
@@ -1293,7 +1294,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             if upsert:
                 for field_name, new_field_value in kwargs.items():
                     field = getattr(existing, field_name, MISSING)
-                    if field is not MISSING and field != new_field_value:
+                    if field is not MISSING and not compare_values(field, new_field_value):
                         setattr(existing, field_name, new_field_value)
                 existing = await self._attach_to_session(existing, strategy="merge")
                 await self._flush_or_commit(auto_commit=auto_commit)
@@ -1367,7 +1368,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             updated = False
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and field != new_field_value:
+                if field is not MISSING and not compare_values(field, new_field_value):
                     updated = True
                     setattr(existing, field_name, new_field_value)
             existing = await self._attach_to_session(existing, strategy="merge")
@@ -1502,7 +1503,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                             if new_field_value is None and column_has_defaults(column):
                                 continue
                             existing_field_value = getattr(existing_instance, field_name, MISSING)
-                            if existing_field_value is not MISSING and existing_field_value != new_field_value:
+                            if existing_field_value is not MISSING and not compare_values(
+                                existing_field_value, new_field_value
+                            ):
                                 setattr(existing_instance, field_name, new_field_value)
 
                     # Handle relationships by merging objects into session first
@@ -1940,7 +1943,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         ):
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and field != new_field_value:
+                if field is not MISSING and not compare_values(field, new_field_value):
                     setattr(existing, field_name, new_field_value)
             instance = await self._attach_to_session(existing, strategy="merge")
             await self._flush_or_commit(auto_commit=auto_commit)
