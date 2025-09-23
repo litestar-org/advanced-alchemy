@@ -385,7 +385,7 @@ async def test_repo_update_many_method_stale_data_fix(
         # updated_at should be newer than before
         if updated_author.id == authors[0].id:
             assert updated_author.created_at == original_created_at
-            assert updated_author.updated_at >= original_updated_at
+            assert updated_author.updated_at > original_updated_at
 
 
 async def test_repo_update_many_mixed_types(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
