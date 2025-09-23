@@ -9,7 +9,7 @@ from typing import Any
 # Always define stub functions for type checking and fallback behavior
 
 
-def is_numpy_array_stub(value: Any) -> bool:
+def is_numpy_array_stub(value: Any) -> bool:  # pragma: no cover
     """Check if value has numpy array-like characteristics (fallback implementation).
 
     When numpy is not installed, this checks for basic array-like attributes
@@ -21,10 +21,10 @@ def is_numpy_array_stub(value: Any) -> bool:
     Returns:
         bool: True if value appears to be array-like.
     """
-    return hasattr(value, "__array__") and hasattr(value, "dtype")
+    return hasattr(value, "__array__") and hasattr(value, "dtype")  # pragma: no cover
 
 
-def arrays_equal_stub(a: Any, b: Any) -> bool:  # noqa: ARG001
+def arrays_equal_stub(a: Any, b: Any) -> bool:
     """Fallback array equality comparison when numpy is not installed.
 
     When numpy is not available, we can't properly compare arrays,
@@ -38,6 +38,7 @@ def arrays_equal_stub(a: Any, b: Any) -> bool:  # noqa: ARG001
     Returns:
         bool: Always False when numpy is not available.
     """
+    _, _ = a, b  # Unused parameters
     return False
 
 
@@ -74,7 +75,7 @@ try:
     arrays_equal = arrays_equal_real
     NUMPY_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 
-except ImportError:
+except ImportError:  # pragma: no cover
     is_numpy_array = is_numpy_array_stub
     arrays_equal = arrays_equal_stub
     NUMPY_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]

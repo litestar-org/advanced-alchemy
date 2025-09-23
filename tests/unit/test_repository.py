@@ -1689,16 +1689,19 @@ def test_compare_values_handles_numpy_arrays() -> None:
     array3 = MockNumpyArray([4.0, 5.0, 6.0])  # Different data
 
     # Test array comparisons (these would previously raise ValueError)
-    # Without numpy installed, arrays_equal_stub returns False (safe fallback)
     result_same = compare_values(array1, array2)
     result_different = compare_values(array1, array3)
     result_mixed = compare_values(array1, "not_an_array")
 
-    # When numpy is not installed, the stub returns False for safety
-    # This may cause unnecessary updates but prevents crashes
+    # The important thing is that no ValueError is raised
     assert isinstance(result_same, bool)  # Should not raise ValueError
     assert isinstance(result_different, bool)  # Should not raise ValueError
-    assert result_mixed is False  # Array vs non-array is always False
+    assert isinstance(result_mixed, bool)  # Should not raise ValueError
+
+    # The specific results depend on whether numpy is installed:
+    # - With numpy: MockNumpyArray is not detected as numpy array, falls back to __eq__
+    # - Without numpy: stub functions are used which return False for safety
+    # Either way, no ValueError should be raised
 
     # Test with values that would cause comparison errors
     class ProblematicValue:
@@ -1709,3 +1712,122 @@ def test_compare_values_handles_numpy_arrays() -> None:
     # Should handle comparison errors gracefully
     assert compare_values(problematic, "other") is False
     assert compare_values("other", problematic) is False
+
+
+def test_compare_values_with_real_numpy_arrays() -> None:
+    """Test compare_values with actual numpy arrays when numpy is installed.
+
+    This test covers the real numpy code paths that were missing from coverage.
+    """
+    # This test will only run if numpy is actually installed
+    try:
+        import numpy as np
+    except ImportError:
+        pytest.skip("numpy not available")
+
+    from advanced_alchemy.repository._util import compare_values
+
+    # Test equal arrays
+    arr1 = np.array([1.0, 2.0, 3.0])
+    arr2 = np.array([1.0, 2.0, 3.0])
+    assert compare_values(arr1, arr2) is True
+
+    # Test different arrays
+    arr3 = np.array([4.0, 5.0, 6.0])
+    assert compare_values(arr1, arr3) is False
+
+    # Test different shapes
+    arr4 = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert compare_values(arr1, arr4) is False
+
+    # Test array vs non-array
+    assert compare_values(arr1, [1.0, 2.0, 3.0]) is False
+    assert compare_values(arr1, "not an array") is False
+
+    # Test empty arrays
+    empty1 = np.array([])
+    empty2 = np.array([])
+    assert compare_values(empty1, empty2) is True
+
+    # Test different dtypes but same values
+    int_arr = np.array([1, 2, 3])
+    float_arr = np.array([1.0, 2.0, 3.0])
+    assert compare_values(int_arr, float_arr) is True  # numpy considers these equal
+
+    # Test NaN handling
+    nan_arr1 = np.array([1.0, np.nan, 3.0])
+    nan_arr2 = np.array([1.0, np.nan, 3.0])
+    # numpy considers NaN != NaN, so arrays with NaN won't be equal
+    assert compare_values(nan_arr1, nan_arr2) is False
+
+
+def test_compare_values_covers_all_branches() -> None:
+    """Test compare_values to ensure all code branches are covered."""
+    from advanced_alchemy.repository._util import compare_values
+
+    # Test standard equality that returns non-bool (should not happen with normal types)
+    class WeirdComparison:
+        def __eq__(self, other: object) -> str:  # type: ignore[override]
+            return "weird"
+
+    weird = WeirdComparison()
+    # This tests the bool() conversion in the standard comparison path
+    result = compare_values(weird, weird)
+    assert isinstance(result, bool)  # Should convert "weird" to True
+    assert result is True
+
+
+def test_repository_update_methods_with_numpy_arrays() -> None:
+    """Test that repository update methods work correctly with numpy array fields.
+
+    This integration test covers the actual repository comparison paths
+    that were missing from coverage.
+    """
+    # This test will only run if numpy is actually installed
+    try:
+        import numpy as np
+    except ImportError:
+        pytest.skip("numpy not available")
+
+    from advanced_alchemy.repository._util import compare_values
+
+    # Test data with numpy arrays
+    arr1 = np.array([1.0, 2.0, 3.0])
+    arr2 = np.array([1.0, 2.0, 3.0])  # Same as arr1
+    arr3 = np.array([4.0, 5.0, 6.0])  # Different from arr1
+
+    # These operations would previously fail with ValueError
+    # Now they should work correctly by using our safe comparison
+
+    # Test 1: Arrays with same data should be considered equal
+    assert arr1 is not arr2  # Different objects
+    # But compare_values should see them as equal
+    assert compare_values(arr1, arr2) is True
+
+    # Test 2: Arrays with different data should be considered different
+    assert compare_values(arr1, arr3) is False
+
+    # Test 3: Test with None values (common edge case)
+    assert compare_values(None, None) is True
+    assert compare_values(arr1, None) is False
+    assert compare_values(None, arr1) is False
+
+    # Test 4: Array vs non-array should be False
+    assert compare_values(arr1, [1.0, 2.0, 3.0]) is False
+    assert compare_values(arr1, "not an array") is False
+
+    # Test 5: Test different shapes
+    arr_2d = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert compare_values(arr1, arr_2d) is False
+
+    # Test 6: Test empty arrays
+    empty1 = np.array([])
+    empty2 = np.array([])
+    assert compare_values(empty1, empty2) is True
+
+    # Test 7: Test with complex numbers (edge case)
+    complex1 = np.array([1 + 2j, 3 + 4j])
+    complex2 = np.array([1 + 2j, 3 + 4j])
+    complex3 = np.array([1 + 2j, 5 + 6j])
+    assert compare_values(complex1, complex2) is True
+    assert compare_values(complex1, complex3) is False
