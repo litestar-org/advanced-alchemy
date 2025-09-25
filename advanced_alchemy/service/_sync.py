@@ -472,6 +472,10 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 **asdict(data, filter=filter_unset),
             )
 
+        # Check if data is already an instance of the expected model type
+        if isinstance(data, self.model_type):
+            return cast("ModelT", data)
+
         # Fallback for objects with __dict__ (e.g., regular classes)
         if hasattr(data, "__dict__"):
             return model_from_dict(
