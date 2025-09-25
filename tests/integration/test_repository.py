@@ -339,7 +339,10 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
     # Get first author
     authors = await maybe_async(author_repo.list())
     author = authors[0]
+
     original_name = author.name
+    original_created_at = author.created_at
+    original_updated_at = author.updated_at
 
     # Update the author
     author.name = "Updated Name"
@@ -347,6 +350,8 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
 
     assert updated_author.name == "Updated Name"
     assert updated_author.name != original_name
+    assert updated_author.created_at == original_created_at
+    assert updated_author.updated_at > original_updated_at
 
 
 async def test_repo_update_many_method_stale_data_fix(
@@ -498,11 +503,18 @@ async def test_service_update_method(seeded_test_session_async: "tuple[AsyncSess
     author = authors[0]
     author_id = author.id
 
+    original_name = author.name
+    original_created_at = author.created_at
+    original_updated_at = author.updated_at
+
     # Update via service - correct parameter order is (data, item_id)
-    update_data = {"name": "Service Updated Name"}
-    updated_author = await maybe_async(author_service.update(update_data, item_id=author_id))
+    author.name = "Service Updated Name"
+    updated_author = await maybe_async(author_service.update(author, item_id=author_id))
 
     assert updated_author.name == "Service Updated Name"
+    assert updated_author.name != original_name
+    assert updated_author.created_at == original_created_at
+    assert updated_author.updated_at > original_updated_at
 
 
 async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
