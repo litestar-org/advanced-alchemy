@@ -38,8 +38,8 @@ def arrays_equal_stub(a: Any, b: Any) -> bool:
     Returns:
         bool: Always False when numpy is not available.
     """
-    _, _ = a, b  # Unused parameters
-    return False
+    _, _ = a, b  # Unused parameters  # pragma: no cover
+    return False  # pragma: no cover
 
 
 # Try to import real numpy implementation at runtime
