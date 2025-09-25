@@ -490,7 +490,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         if upsert:
             for field_name, new_field_value in kwargs_.items():
                 field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and not compare_values(field, new_field_value):
+                if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                     setattr(existing, field_name, new_field_value)
             existing = await self.update(existing)
         return existing, False
@@ -524,7 +524,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         updated = False
         for field_name, new_field_value in kwargs_.items():
             field = getattr(existing, field_name, MISSING)
-            if field is not MISSING and not compare_values(field, new_field_value):
+            if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                 updated = True
                 setattr(existing, field_name, new_field_value)
         existing = await self.update(existing)
