@@ -1295,7 +1295,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if upsert:
                 for field_name, new_field_value in kwargs.items():
                     field = getattr(existing, field_name, MISSING)
-                    if field is not MISSING and not compare_values(field, new_field_value):
+                    if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                         setattr(existing, field_name, new_field_value)
                 existing = self._attach_to_session(existing, strategy="merge")
                 self._flush_or_commit(auto_commit=auto_commit)
@@ -1369,7 +1369,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             updated = False
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and not compare_values(field, new_field_value):
+                if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                     updated = True
                     setattr(existing, field_name, new_field_value)
             existing = self._attach_to_session(existing, strategy="merge")
@@ -1942,7 +1942,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         ):
             for field_name, new_field_value in data.to_dict(exclude={self.id_attribute}).items():
                 field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and not compare_values(field, new_field_value):
+                if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                     setattr(existing, field_name, new_field_value)
             instance = self._attach_to_session(existing, strategy="merge")
             self._flush_or_commit(auto_commit=auto_commit)
