@@ -691,6 +691,10 @@ async def test_service_update_many_schema_types_github_535(
 
     original_dob1 = author1.dob
     original_dob2 = author2.dob
+    original_created_at1 = author1.created_at
+    original_created_at2 = author2.created_at
+    original_updated_at1 = author1.updated_at
+    original_updated_at2 = author2.updated_at
 
     # Get ID type from model for dynamic schema creation
     # For Pydantic compatibility, we need to map database-specific types to Python types
@@ -732,9 +736,13 @@ async def test_service_update_many_schema_types_github_535(
     # Verify: names were updated, but dobs remain unchanged
     assert updated_author1.name == "Updated Author One"
     assert updated_author1.dob == original_dob1  # Should be unchanged
+    assert updated_author1.created_at == original_created_at1
+    assert updated_author1.updated_at > original_updated_at1
 
     assert updated_author2.name == "Updated Author Two"
     assert updated_author2.dob == original_dob2  # Should be unchanged
+    assert updated_author2.created_at == original_created_at2
+    assert updated_author2.updated_at > original_updated_at2
 
 
 async def test_repo_update_many_non_returning_backend_refresh(
