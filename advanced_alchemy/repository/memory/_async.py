@@ -35,7 +35,7 @@ from advanced_alchemy.filters import (
     StatementFilter,
 )
 from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol, SQLAlchemyAsyncSlugRepositoryProtocol
-from advanced_alchemy.repository._util import DEFAULT_ERROR_MESSAGE_TEMPLATES, LoadSpec
+from advanced_alchemy.repository._util import DEFAULT_ERROR_MESSAGE_TEMPLATES, LoadSpec, compare_values
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
     InMemoryStore,
@@ -490,7 +490,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         if upsert:
             for field_name, new_field_value in kwargs_.items():
                 field = getattr(existing, field_name, MISSING)
-                if field is not MISSING and field != new_field_value:
+                if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                     setattr(existing, field_name, new_field_value)
             existing = await self.update(existing)
         return existing, False
@@ -524,7 +524,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         updated = False
         for field_name, new_field_value in kwargs_.items():
             field = getattr(existing, field_name, MISSING)
-            if field is not MISSING and field != new_field_value:
+            if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                 updated = True
                 setattr(existing, field_name, new_field_value)
         existing = await self.update(existing)

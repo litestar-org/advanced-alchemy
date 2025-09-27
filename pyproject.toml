@@ -148,6 +148,8 @@ test = [
   "cattrs",
   "dishka ; python_version >= \"3.10\"",
   "pydantic-extra-types",
+  "numpy",
+  "pgvector",
   "rich-click",
   "coverage>=7.6.1",
   "fsspec[s3]",
