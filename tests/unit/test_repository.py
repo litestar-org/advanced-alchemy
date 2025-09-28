@@ -1514,6 +1514,7 @@ async def test_update_skips_raise_lazy_relationships(
 
     mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
     mocker.patch.object(mock_repo, "get", return_value=existing_instance)
+    mocker.patch("advanced_alchemy.repository._sync.inspect", return_value=mock_mapper)
     mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_mapper)
     mock_repo.session.merge.return_value = existing_instance  # pyright: ignore[reportFunctionMemberAccess]
 
