@@ -6,7 +6,7 @@ import datetime
 import decimal
 from collections.abc import AsyncGenerator, Collection, Generator
 from typing import TYPE_CHECKING, Any, Union, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
 from uuid import uuid4
 
 import pytest
@@ -14,7 +14,7 @@ from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
 from sqlalchemy import Integer, String
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
 from sqlalchemy.types import TypeEngine
@@ -1509,8 +1509,8 @@ async def test_update_skips_raise_lazy_relationships(
     mock_mapper.mapper.columns = []
     mock_mapper.mapper.relationships = [mock_relationship]
 
-    # Mock the data object to have the raise relationship attribute
-    mock_instance.items = MagicMock()
+    # Mock the data object to raise an error when accessing the relationship
+    type(mock_instance).items = PropertyMock(side_effect=InvalidRequestError)
 
     mocker.patch.object(mock_repo, "get_id_attribute_value", return_value=id_)
     mocker.patch.object(mock_repo, "get", return_value=existing_instance)
