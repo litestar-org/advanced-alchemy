@@ -230,11 +230,13 @@ cat requirements/{slug}/prd.md
 **Docs & Vision agent MUST clean up after every `/review`:**
 
 1. **Remove all tmp/ directories:**
+
    ```bash
    find requirements/*/tmp -type d -exec rm -rf {} +
    ```
 
 2. **Archive completed requirement:**
+
    ```bash
    mv requirements/{requirement} requirements/archive/{requirement}
    echo "Archived on $(date)" > requirements/archive/{requirement}/ARCHIVED.txt
