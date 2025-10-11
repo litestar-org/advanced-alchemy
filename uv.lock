@@ -10,6 +10,18 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "accessible-pygments"
+version = "0.0.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bc/c1/bbac6a50d02774f91572938964c582fff4270eee73ab822a4aeea4d8b11b/accessible_pygments-0.0.5.tar.gz", hash = "sha256:40918d3e6a2b619ad424cb91e556bd3bd8865443d9f22f1dcdf79e33c8046872", size = 1377899, upload-time = "2024-05-10T11:23:10.216Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/3f/95338030883d8c8b91223b4e21744b04d11b161a3ef117295d8241f50ab4/accessible_pygments-0.0.5-py3-none-any.whl", hash = "sha256:88ae3211e68a1d0b011504b2ffc1691feafce124b845bd072ab6f9f66f34d4b7", size = 1395903, upload-time = "2024-05-10T11:23:08.421Z" },
+]
+
+[[package]]
 name = "advanced-alchemy"
 version = "1.6.3"
 source = { editable = "." }
@@ -58,6 +70,7 @@ cockroachdb = [
     { name = "sqlalchemy-cockroachdb" },
 ]
 dev = [
+    { name = "accessible-pygments" },
     { name = "aioodbc" },
     { name = "aiosqlite" },
     { name = "asgi-lifespan" },
@@ -146,6 +159,7 @@ dev = [
     { name = "types-ujson" },
 ]
 doc = [
+    { name = "accessible-pygments" },
     { name = "auto-pytabs", extra = ["sphinx"] },
     { name = "myst-parser", version = "3.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "myst-parser", version = "4.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -288,6 +302,7 @@ cockroachdb = [
     { name = "sqlalchemy-cockroachdb", specifier = ">=2.0.2" },
 ]
 dev = [
+    { name = "accessible-pygments", specifier = ">=0.0.5" },
     { name = "aioodbc", specifier = ">=0.5.0" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "asgi-lifespan" },
@@ -367,6 +382,7 @@ dev = [
     { name = "types-ujson" },
 ]
 doc = [
+    { name = "accessible-pygments", specifier = ">=0.0.5" },
     { name = "auto-pytabs", extras = ["sphinx"], specifier = ">=0.5.0" },
     { name = "myst-parser" },
     { name = "shibuya" },
@@ -1751,7 +1767,7 @@ name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/9f/a65090624ecf468cdca03533906e7c69ed7588582240cfe7cc9e770b50eb/exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88", size = 29749, upload-time = "2025-05-10T17:42:51.123Z" }
 wheels = [

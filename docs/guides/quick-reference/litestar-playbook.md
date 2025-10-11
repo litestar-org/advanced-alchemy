@@ -451,7 +451,7 @@ Working examples in [`examples/`](../../../examples/):
 - **[litestar_repo_only.py](../../../examples/litestar/litestar_repo_only.py)** - Repository without service
 - **[litestar_fileobject.py](../../../examples/litestar/litestar_fileobject.py)** - File storage
 - **[fastapi/](../../../examples/fastapi/)** - FastAPI integration
-- **[flask/](../../../examples/flask/)** - Flask integration
+- **[flask_services.py](../../../examples/flask/flask_services.py)** - Flask integration
 - **[sanic.py](../../../examples/sanic.py)** - Sanic integration
 - **[standalone.py](../../../examples/standalone.py)** - Without web framework
 

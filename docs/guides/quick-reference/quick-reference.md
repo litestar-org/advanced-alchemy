@@ -1,6 +1,6 @@
 # Quick Reference
 
-Advanced Alchemy patterns and code snippets. See [AGENTS.md](/home/cody/code/litestar/advanced-alchemy/AGENTS.md) for complete conventions.
+Advanced Alchemy patterns and code snippets. See [AGENTS.md](../../../AGENTS.md) for complete conventions.
 
 ## Service Patterns
 
