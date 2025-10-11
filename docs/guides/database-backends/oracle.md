@@ -10,7 +10,7 @@ Oracle Database driver configuration and Advanced Alchemy-specific patterns.
 uv add "oracledb>=2.4.1"
 ```
 
-Thin mode (no Oracle Client required) is recommended for most use cases.
+Thin mode requires no Oracle Client installation.
 
 ```python
 # Async
@@ -112,7 +112,7 @@ class User(UUIDAuditBase):
     email: "Mapped[str]" = mapped_column(String(255), unique=True)
 ```
 
-**UUID Primary Keys (Recommended for distributed systems):**
+**UUID Primary Keys:**
 
 ```python
 from advanced_alchemy.base import UUIDBase

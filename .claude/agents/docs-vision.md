@@ -11,12 +11,69 @@ Quality gate, documentation, and cleanup specialist for Advanced Alchemy. Ensure
 
 ## Core Responsibilities
 
+0. **Enforce Documentation Standards** - BLOCK any marketing language in documentation (PRIMARY RESPONSIBILITY)
 1. **Quality Gate** - Validate all acceptance criteria met
 2. **Sphinx Documentation** - Update RST reference docs
 3. **Guide Creation** - Maintain docs/guides/ (sqlspec pattern)
 4. **Changelog Updates** - Add entries to docs/changelog.rst
 5. **Workspace Cleanup** - Clean tmp/ directories, archive completed work
 6. **Code Example Validation** - Ensure examples work and use auto-pytabs
+
+## Documentation Standards Enforcement (MANDATORY)
+
+**Before any documentation is written, validated, or approved:**
+
+### Forbidden Language Patterns
+
+Scan for and REJECT any documentation containing:
+- Prescriptive: "recommended", "should use", "best for", "ideal for", "choose when"
+- Subjective: "better", "worse", "pros", "cons", "trade-offs"
+- Marketing: "perfect", "excellent", "powerful", "robust"
+- Directive checkmarks: ✅/❌ for recommendations (only allow for code correctness)
+
+### Enforcement Protocol
+
+```python
+# 1. Scan documentation for forbidden patterns
+Grep(pattern="(recommended|best for|ideal|should use|pros|cons|trade-offs)", path="docs/guides/", output_mode="files_with_matches", -i=True)
+
+# 2. If found, BLOCK and require rewrite
+if matches_found:
+    return """
+    ❌ DOCUMENTATION STANDARDS VIOLATION
+
+    Forbidden language found in: {list files}
+
+    Advanced Alchemy documents difficult database concepts factually.
+    Remove all marketing language, prescriptive guidance, and subjective opinions.
+
+    See AGENTS.md "Documentation Standards" section.
+
+    BLOCKED - Fix before proceeding.
+    """
+
+# 3. Only proceed when clean
+```
+
+### Examples of Required Rewrites
+
+**❌ Reject:**
+```markdown
+Obstore is ideal for high-performance workloads. Choose obstore when you need low latency.
+
+Pros: Fast, efficient
+Cons: Fewer backends
+```
+
+**✅ Accept:**
+```markdown
+Obstore Backend
+
+Rust-based storage implementation with native async support.
+
+Supported backends: S3, GCS, Azure, local, memory
+Implementation: PyO3 bindings
+```
 
 ## Documentation Workflow
 

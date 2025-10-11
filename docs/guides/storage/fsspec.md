@@ -1,6 +1,12 @@
-# FSSpec File Storage
+# FSSpec Storage Backend
 
-Using Advanced Alchemy's FileObject type with fsspec backends for local, S3, GCS, Azure, and more.
+Python-based storage backend with broad filesystem support.
+
+**Characteristics:**
+- Implementation: Pure Python
+- Async support: Via async wrappers
+- Supported backends: 50+ filesystems (S3, GCS, Azure, SFTP, HTTP, local, and more)
+- Ecosystem: Compatible with any fsspec-based filesystem
 
 ## Installation
 

@@ -1,6 +1,12 @@
-# Obstore File Storage
+# Obstore Storage Backend
 
-High-performance Rust-based file storage backend for Advanced Alchemy.
+Rust-based storage backend implementation.
+
+**Characteristics:**
+- Implementation: Rust via PyO3 bindings
+- Async support: Native async/await
+- Supported backends: S3, GCS, Azure, local filesystem, memory
+- Additional features: Native multipart upload, metadata support
 
 ## Installation
 
@@ -261,9 +267,9 @@ async def test_obstore_upload():
     await file_obj.delete_async()
 ```
 
-## Best Practices
+## Configuration Patterns
 
-### 1. Use Environment Variables
+### Environment Variables
 
 ```python
 import os
@@ -277,7 +283,7 @@ storages.register_backend(ObstoreBackend(
 ))
 ```
 
-### 2. Configure at Startup
+### Startup Configuration
 
 ```python
 from contextlib import asynccontextmanager
@@ -295,7 +301,7 @@ async def lifespan(app: Litestar):
 app = Litestar(route_handlers=[...], lifespan=[lifespan])
 ```
 
-### 3. Use Signed URLs for Direct Access
+### Signed URLs
 
 ```python
 # Generate signed URL for download
@@ -305,7 +311,7 @@ download_url = await file_obj.sign_async(expires_in=3600)
 upload_url = await file_obj.sign_async(expires_in=300, for_upload=True)
 ```
 
-### 4. Adjust Chunk Sizes
+### Chunk Size Configuration
 
 ```python
 # Small files (<10MB): disable multipart

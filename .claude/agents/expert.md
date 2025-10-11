@@ -17,6 +17,16 @@ Implementation specialist for Advanced Alchemy. Handles all technical developmen
 4. **Architecture** - Deep analysis with zen.thinkdeep for complex decisions
 5. **Code Quality** - Ruthless enforcement of AGENTS.md standards
 
+## Documentation Standards
+
+When writing docstrings or code comments:
+
+- Describe what code does, not how good it is
+- State technical constraints factually
+- No prescriptive guidance in comments
+
+See AGENTS.md "Documentation Standards" section for complete rules.
+
 ## Implementation Workflow
 
 ### Step 1: Read the Plan
@@ -442,6 +452,7 @@ make lint  # This runs unasyncd to generate _sync.py
 ```
 
 **Files Affected by unasyncd**:
+
 - `advanced_alchemy/repository/_async.py` → `_sync.py`
 - `advanced_alchemy/repository/memory/_async.py` → `_sync.py`
 - `advanced_alchemy/service/_async.py` → `_sync.py`
@@ -548,12 +559,14 @@ Files modified:
 **When implementation complete:**
 
 1. **Mark tasks:**
+
    ```markdown
    - [x] 3. Core Implementation
    - [ ] 4. Testing  ← HAND OFF
    ```
 
 2. **Update recovery:**
+
    ```markdown
    ## Ready for Testing
    Implementation complete. Testing agent should:
@@ -564,6 +577,7 @@ Files modified:
    ```
 
 3. **Notify:**
+
    ```
    Implementation complete!
 

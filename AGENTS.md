@@ -80,6 +80,19 @@ make docs-serve
 make docs-linkcheck
 ```
 
+### Documentation Standards
+
+**CRITICAL: Documentation is technical reference material, not marketing content.**
+
+Advanced Alchemy documents difficult database concepts factually. All documentation must:
+- State facts about capabilities, characteristics, and constraints
+- Provide objective code examples
+- Never prescribe what users "should" use
+- Never include "pros/cons" or "recommended for" language
+- Never use ✅/❌ for recommendations (only code correctness)
+
+See full "Documentation Standards" section at the end of this file for complete rules.
+
 ### Database Operations
 
 ```bash
@@ -948,6 +961,78 @@ git checkout main  # Can wipe user work!
 git checkout other-branch  # Can wipe user work!
 ```
 
+## Documentation Standards (Full)
+
+**CRITICAL: Documentation is technical reference material, not marketing content.**
+
+### ✅ ALWAYS DO
+
+- **Factual descriptions** - State what something does, not how good it is
+- **Objective characteristics** - Performance metrics, compatibility lists, feature sets
+- **Technical constraints** - Limitations, requirements, edge cases
+- **Code examples** - Working examples with proper context
+- **Error conditions** - What can go wrong and how to handle it
+
+### ❌ NEVER DO
+
+- **Prescriptive guidance** - "recommended", "best for", "ideal for", "should use"
+- **Subjective opinions** - "better", "worse", "perfect", "excellent"
+- **Marketing language** - "pros/cons", "trade-offs", persuasive comparisons
+- **Emoji indicators** - ✅/❌ for recommendations (OK for code correctness examples only)
+- **Use case prescription** - "Choose X when...", "Use Y for..."
+
+### Examples
+
+**❌ Bad (Marketing):**
+```markdown
+## When to Use Obstore
+
+Obstore is **ideal** for:
+- ✅ High-performance workloads
+- ✅ Latency-sensitive applications
+
+**Trade-offs:**
+- ✅ Pros: 10x faster
+- ❌ Cons: Fewer backends
+```
+
+**✅ Good (Technical):**
+```markdown
+## Obstore Backend
+
+Rust-based storage implementation.
+
+**Characteristics:**
+- Implementation: Native Rust via PyO3 bindings
+- Async support: Native async/await
+- Supported backends: S3, GCS, Azure, local, memory
+- Benchmarks: [link to objective performance data]
+```
+
+### Code Correctness Indicators
+
+✅/❌ are ONLY acceptable when showing code correctness:
+
+**✅ Acceptable:**
+```markdown
+# ✅ Correct - uses async context manager
+async with session.begin():
+    await repository.create(data)
+
+# ❌ Wrong - missing await
+async with session.begin():
+    repository.create(data)  # Bug!
+```
+
+**❌ Not acceptable:**
+```markdown
+# ✅ Recommended approach
+use_obstore_backend()
+
+# ❌ Slower alternative
+use_fsspec_backend()
+```
+
 ## Remember: Advanced Alchemy Conventions
 
 1. **NEVER change branches without explicit user permission** - Stay on current branch, use `gh` CLI for exploration
@@ -967,6 +1052,7 @@ git checkout other-branch  # Can wipe user work!
 15. **Edit async files only** - Sync files are auto-generated via `unasyncd`
 16. **Test with markers** - Use database-specific markers to avoid 20+ minute test runs
 17. **Use Advanced Alchemy imports for Litestar** - `from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin`, not `litestar.plugins.sqlalchemy`
+18. **No marketing in docs** - Document difficult database concepts factually, no fluff
 
 ## AI Agent System
 

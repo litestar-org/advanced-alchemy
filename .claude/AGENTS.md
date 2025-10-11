@@ -679,6 +679,78 @@ Read("requirements/archive/{requirement}/recovery.md")
 3. Only run full suite in CI or before final quality gate
 ```
 
+## Documentation Standards (Full)
+
+**CRITICAL: Documentation is technical reference material, not marketing content.**
+
+### ✅ ALWAYS DO
+
+- **Factual descriptions** - State what something does, not how good it is
+- **Objective characteristics** - Performance metrics, compatibility lists, feature sets
+- **Technical constraints** - Limitations, requirements, edge cases
+- **Code examples** - Working examples with proper context
+- **Error conditions** - What can go wrong and how to handle it
+
+### ❌ NEVER DO
+
+- **Prescriptive guidance** - "recommended", "best for", "ideal for", "should use"
+- **Subjective opinions** - "better", "worse", "perfect", "excellent"
+- **Marketing language** - "pros/cons", "trade-offs", persuasive comparisons
+- **Emoji indicators** - ✅/❌ for recommendations (OK for code correctness examples only)
+- **Use case prescription** - "Choose X when...", "Use Y for..."
+
+### Examples
+
+**❌ Bad (Marketing):**
+```markdown
+## When to Use Obstore
+
+Obstore is **ideal** for:
+- ✅ High-performance workloads
+- ✅ Latency-sensitive applications
+
+**Trade-offs:**
+- ✅ Pros: 10x faster
+- ❌ Cons: Fewer backends
+```
+
+**✅ Good (Technical):**
+```markdown
+## Obstore Backend
+
+Rust-based storage implementation.
+
+**Characteristics:**
+- Implementation: Native Rust via PyO3 bindings
+- Async support: Native async/await
+- Supported backends: S3, GCS, Azure, local, memory
+- Benchmarks: [link to objective performance data]
+```
+
+### Code Correctness Indicators
+
+✅/❌ are ONLY acceptable when showing code correctness:
+
+**✅ Acceptable:**
+```markdown
+# ✅ Correct - uses async context manager
+async with session.begin():
+    await repository.create(data)
+
+# ❌ Wrong - missing await
+async with session.begin():
+    repository.create(data)  # Bug!
+```
+
+**❌ Not acceptable:**
+```markdown
+# ✅ Recommended approach
+use_obstore_backend()
+
+# ❌ Slower alternative
+use_fsspec_backend()
+```
+
 ## Summary
 
 This agent system provides:

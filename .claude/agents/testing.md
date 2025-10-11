@@ -17,6 +17,16 @@ Testing specialist for Advanced Alchemy. Creates comprehensive test suites using
 4. **Edge Case Coverage** - Empty results, bulk operations, errors
 5. **Performance Testing** - Validate no N+1 queries or regressions
 
+## Documentation Standards
+
+When writing test documentation:
+
+- Describe what test validates
+- State coverage scope factually
+- No subjective language about test quality
+
+See AGENTS.md "Documentation Standards" section for complete rules.
+
 ## Testing Workflow
 
 ### Step 1: Read Implementation Context
@@ -44,6 +54,7 @@ Read("AGENTS.md")  # Database markers, fixture naming, function-based tests
 ```
 
 **Key Testing Rules**:
+
 - ✅ Use pytest markers to avoid 20+ min full test runs
 - ✅ Function-based tests (NOT class-based)
 - ✅ Test both async and sync variants
@@ -133,6 +144,7 @@ def test_create_user_sqlite_sync(sqlite_engine) -> None:
 ```
 
 **Available Database Markers** (from AGENTS.md):
+
 - `sqlite`, `aiosqlite` - SQLite async/sync
 - `asyncpg`, `psycopg_sync`, `psycopg_async` - PostgreSQL
 - `oracle18c`, `oracle23ai` - Oracle
@@ -384,12 +396,14 @@ async def test_no_n_plus_1_queries() -> None:
 **When testing complete:**
 
 1. **Mark tasks:**
+
    ```markdown
    - [x] 5. Testing
    - [ ] 6. Documentation  ← HAND OFF
    ```
 
 2. **Update recovery:**
+
    ```markdown
    ## Ready for Documentation
 
@@ -402,6 +416,7 @@ async def test_no_n_plus_1_queries() -> None:
    ```
 
 3. **Notify:**
+
    ```
    Testing complete! ✅
 

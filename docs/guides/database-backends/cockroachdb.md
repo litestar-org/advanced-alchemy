@@ -44,15 +44,15 @@ config = SQLAlchemySyncConfig(
 
 ## Advanced Alchemy-Specific Patterns
 
-### UUID Primary Keys (Strongly Recommended)
+### UUID Primary Keys
 
-CockroachDB **strongly recommends UUID primary keys** to avoid transaction contention hotspots:
+UUID primary keys avoid transaction contention hotspots in distributed systems:
 
 ```python
 from advanced_alchemy.base import UUIDAuditBase
 
 class User(UUIDAuditBase):
-    """Uses UUID primary key - recommended for CockroachDB."""
+    """Uses UUID primary key."""
 
     __tablename__ = "users"
 
@@ -60,10 +60,10 @@ class User(UUIDAuditBase):
     name: "Mapped[str]"
 ```
 
-**Why UUIDs?**
-- Avoids hotspots on sequential primary keys
-- Better distribution across nodes in distributed systems
-- No central counter coordination
+**UUID characteristics in CockroachDB:**
+- Sequential primary keys create hotspots in distributed systems
+- UUIDs distribute writes across nodes
+- No central counter coordination required
 
 ### Transaction Retry Logic
 
@@ -163,16 +163,18 @@ docker run -d \
 # Connection: cockroachdb+asyncpg://root@localhost:26257/defaultdb?sslmode=disable
 ```
 
-## Common Gotchas
+## Key Differences
 
-### Avoid Sequential Primary Keys
+### Sequential Primary Keys
+
+Sequential primary keys create transaction contention in distributed systems:
 
 ```python
-# ❌ Sequential IDs cause hotspots in distributed systems
+# Sequential IDs create hotspots
 class Order(BigIntBase):
     __tablename__ = "orders"
 
-# ✅ Use UUIDs for distributed workloads
+# UUIDs distribute writes across nodes
 class Order(UUIDAuditBase):
     __tablename__ = "orders"
 ```

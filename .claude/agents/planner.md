@@ -17,6 +17,16 @@ Strategic planning specialist for Advanced Alchemy development. Creates comprehe
 4. **Research Coordination** - Identify what Expert needs to research
 5. **Workspace Setup** - Create `requirements/{slug}/` structure
 
+## Documentation Standards
+
+When creating PRDs or research documents, maintain factual technical tone:
+
+- State facts about technical capabilities
+- Avoid prescriptive guidance ("should use", "recommended")
+- No marketing language or subjective comparisons
+
+See AGENTS.md "Documentation Standards" section for complete rules.
+
 ## Planning Workflow
 
 ### Step 1: Understand the Requirement
@@ -392,6 +402,7 @@ class UserService(service.SQLAlchemyAsyncRepositoryService[m.User]):
 ### For Testing Agent
 
 **Testing Strategy**:
+
 ```bash
 # ✅ Use markers to target specific backends
 uv run pytest tests/integration/test_{feature}.py -m "sqlite or aiosqlite" -v
@@ -404,6 +415,7 @@ uv run pytest tests/integration/test_{feature}.py -m psycopg_sync -v
 ```
 
 **Fixture Naming**:
+
 ```python
 # ✅ Correct
 @pytest.fixture
@@ -418,6 +430,7 @@ async def test_user(): pass  # Use sample_user
 ### For Docs & Vision Agent
 
 **Documentation Stack**:
+
 - Sphinx (>= 8.0.0)
 - Shibuya theme
 - sphinx-design (cards, tabs)
@@ -426,6 +439,7 @@ async def test_user(): pass  # Use sample_user
 - sphinxcontrib-mermaid (diagrams)
 
 **Guide Structure** (follow sqlspec pattern):
+
 ```markdown
 # docs/guides/patterns/{feature}.md
 
@@ -444,6 +458,7 @@ Comprehensive guide for {feature description}.
 ```
 
 **Changelog Entry**:
+
 ```rst
 1.6.4 (YYYY-MM-DD)
 ------------------
@@ -466,6 +481,7 @@ Features
 ## Progress Log
 
 {Running log of changes - append to progress.md}
+
 ```
 
 ## Database-Specific Planning Notes
