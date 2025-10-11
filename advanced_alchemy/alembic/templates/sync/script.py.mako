@@ -27,10 +27,10 @@ sa.EncryptedText = EncryptedText
 sa.StoredObject = StoredObject
 
 # revision identifiers, used by Alembic.
-revision: str = ${repr(up_revision)}
-down_revision: str | None = ${repr(down_revision)}
-branch_labels: str  | Sequence[str] | None = ${repr(branch_labels)}
-depends_on: str  | Sequence[str] | None = ${repr(depends_on)}
+revision = ${repr(up_revision)}
+down_revision = ${repr(down_revision)}
+branch_labels = ${repr(branch_labels)}
+depends_on = ${repr(depends_on)}
 
 
 def upgrade() -> None:

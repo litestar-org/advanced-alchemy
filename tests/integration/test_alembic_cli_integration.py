@@ -156,7 +156,7 @@ def sample_migration(
     yield revision_id
 
 
-async def test_check_with_pending_migrations(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_check_with_pending_migrations(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test check command with pending migrations."""
     # Check should run without crashing
     # It may or may not raise CommandError depending on database state
@@ -167,7 +167,7 @@ async def test_check_with_pending_migrations(alembic_cmds: commands.AlembicComma
         pass
 
 
-async def test_check_with_no_migrations(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_check_with_no_migrations(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test check command with no migrations present."""
     # With no migrations, check may succeed or raise error
     try:
@@ -177,19 +177,19 @@ async def test_check_with_no_migrations(alembic_cmds: commands.AlembicCommands, 
         pass
 
 
-async def test_ensure_version_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_ensure_version_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test ensure-version command executes without error."""
     # Command should execute without raising exception
     alembic_cmds.ensure_version(sql=False)
 
 
-async def test_ensure_version_sql_output(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_ensure_version_sql_output(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test ensure-version with --sql flag generates SQL."""
     # Calling with sql=True should not raise error
     alembic_cmds.ensure_version(sql=True)
 
 
-async def test_stamp_executes(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_stamp_executes(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test stamp command executes."""
     # Ensure version table first
     alembic_cmds.ensure_version(sql=False)
@@ -197,13 +197,13 @@ async def test_stamp_executes(alembic_cmds: commands.AlembicCommands, sample_mig
     alembic_cmds.stamp(revision=sample_migration, sql=False, tag=None, purge=False)
 
 
-async def test_stamp_with_sql_flag(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_stamp_with_sql_flag(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test stamp --sql generates SQL output."""
     # Stamp with sql flag should generate SQL without applying
     alembic_cmds.stamp(revision="head", sql=True, tag=None, purge=False)
 
 
-async def test_stamp_with_tag(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_stamp_with_tag(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test stamp with custom tag."""
     # Ensure version table
     alembic_cmds.ensure_version(sql=False)
@@ -211,7 +211,7 @@ async def test_stamp_with_tag(alembic_cmds: commands.AlembicCommands, sample_mig
     alembic_cmds.stamp(revision="head", sql=False, tag="release-1.0", purge=False)
 
 
-async def test_stamp_with_purge(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_stamp_with_purge(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test stamp --purge option."""
     # Ensure version table
     alembic_cmds.ensure_version(sql=False)
@@ -219,42 +219,42 @@ async def test_stamp_with_purge(alembic_cmds: commands.AlembicCommands, sample_m
     alembic_cmds.stamp(revision="head", sql=False, tag=None, purge=True)
 
 
-async def test_heads_executes(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_heads_executes(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test heads command executes."""
     alembic_cmds.heads(verbose=False, resolve_dependencies=False)
 
 
-async def test_heads_verbose_mode(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_heads_verbose_mode(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test heads command with verbose flag."""
     alembic_cmds.heads(verbose=True, resolve_dependencies=False)
 
 
-async def test_heads_with_resolve_dependencies(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_heads_with_resolve_dependencies(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test heads command with dependency resolution."""
     alembic_cmds.heads(verbose=False, resolve_dependencies=True)
 
 
-async def test_heads_no_migrations(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_heads_no_migrations(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test heads command with no migrations."""
     alembic_cmds.heads(verbose=False, resolve_dependencies=False)
 
 
-async def test_history_shows_migrations(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_history_shows_migrations(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test history command lists migrations."""
     alembic_cmds.history(rev_range=None, verbose=False, indicate_current=False)
 
 
-async def test_history_verbose_mode(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_history_verbose_mode(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test history command with verbose output."""
     alembic_cmds.history(rev_range=None, verbose=True, indicate_current=False)
 
 
-async def test_history_with_rev_range(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_history_with_rev_range(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test history command with revision range."""
     alembic_cmds.history(rev_range="base:head", verbose=False, indicate_current=False)
 
 
-async def test_history_indicate_current(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_history_indicate_current(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test history command with current revision indicator."""
     # Ensure version table and stamp
     alembic_cmds.ensure_version(sql=False)
@@ -263,43 +263,43 @@ async def test_history_indicate_current(alembic_cmds: commands.AlembicCommands, 
     alembic_cmds.history(rev_range=None, verbose=False, indicate_current=True)
 
 
-async def test_history_no_migrations(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_history_no_migrations(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test history command with no migrations."""
     alembic_cmds.history(rev_range=None, verbose=False, indicate_current=False)
 
 
-async def test_show_head_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_show_head_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test show command displays head revision."""
     alembic_cmds.show(rev="head")
 
 
-async def test_show_specific_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_show_specific_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test show command with specific revision ID."""
     alembic_cmds.show(rev=sample_migration)
 
 
-async def test_show_base_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_show_base_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test show command with base revision."""
     alembic_cmds.show(rev="base")
 
 
-async def test_show_invalid_revision(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_show_invalid_revision(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test show command with invalid revision raises error."""
     with pytest.raises(CommandError):
         alembic_cmds.show(rev="nonexistent_revision_12345")
 
 
-async def test_branches_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_branches_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test branches command executes."""
     alembic_cmds.branches(verbose=False)
 
 
-async def test_branches_verbose_mode(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_branches_verbose_mode(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test branches command with verbose output."""
     alembic_cmds.branches(verbose=True)
 
 
-async def test_branches_with_multiple_heads(
+def test_branches_with_multiple_heads(
     alembic_cmds: commands.AlembicCommands, initialized_migrations: Path
 ) -> None:
     """Test branches command with branched migrations."""
@@ -310,7 +310,7 @@ async def test_branches_with_multiple_heads(
     alembic_cmds.branches(verbose=False)
 
 
-async def test_merge_creates_revision(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_merge_creates_revision(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test merge command creates merge revision."""
     # Create two branches
     alembic_cmds.revision(message="branch_a", autogenerate=False, head="base", branch_label="branch_a")
@@ -325,7 +325,7 @@ async def test_merge_creates_revision(alembic_cmds: commands.AlembicCommands, in
     assert result is not None
 
 
-async def test_merge_with_custom_message(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_merge_with_custom_message(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test merge command with custom message."""
     alembic_cmds.revision(message="feature_1", autogenerate=False, head="base", branch_label="feature_1")
     alembic_cmds.revision(message="feature_2", autogenerate=False, head="base", branch_label="feature_2")
@@ -338,7 +338,7 @@ async def test_merge_with_custom_message(alembic_cmds: commands.AlembicCommands,
     assert result is not None
 
 
-async def test_merge_with_branch_label(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_merge_with_branch_label(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test merge command with branch label."""
     alembic_cmds.revision(message="dev_1", autogenerate=False, head="base", branch_label="dev_1")
     alembic_cmds.revision(message="dev_2", autogenerate=False, head="base", branch_label="dev_2")
@@ -351,7 +351,7 @@ async def test_merge_with_branch_label(alembic_cmds: commands.AlembicCommands, i
     assert result is not None
 
 
-async def test_merge_with_custom_rev_id(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_merge_with_custom_rev_id(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test merge command with custom revision ID."""
     alembic_cmds.revision(message="work_1", autogenerate=False, head="base", branch_label="work_1")
     alembic_cmds.revision(message="work_2", autogenerate=False, head="base", branch_label="work_2")
@@ -366,7 +366,7 @@ async def test_merge_with_custom_rev_id(alembic_cmds: commands.AlembicCommands, 
     assert result.revision == custom_id
 
 
-async def test_merge_heads_shortcut(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_merge_heads_shortcut(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test merge command with 'heads' shortcut."""
     alembic_cmds.revision(message="head_1", autogenerate=False, head="base", branch_label="head_1")
     alembic_cmds.revision(message="head_2", autogenerate=False, head="base", branch_label="head_2")
@@ -379,20 +379,20 @@ async def test_merge_heads_shortcut(alembic_cmds: commands.AlembicCommands, init
     assert result is not None
 
 
-async def test_edit_with_editor(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_edit_with_editor(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test edit command with editor set."""
     # Use 'true' as a safe test editor (exits successfully without interaction)
     with patch.dict(os.environ, {"EDITOR": "true"}):
         alembic_cmds.edit(revision=sample_migration)
 
 
-async def test_edit_head_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_edit_head_revision(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test edit command with 'head' revision."""
     with patch.dict(os.environ, {"EDITOR": "true"}):
         alembic_cmds.edit(revision="head")
 
 
-async def test_edit_without_editor(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_edit_without_editor(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test edit command without $EDITOR set."""
     # Remove EDITOR from environment
     env = {k: v for k, v in os.environ.items() if k != "EDITOR"}
@@ -405,33 +405,33 @@ async def test_edit_without_editor(alembic_cmds: commands.AlembicCommands, sampl
             pass
 
 
-async def test_edit_invalid_revision(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_edit_invalid_revision(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test edit command with invalid revision."""
     with patch.dict(os.environ, {"EDITOR": "true"}):
         with pytest.raises(CommandError):
             alembic_cmds.edit(revision="invalid_revision_xyz")
 
 
-async def test_list_templates_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_list_templates_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test list-templates command executes."""
     alembic_cmds.list_templates()
 
 
-async def test_current_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_current_executes(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test current command executes."""
     # Ensure version table exists
     alembic_cmds.ensure_version(sql=False)
     alembic_cmds.current(verbose=False)
 
 
-async def test_current_verbose_mode(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_current_verbose_mode(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test current command with verbose output."""
     alembic_cmds.ensure_version(sql=False)
     alembic_cmds.stamp(revision=sample_migration, sql=False, tag=None, purge=False)
     alembic_cmds.current(verbose=True)
 
 
-async def test_workflow_check_heads_history(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
+def test_workflow_check_heads_history(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test workflow of check, heads, and history commands."""
     # Check for pending migrations
     try:
@@ -444,7 +444,7 @@ async def test_workflow_check_heads_history(alembic_cmds: commands.AlembicComman
     alembic_cmds.history(rev_range=None, verbose=False, indicate_current=False)
 
 
-async def test_workflow_branch_and_merge(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+def test_workflow_branch_and_merge(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test workflow of creating branches and merging."""
     # Create branches
     alembic_cmds.revision(message="branch_x", autogenerate=False, head="base", branch_label="branch_x")
