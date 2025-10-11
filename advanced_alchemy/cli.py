@@ -346,12 +346,12 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         default=False,
         help="Indicate the current revision",
     )
-    def show_history(
+    def show_history(  # pyright: ignore[reportUnusedFunction]
         bind_key: Optional[str],
         verbose: bool,
         rev_range: Optional[str],
         indicate_current: bool,
-    ) -> None:  # pyright: ignore[reportUnusedFunction]
+    ) -> None:
         """Show revision history."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -375,14 +375,14 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @click.option("--branch-label", type=str, default=None, help="Branch label for merge revision")
     @click.option("--rev-id", type=str, default=None, help="Specify custom revision ID")
     @no_prompt_option
-    def merge_revisions(
+    def merge_revisions(  # pyright: ignore[reportUnusedFunction]
         bind_key: Optional[str],
         revisions: str,
         message: Optional[str],
         branch_label: Optional[str],
         rev_id: Optional[str],
         no_prompt: bool,
-    ) -> None:  # pyright: ignore[reportUnusedFunction]
+    ) -> None:
         """Merge revisions (resolves multiple heads)."""
         from rich.prompt import Prompt
 
