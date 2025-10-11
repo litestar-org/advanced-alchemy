@@ -734,10 +734,12 @@ async def test_repo_update_many_non_returning_backend_refresh(
 
     # Create multiple authors
     authors = await maybe_async(
-        author_repo.create_many([
-            {"name": "Author A", "dob": datetime.date(1990, 1, 1)},
-            {"name": "Author B", "dob": datetime.date(1991, 2, 2)},
-        ])
+        author_repo.create_many(
+            [
+                {"name": "Author A", "dob": datetime.date(1990, 1, 1)},
+                {"name": "Author B", "dob": datetime.date(1991, 2, 2)},
+            ]
+        )
     )
 
     # Prepare update data with partial changes
@@ -773,11 +775,13 @@ async def test_service_mixed_input_types_update_many(
 
     # Create multiple authors
     authors = await maybe_async(
-        author_service.create_many([
-            {"name": "Author 1", "dob": datetime.date(1990, 1, 1)},
-            {"name": "Author 2", "dob": datetime.date(1991, 2, 2)},
-            {"name": "Author 3", "dob": datetime.date(1992, 3, 3)},
-        ])
+        author_service.create_many(
+            [
+                {"name": "Author 1", "dob": datetime.date(1990, 1, 1)},
+                {"name": "Author 2", "dob": datetime.date(1991, 2, 2)},
+                {"name": "Author 3", "dob": datetime.date(1992, 3, 3)},
+            ]
+        )
     )
 
     # Get ID type from model for dynamic schema creation

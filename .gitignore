@@ -132,6 +132,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+envs/
+.envs/
 
 # Spyder project settings
 .spyderproject
@@ -174,7 +176,18 @@ cython_debug/
 .cursorignore
 .zed
 .cursor
-CLAUDE.md
-.gitignore
 .todos
 .tmp
+.envs/
+.claude/*
+.claude/archive/*
+!.claude/archive/.gitkeep
+!.claude/commands
+!.claude/agents
+!.claude/AGENTS.md
+!.claude/README.md
+requirements/archive/*
+!requirements/archive/.gitkeep
+requirements/*
+!requirements/example-feature
+!requirements/README.md
