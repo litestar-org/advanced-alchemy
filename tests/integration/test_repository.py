@@ -354,6 +354,30 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
     assert updated_author.updated_at > original_updated_at
 
 
+async def test_service_update_with_dict_data_refreshes_timestamp(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+    frozen_datetime: "Coordinates",
+) -> None:
+    """Service update should refresh audit timestamps when supplied with dict payloads."""
+    session, models = seeded_test_session_async
+    author_service = get_service_from_session((session, models), "author")
+
+    authors = await maybe_async(author_service.list())
+    author = authors[0]
+
+    original_created_at = author.created_at
+    original_updated_at = author.updated_at
+
+    frozen_datetime.shift(datetime.timedelta(seconds=5))
+    update_payload = {"name": "Dict Driven Update"}
+
+    updated_author = await maybe_async(author_service.update(update_payload, item_id=author.id))
+
+    assert updated_author.name == "Dict Driven Update"
+    assert updated_author.created_at == original_created_at
+    assert updated_author.updated_at > original_updated_at
+
+
 async def test_repo_update_many_method_stale_data_fix(
     seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
 ) -> None:

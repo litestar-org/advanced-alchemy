@@ -12,6 +12,7 @@ from sqlalchemy.inspection import inspect
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session, UOWTransaction
+    from sqlalchemy.orm.state import InstanceState
 
     from advanced_alchemy.types.file_object import FileObjectSessionTracker, StorageRegistry
 
@@ -452,8 +453,31 @@ def touch_updated_timestamp(session: "Session", *_: Any) -> None:  # pragma: no 
     """
     for instance in session.dirty:
         state = inspect(instance)
-        if not state or not hasattr(state.mapper.class_, "updated_at"):
+        if not state or not hasattr(state.mapper.class_, "updated_at") or state.deleted or instance in session.new:
             continue
         updated_at_attr = state.attrs.get("updated_at")
-        if updated_at_attr and not updated_at_attr.history.has_changes():
+        if not updated_at_attr or updated_at_attr.history.added:
+            # Respect explicit user assignments such as manual overrides or import routines
+            continue
+
+        if _has_persistent_column_changes(state, skip_keys={"updated_at"}):
             instance.updated_at = datetime.datetime.now(datetime.timezone.utc)
+
+
+def _has_persistent_column_changes(
+    state: "InstanceState[Any]",
+    *,
+    skip_keys: "Optional[set[str]]" = None,
+) -> bool:
+    """Check if any mapped column (excluding ``skip_keys``) has modifications pending flush."""
+    if skip_keys is None:
+        skip_keys = set()
+
+    mapper = state.mapper
+    for attr in mapper.column_attrs:
+        if attr.key in skip_keys:
+            continue
+        attr_state = state.attrs.get(attr.key)
+        if attr_state is not None and attr_state.history.has_changes():
+            return True
+    return False
