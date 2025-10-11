@@ -102,8 +102,13 @@ If the file is named ``alchemy-config.py``, you would need to use it like this `
 Available Commands
 ------------------
 
+Migration Commands
+~~~~~~~~~~~~~~~~~~
+
+These commands manage database migrations and revisions.
+
 show-current-revision
-~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^
 
 Show the current revision of the database:
 
@@ -111,8 +116,17 @@ Show the current revision of the database:
 
     alchemy show-current-revision --config path.to.alchemy-config.config
 
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--verbose``
+     - Display detailed revision information
+
 downgrade
-~~~~~~~~~
+^^^^^^^^^
 
 Downgrade database to a specific revision:
 
@@ -135,7 +149,7 @@ Downgrade database to a specific revision:
 
 
 upgrade
-~~~~~~~
+^^^^^^^
 
 Upgrade database to a specific revision:
 
@@ -156,9 +170,39 @@ Upgrade database to a specific revision:
    * - ``REVISION``
      - Target revision (default: "head")
 
+stamp
+^^^^^
+
+Stamp the revision table with a specific revision without running migrations:
+
+.. code-block:: bash
+
+    alchemy stamp --config path.to.alchemy-config.config REVISION
+
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--sql``
+     - Generate SQL output for offline migrations
+   * - ``--tag`` TEXT
+     - Arbitrary tag for custom env.py scripts
+   * - ``--purge``
+     - Delete all entries in version table before stamping
+   * - ``REVISION``
+     - Target revision to stamp (required)
+
+**Use cases:**
+
+- Initialize version table for existing database
+- Mark migrations as applied without running them
+- Reset migration history (with ``--purge``)
+- Generate SQL for manual database stamping (with ``--sql``)
 
 init
-~~~~
+^^^^
 
 Initialize migrations for the project:
 
@@ -181,7 +225,7 @@ Initialize migrations for the project:
 
 
 make-migrations
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 Create a new migration revision:
 
@@ -213,8 +257,245 @@ Create a new migration revision:
      - Specific revision ID
 
 
+Inspection Commands
+~~~~~~~~~~~~~~~~~~~
+
+These commands inspect migration history and database state.
+
+check
+^^^^^
+
+Check if the database is up to date with the current migration revision:
+
+.. code-block:: bash
+
+    alchemy check --config path.to.alchemy-config.config
+
+Returns exit code 0 if database is current, non-zero otherwise.
+
+**Use cases:**
+
+- CI/CD validation before deployment
+- Pre-deployment smoke tests
+- Health checks
+
+heads
+^^^^^
+
+Show current available heads in the migration script directory:
+
+.. code-block:: bash
+
+    alchemy heads --config path.to.alchemy-config.config
+
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--verbose``
+     - Display detailed head information
+   * - ``--resolve-dependencies``
+     - Resolve dependencies between heads
+
+**Use cases:**
+
+- Detect multiple heads (branch conflicts)
+- Verify migration graph state
+- Branch development coordination
+
+history
+^^^^^^^
+
+List migration changesets in chronological order:
+
+.. code-block:: bash
+
+    alchemy history --config path.to.alchemy-config.config
+
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--verbose``
+     - Display detailed revision information
+   * - ``--rev-range`` TEXT
+     - Revision range to display (e.g., 'base:head', 'abc:def')
+   * - ``--indicate-current``
+     - Indicate the current revision in output
+
+**Use cases:**
+
+- Audit migration history
+- Generate migration documentation
+- Review changes between revisions
+
+show
+^^^^
+
+Show details of a specific revision:
+
+.. code-block:: bash
+
+    alchemy show --config path.to.alchemy-config.config REVISION
+
+**Examples:**
+
+.. code-block:: bash
+
+    # Show head revision
+    alchemy show head --config path.to.alchemy-config.config
+
+    # Show specific revision
+    alchemy show abc123def --config path.to.alchemy-config.config
+
+    # Show base revision
+    alchemy show base --config path.to.alchemy-config.config
+
+branches
+^^^^^^^^
+
+Show current branch points in the migration history:
+
+.. code-block:: bash
+
+    alchemy branches --config path.to.alchemy-config.config
+
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--verbose``
+     - Display detailed branch information
+
+**Use cases:**
+
+- Identify branch points in migration graph
+- Multi-team development coordination
+- Branch-based development workflows
+
+
+Branch Management Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These commands manage branched migration workflows.
+
+merge
+^^^^^
+
+Merge two revisions together, creating a new migration file:
+
+.. code-block:: bash
+
+    alchemy merge --config path.to.alchemy-config.config REVISIONS
+
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``-m``, ``--message`` TEXT
+     - Merge message
+   * - ``--branch-label`` TEXT
+     - Branch label for merge revision
+   * - ``--rev-id`` TEXT
+     - Specify custom revision ID
+   * - ``REVISIONS``
+     - Revisions to merge (e.g., 'abc123+def456' or 'heads')
+
+**Examples:**
+
+.. code-block:: bash
+
+    # Merge all heads
+    alchemy merge heads -m "merge feature branches" --config path.to.alchemy-config.config
+
+    # Merge specific revisions
+    alchemy merge abc123+def456 -m "merge database changes" --config path.to.alchemy-config.config
+
+**Use cases:**
+
+- Resolve multiple heads (branch conflicts)
+- Consolidate parallel development branches
+- Team coordination for database changes
+
+
+Utility Commands
+~~~~~~~~~~~~~~~~
+
+These commands provide additional migration utilities.
+
+edit
+^^^^
+
+Edit a revision file using the system editor (set via ``$EDITOR`` environment variable):
+
+.. code-block:: bash
+
+    alchemy edit --config path.to.alchemy-config.config REVISION
+
+**Examples:**
+
+.. code-block:: bash
+
+    # Edit latest revision
+    alchemy edit head --config path.to.alchemy-config.config
+
+    # Edit specific revision
+    alchemy edit abc123def --config path.to.alchemy-config.config
+
+ensure-version
+^^^^^^^^^^^^^^
+
+Create the Alembic version table if it doesn't exist:
+
+.. code-block:: bash
+
+    alchemy ensure-version --config path.to.alchemy-config.config
+
+.. list-table:: Options
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Option
+     - Explanation
+   * - ``--sql``
+     - Generate SQL output instead of executing
+
+**Use cases:**
+
+- Database initialization workflows
+- Manual database setup
+- Generate SQL for DBA review (with ``--sql``)
+
+list-templates
+^^^^^^^^^^^^^^
+
+List available Alembic migration templates:
+
+.. code-block:: bash
+
+    alchemy list-templates --config path.to.alchemy-config.config
+
+**Use cases:**
+
+- Discover available templates for ``init`` command
+- Template selection for new projects
+
+
+Database Commands
+~~~~~~~~~~~~~~~~~
+
+These commands manage database tables and data.
+
 drop-all
-~~~~~~~~
+^^^^^^^^
 
 Drop all tables from the database:
 
@@ -222,8 +503,12 @@ Drop all tables from the database:
 
     alchemy drop-all --config path.to.alchemy-config.config
 
+.. warning::
+
+   This command is destructive and will delete all data. Use with caution.
+
 dump-data
-~~~~~~~~~
+^^^^^^^^^
 
 Dump specified tables from the database to JSON files:
 
