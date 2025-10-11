@@ -52,6 +52,7 @@ from advanced_alchemy.repository._util import (
     compare_values,
     get_abstract_loader_options,
     get_instrumented_attr,
+    was_attribute_set,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, T
 from advanced_alchemy.service.typing import schema_dump
@@ -1501,6 +1502,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                             # Skip setting columns with defaults/onupdate to None during updates
                             # This prevents overwriting columns that should use their defaults
                             if new_field_value is None and column_has_defaults(column):
+                                continue
+                            # Only copy attributes that were explicitly set on the input instance
+                            # This prevents overwriting existing values with uninitialized None values
+                            if not was_attribute_set(data, mapper, field_name):
                                 continue
                             existing_field_value = getattr(existing_instance, field_name, MISSING)
                             if existing_field_value is not MISSING and not compare_values(

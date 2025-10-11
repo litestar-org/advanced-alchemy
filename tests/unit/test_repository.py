@@ -1832,3 +1832,77 @@ def test_repository_update_methods_with_numpy_arrays() -> None:
     complex3 = np.array([1 + 2j, 5 + 6j])
     assert compare_values(complex1, complex2) is True
     assert compare_values(complex1, complex3) is False
+
+
+def test_was_attribute_set_with_explicitly_set_attributes() -> None:
+    """Test was_attribute_set correctly identifies explicitly set attributes."""
+    from sqlalchemy import inspect
+
+    from advanced_alchemy.repository._util import was_attribute_set
+
+    # Create an instance with explicitly set attributes
+    instance = UUIDModel()
+    instance.id = uuid4()  # Explicitly set id
+
+    # Get the mapper/inspector
+    mapper = inspect(instance)
+
+    # Explicitly set attributes should return True
+    assert was_attribute_set(instance, mapper, "id") is True
+
+
+def test_was_attribute_set_with_uninitialized_attributes() -> None:
+    """Test was_attribute_set correctly identifies uninitialized attributes."""
+    from sqlalchemy import inspect
+
+    from advanced_alchemy.repository._util import was_attribute_set
+
+    # Use the existing UUIDModel which has created_at and updated_at audit fields
+    # Create an instance - created_at and updated_at won't be in instance dict yet
+    instance = UUIDModel()
+
+    # Get the mapper/inspector
+    mapper = inspect(instance)
+
+    # Uninitialized audit attributes should return False
+    # They exist on the model but haven't been explicitly set
+    assert was_attribute_set(instance, mapper, "created_at") is False
+    assert was_attribute_set(instance, mapper, "updated_at") is False
+
+
+def test_was_attribute_set_with_modified_attributes() -> None:
+    """Test was_attribute_set detects attributes with modification history."""
+    from sqlalchemy import inspect
+
+    from advanced_alchemy.repository._util import was_attribute_set
+
+    # Create an instance and explicitly set attributes
+    instance = UUIDModel()
+    instance.id = uuid4()  # Explicitly set id
+
+    # Also test setting a datetime attribute
+    now = datetime.datetime.now(datetime.timezone.utc)
+    instance.created_at = now  # Explicitly modify created_at
+
+    # Get the mapper/inspector
+    mapper = inspect(instance)
+
+    # Modified attributes should return True
+    assert was_attribute_set(instance, mapper, "id") is True
+    assert was_attribute_set(instance, mapper, "created_at") is True
+
+
+def test_was_attribute_set_with_nonexistent_attribute() -> None:
+    """Test was_attribute_set handles nonexistent attributes gracefully."""
+    from sqlalchemy import inspect
+
+    from advanced_alchemy.repository._util import was_attribute_set
+
+    # Create an instance
+    instance = UUIDModel()
+
+    # Get the mapper/inspector
+    mapper = inspect(instance)
+
+    # Nonexistent attribute should return False (attr_state is None)
+    assert was_attribute_set(instance, mapper, "nonexistent_field") is False

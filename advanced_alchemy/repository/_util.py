@@ -371,6 +371,42 @@ def column_has_defaults(column: Any) -> bool:
     )
 
 
+def was_attribute_set(instance: Any, mapper: Any, attr_name: str) -> bool:
+    """Check if an attribute was explicitly set on a model instance.
+
+    This function distinguishes between attributes that were explicitly set
+    (even to None) versus attributes that are simply uninitialized and defaulting
+    to None. This is crucial for partial updates where only modified fields
+    should be copied.
+
+    Args:
+        instance: The model instance to check.
+        mapper: The SQLAlchemy mapper/inspector for the instance.
+        attr_name: The name of the attribute to check.
+
+    Returns:
+        bool: True if the attribute was explicitly set, False if uninitialized.
+    """
+    try:
+        # Get the attribute state
+        attr_state = mapper.attrs.get(attr_name)
+        if attr_state is None:
+            return False
+
+        # Check if the attribute has history (was modified)
+        # For a new transient instance, modified attributes will have history
+        history = attr_state.history
+        if history.has_changes():
+            return True
+
+        # For attributes with no history, check if they're in the instance dict
+        # This handles the case where an attribute was set during __init__
+        return hasattr(instance, "__dict__") and attr_name in instance.__dict__
+    except (AttributeError, KeyError):  # pragma: no cover
+        # If we can't determine, assume it was set to be safe
+        return True
+
+
 def compare_values(existing_value: Any, new_value: Any) -> bool:
     """Safely compare two values, handling numpy arrays and other special types.
 
