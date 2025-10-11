@@ -3,6 +3,34 @@
 1.x Changelog
 =============
 
+.. changelog:: unreleased
+    :date: unreleased
+
+    .. change:: Complete Alembic CLI alignment - expose all missing commands and options
+        :type: feature
+        :pr: TBD
+        :issue: 566
+
+        Added 9 missing Alembic commands to the Advanced Alchemy CLI and completed the ``stamp`` command with all options:
+
+        **New Commands:**
+
+        - ``check`` - Verify if revision command would detect pending upgrade operations
+        - ``edit`` - Edit revision script with system editor (uses $EDITOR)
+        - ``ensure-version`` - Ensure alembic version table exists (supports --sql)
+        - ``heads`` - Show current available heads in script directory (supports --verbose, --resolve-dependencies)
+        - ``history`` - List changesets in chronological order (supports --verbose, --rev-range, --indicate-current)
+        - ``merge`` - Merge two revisions together (supports -m/--message, --branch-label, --rev-id, --no-prompt)
+        - ``show`` - Show revision(s) denoted by symbol
+        - ``branches`` - Show current branch points (supports --verbose)
+        - ``list-templates`` - List available Alembic templates
+
+        **Enhanced Commands:**
+
+        - ``stamp`` - Added missing options: --sql, --tag, --purge
+
+        This achieves 100% API parity between Alembic 1.16.5 CLI commands and Advanced Alchemy's CLI interface.
+
 .. changelog:: 1.6.3
     :date: 2025-09-19
 
