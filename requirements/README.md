@@ -64,7 +64,16 @@ Keep up to 3 active requirements in the root of this directory:
 
 ```
 requirements/
-├── alembic-cli-alignment/  # Active requirement (Week 1 Priority)
+├── theme-color-alignment/  # Active requirement (Week 1 Priority: CRITICAL UX)
+│   ├── prd.md              # Product Requirements Document
+│   ├── tasks.md            # Task checklist (100+ tasks, 9 phases)
+│   ├── recovery.md         # Resume instructions
+│   ├── progress.md         # Running log of changes
+│   ├── research/           # Research findings
+│   │   └── .gitkeep
+│   └── tmp/                # Temporary files (cleaned on review)
+│       └── .gitkeep
+├── alembic-cli-alignment/  # Active requirement (Week 1 Priority: HIGHEST)
 │   ├── prd.md              # Product Requirements Document
 │   ├── tasks.md            # Task checklist (69 tasks, 8 phases)
 │   ├── recovery.md         # Resume instructions
@@ -73,8 +82,16 @@ requirements/
 │   │   └── .gitkeep
 │   └── tmp/                # Temporary files (cleaned on review)
 │       └── .gitkeep
-├── vector-search/          # Example active requirement
-└── bulk-upsert-optimization/  # Example active requirement
+├── updated-at-timestamp-fix/  # Bug fix (Week 1 Priority)
+│   ├── prd.md              # Product Requirements Document
+│   ├── tasks.md            # Task checklist (100+ tasks, 6 phases)
+│   ├── recovery.md         # Resume instructions
+│   ├── progress.md         # Running log of changes
+│   ├── research/           # Research findings
+│   │   └── .gitkeep
+│   └── tmp/                # Temporary files (cleaned on review)
+│       └── .gitkeep
+└── vector-search/          # Example active requirement
 ```
 
 ### Archived Requirements
@@ -269,12 +286,29 @@ cat requirements/{slug}/prd.md
 
 Currently active requirements:
 
-1. **alembic-cli-alignment** (Priority: HIGHEST - Week 1)
+1. **theme-color-alignment** (Priority: CRITICAL UX - Week 1)
+   - Status: Phase 1 Complete ✅, Ready for Phase 2
+   - Issue: #554
+   - Branch: docs/theme-color-alignment
+   - PR Title: docs: align code block and UI themes with Advanced Alchemy branding
+   - Goal: Fix unreadable code blocks in light mode, align with brand colors
+   - Estimated: 10-14 days (2 weeks)
+   - Next: Expert agent to research Shibuya theme and test accessible-pygments
+
+2. **alembic-cli-alignment** (Priority: HIGHEST - Week 1)
    - Status: Phase 1 Complete ✅, Ready for Phase 2
    - Issue: #566
    - Goal: Complete Alembic 1.16.5 API parity (9 commands + 1 fix)
    - Estimated: 12.5 days (2.5 weeks)
    - Next: Expert agent to fix stamp command options
+
+3. **updated-at-timestamp-fix** (Priority: HIGH - Week 1)
+   - Status: Phase 1 In Progress (4/13 tasks)
+   - Issue: #549
+   - Goal: Fix `updated_at` not updating on record modifications
+   - Root Cause: Faulty `has_changes()` check in listener
+   - Estimated: 2-3 days
+   - Next: Reproduce bug and git bisect to find regression commit
 
 ## Recent Completions
 
