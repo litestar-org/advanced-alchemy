@@ -48,15 +48,13 @@ Invoke the Docs & Vision agent for quality gate, documentation, and cleanup.
    - Performance considerations
    - Testing examples
    - Troubleshooting
-3. Add changelog entry to `docs/changelog.rst`:
-   - Feature description
-   - Database compatibility notes
-   - Code examples
-4. Validate documentation builds:
+3. Validate documentation builds:
    ```bash
    make docs  # Build docs
    make docs-linkcheck  # Validate links
    ```
+
+**Note:** Changelog entries are auto-generated from GitHub issues. NEVER manually add changelog entries.
 
 ### Phase 3: Cleanup
 1. Clean tmp/ directories:

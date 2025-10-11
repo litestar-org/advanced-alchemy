@@ -349,5 +349,5 @@ aws_endpoint="http://localhost:9000"  # With protocol
 
 - [FSSpec Storage Guide](fsspec.md) - Alternative storage backend
 - [Quick Reference](../quick-reference/quick-reference.md) - Common patterns
-- [Testing Guide](../testing/testing.md) - Testing file storage
+- [Testing Guide](../testing/integration.md) - Testing file storage
 - [Obstore Documentation](https://github.com/roeap/obstore) - Official obstore docs

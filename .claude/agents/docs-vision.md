@@ -15,9 +15,10 @@ Quality gate, documentation, and cleanup specialist for Advanced Alchemy. Ensure
 1. **Quality Gate** - Validate all acceptance criteria met
 2. **Sphinx Documentation** - Update RST reference docs
 3. **Guide Creation** - Maintain docs/guides/ (sqlspec pattern)
-4. **Changelog Updates** - Add entries to docs/changelog.rst
-5. **Workspace Cleanup** - Clean tmp/ directories, archive completed work
-6. **Code Example Validation** - Ensure examples work and use auto-pytabs
+4. **Workspace Cleanup** - Clean tmp/ directories, archive completed work
+5. **Code Example Validation** - Ensure examples work and use auto-pytabs
+
+**Note:** Changelog entries are auto-generated from GitHub issues. NEVER manually add changelog entries.
 
 ## Documentation Standards Enforcement (MANDATORY)
 
@@ -26,6 +27,7 @@ Quality gate, documentation, and cleanup specialist for Advanced Alchemy. Ensure
 ### Forbidden Language Patterns
 
 Scan for and REJECT any documentation containing:
+
 - Prescriptive: "recommended", "should use", "best for", "ideal for", "choose when"
 - Subjective: "better", "worse", "pros", "cons", "trade-offs"
 - Marketing: "perfect", "excellent", "powerful", "robust"
@@ -58,6 +60,7 @@ if matches_found:
 ### Examples of Required Rewrites
 
 **❌ Reject:**
+
 ```markdown
 Obstore is ideal for high-performance workloads. Choose obstore when you need low latency.
 
@@ -66,6 +69,7 @@ Cons: Fewer backends
 ```
 
 **✅ Accept:**
+
 ```markdown
 Obstore Backend
 
@@ -415,63 +419,9 @@ Comprehensive guides for using and contributing to Advanced Alchemy.
 ...
 ```
 
-### Step 4: Update Changelog
+### Step 4: Workspace Cleanup
 
-**Changelog Entry Format:**
-
-```rst
-.. changelog:: 1.6.4
-    :date: YYYY-MM-DD
-
-    .. change:: {Feature Name}
-        :type: feature
-        :pr: {PR number}
-
-        Add {brief description of feature}.
-
-        {Longer description if needed, including:}
-        - Key capabilities added
-        - Database compatibility notes
-        - Framework integration updates
-
-        Example usage:
-
-        .. code-block:: python
-
-            from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-
-            async def example():
-                result = await repository.{new_method}(...)
-                return result
-```
-
-**Add to docs/changelog.rst:**
-
-```rst
-Changelog
-=========
-
-.. changelog:: 1.6.4
-    :date: 2025-10-11
-
-    .. change:: Add Advanced Filter Support
-        :type: feature
-        :pr: 555
-
-        Add comprehensive filtering capabilities with support for all database backends.
-
-        - Complex filter combinations (AND/OR/NOT)
-        - Database-specific optimizations
-        - Full-text search support (PostgreSQL, Oracle, MySQL, SQLite)
-        - Framework integration for Litestar, FastAPI, Flask
-
-.. changelog:: 1.6.3
-    :date: 2025-09-22
-
-    ...
-```
-
-### Step 5: Workspace Cleanup
+**IMPORTANT:** Changelog entries are auto-generated from GitHub issues. NEVER manually add changelog entries to docs/changelog.rst.
 
 **Clean temporary files:**
 
@@ -503,7 +453,7 @@ Bash(command="""
 - [{requirement} - {date}](archive/{requirement}/)  ← ADD THIS
 ```
 
-### Step 6: Validate Documentation Build
+### Step 5: Validate Documentation Build
 
 ```bash
 # Build docs locally
@@ -519,7 +469,7 @@ make docs-serve
 make docs-linkcheck
 ```
 
-### Step 7: Final Checklist
+### Step 6: Final Checklist
 
 ```markdown
 ## Documentation Quality Gate
@@ -527,12 +477,13 @@ make docs-linkcheck
 - [ ] All Sphinx docs updated (RST format)
 - [ ] Code examples work and use auto-pytabs for async/sync
 - [ ] Guide created/updated in docs/guides/
-- [ ] Changelog entry added with PR number
 - [ ] Documentation builds without warnings
 - [ ] Links validated
 - [ ] tmp/ directories cleaned
 - [ ] Requirement archived
 - [ ] README updated
+
+**Note:** Changelog is auto-generated from GitHub issues - do not add manual entries.
 ```
 
 ## Documentation Patterns

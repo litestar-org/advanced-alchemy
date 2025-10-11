@@ -52,7 +52,7 @@ extensions = [
     "sphinx_togglebutton",
     "sphinx_paramlinks",
 ]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "msgspec": ("https://jcristharif.com/msgspec/", None),
@@ -196,15 +196,22 @@ copybutton_prompt_text = "$ "
 html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
-pygments_style = "dracula"
+
+# Pygments syntax highlighting configuration
+# Using accessible-pygments for WCAG AA/AAA compliant syntax highlighting
+# Light mode: a11y-light provides excellent readability on light backgrounds (WCAG AA)
+# Dark mode: a11y-high-contrast-dark provides maximum readability on dark backgrounds (WCAG AAA)
+pygments_style = "a11y-light"
+pygments_dark_style = "a11y-high-contrast-dark"
+
 todo_include_todos = True
 
 html_static_path = ["_static"]
 html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
 html_js_files = ["versioning.js"]
-html_css_files = ["custom.css"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md"]
+html_css_files = ["custom.css", "syntax-highlighting.css"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**"]
 html_show_sourcelink = True
 html_copy_source = True
 

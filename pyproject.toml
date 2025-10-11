@@ -95,6 +95,7 @@ dev = [
   { include-group = "postgres" },
 ]
 doc = [
+  "accessible-pygments>=0.0.5",
   "auto-pytabs[sphinx]>=0.5.0",
   "shibuya",
   "sphinx>=7.0.0; python_version <= \"3.9\"",
@@ -589,4 +590,4 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 
 [tool.codespell]
 ignore-words-list = "selectin,fo,froms,notin"
-skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg, docs/changelog.rst, advanced_alchemy/types/file_object/file.py'
+skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg, docs/changelog.rst, advanced_alchemy/types/file_object/file.py, docs/_static/syntax-highlighting.css'

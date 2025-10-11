@@ -1,0 +1,266 @@
+/* Advanced Alchemy Syntax Highlighting
+ *
+ * This file provides syntax highlighting that integrates with Shibuya theme's accent color.
+ * The accent color is configured in docs/conf.py (currently: amber)
+ *
+ * Features:
+ * 1. Integrates with Shibuya's --accent-* CSS variables
+ * 2. Meets WCAG AA compliance standards
+ * 3. Provides proper backgrounds for both light and dark modes
+ * 4. Offers rich color variation for better code readability
+ *
+ * Shibuya accent variables used:
+ * - --accent-9: Primary accent color
+ * - --accent-10: Slightly darker/lighter variant
+ * - --accent-11: High-contrast text color
+ * - --accent-a*: Transparent variants
+ */
+
+/* =====================================================
+ * Light Mode Syntax Highlighting
+ * ===================================================== */
+
+html.light .highlight {
+  background-color: var(--gray-2) !important;
+}
+
+html.light .highlight pre {
+  background-color: var(--gray-2) !important;
+  color: var(--gray-12);
+}
+
+/* Light mode token colors - using accent colors where appropriate */
+html.light .highlight .k,    /* Keyword */
+html.light .highlight .kc,   /* Keyword.Constant */
+html.light .highlight .kd,   /* Keyword.Declaration */
+html.light .highlight .kn,   /* Keyword.Namespace */
+html.light .highlight .kp,   /* Keyword.Pseudo */
+html.light .highlight .kr,   /* Keyword.Reserved */
+html.light .highlight .kt {  /* Keyword.Type */
+  color: #8045e5 !important;
+  font-weight: 600;
+}
+
+html.light .highlight .nf,   /* Name.Function */
+html.light .highlight .nc,   /* Name.Class */
+html.light .highlight .fm,   /* Name.Function.Magic */
+html.light .highlight .nb {  /* Name.Builtin */
+  color: var(--sy-c-heading) !important;
+  font-weight: 600;
+}
+
+html.light .highlight .s,    /* String */
+html.light .highlight .s1,   /* String.Single */
+html.light .highlight .s2,   /* String.Double */
+html.light .highlight .sd,   /* String.Doc */
+html.light .highlight .sa,   /* String.Affix */
+html.light .highlight .sb,   /* String.Backtick */
+html.light .highlight .sc {  /* String.Char */
+  color: #008000 !important;
+}
+
+html.light .highlight .c,    /* Comment */
+html.light .highlight .c1,   /* Comment.Single */
+html.light .highlight .cm,   /* Comment.Multiline */
+html.light .highlight .ch {  /* Comment.Hashbang */
+  color: var(--gray-11) !important;
+  font-style: italic;
+}
+
+html.light .highlight .nd,   /* Name.Decorator */
+html.light .highlight .na {  /* Name.Attribute */
+  color: var(--accent-11) !important;
+  font-weight: 600;
+}
+
+html.light .highlight .m,    /* Number */
+html.light .highlight .mi,   /* Number.Integer */
+html.light .highlight .mf,   /* Number.Float */
+html.light .highlight .mh,   /* Number.Hex */
+html.light .highlight .mo {  /* Number.Oct */
+  color: #0077aa !important;
+}
+
+html.light .highlight .o,    /* Operator */
+html.light .highlight .ow {  /* Operator.Word */
+  color: var(--gray-12) !important;
+}
+
+html.light .highlight .nn,   /* Name.Namespace */
+html.light .highlight .bp,   /* Name.Builtin.Pseudo */
+html.light .highlight .n {   /* Name (covers generic names) */
+  color: #00749c !important;
+}
+
+html.light .highlight .nv,   /* Name.Variable */
+html.light .highlight .vc,   /* Name.Variable.Class */
+html.light .highlight .vg,   /* Name.Variable.Global */
+html.light .highlight .vi {  /* Name.Variable.Instance */
+  color: #d71835 !important;
+}
+
+html.light .highlight .nt {  /* Name.Tag */
+  color: #22863a !important;
+}
+
+html.light .highlight .ne {  /* Name.Exception */
+  color: #8045e5 !important;
+}
+
+html.light .highlight .si,   /* String.Interpol */
+html.light .highlight .sx {  /* String.Other */
+  color: #d73a49 !important;
+}
+
+/* =====================================================
+ * Dark Mode Syntax Highlighting
+ * ===================================================== */
+
+html.dark .highlight {
+  background-color: var(--gray-2) !important;
+}
+
+html.dark .highlight pre {
+  background-color: var(--gray-2) !important;
+  color: var(--gray-12);
+}
+
+/* Dark mode token colors - using accent colors where appropriate */
+html.dark .highlight .k,     /* Keyword */
+html.dark .highlight .kc,    /* Keyword.Constant */
+html.dark .highlight .kd,    /* Keyword.Declaration */
+html.dark .highlight .kn,    /* Keyword.Namespace */
+html.dark .highlight .kp,    /* Keyword.Pseudo */
+html.dark .highlight .kr,    /* Keyword.Reserved */
+html.dark .highlight .kt {   /* Keyword.Type */
+  color: #ff7b72 !important;
+  font-weight: 600;
+}
+
+html.dark .highlight .nf,    /* Name.Function */
+html.dark .highlight .nc,    /* Name.Class */
+html.dark .highlight .fm,    /* Name.Function.Magic */
+html.dark .highlight .nb {   /* Name.Builtin */
+  color: var(--accent-11) !important;
+  font-weight: 600;
+}
+
+html.dark .highlight .s,     /* String */
+html.dark .highlight .s1,    /* String.Single */
+html.dark .highlight .s2,    /* String.Double */
+html.dark .highlight .sd,    /* String.Doc */
+html.dark .highlight .sa,    /* String.Affix */
+html.dark .highlight .sb,    /* String.Backtick */
+html.dark .highlight .sc {   /* String.Char */
+  color: #a5d6ff !important;
+}
+
+html.dark .highlight .c,     /* Comment */
+html.dark .highlight .c1,    /* Comment.Single */
+html.dark .highlight .cm,    /* Comment.Multiline */
+html.dark .highlight .ch {   /* Comment.Hashbang */
+  color: var(--gray-11) !important;
+  font-style: italic;
+}
+
+html.dark .highlight .nd,    /* Name.Decorator */
+html.dark .highlight .na {   /* Name.Attribute */
+  color: var(--accent-10) !important;
+  font-weight: 600;
+}
+
+html.dark .highlight .m,     /* Number */
+html.dark .highlight .mi,    /* Number.Integer */
+html.dark .highlight .mf,    /* Number.Float */
+html.dark .highlight .mh,    /* Number.Hex */
+html.dark .highlight .mo {   /* Number.Oct */
+  color: #79c0ff !important;
+}
+
+html.dark .highlight .o,     /* Operator */
+html.dark .highlight .ow {   /* Operator.Word */
+  color: #ff7b72 !important;
+}
+
+html.dark .highlight .nn,    /* Name.Namespace */
+html.dark .highlight .bp,    /* Name.Builtin.Pseudo */
+html.dark .highlight .n {    /* Name (covers generic names) */
+  color: #79c0ff !important;
+}
+
+html.dark .highlight .nv,    /* Name.Variable */
+html.dark .highlight .vc,    /* Name.Variable.Class */
+html.dark .highlight .vg,    /* Name.Variable.Global */
+html.dark .highlight .vi {   /* Name.Variable.Instance */
+  color: #ffa657 !important;
+}
+
+html.dark .highlight .nt {   /* Name.Tag */
+  color: #7ee787 !important;
+}
+
+html.dark .highlight .ne {   /* Name.Exception */
+  color: #ff7b72 !important;
+}
+
+html.dark .highlight .si,    /* String.Interpol */
+html.dark .highlight .sx {   /* String.Other */
+  color: #a5d6ff !important;
+}
+
+/* =====================================================
+ * Common Styles (Both Themes)
+ * ===================================================== */
+
+.highlight {
+  border-radius: 0.5em;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.highlight pre {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  font-family: var(--sy-f-mono), 'Courier New', Courier, monospace;
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+
+/* Smooth transitions when switching themes */
+.highlight,
+.highlight pre,
+.highlight .k,
+.highlight .nf,
+.highlight .s,
+.highlight .c,
+.highlight .nd,
+.highlight .m,
+.highlight .o,
+.highlight .nn,
+.highlight .nv,
+.highlight .nt,
+.highlight .ne,
+.highlight .si {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Ensure line numbers (if present) have proper styling */
+.highlight .linenos {
+  opacity: 0.5;
+  user-select: none;
+  padding-right: 1em;
+}
+
+/* Highlighted lines */
+.highlight .hll {
+  background-color: var(--accent-a2);
+  display: block;
+  margin: 0 -1em;
+  padding: 0 1em;
+}
+
+html.dark .highlight .hll {
+  background-color: var(--accent-a4);
+}
