@@ -156,9 +156,7 @@ def sample_migration(
     yield revision_id
 
 
-async def test_check_with_pending_migrations(
-    alembic_cmds: commands.AlembicCommands, sample_migration: str
-) -> None:
+async def test_check_with_pending_migrations(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test check command with pending migrations."""
     # Check should run without crashing
     # It may or may not raise CommandError depending on database state
@@ -231,9 +229,7 @@ async def test_heads_verbose_mode(alembic_cmds: commands.AlembicCommands, sample
     alembic_cmds.heads(verbose=True, resolve_dependencies=False)
 
 
-async def test_heads_with_resolve_dependencies(
-    alembic_cmds: commands.AlembicCommands, sample_migration: str
-) -> None:
+async def test_heads_with_resolve_dependencies(alembic_cmds: commands.AlembicCommands, sample_migration: str) -> None:
     """Test heads command with dependency resolution."""
     alembic_cmds.heads(verbose=False, resolve_dependencies=True)
 
@@ -303,7 +299,9 @@ async def test_branches_verbose_mode(alembic_cmds: commands.AlembicCommands, ini
     alembic_cmds.branches(verbose=True)
 
 
-async def test_branches_with_multiple_heads(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
+async def test_branches_with_multiple_heads(
+    alembic_cmds: commands.AlembicCommands, initialized_migrations: Path
+) -> None:
     """Test branches command with branched migrations."""
     # Create branched migrations
     alembic_cmds.revision(message="main_branch", autogenerate=False, head="base", branch_label="main")
