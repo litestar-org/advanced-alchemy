@@ -106,8 +106,8 @@ requirements/{requirement-slug}/
 1. **Documentation:**
    - Update docs/guides/
    - Update Sphinx API reference (RST)
-   - Add changelog entry
    - Build docs locally
+   - **Note:** Changelog is auto-generated from GitHub issues - NEVER add manual entries
 
 2. **Quality Gate (MANDATORY):**
    - Run `make lint` (must pass)

@@ -920,11 +920,12 @@ users = await repository.upsert_many(
 When updating documentation:
 
 - Use Sphinx-compatible docstrings (Google style)
-- Update changelog in `docs/changelog.rst`
 - Use `sphinx-paramlinks` for parameter references
 - Use `sphinx_design` for visually appealing elements
 - Include code examples with `auto-pytabs` for async/sync variants
 - Update relevant toctrees in `docs/index.rst`
+
+**IMPORTANT:** Changelog entries are auto-generated from GitHub issues. NEVER manually add entries to `docs/changelog.rst`.
 
 ## Alembic Integration
 
