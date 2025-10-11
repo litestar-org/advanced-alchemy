@@ -1,5 +1,11 @@
-/* Theme color definitions */
+/* Advanced Alchemy Custom Theme Configuration
+ * Uses Shibuya theme's CSS variables for proper color integration
+ * Shibuya provides --accent-1 through --accent-12 based on accent_color in conf.py
+ * Current accent_color: amber (configured in docs/conf.py)
+ */
+
 :root {
+  /* Typography scaling for responsive brand text */
   --brand-font-size-xl: 6rem;
   --brand-font-size-lg: 5rem;
   --brand-font-size-md: 4rem;
@@ -14,24 +20,21 @@
   --brand-letter-spacing-xs: 0.03em;
 }
 
+/* Light mode: Use Shibuya's accent color variables
+ * --accent-9 is the primary accent color
+ * --accent-10 is slightly darker
+ * --accent-11 is for high-contrast text
+ * --accent-a1 through --accent-a12 are transparent variants
+ */
 html.light {
-  --sl-color-primary: #202235;
-  --sl-color-secondary: #edb641;
-  --sl-color-accent: #ffd480;
-  --sl-color-text-1: var(--sl-color-primary);
-  --sl-color-text-2: var(--sl-color-secondary);
-  --sy-c-foot-background: #f0f0f0;
-  --yue-c-text: #000;
-  --brand-text-glow: 0 0 10px rgba(32, 34, 53, 0.3),
-    0 0 20px rgba(32, 34, 53, 0.2), 0 0 30px rgba(237, 182, 65, 0.1);
+  --brand-text-glow: 0 0 10px var(--accent-a3),
+    0 0 20px var(--accent-a2), 0 0 30px var(--accent-a1);
 }
 
+/* Dark mode: Use Shibuya's accent color variables for dark theme */
 html.dark {
-  --sl-color-text-1: var(--sl-color-secondary);
-  --sy-c-foot-background: black;
-  --yue-c-text: #fff;
-  --brand-text-glow: 0 0 10px rgba(237, 182, 65, 0.4),
-    0 0 20px rgba(237, 182, 65, 0.3), 0 0 30px rgba(237, 182, 65, 0.2);
+  --brand-text-glow: 0 0 10px var(--accent-a6),
+    0 0 20px var(--accent-a5), 0 0 30px var(--accent-a4);
 }
 
 .title-with-logo {
@@ -48,7 +51,7 @@ html.dark {
 }
 
 html[class] .title-with-logo .brand-text {
-  font-family: var(--sl-font-sans);
+  font-family: var(--sy-f-text);
   font-weight: 300;
   font-size: var(--brand-font-size-lg);
   letter-spacing: var(--brand-letter-spacing-xl);
@@ -62,16 +65,16 @@ html[class] .title-with-logo .brand-text {
   hyphens: auto;
   -webkit-hyphens: auto;
   -ms-hyphens: auto;
-  transition: color var(--sl-transition), text-shadow var(--sl-transition);
+  transition: color 0.3s ease, text-shadow 0.3s ease;
 }
 
 html.light .title-with-logo .brand-text {
-  color: var(--sl-color-text-1);
+  color: var(--sy-c-heading);
   text-shadow: var(--brand-text-glow);
 }
 
 html.dark .title-with-logo .brand-text {
-  color: var(--sl-color-text-2);
+  color: var(--sy-c-text);
   text-shadow: var(--brand-text-glow);
 }
 
@@ -133,15 +136,103 @@ html.dark .title-with-logo .brand-text {
   }
 }
 
-/* Preserve existing layout styles */
-#badges img {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
+/* Badge container styling - clean layout without box */
 #badges {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 3em;
+}
+
+#badges img {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* =====================================================
+ * Brand-Aligned UI Element Enhancements
+ * Uses Shibuya's accent colors for consistency
+ * ===================================================== */
+
+/* Inline code styling - uses accent colors */
+html.light code.literal {
+  background-color: var(--accent-a2);
+  border: 1px solid var(--accent-a4);
+  color: var(--accent-11);
+  padding: 0.1em 0.4em;
+  border-radius: 0.3em;
+  font-size: 90%;
+}
+
+html.dark code.literal {
+  background-color: var(--accent-a3);
+  border: 1px solid var(--accent-a5);
+  color: var(--accent-11);
+  padding: 0.1em 0.4em;
+  border-radius: 0.3em;
+  font-size: 90%;
+}
+
+/* Navigation links - accent color on hover */
+html.light .toctree-wrapper a:hover,
+html.light .doc-toc a:hover {
+  color: var(--accent-10);
+}
+
+html.dark .toctree-wrapper a:hover,
+html.dark .doc-toc a:hover {
+  color: var(--accent-11);
+}
+
+/* Blockquote styling - accent-colored left border */
+html.light blockquote {
+  border-left: 4px solid var(--accent-9);
+  background-color: var(--accent-a2);
+  padding: 1em 1em 1em 1.5em;
+  margin: 1em 0;
+}
+
+html.dark blockquote {
+  border-left: 4px solid var(--accent-10);
+  background-color: var(--accent-a3);
+  padding: 1em 1em 1em 1.5em;
+  margin: 1em 0;
+}
+
+/* Table header styling - accent colors */
+html.light table thead th {
+  background-color: var(--accent-a2);
+  border-bottom: 2px solid var(--accent-9);
+}
+
+html.dark table thead th {
+  background-color: var(--accent-a3);
+  border-bottom: 2px solid var(--accent-10);
+}
+
+/* Admonition enhancements - accent-aligned colors */
+html.light .admonition.note {
+  border-left-color: var(--sy-c-heading);
+}
+
+html.light .admonition.tip {
+  border-left-color: var(--accent-9);
+}
+
+html.dark .admonition.note {
+  border-left-color: var(--accent-9);
+}
+
+html.dark .admonition.tip {
+  border-left-color: var(--accent-10);
+}
+
+/* Ensure smooth transitions for theme switching */
+code.literal,
+.toctree-wrapper a,
+.doc-toc a,
+blockquote,
+table thead th,
+.admonition {
+  transition: all 0.3s ease;
 }

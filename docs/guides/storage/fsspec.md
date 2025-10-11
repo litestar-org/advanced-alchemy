@@ -271,5 +271,5 @@ if data.content_type not in ALLOWED_CONTENT_TYPES:
 
 - [Obstore Storage Guide](obstore.md) - High-performance Rust-based alternative
 - [Quick Reference](../quick-reference/quick-reference.md) - Common patterns
-- [Testing Guide](../testing/testing.md) - Testing file storage
+- [Testing Guide](../testing/integration.md) - Testing file storage
 - [FSSpec Documentation](https://filesystem-spec.readthedocs.io/) - Official fsspec docs
