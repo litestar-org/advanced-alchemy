@@ -116,9 +116,33 @@ def alembic_cmds(
     test_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
 ) -> Generator[commands.AlembicCommands, None, None]:
     """Create AlembicCommands instance."""
-    yield commands.AlembicCommands(
+    cmds = commands.AlembicCommands(
         sqlalchemy_config=test_config,
     )
+    yield cmds
+    # Clean up: Drop the alembic_version table after each test to prevent
+    # revision ID conflicts between tests using session-scoped databases
+    try:
+        from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import AsyncEngine
+
+        engine = test_config.get_engine()
+        table_name = test_config.alembic_config.version_table_name
+
+        if isinstance(engine, AsyncEngine):
+            import asyncio
+
+            async def _cleanup() -> None:
+                async with engine.begin() as conn:
+                    await conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+
+            asyncio.run(_cleanup())
+        else:
+            with engine.begin() as conn:
+                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+    except Exception:
+        # Ignore cleanup errors - table may not exist
+        pass
 
 
 @pytest.fixture()
@@ -299,9 +323,7 @@ def test_branches_verbose_mode(alembic_cmds: commands.AlembicCommands, initializ
     alembic_cmds.branches(verbose=True)
 
 
-def test_branches_with_multiple_heads(
-    alembic_cmds: commands.AlembicCommands, initialized_migrations: Path
-) -> None:
+def test_branches_with_multiple_heads(alembic_cmds: commands.AlembicCommands, initialized_migrations: Path) -> None:
     """Test branches command with branched migrations."""
     # Create branched migrations
     alembic_cmds.revision(message="main_branch", autogenerate=False, head="base", branch_label="main")
@@ -317,7 +339,7 @@ def test_merge_creates_revision(alembic_cmds: commands.AlembicCommands, initiali
     alembic_cmds.revision(message="branch_b", autogenerate=False, head="base", branch_label="branch_b")
     # Merge
     result = alembic_cmds.merge(
-        revisions="branch_a+branch_b",
+        revisions="heads",
         message="merge branches",
         branch_label=None,
         rev_id=None,
@@ -330,7 +352,7 @@ def test_merge_with_custom_message(alembic_cmds: commands.AlembicCommands, initi
     alembic_cmds.revision(message="feature_1", autogenerate=False, head="base", branch_label="feature_1")
     alembic_cmds.revision(message="feature_2", autogenerate=False, head="base", branch_label="feature_2")
     result = alembic_cmds.merge(
-        revisions="feature_1+feature_2",
+        revisions="heads",
         message="custom merge message",
         branch_label=None,
         rev_id=None,
@@ -343,7 +365,7 @@ def test_merge_with_branch_label(alembic_cmds: commands.AlembicCommands, initial
     alembic_cmds.revision(message="dev_1", autogenerate=False, head="base", branch_label="dev_1")
     alembic_cmds.revision(message="dev_2", autogenerate=False, head="base", branch_label="dev_2")
     result = alembic_cmds.merge(
-        revisions="dev_1+dev_2",
+        revisions="heads",
         message="merge development branches",
         branch_label="merged_dev",
         rev_id=None,
@@ -357,7 +379,7 @@ def test_merge_with_custom_rev_id(alembic_cmds: commands.AlembicCommands, initia
     alembic_cmds.revision(message="work_2", autogenerate=False, head="base", branch_label="work_2")
     custom_id = "custom_merge_001"
     result = alembic_cmds.merge(
-        revisions="work_1+work_2",
+        revisions="heads",
         message="merge with custom id",
         branch_label=None,
         rev_id=custom_id,
@@ -453,7 +475,7 @@ def test_workflow_branch_and_merge(alembic_cmds: commands.AlembicCommands, initi
     alembic_cmds.branches(verbose=False)
     # Merge
     alembic_cmds.merge(
-        revisions="branch_x+branch_y",
+        revisions="heads",
         message="merged branches",
         branch_label=None,
         rev_id=None,
