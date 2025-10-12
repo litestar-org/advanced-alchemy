@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Gemini, Claude Code, Codex, and other agents when working with code in the Advanced Alchemy project..
+This file provides guidance to Gemini, Claude Code, Codex, and other agents when working with code in the Advanced Alchemy project.
 
 ## Essential Commands
 

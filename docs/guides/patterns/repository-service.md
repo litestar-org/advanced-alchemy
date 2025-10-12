@@ -1,6 +1,6 @@
 # Repository-Service Pattern
 
-Advanced Alchemy repository-service pattern reference. See [AGENTS.md](/home/cody/code/litestar/advanced-alchemy/AGENTS.md) for complete conventions.
+Advanced Alchemy repository-service pattern reference. See [AGENTS.md](../../../AGENTS.md) for complete conventions.
 
 ## Core Pattern
 
