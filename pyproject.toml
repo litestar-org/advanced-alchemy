@@ -349,6 +349,7 @@ classmethod-decorators = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"advanced_alchemy/alembic/templates/*/env.py" = ["INP001"]
 "advanced_alchemy/repository/*.py" = ['C901']
 "advanced_alchemy/service/*.py" = ["PLR0911"]
 "examples/flask.py" = ["ANN"]

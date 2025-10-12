@@ -166,6 +166,14 @@ class AlembicCommands:
         """
         return migration_command.downgrade(config=self.config, revision=revision, tag=tag, sql=sql)
 
+    def branches(self, verbose: bool = False) -> None:
+        """Show current branch points in the script directory.
+
+        Args:
+            verbose (bool): If True, display detailed information.
+        """
+        return migration_command.branches(config=self.config, verbose=verbose)
+
     def check(self) -> None:
         """Check for pending upgrade operations.
 

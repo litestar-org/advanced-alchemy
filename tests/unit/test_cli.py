@@ -157,13 +157,161 @@ def test_stamp(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMo
 
         assert result.exit_code == 0
         mock_alembic.assert_called_once()
-        mock_alembic.return_value.stamp.assert_called_once_with(revision="head")
+        mock_alembic.return_value.stamp.assert_called_once_with(revision="head", sql=False, tag=None, purge=False)
+
+
+def test_stamp_with_options(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the stamp command with all options."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "stamp", "--sql", "--tag", "v1.0", "--purge", "head"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.stamp.assert_called_once_with(revision="head", sql=True, tag="v1.0", purge=True)
+
+
+def test_check(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the check command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "check"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.check.assert_called_once()
+
+
+def test_edit(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the edit command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "edit", "abc123"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.edit.assert_called_once_with(revision="abc123")
+
+
+def test_ensure_version(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the ensure-version command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "ensure-version"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.ensure_version.assert_called_once_with(sql=False)
+
+
+def test_heads(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the heads command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "heads", "--verbose", "--resolve-dependencies"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.heads.assert_called_once_with(verbose=True, resolve_dependencies=True)
+
+
+def test_history(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the history command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            [
+                "--config",
+                "tests.unit.fixtures.configs",
+                "history",
+                "--verbose",
+                "--rev-range",
+                "base:head",
+                "--indicate-current",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.history.assert_called_once_with(
+            rev_range="base:head",
+            verbose=True,
+            indicate_current=True,
+        )
+
+
+def test_merge(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the merge command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "merge", "--no-prompt", "-m", "test merge", "heads"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.merge.assert_called_once_with(
+            revisions="heads",
+            message="test merge",
+            branch_label=None,
+            rev_id=None,
+        )
+
+
+def test_show(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the show command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "show", "head"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.show.assert_called_once_with(rev="head")
+
+
+def test_branches(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the branches command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "branches", "--verbose"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.branches.assert_called_once_with(verbose=True)
+
+
+def test_list_templates(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
+    """Test the list-templates command."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(
+            database_cli,
+            ["--config", "tests.unit.fixtures.configs", "list-templates"],
+        )
+
+        assert result.exit_code == 0
+        mock_alembic.assert_called_once()
+        mock_alembic.return_value.list_templates.assert_called_once()
 
 
 def test_cli_group_creation() -> None:
     """Test that the CLI group is created correctly."""
     cli_group = add_migration_commands()
     assert cli_group.name == "alchemy"
+    # Original commands
     assert "show-current-revision" in cli_group.commands
     assert "upgrade" in cli_group.commands
     assert "downgrade" in cli_group.commands
@@ -172,6 +320,16 @@ def test_cli_group_creation() -> None:
     assert "drop-all" in cli_group.commands
     assert "dump-data" in cli_group.commands
     assert "stamp" in cli_group.commands
+    # New commands added for Alembic CLI alignment
+    assert "check" in cli_group.commands
+    assert "edit" in cli_group.commands
+    assert "ensure-version" in cli_group.commands
+    assert "heads" in cli_group.commands
+    assert "history" in cli_group.commands
+    assert "merge" in cli_group.commands
+    assert "show" in cli_group.commands
+    assert "branches" in cli_group.commands
+    assert "list-templates" in cli_group.commands
 
 
 def test_external_config_loading(cli_runner: CliRunner) -> None:

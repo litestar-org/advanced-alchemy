@@ -240,18 +240,215 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
             alembic_commands.upgrade(revision=revision, sql=sql, tag=tag)
 
     @database_group.command(
-        help="Stamp the revision table with the given revision",
+        help="Stamp the revision table with the given revision; don't run any migrations",
     )
     @click.argument("revision", type=str)
     @bind_key_option
-    def stamp(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+    @click.option("--sql", is_flag=True, default=False, help="Generate SQL output for offline migrations")
+    @click.option(
+        "--tag", type=str, default=None, help="Arbitrary 'tag' that can be intercepted by custom env.py scripts"
+    )
+    @click.option("--purge", is_flag=True, default=False, help="Delete all entries in version table before stamping")
+    def stamp(bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], purge: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Stamp the revision table with the given revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Stamping revision table[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
-        alembic_commands.stamp(revision=revision)
+        alembic_commands.stamp(revision=revision, sql=sql, tag=tag, purge=purge)
+
+    @database_group.command(
+        name="check",
+        help="Check if the target database is up to date",
+    )
+    @bind_key_option
+    def check_revision(bind_key: Optional[str]) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Check for pending upgrade operations."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Checking for pending migrations[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.check()
+
+    @database_group.command(
+        name="edit",
+        help="Edit a revision file using $EDITOR",
+    )
+    @click.argument("revision", type=str)
+    @bind_key_option
+    def edit_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Edit revision script with system editor."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule(f"[yellow]Opening revision {revision} in editor[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.edit(revision=revision)
+
+    @database_group.command(
+        name="ensure-version",
+        help="Create the alembic version table if it doesn't exist",
+    )
+    @bind_key_option
+    @click.option("--sql", is_flag=True, default=False, help="Generate SQL output instead of executing")
+    def ensure_version_table(bind_key: Optional[str], sql: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Ensure alembic version table exists."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Ensuring version table exists[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.ensure_version(sql=sql)
+
+    @database_group.command(
+        name="heads",
+        help="Show current available heads in the script directory",
+    )
+    @bind_key_option
+    @verbose_option
+    @click.option(
+        "--resolve-dependencies",
+        is_flag=True,
+        default=False,
+        help="Resolve dependencies between heads",
+    )
+    def show_heads(bind_key: Optional[str], verbose: bool, resolve_dependencies: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Show current heads."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Showing current heads[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.heads(verbose=verbose, resolve_dependencies=resolve_dependencies)
+
+    @database_group.command(
+        name="history",
+        help="List changeset scripts in chronological order",
+    )
+    @bind_key_option
+    @verbose_option
+    @click.option(
+        "--rev-range",
+        type=str,
+        default=None,
+        help="Revision range (e.g., 'base:head', 'abc:def')",
+    )
+    @click.option(
+        "--indicate-current",
+        is_flag=True,
+        default=False,
+        help="Indicate the current revision",
+    )
+    def show_history(  # pyright: ignore[reportUnusedFunction]
+        bind_key: Optional[str],
+        verbose: bool,
+        rev_range: Optional[str],
+        indicate_current: bool,
+    ) -> None:
+        """Show revision history."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Showing revision history[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.history(
+            rev_range=rev_range,
+            verbose=verbose,
+            indicate_current=indicate_current,
+        )
+
+    @database_group.command(
+        name="merge",
+        help="Merge two revisions together, creating a new migration file",
+    )
+    @click.argument("revisions", type=str)
+    @bind_key_option
+    @click.option("-m", "--message", type=str, default=None, help="Merge message")
+    @click.option("--branch-label", type=str, default=None, help="Branch label for merge revision")
+    @click.option("--rev-id", type=str, default=None, help="Specify custom revision ID")
+    @no_prompt_option
+    def merge_revisions(  # pyright: ignore[reportUnusedFunction]
+        bind_key: Optional[str],
+        revisions: str,
+        message: Optional[str],
+        branch_label: Optional[str],
+        rev_id: Optional[str],
+        no_prompt: bool,
+    ) -> None:
+        """Merge revisions (resolves multiple heads)."""
+        from rich.prompt import Prompt
+
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Merging revisions[/]", align="left")
+
+        if message is None:
+            message = "merge revisions" if no_prompt else Prompt.ask("Enter merge message")
+
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.merge(
+            revisions=revisions,
+            message=message,
+            branch_label=branch_label,
+            rev_id=rev_id,
+        )
+
+    @database_group.command(
+        name="show",
+        help="Show the revision denoted by the given symbol",
+    )
+    @click.argument("revision", type=str)
+    @bind_key_option
+    def show_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Show details of a specific revision."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule(f"[yellow]Showing revision {revision}[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.show(rev=revision)
+
+    @database_group.command(
+        name="branches",
+        help="Show current branch points in the migration history",
+    )
+    @bind_key_option
+    @verbose_option
+    def show_branches(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+        """Show branch points."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Showing branch points[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.branches(verbose=verbose)
+
+    @database_group.command(
+        name="list-templates",
+        help="List available Alembic migration templates",
+    )
+    @bind_key_option
+    def list_init_templates(bind_key: Optional[str]) -> None:  # pyright: ignore[reportUnusedFunction]
+        """List available initialization templates."""
+        from advanced_alchemy.alembic.commands import AlembicCommands
+
+        ctx = cast("click.Context", click.get_current_context())
+        console.rule("[yellow]Available templates[/]", align="left")
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
+        alembic_commands.list_templates()
 
     @database_group.command(
         name="init",
