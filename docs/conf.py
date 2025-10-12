@@ -187,12 +187,9 @@ autodoc_mock_imports = [
 
 autosectionlabel_prefix_document = True
 
-# Strip prompts when copying code
+# Strip the dollar prompt when copying code
 # https://sphinx-copybutton.readthedocs.io/en/latest/use.html#strip-and-configure-input-prompts-for-code-cells
-copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
-copybutton_prompt_is_regexp = True
-copybutton_line_continuation_character = "\\"
-copybutton_here_doc_delimiter = "EOF"
+copybutton_prompt_text = "$ "
 
 # -- Style configuration -----------------------------------------------------
 html_theme = "shibuya"
