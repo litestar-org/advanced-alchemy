@@ -748,7 +748,8 @@ async def test_service_update_many_schema_types_github_535(
         AuthorUpdateMsgspecSchema(id=author2.id, name="Updated Author Two"),  # msgspec with UNSET dob
     ]
 
-    await asyncio.sleep(0.01)
+    # Sleep to ensure timestamp difference for databases with lower precision
+    await asyncio.sleep(1.1)
 
     # Update via service - should only update names, leave dobs unchanged
     updated_authors = await maybe_async(author_service.update_many(update_data))
