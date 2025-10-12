@@ -318,7 +318,12 @@ Currently active requirements:
 
 Recent archived requirements:
 
-- _None yet_ (This is a fresh workspace!)
+- **in-fields-closure-fix** (Completed: 2025-10-12)
+    - Issue: #507
+    - Branch: fix/in-fields-closure
+    - Commit: 94e1bbd6
+    - Fixed Python closure bug in filter provider loops
+    - Status: Ready for PR merge
 
 ## See Also
 
