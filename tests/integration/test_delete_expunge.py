@@ -18,10 +18,8 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
-from tests.helpers import maybe_async
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncEngine
     from sqlalchemy.orm.state import InstanceState
 
 
@@ -53,7 +51,7 @@ class UserRepositorySync(SQLAlchemySyncRepository[User]):
 
 
 # Helper function to check object state
-def get_object_state(instance: Any) -> "Union[InstanceState[Any], None]":
+def get_object_state(instance: Any) -> Union[InstanceState[Any], None]:
     """Get the SQLAlchemy object state."""
     try:
         state = inspect(instance)
@@ -68,7 +66,7 @@ def is_object_detached(instance: Any) -> bool:
     return state is not None and state.detached
 
 
-def is_object_in_session(instance: Any, session: "Union[Session, AsyncSession]") -> bool:
+def is_object_in_session(instance: Any, session: Union[Session, AsyncSession]) -> bool:
     """Check if object is in session."""
     return instance in session
 
@@ -120,11 +118,13 @@ async def test_delete_many_with_auto_expunge_and_commit_async(async_session: Asy
 
     # Setup: Create multiple users
     repo = UserRepository(session=async_session)
-    users = await repo.add_many([
-        User(name="User1", active=True),
-        User(name="User2", active=True),
-        User(name="User3", active=True),
-    ])
+    users = await repo.add_many(
+        [
+            User(name="User1", active=True),
+            User(name="User2", active=True),
+            User(name="User3", active=True),
+        ]
+    )
     await async_session.commit()
     user1, user2, user3 = users[0], users[1], users[2]
 
@@ -161,11 +161,13 @@ async def test_delete_where_with_auto_expunge_and_commit_async(async_session: As
 
     # Setup: Create users with different active states
     repo = UserRepository(session=async_session, auto_expunge=True, auto_commit=True)
-    await repo.add_many([
-        User(name="Alice", active=True),
-        User(name="Bob", active=False),
-        User(name="Charlie", active=False),
-    ])
+    await repo.add_many(
+        [
+            User(name="Alice", active=True),
+            User(name="Bob", active=False),
+            User(name="Charlie", active=False),
+        ]
+    )
     await async_session.commit()
 
     # Bug reproduction: This failed with InvalidRequestError before the fix
@@ -293,11 +295,13 @@ def test_delete_where_with_auto_expunge_and_commit_sync(sync_session: Session) -
 
     # Setup: Create users
     repo = UserRepositorySync(session=sync_session, auto_expunge=True, auto_commit=True)
-    repo.add_many([
-        User(name="Alice", active=True),
-        User(name="Bob", active=False),
-        User(name="Charlie", active=False),
-    ])
+    repo.add_many(
+        [
+            User(name="Alice", active=True),
+            User(name="Bob", active=False),
+            User(name="Charlie", active=False),
+        ]
+    )
     sync_session.commit()
 
     # This should NOT raise InvalidRequestError
@@ -323,10 +327,12 @@ async def test_delete_empty_result_with_auto_expunge_async(async_session: AsyncS
 
     # Setup: Create only active users
     repo = UserRepository(session=async_session, auto_expunge=True, auto_commit=True)
-    await repo.add_many([
-        User(name="Alice", active=True),
-        User(name="Bob", active=True),
-    ])
+    await repo.add_many(
+        [
+            User(name="Alice", active=True),
+            User(name="Bob", active=True),
+        ]
+    )
     await async_session.commit()
 
     # Delete inactive users (none exist)

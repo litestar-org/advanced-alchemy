@@ -1737,13 +1737,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         # Check object state before expunging
         state = inspect(instance)
-        if state is not None:
-            # Skip expunge if object is marked for deletion (will be detached on commit)
-            if state.deleted:
-                return None
-            # Skip expunge if object is already detached (already removed from session)
-            if state.detached:
-                return None
+        if state is not None and (state.deleted or state.detached):
+            # Skip expunge for objects that are deleted or already detached
+            # - state.deleted: Object marked for deletion, will be detached on commit
+            # - state.detached: Object already removed from session (e.g., from DELETE...RETURNING)
+            return None
 
         return self.session.expunge(instance)
 
