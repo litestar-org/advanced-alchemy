@@ -124,7 +124,7 @@ class TestExpungeDeletedObjects:
         mocker.patch("advanced_alchemy.repository._async.inspect", return_value=None)
 
         # Call _expunge - should call session.expunge (no state check passes)
-        result = repo._expunge(mock_instance, auto_expunge=True)
+        result = repo._expunge(mock_instance, auto_expunge=True)  # type: ignore[func-returns-value]
 
         # Verify: expunge WAS called (None state doesn't have .deleted)
         session.expunge.assert_called_once_with(mock_instance)
@@ -151,7 +151,7 @@ class TestExpungeDeletedObjects:
         mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_state)
 
         # Call _expunge - should not call session.expunge
-        result = repo._expunge(mock_instance, auto_expunge=True)
+        result = repo._expunge(mock_instance, auto_expunge=True)  # type: ignore[func-returns-value]
 
         # Verify: expunge was NOT called (object is detached)
         session.expunge.assert_not_called()
