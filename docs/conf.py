@@ -220,7 +220,7 @@ html_meta = {
     "author": "Litestar Organization",
     "og:title": "Advanced Alchemy Documentation",
     "og:type": "website",
-    "og:description": "Advanced Alchemy provides base classes, mixins, custom column types, and implementations of repository and service layer patterns for SQLAlchemy",
+    "og:description": "Advanced Alchemy - A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy",
     "og:site_name": "Advanced Alchemy",
     "twitter:card": "summary",
 }
