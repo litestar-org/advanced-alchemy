@@ -54,8 +54,7 @@ class UserRepositorySync(SQLAlchemySyncRepository[User]):
 def get_object_state(instance: Any) -> Union[InstanceState[Any], None]:
     """Get the SQLAlchemy object state."""
     try:
-        state = inspect(instance)
-        return state  # type: ignore[no-any-return]
+        return inspect(instance)  # type: ignore[no-any-return]
     except Exception:
         return None
 
