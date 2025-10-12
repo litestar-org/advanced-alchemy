@@ -573,10 +573,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
         for field_def in not_in_fields:
 
+            # Capture field_def by value to avoid Python closure late binding gotcha
+            # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
                 local_field_name: str,
                 local_field_type: type[Any],
-            ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
+                _captured_field_def: FieldNameType = field_def,  # Capture by value
+            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
                 def provide_not_in_filter(  # pyright: ignore
                     values: Annotated[  # type: ignore
                         Optional[set[local_field_type]],  # pyright: ignore
@@ -606,10 +609,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
         for field_def in in_fields:
 
+            # Capture field_def by value to avoid Python closure late binding gotcha
+            # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore
                 local_field_name: str,
                 local_field_type: type[Any],
-            ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore
+                _captured_field_def: FieldNameType = field_def,  # Capture by value
+            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
                 def provide_in_filter(  # pyright: ignore
                     values: Annotated[  # type: ignore
                         Optional[set[local_field_type]],  # pyright: ignore
