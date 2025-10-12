@@ -1714,11 +1714,32 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             **kwargs,
         )
 
-    def _expunge(self, instance: ModelT, auto_expunge: Optional[bool]) -> None:
+    def _expunge(self, instance: "ModelT", auto_expunge: "Optional[bool]") -> None:
+        """Remove instance from session if auto_expunge is enabled.
+
+        Args:
+            instance: The model instance to expunge
+            auto_expunge: Whether to expunge the instance. If None, uses self.auto_expunge
+
+        Note:
+            Deleted objects that have been committed are automatically moved to the
+            detached state by SQLAlchemy. We skip expunge for deleted objects to
+            avoid InvalidRequestError when attempting to expunge objects not in the session.
+        """
         if auto_expunge is None:
             auto_expunge = self.auto_expunge
 
-        return self.session.expunge(instance) if auto_expunge else None
+        if not auto_expunge:
+            return None
+
+        # Check object state before expunging
+        state = inspect(instance)
+        if state is not None and state.deleted:
+            # Object is marked for deletion; it will be automatically detached
+            # when the transaction commits. Skip expunge to avoid InvalidRequestError.
+            return None
+
+        return self.session.expunge(instance)
 
     async def _flush_or_commit(self, auto_commit: Optional[bool]) -> None:
         if auto_commit is None:
