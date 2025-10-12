@@ -1723,8 +1723,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Note:
             Deleted objects that have been committed are automatically moved to the
-            detached state by SQLAlchemy. We skip expunge for deleted objects to
-            avoid InvalidRequestError when attempting to expunge objects not in the session.
+            detached state by SQLAlchemy. Objects returned from DELETE...RETURNING
+            statements are initially persistent but become detached after commit.
+            We skip expunge for objects that are already detached or marked for deletion
+            to avoid InvalidRequestError.
         """
         if auto_expunge is None:
             auto_expunge = self.auto_expunge
@@ -1734,10 +1736,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         # Check object state before expunging
         state = inspect(instance)
-        if state is not None and state.deleted:
-            # Object is marked for deletion; it will be automatically detached
-            # when the transaction commits. Skip expunge to avoid InvalidRequestError.
-            return None
+        if state is not None:
+            # Skip expunge if object is marked for deletion (will be detached on commit)
+            if state.deleted:
+                return None
+            # Skip expunge if object is already detached (already removed from session)
+            if state.detached:
+                return None
 
         return self.session.expunge(instance)
 

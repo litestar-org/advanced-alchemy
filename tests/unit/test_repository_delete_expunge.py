@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -43,8 +42,7 @@ class TestExpungeDeletedObjects:
     @pytest.fixture
     def mock_instance(self) -> MagicMock:
         """Create a mock instance for testing."""
-        instance = MagicMock()
-        return instance
+        return MagicMock()
 
     def test_expunge_skips_deleted_objects_async(
         self,
@@ -65,11 +63,10 @@ class TestExpungeDeletedObjects:
         mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_state)
 
         # Call _expunge - should not raise, should not call session.expunge
-        result = repo._expunge(mock_instance, auto_expunge=True)
+        repo._expunge(mock_instance, auto_expunge=True)
 
         # Verify: expunge was NOT called (because object is deleted)
         session.expunge.assert_not_called()
-        assert result is None
 
     def test_expunge_calls_session_for_non_deleted_async(
         self,
@@ -81,15 +78,16 @@ class TestExpungeDeletedObjects:
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
         repo = TestModelRepository(session=session, auto_expunge=True)
 
-        # Mock inspect to return non-deleted state
+        # Mock inspect to return non-deleted, non-detached state
         mock_state = MagicMock()
         mock_state.deleted = False
+        mock_state.detached = False
         mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_state)
 
         # Call _expunge - should call session.expunge
         repo._expunge(mock_instance, auto_expunge=True)
 
-        # Verify: expunge WAS called (object not deleted)
+        # Verify: expunge WAS called (object not deleted and not detached)
         session.expunge.assert_called_once_with(mock_instance)
 
     def test_expunge_respects_auto_expunge_false_async(
@@ -106,12 +104,11 @@ class TestExpungeDeletedObjects:
         mock_inspect = mocker.patch("advanced_alchemy.repository._async.inspect")
 
         # Call _expunge with auto_expunge=False
-        result = repo._expunge(mock_instance, auto_expunge=False)
+        repo._expunge(mock_instance, auto_expunge=False)
 
         # Verify: Neither inspect nor expunge were called
         mock_inspect.assert_not_called()
         session.expunge.assert_not_called()
-        assert result is None
 
     def test_expunge_handles_none_state_async(
         self,
@@ -132,6 +129,33 @@ class TestExpungeDeletedObjects:
         # Verify: expunge WAS called (None state doesn't have .deleted)
         session.expunge.assert_called_once_with(mock_instance)
 
+    def test_expunge_skips_detached_objects_async(
+        self,
+        mock_instance: MagicMock,
+        mocker: MockerFixture,
+    ) -> None:
+        """Test that _expunge() skips detached objects.
+
+        This handles the case where objects from DELETE...RETURNING have
+        already been detached after commit.
+        """
+        # Setup
+        session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+        repo = TestModelRepository(session=session, auto_expunge=True)
+
+        # Mock inspect to return detached state
+        mock_state = MagicMock()
+        mock_state.deleted = False
+        mock_state.detached = True
+        mocker.patch("advanced_alchemy.repository._async.inspect", return_value=mock_state)
+
+        # Call _expunge - should not call session.expunge
+        result = repo._expunge(mock_instance, auto_expunge=True)
+
+        # Verify: expunge was NOT called (object is detached)
+        session.expunge.assert_not_called()
+        assert result is None
+
     def test_expunge_skips_deleted_objects_sync(
         self,
         mock_instance: MagicMock,
@@ -148,11 +172,10 @@ class TestExpungeDeletedObjects:
         mocker.patch("advanced_alchemy.repository._sync.inspect", return_value=mock_state)
 
         # Call _expunge - should not call session.expunge
-        result = repo._expunge(mock_instance, auto_expunge=True)
+        repo._expunge(mock_instance, auto_expunge=True)
 
         # Verify: expunge was NOT called
         session.expunge.assert_not_called()
-        assert result is None
 
     def test_expunge_calls_session_for_non_deleted_sync(
         self,
@@ -164,9 +187,10 @@ class TestExpungeDeletedObjects:
         session = MagicMock(spec=Session, bind=MagicMock())
         repo = TestModelRepositorySync(session=session, auto_expunge=True)
 
-        # Mock inspect to return non-deleted state
+        # Mock inspect to return non-deleted, non-detached state
         mock_state = MagicMock()
         mock_state.deleted = False
+        mock_state.detached = False
         mocker.patch("advanced_alchemy.repository._sync.inspect", return_value=mock_state)
 
         # Call _expunge
