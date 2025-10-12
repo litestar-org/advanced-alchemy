@@ -474,7 +474,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             )
 
         # Fallback for objects with __dict__ (e.g., regular classes)
-        if hasattr(data, "__dict__"):
+        if hasattr(data, "__dict__") and not isinstance(data, self.model_type):
             return model_from_dict(
                 model=self.model_type,
                 **data.__dict__,

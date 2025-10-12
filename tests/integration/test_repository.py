@@ -1,5 +1,6 @@
 """Integration tests for the SQLAlchemy Repository implementation using session-based fixtures."""
 
+import asyncio
 import datetime
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
@@ -339,7 +340,10 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
     # Get first author
     authors = await maybe_async(author_repo.list())
     author = authors[0]
+
     original_name = author.name
+    original_created_at = author.created_at
+    original_updated_at = author.updated_at
 
     # Update the author
     author.name = "Updated Name"
@@ -347,6 +351,32 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
 
     assert updated_author.name == "Updated Name"
     assert updated_author.name != original_name
+    assert updated_author.created_at == original_created_at
+    assert updated_author.updated_at > original_updated_at
+
+
+async def test_service_update_with_dict_data_refreshes_timestamp(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+    frozen_datetime: "Coordinates",
+) -> None:
+    """Service update should refresh audit timestamps when supplied with dict payloads."""
+    session, models = seeded_test_session_async
+    author_service = get_service_from_session((session, models), "author")
+
+    authors = await maybe_async(author_service.list())
+    author = authors[0]
+
+    original_created_at = author.created_at
+    original_updated_at = author.updated_at
+
+    frozen_datetime.shift(datetime.timedelta(seconds=5))
+    update_payload = {"name": "Dict Driven Update"}
+
+    updated_author = await maybe_async(author_service.update(update_payload, item_id=author.id))
+
+    assert updated_author.name == "Dict Driven Update"
+    assert updated_author.created_at == original_created_at
+    assert updated_author.updated_at > original_updated_at
 
 
 async def test_repo_update_many_method_stale_data_fix(
@@ -385,7 +415,7 @@ async def test_repo_update_many_method_stale_data_fix(
         # updated_at should be newer than before
         if updated_author.id == authors[0].id:
             assert updated_author.created_at == original_created_at
-            assert updated_author.updated_at >= original_updated_at
+            assert updated_author.updated_at > original_updated_at
 
 
 async def test_repo_update_many_mixed_types(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
@@ -498,11 +528,18 @@ async def test_service_update_method(seeded_test_session_async: "tuple[AsyncSess
     author = authors[0]
     author_id = author.id
 
+    original_name = author.name
+    original_created_at = author.created_at
+    original_updated_at = author.updated_at
+
     # Update via service - correct parameter order is (data, item_id)
-    update_data = {"name": "Service Updated Name"}
-    updated_author = await maybe_async(author_service.update(update_data, item_id=author_id))
+    author.name = "Service Updated Name"
+    updated_author = await maybe_async(author_service.update(author, item_id=author_id))
 
     assert updated_author.name == "Service Updated Name"
+    assert updated_author.name != original_name
+    assert updated_author.created_at == original_created_at
+    assert updated_author.updated_at > original_updated_at
 
 
 async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
@@ -679,6 +716,10 @@ async def test_service_update_many_schema_types_github_535(
 
     original_dob1 = author1.dob
     original_dob2 = author2.dob
+    original_created_at1 = author1.created_at
+    original_created_at2 = author2.created_at
+    original_updated_at1 = author1.updated_at
+    original_updated_at2 = author2.updated_at
 
     # Get ID type from model for dynamic schema creation
     # For Pydantic compatibility, we need to map database-specific types to Python types
@@ -707,6 +748,9 @@ async def test_service_update_many_schema_types_github_535(
         AuthorUpdateMsgspecSchema(id=author2.id, name="Updated Author Two"),  # msgspec with UNSET dob
     ]
 
+    # Sleep to ensure timestamp difference for databases with lower precision
+    await asyncio.sleep(1.1)
+
     # Update via service - should only update names, leave dobs unchanged
     updated_authors = await maybe_async(author_service.update_many(update_data))
 
@@ -720,9 +764,13 @@ async def test_service_update_many_schema_types_github_535(
     # Verify: names were updated, but dobs remain unchanged
     assert updated_author1.name == "Updated Author One"
     assert updated_author1.dob == original_dob1  # Should be unchanged
+    assert updated_author1.created_at == original_created_at1
+    assert updated_author1.updated_at > original_updated_at1
 
     assert updated_author2.name == "Updated Author Two"
     assert updated_author2.dob == original_dob2  # Should be unchanged
+    assert updated_author2.created_at == original_created_at2
+    assert updated_author2.updated_at > original_updated_at2
 
 
 async def test_repo_update_many_non_returning_backend_refresh(

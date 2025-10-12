@@ -1586,12 +1586,17 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
+        supports_updated_at = hasattr(self.model_type, "updated_at")
         data_to_update: list[dict[str, Any]] = []
         for v in data:
             if isinstance(v, self.model_type) or (hasattr(v, "to_dict") and callable(v.to_dict)):
-                data_to_update.append(v.to_dict())
+                update_payload = v.to_dict()
             else:
-                data_to_update.append(cast("dict[str, Any]", schema_dump(v)))
+                update_payload = cast("dict[str, Any]", schema_dump(v))
+
+            if supports_updated_at and (update_payload.get("updated_at") is None):
+                update_payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc)
+            data_to_update.append(update_payload)
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
