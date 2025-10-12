@@ -30,22 +30,25 @@ suppress_warnings = [
     "autosectionlabel.*",
     "ref.python",  # TODO: remove when https://github.com/sphinx-doc/sphinx/issues/4961 is fixed
 ]
+
 # -- General configuration ---------------------------------------------------
 extensions = [
-    "sphinx.ext.intersphinx",
+    # Sphinx core extensions
     "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.githubpages",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.todo",
     "sphinx.ext.viewcode",
+    # Custom extensions
     "tools.sphinx_ext.missing_references",
     "tools.sphinx_ext.changelog",
+    # Third-party extensions
     "sphinx_autodoc_typehints",
     "myst_parser",
     "auto_pytabs.sphinx_ext",
     "sphinx_copybutton",
-    "sphinx.ext.todo",
-    "sphinx.ext.viewcode",
     "sphinx_click",
     "sphinx_toolbox.collapse",
     "sphinx_design",
@@ -67,14 +70,9 @@ intersphinx_mapping = {
     "sanic": ("https://sanic.readthedocs.io/en/latest/", None),
     "flask": ("https://flask.palletsprojects.com/en/stable/", None),
     "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
+    "attrs": ("https://www.attrs.org/en/stable/", None),
+    "pytest": ("https://docs.pytest.org/en/stable/", None),
 }
-PY_CLASS = "py:class"
-PY_EXC = "py:exc"
-PY_RE = r"py:.*"
-PY_METH = "py:meth"
-PY_ATTR = "py:attr"
-PY_OBJ = "py:obj"
-PY_FUNC = "py:func"
 nitpicky = True
 nitpick_ignore: list[str] = []
 nitpick_ignore_regex: list[str] = []
@@ -94,6 +92,8 @@ autodoc_class_signature = "separated"
 autodoc_default_options = {"special-members": "__init__", "show-inheritance": True, "members": True}
 autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
+autodoc_typehints = "both"
+autodoc_preserve_defaults = True
 autodoc_type_aliases = {
     "ModelT": "advanced_alchemy.repository.typing.ModelT",
     "FilterTypeT": "advanced_alchemy.filters.FilterTypeT",
@@ -170,7 +170,6 @@ autodoc_mock_imports = [
     "_sa.create_engine._sphinx_paramlinks_creator",
     "sqlalchemy.Dialect",
     "sqlalchemy.orm.MetaData",
-    # Add these new entries:
     "advanced_alchemy.config.engine.EngineConfig",
     "advanced_alchemy.config.asyncio.AsyncSessionConfig",
     "advanced_alchemy.config.sync.SyncSessionConfig",
@@ -188,9 +187,12 @@ autodoc_mock_imports = [
 
 autosectionlabel_prefix_document = True
 
-# Strip the dollar prompt when copying code
+# Strip prompts when copying code
 # https://sphinx-copybutton.readthedocs.io/en/latest/use.html#strip-and-configure-input-prompts-for-code-cells
-copybutton_prompt_text = "$ "
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
+copybutton_line_continuation_character = "\\"
+copybutton_here_doc_delimiter = "EOF"
 
 # -- Style configuration -----------------------------------------------------
 html_theme = "shibuya"
@@ -209,11 +211,22 @@ todo_include_todos = True
 html_static_path = ["_static"]
 html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
-html_js_files = ["versioning.js"]
 html_css_files = ["custom.css", "syntax-highlighting.css"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**"]
 html_show_sourcelink = True
 html_copy_source = True
+
+# Add SEO-friendly meta tags
+html_meta = {
+    "description": "Advanced Alchemy - A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy",
+    "keywords": "sqlalchemy, orm, alembic, python, database, litestar, repository-pattern, fastapi, starlette",
+    "author": "Litestar Organization",
+    "og:title": "Advanced Alchemy Documentation",
+    "og:type": "website",
+    "og:description": "Advanced Alchemy provides base classes, mixins, custom column types, and implementations of repository and service layer patterns for SQLAlchemy",
+    "og:site_name": "Advanced Alchemy",
+    "twitter:card": "summary",
+}
 
 html_context = {
     "source_type": "github",
