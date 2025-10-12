@@ -572,7 +572,6 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if not_in_fields := config.get("not_in_fields"):
         not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
         for field_def in not_in_fields:
-
             # Capture field_def by value to avoid Python closure late binding gotcha
             # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
@@ -608,7 +607,6 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if in_fields := config.get("in_fields"):
         in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
         for field_def in in_fields:
-
             # Capture field_def by value to avoid Python closure late binding gotcha
             # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore

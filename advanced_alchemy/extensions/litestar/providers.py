@@ -509,7 +509,7 @@ def _create_statement_filters(  # noqa: C901
             # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = field_def,  # type: ignore[assignment]
-            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:  # type: ignore
+            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
                 def provide_not_in_filter(  # pyright: ignore
                     values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore
                         query=camelize(f"{field_name.name}_not_in"), default=None, required=False
@@ -538,7 +538,7 @@ def _create_statement_filters(  # noqa: C901
             # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = field_def,  # type: ignore[assignment]
-            ) -> Callable[..., Optional[CollectionFilter[Any]]]:  # type: ignore # pyright: ignore
+            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
                 def provide_in_filter(  # pyright: ignore
                     values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore # pyright: ignore
                         query=camelize(f"{field_name.name}_in"), default=None, required=False
