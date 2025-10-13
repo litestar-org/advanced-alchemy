@@ -32,7 +32,7 @@
         :pr: 553
         :issue: 552
 
-        This fixes #552 by moving the guard condition up. One test has been modified but honestly I'm less certain about the test change than the code change lol.
+        This fixes #552 by moving the guard condition up.
 
     .. change:: prevent update() from overwriting unset fields with None (#560)
         :type: bugfix
