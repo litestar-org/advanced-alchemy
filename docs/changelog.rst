@@ -3,6 +3,87 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.7.0
+    :date: 2025-10-13
+
+    .. change:: handle and compare `numpy` arrays
+        :type: feature
+        :pr: 550
+
+        Direct equality comparisons (`!=`) with numpy arrays in repository update methods raised `ValueError: The truth value of an array with more than one element is ambiguous`
+
+        Adds a safe comparison utility that handle numpy arrays gracefully
+
+    .. change:: enhance visibility of syntax blocks in docs
+        :type: feature
+        :pr: 570
+
+        Migrates custom documentation styling from hardcoded colors to Shibuya theme's native CSS variable system. This ensures consistent theming across light/dark modes and leverages the configured `accent_color: "amber"` setting.
+
+    .. change:: align CLI commands with complete Alembic API
+        :type: feature
+        :pr: 569
+        :issue: 566, 568
+
+        Implements complete API parity with Alembic 1.16.5 CLI by adding 9 missing commands and completing the stamp command with all options.
+
+    .. change:: lazy attributes getting accessed on repository update method
+        :type: bugfix
+        :pr: 553
+        :issue: 552
+
+        This fixes #552 by moving the guard condition up.
+
+    .. change:: prevent update() from overwriting unset fields with None (#560)
+        :type: bugfix
+        :pr: 563
+        :issue: 560
+
+        Added `was_attribute_set()` helper function that uses SQLAlchemy's
+        instance state inspection to check which attributes were actually
+        modified/set on the input instance. The update() method now only copies
+        attributes that have been explicitly set by the user.
+
+    .. change:: updated_at not being updated
+        :type: bugfix
+        :pr: 551
+
+        `updated_at` was not correctly updated on some base models.
+
+    .. change:: ensure to_model called with update operation for all data types
+        :type: bugfix
+        :pr: 575
+        :issue: 555
+
+        This PR fixes a bug in the Service layer's `update()` method where dict, Pydantic, msgspec, and attrs data bypassed the `to_model()` operation map, preventing custom `to_model()` implementations from being invoked during update operations.
+
+    .. change:: handle deleted objects gracefully in auto_expunge
+        :type: bugfix
+        :pr: 574
+        :issue: 514
+
+        Resolves InvalidRequestError when deleting objects with `auto_expunge=True` and `auto_commit=True` enabled.
+
+    .. change:: punctuation symbols not visible in dark mode syntax highlighting
+        :type: bugfix
+        :pr: 576
+
+        Add explicit color styling for `.highlight .p` (punctuation tokens) in both light and dark modes using Shibuya theme's `--gray-12` variable. This ensures brackets, parentheses, commas, and other punctuation symbols are properly visible when viewing code examples in dark mode.
+
+    .. change:: correct closure variable capture in filter provider loops
+        :type: bugfix
+        :pr: 573
+        :issue: 507
+
+        Fixes a closure bug where multiple fields in `in_fields` and `not_in_fields` arrays resulted in only the last field working correctly. This was caused by loop variables being captured by reference rather than by value in nested function definitions.
+
+    .. change:: agent workflow and knowledge repository
+        :type: misc
+        :pr: 567
+
+        Introduce a structured agent workflow and comprehensive development guides for the AI agent based development. This includes detailed instructions for agents, directory structures for requirements, and updates to existing documentation.
+
+
 .. changelog:: 1.6.3
     :date: 2025-09-19
 
