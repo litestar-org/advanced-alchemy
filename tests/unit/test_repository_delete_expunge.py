@@ -6,7 +6,7 @@ with auto_expunge=True and auto_commit=True would fail with InvalidRequestError.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,20 +20,20 @@ if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
-class TestModel(base.UUIDAuditBase):
+class ExpungeTestModel(base.UUIDAuditBase):
     """Test model for delete expunge tests."""
 
 
-class TestModelRepository(SQLAlchemyAsyncRepository[TestModel]):
-    """Async repository for TestModel."""
+class ExpungeTestModelRepository(SQLAlchemyAsyncRepository[ExpungeTestModel]):
+    """Async repository for ExpungeTestModel."""
 
-    model_type = TestModel
+    model_type = ExpungeTestModel
 
 
-class TestModelRepositorySync(SQLAlchemySyncRepository[TestModel]):
-    """Sync repository for TestModel."""
+class ExpungeTestModelRepositorySync(SQLAlchemySyncRepository[ExpungeTestModel]):
+    """Sync repository for ExpungeTestModel."""
 
-    model_type = TestModel
+    model_type = ExpungeTestModel
 
 
 class TestExpungeDeletedObjects:
@@ -55,7 +55,7 @@ class TestExpungeDeletedObjects:
         """
         # Setup: Mock session and repository
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=True)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=True)
 
         # Mock inspect to return deleted state
         mock_state = MagicMock()
@@ -76,7 +76,7 @@ class TestExpungeDeletedObjects:
         """Test that _expunge() still calls session.expunge for non-deleted objects."""
         # Setup
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=True)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=True)
 
         # Mock inspect to return non-deleted, non-detached state
         mock_state = MagicMock()
@@ -98,7 +98,7 @@ class TestExpungeDeletedObjects:
         """Test that _expunge() respects auto_expunge=False."""
         # Setup
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=False)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=False)
 
         # Mock inspect (shouldn't be called)
         mock_inspect = mocker.patch("advanced_alchemy.repository._async.inspect")
@@ -118,7 +118,7 @@ class TestExpungeDeletedObjects:
         """Test that _expunge() handles inspect returning None gracefully."""
         # Setup
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=True)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=True)
 
         # Mock inspect to return None (edge case)
         mocker.patch("advanced_alchemy.repository._async.inspect", return_value=None)
@@ -142,7 +142,7 @@ class TestExpungeDeletedObjects:
         """
         # Setup
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=True)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=True)
 
         # Mock inspect to return detached state
         mock_state = MagicMock()
@@ -165,7 +165,7 @@ class TestExpungeDeletedObjects:
         """Test that _expunge() skips deleted objects in sync repository."""
         # Setup
         session = MagicMock(spec=Session, bind=MagicMock())
-        repo = TestModelRepositorySync(session=session, auto_expunge=True)
+        repo = ExpungeTestModelRepositorySync(session=session, auto_expunge=True)
 
         # Mock inspect to return deleted state
         mock_state = MagicMock()
@@ -186,7 +186,7 @@ class TestExpungeDeletedObjects:
         """Test that _expunge() calls session.expunge for non-deleted objects in sync repo."""
         # Setup
         session = MagicMock(spec=Session, bind=MagicMock())
-        repo = TestModelRepositorySync(session=session, auto_expunge=True)
+        repo = ExpungeTestModelRepositorySync(session=session, auto_expunge=True)
 
         # Mock inspect to return non-deleted, non-detached state
         mock_state = MagicMock()
@@ -222,10 +222,10 @@ class TestDeleteMethodsStateChecking:
         """
         # Setup
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=True, auto_commit=True)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=True, auto_commit=True)
 
-        # Mock get_one to return our instance
-        mocker.patch.object(repo, "get_one", return_value=mock_instance)
+        # Mock get to return our instance (delete() calls get, not get_one)
+        mocker.patch.object(repo, "get", new=AsyncMock(return_value=mock_instance))
 
         # Mock inspect to simulate deleted state after commit
         mock_state = MagicMock()
@@ -252,17 +252,24 @@ class TestDeleteMethodsStateChecking:
         """Integration test: delete_many() with auto_expunge should not raise."""
         # Setup
         session = AsyncMock(spec=AsyncSession, bind=MagicMock())
-        repo = TestModelRepository(session=session, auto_expunge=True, auto_commit=True)
+        repo = ExpungeTestModelRepository(session=session, auto_expunge=True, auto_commit=True)
 
         instances = [MagicMock(id=f"id-{i}") for i in range(3)]
 
         # Mock _get_delete_many_statement to return a statement
         mocker.patch.object(repo, "_get_delete_many_statement", return_value=MagicMock())
 
-        # Mock scalars to return instances
-        mock_scalars_result = MagicMock()
-        mock_scalars_result.__aiter__ = AsyncMock(return_value=iter(instances))
-        session.scalars = AsyncMock(return_value=mock_scalars_result)
+        # Mock scalars to return instances - needs to be an async iterable
+        async def mock_scalars(*args: Any, **kwargs: Any) -> Any:
+            """Mock that returns an async iterable of instances."""
+
+            class AsyncIterableResult:
+                def __iter__(self) -> Any:
+                    return iter(instances)
+
+            return AsyncIterableResult()
+
+        session.scalars = mock_scalars
 
         # Mock dialect to support returning
         repo._dialect.delete_executemany_returning = True
