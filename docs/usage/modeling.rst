@@ -57,7 +57,7 @@ Additionally, Advanced Alchemy provides mixins to enhance model functionality:
    * - ``AuditColumns``
      - | Automatic created_at/updated_at timestamps
        | Tracks record modifications
-      | ``updated_at`` refreshes during flush when any mapped column value changes, while preserving explicit timestamp overrides
+       | ``updated_at`` refreshes during flush when any mapped column value changes, while preserving explicit timestamp overrides
    * - ``BigIntPrimaryKey``
      - | Adds BigInt primary key with sequence
    * - ``IdentityPrimaryKey``
