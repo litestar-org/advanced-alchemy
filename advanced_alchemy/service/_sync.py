@@ -12,6 +12,7 @@ from functools import cached_property
 from typing import Any, ClassVar, Generic, Optional, Union, cast
 
 from sqlalchemy import Select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.sql import ColumnElement
@@ -37,7 +38,6 @@ from advanced_alchemy.service.typing import (
     is_dto_data,
     is_msgspec_struct,
     is_pydantic_model,
-    schema_dump,
 )
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 
@@ -737,36 +737,42 @@ class SQLAlchemySyncRepositoryService(
         Returns:
             Updated representation.
         """
-        if (
-            is_dict(data) or is_pydantic_model(data) or is_msgspec_struct(data) or is_attrs_instance(data)
-        ) and item_id is not None:
+        # ALWAYS convert data through to_model first to ensure operation hooks are called
+        # This ensures custom to_model() implementations receive the operation="update" parameter
+        # and that to_model_on_update() is properly invoked via the operation_map
+        data = self.to_model(data, "update")
+
+        if item_id is not None:
+            # When item_id is provided, update existing instance rather than replacing it
+            # This preserves relationships and database-managed fields
             existing_instance = self.repository.get(
                 item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
             )
-            update_data = self.to_model_on_update(data) if is_dict(data) else schema_dump(data, exclude_unset=True)
 
-            if is_dict(update_data):
-                for key, value in update_data.items():
-                    if getattr(existing_instance, key, MISSING) is not MISSING:
-                        setattr(existing_instance, key, value)
+            # Extract attributes from converted model to update existing instance
+            # Only copy attributes that were explicitly set (present in instance state)
+            instance_state = sa_inspect(data)  # pyright: ignore[reportOptionalMemberAccess]
+            for attr in instance_state.mapper.attrs:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
+                # Check if attribute was explicitly set in the instance
+                if attr.key in instance_state.dict:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
+                    value = getattr(data, attr.key, MISSING)
+                    if value is not MISSING and hasattr(existing_instance, attr.key):
+                        setattr(existing_instance, attr.key, value)
+
             data = existing_instance
-        else:
-            data = self.to_model(data, "update")
-            if (
-                item_id is None
-                and self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
-                    item=data,
-                    id_attribute=id_attribute,
-                )
-                is None
-            ):
-                msg = (
-                    "Could not identify ID attribute value.  One of the following is required: "
-                    f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
-                )
-                raise RepositoryError(msg)
-            if item_id is not None:
-                data = self.repository.set_id_attribute_value(item_id=item_id, item=data, id_attribute=id_attribute)  # pyright: ignore[reportUnknownMemberType]
+        elif (
+            self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
+                item=data,
+                id_attribute=id_attribute,
+            )
+            is None
+        ):
+            # No item_id provided and no ID on model - error
+            msg = (
+                "Could not identify ID attribute value.  One of the following is required: "
+                f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
+            )
+            raise RepositoryError(msg)
         return cast(
             "ModelT",
             self.repository.update(

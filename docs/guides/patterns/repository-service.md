@@ -33,25 +33,79 @@ class TagService(service.SQLAlchemyAsyncRepositoryService[m.Tag]):
 
 ## Service Hooks
 
+### Operation Flow
+
+All service CRUD operations follow a consistent pattern:
+
+```
+Operation (create/update/upsert/delete)
+    ↓
+to_model(data, operation="create"|"update"|"upsert"|"delete")
+    ↓
+operation_map routes to operation-specific hook:
+    ↓
+to_model_on_create()  # for create
+to_model_on_update()  # for update
+to_model_on_upsert()  # for upsert
+to_model_on_delete()  # for delete
+```
+
+This ensures custom `to_model()` implementations receive the operation parameter for all data types (dict, Pydantic, msgspec, attrs, model instances).
+
 ### Data Transformation Hooks
 
+**Operation-Specific Hooks** (recommended pattern):
+
 ```python
-# Called before create
+# Called before create (via to_model operation_map)
 async def to_model_on_create(self, data: service.ModelDictT[m.User]) -> service.ModelDictT[m.User]:
     data = service.schema_dump(data)
     # Hash passwords, generate slugs, set defaults
     return data
 
-# Called before update
+# Called before update (via to_model operation_map)
 async def to_model_on_update(self, data: service.ModelDictT[m.User]) -> service.ModelDictT[m.User]:
     data = service.schema_dump(data)
     # Update slugs, validate permissions
     return data
 
-# Called before upsert (insert or update based on match_fields)
+# Called before upsert (via to_model operation_map)
 async def to_model_on_upsert(self, data: service.ModelDictT[m.User]) -> service.ModelDictT[m.User]:
     data = service.schema_dump(data)
     return data
+```
+
+**Custom to_model() with Operation Parameter** (for shared logic across operations):
+
+```python
+class UserService(service.SQLAlchemyAsyncRepositoryService[m.User]):
+    class Repo(repository.SQLAlchemyAsyncRepository[m.User]):
+        model_type = m.User
+
+    repository_type = Repo
+
+    async def to_model(
+        self,
+        data: service.ModelDictT[m.User],
+        operation: str | None = None,
+    ) -> m.User:
+        """Custom to_model with operation-aware logic."""
+        data = service.schema_dump(data)
+
+        # Shared preprocessing for all operations
+        if service.is_dict(data):
+            data["email"] = data.get("email", "").lower()
+
+        # Let parent call operation-specific hook via operation_map
+        return await super().to_model(data, operation)
+
+    async def to_model_on_update(self, data: service.ModelDictT[m.User]) -> service.ModelDictT[m.User]:
+        """Update-specific logic (called after to_model preprocessing)."""
+        data = service.schema_dump(data)
+        # Only update slug if name changed
+        if "name" in data and "slug" not in data:
+            data["slug"] = await self.repository.get_available_slug(data["name"])
+        return data
 ```
 
 ## Service Patterns
