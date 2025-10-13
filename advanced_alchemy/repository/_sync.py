@@ -1733,7 +1733,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             auto_expunge = self.auto_expunge
 
         if not auto_expunge:
-            return None
+            return
 
         # Check object state before expunging
         state = inspect(instance)
@@ -1741,9 +1741,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             # Skip expunge for objects that are deleted or already detached
             # - state.deleted: Object marked for deletion, will be detached on commit
             # - state.detached: Object already removed from session (e.g., from DELETE...RETURNING)
-            return None
+            return
 
-        return self.session.expunge(instance)
+        self.session.expunge(instance)
+        return
 
     def _flush_or_commit(self, auto_commit: Optional[bool]) -> None:
         if auto_commit is None:
