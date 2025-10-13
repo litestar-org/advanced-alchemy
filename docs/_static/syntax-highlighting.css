@@ -112,6 +112,10 @@ html.light .highlight .sx {  /* String.Other */
   color: #d73a49 !important;
 }
 
+html.light .highlight .p {   /* Punctuation */
+  color: var(--gray-12) !important;
+}
+
 /* =====================================================
  * Dark Mode Syntax Highlighting
  * ===================================================== */
@@ -206,6 +210,10 @@ html.dark .highlight .ne {   /* Name.Exception */
 html.dark .highlight .si,    /* String.Interpol */
 html.dark .highlight .sx {   /* String.Other */
   color: #a5d6ff !important;
+}
+
+html.dark .highlight .p {    /* Punctuation */
+  color: var(--gray-12) !important;
 }
 
 /* =====================================================
