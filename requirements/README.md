@@ -316,6 +316,8 @@ Currently active requirements:
 
 <!-- Updated by Docs & Vision agent after archiving -->
 
+Recent archived requirements:
+
 - _None yet_ (This is a fresh workspace!)
 
 ## See Also
