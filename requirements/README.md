@@ -316,14 +316,7 @@ Currently active requirements:
 
 <!-- Updated by Docs & Vision agent after archiving -->
 
-Recent archived requirements:
-
-- **in-fields-closure-fix** (Completed: 2025-10-12)
-    - Issue: #507
-    - Branch: fix/in-fields-closure
-    - Commit: 94e1bbd6
-    - Fixed Python closure bug in filter provider loops
-    - Status: Ready for PR merge
+- _None yet_ (This is a fresh workspace!)
 
 ## See Also
 
