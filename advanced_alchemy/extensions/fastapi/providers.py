@@ -572,25 +572,25 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if not_in_fields := config.get("not_in_fields"):
         not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
         for field_def in not_in_fields:
-
+            # Capture field_def by value to avoid Python closure late binding gotcha
+            # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
-                local_field_name: str,
-                local_field_type: type[Any],
-            ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
+                field_name: FieldNameType = field_def,
+            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
                 def provide_not_in_filter(  # pyright: ignore
                     values: Annotated[  # type: ignore
-                        Optional[set[local_field_type]],  # pyright: ignore
+                        Optional[set[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(f"{local_field_name}_not_in"),
-                            description=f"Filter {local_field_name} not in values",
+                            alias=camelize(f"{field_name.name}_not_in"),
+                            description=f"Filter {field_name.name} not in values",
                         ),
                     ] = None,
-                ) -> Optional[NotInCollectionFilter[local_field_type]]:  # type: ignore
-                    return NotInCollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
+                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
+                    return NotInCollectionFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
 
                 return provide_not_in_filter  # pyright: ignore
 
-            provider = create_not_in_filter_provider(field_def.name, field_def.type_hint)  # pyright: ignore
+            provider = create_not_in_filter_provider()  # pyright: ignore
             param_name = f"{field_def.name}_not_in_filter"
             params.append(
                 inspect.Parameter(
@@ -605,25 +605,25 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if in_fields := config.get("in_fields"):
         in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
         for field_def in in_fields:
-
+            # Capture field_def by value to avoid Python closure late binding gotcha
+            # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore
-                local_field_name: str,
-                local_field_type: type[Any],
-            ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore
+                field_name: FieldNameType = field_def,
+            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
                 def provide_in_filter(  # pyright: ignore
                     values: Annotated[  # type: ignore
-                        Optional[set[local_field_type]],  # pyright: ignore
+                        Optional[set[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(f"{local_field_name}_in"),
-                            description=f"Filter {local_field_name} in values",
+                            alias=camelize(f"{field_name.name}_in"),
+                            description=f"Filter {field_name.name} in values",
                         ),
                     ] = None,
-                ) -> Optional[CollectionFilter[local_field_type]]:  # type: ignore
-                    return CollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
+                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore
+                    return CollectionFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
 
                 return provide_in_filter  # pyright: ignore
 
-            provider = create_in_filter_provider(field_def.name, field_def.type_hint)  # type: ignore
+            provider = create_in_filter_provider()  # type: ignore
             param_name = f"{field_def.name}_in_filter"
             params.append(
                 inspect.Parameter(
