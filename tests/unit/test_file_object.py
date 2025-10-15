@@ -1,5 +1,7 @@
 """Unit tests for FileObject class."""
 
+import asyncio
+import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
@@ -8,6 +10,7 @@ import pytest
 from advanced_alchemy.service.typing import PYDANTIC_INSTALLED, BaseModel
 from advanced_alchemy.types.file_object import FileObject
 from advanced_alchemy.types.file_object.base import StorageBackend
+from advanced_alchemy.types.file_object.session_tracker import FileObjectSessionTracker
 
 
 def test_file_object_delete_no_backend() -> None:
@@ -622,3 +625,54 @@ def test_pydantic_validation_error_missing_backend() -> None:
     }
     with pytest.raises(ValidationError, match="backend"):  # type: ignore
         FileModel(file=input_dict)  # type: ignore[arg-type]
+
+
+def test_session_tracker_commit_reraises_sync_errors(caplog: "pytest.LogCaptureFixture") -> None:
+    """Ensure sync commit surfaces exceptions with logging."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.save.side_effect = RuntimeError("sync failure")
+
+    tracker.add_pending_save(file_obj, b"payload")
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="sync failure"):
+            tracker.commit()
+
+    file_obj.save.assert_called_once_with(b"payload")
+    assert any("error saving file" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_session_tracker_commit_async_reraises_exceptions(caplog: "pytest.LogCaptureFixture") -> None:
+    """Ensure async commit surfaces regular exceptions and logs them."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.save_async = AsyncMock(side_effect=RuntimeError("async failure"))
+
+    tracker.add_pending_save(file_obj, b"payload")
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="async failure"):
+            await tracker.commit_async()
+
+    file_obj.save_async.assert_awaited_once_with(b"payload")
+    assert any("error saving file" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_session_tracker_commit_async_reraises_base_exceptions() -> None:
+    """Ensure async commit re-raises non-Exception BaseException instances."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.save_async = AsyncMock(side_effect=asyncio.CancelledError())
+
+    tracker.add_pending_save(file_obj, b"payload")
+
+    with pytest.raises(asyncio.CancelledError):
+        await tracker.commit_async()
+
+    file_obj.save_async.assert_awaited_once_with(b"payload")

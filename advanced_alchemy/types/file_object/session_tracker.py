@@ -47,41 +47,67 @@ class FileObjectSessionTracker:
         for obj, data in self.pending_saves.items():
             try:
                 obj.save(data)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Error saving file for object %s: %s", obj, e.__cause__)
+                self._saved_in_transaction.add(obj)
+            except Exception:
+                logger.exception("error saving file for object %s", obj)
+                raise
         for obj in self.pending_deletes:
             try:
                 obj.delete()
             except FileNotFoundError:
                 # Ignore if the file is already gone (shouldn't happen often here)
                 pass
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Error deleting file for object %s: %s", obj, e.__cause__)
+            except Exception:
+                logger.exception("error deleting file for object %s", obj)
+                raise
         self.clear()
 
     async def commit_async(self) -> None:
         """Process pending saves and deletes after a successful commit."""
-        save_tasks: list[Awaitable[Any]] = []
-        for obj, data in self.pending_saves.items():
-            save_tasks.append(obj.save_async(data))
-            self._saved_in_transaction.add(obj)
+        save_items: "list[tuple[FileObject, Union[bytes, Path]]]" = list(self.pending_saves.items())
+        delete_items: "list[FileObject]" = list(self.pending_deletes)
 
-        delete_tasks: list[Awaitable[Any]] = [obj.delete_async() for obj in self.pending_deletes]
+        save_results: "list[Any]" = await asyncio.gather(
+            *(obj.save_async(data) for obj, data in save_items),
+            return_exceptions=True,
+        )
+        delete_results: "list[Any]" = await asyncio.gather(
+            *(obj.delete_async() for obj in delete_items),
+            return_exceptions=True,
+        )
 
-        # Run save and delete tasks concurrently
-        save_results = await asyncio.gather(*save_tasks, return_exceptions=True)
-        delete_results = await asyncio.gather(*delete_tasks, return_exceptions=True)
+        errors: list[Exception] = []
 
-        # Process save results (log errors)
-        for result, (obj, _data) in zip(save_results, self.pending_saves.items()):
-            if isinstance(result, Exception):
-                logger.warning("Error saving file for object %s: %s", obj, result.__cause__)
-        # Process delete results (log errors, ignore FileNotFoundError)
-        for result, obj_to_delete in zip(delete_results, self.pending_deletes):
+        for (obj, _data), result in zip(save_items, save_results):
+            if isinstance(result, BaseException):
+                if isinstance(result, Exception):
+                    logger.error(
+                        "error saving file for object %s",
+                        obj,
+                        exc_info=(type(result), result, result.__traceback__),
+                    )
+                    errors.append(result)
+                else:
+                    raise result
+            else:
+                self._saved_in_transaction.add(obj)
+
+        for obj_to_delete, result in zip(delete_items, delete_results):
             if isinstance(result, FileNotFoundError):
                 continue
-            if isinstance(result, Exception):
-                logger.warning("Error deleting file %s: %s", obj_to_delete.path, result.__cause__)
+            if isinstance(result, BaseException):
+                if isinstance(result, Exception):
+                    logger.error(
+                        "error deleting file %s",
+                        obj_to_delete.path or obj_to_delete,
+                        exc_info=(type(result), result, result.__traceback__),
+                    )
+                    errors.append(result)
+                else:
+                    raise result
+
+        if errors:
+            raise errors[0]
 
         self.clear()
 
@@ -94,8 +120,9 @@ class FileObjectSessionTracker:
                 except FileNotFoundError:
                     # Ignore if the file is already gone (shouldn't happen often here)
                     pass
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("Error deleting file during rollback %s: %s", obj.path, e.__cause__)
+                except Exception:
+                    logger.exception("error deleting file during rollback %s", obj.path or obj)
+                    raise
         self.clear()
 
     async def rollback_async(self) -> None:
@@ -114,8 +141,9 @@ class FileObjectSessionTracker:
             except FileNotFoundError:
                 # Ignore if the file is already gone (shouldn't happen often here)
                 pass
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Error deleting file during rollback %s: %s", obj_to_delete.path, e.__cause__)
+            except Exception:
+                logger.exception("error deleting file during rollback %s", obj_to_delete.path or obj_to_delete)
+                raise
 
         self.clear()
 
