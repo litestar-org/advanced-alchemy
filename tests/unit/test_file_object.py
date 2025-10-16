@@ -1055,3 +1055,72 @@ async def test_session_tracker_commit_async_logs_exc_info_on_save_error(caplog: 
     # Find our error record and assert exc_info present
     err_records = [r for r in caplog.records if "error saving file" in r.message]
     assert err_records and any(rec.exc_info for rec in err_records)
+
+
+@pytest.mark.parametrize(
+    "ops, expected_in_saves, expected_in_deletes",
+    [
+        (("save", "delete"), False, True),
+        (("delete", "save"), True, False),
+    ],
+)
+def test_session_tracker_override_semantics_parametrized(
+    ops: "tuple[str, str]",
+    expected_in_saves: bool,
+    expected_in_deletes: bool,
+) -> None:
+    """Parametrized check that save/delete override each other appropriately."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+
+    first, second = ops
+    if first == "save":
+        tracker.add_pending_save(file_obj, b"data")
+    else:
+        tracker.add_pending_delete(file_obj)
+
+    if second == "save":
+        tracker.add_pending_save(file_obj, b"data")
+    else:
+        tracker.add_pending_delete(file_obj)
+
+    assert (file_obj in tracker.pending_saves) is expected_in_saves
+    assert (file_obj in tracker.pending_deletes) is expected_in_deletes
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc_factory, expected_exception, expect_log",
+    [
+        (lambda: RuntimeError("delete boom"), RuntimeError, True),
+        (lambda: FileNotFoundError(), None, False),
+        (lambda: asyncio.CancelledError(), asyncio.CancelledError, False),
+    ],
+)
+async def test_session_tracker_commit_async_delete_exceptions_parametrized(
+    caplog: "pytest.LogCaptureFixture",
+    exc_factory,
+    expected_exception,
+    expect_log: bool,
+) -> None:
+    """Parametrized verification of async delete exception handling semantics."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.delete_async = AsyncMock(side_effect=exc_factory())
+
+    tracker.add_pending_delete(file_obj)
+
+    with caplog.at_level(logging.ERROR):
+        if expected_exception is None:
+            await tracker.commit_async()
+        else:
+            with pytest.raises(expected_exception):
+                await tracker.commit_async()
+
+    file_obj.delete_async.assert_awaited_once_with()
+    if expect_log:
+        assert any("error deleting file" in r.message for r in caplog.records)
+    else:
+        assert not any("error deleting file" in r.message for r in caplog.records)
