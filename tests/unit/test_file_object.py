@@ -1064,7 +1064,7 @@ async def test_session_tracker_commit_async_logs_exc_info_on_save_error(caplog: 
         (("delete", "save"), True, False),
     ],
 )
-def test_session_tracker_override_semantics_parametrized(
+def test_session_tracker_override_semantics(
     ops: "tuple[str, str]",
     expected_in_saves: bool,
     expected_in_deletes: bool,
@@ -1098,7 +1098,7 @@ def test_session_tracker_override_semantics_parametrized(
         (lambda: asyncio.CancelledError(), asyncio.CancelledError, False),
     ],
 )
-async def test_session_tracker_commit_async_delete_exceptions_parametrized(
+async def test_session_tracker_commit_async_delete_exceptions(
     caplog: "pytest.LogCaptureFixture",
     exc_factory,
     expected_exception,
