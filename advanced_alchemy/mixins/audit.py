@@ -12,12 +12,14 @@ class AuditColumns:
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTimeUTC(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        sort_order=3002,
     )
     """Date/time of instance creation."""
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTimeUTC(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        sort_order=3003,
     )
     """Date/time of instance last update."""
 

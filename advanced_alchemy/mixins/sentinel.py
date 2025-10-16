@@ -30,5 +30,6 @@ class SentinelMixin:
             insert_sentinel=True,
             use_existing_column=True,
             nullable=True,
+            sort_order=3001,
             **cls._sentinel_kwargs,
         )
