@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from pathlib import Path
+from typing import Callable, Optional
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import pytest
@@ -627,15 +628,6 @@ def test_pydantic_validation_error_missing_backend() -> None:
         FileModel(file=input_dict)  # type: ignore[arg-type]
 
 
- 
-
-
- 
-
-
- 
-
-
 @pytest.mark.asyncio
 async def test_session_tracker_commit_async_reraises_base_exceptions() -> None:
     """Ensure async commit re-raises non-Exception BaseException instances."""
@@ -650,18 +642,6 @@ async def test_session_tracker_commit_async_reraises_base_exceptions() -> None:
         await tracker.commit_async()
 
     file_obj.save_async.assert_awaited_once_with(b"payload")
-
-
- 
-
-
- 
-
-
- 
-
-
- 
 
 
 def test_session_tracker_commit_ignores_file_not_found_on_delete_sync() -> None:
@@ -686,27 +666,6 @@ def test_session_tracker_add_pending_delete_ignores_none_path() -> None:
     tracker.add_pending_delete(file_obj)
 
     assert file_obj not in tracker.pending_deletes
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
 
 
 def test_session_tracker_rollback_ignores_file_not_found_sync() -> None:
@@ -734,9 +693,6 @@ async def test_session_tracker_rollback_async_ignores_file_not_found() -> None:
 
     await tracker.rollback_async()  # should not raise
     obj.delete_async.assert_awaited_once_with()
-
-
- 
 
 
 def test_session_tracker_commit_multiple_saves_then_rollback_deletes_successful_ones() -> None:
@@ -831,7 +787,6 @@ def test_session_tracker_commit_delete_exceptions_sync(
     """Parametrized-like table: sync delete exceptions behavior."""
     tracker = FileObjectSessionTracker()
 
-    # cases: (exception, expect_raise_type, expect_log)
     cases = [
         (FileNotFoundError(), None, False),
         (RuntimeError("boom"), RuntimeError, True),
@@ -971,7 +926,9 @@ async def test_session_tracker_commit_delete_attempt_when_save_fails(mode: str, 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["sync", "async"])
-async def test_session_tracker_rollback_reraises_delete_errors_param(mode: str, caplog: "pytest.LogCaptureFixture") -> None:
+async def test_session_tracker_rollback_reraises_delete_errors_param(
+    mode: str, caplog: "pytest.LogCaptureFixture"
+) -> None:
     """Rollback re-raises delete errors in both modes."""
     tracker = FileObjectSessionTracker()
     obj = Mock(spec=FileObject)
@@ -1035,8 +992,8 @@ def test_session_tracker_override_semantics(
 )
 async def test_session_tracker_commit_async_delete_exceptions(
     caplog: "pytest.LogCaptureFixture",
-    exc_factory,
-    expected_exception,
+    exc_factory: "Callable[[], BaseException]",
+    expected_exception: "Optional[type[BaseException]]",
     expect_log: bool,
 ) -> None:
     """Parametrized verification of async delete exception handling semantics."""
