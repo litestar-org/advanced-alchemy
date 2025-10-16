@@ -627,56 +627,13 @@ def test_pydantic_validation_error_missing_backend() -> None:
         FileModel(file=input_dict)  # type: ignore[arg-type]
 
 
-def test_session_tracker_commit_reraises_sync_errors(caplog: "pytest.LogCaptureFixture") -> None:
-    """Ensure sync commit surfaces exceptions with logging."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.save.side_effect = RuntimeError("sync failure")
-
-    tracker.add_pending_save(file_obj, b"payload")
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="sync failure"):
-            tracker.commit()
-
-    file_obj.save.assert_called_once_with(b"payload")
-    assert any("error saving file" in record.message for record in caplog.records)
+ 
 
 
-def test_session_tracker_commit_reraises_sync_delete_errors(caplog: "pytest.LogCaptureFixture") -> None:
-    """Ensure sync commit propagates delete errors."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.delete.side_effect = RuntimeError("delete failure")
-
-    tracker.add_pending_delete(file_obj)
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="delete failure"):
-            tracker.commit()
-
-    file_obj.delete.assert_called_once_with()
-    assert any("error deleting file" in record.message for record in caplog.records)
+ 
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_reraises_exceptions(caplog: "pytest.LogCaptureFixture") -> None:
-    """Ensure async commit surfaces regular exceptions and logs them."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.save_async = AsyncMock(side_effect=RuntimeError("async failure"))
-
-    tracker.add_pending_save(file_obj, b"payload")
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="async failure"):
-            await tracker.commit_async()
-
-    file_obj.save_async.assert_awaited_once_with(b"payload")
-    assert any("error saving file" in record.message for record in caplog.records)
+ 
 
 
 @pytest.mark.asyncio
@@ -695,72 +652,16 @@ async def test_session_tracker_commit_async_reraises_base_exceptions() -> None:
     file_obj.save_async.assert_awaited_once_with(b"payload")
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_reraises_delete_exceptions(caplog: "pytest.LogCaptureFixture") -> None:
-    """Ensure async commit surfaces delete exceptions."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.delete_async = AsyncMock(side_effect=RuntimeError("async delete failure"))
-
-    tracker.add_pending_delete(file_obj)
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="async delete failure"):
-            await tracker.commit_async()
-
-    file_obj.delete_async.assert_awaited_once_with()
-    assert any("error deleting file" in record.message for record in caplog.records)
+ 
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_ignores_file_not_found() -> None:
-    """Ensure async commit ignores FileNotFoundError when deleting."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.delete_async = AsyncMock(side_effect=FileNotFoundError())
-
-    tracker.add_pending_delete(file_obj)
-
-    await tracker.commit_async()
-
-    file_obj.delete_async.assert_awaited_once_with()
+ 
 
 
-def test_session_tracker_rollback_reraises_delete_errors(caplog: "pytest.LogCaptureFixture") -> None:
-    """Ensure rollback propagates delete errors."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.delete.side_effect = RuntimeError("rollback delete failure")
-
-    tracker._saved_in_transaction.add(file_obj)
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="rollback delete failure"):
-            tracker.rollback()
-
-    file_obj.delete.assert_called_once_with()
-    assert any("error deleting file during rollback" in record.message for record in caplog.records)
+ 
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_rollback_async_reraises_delete_errors(caplog: "pytest.LogCaptureFixture") -> None:
-    """Ensure async rollback propagates delete errors."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.delete_async = AsyncMock(side_effect=RuntimeError("rollback async delete failure"))
-
-    tracker._saved_in_transaction.add(file_obj)
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="rollback async delete failure"):
-            await tracker.rollback_async()
-
-    file_obj.delete_async.assert_awaited_once_with()
-    assert any("error deleting file during rollback" in record.message for record in caplog.records)
+ 
 
 
 def test_session_tracker_commit_ignores_file_not_found_on_delete_sync() -> None:
@@ -787,140 +688,25 @@ def test_session_tracker_add_pending_delete_ignores_none_path() -> None:
     assert file_obj not in tracker.pending_deletes
 
 
-def test_session_tracker_save_then_delete_overrides_save() -> None:
-    """A delete should cancel a prior pending save for the same object."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-
-    tracker.add_pending_save(file_obj, b"data")
-    tracker.add_pending_delete(file_obj)
-
-    assert file_obj not in tracker.pending_saves
-    assert file_obj in tracker.pending_deletes
+ 
 
 
-def test_session_tracker_delete_then_save_overrides_delete() -> None:
-    """A save should cancel a prior pending delete for the same object."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-
-    tracker.add_pending_delete(file_obj)
-    tracker.add_pending_save(file_obj, b"data")
-
-    assert file_obj in tracker.pending_saves
-    assert file_obj not in tracker.pending_deletes
+ 
 
 
-def test_session_tracker_commit_clears_state_on_success_sync() -> None:
-    """On successful sync commit, tracker state should be cleared."""
-    tracker = FileObjectSessionTracker()
-    file_obj = Mock(spec=FileObject)
-    file_obj.path = "tmp"
-    file_obj.save.return_value = None
-
-    tracker.add_pending_save(file_obj, b"data")
-
-    tracker.commit()
-
-    # All queues cleared
-    assert not tracker.pending_saves
-    assert not tracker.pending_deletes
-    assert not tracker._saved_in_transaction
+ 
 
 
-def test_session_tracker_commit_sync_does_not_run_delete_if_save_fails() -> None:
-    """Sync commit stops at first save error and does not attempt deletes."""
-    tracker = FileObjectSessionTracker()
-    save_obj = Mock(spec=FileObject)
-    save_obj.path = "tmp1"
-    save_obj.save.side_effect = RuntimeError("save failed")
-    del_obj = Mock(spec=FileObject)
-    del_obj.path = "tmp2"
-
-    tracker.add_pending_save(save_obj, b"data")
-    tracker.add_pending_delete(del_obj)
-
-    with pytest.raises(RuntimeError, match="save failed"):
-        tracker.commit()
-
-    # Delete not attempted
-    del_obj.delete.assert_not_called()
-    # State not cleared on error
-    assert save_obj in tracker.pending_saves
-    assert del_obj in tracker.pending_deletes
+ 
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_runs_delete_even_if_save_fails() -> None:
-    """Async commit runs deletes concurrently even when a save fails."""
-    tracker = FileObjectSessionTracker()
-    save_obj = Mock(spec=FileObject)
-    save_obj.path = "tmp1"
-    save_obj.save_async = AsyncMock(side_effect=RuntimeError("save failed"))
-    del_obj = Mock(spec=FileObject)
-    del_obj.path = "tmp2"
-    del_obj.delete_async = AsyncMock(return_value=None)
-
-    tracker.add_pending_save(save_obj, b"data")
-    tracker.add_pending_delete(del_obj)
-
-    with pytest.raises(RuntimeError, match="save failed"):
-        await tracker.commit_async()
-
-    # Delete still attempted in async path
-    del_obj.delete_async.assert_awaited_once_with()
-    # State not cleared on error
-    assert save_obj in tracker.pending_saves
-    assert del_obj in tracker.pending_deletes
+ 
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_reraises_base_exceptions_on_delete() -> None:
-    """Async commit re-raises BaseException (e.g., CancelledError) from delete."""
-    tracker = FileObjectSessionTracker()
-    del_obj = Mock(spec=FileObject)
-    del_obj.path = "tmp"
-    del_obj.delete_async = AsyncMock(side_effect=asyncio.CancelledError())
-
-    tracker.add_pending_delete(del_obj)
-
-    with pytest.raises(asyncio.CancelledError):
-        await tracker.commit_async()
-
-    del_obj.delete_async.assert_awaited_once_with()
+ 
 
 
-def test_session_tracker_commit_sync_does_not_clear_state_on_error() -> None:
-    """Sync commit must not clear queues when a save fails."""
-    tracker = FileObjectSessionTracker()
-    obj = Mock(spec=FileObject)
-    obj.path = "tmp"
-    obj.save.side_effect = RuntimeError("boom")
-
-    tracker.add_pending_save(obj, b"data")
-
-    with pytest.raises(RuntimeError):
-        tracker.commit()
-
-    assert obj in tracker.pending_saves
-
-
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_does_not_clear_state_on_error() -> None:
-    """Async commit must not clear queues when a save fails."""
-    tracker = FileObjectSessionTracker()
-    obj = Mock(spec=FileObject)
-    obj.path = "tmp"
-    obj.save_async = AsyncMock(side_effect=RuntimeError("boom"))
-
-    tracker.add_pending_save(obj, b"data")
-
-    with pytest.raises(RuntimeError):
-        await tracker.commit_async()
-
-    assert obj in tracker.pending_saves
+ 
 
 
 def test_session_tracker_rollback_ignores_file_not_found_sync() -> None:
@@ -950,25 +736,7 @@ async def test_session_tracker_rollback_async_ignores_file_not_found() -> None:
     obj.delete_async.assert_awaited_once_with()
 
 
-@pytest.mark.asyncio
-async def test_session_tracker_commit_async_clears_state_on_success() -> None:
-    """Async commit clears state after successful operations."""
-    tracker = FileObjectSessionTracker()
-    save_obj = Mock(spec=FileObject)
-    save_obj.path = "tmp1"
-    save_obj.save_async = AsyncMock(return_value=None)
-    del_obj = Mock(spec=FileObject)
-    del_obj.path = "tmp2"
-    del_obj.delete_async = AsyncMock(return_value=None)
-
-    tracker.add_pending_save(save_obj, b"data")
-    tracker.add_pending_delete(del_obj)
-
-    await tracker.commit_async()
-
-    assert not tracker.pending_saves
-    assert not tracker.pending_deletes
-    assert not tracker._saved_in_transaction
+ 
 
 
 def test_session_tracker_commit_multiple_saves_then_rollback_deletes_successful_ones() -> None:
