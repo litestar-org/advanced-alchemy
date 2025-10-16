@@ -1,5 +1,21 @@
 # ruff: noqa: UP037
-"""Application ORM configuration."""
+"""FileObject session change tracking and commit/rollback coordination.
+
+This tracker collects FileObject save/delete intentions during a database
+transaction and applies them on commit, or cleans up saved files on rollback.
+
+Behavior summary:
+- Sync commit: processes saves sequentially, then deletes; logs failures with
+  stack traces and re-raises; ignores ``FileNotFoundError`` on delete; stops on
+  the first save error; clears internal state only on full success.
+- Async commit: executes saves and deletes concurrently via ``asyncio.gather``;
+  logs each failure with ``exc_info``; raises the first real ``Exception`` and
+  lets ``BaseException`` (e.g., ``asyncio.CancelledError``) bubble; attempts
+  deletes even if a save fails; clears state only on full success.
+- Rollback (sync/async): deletes only files saved during this transaction;
+  ignores ``FileNotFoundError``; logs and re-raises other errors; clears state
+  after processing.
+"""
 
 import asyncio
 import logging
@@ -15,10 +31,23 @@ logger = logging.getLogger("advanced_alchemy")
 
 
 class FileObjectSessionTracker:
-    """Tracks FileObject changes within a single session transaction."""
+    """Track pending FileObject saves/deletes for a single transaction.
+
+    This class records pending changes and coordinates applying them on commit
+    or undoing saved files on rollback. It does not manage database
+    transactions; it assumes callers invoke ``commit*``/``rollback*`` at the
+    appropriate points in the application transaction lifecycle.
+    """
 
     def __init__(self) -> None:
-        """Initialize the tracker."""
+        """Initialize empty tracking state.
+
+        Internal structures:
+        - ``pending_saves``: ``FileObject -> data`` to be saved on commit
+        - ``pending_deletes``: ``FileObject`` instances to delete on commit
+        - ``_saved_in_transaction``: successfully saved objects used for
+          selective cleanup on rollback
+        """
         # Stores objects that have pending data to be saved on commit.
         # Maps FileObject -> data source (bytes or Path)
         self.pending_saves: "dict[FileObject, Union[bytes, Path]]" = {}
@@ -29,13 +58,21 @@ class FileObjectSessionTracker:
         self._saved_in_transaction: "set[FileObject]" = set()
 
     def add_pending_save(self, obj: "FileObject", data: "Union[bytes, Path]") -> None:
-        """Mark a FileObject for saving."""
+        """Mark a FileObject for saving on commit.
+
+        Also cancels any prior pending delete for ``obj`` within this
+        transaction.
+        """
         self.pending_saves[obj] = data
         # If this object was previously marked for deletion, unmark it.
         self.pending_deletes.discard(obj)
 
     def add_pending_delete(self, obj: "FileObject") -> None:
-        """Mark a FileObject for deletion."""
+        """Mark a FileObject for deletion on commit.
+
+        Cancels any prior pending save for ``obj``. The object is only added to
+        the delete set if it has a non-empty ``path`` (i.e., exists in storage).
+        """
         # If this object was pending save, unmark it.
         self.pending_saves.pop(obj, None)
         # Only add to pending deletes if it actually exists in storage (has a path)
@@ -43,7 +80,16 @@ class FileObjectSessionTracker:
             self.pending_deletes.add(obj)
 
     def commit(self) -> None:
-        """Process pending saves and deletes after a successful commit."""
+        """Apply pending changes after a successful database commit (sync).
+
+        Processing order and error handling:
+        - Saves are processed first, sequentially. If a save fails, the error
+          is logged (with traceback) and re-raised immediately; pending deletes
+          are not attempted; internal state is not cleared.
+        - Deletes are processed next. ``FileNotFoundError`` is ignored; other
+          exceptions are logged (with traceback) and re-raised.
+        - On full success, tracking state is cleared.
+        """
         for obj, data in self.pending_saves.items():
             try:
                 obj.save(data)
@@ -63,7 +109,18 @@ class FileObjectSessionTracker:
         self.clear()
 
     async def commit_async(self) -> None:
-        """Process pending saves and deletes after a successful commit."""
+        """Apply pending changes after a successful database commit (async).
+
+        Execution and error handling:
+        - Saves and deletes are executed concurrently via ``asyncio.gather``.
+        - For each operation that fails with an ``Exception``, the failure is
+          logged with ``exc_info`` and collected. ``BaseException`` instances
+          (e.g., ``asyncio.CancelledError``) are re-raised immediately.
+        - After processing, if any ``Exception`` occurred, the first one (in
+          input order) is raised. Successful saves are recorded for potential
+          rollback cleanup. Deletes are attempted even if a save fails.
+        - On full success, tracking state is cleared.
+        """
         save_items: "list[tuple[FileObject, Union[bytes, Path]]]" = list(self.pending_saves.items())
         delete_items: "list[FileObject]" = list(self.pending_deletes)
 
@@ -112,7 +169,13 @@ class FileObjectSessionTracker:
         self.clear()
 
     def rollback(self) -> None:
-        """Clean up files saved during a transaction that is being rolled back."""
+        """Delete files saved in the current transaction (sync rollback).
+
+        Only files recorded in ``_saved_in_transaction`` (i.e., saved by this
+        tracker during the current transaction) are candidates for deletion.
+        ``FileNotFoundError`` is ignored; other exceptions are logged (with
+        traceback) and re-raised. Tracking state is cleared afterward.
+        """
         for obj in self._saved_in_transaction:
             if obj.path:
                 try:
@@ -126,7 +189,13 @@ class FileObjectSessionTracker:
         self.clear()
 
     async def rollback_async(self) -> None:
-        """Clean up files saved during a transaction that is being rolled back."""
+        """Delete files saved in the current transaction (async rollback).
+
+        Deletes are issued for objects recorded in ``_saved_in_transaction``
+        that still expose a ``path``. ``FileNotFoundError`` is ignored; other
+        exceptions are logged (with traceback) and re-raised. Tracking state is
+        cleared afterward.
+        """
         rollback_delete_tasks: list[Awaitable[Any]] = []
         objects_to_delete_on_rollback: list[FileObject] = []
         # Only delete files that were actually saved *during this transaction*
@@ -148,7 +217,12 @@ class FileObjectSessionTracker:
         self.clear()
 
     def clear(self) -> None:
-        """Clear the tracker's state."""
+        """Clear all internal tracking state.
+
+        Empties ``pending_saves`` and ``pending_deletes``, and resets
+        ``_saved_in_transaction``. Typically invoked after a successful
+        commit/rollback or before reusing the tracker.
+        """
         self.pending_saves.clear()
         self.pending_deletes.clear()
         self._saved_in_transaction.clear()
