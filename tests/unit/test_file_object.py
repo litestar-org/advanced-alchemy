@@ -644,6 +644,23 @@ def test_session_tracker_commit_reraises_sync_errors(caplog: "pytest.LogCaptureF
     assert any("error saving file" in record.message for record in caplog.records)
 
 
+def test_session_tracker_commit_reraises_sync_delete_errors(caplog: "pytest.LogCaptureFixture") -> None:
+    """Ensure sync commit propagates delete errors."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.delete.side_effect = RuntimeError("delete failure")
+
+    tracker.add_pending_delete(file_obj)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="delete failure"):
+            tracker.commit()
+
+    file_obj.delete.assert_called_once_with()
+    assert any("error deleting file" in record.message for record in caplog.records)
+
+
 @pytest.mark.asyncio
 async def test_session_tracker_commit_async_reraises_exceptions(caplog: "pytest.LogCaptureFixture") -> None:
     """Ensure async commit surfaces regular exceptions and logs them."""
@@ -676,3 +693,71 @@ async def test_session_tracker_commit_async_reraises_base_exceptions() -> None:
         await tracker.commit_async()
 
     file_obj.save_async.assert_awaited_once_with(b"payload")
+
+
+@pytest.mark.asyncio
+async def test_session_tracker_commit_async_reraises_delete_exceptions(caplog: "pytest.LogCaptureFixture") -> None:
+    """Ensure async commit surfaces delete exceptions."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.delete_async = AsyncMock(side_effect=RuntimeError("async delete failure"))
+
+    tracker.add_pending_delete(file_obj)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="async delete failure"):
+            await tracker.commit_async()
+
+    file_obj.delete_async.assert_awaited_once_with()
+    assert any("error deleting file" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_session_tracker_commit_async_ignores_file_not_found() -> None:
+    """Ensure async commit ignores FileNotFoundError when deleting."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.delete_async = AsyncMock(side_effect=FileNotFoundError())
+
+    tracker.add_pending_delete(file_obj)
+
+    await tracker.commit_async()
+
+    file_obj.delete_async.assert_awaited_once_with()
+
+
+def test_session_tracker_rollback_reraises_delete_errors(caplog: "pytest.LogCaptureFixture") -> None:
+    """Ensure rollback propagates delete errors."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.delete.side_effect = RuntimeError("rollback delete failure")
+
+    tracker._saved_in_transaction.add(file_obj)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="rollback delete failure"):
+            tracker.rollback()
+
+    file_obj.delete.assert_called_once_with()
+    assert any("error deleting file during rollback" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_session_tracker_rollback_async_reraises_delete_errors(caplog: "pytest.LogCaptureFixture") -> None:
+    """Ensure async rollback propagates delete errors."""
+    tracker = FileObjectSessionTracker()
+    file_obj = Mock(spec=FileObject)
+    file_obj.path = "tmp"
+    file_obj.delete_async = AsyncMock(side_effect=RuntimeError("rollback async delete failure"))
+
+    tracker._saved_in_transaction.add(file_obj)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="rollback async delete failure"):
+            await tracker.rollback_async()
+
+    file_obj.delete_async.assert_awaited_once_with()
+    assert any("error deleting file during rollback" in record.message for record in caplog.records)
