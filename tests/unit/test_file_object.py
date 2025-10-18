@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 from typing import Callable, Optional
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
@@ -12,6 +13,11 @@ from advanced_alchemy.service.typing import PYDANTIC_INSTALLED, BaseModel
 from advanced_alchemy.types.file_object import FileObject
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.session_tracker import FileObjectSessionTracker
+
+if sys.version_info >= (3, 11):
+    from builtins import ExceptionGroup
+else:
+    from exceptiongroup import ExceptionGroup
 
 
 def test_file_object_delete_no_backend() -> None:
@@ -697,7 +703,7 @@ async def test_session_tracker_rollback_async_ignores_file_not_found() -> None:
 
 def test_session_tracker_commit_multiple_saves_then_rollback_deletes_successful_ones() -> None:
     """Sync commit failure after some saves should allow rollback to delete saved ones."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     obj1 = Mock(spec=FileObject)
     obj1.path = "p1"
     obj1.save.return_value = None
@@ -723,7 +729,7 @@ def test_session_tracker_commit_multiple_saves_then_rollback_deletes_successful_
 @pytest.mark.asyncio
 async def test_session_tracker_commit_async_multiple_saves_raises_first_and_rollback_deletes_success() -> None:
     """Async commit raises first failure; rollback deletes successful saves."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     ok = Mock(spec=FileObject)
     ok.path = "ok"
     ok.save_async = AsyncMock(return_value=None)
@@ -746,8 +752,8 @@ async def test_session_tracker_commit_async_multiple_saves_raises_first_and_roll
 
 @pytest.mark.asyncio
 async def test_session_tracker_commit_async_raises_first_save_exception_in_order() -> None:
-    """When multiple saves fail, the first in order is raised."""
-    tracker = FileObjectSessionTracker()
+    """When multiple saves fail, an ExceptionGroup is raised with all failures."""
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     a = Mock(spec=FileObject)
     a.path = "a"
     a.save_async = AsyncMock(side_effect=RuntimeError("first"))
@@ -758,14 +764,15 @@ async def test_session_tracker_commit_async_raises_first_save_exception_in_order
     tracker.add_pending_save(a, b"x")
     tracker.add_pending_save(b, b"y")
 
-    with pytest.raises(RuntimeError, match="first"):
+    # Multiple errors raise ExceptionGroup
+    with pytest.raises(ExceptionGroup, match="multiple FileObject operation failures"):
         await tracker.commit_async()
 
 
 @pytest.mark.asyncio
 async def test_session_tracker_commit_async_logs_exc_info_on_save_error(caplog: "pytest.LogCaptureFixture") -> None:
     """Async save errors are logged with exc_info for stack traces."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     obj = Mock(spec=FileObject)
     obj.path = "tmp"
     obj.save_async = AsyncMock(side_effect=RuntimeError("fail"))
@@ -785,7 +792,7 @@ def test_session_tracker_commit_delete_exceptions_sync(
     caplog: "pytest.LogCaptureFixture",
 ) -> None:
     """Parametrized-like table: sync delete exceptions behavior."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
 
     cases = [
         (FileNotFoundError(), None, False),
@@ -819,7 +826,7 @@ def test_session_tracker_commit_delete_exceptions_sync(
 
 def test_session_tracker_commit_save_exceptions_sync(caplog: "pytest.LogCaptureFixture") -> None:
     """Sync save exceptions: RuntimeError logs+raises; BaseException bubbles without log."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
 
     cases = [
         (RuntimeError("sync failure"), RuntimeError, True),
@@ -850,7 +857,7 @@ def test_session_tracker_commit_save_exceptions_sync(caplog: "pytest.LogCaptureF
 @pytest.mark.parametrize("mode", ["sync", "async"])
 async def test_session_tracker_commit_does_not_clear_state_on_error(mode: str) -> None:
     """Commit keeps pending items when a save fails (sync and async)."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     obj = Mock(spec=FileObject)
     obj.path = "tmp"
     if mode == "sync":
@@ -902,7 +909,7 @@ async def test_session_tracker_commit_clears_state_on_success(mode: str) -> None
 )
 async def test_session_tracker_commit_delete_attempt_when_save_fails(mode: str, expect_delete_called: bool) -> None:
     """Sync commit aborts before deletes; async still attempts deletes on gather."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     save_obj = Mock(spec=FileObject)
     save_obj.path = "tmp1"
     del_obj = Mock(spec=FileObject)
@@ -997,7 +1004,7 @@ async def test_session_tracker_commit_async_delete_exceptions(
     expect_log: bool,
 ) -> None:
     """Parametrized verification of async delete exception handling semantics."""
-    tracker = FileObjectSessionTracker()
+    tracker = FileObjectSessionTracker(raise_on_error=True)
     file_obj = Mock(spec=FileObject)
     file_obj.path = "tmp"
     file_obj.delete_async = AsyncMock(side_effect=exc_factory())

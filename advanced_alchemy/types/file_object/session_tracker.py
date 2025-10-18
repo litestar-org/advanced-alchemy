@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Union
 if sys.version_info >= (3, 11):
     from builtins import ExceptionGroup
 else:
-    from exceptiongroup import ExceptionGroup
+    from exceptiongroup import ExceptionGroup  # type: ignore[import-not-found,unused-ignore]
 
 if TYPE_CHECKING:
     from pathlib import Path
