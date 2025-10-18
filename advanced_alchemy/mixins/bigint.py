@@ -35,6 +35,7 @@ class BigIntPrimaryKey:
             BigIntIdentity,
             Sequence(f"{cls.__tablename__}_id_seq", **seq_kwargs),  # type: ignore[attr-defined]
             primary_key=True,
+            sort_order=-100,
         )
 
 
@@ -53,4 +54,5 @@ class IdentityPrimaryKey:
             BigIntIdentity,
             Identity(start=1, increment=1),
             primary_key=True,
+            sort_order=-100,
         )
