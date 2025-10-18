@@ -210,8 +210,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _apply_limit_offset_pagination(result: list[ModelT], limit: int, offset: int) -> list[ModelT]:
         return result[offset:limit]
 
-    @staticmethod
-    def _extract_field_name(field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
+    def _extract_field_name(self, field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
         """Extract string field name from various input types.
 
         Args:
@@ -232,28 +231,28 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         msg = "func expressions and column elements are not supported in mock repositories (in-memory filtering)"
         raise RepositoryError(msg)
 
-    @staticmethod
     def _filter_in_collection(
+        self,
         result: list[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> list[ModelT]:
-        field_str = SQLAlchemySyncMockRepository._extract_field_name(field_name)
+        field_str = self._extract_field_name(field_name)
         return [item for item in result if getattr(item, field_str) in values]
 
-    @staticmethod
     def _filter_not_in_collection(
+        self,
         result: list[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> list[ModelT]:
         if not values:
             return result
-        field_str = SQLAlchemySyncMockRepository._extract_field_name(field_name)
+        field_str = self._extract_field_name(field_name)
         return [item for item in result if getattr(item, field_str) not in values]
 
-    @staticmethod
     def _filter_on_datetime_field(
+        self,
         result: list[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         before: Optional[datetime.datetime] = None,
@@ -261,7 +260,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         on_or_before: Optional[datetime.datetime] = None,
         on_or_after: Optional[datetime.datetime] = None,
     ) -> list[ModelT]:
-        field_str = SQLAlchemySyncMockRepository._extract_field_name(field_name)
+        field_str = self._extract_field_name(field_name)
         result_: list[ModelT] = []
         for item in result:
             attr: datetime.datetime = getattr(item, field_str)
@@ -328,13 +327,13 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         except AttributeError as error:
             raise RepositoryError from error
 
-    @staticmethod
     def _order_by(
+        self,
         result: list[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         sort_desc: bool = False,
     ) -> list[ModelT]:
-        field_str = SQLAlchemySyncMockRepository._extract_field_name(field_name)
+        field_str = self._extract_field_name(field_name)
         return sorted(result, key=lambda item: getattr(item, field_str), reverse=sort_desc)
 
     def _apply_filters(
