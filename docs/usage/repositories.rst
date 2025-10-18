@@ -92,6 +92,7 @@ Advanced Alchemy provides powerful filtering capabilities:
 .. code-block:: python
 
     import datetime
+    from datetime import timedelta
 
     async def get_recent_posts(db_session: AsyncSession) -> list[Post]:
         repository = PostRepository(session=db_session)

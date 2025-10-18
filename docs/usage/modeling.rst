@@ -113,7 +113,8 @@ Let's implement a tagging system using a many-to-many relationship. This example
     from sqlalchemy import Column, ForeignKey, Table
     from sqlalchemy.orm import relationship
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntAuditBase, orm_registry, SlugKey
+    from advanced_alchemy.base import BigIntAuditBase, orm_registry
+    from advanced_alchemy.mixins import SlugKey
     from typing import List
 
     # Association table for post-tag relationship
@@ -156,6 +157,7 @@ If we want to interact with the models above, we might use something like the fo
 .. code-block:: python
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy import select
     from advanced_alchemy.utils.text import slugify
 
     async def add_tags_to_post(
@@ -182,7 +184,7 @@ Using :class:`UniqueMixin`
 --------------------------
 
 :class:`UniqueMixin` provides automatic handling of unique constraints and merging of duplicate records. When using the mixin,
-you must implement two classmethods: :meth:`unique_hash <UniqueMixin.unique_hash>` and :meth:`unique_filter <UniqueMixin.unique_hash>`. These methods enable:
+you must implement two classmethods: :meth:`unique_hash <UniqueMixin.unique_hash>` and :meth:`unique_filter <UniqueMixin.unique_filter>`. These methods enable:
 
 - Automatic lookup of existing records
 - Safe merging of duplicates
@@ -193,8 +195,8 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
 
 .. code-block:: python
 
-    from advanced_alchemy.base import BigIntAuditBase, SlugKey
-    from advanced_alchemy.mixins import UniqueMixin
+    from advanced_alchemy.base import BigIntAuditBase
+    from advanced_alchemy.mixins import SlugKey, UniqueMixin
     from advanced_alchemy.utils.text import slugify
     from sqlalchemy.sql.elements import ColumnElement
     from typing import Hashable
