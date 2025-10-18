@@ -17,7 +17,7 @@ from advanced_alchemy.types.file_object.session_tracker import FileObjectSession
 if sys.version_info >= (3, 11):
     from builtins import ExceptionGroup
 else:
-    from exceptiongroup import ExceptionGroup
+    from exceptiongroup import ExceptionGroup  # type: ignore[import-not-found,unused-ignore]
 
 
 def test_file_object_delete_no_backend() -> None:
