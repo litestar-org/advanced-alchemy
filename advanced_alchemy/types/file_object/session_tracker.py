@@ -9,20 +9,26 @@ Behavior summary:
   stack traces and re-raises; ignores ``FileNotFoundError`` on delete; stops on
   the first save error; clears internal state only on full success.
 - Async commit: executes saves and deletes concurrently via ``asyncio.gather``;
-  logs each failure with ``exc_info``; raises the first real ``Exception`` and
-  lets ``BaseException`` (e.g., ``asyncio.CancelledError``) bubble; attempts
-  deletes even if a save fails; clears state only on full success.
+  logs each failure with ``exc_info``; raises single exceptions directly or
+  multiple exceptions as ``ExceptionGroup``; lets ``BaseException`` (e.g.,
+  ``asyncio.CancelledError``) bubble; attempts deletes even if a save fails;
+  clears state only on full success.
 - Rollback (sync/async): deletes only files saved during this transaction;
-  ignores ``FileNotFoundError``; logs and re-raises other errors; clears state
-  after processing.
+  ignores ``FileNotFoundError``; logs and re-raises errors (as ``ExceptionGroup``
+  for multiple async failures); clears state after processing.
 """
 
 import asyncio
 import logging
+import sys
 from typing import TYPE_CHECKING, Any, Union
 
+if sys.version_info >= (3, 11):
+    from builtins import ExceptionGroup
+else:
+    from exceptiongroup import ExceptionGroup
+
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
     from pathlib import Path
 
     from advanced_alchemy.types.file_object import FileObject
@@ -39,8 +45,12 @@ class FileObjectSessionTracker:
     appropriate points in the application transaction lifecycle.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, raise_on_error: bool = False) -> None:
         """Initialize empty tracking state.
+
+        Args:
+            raise_on_error: If True, raise exceptions on file operation failures.
+                           If False, log warnings and continue (legacy behavior).
 
         Internal structures:
         - ``pending_saves``: ``FileObject -> data`` to be saved on commit
@@ -48,6 +58,7 @@ class FileObjectSessionTracker:
         - ``_saved_in_transaction``: successfully saved objects used for
           selective cleanup on rollback
         """
+        self.raise_on_error = raise_on_error
         # Stores objects that have pending data to be saved on commit.
         # Maps FileObject -> data source (bytes or Path)
         self.pending_saves: "dict[FileObject, Union[bytes, Path]]" = {}
@@ -83,29 +94,36 @@ class FileObjectSessionTracker:
         """Apply pending changes after a successful database commit (sync).
 
         Processing order and error handling:
-        - Saves are processed first, sequentially. If a save fails, the error
-          is logged (with traceback) and re-raised immediately; pending deletes
-          are not attempted; internal state is not cleared.
+        - Saves are processed first, sequentially. If a save fails:
+          * With raise_on_error=True: logged as ERROR and re-raised
+          * With raise_on_error=False: logged as WARNING, processing continues
         - Deletes are processed next. ``FileNotFoundError`` is ignored; other
-          exceptions are logged (with traceback) and re-raised.
-        - On full success, tracking state is cleared.
+          exceptions follow same raise_on_error behavior.
+        - State is only cleared if no errors occurred.
         """
         for obj, data in self.pending_saves.items():
             try:
                 obj.save(data)
                 self._saved_in_transaction.add(obj)
             except Exception:
-                logger.exception("error saving file for object %s", obj)
-                raise
+                if self.raise_on_error:
+                    logger.exception("error saving file for object %s", obj)
+                    raise
+                # Legacy behavior: log as warning, not error
+                logger.warning("error saving file for object %s", obj, exc_info=True)
+
         for obj in self.pending_deletes:
             try:
                 obj.delete()
             except FileNotFoundError:
-                # Ignore if the file is already gone (shouldn't happen often here)
+                # Ignore if the file is already gone
                 pass
             except Exception:
-                logger.exception("error deleting file for object %s", obj)
-                raise
+                if self.raise_on_error:
+                    logger.exception("error deleting file for object %s", obj)
+                    raise
+                logger.warning("error deleting file for object %s", obj, exc_info=True)
+
         self.clear()
 
     async def commit_async(self) -> None:
@@ -113,13 +131,15 @@ class FileObjectSessionTracker:
 
         Execution and error handling:
         - Saves and deletes are executed concurrently via ``asyncio.gather``.
-        - For each operation that fails with an ``Exception``, the failure is
-          logged with ``exc_info`` and collected. ``BaseException`` instances
-          (e.g., ``asyncio.CancelledError``) are re-raised immediately.
-        - After processing, if any ``Exception`` occurred, the first one (in
-          input order) is raised. Successful saves are recorded for potential
-          rollback cleanup. Deletes are attempted even if a save fails.
-        - On full success, tracking state is cleared.
+        - For each operation that fails with an ``Exception``:
+          * With raise_on_error=True: logged as ERROR, collected for raising
+          * With raise_on_error=False: logged as WARNING, processing continues
+        - ``BaseException`` instances (e.g., ``asyncio.CancelledError``) are
+          re-raised immediately regardless of raise_on_error setting.
+        - After processing, if raise_on_error=True and any ``Exception`` occurred,
+          a single exception is raised directly, or multiple exceptions are raised
+          as an ``ExceptionGroup``.
+        - State is only cleared if no errors occurred.
         """
         save_items: "list[tuple[FileObject, Union[bytes, Path]]]" = list(self.pending_saves.items())
         delete_items: "list[FileObject]" = list(self.pending_deletes)
@@ -138,13 +158,22 @@ class FileObjectSessionTracker:
         for (obj, _data), result in zip(save_items, save_results):
             if isinstance(result, BaseException):
                 if isinstance(result, Exception):
-                    logger.error(
-                        "error saving file for object %s",
-                        obj,
-                        exc_info=(type(result), result, result.__traceback__),
-                    )
+                    if self.raise_on_error:
+                        logger.error(
+                            "error saving file for object %s",
+                            obj,
+                            exc_info=(type(result), result, result.__traceback__),
+                        )
+                    else:
+                        # Legacy behavior: warning level
+                        logger.warning(
+                            "error saving file for object %s",
+                            obj,
+                            exc_info=(type(result), result, result.__traceback__),
+                        )
                     errors.append(result)
                 else:
+                    # BaseException (e.g., CancelledError) - always raise
                     raise result
             else:
                 self._saved_in_transaction.add(obj)
@@ -154,19 +183,32 @@ class FileObjectSessionTracker:
                 continue
             if isinstance(result, BaseException):
                 if isinstance(result, Exception):
-                    logger.error(
-                        "error deleting file %s",
-                        obj_to_delete.path or obj_to_delete,
-                        exc_info=(type(result), result, result.__traceback__),
-                    )
+                    if self.raise_on_error:
+                        logger.error(
+                            "error deleting file %s",
+                            obj_to_delete.path or obj_to_delete,
+                            exc_info=(type(result), result, result.__traceback__),
+                        )
+                    else:
+                        logger.warning(
+                            "error deleting file %s",
+                            obj_to_delete.path or obj_to_delete,
+                            exc_info=(type(result), result, result.__traceback__),
+                        )
                     errors.append(result)
                 else:
                     raise result
 
-        if errors:
-            raise errors[0]
+        # Raise ExceptionGroup if multiple errors occurred, single error otherwise
+        if errors and self.raise_on_error:
+            if len(errors) == 1:
+                raise errors[0]
+            msg = "multiple FileObject operation failures"
+            raise ExceptionGroup(msg, errors)
 
-        self.clear()
+        # Only clear if no errors occurred
+        if not errors:
+            self.clear()
 
     def rollback(self) -> None:
         """Delete files saved in the current transaction (sync rollback).
@@ -191,30 +233,44 @@ class FileObjectSessionTracker:
     async def rollback_async(self) -> None:
         """Delete files saved in the current transaction (async rollback).
 
-        Deletes are issued for objects recorded in ``_saved_in_transaction``
-        that still expose a ``path``. ``FileNotFoundError`` is ignored; other
-        exceptions are logged (with traceback) and re-raised. Tracking state is
-        cleared afterward.
+        Uses asyncio.gather to attempt all deletions concurrently, preventing
+        partial rollback failures. ``FileNotFoundError`` is ignored; other
+        exceptions are logged and collected. If multiple exceptions occur, they
+        are raised as an ``ExceptionGroup``; single exceptions are raised
+        directly. Tracking state is cleared afterward.
         """
-        rollback_delete_tasks: list[Awaitable[Any]] = []
-        objects_to_delete_on_rollback: list[FileObject] = []
-        # Only delete files that were actually saved *during this transaction*
-        for obj in self._saved_in_transaction:
-            if obj.path:
-                rollback_delete_tasks.append(obj.delete_async())
-                objects_to_delete_on_rollback.append(obj)
+        objects_to_delete = [obj for obj in self._saved_in_transaction if obj.path]
+        if not objects_to_delete:
+            self.clear()
+            return
 
-        for task, obj_to_delete in zip(rollback_delete_tasks, objects_to_delete_on_rollback):
-            try:
-                await task
-            except FileNotFoundError:
-                # Ignore if the file is already gone (shouldn't happen often here)
-                pass
-            except Exception:
-                logger.exception("error deleting file during rollback %s", obj_to_delete.path or obj_to_delete)
-                raise
+        delete_results = await asyncio.gather(
+            *(obj.delete_async() for obj in objects_to_delete),
+            return_exceptions=True,
+        )
+
+        errors: list[Exception] = []
+        for obj, result in zip(objects_to_delete, delete_results):
+            if isinstance(result, FileNotFoundError):
+                continue
+            if isinstance(result, BaseException):
+                if isinstance(result, Exception):
+                    logger.error(
+                        "error deleting file during rollback %s",
+                        obj.path or obj,
+                        exc_info=(type(result), result, result.__traceback__),
+                    )
+                    errors.append(result)
+                else:
+                    # Propagate BaseExceptions like CancelledError
+                    raise result
 
         self.clear()
+        if errors:
+            if len(errors) == 1:
+                raise errors[0]
+            msg = "multiple FileObject rollback failures"
+            raise ExceptionGroup(msg, errors)
 
     def clear(self) -> None:
         """Clear all internal tracking state.
