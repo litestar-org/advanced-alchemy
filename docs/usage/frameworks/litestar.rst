@@ -70,6 +70,49 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
         author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
         author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
 
+Using Properties with DTOs
+---------------------------
+
+SQLAlchemyDTO automatically includes Python ``@property`` and ``@functools.cached_property`` decorated methods as read-only fields. This is useful with SQLAlchemy's ``MappedAsDataclass`` where computed properties are common.
+
+.. code-block:: python
+
+    from functools import cached_property
+    from sqlalchemy.orm import Mapped, mapped_column, MappedAsDataclass
+    from advanced_alchemy.extensions.litestar import base, SQLAlchemyDTO
+
+    class UserModel(base.UUIDAuditBase, MappedAsDataclass):
+        __tablename__ = "user"
+
+        first_name: Mapped[str]
+        last_name: Mapped[str]
+
+        @property
+        def full_name(self) -> str:
+            """Computed property combining first and last name."""
+            return f"{self.first_name} {self.last_name}"
+
+        @cached_property
+        def name_length(self) -> int:
+            """Cached computed property."""
+            return len(self.full_name)
+
+    # DTO will include: id, created_at, updated_at, first_name, last_name, full_name (read-only), name_length (read-only)
+    UserDTO = SQLAlchemyDTO[UserModel]
+
+Properties are:
+
+- Automatically detected and included in DTO field generation
+- Marked as ``READ_ONLY`` by default (cannot be set via DTO)
+- Type-inferred from return type hints
+- Skipped if they start with ``_`` (private properties)
+- Skipped if already handled by SQLAlchemy descriptors (like ``hybrid_property``)
+
+.. note::
+
+    Properties with setters (``@property.setter``) are currently marked as ``READ_ONLY``.
+    Full read-write property support may be added in a future release.
+
 Pydantic Schemas
 ----------------
 

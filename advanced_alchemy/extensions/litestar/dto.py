@@ -315,19 +315,25 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         # Get the namespace for proper type resolution (like DataclassDTO does)
         namespace = cls.get_model_namespace(model_type)
 
+        # SQLAlchemy internal properties that should be excluded
+        sqla_internal_properties = {"awaitable_attrs", "registry", "metadata"}
+
         properties: dict[str, FieldDefinition] = {}
         for name, member in stdlib_inspect.getmembers(
             model_type, predicate=lambda x: isinstance(x, (property, cached_property))
         ):
+            # Skip SQLAlchemy internal properties
+            if name in sqla_internal_properties:
+                continue
+
             # For regular property, check fget. For cached_property, it's the function itself
             if isinstance(member, cached_property):
                 func = member.func
             elif isinstance(member, property):
+                if member.fget is None:
+                    continue
                 func = member.fget
             else:
-                continue
-
-            if func is None:
                 continue
 
             # Use ParsedSignature like Litestar's DataclassDTO
