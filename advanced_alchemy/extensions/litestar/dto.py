@@ -1,9 +1,10 @@
-# ruff: noqa: C901, PLR0914
+# ruff: noqa: C901
 import inspect as stdlib_inspect
+import logging
 from collections.abc import Collection, Generator
 from collections.abc import Set as AbstractSet
 from dataclasses import asdict, dataclass, field, replace
-from functools import singledispatchmethod
+from functools import cached_property, singledispatchmethod
 from typing import (
     Any,
     ClassVar,
@@ -45,6 +46,8 @@ from typing_extensions import TypeAlias, TypeVar
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 __all__ = ("SQLAlchemyDTO",)
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound="Union[DeclarativeBase, Collection[DeclarativeBase]]")
 
@@ -291,27 +294,57 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         return field_defs
 
     @classmethod
-    def get_property_fields(cls, model_type: type) -> dict[str, FieldDefinition]:
-        """Get fields defined as properties on the model type.
+    def get_property_fields(cls, model_type: "type[DeclarativeBase]") -> "dict[str, FieldDefinition]":
+        """Get fields defined as @property on the model.
+
+        Extends AbstractDTO.get_property_fields() to handle SQLAlchemy-specific cases.
+        Uses inspect.getmembers() instead of vars() to catch inherited properties from mixins.
+
+        Note:
+            - Only property getters are handled (read-only fields)
+            - Properties with setters are still marked READ_ONLY
+            - This is a simpler implementation than hybrid_property handling
+            - Setter support can be added in a future enhancement if needed
+
+        Args:
+            model_type: The SQLAlchemy model type to extract properties from.
 
         Returns:
-            dict[str, FieldDefinition]: A dictionary mapping property names to their field definitions.
+            A dictionary mapping property names to their field definitions.
         """
+        # Get the namespace for proper type resolution (like DataclassDTO does)
+        namespace = cls.get_model_namespace(model_type)
+
         properties: dict[str, FieldDefinition] = {}
-        for name, member in stdlib_inspect.getmembers(model_type, predicate=lambda x: isinstance(x, property)):
-            if member.fget:
-                try:
-                    # Attempt to parse the signature to get the return type hint
-                    sig = ParsedSignature.from_fn(member.fget, {})
-                    field_def = sig.return_type
-                    # Ensure the name is set correctly on the FieldDefinition
-                    if field_def.name != name:
-                        field_def = replace(field_def, name=name)
-                    properties[name] = field_def
-                except Exception:  # pragma: no cover  # noqa: BLE001
-                    # Fallback if signature parsing fails (e.g., no type hint)
-                    # Consider logging a warning here
-                    properties[name] = FieldDefinition.from_annotation(Any, name=name)
+        for name, member in stdlib_inspect.getmembers(
+            model_type, predicate=lambda x: isinstance(x, (property, cached_property))
+        ):
+            # For regular property, check fget. For cached_property, it's the function itself
+            if isinstance(member, cached_property):
+                func = member.func
+            elif isinstance(member, property):
+                func = member.fget
+            else:
+                continue
+
+            if func is None:
+                continue
+
+            # Use ParsedSignature like Litestar's DataclassDTO
+            try:
+                sig = ParsedSignature.from_fn(func, namespace)
+                properties[name] = replace(sig.return_type, name=name)
+            except (AttributeError, TypeError, ValueError) as e:
+                # Signature parsing failed - likely missing type hint or complex signature
+                # Fall back to Any type and log for debugging
+                logger.debug(
+                    "could not parse type hint for property %s.%s: %s. using Any type. consider adding explicit type hint to property getter",
+                    model_type.__name__,
+                    name,
+                    e,
+                )
+                properties[name] = FieldDefinition.from_annotation(Any, name=name)
+
         return properties
 
     @classmethod
