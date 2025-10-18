@@ -261,7 +261,7 @@ def has_dict_attribute(obj: Any) -> "TypeGuard[DictProtocol]":
         bool
     """
     # Protocol checking returns True for None, so add explicit check
-    return obj is not None and isinstance(obj, DictProtocol)
+    return obj is not None and hasattr(obj, "__dict__")
 
 
 def is_row_mapping(v: Any) -> TypeGuard["RowMapping"]:
