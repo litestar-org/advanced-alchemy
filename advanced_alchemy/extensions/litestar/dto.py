@@ -295,16 +295,10 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
     @classmethod
     def get_property_fields(cls, model_type: "type[DeclarativeBase]") -> "dict[str, FieldDefinition]":
-        """Get fields defined as @property on the model.
+        """Get fields defined as @property or @cached_property on the model.
 
-        Extends AbstractDTO.get_property_fields() to handle SQLAlchemy-specific cases.
-        Uses inspect.getmembers() instead of vars() to catch inherited properties from mixins.
-
-        Note:
-            - Only property getters are handled (read-only fields)
-            - Properties with setters are still marked READ_ONLY
-            - This is a simpler implementation than hybrid_property handling
-            - Setter support can be added in a future enhancement if needed
+        Uses inspect.getmembers() to detect properties from the model class and mixins.
+        Properties are marked read-only; setter support is not implemented.
 
         Args:
             model_type: The SQLAlchemy model type to extract properties from.
@@ -312,21 +306,16 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         Returns:
             A dictionary mapping property names to their field definitions.
         """
-        # Get the namespace for proper type resolution (like DataclassDTO does)
         namespace = cls.get_model_namespace(model_type)
-
-        # SQLAlchemy internal properties that should be excluded
         sqla_internal_properties = {"awaitable_attrs", "registry", "metadata"}
 
         properties: dict[str, FieldDefinition] = {}
         for name, member in stdlib_inspect.getmembers(
             model_type, predicate=lambda x: isinstance(x, (property, cached_property))
         ):
-            # Skip SQLAlchemy internal properties
             if name in sqla_internal_properties:
                 continue
 
-            # For regular property, check fget. For cached_property, it's the function itself
             if isinstance(member, cached_property):
                 func = member.func
             elif isinstance(member, property):
@@ -336,15 +325,12 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             else:
                 continue
 
-            # Use ParsedSignature like Litestar's DataclassDTO
             try:
                 sig = ParsedSignature.from_fn(func, namespace)
                 properties[name] = replace(sig.return_type, name=name)
             except (AttributeError, TypeError, ValueError) as e:
-                # Signature parsing failed - likely missing type hint or complex signature
-                # Fall back to Any type and log for debugging
                 logger.debug(
-                    "could not parse type hint for property %s.%s: %s. using Any type. consider adding explicit type hint to property getter",
+                    "could not parse type hint for property %s.%s: %s, using Any type",
                     model_type.__name__,
                     name,
                     e,
@@ -444,26 +430,20 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 yielded_sqla_keys.add(definition.name)  # Track yielded key
                 yield definition
 
-        # Now handle Python @property fields
         property_fields = cls.get_property_fields(model_type)
         for key, property_field_definition in property_fields.items():
-            if key.startswith("_"):  # Skip private properties
+            if key.startswith("_") or key in yielded_sqla_keys:
                 continue
 
-            if key in yielded_sqla_keys:  # Skip if already handled by SQLAlchemy logic
-                continue
-
-            # Assume properties are read-only unless configured otherwise
             yield DTOFieldDefinition.from_field_definition(
                 field_definition=replace(
                     property_field_definition,
-                    # Ensure name is correct, default is Empty for properties
                     name=key,
                     default=Empty,
                 ),
                 model_name=model_name,
                 default_factory=None,
-                dto_field=DTOField(mark=Mark.READ_ONLY),  # Mark as read-only
+                dto_field=DTOField(mark=Mark.READ_ONLY),
             )
 
     @classmethod

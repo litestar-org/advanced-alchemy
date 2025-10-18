@@ -232,7 +232,7 @@ def test_model_using_func() -> None:
 
 
 def test_dto_includes_simple_property() -> None:
-    """Test that @property decorated methods appear in DTO."""
+    """Test that @property decorated methods appear in DTO as read-only fields."""
 
     class ModelWithProperty(Base):
         __tablename__ = "model_with_property"
@@ -242,7 +242,6 @@ def test_dto_includes_simple_property() -> None:
 
         @property
         def full_name(self) -> str:
-            """Computed property combining first and last name."""
             return f"{self.first_name} {self.last_name}"
 
     config = SQLAlchemyDTOConfig()
@@ -250,16 +249,14 @@ def test_dto_includes_simple_property() -> None:
     field_defs = list(dto.generate_field_definitions(ModelWithProperty))
     field_names = {f.name for f in field_defs}
 
-    # Should include the property
     assert "full_name" in field_names
 
-    # Verify it's read-only
     full_name_field = next(f for f in field_defs if f.name == "full_name")
     assert full_name_field.dto_field.mark == Mark.READ_ONLY
 
 
 def test_dto_includes_cached_property() -> None:
-    """Test that @cached_property decorated methods appear in DTO."""
+    """Test that @cached_property decorated methods appear in DTO as read-only fields."""
 
     class ModelWithCachedProperty(Base):
         __tablename__ = "model_with_cached_property"
@@ -268,7 +265,6 @@ def test_dto_includes_cached_property() -> None:
 
         @cached_property
         def expensive_calculation(self) -> int:
-            """Cached computed property."""
             return self.value * 2
 
     config = SQLAlchemyDTOConfig()
@@ -276,19 +272,14 @@ def test_dto_includes_cached_property() -> None:
     field_defs = list(dto.generate_field_definitions(ModelWithCachedProperty))
     field_names = {f.name for f in field_defs}
 
-    # Should include the cached property
     assert "expensive_calculation" in field_names
 
-    # Verify it's read-only
     field = next(f for f in field_defs if f.name == "expensive_calculation")
     assert field.dto_field.mark == Mark.READ_ONLY
 
 
 def test_dto_property_with_setter_is_read_only() -> None:
-    """Test that properties with setters are still marked READ_ONLY.
-
-    This is current behavior - setter support can be added later.
-    """
+    """Test that properties with setters are marked READ_ONLY (setter support not implemented)."""
 
     class ModelWithPropertySetter(Base):
         __tablename__ = "model_with_property_setter"
@@ -297,12 +288,10 @@ def test_dto_property_with_setter_is_read_only() -> None:
 
         @property
         def value(self) -> int:
-            """Property with both getter and setter."""
             return self._internal_value
 
         @value.setter
         def value(self, new_value: int) -> None:
-            """Setter for value property."""
             self._internal_value = new_value
 
     config = SQLAlchemyDTOConfig()
@@ -310,29 +299,24 @@ def test_dto_property_with_setter_is_read_only() -> None:
     field_defs = list(dto.generate_field_definitions(ModelWithPropertySetter))
     field_names = {f.name for f in field_defs}
 
-    # Should include the property
     assert "value" in field_names
 
-    # Current implementation: even with setter, marked READ_ONLY
-    # Future enhancement could add WRITE_ONLY or READ_WRITE support
     field = next(f for f in field_defs if f.name == "value")
     assert field.dto_field.mark == Mark.READ_ONLY
 
 
 def test_dto_skips_private_properties() -> None:
-    """Test that properties starting with _ are skipped."""
+    """Test that properties starting with _ are excluded from DTO."""
 
     class ModelWithPrivateProperty(Base):
         __tablename__ = "model_with_private_property"
 
         @property
         def public_prop(self) -> str:
-            """Public property."""
             return "public"
 
         @property
         def _private_prop(self) -> str:
-            """Private property (should be skipped)."""
             return "private"
 
     config = SQLAlchemyDTOConfig()
@@ -340,22 +324,18 @@ def test_dto_skips_private_properties() -> None:
     field_defs = list(dto.generate_field_definitions(ModelWithPrivateProperty))
     field_names = {f.name for f in field_defs}
 
-    # Should include public property
     assert "public_prop" in field_names
-
-    # Should NOT include private property
     assert "_private_prop" not in field_names
 
 
 def test_dto_handles_untyped_property() -> None:
-    """Test that properties without type hints fall back to Any."""
+    """Test that properties without type hints are included with Any type."""
 
     class ModelWithUntypedProperty(Base):
         __tablename__ = "model_with_untyped_property"
 
         @property
         def untyped_prop(self):  # type: ignore[no-untyped-def]
-            """Property without type hint."""
             return "value"
 
     config = SQLAlchemyDTOConfig()
@@ -363,10 +343,8 @@ def test_dto_handles_untyped_property() -> None:
     field_defs = list(dto.generate_field_definitions(ModelWithUntypedProperty))
     field_names = {f.name for f in field_defs}
 
-    # Should still include the property
     assert "untyped_prop" in field_names
 
-    # Field definition should exist even without type hint
     field = next(f for f in field_defs if f.name == "untyped_prop")
     assert field is not None
 

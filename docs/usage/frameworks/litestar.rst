@@ -73,7 +73,7 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
 Using Properties with DTOs
 ---------------------------
 
-SQLAlchemyDTO automatically includes Python ``@property`` and ``@functools.cached_property`` decorated methods as read-only fields. This is useful with SQLAlchemy's ``MappedAsDataclass`` where computed properties are common.
+SQLAlchemyDTO includes Python ``@property`` and ``@functools.cached_property`` decorated methods as read-only fields.
 
 .. code-block:: python
 
@@ -89,29 +89,27 @@ SQLAlchemyDTO automatically includes Python ``@property`` and ``@functools.cache
 
         @property
         def full_name(self) -> str:
-            """Computed property combining first and last name."""
             return f"{self.first_name} {self.last_name}"
 
         @cached_property
         def name_length(self) -> int:
-            """Cached computed property."""
             return len(self.full_name)
 
-    # DTO will include: id, created_at, updated_at, first_name, last_name, full_name (read-only), name_length (read-only)
+    # DTO includes: id, created_at, updated_at, first_name, last_name,
+    # full_name (read-only), name_length (read-only)
     UserDTO = SQLAlchemyDTO[UserModel]
 
-Properties are:
+Property handling characteristics:
 
-- Automatically detected and included in DTO field generation
-- Marked as ``READ_ONLY`` by default (cannot be set via DTO)
-- Type-inferred from return type hints
-- Skipped if they start with ``_`` (private properties)
-- Skipped if already handled by SQLAlchemy descriptors (like ``hybrid_property``)
+- Detected from model class and mixins
+- Marked as ``READ_ONLY`` (cannot be set via DTO)
+- Type inferred from return type annotations
+- Private properties (starting with ``_``) excluded
+- Skipped if already handled by SQLAlchemy descriptors (e.g., ``hybrid_property``)
 
 .. note::
 
-    Properties with setters (``@property.setter``) are currently marked as ``READ_ONLY``.
-    Full read-write property support may be added in a future release.
+    Properties with setters (``@property.setter``) are marked ``READ_ONLY``. Setter support is not implemented.
 
 Pydantic Schemas
 ----------------
