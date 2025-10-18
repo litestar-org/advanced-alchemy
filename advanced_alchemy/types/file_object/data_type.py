@@ -72,6 +72,8 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
 
     def __repr__(self) -> str:
         """Return a string representation of the StoredObject."""
+        if self.multiple:
+            return f"StoredObject(backend='{self.backend.key}', multiple=True)"
         return f"StoredObject(backend='{self.backend.key}')"
 
     def process_bind_param(
