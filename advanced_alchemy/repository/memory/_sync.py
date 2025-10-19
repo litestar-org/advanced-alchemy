@@ -333,8 +333,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         sort_desc: bool = False,
     ) -> list[ModelT]:
-        field_str = self._extract_field_name(field_name)
-        return sorted(result, key=lambda item: getattr(item, field_str), reverse=sort_desc)
+        return sorted(result, key=lambda item: getattr(item, self._extract_field_name(field_name)), reverse=sort_desc)
 
     def _apply_filters(
         self,

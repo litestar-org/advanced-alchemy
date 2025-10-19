@@ -159,72 +159,22 @@ class StatementFilter(ABC):
     def _get_instrumented_attr(
         model: Any, key: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
     ) -> "Union[ColumnElement[Any], InstrumentedAttribute[Any]]":
-        """Get SQLAlchemy instrumented attribute or column element from model.
-
-        Args:
-            model: SQLAlchemy model class or instance
-            key: Attribute name (str), column element (e.g., ``func.random()``),
-                or instrumented attribute (e.g., ``User.name``)
-
-        Returns:
-            Union[ColumnElement[Any], InstrumentedAttribute[Any]]:
-                SQLAlchemy column expression with ``.asc()`` and ``.desc()`` methods
-
-        Examples:
-            String field name::
-
-                field = _get_instrumented_attr(User, "name")
-
-            func expression::
-
-                from sqlalchemy import func
-
-                field = _get_instrumented_attr(User, func.random())
-
-            InstrumentedAttribute::
-
-                field = _get_instrumented_attr(User, User.created_at)
-
-        See Also:
-            :class:`sqlalchemy.sql.expression.ColumnElement`: Base for column expressions
-            :class:`sqlalchemy.orm.attributes.InstrumentedAttribute`: ORM attribute
-        """
-        if isinstance(key, str):
-            return cast("InstrumentedAttribute[Any]", getattr(model, key))
-        # ColumnElement and InstrumentedAttribute can be used directly
-        return key
+        """Get column expression from string, func, or model attribute."""
+        return cast("InstrumentedAttribute[Any]", getattr(model, key)) if isinstance(key, str) else key
 
 
 @dataclass
 class BeforeAfter(StatementFilter):
-    """DateTime range filter with exclusive bounds.
+    """DateTime range filter with exclusive bounds (< and >).
 
-    This filter creates date/time range conditions using < and > operators,
-    excluding the boundary values. Supports string field names, instrumented
-    attributes, and SQLAlchemy func expressions.
-
-    If either `before` or `after` is None, that boundary condition is not applied.
-
-    Examples:
-        Using date function expressions::
-
-            from sqlalchemy import func
-            from advanced_alchemy.filters import BeforeAfter
-
-            # Filter by current timestamp
-            recent = await repository.list(
-                BeforeAfter(func.current_timestamp(), after=cutoff_date)
-            )
+    If either `before` or `after` is None, that boundary is not applied.
 
     See Also:
-    ---------
-        :class:`OnBeforeAfter` : Inclusive datetime range filtering
-
+        :class:`OnBeforeAfter`: Inclusive datetime range filtering
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
-    """Name of the model attribute to filter on, a SQLAlchemy column expression,
-    or an instrumented attribute."""
+    """Field name, model attribute, or func expression."""
     before: Optional[datetime.datetime]
     """Filter results where field is earlier than this value."""
     after: Optional[datetime.datetime]
@@ -255,24 +205,16 @@ class BeforeAfter(StatementFilter):
 
 @dataclass
 class OnBeforeAfter(StatementFilter):
-    """DateTime range filter with inclusive bounds.
+    """DateTime range filter with inclusive bounds (<= and >=).
 
-    This filter creates date/time range conditions using <= and >= operators,
-    including the boundary values. Supports string field names, instrumented
-    attributes, and SQLAlchemy func expressions.
-
-    If either `on_or_before` or `on_or_after` is None, that boundary condition
-    is not applied.
+    If either `on_or_before` or `on_or_after` is None, that boundary is not applied.
 
     See Also:
-    ---------
-        :class:`BeforeAfter` : Exclusive datetime range filtering
-
+        :class:`BeforeAfter`: Exclusive datetime range filtering
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
-    """Name of the model attribute to filter on, a SQLAlchemy column expression,
-    or an instrumented attribute."""
+    """Field name, model attribute, or func expression."""
     on_or_before: Optional[datetime.datetime]
     """Filter results where field is on or earlier than this value."""
     on_or_after: Optional[datetime.datetime]
@@ -311,21 +253,15 @@ class InAnyFilter(StatementFilter, ABC):
 
 @dataclass
 class CollectionFilter(InAnyFilter, Generic[T]):
-    """Data required to construct a WHERE ... IN (...) clause.
+    """WHERE ... IN (...) clause filter.
 
-    This filter restricts records based on a field's presence in a collection of values.
-    Supports string field names, instrumented attributes, and SQLAlchemy func expressions.
-
-    The filter supports both ``IN`` and ``ANY`` operators for collection membership testing.
-    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
+    Supports both ``IN`` and ``ANY`` operators via ``prefer_any`` parameter.
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
-    """Name of the model attribute to filter on, a SQLAlchemy column expression,
-    or an instrumented attribute."""
+    """Field name, model attribute, or func expression."""
     values: Union[Collection[T], None]
-    """Values for the ``IN`` clause. If this is None, no filter is applied.
-        An empty list will force an empty result set (WHERE 1=-1)"""
+    """Values for IN clause. None = no filter, empty list = empty result set."""
 
     def append_to_statement(
         self,
@@ -363,30 +299,15 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
 @dataclass
 class NotInCollectionFilter(InAnyFilter, Generic[T]):
-    """Data required to construct a WHERE ... NOT IN (...) clause.
+    """WHERE ... NOT IN (...) clause filter.
 
-    This filter restricts records based on a field's absence in a collection of values.
-    Supports string field names, instrumented attributes, and SQLAlchemy func expressions.
-
-    The filter supports both ``NOT IN`` and ``!= ANY`` operators for collection exclusion.
-    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
-
-    Parameters
-    ----------
-    field_name : str | ColumnElement | InstrumentedAttribute
-        Name of the model attribute to filter on, a SQLAlchemy column expression,
-        or an instrumented attribute
-    values : abc.Collection[T] | None
-        Values for the ``NOT IN`` clause. If this is None or empty,
-        the filter is not applied.
-
+    Supports both ``NOT IN`` and ``!= ANY`` operators via ``prefer_any`` parameter.
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
-    """Name of the model attribute to filter on, a SQLAlchemy column expression,
-    or an instrumented attribute."""
+    """Field name, model attribute, or func expression."""
     values: Union[Collection[T], None]
-    """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
+    """Values for NOT IN clause. None or empty = no filter."""
 
     def append_to_statement(
         self,
@@ -474,54 +395,11 @@ class LimitOffset(PaginationFilter):
 class OrderBy(StatementFilter):
     """Order by a specific field or SQLAlchemy function expression.
 
-    Appends an ORDER BY clause to SELECT statements, sorting records by the
-    specified field in ascending or descending order. Supports string field names,
-    instrumented attributes, and SQLAlchemy func expressions.
+    Supports string field names, model attributes, and func expressions (e.g., ``func.random()``).
 
     Note:
         This filter only modifies SELECT statements. For other statement types,
         the statement is returned unchanged.
-
-    Examples:
-        Random ordering (database-specific functions)::
-
-            from sqlalchemy import func
-            from advanced_alchemy.filters import OrderBy
-
-            # PostgreSQL, SQLite, DuckDB
-            users = await repository.list(OrderBy(func.random()))
-
-            # MySQL
-            users = await repository.list(OrderBy(func.rand()))
-
-            # SQL Server
-            users = await repository.list(OrderBy(func.newid()))
-
-        Computed field sorting::
-
-            from sqlalchemy import func
-
-            # Case-insensitive alphabetical order
-            users = await repository.list(
-                OrderBy(func.lower(User.name))
-            )
-
-            # Sort by string length
-            posts = await repository.list(
-                OrderBy(func.length(Post.title), sort_order="desc")
-            )
-
-        Traditional string field name (backward compatible)::
-
-            users = await repository.list(
-                OrderBy("created_at", sort_order="desc")
-            )
-
-        Instrumented attribute::
-
-            users = await repository.list(
-                OrderBy(User.created_at, sort_order="asc")
-            )
 
     See Also:
         - :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY clause
@@ -531,8 +409,7 @@ class OrderBy(StatementFilter):
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
-    """Name of the model attribute to sort on, a SQLAlchemy column expression
-    (e.g., ``func.random()``), or an instrumented attribute (e.g., ``User.name``)."""
+    """Field name, model attribute, or func expression (e.g., ``func.random()``)."""
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort direction ("asc" or "desc")."""
 
@@ -688,27 +565,12 @@ VALID_OPERATORS = set(operators_map.keys())
 
 @dataclass
 class ComparisonFilter(StatementFilter):
-    """Simple comparison filter for equality and inequality operations.
-
-    This filter applies basic comparison operators (=, !=, >, >=, <, <=) to a field.
-    It provides a generic way to perform common comparison operations. Supports
-    string field names, instrumented attributes, and SQLAlchemy func expressions.
-
-    Args:
-        field_name: Name of the model attribute to filter on, a SQLAlchemy column
-            expression, or an instrumented attribute
-        operator: Comparison operator to use (must be one of: 'eq', 'ne', 'gt', 'ge', 'lt', 'le', 'in', 'notin', 'between', 'like', 'ilike', 'startswith', 'istartswith', 'endswith', 'iendswith', 'dateeq')
-        value: Value to compare against
-
-    Raises:
-        ValueError: If an invalid operator is provided
-    """
+    """Comparison filter for standard operators (=, !=, >, <, >=, <=, etc.)."""
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
-    """Name of the model attribute to filter on, a SQLAlchemy column expression,
-    or an instrumented attribute."""
+    """Field name, model attribute, or func expression."""
     operator: str
-    """Comparison operator to use (one of 'eq', 'ne', 'gt', 'ge', 'lt', 'le')."""
+    """Comparison operator ('eq', 'ne', 'gt', 'ge', 'lt', 'le', etc.)."""
     value: Any
     """Value to compare against."""
 
