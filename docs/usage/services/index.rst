@@ -7,7 +7,34 @@ Services in Advanced Alchemy build upon repositories to provide higher-level bus
 Learning Path
 =============
 
+Follow this progression to master Advanced Alchemy services:
+
+.. grid:: 1 1 3 3
+    :gutter: 2
+
+    .. grid-item-card:: 1. Basics
+        :link: basics
+        :link-type: doc
+        :text-align: center
+
+        Service pattern and basic CRUD
+
+    .. grid-item-card:: 2. Schemas
+        :link: schemas
+        :link-type: doc
+        :text-align: center
+
+        Pydantic/msgspec integration
+
+    .. grid-item-card:: 3. Advanced
+        :link: advanced
+        :link-type: doc
+        :text-align: center
+
+        Complex operations and hooks
+
 .. toctree::
+   :hidden:
    :maxdepth: 1
 
    basics

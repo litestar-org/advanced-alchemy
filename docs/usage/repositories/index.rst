@@ -7,7 +7,34 @@ Advanced Alchemy's repository pattern provides a clean, consistent interface for
 Learning Path
 =============
 
+Follow this progression to master Advanced Alchemy repositories:
+
+.. grid:: 1 1 3 3
+    :gutter: 2
+
+    .. grid-item-card:: 1. Basics
+        :link: basics
+        :link-type: doc
+        :text-align: center
+
+        CRUD operations and simple queries
+
+    .. grid-item-card:: 2. Filtering
+        :link: filtering
+        :link-type: doc
+        :text-align: center
+
+        Pagination, sorting, and search
+
+    .. grid-item-card:: 3. Advanced
+        :link: advanced
+        :link-type: doc
+        :text-align: center
+
+        Bulk operations and custom queries
+
 .. toctree::
+   :hidden:
    :maxdepth: 1
 
    basics

@@ -16,11 +16,39 @@ Overview
 
 Advanced Alchemy provides framework-specific extensions for:
 
-- Litestar (async)
-- FastAPI (async)
-- Flask (sync)
-- Sanic (async)
-- Starlette (async)
+.. grid:: 1 1 2 2
+    :padding: 0
+    :gutter: 2
+
+    .. grid-item-card:: Litestar
+        :link: litestar
+        :link-type: doc
+
+        Async web framework integration
+
+    .. grid-item-card:: FastAPI
+        :link: fastapi
+        :link-type: doc
+
+        Async web framework integration
+
+    .. grid-item-card:: Flask
+        :link: flask
+        :link-type: doc
+
+        Sync web framework integration
+
+    .. grid-item-card:: Sanic
+        :link: https://sanicframework.org/
+        :link-type: url
+
+        Async web framework integration
+
+    .. grid-item-card:: Starlette
+        :link: https://www.starlette.io/
+        :link-type: url
+
+        Async web framework integration
 
 Framework Comparison
 ====================

@@ -7,7 +7,34 @@ Advanced Alchemy enhances SQLAlchemy's modeling capabilities with production-rea
 Learning Path
 =============
 
+Follow this progression to master Advanced Alchemy modeling:
+
+.. grid:: 1 1 3 3
+    :gutter: 2
+
+    .. grid-item-card:: 1. Basics
+        :link: basics
+        :link-type: doc
+        :text-align: center
+
+        Core concepts and simple models
+
+    .. grid-item-card:: 2. Relationships
+        :link: relationships
+        :link-type: doc
+        :text-align: center
+
+        Connecting models together
+
+    .. grid-item-card:: 3. Advanced
+        :link: advanced
+        :link-type: doc
+        :text-align: center
+
+        Complex patterns and optimization
+
 .. toctree::
+   :hidden:
    :maxdepth: 1
 
    basics
