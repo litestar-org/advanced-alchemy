@@ -141,7 +141,11 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
             type(
                 "Movie",
                 (),
-                {"title": "The Godfather", "release_date": datetime(1972, 3, 24, tzinfo=timezone.utc), "genre": "Crime"},
+                {
+                    "title": "The Godfather",
+                    "release_date": datetime(1972, 3, 24, tzinfo=timezone.utc),
+                    "genre": "Crime",
+                },
             ),
             type(
                 "Movie",
