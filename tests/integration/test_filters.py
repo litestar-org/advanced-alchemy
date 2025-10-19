@@ -141,11 +141,7 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
             type(
                 "Movie",
                 (),
-                {
-                    "title": "The Godfather",
-                    "release_date": datetime(1972, 3, 24, tzinfo=timezone.utc),
-                    "genre": "Crime",
-                },
+                {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
             ),
             type(
                 "Movie",
@@ -170,7 +166,7 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
     # CockroachDB and Spanner require UUID primary keys to be provided
     dialect_name = getattr(session.bind.dialect, "name", "")
     movie_data = [
-        {"title": "The Godfather", "release_date": datetime(1972, 3, 24, tzinfo=timezone.utc), "genre": "Crime"},
+        {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
         {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc), "genre": "Comedy"},
         {
             "title": "Shawshank Redemption",
@@ -212,8 +208,7 @@ def test_before_after_filter(session: Session, movie_model_sync: type[Declarativ
     )
     statement = before_after_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
-    # Should return The Godfather (1972) and Shawshank Redemption (1994)
-    assert len(results) == 2
+    assert len(results) == 1
 
 
 def test_on_before_after_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
@@ -234,8 +229,7 @@ def test_on_before_after_filter(session: Session, movie_model_sync: type[Declara
     )
     statement = on_before_after_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
-    # Should return only The Hangover (2009)
-    assert len(results) == 1
+    assert len(results) == 2
 
 
 def test_collection_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
@@ -507,10 +501,10 @@ def test_order_by_with_func_lower(session: Session, movie_model_sync: type[Decla
     order_by_filter = OrderBy(field_name=func.lower(Movie.title), sort_order="asc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
-    # Should be sorted alphabetically: Shawshank, The Godfather, The Hangover
+    # Should be sorted alphabetically: Shawshank, The Hangover, The Matrix
     assert results[0].title == "Shawshank Redemption"
-    assert results[1].title == "The Godfather"
-    assert results[2].title == "The Hangover"
+    assert results[1].title == "The Hangover"
+    assert results[2].title == "The Matrix"
 
 
 def test_order_by_with_instrumented_attribute(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
