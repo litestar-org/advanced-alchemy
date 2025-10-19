@@ -220,6 +220,28 @@ For synchronous code, use ``SQLAlchemySyncRepository``:
 
 Sync repositories have the same API as async repositories, without ``await``.
 
+Inline Repository Pattern
+--------------------------
+
+When repository needs no custom methods, define as service inner class:
+
+.. code-block:: python
+
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+
+    class TeamService(SQLAlchemyAsyncRepositoryService[Team]):
+        """Team service with inline repository."""
+
+        class Repository(SQLAlchemyAsyncRepository[Team]):
+            """Inline repository definition."""
+            model_type = Team
+
+        repository_type = Repository
+        match_fields = ["name"]
+
+This pattern works when repository needs no custom methods. All business logic resides in the service layer.
+
 Technical Constraints
 =====================
 

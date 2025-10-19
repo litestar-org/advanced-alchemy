@@ -119,6 +119,65 @@ This pattern:
 - Returns existing tag if found
 - Handles race conditions during concurrent creation
 
+UniqueMixin in Production
+--------------------------
+
+Real-world get-or-create pattern for tags:
+
+.. code-block:: python
+
+    from advanced_alchemy.utils.text import slugify
+
+    async def get_or_create_tag(session: AsyncSession, name: str) -> Tag:
+        """Get existing tag or create new one atomically."""
+        tag = await Tag.as_unique_async(
+            session=session,
+            name=name,
+            slug=slugify(name),
+        )
+        return tag
+
+    async def sync_post_tags(
+        session: AsyncSession,
+        post: Post,
+        tag_names: list[str]
+    ) -> Post:
+        """Synchronize post tags, handling adds and removes."""
+        # Get or create all tags
+        new_tags = [
+            await get_or_create_tag(session, name)
+            for name in tag_names
+        ]
+
+        # Find tags to remove
+        existing_tag_names = {tag.name for tag in post.tags}
+        tags_to_remove = [
+            tag for tag in post.tags
+            if tag.name not in tag_names
+        ]
+
+        # Remove old tags
+        for tag in tags_to_remove:
+            post.tags.remove(tag)
+
+        # Add new tags
+        new_tag_names = set(tag_names) - existing_tag_names
+        post.tags.extend([
+            tag for tag in new_tags
+            if tag.name in new_tag_names
+        ])
+
+        await session.flush()
+        return post
+
+This pattern:
+
+- Atomically gets or creates tags
+- Handles tag addition and removal
+- Prevents duplicate tags
+- Works with concurrent requests
+- Integrates with service layer
+
 Sync Version
 ------------
 

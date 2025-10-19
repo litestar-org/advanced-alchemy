@@ -260,6 +260,41 @@ Lazy loading can cause performance issues:
 
 Use eager loading (``selectinload``, ``joinedload``) to avoid N+1 query problems.
 
+Eager Loading in Dependency Injection
+--------------------------------------
+
+When using web frameworks, configure eager loading at the dependency provider level:
+
+.. code-block:: python
+
+    from advanced_alchemy.extensions.litestar.providers import create_service_provider
+    from sqlalchemy.orm import selectinload, joinedload, load_only
+
+    # Configure loading strategies at DI level
+    provide_team_service = create_service_provider(
+        TeamService,
+        load=[
+            # Load team members with nested user details
+            selectinload(Team.members).options(
+                joinedload(TeamMember.user, innerjoin=True),
+            ),
+            # Load owner relationship
+            selectinload(Team.owner),
+            # Load tags with limited fields
+            selectinload(Team.tags).options(
+                load_only(Tag.name, Tag.slug),
+            ),
+        ],
+    )
+
+This pattern:
+
+- Configures loading once at dependency setup
+- Applies to all uses of the service
+- Prevents N+1 queries automatically
+- Supports nested loading strategies
+- Works with framework dependency injection
+
 Viewonly Modification Constraint
 ---------------------------------
 

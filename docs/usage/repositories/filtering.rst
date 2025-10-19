@@ -180,6 +180,72 @@ Parameters:
 
 Equivalent to SQLAlchemy's ``Post.id.in_(post_ids)``.
 
+Not Filter
+----------
+
+Negate other filters:
+
+.. code-block:: python
+
+    from advanced_alchemy.filters import NotFilter, CollectionFilter
+
+    async def get_posts_except_ids(
+        db_session: AsyncSession,
+        excluded_ids: list[int]
+    ) -> list[Post]:
+        repository = PostRepository(session=db_session)
+
+        return await repository.list(
+            NotFilter(CollectionFilter(field_name="id", values=excluded_ids))
+        )
+
+Parameters:
+
+- Wraps any other filter type
+- Negates the filter condition
+
+Equivalent to SQLAlchemy's ``~`` (NOT) operator.
+
+Filter Configuration Options
+=============================
+
+When using Advanced Alchemy with web frameworks, filters can be configured declaratively. Complete reference of options:
+
+.. code-block:: python
+
+    filter_config = {
+        # ID filtering
+        "id_filter": UUID,  # Enable filtering by primary key type
+
+        # Search configuration
+        "search": "name,email",  # Comma-separated fields to search
+        "search_ignore_case": True,  # Case-insensitive search
+
+        # Pagination
+        "pagination_type": "limit_offset",  # "limit_offset" or "cursor"
+        "pagination_size": 20,  # Default page size
+
+        # Date range filters
+        "created_at": True,  # Enable created_at field filtering
+        "updated_at": True,  # Enable updated_at field filtering
+
+        # Sorting
+        "sort_field": "created_at",  # Default sort field
+        "sort_order": "desc",  # Default sort order ("asc" or "desc")
+    }
+
+Option descriptions:
+
+- **id_filter**: Type hint for primary key filtering
+- **search**: Comma-separated field names for search
+- **search_ignore_case**: Case-sensitive or case-insensitive search
+- **pagination_type**: Pagination strategy (offset or cursor-based)
+- **pagination_size**: Default number of items per page
+- **created_at**: Enable date range filtering on created_at field
+- **updated_at**: Enable date range filtering on updated_at field
+- **sort_field**: Default field for sorting results
+- **sort_order**: Default sort direction ("asc" for ascending, "desc" for descending)
+
 Implementation Patterns
 =======================
 

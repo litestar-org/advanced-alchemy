@@ -154,12 +154,22 @@ Convert models to schemas:
     # SQLAlchemy Row objects
     row_schema = service.to_schema(row_object, schema_type=UserResponse)
 
+    # With pagination
+    results, total = await service.list_and_count(*filters)
+    paginated_response = service.to_schema(
+        results,
+        total,
+        filters=filters,
+        schema_type=UserResponse
+    )
+
 Supports:
 
 - SQLAlchemy model instances
 - SQLAlchemy Row objects
 - RowMapping objects
 - Lists of any of the above
+- Pagination results with total count and filter metadata
 
 to_model Method
 ---------------

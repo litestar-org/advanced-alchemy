@@ -27,11 +27,11 @@ First, configure the SQLAlchemy plugin with Litestar. The plugin handles databas
 .. code-block:: python
 
     from litestar import Litestar
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
-        SQLAlchemyPlugin,
     )
+    from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin
 
     session_config = AsyncSessionConfig(expire_on_commit=False)
     alchemy_config = SQLAlchemyAsyncConfig(
@@ -146,7 +146,7 @@ Create repository and service classes to interact with the model:
 
 .. code-block:: python
 
-    from advanced_alchemy.extensions.litestar import repository, service
+    from litestar.plugins.sqlalchemy import repository, service
 
     class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
         """Author service."""
@@ -154,6 +154,154 @@ Create repository and service classes to interact with the model:
             """Author repository."""
             model_type = AuthorModel
         repository_type = Repo
+
+
+Dependency Injection Helpers
+-----------------------------
+
+Advanced Alchemy provides helper functions for creating Litestar dependency providers. These helpers simplify service and filter configuration in controllers.
+
+Basic Service Provider
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a dependency provider for a service:
+
+.. code-block:: python
+
+    from advanced_alchemy.extensions.litestar.providers import create_service_provider
+
+    # Create provider with eager loading
+    provide_authors_service = create_service_provider(
+        AuthorService,
+        load=[selectinload(AuthorModel.books)],
+    )
+
+    # Use in controller
+    class AuthorController(Controller):
+        dependencies = {"authors_service": provide_authors_service}
+
+        @get("/authors/{author_id:uuid}")
+        async def get_author(
+            self,
+            author_id: UUID,
+            authors_service: Annotated[AuthorService, Dependency(skip_validation=True)],
+        ) -> Author:
+            obj = await authors_service.get(author_id)
+            return authors_service.to_schema(obj, schema_type=Author)
+
+Service with Filters
+^^^^^^^^^^^^^^^^^^^^
+
+Create providers for both service and filters in one call:
+
+.. code-block:: python
+
+    from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
+    from litestar.plugins.sqlalchemy import filters
+
+    # Create service + filter dependencies together
+    class AuthorController(Controller):
+        dependencies = create_service_dependencies(
+            AuthorService,
+            "authors_service",
+            load=[selectinload(AuthorModel.books)],
+            filters={
+                "pagination_type": "limit_offset",
+                "id_filter": UUID,
+                "search": "name",
+                "search_ignore_case": True,
+            },
+        )
+
+        @get("/authors")
+        async def list_authors(
+            self,
+            authors_service: AuthorService,
+            filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+        ) -> service.OffsetPagination[Author]:
+            results, total = await authors_service.list_and_count(*filters)
+            return authors_service.to_schema(
+                results, total, filters=filters, schema_type=Author
+            )
+
+Filter Dependencies Only
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create filter provider without service:
+
+.. code-block:: python
+
+    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+
+    # Configure filters independently
+    filters_config = create_filter_dependencies({
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "search": "name,email",
+        "created_at": True,
+        "updated_at": True,
+        "sort_field": "created_at",
+        "sort_order": "desc",
+    })
+
+Advanced Provider Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Configure eager loading strategies for relationships:
+
+.. code-block:: python
+
+    from sqlalchemy.orm import selectinload, joinedload, load_only
+
+    # Provider with complex loading
+    provide_users_service = create_service_provider(
+        UserService,
+        load=[
+            # Load one-to-many with nested loading
+            selectinload(User.roles).options(
+                joinedload(UserRole.role, innerjoin=True),
+            ),
+            # Load with limited fields
+            selectinload(User.teams).options(
+                joinedload(TeamMember.team, innerjoin=True).options(
+                    load_only(Team.name),
+                ),
+            ),
+        ],
+        uniquify=True,  # Deduplicate results from joins
+        error_messages={
+            "duplicate_key": "User with this email already exists",
+            "integrity": "User operation failed",
+        },
+    )
+
+Filter Configuration Options
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Complete reference of filter configuration options:
+
+.. code-block:: python
+
+    filters_config = create_filter_dependencies({
+        # ID filtering
+        "id_filter": UUID,  # Enable filtering by primary key
+
+        # Search configuration
+        "search": "name,email",  # Comma-separated search fields
+        "search_ignore_case": True,  # Case-insensitive search
+
+        # Pagination
+        "pagination_type": "limit_offset",  # or "cursor"
+        "pagination_size": 20,  # Default page size
+
+        # Date range filters
+        "created_at": True,  # Enable created_at filtering
+        "updated_at": True,  # Enable updated_at filtering
+
+        # Sorting
+        "sort_field": "created_at",  # Default sort field
+        "sort_order": "desc",  # Default sort order ("asc" or "desc")
+    })
 
 
 Controllers
@@ -167,7 +315,8 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
 
     from litestar import Controller, get, post, patch, delete
     from litestar.params import Dependency, Parameter
-    from advanced_alchemy.extensions.litestar import filters, providers, service
+    from litestar.plugins.sqlalchemy import filters, service
+    from advanced_alchemy.extensions.litestar import providers
 
     class AuthorController(Controller):
         """Author CRUD endpoints."""
@@ -238,6 +387,96 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
             """Delete an author from the system."""
             _ = await authors_service.delete(author_id)
 
+Complete CRUD Example
+----------------------
+
+Here's a comprehensive example showing all CRUD operations together:
+
+.. code-block:: python
+
+    from typing import Annotated
+    from uuid import UUID
+
+    from litestar import Router, get, post, put, delete
+    from litestar.params import Dependency
+    from litestar.plugins.sqlalchemy import service, filters
+    from advanced_alchemy.extensions.litestar.providers import (
+        create_service_provider,
+        create_filter_dependencies,
+    )
+
+    # Service provider with eager loading
+    provide_authors_service = create_service_provider(
+        AuthorService,
+        load=[AuthorModel.books],  # Eager load books relationship
+    )
+
+    # Filter configuration
+    author_filters = create_filter_dependencies({
+        "id_filter": UUID,
+        "search": "name",
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "sort_field": "name",
+        "sort_order": "asc",
+    })
+
+    # Router configuration
+    authors_router = Router(
+        path="/authors",
+        tags=["authors"],
+        dependencies={
+            "authors_service": provide_authors_service,
+        } | author_filters,
+    )
+
+    @authors_router.get("/")
+    async def list_authors(
+        authors_service: Annotated[AuthorService, Dependency(skip_validation=True)],
+        filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+    ) -> service.OffsetPagination[Author]:
+        """List all authors with pagination and filtering."""
+        results, total = await authors_service.list_and_count(*filters)
+        return authors_service.to_schema(
+            results, total, filters=filters, schema_type=Author
+        )
+
+    @authors_router.get("/{author_id:uuid}")
+    async def get_author(
+        author_id: UUID,
+        authors_service: Annotated[AuthorService, Dependency(skip_validation=True)],
+    ) -> Author:
+        """Get single author by ID."""
+        author = await authors_service.get(author_id)
+        return authors_service.to_schema(author, schema_type=Author)
+
+    @authors_router.post("/")
+    async def create_author(
+        data: AuthorCreate,
+        authors_service: Annotated[AuthorService, Dependency(skip_validation=True)],
+    ) -> Author:
+        """Create new author."""
+        author = await authors_service.create(data)
+        return authors_service.to_schema(author, schema_type=Author)
+
+    @authors_router.put("/{author_id:uuid}")
+    async def update_author(
+        author_id: UUID,
+        data: AuthorUpdate,
+        authors_service: Annotated[AuthorService, Dependency(skip_validation=True)],
+    ) -> Author:
+        """Update existing author."""
+        author = await authors_service.update(data, item_id=author_id)
+        return authors_service.to_schema(author, schema_type=Author)
+
+    @authors_router.delete("/{author_id:uuid}")
+    async def delete_author(
+        author_id: UUID,
+        authors_service: Annotated[AuthorService, Dependency(skip_validation=True)],
+    ) -> None:
+        """Delete author."""
+        await authors_service.delete(author_id)
+
 Application Configuration
 -------------------------
 
@@ -246,11 +485,11 @@ Finally, configure your Litestar application with the plugin and dependencies:
 .. code-block:: python
 
     from litestar import Litestar
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
-        SQLAlchemyPlugin,
     )
+    from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin
 
     alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///test.sqlite",
@@ -262,6 +501,48 @@ Finally, configure your Litestar application with the plugin and dependencies:
     app = Litestar(
         route_handlers=[AuthorController],
         plugins=[SQLAlchemyPlugin(config=alchemy_config)],
+    )
+
+Advanced Configuration
+----------------------
+
+Engine Factory Pattern
+^^^^^^^^^^^^^^^^^^^^^^^
+
+For advanced control over engine creation, configure the engine separately:
+
+.. code-block:: python
+
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+    from litestar.plugins.sqlalchemy import SQLAlchemyAsyncConfig, AsyncSessionConfig
+    from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin
+
+    def create_async_engine_instance(database_url: str) -> AsyncEngine:
+        """Create SQLAlchemy async engine with custom configuration."""
+        return create_async_engine(
+            url=database_url,
+            echo=False,
+            echo_pool=False,
+            pool_pre_ping=True,
+            pool_size=20,
+            max_overflow=10,
+        )
+
+    engine = create_async_engine_instance("postgresql+asyncpg://user:password@localhost/mydb")
+
+    sqlalchemy_plugin = SQLAlchemyPlugin(
+        config=SQLAlchemyAsyncConfig(
+            engine_instance=engine,  # Pass engine, not connection_string
+            before_send_handler="autocommit",
+            session_config=AsyncSessionConfig(
+                expire_on_commit=False,
+            ),
+        ),
+    )
+
+    app = Litestar(
+        route_handlers=[AuthorController],
+        plugins=[sqlalchemy_plugin],
     )
 
 Database Sessions
@@ -880,15 +1161,17 @@ Advanced Alchemy provides built-in support for file storage with various backend
     from pydantic import BaseModel, Field, computed_field
     from sqlalchemy.orm import Mapped, mapped_column
 
-    from advanced_alchemy.extensions.litestar import (
+    from litestar.plugins.sqlalchemy import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
-        SQLAlchemyPlugin,
-        base,
         filters,
-        providers,
         repository,
         service,
+    )
+    from advanced_alchemy.extensions.litestar import (
+        SQLAlchemyPlugin,
+        base,
+        providers,
     )
     from advanced_alchemy.types import FileObject, storages
     from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
@@ -1079,9 +1362,12 @@ Alternative Patterns
         from sqlalchemy import ForeignKey
         from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+        from litestar.plugins.sqlalchemy import (
+            AsyncSessionConfig,
+            SQLAlchemyAsyncConfig,
+            SQLAlchemyPlugin,
+        )
         from advanced_alchemy.base import UUIDAuditBase, UUIDBase
-        from advanced_alchemy.config import AsyncSessionConfig
-        from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
         from advanced_alchemy.filters import LimitOffset
         from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 

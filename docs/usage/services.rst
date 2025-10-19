@@ -211,6 +211,203 @@ The code below shows a service coordinating posts and tags.
                 data["slug"] = await self.repository.get_available_slug(data["name"])
             return await super().to_model(data, operation)
 
+Service Hooks in Practice
+--------------------------
+
+Service hooks enable custom logic during create, update, and upsert operations. These hooks run before data reaches the repository layer.
+
+Password Hashing Hook
+^^^^^^^^^^^^^^^^^^^^^^
+
+Automatically hash passwords on user creation:
+
+.. code-block:: python
+
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+    from advanced_alchemy.service.typing import ModelDictT
+
+    class UserService(SQLAlchemyAsyncRepositoryService[User]):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            # Initialize password hasher (e.g., from pwdlib, passlib, etc.)
+            from pwdlib import PasswordHash
+            self.hasher = PasswordHash()
+
+        async def to_model(
+            self,
+            data: ModelDictT[User],
+            operation: str | None = None,
+        ) -> User:
+            """Hash password before creating/updating user."""
+            if isinstance(data, dict) and (password := data.pop("password", None)) is not None:
+                data["hashed_password"] = self.hasher.hash(password)
+            return await super().to_model(data, operation)
+
+Slug Generation Hook
+^^^^^^^^^^^^^^^^^^^^
+
+Automatically generate slugs from names:
+
+.. code-block:: python
+
+    from advanced_alchemy.utils.text import slugify
+
+    class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
+        async def to_model(
+            self,
+            data: ModelDictT[Tag],
+            operation: str | None = None,
+        ) -> Tag:
+            """Generate slug from name."""
+            if isinstance(data, dict) and "name" in data and "slug" not in data:
+                data["slug"] = slugify(data["name"])
+            return await super().to_model(data, operation)
+
+Relationship Population Hook
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Coordinate multiple services to populate relationships:
+
+.. code-block:: python
+
+    class TeamService(SQLAlchemyAsyncRepositoryService[Team]):
+        def __init__(self, user_service: UserService, **kwargs):
+            super().__init__(**kwargs)
+            self.user_service = user_service
+
+        async def to_model(
+            self,
+            data: ModelDictT[Team],
+            operation: str | None = None,
+        ) -> Team:
+            """Add owner to team members on creation."""
+            team = await super().to_model(data, operation)
+
+            if operation == "create" and isinstance(data, dict):
+                # Get owner from another service
+                owner_id = data.get("owner_id")
+                if owner_id:
+                    owner = await self.user_service.get_one(id=owner_id)
+                    team.members.append(owner)
+
+            return team
+
+Validation Hook
+^^^^^^^^^^^^^^^
+
+Perform complex validation before operations:
+
+.. code-block:: python
+
+    from advanced_alchemy.exceptions import ConflictError
+
+    class InvitationService(SQLAlchemyAsyncRepositoryService[Invitation]):
+        async def to_model(
+            self,
+            data: ModelDictT[Invitation],
+            operation: str | None = None,
+        ) -> Invitation:
+            """Validate invitation constraints."""
+            if operation == "create" and isinstance(data, dict):
+                # Check if user already has invitation
+                existing = await self.repository.get_one_or_none(
+                    Invitation.email == data["email"],
+                    Invitation.team_id == data["team_id"],
+                )
+                if existing:
+                    raise ConflictError("user already invited to this team")
+
+            return await super().to_model(data, operation)
+
+Transform DTO to Model Hook
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Handle schema-to-model conversion with additional processing:
+
+.. code-block:: python
+
+    from advanced_alchemy.service import is_dict, is_pydantic_model, schema_dump
+
+    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+        async def to_model(
+            self,
+            data: ModelDictT[Post],
+            operation: str | None = None,
+        ) -> Post:
+            """Convert schema to model with tag processing."""
+            # Convert Pydantic/Msgspec to dict
+            data = schema_dump(data)
+
+            if is_dict(data):
+                # Extract tag names for processing
+                tag_names = data.pop("tag_names", [])
+
+                # Create model
+                model = await super().to_model(data, operation)
+
+                # Add tags via UniqueMixin
+                if tag_names:
+                    from advanced_alchemy.utils.text import slugify
+                    model.tags.extend([
+                        await Tag.as_unique_async(
+                            self.repository.session,
+                            name=tag_name,
+                            slug=slugify(tag_name),
+                        )
+                        for tag_name in tag_names
+                    ])
+
+                return model
+
+            return await super().to_model(data, operation)
+
+Multiple Transformation Pipeline
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Chain multiple transformations in sequence:
+
+.. code-block:: python
+
+    class UserService(SQLAlchemyAsyncRepositoryService[User]):
+        async def to_model(
+            self,
+            data: ModelDictT[User],
+            operation: str | None = None,
+        ) -> User:
+            """Run multiple transformations in sequence."""
+            # Convert to dict for processing
+            data = schema_dump(data)
+
+            # Chain transformations
+            data = await self._hash_password(data)
+            data = await self._assign_default_role(data, operation)
+            data = await self._populate_profile(data, operation)
+
+            return await super().to_model(data, operation)
+
+        async def _hash_password(self, data: dict) -> dict:
+            """Hash password if present."""
+            if password := data.pop("password", None):
+                data["hashed_password"] = self.hasher.hash(password)
+            return data
+
+        async def _assign_default_role(self, data: dict, operation: str | None) -> dict:
+            """Assign default role on creation."""
+            if operation == "create" and "role_id" not in data:
+                default_role = await self.repository.session.execute(
+                    select(Role).where(Role.name == "user")
+                )
+                data["role_id"] = default_role.scalar_one().id
+            return data
+
+        async def _populate_profile(self, data: dict, operation: str | None) -> dict:
+            """Create user profile on creation."""
+            if operation == "create":
+                # Profile will be created automatically via relationship
+                data["profile"] = {"display_name": data.get("name")}
+            return data
+
+
 Schema Integration
 ------------------
 

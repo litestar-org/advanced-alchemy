@@ -279,44 +279,154 @@ Services handle errors consistently:
 
 Specific exceptions provide clear error handling.
 
-Hooks and Callbacks
--------------------
+to_model Hooks
+--------------
 
-Extend behavior with hooks:
+Override ``to_model_on_create``, ``to_model_on_update``, and ``to_model_on_upsert`` to transform data before model creation:
+
+Basic Pattern
+~~~~~~~~~~~~~
+
+.. code-block:: python
+
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, schema_dump, is_dict
+    from advanced_alchemy.service.typing import ModelDictT
+
+    class UserService(SQLAlchemyAsyncRepositoryService[User]):
+
+        async def to_model_on_create(self, data: ModelDictT[User]) -> ModelDictT[User]:
+            """Transform data before creating user."""
+            data = schema_dump(data)  # Convert schema to dict
+            # Custom transformation logic
+            return data
+
+All ``to_model_on_*`` hooks receive ``ModelDictT`` (schema or dict) and return ``ModelDictT``.
+
+Field Extraction
+~~~~~~~~~~~~~~~~
+
+Extract fields from input and transform:
+
+.. code-block:: python
+
+    from advanced_alchemy import service
+
+    class UserService(SQLAlchemyAsyncRepositoryService[User]):
+
+        async def to_model_on_create(self, data: service.ModelDictT[User]) -> service.ModelDictT[User]:
+            """Hash password before creating user."""
+            data = service.schema_dump(data)
+            if service.is_dict(data) and (password := data.pop("password", None)) is not None:
+                data["hashed_password"] = await hash_password(password)
+            return data
+
+Use ``data.pop()`` to extract and remove fields from input.
+
+Conditional Field Population
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Generate fields conditionally:
+
+.. code-block:: python
+
+    class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
+
+        async def to_model_on_create(self, data: service.ModelDictT[Tag]) -> service.ModelDictT[Tag]:
+            """Generate slug if not provided."""
+            data = service.schema_dump(data)
+            if service.is_dict_without_field(data, "slug"):
+                data["slug"] = await self.repository.get_available_slug(data["name"])
+            return data
+
+        async def to_model_on_update(self, data: service.ModelDictT[Tag]) -> service.ModelDictT[Tag]:
+            """Regenerate slug if name changed."""
+            data = service.schema_dump(data)
+            if service.is_dict_without_field(data, "slug") and service.is_dict_with_field(data, "name"):
+                data["slug"] = await self.repository.get_available_slug(data["name"])
+            return data
+
+Helper functions:
+- ``service.is_dict(data)`` - Check if data is dict
+- ``service.is_dict_with_field(data, "field")`` - Check dict has field
+- ``service.is_dict_without_field(data, "field")`` - Check dict missing field
+
+Helper Method Pattern
+~~~~~~~~~~~~~~~~~~~~~
+
+Delegate to helper methods for complex logic:
+
+.. code-block:: python
+
+    class UserService(SQLAlchemyAsyncRepositoryService[User]):
+
+        async def to_model_on_create(self, data: service.ModelDictT[User]) -> service.ModelDictT[User]:
+            return await self._populate_model(data)
+
+        async def to_model_on_update(self, data: service.ModelDictT[User]) -> service.ModelDictT[User]:
+            return await self._populate_model(data)
+
+        async def _populate_model(self, data: service.ModelDictT[User]) -> service.ModelDictT[User]:
+            """Shared transformation logic."""
+            data = service.schema_dump(data)
+            data = await self._populate_password(data)
+            data = await self._populate_role(data)
+            return data
+
+        async def _populate_password(self, data: service.ModelDictT[User]) -> service.ModelDictT[User]:
+            if service.is_dict(data) and (password := data.pop("password", None)) is not None:
+                data["hashed_password"] = await hash_password(password)
+            return data
+
+Reuse transformation logic across create/update/upsert hooks.
+
+Working with Model Instances
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Convert to model instance for relationship manipulation:
+
+.. code-block:: python
+
+    class TeamService(SQLAlchemyAsyncRepositoryService[Team]):
+
+        async def to_model_on_create(self, data: service.ModelDictT[Team]) -> service.ModelDictT[Team]:
+            if service.is_dict(data):
+                owner_id = data.pop("owner_id", None)
+                data = await super().to_model(data)  # Convert to Team instance
+
+                # Now work with model relationships
+                if owner_id:
+                    data.members.append(
+                        TeamMember(user_id=owner_id, role=TeamRoles.ADMIN, is_owner=True)
+                    )
+            return data
+
+Call ``await super().to_model(data)`` to convert dict to model instance, then manipulate relationships.
+
+Custom Hooks
+------------
+
+Add custom pre/post hooks for side effects:
 
 .. code-block:: python
 
     class PostService(SQLAlchemyAsyncRepositoryService[Post]):
-        repository_type = PostRepository
 
         async def create(self, data: ModelDictT[Post], **kwargs) -> Post:
             """Create with pre/post hooks."""
-            # Pre-creation hook
-            await self._before_create(data)
-
-            # Create operation
+            await self._before_create(data)  # Pre-creation hook
             post = await super().create(data, **kwargs)
-
-            # Post-creation hook
-            await self._after_create(post)
-
+            await self._after_create(post)  # Post-creation hook
             return post
 
         async def _before_create(self, data: ModelDictT[Post]) -> None:
-            """Hook called before creation."""
-            # Validate business rules
-            # Send notifications
-            # Log operations
+            """Validate business rules, log operations."""
             pass
 
         async def _after_create(self, post: Post) -> None:
-            """Hook called after creation."""
-            # Index in search engine
-            # Send webhooks
-            # Update caches
+            """Index in search, send webhooks, update caches."""
             pass
 
-Hooks separate concerns and enable extensibility.
+Custom hooks separate concerns and enable extensibility.
 
 Technical Constraints
 =====================
