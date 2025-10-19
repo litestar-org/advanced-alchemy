@@ -141,7 +141,7 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
             type(
                 "Movie",
                 (),
-                {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
+                {"title": "The Godfather", "release_date": datetime(1972, 3, 24, tzinfo=timezone.utc), "genre": "Crime"},
             ),
             type(
                 "Movie",
@@ -166,7 +166,7 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
     # CockroachDB and Spanner require UUID primary keys to be provided
     dialect_name = getattr(session.bind.dialect, "name", "")
     movie_data = [
-        {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
+        {"title": "The Godfather", "release_date": datetime(1972, 3, 24, tzinfo=timezone.utc), "genre": "Crime"},
         {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc), "genre": "Comedy"},
         {
             "title": "Shawshank Redemption",
@@ -208,7 +208,8 @@ def test_before_after_filter(session: Session, movie_model_sync: type[Declarativ
     )
     statement = before_after_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
-    assert len(results) == 1
+    # Should return The Godfather (1972) and Shawshank Redemption (1994)
+    assert len(results) == 2
 
 
 def test_on_before_after_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
@@ -229,7 +230,8 @@ def test_on_before_after_filter(session: Session, movie_model_sync: type[Declara
     )
     statement = on_before_after_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
-    assert len(results) == 2
+    # Should return only The Hangover (2009)
+    assert len(results) == 1
 
 
 def test_collection_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
@@ -461,11 +463,16 @@ def test_order_by_with_func_random(session: Session, movie_model_sync: type[Decl
     Movie = movie_model_sync
 
     # Skip mock engines
-    if getattr(session.bind.dialect, "name", "") == "mock":
+    dialect_name = getattr(session.bind.dialect, "name", "")
+    if dialect_name == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
+    # Skip Oracle - uses dbms_random.value() instead of random()
+    if dialect_name.startswith("oracle"):
+        pytest.skip("Oracle uses dbms_random.value() instead of random()")
+
     # Clean any existing data first, then setup fresh data
-    if getattr(session.bind.dialect, "name", "") != "mock":
+    if dialect_name != "mock":
         session.execute(Movie.__table__.delete())
         session.commit()
     setup_movie_data(session, Movie)
