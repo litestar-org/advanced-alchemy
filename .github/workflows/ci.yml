@@ -181,6 +181,8 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Build docs
+        env:
+          PR_NUMBER: ${{ github.event.number }}
         run: uv run make docs
 
       - name: Check docs links

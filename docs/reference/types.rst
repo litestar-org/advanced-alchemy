@@ -8,6 +8,7 @@ Custom SQLAlchemy types for use with the ORM.
 
 .. automodule:: advanced_alchemy.types
     :no-members:
+    :no-special-members:
     :show-inheritance:
 
 Core Types
@@ -81,7 +82,7 @@ SQLAlchemy type for encrypted string storage.
 
 SQLAlchemy type for encrypted text storage (longer content).
 
-.. autoclass:: password_hash.HashedPassword
+.. autoclass:: advanced_alchemy.types.password_hash.base.HashedPassword
    :members:
    :show-inheritance:
 
@@ -104,22 +105,22 @@ Encryption Backends
    :members:
    :show-inheritance:
 
-.. autoclass:: encrypted_string.PGCryptoBackend
+.. autoclass:: advanced_alchemy.types.encrypted_string.PGCryptoBackend
    :members:
    :show-inheritance:
 
 Password Hashers
 ----------------
 
-.. autoclass:: password_hash.argon2.Argon2Hasher
+.. autoclass:: advanced_alchemy.types.password_hash.argon2.Argon2Hasher
    :members:
    :show-inheritance:
 
-.. autoclass:: password_hash.passlib.PasslibHasher
+.. autoclass:: advanced_alchemy.types.password_hash.passlib.PasslibHasher
    :members:
    :show-inheritance:
 
-.. autoclass:: password_hash.pwdlib.PwdlibHasher
+.. autoclass:: advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher
    :members:
    :show-inheritance:
 

@@ -8,6 +8,7 @@ Base model classes for SQLAlchemy ORM with common patterns and functionality.
 
 .. automodule:: advanced_alchemy.base
     :no-members:
+    :no-special-members:
     :show-inheritance:
 
 UUID Primary Key Models

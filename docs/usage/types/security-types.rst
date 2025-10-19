@@ -191,7 +191,7 @@ Type for storing password hashes with automatic hashing and verification.
 
 **Characteristics:**
 
-- Python type: :class:`str` (plaintext) or :class:`~advanced_alchemy.types.password_hash.HashedPassword`
+- Python type: :class:`str` (plaintext) or :class:`~advanced_alchemy.types.password_hash.base.HashedPassword`
 - Storage: Hashed string (VARCHAR/TEXT)
 - Automatic hashing on assignment
 - Verification support
