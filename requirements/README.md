@@ -312,13 +312,6 @@ Currently active requirements:
    - Estimated: 2-3 days
    - Next: Reproduce bug and git bisect to find regression commit
 
-## Recent Completions
-
-<!-- Updated by Docs & Vision agent after archiving -->
-
-Recent archived requirements:
-
-- _None yet_ (This is a fresh workspace!)
 
 ## See Also
 
