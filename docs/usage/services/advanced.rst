@@ -34,7 +34,8 @@ Customize create/update behavior:
     from advanced_alchemy.service.typing import ModelDictT
     from advanced_alchemy.utils.text import slugify
 
-    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+    class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
+        """Post service with tag handling."""
 
         default_load_options = [Post.tags]
         repository_type = PostRepository
@@ -150,7 +151,7 @@ Customize schema-to-model conversion:
 
     from advanced_alchemy.utils.dataclass import is_dict, is_msgspec_struct, is_pydantic_model
 
-    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+    class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
         repository_type = PostRepository
 
         # Override the default `to_model` to handle slugs
@@ -166,58 +167,64 @@ Customize schema-to-model conversion:
 
 This pattern generates slugs automatically during conversion.
 
-Multi-Repository Coordination
-==============================
+Multi-Model Coordination
+=========================
 
-Services coordinate multiple repositories:
+Services handle relationships across models using UniqueMixin and model instance manipulation:
 
 .. code-block:: python
 
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from uuid import uuid4
+    from advanced_alchemy import service
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+    from advanced_alchemy.utils.text import slugify
 
-    class BlogService:
-        """Service coordinating posts, tags, and authors."""
+    class TeamService(SQLAlchemyAsyncRepositoryService[Team, TeamRepository]):
+        """Team service handling owner and tag relationships."""
 
-        def __init__(self, session: AsyncSession):
-            self.post_service = PostService(session=session)
-            self.tag_service = TagService(session=session)
-            self.author_service = AuthorService(session=session)
-            self.session = session
+        repository_type = TeamRepository
+        match_fields = ["name"]
 
-        async def create_post_with_author(
-            self,
-            title: str,
-            content: str,
-            author_email: str,
-            tag_names: list[str]
-        ) -> Post:
-            """Create post, ensuring author exists and tags are created."""
-            async with self.session.begin():
-                # Get or create author
-                author = await self.author_service.get_one_or_none(
-                    Author.email == author_email
-                )
-                if not author:
-                    author = await self.author_service.create(
-                        {"email": author_email, "name": author_email.split("@")[0]}
+        async def to_model_on_create(self, data: service.ModelDictT[Team]) -> service.ModelDictT[Team]:
+            """Create team with owner and tags."""
+            if service.is_dict(data):
+                # Extract relationship data
+                owner_id = data.pop("owner_id", None)
+                tag_names = data.pop("tags", [])
+                data["id"] = data.get("id", uuid4())
+
+                # Convert to model instance
+                data = await super().to_model(data)
+
+                # Handle tags using UniqueMixin (get or create)
+                if tag_names:
+                    data.tags.extend([
+                        await Tag.as_unique_async(
+                            self.repository.session,
+                            name=tag_name,
+                            slug=slugify(tag_name)
+                        )
+                        for tag_name in tag_names
+                    ])
+
+                # Add owner as team member
+                if owner_id:
+                    data.members.append(
+                        TeamMember(
+                            user_id=owner_id,
+                            role=TeamRoles.ADMIN,
+                            is_owner=True
+                        )
                     )
 
-                # Create post with tags (handled by PostService.create override)
-                post_data = {
-                    "title": title,
-                    "content": content,
-                    "author_id": author.id,
-                    "tags": tag_names
-                }
-                post = await self.post_service.create(post_data)
-
-                return post
+            return data
 
 This pattern:
 
-- Coordinates multiple services
-- Manages transaction boundaries
-- Enforces business rules across entities
+- Extracts relationship data from input using ``pop()``
+- Converts to model instance with ``await super().to_model(data)``
+- Uses ``UniqueMixin.as_unique_async()`` for get-or-create pattern
+- Manipulates relationships directly on model instance
 
 Implementation Patterns
 =======================
@@ -225,9 +232,11 @@ Implementation Patterns
 Service Composition
 -------------------
 
-Compose services for complex operations:
+Compose services for complex operations. When using framework dependency injection, services receive sessions:
 
 .. code-block:: python
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     class AnalyticsService:
         """Analytics service using multiple domain services."""
@@ -247,6 +256,32 @@ Compose services for complex operations:
                 "published_posts": len([p for p in posts if p.published]),
                 "total_views": sum(p.view_count for p in posts),
             }
+
+Outside frameworks, use ``.new()`` for session management:
+
+.. code-block:: python
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+    class AnalyticsService:
+        """Analytics service using .new() for session management."""
+
+        def __init__(self, config: SQLAlchemyAsyncConfig):
+            self.config = config
+
+        async def get_author_stats(self, author_id: int) -> dict:
+            """Get comprehensive author statistics."""
+            async with AuthorService.new(config=self.config) as author_service, \
+                       PostService.new(config=self.config) as post_service:
+                author = await author_service.get(author_id)
+                posts = await post_service.list(Post.author_id == author_id)
+
+                return {
+                    "author": author,
+                    "total_posts": len(posts),
+                    "published_posts": len([p for p in posts if p.published]),
+                    "total_views": sum(p.view_count for p in posts),
+                }
 
 Composition enables complex analytics without coupling services.
 
@@ -409,7 +444,7 @@ Add custom pre/post hooks for side effects:
 
 .. code-block:: python
 
-    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+    class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
 
         async def create(self, data: ModelDictT[Post], **kwargs) -> Post:
             """Create with pre/post hooks."""
@@ -428,6 +463,233 @@ Add custom pre/post hooks for side effects:
 
 Custom hooks separate concerns and enable extensibility.
 
+Query Service
+=============
+
+The ``SQLAlchemyAsyncQueryService`` provides direct SQL query execution for analytics and reporting without requiring a model.
+
+Basic Query Service
+-------------------
+
+Execute raw SQL queries and return results:
+
+.. code-block:: python
+
+    from advanced_alchemy import exceptions as exc
+    from advanced_alchemy import service
+    from sqlalchemy import RowMapping, text
+
+    class StatsService(service.SQLAlchemyAsyncQueryService):
+        """Stats service for analytics queries."""
+
+        async def users_by_week(self) -> list[RowMapping]:
+            """Get user signup counts by week."""
+            statement = text(
+                """
+                    select a.week, count(a.user_id) as new_users
+                    from (
+                        select date_trunc('week', user_account.joined_at) as week,
+                               user_account.id as user_id
+                        from user_account
+                    ) a
+                    group by a.week
+                    order by a.week
+                """,
+            )
+            with exc.wrap_sqlalchemy_exception():
+                result = await self.repository.session.execute(statement)
+                return list(result.mappings())
+
+        async def current_totals(self) -> list[RowMapping]:
+            """Get current total counts."""
+            statement = text(
+                """
+                    select count(user_account.id) as total_users,
+                           date_trunc('hour', current_timestamp) as as_of
+                    from user_account
+                    group by as_of
+                """,
+            )
+            with exc.wrap_sqlalchemy_exception():
+                result = await self.repository.session.execute(statement)
+                return list(result.mappings())
+
+This pattern:
+
+- Extends ``SQLAlchemyAsyncQueryService`` (no model required)
+- Uses ``text()`` for raw SQL queries
+- Wraps queries with ``exc.wrap_sqlalchemy_exception()`` for consistent error handling
+- Returns ``list[RowMapping]`` for dictionary-like result access
+- Accesses session via ``self.repository.session``
+
+Query Service Characteristics
+------------------------------
+
+``SQLAlchemyAsyncQueryService`` differs from ``SQLAlchemyAsyncRepositoryService``:
+
+- No model type parameter (works with raw SQL)
+- No CRUD operations (create, update, delete)
+- Direct session access for complex queries
+- Returns ``RowMapping`` instead of model instances
+- Useful for analytics, reporting, and aggregations
+
+Sample Repository and Service
+==============================
+
+Complete example showing Author and Post models with repositories and services.
+
+Author Repository and Service
+------------------------------
+
+.. note::
+
+    The following examples use the ``Author`` and ``Post`` models from :ref:`one_to_many_relationships`.
+
+.. code-block:: python
+
+    from advanced_alchemy import service
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+
+    class AuthorRepository(SQLAlchemyAsyncRepository[Author]):
+        """Author repository with custom queries."""
+
+        model_type = Author
+
+        async def get_by_email(self, email: str) -> Author | None:
+            """Get author by email address."""
+            return await self.get_one_or_none(Author.email == email.lower())
+
+        async def get_top_authors(self, limit: int = 10) -> list[Author]:
+            """Get authors with most posts."""
+            from sqlalchemy import func, select
+            from sqlalchemy.orm import selectinload
+
+            stmt = (
+                select(Author)
+                .join(Author.posts)
+                .group_by(Author.id)
+                .order_by(func.count(Post.id).desc())
+                .limit(limit)
+                .options(selectinload(Author.posts))
+            )
+            result = await self.session.execute(stmt)
+            return list(result.scalars())
+
+    class AuthorService(SQLAlchemyAsyncRepositoryService[Author, AuthorRepository]):
+        """Author service with email normalization."""
+
+        repository_type = AuthorRepository
+        match_fields = ["email"]
+
+        async def to_model_on_create(self, data: service.ModelDictT[Author]) -> service.ModelDictT[Author]:
+            """Normalize email before creating author."""
+            data = service.schema_dump(data)
+            if service.is_dict(data) and service.is_dict_with_field(data, "email"):
+                data["email"] = data["email"].lower().strip()
+            return data
+
+        async def to_model_on_update(self, data: service.ModelDictT[Author]) -> service.ModelDictT[Author]:
+            """Normalize email before updating author."""
+            data = service.schema_dump(data)
+            if service.is_dict(data) and service.is_dict_with_field(data, "email"):
+                data["email"] = data["email"].lower().strip()
+            return data
+
+Post Repository and Service
+----------------------------
+
+.. code-block:: python
+
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from advanced_alchemy import service
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+    from advanced_alchemy.exceptions import ConflictError
+    from advanced_alchemy.utils.text import slugify
+
+    class PostRepository(SQLAlchemyAsyncRepository[Post]):
+        """Post repository with custom queries."""
+
+        model_type = Post
+
+        async def get_published(self, limit: int = 10) -> list[Post]:
+            """Get published posts."""
+            from sqlalchemy.orm import selectinload
+
+            return await self.list(
+                Post.published == True,
+                Post.published_at.is_not(None),
+                order_by=[Post.published_at.desc()],
+                limit=limit,
+                load=[selectinload(Post.author), selectinload(Post.tags)],
+            )
+
+        async def get_by_author(self, author_id: int) -> list[Post]:
+            """Get all posts by author."""
+            from sqlalchemy.orm import selectinload
+
+            return await self.list(
+                Post.author_id == author_id,
+                order_by=[Post.created_at.desc()],
+                load=[selectinload(Post.tags)],
+            )
+
+    class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
+        """Post service with tag handling and publishing logic."""
+
+        repository_type = PostRepository
+        match_fields = ["title"]
+        default_load_options = [Post.author, Post.tags]
+
+        async def to_model_on_create(self, data: service.ModelDictT[Post]) -> service.ModelDictT[Post]:
+            """Handle tags when creating post."""
+            if service.is_dict(data):
+                # Extract and process tags
+                tag_names = data.pop("tags", [])
+                data["id"] = data.get("id", uuid4())
+
+                # Convert to model instance
+                data = await super().to_model(data)
+
+                # Add tags using UniqueMixin
+                if tag_names:
+                    data.tags.extend([
+                        await Tag.as_unique_async(
+                            self.repository.session,
+                            name=tag_name,
+                            slug=slugify(tag_name)
+                        )
+                        for tag_name in tag_names
+                    ])
+
+            return data
+
+        async def publish_post(self, post_id: int) -> Post:
+            """Publish a post with timestamp."""
+            post = await self.get(post_id)
+
+            if post.published:
+                raise ConflictError(f"post already published: {post_id}")
+
+            post.published = True
+            post.published_at = datetime.now(timezone.utc)
+
+            return await self.update(post, auto_commit=True)
+
+        async def unpublish_post(self, post_id: int) -> Post:
+            """Unpublish a post."""
+            post = await self.get(post_id)
+
+            if not post.published:
+                raise ConflictError(f"post not published: {post_id}")
+
+            post.published = False
+            post.published_at = None
+
+            return await self.update(post, auto_commit=True)
+
 Technical Constraints
 =====================
 
@@ -438,15 +700,13 @@ Services should not manage session lifecycle:
 
 .. code-block:: python
 
-    # ✅ Correct - session managed externally
-    async with AsyncSession(engine) as session:
-        post_service = PostService(session=session)
-        author_service = AuthorService(session=session)
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
 
-        async with session.begin():
-            author = await author_service.create(author_data)
-            post = await post_service.create(post_data)
-            # Transaction committed here
+    # ✅ Correct - use .new() context manager
+    async with PostService.new(config=config) as post_service, \
+               AuthorService.new(config=config) as author_service:
+        author = await author_service.create(author_data, auto_commit=True)
+        post = await post_service.create(post_data, auto_commit=True)
 
     # ❌ Incorrect - service manages session
     class PostService:
@@ -455,7 +715,7 @@ Services should not manage session lifecycle:
                 # Don't create sessions in services
                 pass
 
-Services receive sessions, they don't create them.
+Services use ``.new()`` for session management or receive sessions from framework dependency injection.
 
 Override Method Signatures
 ---------------------------
@@ -492,14 +752,60 @@ Avoid circular dependencies between services:
         def __init__(self, session, post_service):
             self.post_service = post_service  # AuthorService depends on PostService
 
-    # ✅ Correct - use coordinator service
-    class BlogService:
-        def __init__(self, session):
-            self.post_service = PostService(session=session)
-            self.author_service = AuthorService(session=session)
-            # BlogService coordinates both
+    # ✅ Correct - services use repositories directly
+    class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
+        repository_type = PostRepository
+        # Access Author data through repository queries, not AuthorService
 
-Use coordinator services to break circular dependencies.
+    class AuthorService(SQLAlchemyAsyncRepositoryService[Author, AuthorRepository]):
+        repository_type = AuthorRepository
+        # Access Post data through repository queries, not PostService
+
+Services should not depend on each other. Use repository queries to access related data.
+
+Service Coordinators
+--------------------
+
+Use coordinator services to orchestrate multiple services in a single unit of work:
+
+.. code-block:: python
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+    class BlogCoordinator:
+        """Coordinates author and post operations in transactions."""
+
+        def __init__(self, config: SQLAlchemyAsyncConfig):
+            self.config = config
+
+        async def create_author_with_posts(
+            self,
+            author_data: dict,
+            posts_data: list[dict],
+        ) -> tuple[Author, list[Post]]:
+            """Create author and their posts in single transaction."""
+            # Services manage session lifecycle with .new()
+            async with AuthorService.new(config=self.config) as author_service, \
+                       PostService.new(config=self.config) as post_service:
+                # Create author
+                author = await author_service.create(author_data, auto_commit=True)
+
+                # Create posts linked to author
+                posts = []
+                for post_data in posts_data:
+                    post_data["author_id"] = author.id
+                    post = await post_service.create(post_data, auto_commit=True)
+                    posts.append(post)
+
+                return author, posts
+
+Coordinator characteristics:
+
+- Uses ``.new()`` context manager for proper session handling
+- Orchestrates multiple services in one transaction
+- Contains cross-service business logic
+- Ensures data consistency across services
+- Does not duplicate service methods
 
 Next Steps
 ==========

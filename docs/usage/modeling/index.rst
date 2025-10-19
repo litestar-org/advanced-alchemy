@@ -65,4 +65,4 @@ Related Topics
 ==============
 
 - :doc:`../repositories/index` - Using models with repositories
-- :doc:`../types` - Custom column types
+- :doc:`../types/index` - Custom column types

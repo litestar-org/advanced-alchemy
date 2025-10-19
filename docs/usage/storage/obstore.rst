@@ -128,11 +128,14 @@ IAM Role Authentication
 S3-Compatible Services
 ~~~~~~~~~~~~~~~~~~~~~~
 
-MinIO, DigitalOcean Spaces, Cloudflare R2:
+MinIO
+^^^^^
+
+MinIO provides S3-compatible object storage for local development and production:
 
 .. code-block:: python
 
-    # MinIO
+    # Local development
     storages.register_backend(ObstoreBackend(
         key="minio",
         fs="s3://my-bucket/",
@@ -140,10 +143,27 @@ MinIO, DigitalOcean Spaces, Cloudflare R2:
         aws_access_key_id="minioadmin",
         aws_secret_access_key="minioadmin",
         aws_region="us-east-1",
-        aws_allow_http=True,  # HTTP instead of HTTPS
+        aws_allow_http=True,  # HTTP for local development
     ))
 
-    # Cloudflare R2
+    # Production deployment
+    storages.register_backend(ObstoreBackend(
+        key="minio-prod",
+        fs="s3://production-bucket/",
+        aws_endpoint="https://minio.example.com",
+        aws_access_key_id="production-key",
+        aws_secret_access_key="production-secret",
+        aws_region="us-east-1",
+        aws_allow_http=False,  # HTTPS in production
+    ))
+
+For Docker Compose setup and multi-bucket configuration, see :ref:`minio_configuration`.
+
+Cloudflare R2
+^^^^^^^^^^^^^
+
+.. code-block:: python
+
     storages.register_backend(ObstoreBackend(
         key="r2",
         fs="s3://my-bucket/",
@@ -152,7 +172,11 @@ MinIO, DigitalOcean Spaces, Cloudflare R2:
         aws_secret_access_key="R2_SECRET_ACCESS_KEY",
     ))
 
-    # DigitalOcean Spaces
+DigitalOcean Spaces
+^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
     storages.register_backend(ObstoreBackend(
         key="spaces",
         fs="s3://my-space/",
@@ -370,58 +394,121 @@ Multiple Backends
 Framework Integration
 ---------------------
 
-Litestar Upload
-~~~~~~~~~~~~~~~
+File Upload Handling
+~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+.. tab-set::
 
-    from litestar import post
-    from litestar.datastructures import UploadFile
-    from advanced_alchemy.types import FileObject
+    .. tab-item:: Litestar
 
-    @post("/upload")
-    async def upload_file(
-        data: UploadFile,
-        service: "DocumentService",
-    ) -> "Document":
-        """Upload file to obstore storage."""
-        doc = await service.create(
-            DocumentModel(
-                title=data.filename or "untitled",
-                file=FileObject(
-                    backend="s3",
-                    filename=data.filename or "file",
-                    content_type=data.content_type,
-                    content=await data.read(),
-                ),
-            )
-        )
-        return service.to_schema(doc, schema_type=DocumentSchema)
+        .. code-block:: python
+
+            from litestar import post
+            from litestar.datastructures import UploadFile
+            from litestar.enums import RequestEncodingType
+            from litestar.params import Body
+            from advanced_alchemy.types import FileObject
+            from typing import Annotated
+
+            @post("/upload", signature_namespace={"DocumentService": DocumentService})
+            async def upload_file(
+                data: Annotated[UploadFile, Body(media_type=RequestEncodingType.MULTI_PART)],
+                service: DocumentService,
+            ) -> Document:
+                """Upload file to storage backend."""
+                # Create document with file
+                doc_data = {
+                    "title": data.filename or "untitled",
+                    "file": FileObject(
+                        backend="s3",
+                        filename=data.filename or "file",
+                        content_type=data.content_type or "application/octet-stream",
+                        content=await data.read(),
+                    ),
+                }
+                return await service.create(doc_data)
+
+    .. tab-item:: FastAPI
+
+        .. code-block:: python
+
+            from fastapi import APIRouter, UploadFile, Depends
+            from advanced_alchemy.types import FileObject
+
+            router = APIRouter()
+
+            @router.post("/upload")
+            async def upload_file(
+                file: UploadFile,
+                service: DocumentService = Depends(get_document_service),
+            ) -> Document:
+                """Upload file to storage backend."""
+                # Create document with file
+                doc_data = {
+                    "title": file.filename or "untitled",
+                    "file": FileObject(
+                        backend="s3",
+                        filename=file.filename or "file",
+                        content_type=file.content_type or "application/octet-stream",
+                        content=await file.read(),
+                    ),
+                }
+                return await service.create(doc_data)
 
 Signed URL Generation
 ~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+.. tab-set::
 
-    from litestar import post
+    .. tab-item:: Litestar
 
-    @post("/upload-url")
-    async def generate_upload_url(filename: str) -> "dict[str, str]":
-        """Generate signed upload URL for client-side upload."""
-        from advanced_alchemy.types import FileObject
+        .. code-block:: python
 
-        file_obj = FileObject(
-            backend="s3",
-            filename=filename,
-        )
+            from litestar import post
+            from advanced_alchemy.types import FileObject
 
-        upload_url = await file_obj.sign_async(expires_in=300, for_upload=True)
+            @post("/upload-url")
+            async def generate_upload_url(filename: str, content_type: str) -> dict[str, str]:
+                """Generate signed upload URL for client-side upload."""
+                file_obj = FileObject(
+                    backend="s3",
+                    filename=filename,
+                    content_type=content_type,
+                )
 
-        return {
-            "upload_url": upload_url,
-            "filename": filename,
-            "expires_in": 300,
-        }
+                upload_url = await file_obj.sign_async(expires_in=3600, for_upload=True)
+
+                return {
+                    "upload_url": upload_url,
+                    "filename": filename,
+                    "expires_in": 3600,
+                }
+
+    .. tab-item:: FastAPI
+
+        .. code-block:: python
+
+            from fastapi import APIRouter
+            from advanced_alchemy.types import FileObject
+
+            router = APIRouter()
+
+            @router.post("/upload-url")
+            async def generate_upload_url(filename: str, content_type: str) -> dict[str, str]:
+                """Generate signed upload URL for client-side upload."""
+                file_obj = FileObject(
+                    backend="s3",
+                    filename=filename,
+                    content_type=content_type,
+                )
+
+                upload_url = await file_obj.sign_async(expires_in=3600, for_upload=True)
+
+                return {
+                    "upload_url": upload_url,
+                    "filename": filename,
+                    "expires_in": 3600,
+                }
 
 Testing
 -------

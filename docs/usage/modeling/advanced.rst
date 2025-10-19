@@ -100,15 +100,17 @@ The ``as_unique_async`` method simplifies get-or-create logic:
         tag_names: list[str]
     ) -> Post:
         """Add tags to a post, creating new tags if needed."""
+        # Identify tags to add (only new ones)
+        existing_tag_names = [tag.name for tag in post.tags]
+        tags_to_add = [name for name in tag_names if name not in existing_tag_names]
+
         # The UniqueMixin automatically handles:
         # 1. Looking up existing tags
         # 2. Creating new tags if needed
-        # 3. Merging duplicates
-        post.tags = [
-          await Tag.as_unique_async(db_session, name=tag_text, slug=slugify(tag_text))
-          for tag_text in tag_names
-        ]
-        db_session.merge(post)
+        post.tags.extend([
+            await Tag.as_unique_async(db_session, name=tag_name, slug=slugify(tag_name))
+            for tag_name in tags_to_add
+        ])
         await db_session.flush()
         return post
 
@@ -418,6 +420,6 @@ Related Topics
 ==============
 
 - :doc:`../repositories/index` - Using models with repositories
-- :doc:`../types` - Custom column types
+- :doc:`../types/index` - Custom column types
 - :doc:`basics` - Base classes and simple models
 - :doc:`relationships` - Foreign keys and many-to-many patterns

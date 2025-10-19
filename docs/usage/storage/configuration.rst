@@ -30,6 +30,17 @@ Store configuration in environment variables:
                 aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
                 aws_region=os.environ.get("AWS_REGION", "us-east-1"),
             ))
+        elif storage_backend == "minio":
+            # MinIO S3-compatible storage
+            storages.register_backend(ObstoreBackend(
+                key="default",
+                fs=f"s3://{os.environ['MINIO_BUCKET']}/",
+                aws_access_key_id=os.environ.get("MINIO_ACCESS_KEY"),
+                aws_secret_access_key=os.environ.get("MINIO_SECRET_KEY"),
+                aws_endpoint=os.environ.get("MINIO_ENDPOINT", "http://localhost:9000"),
+                aws_region=os.environ.get("MINIO_REGION", "us-east-1"),
+                aws_allow_http=True,  # MinIO local development
+            ))
         elif storage_backend == "gcs":
             storages.register_backend(ObstoreBackend(
                 key="default",
@@ -128,6 +139,178 @@ Use Pydantic for configuration validation:
                 fs="file",
                 prefix=settings.upload_dir,
             ))
+
+.. _minio_configuration:
+
+MinIO Configuration
+-------------------
+
+MinIO is an S3-compatible object storage server for local development and production.
+
+Local Development with Docker
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Docker Compose configuration for MinIO:
+
+.. code-block:: yaml
+
+    # docker-compose.yml
+    services:
+      object-storage:
+        image: quay.io/minio/minio
+        command: server /data --console-address ":9001"
+        environment:
+          MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+          MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+        volumes:
+          - object-storage-data:/data
+        ports:
+          - 9000:9000  # API
+          - 9001:9001  # Console UI
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+          interval: 30s
+          timeout: 20s
+          retries: 3
+
+      object-storage-initializer:
+        image: minio/mc:latest
+        depends_on:
+          object-storage:
+            condition: service_healthy
+        environment:
+          MINIO_SERVER_URL: http://object-storage:9000
+          MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+          MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+        volumes:
+          - ./minio-config.sh:/scripts/minio-config.sh
+        entrypoint: /bin/sh
+        command: /scripts/minio-config.sh
+
+    volumes:
+      object-storage-data:
+
+Bucket initialization script:
+
+.. code-block:: bash
+
+    #!/bin/sh
+    # minio-config.sh
+    set -e
+
+    MINIO_ALIAS="object-storage"
+    BUCKET_PUBLIC="public"
+    BUCKET_PRIVATE="private"
+
+    # Configure MinIO client
+    mc alias set $MINIO_ALIAS $MINIO_SERVER_URL $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+
+    # Create public bucket
+    mc mb $MINIO_ALIAS/$BUCKET_PUBLIC || echo "Bucket $BUCKET_PUBLIC exists"
+    mc policy set download $MINIO_ALIAS/$BUCKET_PUBLIC
+
+    # Create private bucket
+    mc mb $MINIO_ALIAS/$BUCKET_PRIVATE || echo "Bucket $BUCKET_PRIVATE exists"
+    mc policy set none $MINIO_ALIAS/$BUCKET_PRIVATE
+
+Application Configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Environment variables:
+
+.. code-block:: bash
+
+    # .env
+    PUBLIC_STORAGE_URI=s3://public/
+    PUBLIC_STORAGE_OPTIONS={"aws_access_key_id":"minioadmin","aws_secret_access_key":"minioadmin","aws_endpoint":"http://localhost:9000","aws_region":"us-east-1","aws_allow_http":true}
+
+    PRIVATE_STORAGE_URI=s3://private/
+    PRIVATE_STORAGE_OPTIONS={"aws_access_key_id":"minioadmin","aws_secret_access_key":"minioadmin","aws_endpoint":"http://localhost:9000","aws_region":"us-east-1","aws_allow_http":true}
+
+Settings dataclass:
+
+.. code-block:: python
+
+    from dataclasses import dataclass, field
+    from typing import Any
+
+    @dataclass
+    class StorageSettings:
+        """Storage configuration settings."""
+
+        PUBLIC_STORAGE_KEY: str = field(default="public")
+        PUBLIC_STORAGE_URI: str = field(default="s3://public/")
+        PUBLIC_STORAGE_OPTIONS: dict[str, Any] = field(default_factory=dict)
+
+        PRIVATE_STORAGE_KEY: str = field(default="private")
+        PRIVATE_STORAGE_URI: str = field(default="s3://private/")
+        PRIVATE_STORAGE_OPTIONS: dict[str, Any] = field(default_factory=dict)
+
+Backend registration:
+
+.. code-block:: python
+
+    from advanced_alchemy.types.file_object import storages
+    from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+
+    def configure_minio_storage(settings: StorageSettings):
+        """Configure MinIO storage backends."""
+        # Public storage
+        storages.register_backend(ObstoreBackend(
+            key=settings.PUBLIC_STORAGE_KEY,
+            fs=settings.PUBLIC_STORAGE_URI,
+            **settings.PUBLIC_STORAGE_OPTIONS
+        ))
+
+        # Private storage
+        storages.register_backend(ObstoreBackend(
+            key=settings.PRIVATE_STORAGE_KEY,
+            fs=settings.PRIVATE_STORAGE_URI,
+            **settings.PRIVATE_STORAGE_OPTIONS
+        ))
+
+Model usage:
+
+.. code-block:: python
+
+    from advanced_alchemy.base import UUIDAuditBase
+    from advanced_alchemy.types import FileObject, StoredObject
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    class TeamFile(UUIDAuditBase):
+        """Team file with private storage."""
+
+        __tablename__ = "team_file"
+
+        name: Mapped[str]
+        file: Mapped[FileObject] = mapped_column(StoredObject(backend="private"))
+
+        @property
+        def url(self) -> str:
+            """Generate signed URL for file access."""
+            return await self.file.sign_async(expires_in=3600)
+
+Production Configuration
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+For production MinIO deployments:
+
+.. code-block:: python
+
+    # Production settings
+    MINIO_ENDPOINT = "https://minio.example.com"
+    MINIO_ACCESS_KEY = "production-access-key"  # Use secrets manager
+    MINIO_SECRET_KEY = "production-secret-key"  # Use secrets manager
+
+    storages.register_backend(ObstoreBackend(
+        key="default",
+        fs="s3://production-bucket/",
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+        aws_endpoint=MINIO_ENDPOINT,
+        aws_region="us-east-1",
+        aws_allow_http=False,  # HTTPS in production
+    ))
 
 Framework Integration
 ---------------------

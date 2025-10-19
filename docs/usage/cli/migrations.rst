@@ -141,16 +141,25 @@ Output:
 
 Verify schema in database:
 
-.. code-block:: sql
+.. tab-set::
 
-    -- PostgreSQL
-    \d+ user
+    .. tab-item:: PostgreSQL
 
-    -- MySQL
-    DESCRIBE user;
+        .. code-block:: bash
 
-    -- SQLite
-    .schema user
+            psql -d mydb -c "\d+ user"
+
+    .. tab-item:: MySQL
+
+        .. code-block:: bash
+
+            mysql -e "DESCRIBE user;"
+
+    .. tab-item:: SQLite
+
+        .. code-block:: bash
+
+            sqlite3 mydb.db ".schema user"
 
 Autogenerate Capabilities
 ==========================

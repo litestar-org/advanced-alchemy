@@ -253,5 +253,5 @@ Related Topics
 ==============
 
 - :doc:`../repositories/basics` - Using models with repositories
-- :doc:`../types` - Custom column types
+- :doc:`../types/index` - Custom column types
 - :doc:`advanced` - Advanced patterns and mixins

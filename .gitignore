@@ -191,3 +191,7 @@ requirements/archive/*
 requirements/*
 !requirements/example-feature
 !requirements/README.md
+
+# Temporary documentation audit files
+REFERENCE_DOCS_*.md
+gif.md

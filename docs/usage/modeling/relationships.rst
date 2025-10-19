@@ -82,7 +82,10 @@ This configuration creates:
 Working with Tags
 -----------------
 
-Adding tags to posts:
+Manual Get-or-Create Pattern
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Without mixins, adding tags requires manual get-or-create logic:
 
 .. code-block:: python
 
@@ -105,12 +108,50 @@ Adding tags to posts:
         await db_session.flush()
         return post
 
-This pattern:
+This manual pattern:
 
-- Looks up existing tags by slug
-- Creates new tags if needed
+- Queries existing tags by slug
+- Creates new tags for missing names
 - Adds tags to the post
 - Flushes changes to database
+
+Using UniqueMixin
+~~~~~~~~~~~~~~~~~
+
+The ``UniqueMixin`` simplifies get-or-create operations. The ``Tag`` model from the example above includes ``UniqueMixin`` - see :ref:`using_unique_mixin` for the complete implementation.
+
+.. code-block:: python
+
+    from advanced_alchemy.utils.text import slugify
+
+    async def add_tags_to_post(
+        db_session: AsyncSession,
+        post: Post,
+        tag_names: list[str]
+    ) -> Post:
+        """Add tags using UniqueMixin for automatic get-or-create."""
+        # Identify tags to add (only new ones)
+        existing_tag_names = [tag.name for tag in post.tags]
+        tags_to_add = [name for name in tag_names if name not in existing_tag_names]
+
+        # Extend with new tags using UniqueMixin
+        post.tags.extend([
+            await Tag.as_unique_async(
+                db_session,
+                name=tag_name,
+                slug=slugify(tag_name)
+            )
+            for tag_name in tags_to_add
+        ])
+        await db_session.flush()
+        return post
+
+The ``UniqueMixin`` pattern:
+
+- Automatically looks up existing tags by unique key (slug)
+- Creates new tags only if needed
+- Single method call per tag
+- Handles uniqueness constraints safely
 
 Implementation Patterns
 =======================
@@ -192,6 +233,8 @@ Characteristics:
 - Prevents accidental modifications
 - Used for the non-owning side of many-to-many relationships
 - Reduces complexity of bidirectional relationships
+
+.. _one_to_many_relationships:
 
 One-to-Many Relationships
 ==========================
