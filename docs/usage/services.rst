@@ -116,7 +116,7 @@ The code below shows a service coordinating posts and tags.
 
     class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
 
-        default_load_options = [Post.tags]
+        loader_options = [Post.tags]
         repository_type = PostRepository
         match_fields = ["name"]
 
