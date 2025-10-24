@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import Engine, String, select
+from sqlalchemy import Engine, String, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -454,6 +454,78 @@ def test_order_by_filter(session: Session, movie_model_sync: type[DeclarativeBas
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert results[0].title == "The Hangover"
+
+
+def test_order_by_with_func_random(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test OrderBy filter with func.random() expression."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    dialect_name = getattr(session.bind.dialect, "name", "")
+    if dialect_name == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Skip Oracle - uses dbms_random.value() instead of random()
+    if dialect_name.startswith("oracle"):
+        pytest.skip("Oracle uses dbms_random.value() instead of random()")
+
+    # Clean any existing data first, then setup fresh data
+    if dialect_name != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test func.random() - should not raise type error
+    order_by_filter = OrderBy(field_name=func.random())
+    statement = order_by_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    # Should return all movies, order is random
+    assert len(results) == 3
+
+
+def test_order_by_with_func_lower(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test OrderBy filter with func.lower() for case-insensitive sorting."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test func.lower() for case-insensitive alphabetical sorting
+    order_by_filter = OrderBy(field_name=func.lower(Movie.title), sort_order="asc")
+    statement = order_by_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    # Should be sorted alphabetically: Shawshank, The Hangover, The Matrix
+    assert results[0].title == "Shawshank Redemption"
+    assert results[1].title == "The Hangover"
+    assert results[2].title == "The Matrix"
+
+
+def test_order_by_with_instrumented_attribute(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test OrderBy filter with InstrumentedAttribute (Model.field)."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test with InstrumentedAttribute (backward compatibility)
+    order_by_filter = OrderBy(field_name=Movie.release_date, sort_order="asc")
+    statement = order_by_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    assert results[0].title == "Shawshank Redemption"
 
 
 def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
