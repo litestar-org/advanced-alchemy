@@ -519,7 +519,6 @@ To use the SQLAlchemy session backend, you need to:
 
     # 3. Configure session backend
     session_config = ServerSideSessionConfig(
-        secret="your-secret-key-here",  # Use a secure secret in production
         max_age=3600,  # 1 hour
     )
 
@@ -693,34 +692,17 @@ The session table created by ``SessionModelMixin`` has the following structure:
 Security Considerations
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-**Secret Key Management**
-
-Always use a secure secret key for session encryption:
-
-.. code-block:: python
-
-    import secrets
-
-    # Generate a secure random secret
-    secret_key = secrets.token_urlsafe(32)
-
-    session_config = ServerSideSessionConfig(
-        secret=secret_key,
-        max_age=3600,
-        https_only=True,  # Require HTTPS in production
-        samesite="strict",  # CSRF protection
-    )
-
 **Session Expiration**
 
 Configure appropriate session timeouts:
 
 .. code-block:: python
 
+    # Sessions are automatically renewed on each request
     session_config = ServerSideSessionConfig(
-        secret="your-secret-key",
         max_age=1800,  # 30 minutes
-        # Sessions are automatically renewed on each request
+        https_only=True,  # Require HTTPS in production
+        samesite="strict",  # CSRF protection
     )
 
 **Database Security**
@@ -821,7 +803,6 @@ Here's a complete working example:
 
     # Session configuration
     session_config = ServerSideSessionConfig(
-        secret="your-super-secret-key-change-in-production",
         max_age=3600,  # 1 hour
     )
 
