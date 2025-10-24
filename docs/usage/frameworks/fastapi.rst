@@ -48,7 +48,7 @@ Define your SQLAlchemy models and Pydantic schemas:
     class AuthorModel(UUIDBase):
         __tablename__ = "author"
         name: Mapped[str]
-        dob: Mapped[date | None]
+        dob: Mapped[datetime.date | None]
         books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
     class BookModel(UUIDAuditBase):
@@ -122,6 +122,10 @@ Create controllers using the service:
     from fastapi import APIRouter, Depends
     from uuid import UUID
     from advanced_alchemy.extensions.fastapi import filters
+
+    async def provide_limit_offset_pagination() -> filters.LimitOffset:
+        """Provide limit/offset pagination with defaults."""
+        return filters.LimitOffset(limit=10, offset=0)
 
     author_router = APIRouter()
 

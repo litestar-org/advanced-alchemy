@@ -26,6 +26,12 @@ current_year = datetime.datetime.now().year  # noqa: DTZ005
 project = __project__
 copyright = f"{current_year}, Litestar Organization"  # noqa: A001
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
+
+# Configure base URL for PR preview deployments
+pr_number = os.getenv("PR_NUMBER")
+if pr_number:
+    html_baseurl = f"https://litestar-org.github.io/advanced-alchemy-docs-preview/{pr_number}/"
+
 suppress_warnings = [
     "autosectionlabel.*",
     "ref.python",  # TODO: remove when https://github.com/sphinx-doc/sphinx/issues/4961 is fixed

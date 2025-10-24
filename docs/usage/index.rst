@@ -14,20 +14,19 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     :maxdepth: 2
     :caption: Core Features
 
-    modeling
-    repositories
-    services
-    types
-    cli
+    modeling/index
+    repositories/index
+    services/index
+    types/index
+    storage/index
+    cli/index
     database_seeding
 
 .. toctree::
     :maxdepth: 2
     :caption: Framework Integration
 
-    frameworks/litestar
-    frameworks/flask
-    frameworks/fastapi
+    frameworks/index
 
 The guide follows a practical approach:
 

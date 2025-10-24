@@ -1,114 +1,21 @@
-=================
-Command Line Tool
-=================
+========
+Commands
+========
 
-Advanced Alchemy provides a command-line interface (CLI) for common database operations and project management tasks.
+Complete reference for Advanced Alchemy CLI commands.
 
-Installation
-------------
+Prerequisites
+=============
 
-The CLI is installed with Advanced Alchemy with the extra ``cli``:
-
-.. tab-set::
-
-    .. tab-item:: pip
-        :sync: key1
-
-        .. code-block:: bash
-            :caption: Using pip
-
-            python3 -m pip install advanced-alchemy[cli]
-
-    .. tab-item:: uv
-
-        .. code-block:: bash
-            :caption: Using `UV <https://docs.astral.sh/uv/>`_
-
-            uv add advanced-alchemy[cli]
-
-    .. tab-item:: pipx
-        :sync: key2
-
-        .. code-block:: bash
-            :caption: Using `pipx <https://pypa.github.io/pipx/>`_
-
-            pipx install advanced-alchemy[cli]
-
-
-    .. tab-item:: pdm
-
-        .. code-block:: bash
-            :caption: Using `PDM <https://pdm.fming.dev/>`_
-
-            pdm add advanced-alchemy[cli]
-
-    .. tab-item:: Poetry
-
-        .. code-block:: bash
-            :caption: Using `Poetry <https://python-poetry.org/>`_
-
-            poetry add advanced-alchemy[cli]
-
-
-Basic Usage
------------
-
-The CLI can be invoked using the ``alchemy`` command:
-
-.. code-block:: bash
-
-    alchemy --help
-
-Global Options
---------------
-
-The following options are available for all commands:
-
-.. list-table:: Global options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--config`` TEXT
-     - **Required**. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemyConfig`` (sync or async). Example: ``--config path.to.alchemy-config.config``
-   * - ``--bind-key`` TEXT
-     - Optional. Specify which SQLAlchemy config to use
-   * - ``--no-prompt``
-     - Optional. Skip confirmation prompts
-   * - ``--verbose``
-     - Optional. Enable verbose output
-
-
-Config
-------
-
-Here is an example of what **config** looks like.
-
-If the file is named ``alchemy-config.py``, you would need to use it like this ``--config path.to.alchemy-config.config``
-
-.. code-block:: python
-    :caption: alchemy-config.py
-
-    from sqlalchemy import create_engine
-    from advanced_alchemy.config import SQLAlchemyConfig
-
-    # Create a test config using SQLite
-    config = SQLAlchemyConfig(
-        connection_url="sqlite:///test.db"
-    )
-
-
-Available Commands
-------------------
+See :doc:`index` for installation and configuration.
 
 Migration Commands
-~~~~~~~~~~~~~~~~~~
+==================
 
-These commands manage database migrations and revisions.
+Commands for creating and applying database migrations.
 
 show-current-revision
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 
 Show the current revision of the database:
 
@@ -126,7 +33,7 @@ Show the current revision of the database:
      - Display detailed revision information
 
 downgrade
-^^^^^^^^^
+---------
 
 Downgrade database to a specific revision:
 
@@ -147,9 +54,8 @@ Downgrade database to a specific revision:
    * - ``REVISION``
      - Target revision (default: "-1")
 
-
 upgrade
-^^^^^^^
+-------
 
 Upgrade database to a specific revision:
 
@@ -171,7 +77,7 @@ Upgrade database to a specific revision:
      - Target revision (default: "head")
 
 stamp
-^^^^^
+-----
 
 Stamp the revision table with a specific revision without running migrations:
 
@@ -194,7 +100,7 @@ Stamp the revision table with a specific revision without running migrations:
    * - ``REVISION``
      - Target revision to stamp (required)
 
-**Use cases:**
+Use cases:
 
 - Initialize version table for existing database
 - Mark migrations as applied without running them
@@ -202,7 +108,7 @@ Stamp the revision table with a specific revision without running migrations:
 - Generate SQL for manual database stamping (with ``--sql``)
 
 init
-^^^^
+----
 
 Initialize migrations for the project:
 
@@ -223,9 +129,8 @@ Initialize migrations for the project:
    * - ``DIRECTORY``
      - Directory for migration files (optional)
 
-
 make-migrations
-^^^^^^^^^^^^^^^
+---------------
 
 Create a new migration revision:
 
@@ -256,14 +161,13 @@ Create a new migration revision:
    * - ``--rev-id`` TEXT
      - Specific revision ID
 
-
 Inspection Commands
-~~~~~~~~~~~~~~~~~~~
+===================
 
-These commands inspect migration history and database state.
+Commands for inspecting migration history and database state.
 
 check
-^^^^^
+-----
 
 Check if the database is up to date with the current migration revision:
 
@@ -273,14 +177,14 @@ Check if the database is up to date with the current migration revision:
 
 Returns exit code 0 if database is current, non-zero otherwise.
 
-**Use cases:**
+Use cases:
 
 - CI/CD validation before deployment
 - Pre-deployment smoke tests
 - Health checks
 
 heads
-^^^^^
+-----
 
 Show current available heads in the migration script directory:
 
@@ -299,14 +203,14 @@ Show current available heads in the migration script directory:
    * - ``--resolve-dependencies``
      - Resolve dependencies between heads
 
-**Use cases:**
+Use cases:
 
 - Detect multiple heads (branch conflicts)
 - Verify migration graph state
 - Branch development coordination
 
 history
-^^^^^^^
+-------
 
 List migration changesets in chronological order:
 
@@ -327,14 +231,14 @@ List migration changesets in chronological order:
    * - ``--indicate-current``
      - Indicate the current revision in output
 
-**Use cases:**
+Use cases:
 
 - Audit migration history
 - Generate migration documentation
 - Review changes between revisions
 
 show
-^^^^
+----
 
 Show details of a specific revision:
 
@@ -342,7 +246,7 @@ Show details of a specific revision:
 
     alchemy show --config path.to.alchemy-config.config REVISION
 
-**Examples:**
+Examples:
 
 .. code-block:: bash
 
@@ -356,7 +260,7 @@ Show details of a specific revision:
     alchemy show base --config path.to.alchemy-config.config
 
 branches
-^^^^^^^^
+--------
 
 Show current branch points in the migration history:
 
@@ -373,20 +277,19 @@ Show current branch points in the migration history:
    * - ``--verbose``
      - Display detailed branch information
 
-**Use cases:**
+Use cases:
 
 - Identify branch points in migration graph
 - Multi-team development coordination
 - Branch-based development workflows
 
-
 Branch Management Commands
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+==========================
 
-These commands manage branched migration workflows.
+Commands for managing branched migration workflows.
 
 merge
-^^^^^
+-----
 
 Merge two revisions together, creating a new migration file:
 
@@ -409,7 +312,7 @@ Merge two revisions together, creating a new migration file:
    * - ``REVISIONS``
      - Revisions to merge (e.g., 'abc123+def456' or 'heads')
 
-**Examples:**
+Examples:
 
 .. code-block:: bash
 
@@ -419,20 +322,19 @@ Merge two revisions together, creating a new migration file:
     # Merge specific revisions
     alchemy merge abc123+def456 -m "merge database changes" --config path.to.alchemy-config.config
 
-**Use cases:**
+Use cases:
 
 - Resolve multiple heads (branch conflicts)
 - Consolidate parallel development branches
 - Team coordination for database changes
 
-
 Utility Commands
-~~~~~~~~~~~~~~~~
+================
 
-These commands provide additional migration utilities.
+Additional migration utilities.
 
 edit
-^^^^
+----
 
 Edit a revision file using the system editor (set via ``$EDITOR`` environment variable):
 
@@ -440,7 +342,7 @@ Edit a revision file using the system editor (set via ``$EDITOR`` environment va
 
     alchemy edit --config path.to.alchemy-config.config REVISION
 
-**Examples:**
+Examples:
 
 .. code-block:: bash
 
@@ -451,7 +353,7 @@ Edit a revision file using the system editor (set via ``$EDITOR`` environment va
     alchemy edit abc123def --config path.to.alchemy-config.config
 
 ensure-version
-^^^^^^^^^^^^^^
+--------------
 
 Create the Alembic version table if it doesn't exist:
 
@@ -468,14 +370,14 @@ Create the Alembic version table if it doesn't exist:
    * - ``--sql``
      - Generate SQL output instead of executing
 
-**Use cases:**
+Use cases:
 
 - Database initialization workflows
 - Manual database setup
 - Generate SQL for DBA review (with ``--sql``)
 
 list-templates
-^^^^^^^^^^^^^^
+--------------
 
 List available Alembic migration templates:
 
@@ -483,19 +385,18 @@ List available Alembic migration templates:
 
     alchemy list-templates --config path.to.alchemy-config.config
 
-**Use cases:**
+Use cases:
 
 - Discover available templates for ``init`` command
 - Template selection for new projects
 
-
 Database Commands
-~~~~~~~~~~~~~~~~~
+=================
 
-These commands manage database tables and data.
+Commands for managing database tables and data.
 
 drop-all
-^^^^^^^^
+--------
 
 Drop all tables from the database:
 
@@ -508,7 +409,7 @@ Drop all tables from the database:
    This command is destructive and will delete all data. Use with caution.
 
 dump-data
-^^^^^^^^^
+---------
 
 Dump specified tables from the database to JSON files:
 
@@ -527,19 +428,15 @@ Dump specified tables from the database to JSON files:
    * - ``--dir`` PATH
      - Directory to save JSON files (default: ./fixtures)
 
-
 Extending the CLI
+=================
+
+Integrate Advanced Alchemy commands into your application.
+
+Click Integration
 -----------------
 
-If you're using Click in your project, you can extend Advanced Alchemy's CLI with your own commands. The CLI provides two main functions for integration:
-
-- ``get_alchemy_group()``: Get the base CLI group
-- ``add_migration_commands()``: Add migration-related commands to a group
-
-Basic Extension
-~~~~~~~~~~~~~~~
-
-Here's how to extend the CLI with your own commands:
+Extend the CLI with custom commands:
 
 .. code-block:: python
 
@@ -560,9 +457,9 @@ Here's how to extend the CLI with your own commands:
     add_migration_commands(alchemy_group)
 
 Custom Group Integration
-~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------
 
-You can also integrate Advanced Alchemy's commands into your existing Click group:
+Integrate into existing Click group:
 
 .. code-block:: python
 
@@ -585,11 +482,10 @@ You can also integrate Advanced Alchemy's commands into your existing Click grou
     if __name__ == "__main__":
         cli()
 
-Typer integration
+Typer Integration
 -----------------
 
-You can integrate Advanced Alchemy's CLI commands into your existing ``Typer`` application. Here's how:
-
+Integrate with Typer applications:
 
 .. code-block:: python
     :caption: cli.py
@@ -628,8 +524,7 @@ You can integrate Advanced Alchemy's CLI commands into your existing ``Typer`` a
         cli = create_cli()
         cli()
 
-
-After setting up the integration, you can use both your ``Typer`` commands and Advanced Alchemy commands:
+Usage:
 
 .. code-block:: bash
 
@@ -639,3 +534,9 @@ After setting up the integration, you can use both your ``Typer`` commands and A
     # Use Advanced Alchemy commands
     python cli.py alchemy upgrade --config path.to.config
     python cli.py alchemy make-migrations --config path.to.config
+
+Related Topics
+==============
+
+- :doc:`migrations` - Migration workflow and troubleshooting
+- :doc:`index` - CLI overview and installation
