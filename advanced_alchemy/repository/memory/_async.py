@@ -224,10 +224,8 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         if isinstance(field, str):
             return field
         if isinstance(field, InstrumentedAttribute):
-            # Extract the attribute name from InstrumentedAttribute
             return field.key
-        # ColumnElement (func expressions) cannot be executed in-memory
-        msg = "func expressions and column elements are not supported in mock repositories (in-memory filtering)"
+        msg = f"{type(field)} columns are not supported in mock repositories (in-memory filtering)"
         raise RepositoryError(msg)
 
     def _filter_in_collection(
