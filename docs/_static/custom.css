@@ -224,7 +224,7 @@ html.dark .title-with-logo .brand-text {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {  
+@media (max-width: 768px) {
   #copy-markdown-btn {
     font-size: 0.8rem;
     padding: 0.4rem 0.8rem;

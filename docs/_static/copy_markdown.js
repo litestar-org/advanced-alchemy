@@ -1,6 +1,6 @@
 /**
  * Copy as Markdown functionality for Sphinx documentation
- * 
+ *
  * Adds a "Copy as Markdown" button at the top of each documentation page
  * that converts RST content to Markdown format for use with AI tools.
  */
