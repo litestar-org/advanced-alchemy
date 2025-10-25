@@ -159,18 +159,34 @@ class StatementFilter(ABC):
     def _get_instrumented_attr(
         model: Any, key: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
     ) -> "Union[ColumnElement[Any], InstrumentedAttribute[Any]]":
-        """Get column expression from string, func, or model attribute."""
+        """Get SQLAlchemy instrumented attribute from model.
+
+        Args:
+            model: SQLAlchemy model class or instance
+            key: Attribute name or instrumented attribute
+
+        Returns:
+            InstrumentedAttribute[Any]: SQLAlchemy instrumented attribute
+
+        See Also:
+            :class:`sqlalchemy.orm.attributes.InstrumentedAttribute`: SQLAlchemy attribute
+        """
         return cast("InstrumentedAttribute[Any]", getattr(model, key)) if isinstance(key, str) else key
 
 
 @dataclass
 class BeforeAfter(StatementFilter):
-    """DateTime range filter with exclusive bounds (< and >).
+    """DateTime range filter with exclusive bounds.
 
-    If either `before` or `after` is None, that boundary is not applied.
+    This filter creates date/time range conditions using < and > operators,
+    excluding the boundary values.
+
+    If either `before` or `after` is None, that boundary condition is not applied.
 
     See Also:
-        :class:`OnBeforeAfter`: Inclusive datetime range filtering
+    ---------
+        :class:`OnBeforeAfter` : Inclusive datetime range filtering
+
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
@@ -205,12 +221,18 @@ class BeforeAfter(StatementFilter):
 
 @dataclass
 class OnBeforeAfter(StatementFilter):
-    """DateTime range filter with inclusive bounds (<= and >=).
+    """DateTime range filter with inclusive bounds.
 
-    If either `on_or_before` or `on_or_after` is None, that boundary is not applied.
+    This filter creates date/time range conditions using <= and >= operators,
+    including the boundary values.
+
+    If either `on_or_before` or `on_or_after` is None, that boundary condition
+    is not applied.
 
     See Also:
-        :class:`BeforeAfter`: Exclusive datetime range filtering
+    ---------
+        :class:`BeforeAfter` : Exclusive datetime range filtering
+
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
@@ -253,15 +275,19 @@ class InAnyFilter(StatementFilter, ABC):
 
 @dataclass
 class CollectionFilter(InAnyFilter, Generic[T]):
-    """WHERE ... IN (...) clause filter.
+    """Data required to construct a WHERE ... IN (...) clause.
 
-    Supports both ``IN`` and ``ANY`` operators via ``prefer_any`` parameter.
+    This filter restricts records based on a field's presence in a collection of values.
+
+    The filter supports both ``IN`` and ``ANY`` operators for collection membership testing.
+    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
     """Field name, model attribute, or func expression."""
     values: Union[Collection[T], None]
-    """Values for IN clause. None = no filter, empty list = empty result set."""
+    """Values for the ``IN`` clause. If this is None, no filter is applied.
+        An empty list will force an empty result set (WHERE 1=-1)"""
 
     def append_to_statement(
         self,
@@ -299,15 +325,27 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
 @dataclass
 class NotInCollectionFilter(InAnyFilter, Generic[T]):
-    """WHERE ... NOT IN (...) clause filter.
+    """Data required to construct a WHERE ... NOT IN (...) clause.
 
-    Supports both ``NOT IN`` and ``!= ANY`` operators via ``prefer_any`` parameter.
+    This filter restricts records based on a field's absence in a collection of values.
+
+    The filter supports both ``NOT IN`` and ``!= ANY`` operators for collection exclusion.
+    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
+
+    Parameters
+    ----------
+    field_name : str
+        Name of the model attribute to filter on
+    values : abc.Collection[T] | None
+        Values for the ``NOT IN`` clause. If this is None or empty,
+        the filter is not applied.
+
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
     """Field name, model attribute, or func expression."""
     values: Union[Collection[T], None]
-    """Values for NOT IN clause. None or empty = no filter."""
+    """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
 
     def append_to_statement(
         self,
@@ -393,9 +431,10 @@ class LimitOffset(PaginationFilter):
 
 @dataclass
 class OrderBy(StatementFilter):
-    """Order by a specific field or SQLAlchemy function expression.
+    """Order by a specific field.
 
-    Supports string field names, model attributes, and func expressions (e.g., ``func.random()``).
+    Appends an ORDER BY clause to SELECT statements, sorting records by the
+    specified field in ascending or descending order.
 
     Note:
         This filter only modifies SELECT statements. For other statement types,
@@ -405,7 +444,6 @@ class OrderBy(StatementFilter):
         - :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY clause
         - :meth:`sqlalchemy.sql.expression.ColumnElement.asc`: Ascending order
         - :meth:`sqlalchemy.sql.expression.ColumnElement.desc`: Descending order
-        - :func:`sqlalchemy.func`: SQL function expressions
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
@@ -565,12 +603,24 @@ VALID_OPERATORS = set(operators_map.keys())
 
 @dataclass
 class ComparisonFilter(StatementFilter):
-    """Comparison filter for standard operators (=, !=, >, <, >=, <=, etc.)."""
+    """Simple comparison filter for equality and inequality operations.
+
+    This filter applies basic comparison operators (=, !=, >, >=, <, <=) to a field.
+    It provides a generic way to perform common comparison operations.
+
+    Args:
+        field_name: Name of the model attribute to filter on
+        operator: Comparison operator to use (must be one of: 'eq', 'ne', 'gt', 'ge', 'lt', 'le', 'in', 'notin', 'between', 'like', 'ilike', 'startswith', 'istartswith', 'endswith', 'iendswith', 'dateeq')
+        value: Value to compare against
+
+    Raises:
+        ValueError: If an invalid operator is provided
+    """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
     """Field name, model attribute, or func expression."""
     operator: str
-    """Comparison operator ('eq', 'ne', 'gt', 'ge', 'lt', 'le', etc.)."""
+    """Comparison operator to use (one of 'eq', 'ne', 'gt', 'ge', 'lt', 'le')."""
     value: Any
     """Value to compare against."""
 
