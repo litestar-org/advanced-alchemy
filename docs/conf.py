@@ -208,6 +208,7 @@ html_static_path = ["_static"]
 html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
 html_css_files = ["custom.css"]
+html_js_files = ["copy_markdown.js"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**"]
 html_show_sourcelink = True
 html_copy_source = True

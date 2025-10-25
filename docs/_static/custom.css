@@ -137,3 +137,103 @@ html.dark .title-with-logo .brand-text {
     letter-spacing: var(--brand-letter-spacing-xs);
   }
 }
+
+/* Copy as Markdown Button Styling */
+#copy-markdown-container {
+  position: relative;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+#copy-markdown-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent-a3);
+  color: var(--sy-c-text);
+  border: 1px solid var(--sy-c-divider);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--sy-f-text);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  outline: none;
+}
+
+/* Focus state for accessibility */
+#copy-markdown-btn:focus-visible {
+  outline: 2px solid var(--accent-a6);
+  outline-offset: 2px;
+}
+
+/* Hover state */
+#copy-markdown-btn:hover:not(:disabled) {
+  background: var(--accent-a4);
+  border-color: var(--accent-a5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Active state */
+#copy-markdown-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading state */
+#copy-markdown-btn.loading {
+  background: var(--accent-a4);
+  border-color: var(--accent-a5);
+  cursor: wait;
+  opacity: 0.8;
+}
+
+/* Success state */
+#copy-markdown-btn.success {
+  background: var(--accent-a5);
+  border-color: var(--accent-a6);
+  color: var(--sy-c-heading);
+}
+
+/* Error state */
+#copy-markdown-btn.error {
+  background: var(--red-a4);
+  border-color: var(--red-a6);
+  color: var(--sy-c-text);
+}
+
+/* Disabled state */
+#copy-markdown-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Spinning animation for loading state */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {  
+  #copy-markdown-btn {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  #copy-markdown-btn {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.7rem;
+  }
+}
