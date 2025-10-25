@@ -202,19 +202,12 @@ html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
 
-# Pygments syntax highlighting configuration
-# Using accessible-pygments for WCAG AA/AAA compliant syntax highlighting
-# Light mode: a11y-light provides excellent readability on light backgrounds (WCAG AA)
-# Dark mode: a11y-high-contrast-dark provides maximum readability on dark backgrounds (WCAG AAA)
-pygments_style = "a11y-light"
-pygments_dark_style = "a11y-high-contrast-dark"
-
 todo_include_todos = True
 
 html_static_path = ["_static"]
 html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
-html_css_files = ["custom.css", "syntax-highlighting.css"]
+html_css_files = ["custom.css"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**"]
 html_show_sourcelink = True
 html_copy_source = True
@@ -243,12 +236,12 @@ html_theme_options = {
     "logo_target": "/",
     "accent_color": "amber",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
-    "discord_url": "https://discord.gg/dSDXd4mKhp",
+    "discord_url": "https://discord.gg/litestar",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
     "light_logo": "_static/logo-default.png",
     "dark_logo": "_static/logo-default.png",
-    "discussion_url": "https://discord.gg/dSDXd4mKhp",
+    "discussion_url": "https://discord.gg/litestar",
     "nav_links": [
         {"title": "Home", "url": "index"},
         {
@@ -298,7 +291,7 @@ html_theme_options = {
                 {
                     "title": "Discord Help Forum",
                     "summary": "Dedicated Discord help forum",
-                    "url": "https://discord.gg/dSDXd4mKhp",
+                    "url": "https://discord.gg/litestar",
                     "icon": "coc",
                 },
                 {

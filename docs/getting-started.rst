@@ -5,7 +5,7 @@ Getting Started
 Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for :doc:`SQLAlchemy <sqlalchemy:index>`.
 
 It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins/index>`, :doc:`custom column types <usage/types/index>`,
-and implementations of the :doc:`repository <usage/repositories/index>` and :doc:`service layer <usage/services/index>` patterns
+and implementations of the :doc:`repository <usage/repositories/index>` and :doc:`service <usage/services/index>` layer patterns
 to simplify your database operations.
 
 .. seealso:: It is built on:
@@ -53,7 +53,7 @@ We've built extensions for some of the most popular frameworks, so you can get t
         High-performance async web framework
 
 If your framework is not listed, don't worry! Advanced Alchemy is designed to be modular and easily integrated with any Python web framework.
-`Join our Discord <https://discord.gg/dSDXd4mKhp>`_ and we'll help you get started.
+`Join our Discord <https://discord.gg/litestar>`_ and we'll help you get started.
 
 Installation
 ------------
