@@ -180,7 +180,7 @@ cython_debug/
 .tmp
 .envs/
 .claude
-.gemini 
+.gemini
 specs
 requirements
 AGENTS.md
