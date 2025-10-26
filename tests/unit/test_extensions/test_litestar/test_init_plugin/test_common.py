@@ -47,7 +47,7 @@ def test_session_config_dict_with_no_provided_config(
     """Test session_config_dict with no provided config."""
     config = config_cls()
     # Config now includes file_object_raise_on_error in session info by default
-    assert config.session_config_dict == {"info": {"file_object_raise_on_error": False}}
+    assert config.session_config_dict == {"info": {"file_object_raise_on_error": True}}
 
 
 def test_config_create_engine_if_engine_instance_provided(

@@ -8,7 +8,6 @@ from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config.engine import EngineConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty, simple_asdict
-from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
     from sqlalchemy import Connection, Engine, MetaData
@@ -182,19 +181,11 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     This is a listener that will automatically save and delete :class:`FileObject <advanced_alchemy.types.file_object.FileObject>` instances when they are saved or deleted.
 
     Disable if you plan to bring your own save/delete mechanism for these columns"""
-    file_object_raise_on_error: bool = False
+    file_object_raise_on_error: bool = True
     """Control FileObject error handling behavior.
 
-    - ``False`` (default in v1.x): Log warnings on file operation failures, don't raise exceptions
-    - ``True`` (default in v2.0+): Raise exceptions on file operation failures
-
-    In v1.x, using the default (False) will emit a DeprecationWarning at application startup.
-    This flag will be retained indefinitely for users who need legacy behavior.
-
-    .. versionadded:: 1.8.0
-
-    .. versionchanged:: 2.0.0
-        Default changed from ``False`` to ``True``
+    - ``False``: Log warnings on file operation failures, don't raise exceptions
+    - ``True`` (default): Raise exceptions on file operation failures
     """
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
@@ -227,19 +218,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         # Ensure session_config.info is a dict (convert from Empty if needed)
         if self.session_config.info is Empty:
             self.session_config.info = {}
-        # Use isinstance check for proper type narrowing
         if isinstance(self.session_config.info, dict):
             self.session_config.info["file_object_raise_on_error"] = self.file_object_raise_on_error
-
-        # Emit deprecation warning for legacy FileObject error handling
-        if not self.file_object_raise_on_error:
-            warn_deprecation(
-                version="1.8.0",
-                deprecated_name="file_object_raise_on_error=False",
-                kind="parameter",
-                removal_in="2.0.0",
-                info="Set `file_object_raise_on_error=True` in your SQLAlchemyConfig to adopt the new behavior now",
-            )
 
     def __hash__(self) -> int:  # pragma: no cover
         return hash(
