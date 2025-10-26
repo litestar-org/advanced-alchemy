@@ -181,6 +181,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     This is a listener that will automatically save and delete :class:`FileObject <advanced_alchemy.types.file_object.FileObject>` instances when they are saved or deleted.
 
     Disable if you plan to bring your own save/delete mechanism for these columns"""
+    file_object_raise_on_error: bool = True
+    """Control FileObject error handling behavior.
+
+    - ``False``: Log warnings on file operation failures, don't raise exceptions
+    - ``True`` (default): Raise exceptions on file operation failures
+    """
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
@@ -207,6 +213,13 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             from advanced_alchemy._listeners import setup_file_object_listeners
 
             setup_file_object_listeners()
+
+        # Store file_object_raise_on_error in session_config.info
+        # Ensure session_config.info is a dict (convert from Empty if needed)
+        if self.session_config.info is Empty:
+            self.session_config.info = {}
+        if isinstance(self.session_config.info, dict):
+            self.session_config.info["file_object_raise_on_error"] = self.file_object_raise_on_error
 
     def __hash__(self) -> int:  # pragma: no cover
         return hash(

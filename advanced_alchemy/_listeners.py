@@ -54,12 +54,17 @@ def is_async_context() -> bool:
     return _is_async_context.get()
 
 
-def _get_session_tracker(create: bool = True) -> Optional["FileObjectSessionTracker"]:
+def _get_session_tracker(
+    create: bool = True, session: Optional["Session"] = None
+) -> Optional["FileObjectSessionTracker"]:
     from advanced_alchemy.types.file_object import FileObjectSessionTracker
 
     tracker = _current_session_tracker.get()
     if tracker is None and create:
-        tracker = FileObjectSessionTracker()
+        raise_on_error = True
+        if session is not None:
+            raise_on_error = session.info.get("file_object_raise_on_error", True)
+        tracker = FileObjectSessionTracker(raise_on_error=raise_on_error)
         _current_session_tracker.set(tracker)
     return tracker
 
@@ -348,7 +353,7 @@ class FileObjectListener:  # pragma: no cover
         if not cls._is_listener_enabled(session):
             return
 
-        tracker = _get_session_tracker(create=True)
+        tracker = _get_session_tracker(create=True, session=session)
         if not tracker:
             return
 
