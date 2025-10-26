@@ -61,10 +61,9 @@ def _get_session_tracker(
 
     tracker = _current_session_tracker.get()
     if tracker is None and create:
-        # Get raise_on_error flag from session.info if session is provided
-        raise_on_error = False
+        raise_on_error = True
         if session is not None:
-            raise_on_error = session.info.get("file_object_raise_on_error", False)
+            raise_on_error = session.info.get("file_object_raise_on_error", True)
         tracker = FileObjectSessionTracker(raise_on_error=raise_on_error)
         _current_session_tracker.set(tracker)
     return tracker
