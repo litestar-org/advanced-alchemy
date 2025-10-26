@@ -27,7 +27,7 @@ class FileObjectSessionTracker:
 
         Args:
             raise_on_error: If True, raise exceptions on file operation failures.
-                           If False, log warnings and continue (legacy behavior).
+                            If False, log warnings and continue.
 
         Internal structures:
         - ``pending_saves``: ``FileObject -> data`` to be saved on commit
