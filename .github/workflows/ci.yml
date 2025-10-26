@@ -185,14 +185,6 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
         run: uv run make docs
 
-      - name: Ensure .nojekyll present
-        # GitHub Pages runs Jekyll by default which ignores files/dirs starting with
-        # an underscore (e.g. _static). Creating a .nojekyll file prevents that and
-        # ensures Sphinx assets are served on the docs preview site.
-        run: |
-          mkdir -p docs/_build/html
-          touch docs/_build/html/.nojekyll
-
       - name: Check docs links
         env:
           LITESTAR_DOCS_IGNORE_MISSING_EXAMPLE_OUTPUT: 1
