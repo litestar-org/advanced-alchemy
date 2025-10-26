@@ -30,6 +30,7 @@ dependencies = [
   "typing-extensions>=4.0.0",
   "greenlet",
   "eval-type-backport ; python_full_version < '3.10'",
+  "exceptiongroup ; python_full_version < '3.11'",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
