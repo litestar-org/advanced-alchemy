@@ -26,6 +26,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from operator import attrgetter
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     ClassVar,
@@ -53,12 +54,14 @@ from sqlalchemy import (
     text,
     true,
 )
-from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import InstrumentedAttribute
 
 __all__ = (
     "BeforeAfter",
@@ -153,7 +156,9 @@ class StatementFilter(ABC):
         return statement
 
     @staticmethod
-    def _get_instrumented_attr(model: Any, key: Union[str, InstrumentedAttribute[Any]]) -> InstrumentedAttribute[Any]:
+    def _get_instrumented_attr(
+        model: Any, key: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    ) -> "Union[ColumnElement[Any], InstrumentedAttribute[Any]]":
         """Get SQLAlchemy instrumented attribute from model.
 
         Args:
@@ -166,9 +171,7 @@ class StatementFilter(ABC):
         See Also:
             :class:`sqlalchemy.orm.attributes.InstrumentedAttribute`: SQLAlchemy attribute
         """
-        if isinstance(key, str):
-            return cast("InstrumentedAttribute[Any]", getattr(model, key))
-        return key
+        return cast("InstrumentedAttribute[Any]", getattr(model, key)) if isinstance(key, str) else key
 
 
 @dataclass
@@ -186,8 +189,8 @@ class BeforeAfter(StatementFilter):
 
     """
 
-    field_name: str
-    """Name of the model attribute to filter on."""
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
     before: Optional[datetime.datetime]
     """Filter results where field is earlier than this value."""
     after: Optional[datetime.datetime]
@@ -232,8 +235,8 @@ class OnBeforeAfter(StatementFilter):
 
     """
 
-    field_name: str
-    """Name of the model attribute to filter on."""
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
     on_or_before: Optional[datetime.datetime]
     """Filter results where field is on or earlier than this value."""
     on_or_after: Optional[datetime.datetime]
@@ -280,8 +283,8 @@ class CollectionFilter(InAnyFilter, Generic[T]):
     Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
     """
 
-    field_name: str
-    """Name of the model attribute to filter on."""
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
     values: Union[Collection[T], None]
     """Values for the ``IN`` clause. If this is None, no filter is applied.
         An empty list will force an empty result set (WHERE 1=-1)"""
@@ -339,8 +342,8 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     """
 
-    field_name: str
-    """Name of the model attribute to filter on."""
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
     values: Union[Collection[T], None]
     """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
 
@@ -443,8 +446,8 @@ class OrderBy(StatementFilter):
         - :meth:`sqlalchemy.sql.expression.ColumnElement.desc`: Descending order
     """
 
-    field_name: str
-    """Name of the model attribute to sort on."""
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression (e.g., ``func.random()``)."""
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort direction ("asc" or "desc")."""
 
@@ -614,8 +617,8 @@ class ComparisonFilter(StatementFilter):
         ValueError: If an invalid operator is provided
     """
 
-    field_name: str
-    """Name of the model attribute to filter on."""
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
     operator: str
     """Comparison operator to use (one of 'eq', 'ne', 'gt', 'ge', 'lt', 'le')."""
     value: Any

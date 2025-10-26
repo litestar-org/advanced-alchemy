@@ -210,36 +210,58 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _apply_limit_offset_pagination(result: list[ModelT], limit: int, offset: int) -> list[ModelT]:
         return result[offset:limit]
 
-    @staticmethod
+    def _extract_field_name(self, field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
+        """Extract string field name from various input types.
+
+        Args:
+            field: Field name, column element, or instrumented attribute
+
+        Returns:
+            str: String field name for use with getattr()
+
+        Raises:
+            RepositoryError: If a ColumnElement (func expression) is used with mock repository
+        """
+        if isinstance(field, str):
+            return field
+        if isinstance(field, InstrumentedAttribute):
+            return field.key
+        msg = f"{type(field)} columns are not supported in mock repositories (in-memory filtering)"
+        raise RepositoryError(msg)
+
     def _filter_in_collection(
+        self,
         result: list[ModelT],
-        field_name: str,
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> list[ModelT]:
-        return [item for item in result if getattr(item, field_name) in values]
+        field_str = self._extract_field_name(field_name)
+        return [item for item in result if getattr(item, field_str) in values]
 
-    @staticmethod
     def _filter_not_in_collection(
+        self,
         result: list[ModelT],
-        field_name: str,
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> list[ModelT]:
         if not values:
             return result
-        return [item for item in result if getattr(item, field_name) not in values]
+        field_str = self._extract_field_name(field_name)
+        return [item for item in result if getattr(item, field_str) not in values]
 
-    @staticmethod
     def _filter_on_datetime_field(
+        self,
         result: list[ModelT],
-        field_name: str,
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         before: Optional[datetime.datetime] = None,
         after: Optional[datetime.datetime] = None,
         on_or_before: Optional[datetime.datetime] = None,
         on_or_after: Optional[datetime.datetime] = None,
     ) -> list[ModelT]:
+        field_str = self._extract_field_name(field_name)
         result_: list[ModelT] = []
         for item in result:
-            attr: datetime.datetime = getattr(item, field_name)
+            attr: datetime.datetime = getattr(item, field_str)
             if before is not None and attr < before:
                 result_.append(item)
             if after is not None and attr > after:
@@ -303,9 +325,13 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         except AttributeError as error:
             raise RepositoryError from error
 
-    @staticmethod
-    def _order_by(result: list[ModelT], field_name: str, sort_desc: bool = False) -> list[ModelT]:
-        return sorted(result, key=lambda item: getattr(item, field_name), reverse=sort_desc)
+    def _order_by(
+        self,
+        result: list[ModelT],
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        sort_desc: bool = False,
+    ) -> list[ModelT]:
+        return sorted(result, key=lambda item: getattr(item, self._extract_field_name(field_name)), reverse=sort_desc)
 
     def _apply_filters(
         self,
