@@ -67,7 +67,7 @@ jobs:
         if: ${{ inputs.coverage }}
         run: uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 2
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: ${{ inputs.coverage }}
         with:
           name: coverage-xml
