@@ -64,6 +64,9 @@ def build(output_dir: str, version: str | None) -> None:
     subprocess.run(["make", "docs"], check=True)  # noqa: S607
 
     Path(output_dir).mkdir(exist_ok=True, parents=True)
+    # Ensure GitHub Pages does not run Jekyll and ignore files/dirs starting
+    # with an underscore (like _static). Create .nojekyll to force direct
+    # publishing of built assets.
     Path(output_dir).joinpath(".nojekyll").touch(exist_ok=True)
 
     version_spec = load_version_spec()

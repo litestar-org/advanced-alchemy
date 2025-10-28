@@ -4,8 +4,8 @@ Getting Started
 
 Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for :doc:`SQLAlchemy <sqlalchemy:index>`.
 
-It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins/index>`, :doc:`custom column types <usage/types>`,
-and implementations of the :doc:`repository <usage/repositories>` and :doc:`service layer <usage/services>` patterns
+It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins/index>`, :doc:`custom column types <usage/types/index>`,
+and implementations of the :doc:`repository <usage/repositories/index>` and :doc:`service <usage/services/index>` layer patterns
 to simplify your database operations.
 
 .. seealso:: It is built on:
@@ -18,14 +18,42 @@ It's designed to work on its own or with your favorite web framework.
 
 We've built extensions for some of the most popular frameworks, so you can get the most out of Advanced Alchemy with minimal effort.
 
-* `Litestar <https://docs.litestar.dev/>`_
-* `FastAPI <https://fastapi.tiangolo.com/>`_
-* `Starlette <https://www.starlette.io/>`_
-* `Flask <https://flask.palletsprojects.com/>`_
-* `Sanic <https://sanicframework.org/>`_
+.. grid:: 1 1 2 2
+    :padding: 0
+    :gutter: 2
+
+    .. grid-item-card:: Litestar
+        :link: https://docs.litestar.dev/
+        :link-type: url
+
+        Async web framework with built-in Advanced Alchemy support
+
+    .. grid-item-card:: FastAPI
+        :link: https://fastapi.tiangolo.com/
+        :link-type: url
+
+        Modern async web framework with automatic API documentation
+
+    .. grid-item-card:: Starlette
+        :link: https://www.starlette.io/
+        :link-type: url
+
+        Lightweight async web framework and toolkit
+
+    .. grid-item-card:: Flask
+        :link: https://flask.palletsprojects.com/
+        :link-type: url
+
+        Lightweight sync web framework
+
+    .. grid-item-card:: Sanic
+        :link: https://sanicframework.org/
+        :link-type: url
+
+        High-performance async web framework
 
 If your framework is not listed, don't worry! Advanced Alchemy is designed to be modular and easily integrated with any Python web framework.
-`Join our Discord <https://discord.gg/dSDXd4mKhp>`_ and we'll help you get started.
+`Join our Discord <https://discord.gg/litestar>`_ and we'll help you get started.
 
 Installation
 ------------
