@@ -107,6 +107,10 @@ class PasswordHash(TypeDecorator[str]):
         super().__init__(length=length)
         self.backend = backend
 
+    def __repr__(self) -> str:
+        """Return a string representation of the PasswordHash."""
+        return f"PasswordHash(backend={self.backend.__class__.__name__}(), length={self.length})"
+
     @property
     def python_type(self) -> "type[str]":
         """Returns the Python type for this type decorator.
