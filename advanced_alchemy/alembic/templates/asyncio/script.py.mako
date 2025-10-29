@@ -25,6 +25,7 @@ sa.ORA_JSONB = ORA_JSONB
 sa.EncryptedString = EncryptedString
 sa.EncryptedText = EncryptedText
 sa.StoredObject = StoredObject
+sa.PasswordHash = PasswordHash
 
 # revision identifiers, used by Alembic.
 revision = ${repr(up_revision)}
