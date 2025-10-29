@@ -3,6 +3,67 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.8.0
+    :date: 2025-10-28
+
+    .. change:: ensure `has_dict_attribute` checks for `__dict__` attribute
+        :type: bugfix
+        :pr: 579
+
+        The previous implementation used `isinstance` against the `DictProtocol` type returned `True` for any object.
+        The `isinstance` call is replaced with `hasattr` (which should also be faster). With this change, I believe the `DictProtocol` class could also be removed, but I kept the changes to a minimum.
+
+    .. change:: adding string representation to StoredObject
+        :type: bugfix
+        :pr: 582
+
+        Issues running migration created for `advanced_alchemy.types.FileObject` column on a model.
+
+    .. change:: surface FileObject session errors; align commit/rollback semantics
+        :type: bugfix
+        :pr: 580
+        :issue: 543
+
+        - Previously save/delete failures were only logged, so callers believed commits succeeded when storage ops had already failed.
+        - Sync commit: processes saves sequentially, then deletes. Logs failures with tracebacks and re-raises. Ignores FileNotFoundError on delete. Stops on first save error. Clears internal state only on full success.
+        - Async commit: runs saves and deletes concurrently via asyncio.gather. Logs each failure with exc_info. Raises the first real Exception, and lets BaseException (e.g., CancelledError) bubble. Attempts deletes even if a save fails. Clears state only on full success.
+        - Rollback (sync/async): deletes only files saved during the current transaction. Ignores FileNotFoundError. Logs and re-raises other errors. Clears state after processing.
+        - Tracking: records successful saves in _saved_in_transaction for targeted rollback cleanup; state is retained on error to allow inspection/retry.
+
+    .. change:: add `sort_order` to mixin columns for consistent table layout
+        :type: feature
+        :pr: 581
+
+        - Add sort_order=-100 to primary key columns (id) across all mixins
+        - Add sort_order=3001 to sentinel column
+        - Add sort_order=3002 to created_at audit column
+        - Add sort_order=3003 to updated_at audit column
+
+        This ensures consistent column ordering in generated tables:
+        primary keys first, user columns in middle, audit/sentinel columns last.
+
+    .. change:: use `property` in `SQLAlchemyDTO` with `MappedAsDataclass`
+        :type: feature
+        :pr: 447
+
+        Allow better compatibility with `MappedAsDataclass` and the `SQLALchemyDTO`
+
+    .. change:: add support for SQLAlchemy func expressions in filter classes
+        :type: feature
+        :pr: 585
+        :issue: 519
+
+        Adds support for SQLAlchemy func() expressions in filter classes to eliminate type checker errors when using database functions like `func.random()` or `func.lower()`
+
+        **Changes**
+
+        - Updated `OrderBy`, `BeforeAfter`, `OnBeforeAfter`, `CollectionFilter`, `NotInCollectionFilter`, `ComparisonFilter`
+        - Enhanced `_get_instrumented_attr()` to handle new types
+        - Mock repositories extract field names from `InstrumentedAttribute`, raise helpful error for func expressions (can't execute SQL in-memory)
+        - Added integration tests for func expressions
+
+        Note: Different databases use different function names (PostgreSQL: `func.random()`, MySQL: `func.rand()`, SQL Server: `func.newid()`)
+
 .. changelog:: 1.7.0
     :date: 2025-10-13
 
