@@ -45,7 +45,9 @@ class TestSTICRUDOperations:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert data
         dog = Dog(name="Buddy", breed="Golden Retriever")
@@ -89,7 +91,9 @@ class TestSTICRUDOperations:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert data
         manager = Manager(name="Alice", manager_level=5)
@@ -133,7 +137,9 @@ class TestSTICRUDOperations:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert and update
         car = Car(brand="Toyota", doors=4)
@@ -168,7 +174,9 @@ class TestSTICRUDOperations:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert
         book = Book(name="Python Guide", author="John Doe")
@@ -210,7 +218,9 @@ class TestJTICRUDOperations:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert data
         student = Student(name="Alice", grade="A")
@@ -259,7 +269,9 @@ class TestSTIWithRepository:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Use repository
         repo = ContentRepository(session=async_session)
@@ -311,7 +323,9 @@ class TestMultiLevelInheritance:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert at different levels
         entity = Entity(name="General Entity")
@@ -355,7 +369,9 @@ class TestAuditColumnsWithInheritance:
         # Create tables
         async with async_session.begin():
             await async_session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
-            await async_session.run_sync(lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind()))
+            await async_session.run_sync(
+                lambda sync_session: base.UUIDBase.metadata.create_all(bind=sync_session.get_bind())
+            )
 
         # Insert
         report = Report(title="Q4 Report", department="Sales")
