@@ -25,6 +25,22 @@ pytest_plugins = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _clear_sqlalchemy_mappers() -> Generator[None, None, None]:
+    """Clear SQLAlchemy mapper registry after each test to ensure isolation.
+
+    This prevents table name conflicts when tests define models with the same
+    table names. The global orm_registry persists across tests, so we need to
+    clear it between test runs.
+    """
+    from advanced_alchemy.base import orm_registry
+
+    orm_registry.metadata.clear()
+    yield
+    orm_registry.dispose()
+    orm_registry.metadata.clear()
+
+
 @pytest.fixture(autouse=True, scope="session")
 def configure_logging() -> None:
     """Configure logging levels to suppress verbose database output."""
