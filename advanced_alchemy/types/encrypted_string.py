@@ -245,7 +245,9 @@ class EncryptedString(TypeDecorator[str]):
 
     def __repr__(self) -> str:
         """Return a string representation of the EncryptedString."""
-        return f"sa.EncryptedString(key={self.key!r}, backend=sa.{self.backend.__class__.__name__}, length={self.length})"
+        return (
+            f"sa.EncryptedString(key={self.key!r}, backend=sa.{self.backend.__class__.__name__}, length={self.length})"
+        )
 
     @property
     def python_type(self) -> type[str]:
