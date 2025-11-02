@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from advanced_alchemy.base import BigIntBase
-from advanced_alchemy.types import PasswordHash
+from advanced_alchemy.types import EncryptedString, PasswordHash
+from advanced_alchemy.types.encrypted_string import FernetBackend, PGCryptoBackend
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from advanced_alchemy.types.password_hash.base import HashedPassword
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
@@ -194,3 +195,39 @@ async def test_password_hash_async(
         await db_session.flush()
         await db_session.refresh(user2)
         assert user2.argon2_password is None
+
+
+def test_password_hash_repr() -> None:
+    """Test __repr__() method for PasswordHash with different backends."""
+    # Test Argon2Hasher backend
+    argon2_hash = PasswordHash(backend=Argon2Hasher(), length=128)
+    assert repr(argon2_hash) == "sa.PasswordHash(backend=sa.Argon2Hasher(), length=128)"
+
+    # Test PasslibHasher backend
+    passlib_hash = PasswordHash(backend=PasslibHasher(context=CryptContext(schemes=["argon2"])), length=256)
+    assert repr(passlib_hash) == "sa.PasswordHash(backend=sa.PasslibHasher(), length=256)"
+
+    # Test PwdlibHasher backend
+    pwdlib_hash = PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()), length=512)
+    assert repr(pwdlib_hash) == "sa.PasswordHash(backend=sa.PwdlibHasher(), length=512)"
+
+
+def test_encrypted_string_repr() -> None:
+    """Test __repr__() method for EncryptedString with different backends."""
+    # Test FernetBackend (default)
+    enc_str_fernet = EncryptedString(key="test_key", backend=FernetBackend, length=100)
+    assert repr(enc_str_fernet) == "sa.EncryptedString(key='test_key', backend=sa.FernetBackend, length=100)"
+
+    # Test PGCryptoBackend
+    enc_str_pgcrypto = EncryptedString(key=b"test_bytes_key", backend=PGCryptoBackend, length=200)
+    assert repr(enc_str_pgcrypto) == "sa.EncryptedString(key=b'test_bytes_key', backend=sa.PGCryptoBackend, length=200)"
+
+    # Test with callable key
+    def get_key() -> str:
+        return "dynamic_key"
+
+    enc_str_callable = EncryptedString(key=get_key, backend=FernetBackend)
+    # The repr should include the callable object itself
+    assert "sa.EncryptedString(key=" in repr(enc_str_callable)
+    assert "backend=sa.FernetBackend" in repr(enc_str_callable)
+    assert "length=None" in repr(enc_str_callable)
