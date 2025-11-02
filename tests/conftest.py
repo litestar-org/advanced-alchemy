@@ -35,7 +35,6 @@ def _clear_sqlalchemy_mappers() -> Generator[None, None, None]:
     """
     from advanced_alchemy.base import orm_registry
 
-    orm_registry.metadata.clear()
     yield
     orm_registry.dispose()
     orm_registry.metadata.clear()

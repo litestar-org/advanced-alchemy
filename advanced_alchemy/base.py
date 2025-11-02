@@ -220,25 +220,24 @@ class CommonTableAttributes(BasicAttributes):
             Returns:
                 Optional[str]: Snake-case table name derived from class name, or None for STI child classes.
             """
-            # Check if __tablename__ was explicitly defined on this class (not inherited from parent)
-            explicitly_defined_tablename = cls.__dict__.get("__tablename__")
-            if explicitly_defined_tablename:
-                for parent_cls in cls.__mro__[1:]:
-                    if not hasattr(parent_cls, "__dict__"):
-                        continue
-                    parent_tablename = parent_cls.__dict__.get("__tablename__")
-                    if parent_tablename == explicitly_defined_tablename:
-                        explicitly_defined_tablename = None
-                        break
+            # STI pattern detection: only return None if this is truly an STI child
+            # An STI child has ALL of these characteristics:
+            # 1. Inherits from a mapped parent (has_inherited_table)
+            # 2. Parent has polymorphic_on defined (indicating STI hierarchy)
+            # 3. Not marked as concrete=True (which would be CTI)
+            # 4. Did NOT explicitly define __tablename__ in its class body
 
-            if explicitly_defined_tablename:
-                return explicitly_defined_tablename
-
-            # STI pattern: child inherits parent's table (unless concrete=True for CTI)
             is_concrete_table_inheritance = getattr(cls, "__mapper_args__", {}).get("concrete", False)
-            if has_inherited_table(cls) and not is_concrete_table_inheritance:
-                return None
 
+            if has_inherited_table(cls) and not is_concrete_table_inheritance:
+                # Check if any parent has polymorphic_on to confirm this is truly STI
+                for parent in cls.__mro__[1:]:
+                    parent_mapper_args = getattr(parent, "__mapper_args__", {})
+                    if "polymorphic_on" in parent_mapper_args:
+                        # This is STI - return None to use parent's table
+                        return None
+
+            # Not STI - auto-generate tablename from class name
             return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
         @classmethod
@@ -270,7 +269,18 @@ class CommonTableAttributes(BasicAttributes):
                 return Table(name, metadata, *args, **kwargs)
 
             # No own PK - check if this is STI (inheriting from a mapped parent)
-            if has_inherited_table(cls) and not getattr(cls, "__mapper_args__", {}).get("concrete", False):
+            is_concrete = getattr(cls, "__mapper_args__", {}).get("concrete", False)
+
+            is_sti_child = False
+            if has_inherited_table(cls) and not is_concrete:
+                # Check if any parent has polymorphic_on to confirm this is truly STI
+                for parent in cls.__mro__[1:]:
+                    parent_mapper_args = getattr(parent, "__mapper_args__", {})
+                    if "polymorphic_on" in parent_mapper_args:
+                        is_sti_child = True
+                        break
+
+            if is_sti_child:
                 # This is STI - don't create a table, use parent's
                 # Delete the inherited tablename so SQLAlchemy uses parent table
                 if hasattr(cls, "__tablename__"):
