@@ -220,13 +220,12 @@ class CommonTableAttributes(BasicAttributes):
             Returns:
                 Optional[str]: Snake-case table name derived from class name, or None for STI child classes.
             """
-            # STI pattern detection: only return None if this is truly an STI child
-            # An STI child has ALL of these characteristics:
-            # 1. Inherits from a mapped parent (has_inherited_table)
-            # 2. Parent has polymorphic_on defined (indicating STI hierarchy)
-            # 3. Not marked as concrete=True (which would be CTI)
-            # 4. Did NOT explicitly define __tablename__ in its class body
+            # Check if class explicitly defined __tablename__ (captured in __init_subclass__)
+            # This must come FIRST to respect user's explicit choice
+            if hasattr(cls, "_advanced_alchemy_explicit_tablename"):
+                return cls._advanced_alchemy_explicit_tablename  # type: ignore[attr-defined]
 
+            # No explicit tablename - proceed with STI detection and auto-generation
             is_concrete_table_inheritance = getattr(cls, "__mapper_args__", {}).get("concrete", False)
 
             if has_inherited_table(cls) and not is_concrete_table_inheritance:
@@ -415,6 +414,14 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     __bind_key__: Optional[str] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        # Capture explicit __tablename__ BEFORE SQLAlchemy processes it
+        # Store as a class attribute (not in __dict__) so it persists through SQLAlchemy's processing
+        if "__tablename__" in cls.__dict__:
+            tablename_value = cls.__dict__["__tablename__"]
+            if isinstance(tablename_value, str):
+                # Store it as a special attribute that persists
+                cls._advanced_alchemy_explicit_tablename = tablename_value  # type: ignore[attr-defined]
+
         # Handle STI: if child doesn't explicitly define __tablename__, set it to None
         # so it uses parent's table (must be done before super().__init_subclass__)
         if "__tablename__" not in cls.__dict__ and not cls.__dict__.get("__abstract__", False):
