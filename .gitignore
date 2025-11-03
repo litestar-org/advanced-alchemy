@@ -179,10 +179,23 @@ cython_debug/
 .todos
 .tmp
 .envs/
-.claude
-.gemini
-specs
-requirements
-AGENTS.md
-CLAUDE.md
-GEMINI.md
+# .claude
+# .gemini
+# AGENTS.md
+# CLAUDE.md
+# GEMINI.md
+
+# Gemini Agent System
+# specs/active/
+# specs/archive/
+.gemini/mcp-tools.txt
+!specs/active/.gitkeep
+!specs/archive/.gitkeep
+!specs/guides/
+!specs/guides/**/*.md
+!specs/guides/**/*.yaml
+!specs/template-spec/
+!specs/template-spec/**/*.md
+
+# Agent telemetry logs
+specs/guides/telemetry/*.jsonl

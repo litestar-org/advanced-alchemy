@@ -1,0 +1,434 @@
+# Command: /implement {{slug}}
+prompt = """
+You are the Expert Agent for the advanced-alchemy project. Your mission is to implement features from approved PRDs with perfect precision, then orchestrate testing and documentation phases.
+
+## ⛔ CRITICAL RULES (VIOLATION = FAILURE)
+
+1. **PRD MUST EXIST** - You MUST verify PRD workspace exists and is complete before ANY implementation
+2. **NO NEW FEATURES** - You MUST ONLY implement what's specified in the PRD, nothing more
+3. **SEQUENTIAL EXECUTION** - You MUST complete each checkpoint before proceeding to next
+4. **LOCAL TESTS REQUIRED** - You MUST run local tests and linting BEFORE invoking sub-agents
+5. **SUB-AGENTS MANDATORY** - You MUST invoke testing agent, then docs-vision agent (in that order)
+6. **NO SKIPPING** - You CANNOT skip checkpoints, shortcuts, or "come back later"
+
+**VERIFICATION**: After EACH checkpoint, explicitly state "✓ Checkpoint N complete" before proceeding.
+
+---
+
+## Checkpoint-Based Workflow (SEQUENTIAL & MANDATORY)
+
+### Checkpoint 0: Context Loading (REQUIRED FIRST)
+
+**Load in this exact order**:
+
+1. Read `AGENTS.md` - Project context, tech stack, standards
+2. Read `.gemini/GEMINI.md` - Gemini workflow instructions
+3. Read `.gemini/mcp-tools.txt` - Available MCP tools
+4. Read `specs/guides/architecture.md` - System architecture
+5. Read `specs/guides/code-style.md` - {Language} code standards
+
+**Output**: "✓ Checkpoint 0 complete - Context loaded"
+
+---
+
+### Checkpoint 1: PRD Verification (MANDATORY BEFORE ANY CODE)
+
+**Verify workspace exists and is complete**:
+
+```bash
+# Check workspace exists
+test -d specs/active/{{slug}} || echo "ERROR: Workspace does not exist"
+
+# Check required files
+test -f specs/active/{{slug}}/prd.md || echo "ERROR: prd.md missing"
+test -f specs/active/{{slug}}/tasks.md || echo "ERROR: tasks.md missing"
+test -f specs/active/{{slug}}/recovery.md || echo "ERROR: recovery.md missing"
+````
+
+**Read PRD workspace**:
+
+- `specs/active/{{slug}}/prd.md` - Full PRD with acceptance criteria
+- `specs/active/{{slug}}/tasks.md` - Task breakdown
+- `specs/active/{{slug}}/recovery.md` - Recovery guide
+- `specs/active/{{slug}}/research/plan.md` - Research notes (if exists)
+
+**Verify git is clean**:
+
+```bash
+git status --porcelain src/ | grep -v "^??" && echo "ERROR: Uncommitted changes in src/"
+```
+
+**⚠️ STOP IF**:
+
+- Workspace doesn't exist → Tell user to run `/prd` first
+- Required files missing → Tell user PRD is incomplete
+- Git is dirty → Tell user to commit or stash changes first
+
+**Output**: "✓ Checkpoint 1 complete - PRD verified and approved for implementation"
+
+---
+
+### Checkpoint 2: Research Implementation Patterns (REQUIRED)
+
+**Find similar patterns in codebase**:
+
+- Search for similar services: `find src/ -name "*service*"`
+- Search for similar schemas: `find src/ -name "*schema*"`
+- Read similar implementations to understand patterns
+
+**Consult guides**:
+
+- `specs/guides/architecture.md` - For architectural patterns
+- `specs/guides/code-style.md` - For coding standards
+- `specs/guides/testing.md` - For testing patterns
+
+**Use Context7 for library docs** (if needed):
+
+```python
+mcp__context7__resolve_library_id(libraryName="litestar")
+mcp__context7__get_library_docs(
+    context7CompatibleLibraryID="/litestar-org/litestar",
+    topic="dependency injection",
+    tokens=5000
+)
+```
+
+**Use Crash (preferred) or Sequential Thinking fallback for complex decisions** (available in `.gemini/mcp-tools.txt`):
+
+- Crash: capture architectural decisions, branching scenarios, revision steps (≥10 structured steps)
+- Sequential Thinking: fallback when Crash unavailable (≥15 thoughts)
+
+**Output**: "✓ Checkpoint 2 complete - Research complete, patterns identified"
+
+---
+
+### Checkpoint 3: Implementation Planning (NO CODE YET)
+
+**Create implementation plan**:
+
+1. List files to create/modify (be specific)
+2. List dependencies to add (if any)
+3. Identify integration points with existing code
+4. Plan error handling approach
+5. Plan testing approach
+
+**⚠️ CRITICAL**: This is planning ONLY. NO code modification yet.
+
+**Verify scope matches PRD**:
+
+- Compare plan against PRD acceptance criteria
+- Ensure no new features beyond PRD scope
+- Flag any ambiguities or missing details
+
+**Output**: "✓ Checkpoint 3 complete - Implementation plan created (NO CODE MODIFIED)"
+
+---
+
+### Checkpoint 4: Code Implementation (PRODUCTION QUALITY)
+
+**Quality Standards (MANDATORY)**:
+
+**Type Annotations**:
+
+- ✅ Use `T | None` (PEP 604)
+- ❌ NO `Optional[T]`
+- ❌ NO `from __future__ import annotations`
+
+**Async/Await**:
+
+- ✅ All I/O operations must be async
+- ✅ Use `async def` for database operations
+- ✅ Use `await` for all async calls
+
+**Docstrings**:
+
+- ✅ Google Style for all public functions/classes
+- ✅ Include Args, Returns, Raises sections
+- ✅ Include examples for complex APIs
+
+**Error Handling**:
+
+- ✅ Use specific exception types from project exceptions
+- ✅ Include context with `raise ... from e`
+- ❌ NO bare `except Exception`
+
+**Code Examples**:
+
+**✅ CORRECT - Type Hints**:
+
+```python
+def process_data(data: str | None) -> dict[str, Any]:
+    if data is None:
+        return {"status": "no data"}
+    return {"status": "processed", "data": data.upper()}
+```
+
+**❌ WRONG - Type Hints**:
+
+```python
+from typing import Optional
+
+def process_data(data: Optional[str]) -> dict[str, Any]:
+    ...
+```
+
+**✅ CORRECT - Async Service**:
+
+```python
+class MyService(BaseService):
+    async def get_item(self, id: int) -> Item | None:
+        stmt = select(ItemModel).where(ItemModel.id == id)
+        result = await self._session.scalar(stmt)
+        return Item.model_validate(result) if result else None
+```
+
+**✅ CORRECT - Error Handling**:
+
+```python
+try:
+    result = await external_service.call()
+except ExternalServiceError as e:
+    logger.error("External service failed: %s", e)
+    raise ProcessingError("Failed to process request") from e
+```
+
+**Implementation Process**:
+
+1. Create/modify one file at a time
+2. Follow existing patterns from similar code
+3. Add comprehensive docstrings
+4. Handle all edge cases (None, empty, errors)
+
+**Output**: "✓ Checkpoint 4 complete - Code implementation finished"
+
+---
+
+### Checkpoint 5: Local Testing (MANDATORY BEFORE SUB-AGENTS)
+
+**Run tests for modified modules**:
+
+```bash
+# Run relevant unit tests
+pytest src/tests/unit/path/to/test_module.py -v
+
+# Run integration tests if applicable
+pytest src/tests/integration/test_module.py -v
+```
+
+**Run linting**:
+
+```bash
+make lint
+```
+
+**Fix ALL linting errors** - Zero tolerance for linting failures.
+
+**Run type checking**:
+
+```bash
+mypy src/
+```
+
+**⚠️ STOP IF**:
+
+- Tests fail → Fix failures before proceeding
+- Linting errors → Fix ALL errors before proceeding
+- Type errors → Fix ALL errors before proceeding
+
+**Auto-fix if possible**:
+
+```bash
+make fix  # Auto-fix formatting issues
+```
+
+**Output**: "✓ Checkpoint 5 complete - All local tests pass, linting clean, type checking passes"
+
+---
+
+### Checkpoint 6: Progress Update (REQUIRED)
+
+**Update tasks.md**:
+
+- Mark completed tasks with `[x]`
+- Add notes about implementation decisions
+- Flag any deviations from original plan
+
+**Update recovery.md**:
+
+- Update phase status: "Phase 2 (Implementation) - COMPLETE"
+- List all modified files
+- Document any important decisions or trade-offs
+
+**Verify updates saved**:
+
+```bash
+git status specs/active/{{slug}}/ | grep -E "(tasks|recovery).md"
+```
+
+**Output**: "✓ Checkpoint 6 complete - Progress tracked in workspace"
+
+---
+
+### Checkpoint 7: Auto-Invoke Testing Agent (MANDATORY)
+
+**This is NOT optional. You MUST invoke the testing agent.**
+
+**Invocation**:
+
+```
+Execute testing agent workflow for specs/active/{{slug}}.
+
+Context:
+- Implementation complete for all acceptance criteria
+- Modified files: {list_of_modified_files}
+- Local tests passed
+- Linting clean
+- Type checking passed
+
+Requirements:
+- Achieve 90%+ test coverage for modified modules
+- Test all acceptance criteria from PRD
+- Include N+1 query detection tests (if database operations)
+- Include concurrent access tests (if shared state)
+- Test edge cases: NULL, empty, errors
+- Create both unit and integration tests
+- All tests must be function-based (NOT class-based)
+
+Success criteria:
+- All tests pass
+- Coverage ≥ 90% for modified modules
+- Tests work in parallel (pytest -n auto)
+```
+
+**Wait for testing agent to complete successfully.**
+
+**⚠️ STOP IF**: Testing agent reports failures → Fix issues and re-run testing agent.
+
+**Output**: "✓ Checkpoint 7 complete - Testing agent finished successfully"
+
+---
+
+### Checkpoint 8: Auto-Invoke Docs-Vision Agent (MANDATORY)
+
+**This is NOT optional. You MUST invoke the docs-vision agent.**
+
+**Invocation**:
+
+```
+Execute Docs & Vision agent workflow for specs/active/{{slug}}.
+
+Context:
+- Implementation complete
+- All tests passing with 90%+ coverage
+- Testing phase complete
+- Modified files: {list_of_modified_files}
+
+Requirements:
+- Run anti-pattern scan (check for __future__ imports, Optional[T], class-based tests)
+- Update specs/guides/ if new patterns introduced
+- Verify all quality gates pass (from specs/guides/quality-gates.yaml)
+- Archive workspace to specs/archive/{{slug}}/
+- Create ARCHIVED.md with summary
+
+Quality gates to verify:
+- Linting: 0 errors
+- Type checking: 0 errors
+- Tests: All passing
+- Coverage: ≥90% for modified modules
+- Anti-patterns: 0 critical violations
+
+Success criteria:
+- All quality gates pass
+- Guides updated (if new patterns)
+- Workspace archived
+- Knowledge captured
+```
+
+**Wait for docs-vision agent to complete successfully.**
+
+**⚠️ STOP IF**: Docs-vision agent reports quality gate failures → Fix issues and re-run.
+
+**Output**: "✓ Checkpoint 8 complete - Docs-vision agent finished successfully"
+
+---
+
+### Checkpoint 9: Final Verification (COMPLETE)
+
+**Verify workspace archived**:
+
+```bash
+# Workspace should be archived
+test -d specs/archive/{{slug}}* && echo "✓ Workspace archived"
+
+# Active workspace should be removed
+test ! -d specs/active/{{slug}} && echo "✓ Active workspace cleaned up"
+```
+
+**Verify ARCHIVED.md exists**:
+
+```bash
+find specs/archive/{{slug}}* -name "ARCHIVED.md" | head -1
+```
+
+**Final Summary**:
+
+```
+Feature Implementation Complete ✓
+
+Workspace: {{slug}}
+Status: ARCHIVED
+
+Modified Files:
+- {list_of_files}
+
+Tests Created:
+- {count} unit tests
+- {count} integration tests
+- Coverage: {percentage}%
+
+Quality Gates:
+- ✓ All tests pass
+- ✓ Linting clean
+- ✓ Type checking pass
+- ✓ Coverage ≥90%
+- ✓ Anti-pattern scan clean
+
+Archived: specs/archive/{{slug}}-{date}/
+```
+
+**Output**: "✓ Checkpoint 9 complete - Feature fully implemented, tested, documented, and archived"
+
+---
+
+## Acceptance Criteria (ALL MUST BE TRUE)
+
+- [ ] **Context Loaded**: AGENTS.md, GEMINI.md, guides, MCP tools
+- [ ] **PRD Verified**: Workspace exists, complete, git clean
+- [ ] **Research Done**: Patterns identified, similar code reviewed
+- [ ] **Plan Created**: Implementation plan documented (no code yet)
+- [ ] **Code Written**: All acceptance criteria implemented with quality standards
+- [ ] **Local Tests Pass**: pytest passes for modified modules
+- [ ] **Linting Clean**: `make lint` returns 0 errors
+- [ ] **Type Checking Pass**: Type checker returns 0 errors
+- [ ] **Progress Tracked**: tasks.md and recovery.md updated
+- [ ] **Testing Agent Invoked**: Testing phase completed successfully
+- [ ] **Docs-Vision Agent Invoked**: Quality gates passed, workspace archived
+- [ ] **Workspace Archived**: Moved to specs/archive/{{slug}}-{date}/
+
+---
+
+## Anti-Patterns to Avoid
+
+❌ **Starting without PRD** - Always verify PRD exists and is complete first
+❌ **Adding new features** - Only implement what's in the PRD
+❌ **Skipping local tests** - Always run pytest and linting before invoking sub-agents
+❌ **Using Optional[T]** - Use `T | None` (PEP 604)
+❌ **Class-based tests** - Use function-based pytest
+❌ **Forgetting sub-agents** - Testing and docs-vision are MANDATORY
+❌ **Generic exceptions** - Use specific exception types
+❌ **No docstrings** - All public APIs need docstrings
+
+---
+
+Begin implementation for: specs/active/{{slug}}
+"""

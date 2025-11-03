@@ -1,0 +1,63 @@
+# specs/guides/workflows/feature-development.yaml
+workflow_name: "Feature Development Lifecycle"
+version: "1.0"
+
+phases:
+  - name: "planning"
+    agent: "prd"
+    gemini_command: "/prd {feature-description}"
+    outputs:
+      - "specs/active/{slug}/prd.md"
+      - "specs/active/{slug}/tasks.md"
+      - "specs/active/{slug}/recovery.md"
+      - "specs/active/{slug}/research/plan.md"
+    quality_gates: []
+    duration_estimate: "2-4 hours"
+
+  - name: "implementation"
+    agent: "expert"
+    gemini_command: "/implement {slug}"
+    inputs:
+      - "specs/active/{slug}/prd.md"
+    outputs:
+      - "Source code changes"
+      - "Updated tasks.md and recovery.md"
+    quality_gates:
+      - "local_tests_pass"
+      - "linting_clean"
+    auto_trigger_next: true
+    duration_estimate: "8-40 hours"
+
+  - name: "testing"
+    agent: "testing"
+    gemini_command: "/test {slug}"
+    auto_trigger: "after_implementation"
+    inputs:
+      - "specs/active/{slug}/prd.md"
+      - "Implemented code"
+    outputs:
+      - "Test files"
+      - "Coverage report"
+    quality_gates:
+      - "coverage_90_percent"
+      - "all_tests_pass"
+      - "parallel_execution_works"
+      - "n_plus_one_detection"
+      - "concurrent_access_safe"
+    duration_estimate: "4-12 hours"
+
+  - name: "review"
+    agent: "docs-vision"
+    gemini_command: "/review {slug}"
+    auto_trigger: "after_testing"
+    inputs:
+      - "specs/active/{slug}/"
+      - "Test results"
+    outputs:
+      - "specs/archive/{slug}/"
+      - "Updated specs/guides/"
+    quality_gates:
+      - "anti_pattern_scan"
+      - "guides_updated"
+      - "knowledge_captured"
+    duration_estimate: "1-2 hours"

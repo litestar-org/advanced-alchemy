@@ -1,0 +1,68 @@
+# specs/guides/quality-gates.yaml
+implementation_gates:
+  - name: local_tests_pass
+    command: "pytest src/tests/" # Or appropriate test command
+    required: true
+    description: "All tests must pass before proceeding"
+
+  - name: linting_clean
+    command: "make lint" # Or: ruff check ., npm run lint, etc.
+    required: true
+    description: "Zero linting errors allowed"
+
+  - name: type_checking_pass
+    command: "mypy src/" # Or: tsc --noEmit, cargo check, etc.
+    required: true
+    description: "Type checking must pass"
+
+testing_gates:
+  - name: coverage_90_percent
+    threshold: 90
+    scope: "modified_modules"
+    description: "Modified modules must achieve 90%+ test coverage"
+
+  - name: all_tests_pass
+    command: "pytest" # Full test suite
+    required: true
+
+  - name: parallel_execution_works
+    command: "pytest -n auto"
+    required: true
+    description: "Tests must work in parallel execution"
+
+  - name: n_plus_one_detection
+    type: "custom"
+    applicable_when: "database_operations"
+    description: "Database operations must include N+1 query detection tests"
+
+  - name: concurrent_access_safe
+    type: "custom"
+    applicable_when: "shared_state"
+    description: "Shared state operations must include concurrent access tests"
+
+documentation_gates:
+  - name: anti_pattern_scan
+    rules:
+      - pattern: "from __future__ import annotations"
+        severity: "error"
+        message: "Use explicit stringification instead"
+
+      - pattern: "Optional\["
+        severity: "error"
+        message: "Use T | None (PEP 604) instead of Optional[T]"
+
+      - pattern: "class Test"
+        path: "tests/"
+        severity: "error"
+        message: "Use function-based pytest instead of class-based tests"
+
+      - pattern: "hasattr\(|getattr\("
+        severity: "warning"
+        message: "Review defensive programming usage - use type guards"
+
+  - name: guides_updated
+    description: "specs/guides/ must reflect new patterns if introduced"
+
+  - name: knowledge_captured
+    description: "New patterns must be documented before archival"
+
