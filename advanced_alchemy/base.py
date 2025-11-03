@@ -13,7 +13,6 @@ from sqlalchemy.orm import (
     DeclarativeBase,
     Mapper,
     declared_attr,
-    has_inherited_table,
 )
 from sqlalchemy.orm import (
     registry as SQLAlchemyRegistry,  # noqa: N812
@@ -220,75 +219,16 @@ class CommonTableAttributes(BasicAttributes):
             Returns:
                 Optional[str]: Snake-case table name derived from class name, or None for STI child classes.
             """
-            # Check if class explicitly defined __tablename__ (captured in __init_subclass__)
-            # This must come FIRST to respect user's explicit choice
-            if hasattr(cls, "_advanced_alchemy_explicit_tablename"):
+            # Check if THIS class explicitly defined __tablename__
+            if "_advanced_alchemy_explicit_tablename" in cls.__dict__:
                 return cls._advanced_alchemy_explicit_tablename  # type: ignore[attr-defined]
 
-            # No explicit tablename - proceed with STI detection and auto-generation
-            is_concrete_table_inheritance = getattr(cls, "__mapper_args__", {}).get("concrete", False)
-
-            if has_inherited_table(cls) and not is_concrete_table_inheritance:
-                # Check if any parent has polymorphic_on to confirm this is truly STI
-                for parent in cls.__mro__[1:]:
-                    parent_mapper_args = getattr(parent, "__mapper_args__", {})
-                    if "polymorphic_on" in parent_mapper_args:
-                        # This is STI - return None to use parent's table
-                        return None
-
-            # Not STI - auto-generate tablename from class name
-            return table_name_regexp.sub(r"_\1", cls.__name__).lower()
-
-        @classmethod
-        def __table_cls__(cls, name: str, metadata: MetaData, *args: Any, **kwargs: Any) -> Optional[Any]:
-            """Control table creation to support inheritance patterns.
-
-            This hook is called by SQLAlchemy when constructing a Table. It allows
-            us to inspect the columns and determine if this is truly a new table
-            (JTI/CTI) or if it should use the parent's table (STI).
-
-            For STI, when a child class inherits __tablename__ from its parent,
-            we prevent table creation by returning None.
-            """
-            from sqlalchemy import Column, PrimaryKeyConstraint, Table
-
-            # Check if this class has its own primary key
-            # JTI/CTI classes define their own PK, STI children do not
-            has_own_pk = False
-            for arg in args:
-                if isinstance(arg, Column) and arg.primary_key:
-                    has_own_pk = True
-                    break
-                if isinstance(arg, PrimaryKeyConstraint):
-                    has_own_pk = True
-                    break
-
-            if has_own_pk:
-                # Has its own PK - this is JTI or CTI, create the table
-                return Table(name, metadata, *args, **kwargs)
-
-            # No own PK - check if this is STI (inheriting from a mapped parent)
-            is_concrete = getattr(cls, "__mapper_args__", {}).get("concrete", False)
-
-            is_sti_child = False
-            if has_inherited_table(cls) and not is_concrete:
-                # Check if any parent has polymorphic_on to confirm this is truly STI
-                for parent in cls.__mro__[1:]:
-                    parent_mapper_args = getattr(parent, "__mapper_args__", {})
-                    if "polymorphic_on" in parent_mapper_args:
-                        is_sti_child = True
-                        break
-
-            if is_sti_child:
-                # This is STI - don't create a table, use parent's
-                # Delete the inherited tablename so SQLAlchemy uses parent table
-                if hasattr(cls, "__tablename__"):
-                    with contextlib.suppress(AttributeError, TypeError):
-                        del cls.__tablename__
+            # Check if __init_subclass__ set __tablename__ to None (STI child)
+            if "__tablename__" in cls.__dict__ and cls.__dict__["__tablename__"] is None:
                 return None
 
-            # Default: create the table
-            return Table(name, metadata, *args, **kwargs)
+            # Auto-generate tablename from class name
+            return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
 
 def create_registry(
@@ -415,45 +355,34 @@ class AdvancedDeclarativeBase(DeclarativeBase):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Capture explicit __tablename__ BEFORE SQLAlchemy processes it
-        # Store as a class attribute (not in __dict__) so it persists through SQLAlchemy's processing
         if "__tablename__" in cls.__dict__:
             tablename_value = cls.__dict__["__tablename__"]
             if isinstance(tablename_value, str):
-                # Store it as a special attribute that persists
                 cls._advanced_alchemy_explicit_tablename = tablename_value  # type: ignore[attr-defined]
 
-        # Handle STI: if child doesn't explicitly define __tablename__, set it to None
-        # so it uses parent's table (must be done before super().__init_subclass__)
+        # Detect STI child and set __tablename__ = None BEFORE super().__init_subclass__
         if "__tablename__" not in cls.__dict__ and not cls.__dict__.get("__abstract__", False):
-            # Child didn't explicitly set __tablename__
-            # Check if it would inherit one from a CONCRETE mapped parent (not an abstract base)
-            has_mapped_parent = False
-            for base in cls.__mro__[1:]:
-                # Skip abstract classes
-                if base.__dict__.get("__abstract__", False):
-                    continue
-                # Check if this base has an EXPLICIT tablename set in its __dict__
-                # (not a @declared_attr, which would be a function/property)
-                if "__tablename__" in base.__dict__ and isinstance(base.__dict__["__tablename__"], str):
-                    # This base has an explicit tablename - likely a concrete mapped class
-                    # Check this isn't JTI or CTI by looking for concrete=True
-                    mapper_args = getattr(cls, "__mapper_args__", {})
-                    is_concrete = mapper_args.get("concrete", False)
-
-                    if not is_concrete:
-                        # Likely STI - set tablename to None
-                        # (JTI must set explicit __tablename__, so they won't hit this path)
-                        has_mapped_parent = True
-                        break
-
-            if has_mapped_parent:
-                cls.__tablename__ = None  # type: ignore[misc]
+            # Child didn't explicitly set __tablename__ - check for STI pattern
+            is_concrete = getattr(cls, "__mapper_args__", {}).get("concrete", False)
+            if not is_concrete:
+                for parent in cls.__mro__[1:]:
+                    # Skip parents that explicitly set __abstract__ = True in THEIR __dict__
+                    if parent.__dict__.get("__abstract__", False):
+                        continue
+                    if "_advanced_alchemy_explicit_tablename" in parent.__dict__:
+                        parent_mapper_args = getattr(parent, "__mapper_args__", {})
+                        if "polymorphic_on" in parent_mapper_args:
+                            # STI child - set __tablename__ to None BEFORE SQLAlchemy processes
+                            cls.__tablename__ = None  # type: ignore[misc]
+                            break
 
         bind_key = getattr(cls, "__bind_key__", None)
         if bind_key is not None:
             cls.metadata = cls.__metadata_registry__.get(bind_key)
         elif None not in cls.__metadata_registry__ and getattr(cls, "metadata", None) is not None:
             cls.__metadata_registry__[None] = cls.metadata
+
+        # Call super() AFTER setting __tablename__
         super().__init_subclass__(**kwargs)
 
 

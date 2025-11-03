@@ -32,26 +32,12 @@ def _clear_sqlalchemy_mappers() -> Generator[None, None, None]:
     This prevents table name conflicts when tests define models with the same
     table names. The global orm_registry persists across tests, so we need to
     clear it between test runs.
-
-    Also clears the model caches to prevent using stale models that reference
-    the disposed registry.
     """
     from advanced_alchemy.base import orm_registry
 
     yield
-    # Don't dispose the registry - just clear the metadata
-    # Disposing causes issues when subsequent tests try to create models
+    orm_registry.dispose()
     orm_registry.metadata.clear()
-
-    # Clear model caches so next test gets fresh models with fresh metadata
-    try:
-        from tests.integration.repository_fixtures import _bigint_model_cache, _uuid_model_cache
-
-        _uuid_model_cache.clear()
-        _bigint_model_cache.clear()
-    except ImportError:
-        # Not in integration test context
-        pass
 
 
 @pytest.fixture(autouse=True, scope="session")
