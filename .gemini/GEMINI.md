@@ -24,8 +24,8 @@ This configuration applies to the `advanced-alchemy` project.
 - Linting and formatting are enforced by `ruff` and `black`. Use `make lint` and `make fix`.
 - Type checking is enforced by `mypy`. Use `make type-check`.
 - All code must be fully type-hinted.
-- Use `T | None` for optional types (PEP 604), not `Optional[T]`.
-- Avoid `from __future__ import annotations`.
+- Use ``Optional[T]`` for optional types, not ``T | None`` (PEP 604).
+- Avoid ``from __future__ import annotations``.
 
 ## Testing Guidance
 
