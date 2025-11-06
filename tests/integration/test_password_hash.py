@@ -226,6 +226,6 @@ def test_encrypted_string_repr() -> None:
     def get_key() -> str:
         return "dynamic_key"
 
-    enc_str_callable = EncryptedString(key=get_key, backend=FernetBackend)
     # The repr should include the callable object itself
+    enc_str_callable = EncryptedString(key=get_key, backend=FernetBackend)
     assert repr(enc_str_callable) == "EncryptedString(key=get_key, backend=FernetBackend, length=None)"
