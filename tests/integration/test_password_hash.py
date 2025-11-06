@@ -201,15 +201,15 @@ def test_password_hash_repr() -> None:
     """Test __repr__() method for PasswordHash with different backends."""
     # Test Argon2Hasher backend
     argon2_hash = PasswordHash(backend=Argon2Hasher(), length=128)
-    assert repr(argon2_hash) == "PasswordHash(backend=Argon2Hasher(), length=128)"
+    assert repr(argon2_hash) == "PasswordHash(backend=sa.Argon2Hasher(), length=128)"
 
     # Test PasslibHasher backend
     passlib_hash = PasswordHash(backend=PasslibHasher(context=CryptContext(schemes=["argon2"])), length=256)
-    assert repr(passlib_hash) == "PasswordHash(backend=PasslibHasher(), length=256)"
+    assert repr(passlib_hash) == "PasswordHash(backend=sa.PasslibHasher(), length=256)"
 
     # Test PwdlibHasher backend
     pwdlib_hash = PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()), length=512)
-    assert repr(pwdlib_hash) == "PasswordHash(backend=PwdlibHasher(), length=512)"
+    assert repr(pwdlib_hash) == "PasswordHash(backend=sa.PwdlibHasher(), length=512)"
 
 
 def test_encrypted_string_repr() -> None:
