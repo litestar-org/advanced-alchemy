@@ -228,6 +228,4 @@ def test_encrypted_string_repr() -> None:
 
     enc_str_callable = EncryptedString(key=get_key, backend=FernetBackend)
     # The repr should include the callable object itself
-    assert "EncryptedString(key=" in repr(enc_str_callable)
-    assert "backend=FernetBackend" in repr(enc_str_callable)
-    assert "length=None" in repr(enc_str_callable)
+    assert repr(enc_str_callable) == "EncryptedString(key=get_key, backend=FernetBackend, length=None)"
