@@ -11,7 +11,11 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from alembic import op
-from advanced_alchemy.types import EncryptedString, EncryptedText, GUID, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash
+from advanced_alchemy.types import EncryptedString, EncryptedText, GUID, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash, FernetBackend
+from advanced_alchemy.types.encrypted_string import PGCryptoBackend
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+from advanced_alchemy.types.password_hash.passlib import PasslibHasher
+from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 from sqlalchemy import Text  # noqa: F401
 ${imports if imports else ""}
 if TYPE_CHECKING:
@@ -25,6 +29,12 @@ sa.ORA_JSONB = ORA_JSONB
 sa.EncryptedString = EncryptedString
 sa.EncryptedText = EncryptedText
 sa.StoredObject = StoredObject
+sa.PasswordHash = PasswordHash
+sa.Argon2Hasher = Argon2Hasher
+sa.PasslibHasher = PasslibHasher
+sa.PwdlibHasher = PwdlibHasher
+sa.FernetBackend = FernetBackend
+sa.PGCryptoBackend = PGCryptoBackend
 
 # revision identifiers, used by Alembic.
 revision = ${repr(up_revision)}
