@@ -4,30 +4,67 @@ Custom Types
 
 Advanced Alchemy provides SQLAlchemy custom types that adapt to different database backends, ensure data integrity, and provide Python-native type annotations.
 
-All custom types include:
+Learning Path
+=============
+
+Follow this progression to master Advanced Alchemy types:
+
+.. grid:: 1 1 4 4
+    :gutter: 2
+
+    .. grid-item-card:: 1. Basic Types
+        :link: basic-types
+        :link-type: doc
+        :text-align: center
+
+        GUID, DateTimeUTC, JsonB, and identity types
+
+    .. grid-item-card:: 2. Security Types
+        :link: security-types
+        :link-type: doc
+        :text-align: center
+
+        EncryptedString and PasswordHash
+
+    .. grid-item-card:: 3. File Storage
+        :link: file-storage
+        :link-type: doc
+        :text-align: center
+
+        FileObject and cloud storage integration
+
+    .. grid-item-card:: 4. Advanced Types
+        :link: advanced-types
+        :link-type: doc
+        :text-align: center
+
+        Mutable collections and custom types
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+
+   basic-types
+   security-types
+   file-storage
+   advanced-types
+
+Prerequisites
+=============
+
+- Understanding of :doc:`../modeling/basics`
+- Python 3.9+
+- SQLAlchemy 2.0+
+
+Overview
+========
+
+Advanced Alchemy custom types provide:
 
 - Automatic dialect-specific implementations
 - Python type annotation support
 - Consistent behavior across database backends
 - Integration with SQLAlchemy's type system
-
-Type Categories
----------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - Category
-     - Types
-   * - **Basic Types**
-     - GUID, DateTimeUTC, JsonB, BigIntIdentity
-   * - **Security Types**
-     - EncryptedString, EncryptedText, PasswordHash
-   * - **File Storage**
-     - FileObject, FileObjectList, StoredObject
-   * - **Collections**
-     - MutableList
 
 Quick Reference
 ---------------
@@ -151,20 +188,16 @@ Type Selection Guide
 - Cloud storage: :class:`~advanced_alchemy.types.StoredObject` with S3/GCS/Azure backends
 - Local storage: :class:`~advanced_alchemy.types.StoredObject` with local filesystem backend
 
-Detailed Documentation
-----------------------
+Next Steps
+==========
 
-.. toctree::
-   :maxdepth: 2
+- :doc:`basic-types` - GUID, DateTimeUTC, JsonB, and identity types
+- :doc:`security-types` - EncryptedString and PasswordHash
+- :doc:`file-storage` - FileObject and cloud storage integration
+- :doc:`advanced-types` - Mutable collections and custom types
 
-   basic-types
-   security-types
-   file-storage
-   advanced-types
-
-See Also
---------
+Related Topics
+==============
 
 - :doc:`../modeling/index` - Using types in models
 - :doc:`../storage/index` - Storage backend configuration
-- :doc:`/reference/types` - API reference for all types

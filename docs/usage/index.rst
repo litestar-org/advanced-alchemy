@@ -48,6 +48,5 @@ Prerequisites
 
 - Python 3.9+
 - SQLAlchemy 2.0+
-- Pydantic v2 or Msgspec (for schema validation)
 - Basic understanding of SQLAlchemy and async programming
 - Basic understanding of Pydantic or Msgspec

@@ -24,21 +24,23 @@ Advanced Alchemy includes several declarative base classes. Each provides differ
    * - ``IdentityAuditBase``
      - Primary keys using database IDENTITY feature, Automatic created_at/updated_at timestamps
    * - ``UUIDBase``
-     - UUID primary keys
+     - UUID (v4) primary keys
+   * - ``UUIDAuditBase``
+     - UUID (v4) primary keys, Automatic created_at/updated_at timestamps
    * - ``UUIDv6Base``
      - UUIDv6 primary keys
-   * - ``UUIDv7Base``
-     - UUIDv7 primary keys
-   * - ``UUIDAuditBase``
-     - UUID primary keys, Automatic created_at/updated_at timestamps
    * - ``UUIDv6AuditBase``
      - UUIDv6 primary keys, Automatic created_at/updated_at timestamps
+   * - ``UUIDv7Base``
+     - UUIDv7 primary keys
    * - ``UUIDv7AuditBase``
      - Time-sortable UUIDv7 primary keys, Automatic created_at/updated_at timestamps
    * - ``NanoIDBase``
      - URL-friendly unique identifiers, Shorter than UUIDs, collision resistant
    * - ``NanoIDAuditBase``
      - URL-friendly IDs with audit timestamps, Combines Nanoid benefits with audit trails
+   * - ``DefaultBase``
+     - Basic declarative base without primary key or audit fields
 
 Basic Mixins
 ============
@@ -51,16 +53,26 @@ Advanced Alchemy provides mixins to enhance model functionality:
 
    * - Mixin
      - Features
-   * - ``SlugKey``
-     - | Adds URL-friendly slug field
    * - ``AuditColumns``
-     - | Automatic created_at/updated_at timestamps
-       | Tracks record modifications
-       | ``updated_at`` refreshes during flush when any mapped column value changes, while preserving explicit timestamp overrides
+     - | Adds created_at/updated_at timestamps
    * - ``BigIntPrimaryKey``
      - | Adds BigInt primary key with sequence
    * - ``IdentityPrimaryKey``
      - | Adds primary key using database IDENTITY feature
+   * - ``NanoIDPrimaryKey``
+     - | Adds NanoID primary key (URL-friendly unique identifier)
+   * - ``SentinelMixin``
+     - | Adds sentinel column for optimistic locking and change detection
+   * - ``SlugKey``
+     - | Adds URL-friendly slug field
+   * - ``UniqueMixin``
+     - | Provides methods for unique constraint handling
+   * - ``UUIDPrimaryKey``
+     - | Adds UUID (v4) primary key
+   * - ``UUIDv6PrimaryKey``
+     - | Adds UUIDv6 primary key
+   * - ``UUIDv7PrimaryKey``
+     - | Adds time-sortable UUIDv7 primary key
 
 Simple Model Example
 ====================
@@ -173,7 +185,7 @@ Characteristics:
 - Shorter than UUIDs (21 characters vs 36)
 - Collision resistant
 - Generated client-side
-- Requires ``nanoid`` extra: ``pip install advanced-alchemy[nanoid]``
+- Requires ``nanoid`` dependency: ``pip install advanced-alchemy[nanoid]``
 
 Using Mixins
 ------------
@@ -208,13 +220,14 @@ The ``AuditColumns`` mixin provides automatic timestamps:
 
 .. code-block:: python
 
-    # ✅ Correct - updated_at refreshes automatically
-    user = await repository.get_one(User.id == user_id)
+    # === Automatic updated_at refresh ===
+    user = await repository.get_one(User.id == 1)
     user.email = "new@example.com"
     await session.commit()
     # user.updated_at is automatically updated
 
-    # ✅ Correct - explicit override is preserved
+    # === Explicit override of updated_at ===
+    user = await repository.get_one(User.id == 1)
     user.updated_at = specific_timestamp
     await session.commit()
     # user.updated_at retains the explicit value
@@ -228,18 +241,22 @@ Primary key generation differs by type:
 
 .. code-block:: python
 
-    # BigInt - database generates via sequence
+    # === BigInt - Database generates via sequence ===
     user = User(username="alice")  # No id needed
     session.add(user)
     await session.flush()
     # user.id is populated by database
 
-    # UUID - Python generates client-side
+    # === UUID - Python generates client-side ===
     user = User(username="bob")  # UUID generated automatically
+    session.add(user)
+    await session.flush()
     # user.id is populated before flush
 
-    # NanoID - Python generates client-side
+    # === NanoID - Python generates client-side ===
     user = User(username="charlie")  # NanoID generated automatically
+    session.add(user)
+    await session.flush()
     # user.id is populated before flush
 
 Next Steps
@@ -248,10 +265,3 @@ Next Steps
 Once you have basic models, you can add relationships between them.
 
 See :doc:`relationships` for foreign keys and many-to-many patterns.
-
-Related Topics
-==============
-
-- :doc:`../repositories/basics` - Using models with repositories
-- :doc:`../types/index` - Custom column types
-- :doc:`advanced` - Advanced patterns and mixins

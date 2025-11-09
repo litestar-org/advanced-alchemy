@@ -41,13 +41,6 @@ Follow this progression to master Advanced Alchemy modeling:
    relationships
    advanced
 
-Prerequisites
-=============
-
-- Python 3.9+
-- SQLAlchemy 2.0+
-- Basic understanding of SQLAlchemy models
-
 Overview
 ========
 
@@ -69,8 +62,6 @@ The simplest model using BigIntAuditBase:
     from sqlalchemy.orm import Mapped, mapped_column
 
     class Post(BigIntAuditBase):
-        __tablename__ = "posts"
-
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
 
@@ -87,9 +78,3 @@ Next Steps
 - :doc:`basics` - Base classes, simple models, primary key patterns
 - :doc:`relationships` - Foreign keys and many-to-many relationships
 - :doc:`advanced` - Mixins, custom types, and advanced patterns
-
-Related Topics
-==============
-
-- :doc:`../repositories/index` - Using models with repositories
-- :doc:`../types/index` - Custom column types
