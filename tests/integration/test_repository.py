@@ -4,10 +4,11 @@ import asyncio
 import datetime
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from unittest.mock import create_autospec
 from uuid import UUID
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
 from time_machine import travel
 
@@ -636,15 +637,22 @@ async def test_repo_error_messages(seeded_test_session_async: "tuple[AsyncSessio
         await maybe_async(author_repo.get(non_existent_id))
 
 
-async def test_repo_error_message_overrides_are_isolated(
-    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+def _make_mock_session(engine: AsyncEngine) -> AsyncSession:
+    session = cast(AsyncSession, create_autospec(AsyncSession, instance=True))
+    session.bind = engine
+    session.get_bind.return_value = engine
+    return session
+
+
+@pytest.mark.mock_async
+def test_repo_error_message_overrides_are_isolated(
+    mock_async_engine: AsyncEngine, uuid_models_dba: "dict[str, type]"
 ) -> None:
-    session, models = seeded_test_session_async
+    author_model = cast(type[Any], uuid_models_dba["author"])
     default_not_found = DEFAULT_ERROR_MESSAGE_TEMPLATES.get("not_found")
-    AuthorModel = cast(type[Any], models["author"])
 
     class BaseRepo(SQLAlchemyAsyncRepository[Any]):
-        model_type = AuthorModel
+        model_type = author_model
 
     class RepoA(BaseRepo):
         error_messages = {"not_found": "Author A not found"}
@@ -652,9 +660,9 @@ async def test_repo_error_message_overrides_are_isolated(
     class RepoB(BaseRepo):
         error_messages = {"not_found": "Author B not found"}
 
-    repo_a_first = RepoA(session=session)
-    repo_b = RepoB(session=session)
-    repo_a_second = RepoA(session=session)
+    repo_a_first = RepoA(session=_make_mock_session(mock_async_engine))
+    repo_b = RepoB(session=_make_mock_session(mock_async_engine))
+    repo_a_second = RepoA(session=_make_mock_session(mock_async_engine))
 
     assert repo_a_first.error_messages is not DEFAULT_ERROR_MESSAGE_TEMPLATES
     assert repo_a_first.error_messages is not repo_b.error_messages
@@ -664,14 +672,14 @@ async def test_repo_error_message_overrides_are_isolated(
     assert DEFAULT_ERROR_MESSAGE_TEMPLATES["not_found"] == default_not_found
 
 
-async def test_mock_repo_error_message_overrides_are_isolated(
-    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+@pytest.mark.mock_async
+def test_mock_repo_error_message_overrides_are_isolated(
+    mock_async_engine: AsyncEngine, uuid_models_dba: "dict[str, type]"
 ) -> None:
-    session, models = seeded_test_session_async
-    AuthorModel = cast(type[Any], models["author"])
+    author_model = cast(type[Any], uuid_models_dba["author"])
 
     class BaseMockRepo(SQLAlchemyAsyncMockRepository[Any]):
-        model_type = AuthorModel
+        model_type = author_model
 
     class RepoA(BaseMockRepo):
         error_messages = {"not_found": "Mock Author A not found"}
@@ -679,13 +687,12 @@ async def test_mock_repo_error_message_overrides_are_isolated(
     class RepoB(BaseMockRepo):
         error_messages = {"not_found": "Mock Author B not found"}
 
-    repo_a = RepoA(session=session)
-    repo_b = RepoB(session=session)
-    assert repo_a.error_messages is not None
-    assert repo_b.error_messages is not None
+    repo_a = RepoA(session=_make_mock_session(mock_async_engine))
+    repo_b = RepoB(session=_make_mock_session(mock_async_engine))
+
     assert repo_a.error_messages is not repo_b.error_messages
-    assert repo_a.error_messages.get("not_found") == "Mock Author A not found"
-    assert repo_b.error_messages.get("not_found") == "Mock Author B not found"
+    assert repo_a.error_messages["not_found"] == "Mock Author A not found"
+    assert repo_b.error_messages["not_found"] == "Mock Author B not found"
 
 
 # Comprehensive tests for GitHub issue #535 and bug_fix.md issues

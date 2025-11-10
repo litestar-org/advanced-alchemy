@@ -100,7 +100,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
-        self.error_messages = self._get_error_messages(error_messages=error_messages)
+        self.error_messages = self._get_error_messages(
+            error_messages=error_messages, default_messages=self.error_messages
+        )
         self.wrap_exceptions = wrap_exceptions
         self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
