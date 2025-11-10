@@ -99,7 +99,9 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
-        self.error_messages = self._get_error_messages(error_messages=error_messages)
+        self.error_messages = self._get_error_messages(
+            error_messages=error_messages, default_messages=self.error_messages
+        )
         self.wrap_exceptions = wrap_exceptions
         self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
@@ -121,13 +123,14 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     ) -> Optional[ErrorMessages]:
         if error_messages == Empty:
             error_messages = None
-        default_messages = cast(
-            "Optional[ErrorMessages]",
-            default_messages if default_messages != Empty else DEFAULT_ERROR_MESSAGE_TEMPLATES,
-        )
-        if error_messages is not None and default_messages is not None:
-            default_messages.update(cast("ErrorMessages", error_messages))
-        return default_messages
+        if default_messages == Empty:
+            default_messages = None
+        messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
+        if default_messages:
+            messages.update(cast("ErrorMessages", default_messages))
+        if error_messages:
+            messages.update(cast("ErrorMessages", error_messages))
+        return messages
 
     @classmethod
     def __database_add__(cls, identity: Any, data: ModelT) -> ModelT:

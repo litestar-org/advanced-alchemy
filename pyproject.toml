@@ -522,7 +522,6 @@ pythonVersion = "3.9"
 reportMissingTypeStubs = false
 reportPrivateImportUsage = false
 reportUnknownMemberType = false
-reportUnnecessaryTypeIgnoreComments = true
 reportUnusedFunction = false
 strict = ["advanced_alchemy/**/*"]
 venv = ".venv"
