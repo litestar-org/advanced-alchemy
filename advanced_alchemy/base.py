@@ -195,23 +195,39 @@ class CommonTableAttributes(BasicAttributes):
     """Common attributes for SQLAlchemy tables.
 
     Inherits from :class:`BasicAttributes` and provides a mechanism to infer table names from class names.
+    Automatically handles SQLAlchemy inheritance patterns (STI, JTI, CTI).
 
     Attributes:
-        __tablename__ (str): The inferred table name.
+        __tablename__ (Optional[str]): The inferred table name, or None for single-table inheritance.
     """
 
     if TYPE_CHECKING:
         __tablename__: str
     else:
 
-        @declared_attr.directive
-        def __tablename__(cls) -> str:
-            """Infer table name from class name.
+        @declared_attr
+        def __tablename__(cls) -> Optional[str]:
+            """Infer table name from class name, handling SQLAlchemy inheritance patterns.
+
+            Automatically determines the appropriate behavior based on inheritance:
+
+            - **Single Table Inheritance (STI)**: Returns None for child classes to use parent's table
+            - **Joined Table Inheritance (JTI)**: Generates table name when __tablename__ is explicitly
+              defined or foreign key to parent exists
+            - **Concrete Table Inheritance (CTI)**: Generates table name when concrete=True in mapper_args
 
             Returns:
-                str: The inferred table name.
+                Optional[str]: Snake-case table name derived from class name, or None for STI child classes.
             """
+            # Check if THIS class explicitly defined __tablename__
+            if "_advanced_alchemy_explicit_tablename" in cls.__dict__:
+                return cls._advanced_alchemy_explicit_tablename  # type: ignore[attr-defined]
 
+            # Check if __init_subclass__ set __tablename__ to None (STI child)
+            if "__tablename__" in cls.__dict__ and cls.__dict__["__tablename__"] is None:
+                return None
+
+            # Auto-generate tablename from class name
             return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
 
@@ -338,11 +354,35 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     __bind_key__: Optional[str] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        # Capture explicit __tablename__ BEFORE SQLAlchemy processes it
+        if "__tablename__" in cls.__dict__:
+            tablename_value = cls.__dict__["__tablename__"]
+            if isinstance(tablename_value, str):
+                cls._advanced_alchemy_explicit_tablename = tablename_value  # type: ignore[attr-defined]
+
+        # Detect STI child and set __tablename__ = None BEFORE super().__init_subclass__
+        if "__tablename__" not in cls.__dict__ and not cls.__dict__.get("__abstract__", False):
+            # Child didn't explicitly set __tablename__ - check for STI pattern
+            is_concrete = getattr(cls, "__mapper_args__", {}).get("concrete", False)
+            if not is_concrete:
+                for parent in cls.__mro__[1:]:
+                    # Skip parents that explicitly set __abstract__ = True in THEIR __dict__
+                    if parent.__dict__.get("__abstract__", False):
+                        continue
+                    if "_advanced_alchemy_explicit_tablename" in parent.__dict__:
+                        parent_mapper_args = getattr(parent, "__mapper_args__", {})
+                        if "polymorphic_on" in parent_mapper_args:
+                            # STI child - set __tablename__ to None BEFORE SQLAlchemy processes
+                            cls.__tablename__ = None  # type: ignore[misc]
+                            break
+
         bind_key = getattr(cls, "__bind_key__", None)
         if bind_key is not None:
             cls.metadata = cls.__metadata_registry__.get(bind_key)
         elif None not in cls.__metadata_registry__ and getattr(cls, "metadata", None) is not None:
             cls.__metadata_registry__[None] = cls.metadata
+
+        # Call super() AFTER setting __tablename__
         super().__init_subclass__(**kwargs)
 
 

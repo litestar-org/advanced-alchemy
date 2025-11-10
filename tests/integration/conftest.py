@@ -89,7 +89,7 @@ def configure_safe_logging(request: pytest.FixtureRequest) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
+def _patch_bases(monkeypatch: MonkeyPatch) -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
     """Ensure new registry state for every test.
 
     This prevents errors such as "Table '...' is already defined for
@@ -154,6 +154,24 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
     monkeypatch.setattr(base, "NanoIDAuditBase", NewNanoIDAuditBase)
     monkeypatch.setattr(base, "BigIntBase", NewBigIntBase)
     monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
+
+    yield
+
+    # Clean up registries to prevent test pollution
+    for base_class in [
+        NewUUIDBase,
+        NewUUIDAuditBase,
+        NewUUIDv6Base,
+        NewUUIDv6AuditBase,
+        NewUUIDv7Base,
+        NewUUIDv7AuditBase,
+        NewNanoIDBase,
+        NewNanoIDAuditBase,
+        NewBigIntBase,
+        NewBigIntAuditBase,
+    ]:
+        base_class.registry.dispose()
+        base_class.metadata.clear()
 
 
 @pytest.fixture(scope="session")
