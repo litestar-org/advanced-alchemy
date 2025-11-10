@@ -586,7 +586,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages = None
         if default_messages == Empty:
             default_messages = None
-        messages = DEFAULT_ERROR_MESSAGE_TEMPLATES
+        messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
         if default_messages and isinstance(default_messages, dict):
             messages.update(default_messages)
         if error_messages:
