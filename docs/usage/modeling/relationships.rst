@@ -29,21 +29,19 @@ Many-to-many relationships require an association table. This example demonstrat
 
 .. code-block:: python
 
-    from __future__ import annotations
     from sqlalchemy import Column, ForeignKey, Table
-    from sqlalchemy.orm import relationship
-    from sqlalchemy.orm import Mapped, mapped_column
+    from sqlalchemy.orm import Mapped, mapped_column, relationship
     from advanced_alchemy.base import BigIntAuditBase, orm_registry
     from advanced_alchemy.mixins import SlugKey
-    from typing import List
 
     # Association table for post-tag relationship
     post_tag = Table(
         "post_tag",
         orm_registry.metadata,
         Column("post_id", ForeignKey("post.id", ondelete="CASCADE"), primary_key=True),
-        Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True)
+        Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),
     )
+
 
     class Post(BigIntAuditBase):
         """Blog post model."""
@@ -53,23 +51,26 @@ Many-to-many relationships require an association table. This example demonstrat
         published: Mapped[bool] = mapped_column(default=False)
 
         # Many-to-many relationship with tags
-        tags: Mapped[List["Tag"]] = relationship(
+        tags: Mapped[list["Tag"]] = relationship(
             secondary=post_tag,
             back_populates="posts",
-            lazy="selectin"
+            lazy="selectin",
         )
+
 
     class Tag(BigIntAuditBase, SlugKey):
         """Tag model with automatic slug generation.
 
-        The SlugKey mixin automatically adds a slug field to the model.
+        The SlugKey mixin automatically adds a `slug` field to the model.
         """
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
-        posts: Mapped[List[Post]] = relationship(
+
+        # Many-to-many relationship with posts
+        posts: Mapped[list["Post"]] = relationship(
             secondary=post_tag,
             back_populates="tags",
-            viewonly=True
+            viewonly=True,
         )
 
 This configuration creates:
@@ -93,18 +94,16 @@ Without mixins, adding tags requires manual get-or-create logic:
     from sqlalchemy import select
     from advanced_alchemy.utils.text import slugify
 
-    async def add_tags_to_post(
-        db_session: AsyncSession,
-        post: Post,
-        tag_names: list[str]
-    ) -> Post:
+
+    async def add_tags_to_post(db_session: AsyncSession, post: Post, tag_names: list[str]) -> Post:
         """Add tags to a post, looking up existing tags and creating new ones if needed."""
-        existing_tags = await db_session.scalars(
-            select(Tag).filter(Tag.slug.in_([slugify(name) for name in tag_names]))
-        )
-        new_tags = [Tag(name=name, slug=slugify(name)) for name in tag_names if name not in {tag.name for tag in existing_tags}]
+        # We created `Tag` and `Post` models with a many-to-many relationship above.
+        existing_tags = await db_session.scalars(select(Tag).filter(Tag.slug.in_([slugify(name) for name in tag_names])))
+        new_tags = [
+            Tag(name=name, slug=slugify(name)) for name in tag_names if name not in {tag.name for tag in existing_tags}
+        ]
         post.tags.extend(new_tags + list(existing_tags))
-        db_session.merge(post)
+        await db_session.merge(post)
         await db_session.flush()
         return post
 
@@ -118,33 +117,7 @@ This manual pattern:
 Using UniqueMixin
 ~~~~~~~~~~~~~~~~~
 
-The ``UniqueMixin`` simplifies get-or-create operations. The ``Tag`` model from the example above includes ``UniqueMixin`` - see :ref:`using_unique_mixin` for the complete implementation.
-
-.. code-block:: python
-
-    from advanced_alchemy.utils.text import slugify
-
-    async def add_tags_to_post(
-        db_session: AsyncSession,
-        post: Post,
-        tag_names: list[str]
-    ) -> Post:
-        """Add tags using UniqueMixin for automatic get-or-create."""
-        # Identify tags to add (only new ones)
-        existing_tag_names = [tag.name for tag in post.tags]
-        tags_to_add = [name for name in tag_names if name not in existing_tag_names]
-
-        # Extend with new tags using UniqueMixin
-        post.tags.extend([
-            await Tag.as_unique_async(
-                db_session,
-                name=tag_name,
-                slug=slugify(tag_name)
-            )
-            for tag_name in tags_to_add
-        ])
-        await db_session.flush()
-        return post
+The ``UniqueMixin`` simplifies get-or-create operations. - see :ref:`using_unique_mixin` for the complete implementation.
 
 The ``UniqueMixin`` pattern:
 
@@ -165,9 +138,7 @@ SQLAlchemy provides multiple loading strategies:
 
 .. code-block:: python
 
-    from sqlalchemy.orm import selectinload
-
-    posts: Mapped[List["Tag"]] = relationship(
+    tags: Mapped[list["Tag"]] = relationship(
         secondary=post_tag,
         back_populates="posts",
         lazy="selectin"
@@ -176,7 +147,7 @@ SQLAlchemy provides multiple loading strategies:
 Characteristics:
 
 - Executes separate SELECT query for related items
-- Loads all related items in one additional query
+- Loads all related items in with one additional query
 - Efficient for one-to-many relationships
 - Default strategy for Advanced Alchemy examples
 
@@ -185,10 +156,11 @@ Characteristics:
 .. code-block:: python
 
     from sqlalchemy.orm import joinedload
+    from sqlalchemy.future import select
 
-    # Use in query, not in relationship definition
+    # This example shows joinedload in a query, not in the relationship definition
     stmt = select(Post).options(joinedload(Post.tags))
-    posts = await session.scalars(stmt)
+    posts = await db_session.scalars(stmt)
 
 Characteristics:
 
@@ -197,11 +169,11 @@ Characteristics:
 - Can result in duplicate rows (SQLAlchemy handles deduplication)
 - Efficient for many-to-one relationships
 
-**lazy='select' - Lazy Loading**
+**select - Lazy Loading**
 
 .. code-block:: python
 
-    posts: Mapped[List["Tag"]] = relationship(
+    tags: Mapped[list["Tag"]] = relationship(
         secondary=post_tag,
         back_populates="posts",
         lazy="select"
@@ -221,7 +193,7 @@ The ``viewonly=True`` parameter creates read-only relationships:
 
 .. code-block:: python
 
-    posts: Mapped[List[Post]] = relationship(
+    posts: Mapped[list["Post"]] = relationship(
         secondary=post_tag,
         back_populates="tags",
         viewonly=True
@@ -246,7 +218,7 @@ One-to-many relationships use foreign keys directly:
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column, relationship
     from advanced_alchemy.base import BigIntAuditBase
-    from typing import List, Optional
+
 
     class Author(BigIntAuditBase):
         """Author model."""
@@ -255,10 +227,8 @@ One-to-many relationships use foreign keys directly:
         email: Mapped[str] = mapped_column(unique=True)
 
         # One-to-many: one author has many posts
-        posts: Mapped[List["Post"]] = relationship(
-            back_populates="author",
-            lazy="selectin"
-        )
+        posts: Mapped[list["Post"]] = relationship(back_populates="author")
+
 
     class Post(BigIntAuditBase):
         """Blog post model with author relationship."""
@@ -287,15 +257,15 @@ Lazy loading can cause performance issues:
 
 .. code-block:: python
 
-    # ❌ Incorrect - causes N+1 queries
-    posts = await session.scalars(select(Post))
+    # === ❌ Incorrect - causes N+1 queries ===
+    posts = await db_session.scalars(select(Post))
     for post in posts:
         print(post.author.name)  # Triggers separate query per post
 
-    # ✅ Correct - eager loading prevents N+1 queries
+    # === ✅ Correct - eager loading prevents N+1 queries ===
     from sqlalchemy.orm import selectinload
 
-    posts = await session.scalars(
+    posts = await db_session.scalars(
         select(Post).options(selectinload(Post.author))
     )
     for post in posts:
@@ -311,21 +281,15 @@ When using web frameworks, configure eager loading at the dependency provider le
 .. code-block:: python
 
     from advanced_alchemy.extensions.litestar.providers import create_service_provider
-    from sqlalchemy.orm import selectinload, joinedload, load_only
+    from sqlalchemy.orm import selectinload, load_only
 
     # Configure loading strategies at DI level
-    provide_team_service = create_service_provider(
-        TeamService,
+    provide_post_service = create_service_provider(
+        PostService,
         load=[
-            # Load team members with nested user details
-            selectinload(Team.members).options(
-                joinedload(TeamMember.user, innerjoin=True),
-            ),
-            # Load owner relationship
-            selectinload(Team.owner),
-            # Load tags with limited fields
-            selectinload(Team.tags).options(
-                load_only(Tag.name, Tag.slug),
+            # Load slugs of tags when loading posts
+            selectinload(Post.tags).options(
+                load_only(Tag.slug),
             ),
         ],
     )
@@ -345,13 +309,12 @@ Viewonly relationships cannot be modified:
 
 .. code-block:: python
 
-    # ✅ Correct - modify on owning side
-    post.tags.append(tag)
-
-    # ❌ Incorrect - cannot modify viewonly relationship
+    # === ❌ Incorrect - cannot modify viewonly relationship ===
     tag.posts.append(post)  # Raises error or silently ignored
 
-Always modify relationships on the owning side (without ``viewonly=True``).
+    # === ✅ Correct - modify on owning side ===
+    post.tags.append(tag)
+
 
 Cascade Behavior
 ----------------
@@ -360,11 +323,11 @@ Foreign key cascade options control delete behavior:
 
 .. code-block:: python
 
-    # With CASCADE delete
+    # === With CASCADE delete ===
     Column("post_id", ForeignKey("post.id", ondelete="CASCADE"), primary_key=True)
     # Deleting post also deletes post_tag rows
 
-    # Without CASCADE (default RESTRICT)
+    # === Without CASCADE (default RESTRICT) ===
     Column("post_id", ForeignKey("post.id"), primary_key=True)
     # Deleting post fails if post_tag rows exist
 
@@ -374,10 +337,3 @@ Next Steps
 ==========
 
 For automatic deduplication and advanced patterns, see :doc:`advanced`.
-
-Related Topics
-==============
-
-- :doc:`../repositories/filtering` - Filtering relationships
-- :doc:`advanced` - UniqueMixin for automatic get-or-create
-- :doc:`basics` - Base classes and simple models

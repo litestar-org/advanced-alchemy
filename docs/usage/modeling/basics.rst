@@ -223,13 +223,13 @@ The ``AuditColumns`` mixin provides automatic timestamps:
     # === Automatic updated_at refresh ===
     user = await repository.get_one(User.id == 1)
     user.email = "new@example.com"
-    await session.commit()
+    await db_session.commit()
     # user.updated_at is automatically updated
 
     # === Explicit override of updated_at ===
     user = await repository.get_one(User.id == 1)
     user.updated_at = specific_timestamp
-    await session.commit()
+    await db_session.commit()
     # user.updated_at retains the explicit value
 
 The ``updated_at`` field refreshes during flush when any mapped column changes, but preserves explicitly set values.
@@ -243,20 +243,20 @@ Primary key generation differs by type:
 
     # === BigInt - Database generates via sequence ===
     user = User(username="alice")  # No id needed
-    session.add(user)
-    await session.flush()
+    db_session.add(user)
+    await db_session.flush()
     # user.id is populated by database
 
     # === UUID - Python generates client-side ===
     user = User(username="bob")  # UUID generated automatically
-    session.add(user)
-    await session.flush()
+    db_session.add(user)
+    await db_session.flush()
     # user.id is populated before flush
 
     # === NanoID - Python generates client-side ===
     user = User(username="charlie")  # NanoID generated automatically
-    session.add(user)
-    await session.flush()
+    db_session.add(user)
+    await db_session.flush()
     # user.id is populated before flush
 
 Next Steps
