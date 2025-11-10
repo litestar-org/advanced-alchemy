@@ -122,13 +122,14 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     ) -> Optional[ErrorMessages]:
         if error_messages == Empty:
             error_messages = None
-        default_messages = cast(
-            "Optional[ErrorMessages]",
-            default_messages if default_messages != Empty else DEFAULT_ERROR_MESSAGE_TEMPLATES,
-        )
-        if error_messages is not None and default_messages is not None:
-            default_messages.update(cast("ErrorMessages", error_messages))
-        return default_messages
+        if default_messages == Empty:
+            default_messages = None
+        messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
+        if default_messages:
+            messages.update(cast("ErrorMessages", default_messages))
+        if error_messages:
+            messages.update(cast("ErrorMessages", error_messages))
+        return messages
 
     @classmethod
     def __database_add__(cls, identity: Any, data: ModelT) -> ModelT:
