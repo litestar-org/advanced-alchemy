@@ -515,7 +515,7 @@ class IdentityAuditBase(CommonTableAttributes, IdentityPrimaryKey, AuditColumns,
 
 
 class DefaultBase(CommonTableAttributes, AdvancedDeclarativeBase, AsyncAttrs):
-    """Base for all SQLAlchemy declarative models.  No primary key is added.
+    """Base for all SQLAlchemy declarative models. No primary key is added.
 
     .. seealso::
         :class:`CommonTableAttributes`

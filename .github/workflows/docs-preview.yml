@@ -44,7 +44,15 @@ jobs:
         with:
           script: |
             const issue_number = process.env.PR_NUMBER
-            const body = "Documentation preview will be available shortly at https://litestar-org.github.io/advanced-alchemy-docs-preview/" + issue_number
+            const previewUrl = `https://litestar-org.github.io/advanced-alchemy-docs-preview/${issue_number}`
+            const body = `## 📚 Documentation Preview
+
+            The documentation preview for this PR is available at:
+
+            **${previewUrl}**
+
+            > [!NOTE]
+            > The preview is updated automatically when changes are pushed to this PR.`
 
             const opts = github.rest.issues.listComments.endpoint.merge({
               owner: context.repo.owner,
@@ -55,7 +63,7 @@ jobs:
             const comments = await github.paginate(opts)
 
             for (const comment of comments) {
-              if (comment.user.id === 41898282 && comment.body === body) {
+              if (comment.user.id === 41898282 && comment.body.includes('Documentation Preview')) {
                 await github.rest.issues.deleteComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
