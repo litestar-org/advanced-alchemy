@@ -40,7 +40,7 @@ from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
-from sqlalchemy.sql.selectable import ForUpdateParameter
+from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
@@ -203,6 +203,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
     ) -> ModelT: ...
 
     def get_one(
@@ -1034,6 +1035,31 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = cast("StatementTypeT", statement.execution_options(**execution_options))
         return statement
 
+    def _apply_for_update_options(
+        self,
+        statement: Select[tuple[ModelT]],
+        with_for_update: ForUpdateParameter,
+    ) -> Select[tuple[ModelT]]:
+        """Apply FOR UPDATE options to a SELECT statement when requested."""
+
+        if with_for_update in (None, False):
+            return statement
+        if with_for_update is True:
+            return statement.with_for_update()
+        if isinstance(with_for_update, ForUpdateArg):
+            with_for_update_kwargs: dict[str, Any] = {
+                "nowait": with_for_update.nowait,
+                "read": with_for_update.read,
+                "skip_locked": with_for_update.skip_locked,
+                "key_share": with_for_update.key_share,
+            }
+            if getattr(with_for_update, "of", None):
+                with_for_update_kwargs["of"] = with_for_update.of
+            return statement.with_for_update(**with_for_update_kwargs)
+        if isinstance(with_for_update, dict):  # pyright: ignore
+            return statement.with_for_update(**with_for_update)
+        return statement
+
     def _get_delete_many_statement(
         self,
         *,
@@ -1072,6 +1098,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -1086,6 +1113,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
 
         Returns:
             The retrieved instance.
@@ -1108,6 +1136,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
             )
             statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
+            statement = self._apply_for_update_options(statement, with_for_update)
             instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
@@ -1487,7 +1516,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 id_attribute=id_attribute,
             )
             existing_instance = self.get(
-                item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
+                item_id,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
             )
             mapper = None
             with (
