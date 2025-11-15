@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator, Sequence
 from pathlib import Path
+from typing import cast
 
 import pytest
 from flask import Flask, Response
@@ -74,7 +75,7 @@ class AsyncUserService(SQLAlchemyAsyncRepositoryService[User], FlaskServiceMixin
 
 @pytest.fixture(scope="session")
 def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return tmp_path_factory.mktemp("test_extensions_flask")
+    return cast("Path", tmp_path_factory.mktemp("test_extensions_flask"))
 
 
 @pytest.fixture(scope="session")

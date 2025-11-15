@@ -455,6 +455,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
     ) -> ModelT:
         return self._find_or_raise_not_found(item_id)
 

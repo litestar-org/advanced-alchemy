@@ -463,6 +463,16 @@ module = [
 ]
 
 [[tool.mypy.overrides]]
+follow_imports = "skip"
+ignore_missing_imports = true
+module = [
+  "pytest",
+  "pytest.*",
+  "_pytest",
+  "_pytest.*",
+]
+
+[[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
 warn_unused_ignores = false
 
@@ -505,6 +515,10 @@ module = "examples.flask.*"
 [[tool.mypy.overrides]]
 disable_error_code = "unreachable"
 module = "tests.integration.test_repository"
+
+[[tool.mypy.overrides]]
+module = "tests.unit.test_exceptions"
+warn_unreachable = false
 
 
 [tool.pyright]
