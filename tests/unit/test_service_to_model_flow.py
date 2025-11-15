@@ -249,6 +249,17 @@ async def test_update_operation_map_routes_to_to_model_on_update() -> None:
     assert operation == "update"
 
 
+@pytest.mark.asyncio
+async def test_update_propagates_with_for_update_flag() -> None:
+    """Ensure the async service forwards locking hints to the repository."""
+
+    service = TrackingService()
+    await service.update({"name": "updated"}, item_id="test-id", with_for_update=True)
+
+    service.repository.get.assert_awaited_once()
+    assert service.repository.get.call_args.kwargs["with_for_update"] is True
+
+
 # Tests for sync service
 
 
@@ -284,6 +295,16 @@ def test_sync_update_model_instance_calls_to_model_with_operation() -> None:
     data, operation = service.to_model_calls[0]
     assert operation == "update"
     assert data is model
+
+
+def test_sync_update_propagates_with_for_update_flag() -> None:
+    """Ensure the sync service forwards the locking flag to its repository."""
+
+    service = TrackingSyncService()
+    service.update({"name": "updated"}, item_id="test-id", with_for_update=True)
+
+    service.repository.get.assert_called_once()
+    assert service.repository.get.call_args.kwargs["with_for_update"] is True
 
 
 # Tests for backward compatibility

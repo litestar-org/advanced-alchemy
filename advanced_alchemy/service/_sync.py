@@ -745,8 +745,12 @@ class SQLAlchemySyncRepositoryService(
         if item_id is not None:
             # When item_id is provided, update existing instance rather than replacing it
             # This preserves relationships and database-managed fields
-            existing_instance = self.repository.get(
-                item_id, id_attribute=id_attribute, load=load, execution_options=execution_options
+            existing_instance: ModelT = self.repository.get(
+                item_id,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
             )
 
             # Extract attributes from converted model to update existing instance

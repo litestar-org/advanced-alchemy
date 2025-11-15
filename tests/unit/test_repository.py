@@ -17,6 +17,7 @@ from sqlalchemy import Integer, String
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
 from advanced_alchemy import base
@@ -376,6 +377,89 @@ async def test_sqlalchemy_repo_get_member(
     assert instance is mock_instance
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+async def test_sqlalchemy_repo_get_with_for_update(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    """Ensure FOR UPDATE options are applied when requested."""
+
+    statement = MagicMock()
+    statement.options.return_value = statement
+    statement.execution_options.return_value = statement
+    statement.with_for_update.return_value = statement
+    mock_repo.statement = statement
+
+    mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
+    mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
+    mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
+    mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = MagicMock()
+    execute = mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
+
+    instance = await maybe_async(mock_repo.get("instance-id", with_for_update=True))
+
+    assert instance is execute_result.scalar_one_or_none.return_value
+    statement.with_for_update.assert_called_once_with()
+    execute.assert_called_once_with(statement, uniquify=False)
+
+
+async def test_sqlalchemy_repo_get_with_for_update_dict(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    statement = MagicMock()
+    statement.options.return_value = statement
+    statement.execution_options.return_value = statement
+    statement.with_for_update.return_value = statement
+    mock_repo.statement = statement
+
+    mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
+    mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
+    mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
+    mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = MagicMock()
+    mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
+
+    await maybe_async(
+        mock_repo.get(
+            "instance-id",
+            with_for_update={"nowait": True, "read": False},
+        )
+    )
+
+    statement.with_for_update.assert_called_once_with(nowait=True, read=False)
+
+
+async def test_sqlalchemy_repo_get_with_for_update_arg(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mocker: MockerFixture,
+) -> None:
+    statement = MagicMock()
+    statement.options.return_value = statement
+    statement.execution_options.return_value = statement
+    statement.with_for_update.return_value = statement
+    mock_repo.statement = statement
+
+    mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
+    mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
+    mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
+    mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = MagicMock()
+    mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
+
+    await maybe_async(
+        mock_repo.get(
+            "instance-id",
+            with_for_update=ForUpdateArg(nowait=True, key_share=True),
+        )
+    )
+
+    statement.with_for_update.assert_called_once_with(nowait=True, read=False, skip_locked=False, key_share=True)
 
 
 async def test_sqlalchemy_repo_get_one_member(
