@@ -14,7 +14,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     :maxdepth: 2
     :caption: Core Features
 
-    modeling
+    modeling/index
     repositories
     services
     types
@@ -49,6 +49,5 @@ Prerequisites
 
 - Python 3.9+
 - SQLAlchemy 2.0+
-- Pydantic v2 or Msgspec (for schema validation)
 - Basic understanding of SQLAlchemy and async programming
 - Basic understanding of Pydantic or Msgspec
