@@ -20,6 +20,7 @@ Core Components
     types
     exceptions
     utils
+    cli
 
 Repository & Services
 ---------------------

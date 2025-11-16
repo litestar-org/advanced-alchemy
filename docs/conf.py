@@ -26,6 +26,12 @@ current_year = datetime.datetime.now().year  # noqa: DTZ005
 project = __project__
 copyright = f"{current_year}, Litestar Organization"  # noqa: A001
 release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
+
+# Configure base URL for PR preview deployments
+pr_number = os.getenv("PR_NUMBER")
+if pr_number:
+    html_baseurl = f"https://litestar-org.github.io/advanced-alchemy-docs-preview/{pr_number}/"
+
 suppress_warnings = [
     "autosectionlabel.*",
     "ref.python",  # TODO: remove when https://github.com/sphinx-doc/sphinx/issues/4961 is fixed
@@ -196,19 +202,13 @@ html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
 
-# Pygments syntax highlighting configuration
-# Using accessible-pygments for WCAG AA/AAA compliant syntax highlighting
-# Light mode: a11y-light provides excellent readability on light backgrounds (WCAG AA)
-# Dark mode: a11y-high-contrast-dark provides maximum readability on dark backgrounds (WCAG AAA)
-pygments_style = "a11y-light"
-pygments_dark_style = "a11y-high-contrast-dark"
-
 todo_include_todos = True
 
 html_static_path = ["_static"]
 html_favicon = "_static/favicon.png"
 templates_path = ["_templates"]
-html_css_files = ["custom.css", "syntax-highlighting.css"]
+html_css_files = ["custom.css"]
+html_js_files = ["copy_markdown.js"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**"]
 html_show_sourcelink = True
 html_copy_source = True
@@ -237,12 +237,12 @@ html_theme_options = {
     "logo_target": "/",
     "accent_color": "amber",
     "github_url": "https://github.com/litestar-org/advanced-alchemy",
-    "discord_url": "https://discord.gg/dSDXd4mKhp",
+    "discord_url": "https://discord.gg/litestar",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
     "light_logo": "_static/logo-default.png",
     "dark_logo": "_static/logo-default.png",
-    "discussion_url": "https://discord.gg/dSDXd4mKhp",
+    "discussion_url": "https://discord.gg/litestar",
     "nav_links": [
         {"title": "Home", "url": "index"},
         {
@@ -292,7 +292,7 @@ html_theme_options = {
                 {
                     "title": "Discord Help Forum",
                     "summary": "Dedicated Discord help forum",
-                    "url": "https://discord.gg/dSDXd4mKhp",
+                    "url": "https://discord.gg/litestar",
                     "icon": "coc",
                 },
                 {

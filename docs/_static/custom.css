@@ -1,7 +1,5 @@
-/* Advanced Alchemy Custom Theme Configuration
- * Uses Shibuya theme's CSS variables for proper color integration
- * Shibuya provides --accent-1 through --accent-12 based on accent_color in conf.py
- * Current accent_color: amber (configured in docs/conf.py)
+/* Advanced Alchemy Custom Styles
+ * Minimal custom CSS - lets Shibuya's amber theme handle most styling
  */
 
 :root {
@@ -20,23 +18,18 @@
   --brand-letter-spacing-xs: 0.03em;
 }
 
-/* Light mode: Use Shibuya's accent color variables
- * --accent-9 is the primary accent color
- * --accent-10 is slightly darker
- * --accent-11 is for high-contrast text
- * --accent-a1 through --accent-a12 are transparent variants
- */
+/* Brand text glow using amber accent */
 html.light {
   --brand-text-glow: 0 0 10px var(--accent-a3),
     0 0 20px var(--accent-a2), 0 0 30px var(--accent-a1);
 }
 
-/* Dark mode: Use Shibuya's accent color variables for dark theme */
 html.dark {
   --brand-text-glow: 0 0 10px var(--accent-a6),
     0 0 20px var(--accent-a5), 0 0 30px var(--accent-a4);
 }
 
+/* Title with logo */
 .title-with-logo {
   display: flex;
   align-items: center;
@@ -89,54 +82,7 @@ html.dark .title-with-logo .brand-text {
   flex: 0 0 auto;
 }
 
-/* Large screens */
-@media (min-width: 1200px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-xl);
-  }
-}
-
-/* Medium-small screens */
-@media (max-width: 991px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-md);
-    letter-spacing: var(--brand-letter-spacing-lg);
-  }
-}
-
-/* Small screens */
-@media (max-width: 767px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-sm);
-    letter-spacing: var(--brand-letter-spacing-md);
-  }
-  html[class] .title-with-logo {
-    margin: 2rem auto 1.5rem;
-  }
-}
-
-/* Extra small screens */
-@media (max-width: 480px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-xs);
-    letter-spacing: var(--brand-letter-spacing-sm);
-    line-height: 1.2;
-  }
-  html[class] .title-with-logo {
-    margin: 1.5rem auto 1rem;
-    padding: 0 1rem;
-  }
-}
-
-/* Smallest screens */
-@media (max-width: 360px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-xxs);
-    letter-spacing: var(--brand-letter-spacing-xs);
-  }
-}
-
-/* Badge container styling - clean layout without box */
+/* Badge container */
 #badges {
   display: flex;
   flex-wrap: wrap;
@@ -149,90 +95,145 @@ html.dark .title-with-logo .brand-text {
   margin-bottom: 0;
 }
 
-/* =====================================================
- * Brand-Aligned UI Element Enhancements
- * Uses Shibuya's accent colors for consistency
- * ===================================================== */
-
-/* Inline code styling - uses accent colors */
-html.light code.literal {
-  background-color: var(--accent-a2);
-  border: 1px solid var(--accent-a4);
-  color: var(--accent-11);
-  padding: 0.1em 0.4em;
-  border-radius: 0.3em;
-  font-size: 90%;
+/* Responsive typography */
+@media (min-width: 1200px) {
+  html[class] .title-with-logo .brand-text {
+    font-size: var(--brand-font-size-xl);
+  }
 }
 
-html.dark code.literal {
-  background-color: var(--accent-a3);
-  border: 1px solid var(--accent-a5);
-  color: var(--accent-11);
-  padding: 0.1em 0.4em;
-  border-radius: 0.3em;
-  font-size: 90%;
+@media (max-width: 991px) {
+  html[class] .title-with-logo .brand-text {
+    font-size: var(--brand-font-size-md);
+    letter-spacing: var(--brand-letter-spacing-lg);
+  }
 }
 
-/* Navigation links - accent color on hover */
-html.light .toctree-wrapper a:hover,
-html.light .doc-toc a:hover {
-  color: var(--accent-10);
+@media (max-width: 767px) {
+  html[class] .title-with-logo .brand-text {
+    font-size: var(--brand-font-size-sm);
+    letter-spacing: var(--brand-letter-spacing-md);
+  }
+  html[class] .title-with-logo {
+    margin: 2rem auto 1.5rem;
+  }
 }
 
-html.dark .toctree-wrapper a:hover,
-html.dark .doc-toc a:hover {
-  color: var(--accent-11);
+@media (max-width: 480px) {
+  html[class] .title-with-logo .brand-text {
+    font-size: var(--brand-font-size-xs);
+    letter-spacing: var(--brand-letter-spacing-sm);
+    line-height: 1.2;
+  }
+  html[class] .title-with-logo {
+    margin: 1.5rem auto 1rem;
+    padding: 0 1rem;
+  }
 }
 
-/* Blockquote styling - accent-colored left border */
-html.light blockquote {
-  border-left: 4px solid var(--accent-9);
-  background-color: var(--accent-a2);
-  padding: 1em 1em 1em 1.5em;
-  margin: 1em 0;
+@media (max-width: 360px) {
+  html[class] .title-with-logo .brand-text {
+    font-size: var(--brand-font-size-xxs);
+    letter-spacing: var(--brand-letter-spacing-xs);
+  }
 }
 
-html.dark blockquote {
-  border-left: 4px solid var(--accent-10);
-  background-color: var(--accent-a3);
-  padding: 1em 1em 1em 1.5em;
-  margin: 1em 0;
+/* Copy as Markdown Button Styling */
+#copy-markdown-container {
+  position: relative;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  align-items: center;
 }
 
-/* Table header styling - accent colors */
-html.light table thead th {
-  background-color: var(--accent-a2);
-  border-bottom: 2px solid var(--accent-9);
+#copy-markdown-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent-a3);
+  color: var(--sy-c-text);
+  border: 1px solid var(--sy-c-divider);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--sy-f-text);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  outline: none;
 }
 
-html.dark table thead th {
-  background-color: var(--accent-a3);
-  border-bottom: 2px solid var(--accent-10);
+/* Focus state for accessibility */
+#copy-markdown-btn:focus-visible {
+  outline: 2px solid var(--accent-a6);
+  outline-offset: 2px;
 }
 
-/* Admonition enhancements - accent-aligned colors */
-html.light .admonition.note {
-  border-left-color: var(--sy-c-heading);
+/* Hover state */
+#copy-markdown-btn:hover:not(:disabled) {
+  background: var(--accent-a4);
+  border-color: var(--accent-a5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-html.light .admonition.tip {
-  border-left-color: var(--accent-9);
+/* Active state */
+#copy-markdown-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
-html.dark .admonition.note {
-  border-left-color: var(--accent-9);
+/* Loading state */
+#copy-markdown-btn.loading {
+  background: var(--accent-a4);
+  border-color: var(--accent-a5);
+  cursor: wait;
+  opacity: 0.8;
 }
 
-html.dark .admonition.tip {
-  border-left-color: var(--accent-10);
+/* Success state */
+#copy-markdown-btn.success {
+  background: var(--accent-a5);
+  border-color: var(--accent-a6);
+  color: var(--sy-c-heading);
 }
 
-/* Ensure smooth transitions for theme switching */
-code.literal,
-.toctree-wrapper a,
-.doc-toc a,
-blockquote,
-table thead th,
-.admonition {
-  transition: all 0.3s ease;
+/* Error state */
+#copy-markdown-btn.error {
+  background: var(--red-a4);
+  border-color: var(--red-a6);
+  color: var(--sy-c-text);
+}
+
+/* Disabled state */
+#copy-markdown-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Spinning animation for loading state */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  #copy-markdown-btn {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  #copy-markdown-btn {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.7rem;
+  }
 }
