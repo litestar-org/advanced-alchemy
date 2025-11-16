@@ -6,10 +6,8 @@ This module tests all three SQLAlchemy inheritance patterns:
 - Concrete Table Inheritance (CTI)
 """
 
-from __future__ import annotations
-
 import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import pytest
 from sqlalchemy import ForeignKey, MetaData, select
@@ -43,11 +41,11 @@ def test_sti_basic_table_names() -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class STIManager(STIEmployee):
-        department: Mapped[str | None] = mapped_column(nullable=True)
+        department: Mapped[Optional[str]] = mapped_column(nullable=True)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     class STIEngineer(STIEmployee):
-        programming_language: Mapped[str | None] = mapped_column(nullable=True)
+        programming_language: Mapped[Optional[str]] = mapped_column(nullable=True)
         __mapper_args__ = {"polymorphic_identity": "engineer"}
 
     # Verify all use same table (auto-generated from parent class name)
@@ -74,11 +72,11 @@ def test_sti_table_columns() -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class Manager(Employee):
-        department: Mapped[str | None] = mapped_column(default=None)
+        department: Mapped[Optional[str]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     class Engineer(Employee):
-        programming_language: Mapped[str | None] = mapped_column(default=None)
+        programming_language: Mapped[Optional[str]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "engineer"}
 
     # Verify columns exist in single table
@@ -104,11 +102,11 @@ def test_sti_multi_level() -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class Manager(Employee):
-        department: Mapped[str | None] = mapped_column(default=None)
+        department: Mapped[Optional[str]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     class SeniorManager(Manager):
-        budget: Mapped[int | None] = mapped_column(default=None)
+        budget: Mapped[Optional[int]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "senior_manager"}
 
     # All three levels use same table
@@ -137,11 +135,11 @@ def test_sti_crud_operations(session: Session, sqlite_engine: Any) -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class Manager(Employee):
-        department: Mapped[str | None] = mapped_column(default=None)
+        department: Mapped[Optional[str]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     class Engineer(Employee):
-        programming_language: Mapped[str | None] = mapped_column(default=None)
+        programming_language: Mapped[Optional[str]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "engineer"}
 
     # Create tables
@@ -445,7 +443,7 @@ def test_mixin_with_inheritance() -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class Manager(Employee):
-        department: Mapped[str | None] = mapped_column(default=None)
+        department: Mapped[Optional[str]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     # STI works despite mixin
@@ -505,7 +503,7 @@ def test_sti_without_polymorphic_identity_on_child() -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class Manager(Employee):
-        department: Mapped[str | None] = mapped_column(default=None)
+        department: Mapped[Optional[str]] = mapped_column(default=None)
         # No __mapper_args__ - should still detect STI from parent
 
     # Should use parent table even without explicit polymorphic_identity
@@ -550,15 +548,15 @@ def test_sti_with_multiple_inheritance_levels() -> None:
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
     class Manager(Employee):
-        level: Mapped[int | None] = mapped_column(default=None)
+        level: Mapped[Optional[int]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     class SeniorManager(Manager):
-        budget: Mapped[int | None] = mapped_column(default=None)
+        budget: Mapped[Optional[int]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "senior_manager"}
 
     class ExecutiveManager(SeniorManager):
-        bonus: Mapped[int | None] = mapped_column(default=None)
+        bonus: Mapped[Optional[int]] = mapped_column(default=None)
         __mapper_args__ = {"polymorphic_identity": "executive_manager"}
 
     # All levels use same table
