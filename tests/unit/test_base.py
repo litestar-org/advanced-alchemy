@@ -56,10 +56,10 @@ def test_identity_primary_key_generates_identity_ddl() -> None:
 
     @declarative_mixin
     class TestMixin(IdentityPrimaryKey):
-        __tablename__ = "test_identity"
+        pass
 
     class TestModel(TestMixin, BigIntBase):
-        pass
+        __tablename__ = "test_identity"
 
     # Get the CREATE TABLE statement
     create_stmt = CreateTable(cast(Table, TestModel.__table__))
@@ -99,10 +99,10 @@ def test_bigint_primary_key_still_uses_sequence() -> None:
 
     @declarative_mixin
     class TestMixin(BigIntPrimaryKey):
-        __tablename__ = "test_bigint"
+        pass
 
     class TestModel(TestMixin, BigIntBase):
-        pass
+        __tablename__ = "test_bigint"
 
     # Get the CREATE TABLE statement
     create_stmt = CreateTable(cast(Table, TestModel.__table__))

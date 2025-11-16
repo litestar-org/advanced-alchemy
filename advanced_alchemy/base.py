@@ -197,9 +197,84 @@ class CommonTableAttributes(BasicAttributes):
     Inherits from :class:`BasicAttributes` and provides a mechanism to infer table names from class names
     while respecting SQLAlchemy's inheritance patterns.
 
+    This mixin supports all three SQLAlchemy inheritance patterns:
+    - **Single Table Inheritance (STI)**: Child classes automatically use parent's table
+    - **Joined Table Inheritance (JTI)**: Child classes have their own tables with foreign keys
+    - **Concrete Table Inheritance (CTI)**: Child classes have independent tables
+
     Attributes:
         __tablename__ (str | None): The inferred table name, or None for Single Table Inheritance children.
     """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Hook called when a subclass is created.
+
+        This method intercepts class creation to correctly handle ``__tablename__`` for
+        Single Table Inheritance (STI) hierarchies. When a parent class explicitly
+        defines ``__tablename__``, subclasses would normally inherit that string value.
+        For STI, child classes must have ``__tablename__`` resolve to ``None`` to indicate
+        they share the parent's table. This hook enforces that rule.
+
+        The detection logic identifies STI children by checking:
+        1. Class has ``polymorphic_identity`` in ``__mapper_args__`` (explicit STI child marker)
+        2. AND doesn't have ``concrete=True`` (which would make it CTI)
+        3. AND doesn't have ``polymorphic_on`` itself (which would make it a base)
+        4. AND doesn't explicitly define ``__tablename__`` in its own ``__dict__``
+
+        For children without ``polymorphic_identity`` but with a parent that has
+        ``polymorphic_on``, SQLAlchemy treats them as abstract intermediate classes
+        and will issue a warning. We don't modify ``__tablename__`` for these cases.
+
+        This allows both usage patterns:
+        1. Auto-generated names (don't set ``__tablename__`` on parent)
+        2. Explicit names (set ``__tablename__`` on parent, STI still works)
+        """
+        # IMPORTANT: Modify the class BEFORE calling super().__init_subclass__()
+        # because super() triggers SQLAlchemy's declarative processing
+        mapper_args = getattr(cls, "__mapper_args__", {})
+
+        # Skip if this class explicitly defines its own __tablename__
+        if "__tablename__" in cls.__dict__:
+            super().__init_subclass__(**kwargs)
+            return
+
+        # Skip if this is CTI (concrete table inheritance)
+        if mapper_args.get("concrete", False):
+            super().__init_subclass__(**kwargs)
+            return
+
+        # Check if this class might be an STI child
+        # An STI child either has polymorphic_identity in its own __mapper_args__,
+        # or inherits from a parent with polymorphic_on
+        is_potential_sti_child = False
+
+        # Check if THIS class (not inherited) defines polymorphic_on
+        # If it does, it's a base class, not a child
+        if "__mapper_args__" in cls.__dict__:
+            own_mapper_args = cls.__dict__["__mapper_args__"]
+            if "polymorphic_on" in own_mapper_args:
+                # This is a base class, not a child - skip
+                super().__init_subclass__(**kwargs)
+                return
+
+        # Check if any parent has polymorphic_on (indicates we're in an STI hierarchy)
+        for parent in cls.__mro__[1:]:
+            if not hasattr(parent, "__mapper_args__"):
+                continue
+            parent_mapper_args = getattr(parent, "__mapper_args__", {})
+            if "polymorphic_on" in parent_mapper_args:
+                # We're inheriting from a polymorphic base, so we're an STI child
+                is_potential_sti_child = True
+                break
+
+        if is_potential_sti_child and "__tablename__" not in cls.__dict__:
+            # For STI children that inherited an explicit __tablename__ from a parent,
+            # we need to explicitly set it to None so SQLAlchemy knows to use the parent's table.
+            # This overrides the inherited string value.
+            cls.__tablename__ = None  # type: ignore[misc]
+
+        # Now call super() which triggers SQLAlchemy's declarative system
+        super().__init_subclass__(**kwargs)
 
     if TYPE_CHECKING:
         __tablename__: Optional[str]
@@ -208,32 +283,26 @@ class CommonTableAttributes(BasicAttributes):
         @declared_attr.directive
         @classmethod
         def __tablename__(cls) -> Optional[str]:
-            """Infer table name from class name, respecting inheritance patterns.
+            """Generate table name automatically for base models.
 
-            IMPORTANT: This function is called for EVERY class in the hierarchy due to
-            @declared_attr.directive, even if a parent class explicitly sets __tablename__.
+            This is called for models that do not have an explicit ``__tablename__``.
+            For STI child models, ``__init_subclass__`` will have already set
+            ``__tablename__ = None``, so this function returns ``None`` to indicate
+            the child should use the parent's table.
 
-            This method automatically detects SQLAlchemy inheritance patterns and returns
-            the appropriate table name or None:
-
-            - **Single Table Inheritance (STI)**: Returns None for child classes to use parent's table
-            - **Joined Table Inheritance (JTI)**: Returns generated name (child has own table with ForeignKey)
-            - **Concrete Table Inheritance (CTI)**: Returns generated name (independent table with concrete=True)
-
-            The detection logic:
-            1. If class explicitly defines ``__tablename__`` in its ``__dict__``, use that value
-            2. Walk the MRO to find parent classes with tables
-            3. If parent has ``polymorphic_on`` and child doesn't have ``concrete=True``, return None (STI)
-            4. Otherwise, generate table name from class name
+            The generation logic:
+            1. If class explicitly defines ``__tablename__`` in its ``__dict__``, use that
+            2. Otherwise, generate from class name using snake_case conversion
 
             Returns:
-                str | None: Table name string, or None for STI children to inherit parent's table.
+                str | None: Table name generated from class name in snake_case, or None for STI children.
 
             Example:
-                Single Table Inheritance::
+                Single Table Inheritance (both patterns work)::
 
+                    # Pattern 1: Auto-generated table name (recommended)
                     class Employee(UUIDBase):
-                        __tablename__ = "employee"
+                        # __tablename__ auto-generated as "employee"
                         type: Mapped[str]
                         __mapper_args__ = {
                             "polymorphic_on": "type",
@@ -242,7 +311,24 @@ class CommonTableAttributes(BasicAttributes):
 
 
                     class Manager(Employee):
-                        # No __tablename__ needed - automatically uses "employee" table
+                        # __tablename__ = None (set by __init_subclass__)
+                        department: Mapped[str | None]
+                        __mapper_args__ = {"polymorphic_identity": "manager"}
+
+
+                    # Pattern 2: Explicit table name on parent
+                    class Employee(UUIDBase):
+                        __tablename__ = "custom_employee"  # Explicit!
+                        type: Mapped[str]
+                        __mapper_args__ = {
+                            "polymorphic_on": "type",
+                            "polymorphic_identity": "employee",
+                        }
+
+
+                    class Manager(Employee):
+                        # __tablename__ = None (set by __init_subclass__)
+                        # Still uses parent's "custom_employee" table
                         department: Mapped[str | None]
                         __mapper_args__ = {"polymorphic_identity": "manager"}
 
@@ -261,42 +347,51 @@ class CommonTableAttributes(BasicAttributes):
                         )
                         department: Mapped[str]
                         __mapper_args__ = {"polymorphic_identity": "manager"}
+
+                Concrete Table Inheritance::
+
+                    class Employee(UUIDBase):
+                        __tablename__ = "employee"
+                        id: Mapped[int] = mapped_column(primary_key=True)
+
+
+                    class Manager(Employee):
+                        __tablename__ = "manager"  # Independent table
+                        __mapper_args__ = {"concrete": True}
             """
-            # 1. Check if class explicitly defines __tablename__ in its own __dict__
-            # This handles JTI and CTI patterns where tablename is explicitly set
+            # Check if class explicitly defines __tablename__ in its own __dict__
             if "__tablename__" in cls.__dict__:
-                return cls.__dict__["__tablename__"]
+                value = cls.__dict__["__tablename__"]
+                # If explicitly set to None (e.g., by __init_subclass__ for STI), return None
+                if value is None:
+                    return None
+                return value
 
-            # 2. Walk the Method Resolution Order to detect inheritance patterns
-            for base in cls.__mro__[1:]:
-                # Skip framework base classes that don't represent actual tables
-                if base in (
-                    CommonTableAttributes,
-                    BasicAttributes,
-                    AdvancedDeclarativeBase,
-                    DeclarativeBase,
-                ):
-                    continue
+            # Check if this is an STI child class that needs auto-detection
+            # This handles cases where the parent didn't explicitly set __tablename__
+            mapper_args = getattr(cls, "__mapper_args__", {})
 
-                # Check if parent class has a table
-                if hasattr(base, "__tablename__"):
-                    # Get mapper arguments for both parent and current class
-                    parent_mapper_args = getattr(base, "__mapper_args__", {})
-                    cls_mapper_args = getattr(cls, "__mapper_args__", {})
+            # Skip STI detection if this class defines polymorphic_on (it's a base, not a child)
+            if "polymorphic_on" not in mapper_args:
+                is_sti_child = False
 
-                    # STI Pattern Detection:
-                    # Parent has polymorphic_on (discriminator column) and
-                    # child doesn't explicitly set concrete=True
-                    if parent_mapper_args.get("polymorphic_on") is not None and not cls_mapper_args.get(
-                        "concrete", False
-                    ):
-                        # This is STI - child uses parent's table
-                        return None
+                # Check explicit STI marker
+                if "polymorphic_identity" in mapper_args:
+                    is_sti_child = True
+                else:
+                    # Check if any parent has polymorphic_on (indicates STI hierarchy)
+                    for parent in cls.__mro__[1:]:
+                        if not hasattr(parent, "__mapper_args__"):
+                            continue
+                        parent_mapper_args = getattr(parent, "__mapper_args__", {})
+                        if "polymorphic_on" in parent_mapper_args:
+                            is_sti_child = True
+                            break
 
-                    # JTI Pattern: Child explicitly sets __tablename__ (handled in step 1)
-                    # CTI Pattern: Child sets concrete=True and __tablename__ (handled above)
+                if is_sti_child:
+                    # This is an STI child - return None to use parent's table
+                    return None
 
-            # 3. Default: No inheritance detected or first in hierarchy
             # Generate table name from class name using snake_case conversion
             return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
