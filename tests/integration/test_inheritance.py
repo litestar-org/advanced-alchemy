@@ -9,7 +9,7 @@ This module tests all three SQLAlchemy inheritance patterns:
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from sqlalchemy import ForeignKey, MetaData, select
@@ -28,41 +28,43 @@ if TYPE_CHECKING:
 
 @pytest.mark.integration
 def test_sti_basic_table_names() -> None:
-    """STI: Child classes use parent table name."""
+    """STI: Child classes use parent table name (auto-generated)."""
     # Create isolated base with unique metadata
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
-    class Employee(base.CommonTableAttributes, LocalBase):
-        __tablename__ = "sti_employee"
+    # No explicit __tablename__ - let CommonTableAttributes generate it
+    class STIEmployee(base.CommonTableAttributes, LocalBase):
         id: Mapped[int] = mapped_column(primary_key=True)
         type: Mapped[str]
         name: Mapped[str]
         __mapper_args__ = {"polymorphic_on": "type", "polymorphic_identity": "employee"}
 
-    class Manager(Employee):
-        department: Mapped[str | None] = mapped_column(default=None)
+    class STIManager(STIEmployee):
+        department: Mapped[str | None] = mapped_column(nullable=True)
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
-    class Engineer(Employee):
-        programming_language: Mapped[str | None] = mapped_column(default=None)
+    class STIEngineer(STIEmployee):
+        programming_language: Mapped[str | None] = mapped_column(nullable=True)
         __mapper_args__ = {"polymorphic_identity": "engineer"}
 
-    # Verify all use same table
-    assert Manager.__table__.name == "sti_employee"
-    assert Engineer.__table__.name == "sti_employee"
-    assert Employee.__table__.name == "sti_employee"
+    # Verify all use same table (auto-generated from parent class name)
+    expected_name = "sti_employee"  # snake_case of STIEmployee
+    assert STIEmployee.__table__.name == expected_name
+    assert STIManager.__table__.name == expected_name
+    assert STIEngineer.__table__.name == expected_name
+    assert STIManager.__table__ is STIEmployee.__table__  # Same table object
 
 
 @pytest.mark.integration
 def test_sti_table_columns() -> None:
     """STI: Single table contains all columns from hierarchy."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "sti_employee_cols"
@@ -90,10 +92,10 @@ def test_sti_table_columns() -> None:
 @pytest.mark.integration
 def test_sti_multi_level() -> None:
     """STI: Three levels of inheritance share one table."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "sti_employee_ml"
@@ -117,15 +119,15 @@ def test_sti_multi_level() -> None:
 
 @pytest.mark.integration
 @pytest.mark.sqlite
-def test_sti_crud_operations(session: Session, sqlite_engine) -> None:
+def test_sti_crud_operations(session: Session, sqlite_engine: Any) -> None:
     """STI: CRUD operations work correctly with polymorphic models."""
     from sqlalchemy.orm import Session as SessionType
 
     # Create fresh metadata and registry for this test
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "sti_employee_crud"
@@ -143,7 +145,7 @@ def test_sti_crud_operations(session: Session, sqlite_engine) -> None:
         __mapper_args__ = {"polymorphic_identity": "engineer"}
 
     # Create tables
-    metadata.create_all(sqlite_engine)
+    test_metadata.create_all(sqlite_engine)
 
     try:
         with SessionType(sqlite_engine) as test_session:
@@ -170,7 +172,7 @@ def test_sti_crud_operations(session: Session, sqlite_engine) -> None:
             assert isinstance(retrieved_manager, Manager)
             assert retrieved_manager.department == "Engineering"
     finally:
-        metadata.drop_all(sqlite_engine)
+        test_metadata.drop_all(sqlite_engine)
 
 
 # ============================================================================
@@ -181,10 +183,10 @@ def test_sti_crud_operations(session: Session, sqlite_engine) -> None:
 @pytest.mark.integration
 def test_jti_basic() -> None:
     """JTI: Child has separate table with foreign key."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "jti_employee"
@@ -211,10 +213,10 @@ def test_jti_basic() -> None:
 @pytest.mark.integration
 def test_jti_multiple_children() -> None:
     """JTI: Multiple children each with own table."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "jti_employee_multi"
@@ -242,15 +244,15 @@ def test_jti_multiple_children() -> None:
 
 @pytest.mark.integration
 @pytest.mark.sqlite
-def test_jti_crud_operations(session: Session, sqlite_engine) -> None:
+def test_jti_crud_operations(session: Session, sqlite_engine: Any) -> None:
     """JTI: CRUD operations with joined tables."""
     from sqlalchemy.orm import Session as SessionType
 
     # Create fresh metadata for this test
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "jti_employee_crud"
@@ -266,7 +268,7 @@ def test_jti_crud_operations(session: Session, sqlite_engine) -> None:
         __mapper_args__ = {"polymorphic_identity": "manager"}
 
     # Create tables
-    metadata.create_all(sqlite_engine)
+    test_metadata.create_all(sqlite_engine)
 
     try:
         with SessionType(sqlite_engine) as test_session:
@@ -284,7 +286,7 @@ def test_jti_crud_operations(session: Session, sqlite_engine) -> None:
             as_employee = test_session.execute(select(Employee).where(Employee.name == "Alice")).scalar_one()
             assert isinstance(as_employee, Manager)
     finally:
-        metadata.drop_all(sqlite_engine)
+        test_metadata.drop_all(sqlite_engine)
 
 
 # ============================================================================
@@ -295,10 +297,10 @@ def test_jti_crud_operations(session: Session, sqlite_engine) -> None:
 @pytest.mark.integration
 def test_cti_basic() -> None:
     """CTI: Child has independent table (no foreign key)."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "cti_employee"
@@ -307,6 +309,7 @@ def test_cti_basic() -> None:
 
     class Manager(Employee):
         __tablename__ = "cti_manager"
+        id: Mapped[int] = mapped_column(primary_key=True)
         department: Mapped[str]
         __mapper_args__ = {"concrete": True}
 
@@ -321,10 +324,10 @@ def test_cti_basic() -> None:
 @pytest.mark.integration
 def test_cti_multiple_concrete_classes() -> None:
     """CTI: Multiple concrete subclasses with independent tables."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "cti_employee_multi"
@@ -333,11 +336,13 @@ def test_cti_multiple_concrete_classes() -> None:
 
     class Manager(Employee):
         __tablename__ = "cti_manager_multi"
+        id: Mapped[int] = mapped_column(primary_key=True)
         department: Mapped[str]
         __mapper_args__ = {"concrete": True}
 
     class Engineer(Employee):
         __tablename__ = "cti_engineer_multi"
+        id: Mapped[int] = mapped_column(primary_key=True)
         language: Mapped[str]
         __mapper_args__ = {"concrete": True}
 
@@ -353,15 +358,15 @@ def test_cti_multiple_concrete_classes() -> None:
 
 @pytest.mark.integration
 @pytest.mark.sqlite
-def test_cti_crud_operations(session: Session, sqlite_engine) -> None:
+def test_cti_crud_operations(session: Session, sqlite_engine: Any) -> None:
     """CTI: CRUD operations with concrete tables."""
     from sqlalchemy.orm import Session as SessionType
 
     # Create fresh metadata for this test
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "cti_employee_crud"
@@ -370,11 +375,13 @@ def test_cti_crud_operations(session: Session, sqlite_engine) -> None:
 
     class Manager(Employee):
         __tablename__ = "cti_manager_crud"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        name: Mapped[str]  # Must redeclare inherited columns for CTI
         department: Mapped[str]
         __mapper_args__ = {"concrete": True}
 
     # Create tables
-    metadata.create_all(sqlite_engine)
+    test_metadata.create_all(sqlite_engine)
 
     try:
         with SessionType(sqlite_engine) as test_session:
@@ -388,7 +395,7 @@ def test_cti_crud_operations(session: Session, sqlite_engine) -> None:
             assert retrieved.name == "Alice"
             assert retrieved.department == "Engineering"
     finally:
-        metadata.drop_all(sqlite_engine)
+        test_metadata.drop_all(sqlite_engine)
 
 
 # ============================================================================
@@ -399,10 +406,10 @@ def test_cti_crud_operations(session: Session, sqlite_engine) -> None:
 @pytest.mark.integration
 def test_explicit_tablename_override() -> None:
     """Explicit __tablename__ always respected."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "employee_explicit"
@@ -423,10 +430,10 @@ def test_explicit_tablename_override() -> None:
 @pytest.mark.integration
 def test_mixin_with_inheritance() -> None:
     """Mixins don't break inheritance detection."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class TimestampMixin:
         created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now)
@@ -448,10 +455,10 @@ def test_mixin_with_inheritance() -> None:
 @pytest.mark.integration
 def test_abstract_base_class() -> None:
     """Abstract base classes handled correctly."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class BaseEntity(base.CommonTableAttributes, LocalBase):
         __abstract__ = True
@@ -470,10 +477,10 @@ def test_abstract_base_class() -> None:
 @pytest.mark.integration
 def test_no_inheritance_generates_tablename() -> None:
     """Classes without inheritance get auto-generated tablename."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class StandaloneModel(base.CommonTableAttributes, LocalBase):
         id: Mapped[int] = mapped_column(primary_key=True)
@@ -486,10 +493,10 @@ def test_no_inheritance_generates_tablename() -> None:
 @pytest.mark.integration
 def test_sti_without_polymorphic_identity_on_child() -> None:
     """STI child without explicit polymorphic_identity still uses parent table."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "employee_no_poly_id"
@@ -508,10 +515,10 @@ def test_sti_without_polymorphic_identity_on_child() -> None:
 @pytest.mark.integration
 def test_backward_compatibility_simple_models() -> None:
     """Existing simple models without inheritance work as before."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class User(base.CommonTableAttributes, LocalBase):
         id: Mapped[int] = mapped_column(primary_key=True)
@@ -531,10 +538,10 @@ def test_backward_compatibility_simple_models() -> None:
 @pytest.mark.integration
 def test_sti_with_multiple_inheritance_levels() -> None:
     """Multi-level STI inheritance hierarchy."""
-    metadata = MetaData()
+    test_metadata = MetaData()
 
     class LocalBase(DeclarativeBase):
-        metadata = metadata
+        metadata = test_metadata
 
     class Employee(base.CommonTableAttributes, LocalBase):
         __tablename__ = "employee_deep"
