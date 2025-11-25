@@ -264,13 +264,13 @@ async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_na
                 if file_type == "json_gzip":
                     # Read gzipped files using binary pattern
                     async with await fixture_path.open(mode="rb") as f:  # type: ignore[assignment]
-                        compressed_data: bytes = await f.read()  # type: ignore[assignment]
+                        compressed_json: bytes = await f.read()  # type: ignore[assignment]
 
                     # Decompress in thread pool to avoid blocking
                     def _decompress_gzip(data: bytes) -> str:
                         return gzip.decompress(data).decode("utf-8")
 
-                    f_data = await async_(partial(_decompress_gzip, compressed_data))()
+                    f_data = await async_(partial(_decompress_gzip, compressed_json))()
                     return decode_json(f_data)
                 if file_type == "json_zip":
                     # Read zipped files in thread pool to avoid blocking
@@ -290,14 +290,14 @@ async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_na
                     return await async_(partial(_parse_csv, f_data))()
                 if file_type == "csv_gzip":
                     async with await fixture_path.open(mode="rb") as f:  # type: ignore[assignment]
-                        compressed_data: bytes = await f.read()  # type: ignore[assignment]
+                        compressed_csv: bytes = await f.read()  # type: ignore[assignment]
 
                     def _decompress_and_parse_csv(data: bytes) -> "list[dict[str, Any]]":
                         decompressed = gzip.decompress(data).decode("utf-8")
                         reader = csv.DictReader(decompressed.splitlines())
                         return list(reader)
 
-                    return await async_(partial(_decompress_and_parse_csv, compressed_data))()
+                    return await async_(partial(_decompress_and_parse_csv, compressed_csv))()
                 if file_type == "csv_zip":
                     return await async_(partial(_read_csv_zip_file, fixture_path, fixture_name))()
             except (OSError, zipfile.BadZipFile, gzip.BadGzipFile) as exc:
