@@ -8,7 +8,7 @@ This guide demonstrates modeling for a blog system with posts and tags, showcasi
 Base Classes
 ------------
 
-Advanced Alchemy provides several base classes optimized for different use cases.  Any model can utilize these pre-defined declarative bases from sqlchemy.  Here's a brief overview of the included classes:
+Advanced Alchemy provides several base classes optimized for different use cases.  Any model can utilize these pre-defined declarative bases from Advanced Alchemy.  Here's a brief overview of the included classes:
 
 .. list-table:: Base Classes and Features
    :header-rows: 1
