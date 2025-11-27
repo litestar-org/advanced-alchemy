@@ -109,11 +109,10 @@ Let's implement a tagging system using a many-to-many relationship. This example
 
 .. code-block:: python
 
-    from __future__ import annotations
     from sqlalchemy import Column, ForeignKey, Table
-    from sqlalchemy.orm import relationship
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntAuditBase, orm_registry, SlugKey
+    from sqlalchemy.orm import Mapped, mapped_column, relationship
+    from advanced_alchemy.base import BigIntAuditBase, orm_registry
+    from advanced_alchemy.mixins import SlugKey
     from typing import List
 
     # Association table for post-tag relationship
@@ -144,7 +143,7 @@ Let's implement a tagging system using a many-to-many relationship. This example
         """
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
-        posts: Mapped[List[Post]] = relationship(
+        posts: Mapped[List["Post"]] = relationship(
             secondary=post_tag,
             back_populates="tags",
             viewonly=True
@@ -156,6 +155,7 @@ If we want to interact with the models above, we might use something like the fo
 .. code-block:: python
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy import select
     from advanced_alchemy.utils.text import slugify
 
     async def add_tags_to_post(
@@ -169,7 +169,7 @@ If we want to interact with the models above, we might use something like the fo
         )
         new_tags = [Tag(name=name, slug=slugify(name)) for name in tag_names if name not in {tag.name for tag in existing_tags}]
         post.tags.extend(new_tags + list(existing_tags))
-        db_session.merge(post)
+        await db_session.merge(post)
         await db_session.flush()
         return post
 
@@ -193,10 +193,11 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
 
 .. code-block:: python
 
-    from advanced_alchemy.base import BigIntAuditBase, SlugKey
-    from advanced_alchemy.mixins import UniqueMixin
+    from advanced_alchemy.base import BigIntAuditBase
+    from advanced_alchemy.mixins import SlugKey, UniqueMixin
     from advanced_alchemy.utils.text import slugify
     from sqlalchemy.sql.elements import ColumnElement
+    from sqlalchemy.orm import Mapped, mapped_column, relationship
     from typing import Hashable
 
     class Tag(BigIntAuditBase, SlugKey, UniqueMixin):
@@ -209,7 +210,7 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
         """
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
-        posts: Mapped[list[Post]] = relationship(
+        posts: Mapped[list["Post"]] = relationship(
             secondary=post_tag,
             back_populates="tags",
             viewonly=True
@@ -250,7 +251,7 @@ We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the
           await Tag.as_unique_async(db_session, name=tag_text, slug=slugify(tag_text))
           for tag_text in tag_names
         ]
-        db_session.merge(post)
+        await db_session.merge(post)
         await db_session.flush()
         return post
 
@@ -282,7 +283,11 @@ Here's an example showing a class to generate a server-side UUID primary key for
     class ServerSideUUIDPrimaryKey:
         """UUID Primary Key Field Mixin."""
 
-        id: Mapped[UUID] = mapped_column(default=uuid4, primary_key=True, server_default=text("gen_random_uuid()"))
+        id: Mapped[UUID] = mapped_column(
+            default=uuid4,
+            primary_key=True,
+            server_default=text("gen_random_uuid()"),
+        )
         """UUID Primary key column."""
 
         # noinspection PyMethodParameters
@@ -293,7 +298,7 @@ Here's an example showing a class to generate a server-side UUID primary key for
 
 
     class ServerSideUUIDBase(ServerSideUUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
-        """Base for all SQLAlchemy declarative models with the custom UUID primary key ."""
+        """Base for all SQLAlchemy declarative models with the custom UUID primary key."""
 
         registry = orm_registry
 
