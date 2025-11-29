@@ -78,11 +78,9 @@ Let's implement a basic repository for our blog post model:
         """Repository for managing blog posts."""
         model_type = Post
 
-    async def create_post(db_session: AsyncSession, title: str, content: str, author_id: UUID) -> Post:
+    async def create_post(db_session: AsyncSession, title: str, content: str) -> Post:
         repository = PostRepository(session=db_session)
-        return await repository.add(
-            Post(title=title, content=content, author_id=author_id), auto_commit=True
-        )
+        return await repository.add(Post(title=title, content=content), auto_commit=True)
 
 Filtering and Querying
 ----------------------
@@ -92,14 +90,15 @@ Advanced Alchemy provides powerful filtering capabilities:
 .. code-block:: python
 
     import datetime
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     async def get_recent_posts(db_session: AsyncSession) -> list[Post]:
         repository = PostRepository(session=db_session)
 
         # Create filter for posts from last week
         return await repository.list(
-            Post.published == True,
-            Post.created_at > (datetime.datetime.utcnow() - timedelta(days=7))
+            Post.published.is_(True),
+            Post.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7))
         )
 
 Pagination
@@ -110,6 +109,7 @@ Pagination
 .. code-block:: python
 
     from advanced_alchemy.filters import LimitOffset
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     async def get_paginated_posts(
         db_session: AsyncSession,
@@ -137,13 +137,16 @@ Add Many
 
 .. code-block:: python
 
-    async def create_posts(db_session: AsyncSession, data: list[tuple[str, str, UUID]]) -> Sequence[Post]:
+    from collections.abc import Sequence
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    async def create_posts(db_session: AsyncSession, data: list[tuple[str, str]]) -> Sequence[Post]:
         repository = PostRepository(session=db_session)
 
         # Create posts
         return await repository.add_many(
-            [Post(title=title, content=content, author_id=author_id) for title, content, author_id in data],
-            auto_commit=True
+            [Post(title=title, content=content) for title, content in data],
+            auto_commit=True,
         )
 
 Update Many
@@ -151,11 +154,13 @@ Update Many
 
 .. code-block:: python
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     async def publish_posts(db_session: AsyncSession, post_ids: list[int]) -> list[Post]:
         repository = PostRepository(session=db_session)
 
         # Fetch posts to update
-        posts = await repository.list(Post.id.in_(post_ids), published =False)
+        posts = await repository.list(Post.id.in_(post_ids), published=False)
 
         # Update all posts
         for post in posts:
@@ -168,21 +173,26 @@ Delete Many
 
 .. code-block:: python
 
-    async def delete_posts(db_session: AsyncSession, post_ids: list[int]) -> list[Post]:
+    from collections.abc import Sequence
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    async def delete_posts(db_session: AsyncSession, post_ids: list[int]) -> Sequence[Post]:
         repository = PostRepository(session=db_session)
 
-        return await repository.delete_many(Post.id.in_(post_ids))
+        return await repository.delete_many(post_ids)
 
 Delete Where
 -------------
 
 .. code-block:: python
 
-    async def delete_unpublished_posts (db_session: AsyncSession) -> list[Post]:
+    from collections.abc import Sequence
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    async def delete_unpublished_posts(db_session: AsyncSession) -> Sequence[Post]:
         repository = PostRepository(session=db_session)
 
-        return await repository.delete_where(Post.published == False)
-
+        return await repository.delete_where(Post.published.is_(False))
 
 
 Transaction Management
@@ -212,12 +222,7 @@ Transaction Management
                 tags.append(tag)
 
             # Create post with tags
-            post = await post_repo.add(
-                Post(title=title, content=content, tags=tags),
-                auto_commit=True
-            )
-
-            return post
+            return await post_repo.add(Post(title=title, content=content, tags=tags))
 
 .. seealso::
 
@@ -237,28 +242,31 @@ For models using the :class:`SlugKey` mixin, there is a specialized Slug reposit
 .. code-block:: python
 
     from advanced_alchemy.repository import SQLAlchemyAsyncSlugRepository
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-    class ArticleRepository(SQLAlchemyAsyncSlugRepository[Article]):
-        """Repository for articles with slug-based lookups."""
-        model_type = Article
+    class TagRepository(SQLAlchemyAsyncSlugRepository[Tag]):
+        """Repository for tags with slug-based lookups."""
+        model_type = Tag
 
-    async def get_article_by_slug(db_session: AsyncSession, slug: str) -> Article:
-        repository = ArticleRepository(session=db_session)
+    async def get_tag_by_slug(db_session: AsyncSession, slug: str) -> Tag:
+        repository = TagRepository(session=db_session)
         return await repository.get_by_slug(slug)
 
 Query Repository
-----------------
+~~~~~~~~~~~~~~~
 
 For complex custom queries:
 
 .. code-block:: python
 
+    from typing import Any
     from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, Row
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-    async def get_posts_per_author(db_session: AsyncSession) -> list[tuple[UUID, int]]:
+    async def get_posts_count_by_status(db_session: AsyncSession) -> list[Row[Any]]:
         repository = SQLAlchemyAsyncQueryRepository(session=db_session)
-        return await repository.list(select(Post.author_id, func.count(Post.id)).group_by(Post.author_id))
+        return await repository.list(select(Post.published, func.count(Post.id)).group_by(Post.published))
 
 This covers the core functionality of repositories. The next section will explore services,
 which build upon repositories to provide higher-level business logic and data transformation.
