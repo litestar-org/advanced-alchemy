@@ -42,6 +42,7 @@ Let's build upon our blog example by creating services for posts:
     class PostCreate(BaseModel):
         title: str
         content: str
+        tag_names: list[str]
 
 
     class PostUpdate(BaseModel):
