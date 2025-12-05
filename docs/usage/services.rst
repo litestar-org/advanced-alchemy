@@ -63,7 +63,7 @@ Let's build upon our blog example by creating services for posts:
 
 
     class PostService(SQLAlchemyAsyncRepositoryService[Post]):
-        """Post repository."""
+        """Post Service."""
 
         class PostRepository(SQLAlchemyAsyncRepository[Post]):
             """Post repository."""
