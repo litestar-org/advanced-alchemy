@@ -3,6 +3,40 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.8.1
+    :date: 2025-12-06
+
+    .. change:: pin default installed python to 3.10
+        :type: bugfix
+        :pr: 601
+
+        Update the installation process to set the default Python version to 3.10 instead of 3.9.
+
+        There are some testing & docs packages we use that are causing issues.  We can pin 3.10 until 3.9 support is removed.  There is still a CI tests for 3.9
+
+    .. change:: adding string representation to PasswordHash and EncryptedString
+        :type: bugfix
+        :pr: 598
+        :issue: 596
+
+        Add string representation while generating migrations for models with `PasswordHash` or `EncryptedString` columns.
+
+    .. change:: error message handling and isolation in repositories
+        :type: bugfix
+        :pr: 605
+        :issue: 597
+
+        Correct error message retrieval and ensure that error message overrides are isolated for different repository instances. This improves the clarity and reliability of error messages across the application.
+
+    .. change:: correct race condition in `with_for_update`
+        :type: bugfix
+        :pr: 607
+
+        This corrects an issue in the `with_for_update` behavior:
+
+        - Before the change, passing `with_for_update` to service.update() or repository.update() only affected the post-flush session.refresh() call. The row that gets copied and mutated was always retrieved with a plain SELECT, so two concurrent writers could both read the same version
+        - Now the `with_for_update` flag is honored when the row is first fetched (both in the  service’s item_id branch and inside SQLAlchemyAsyncRepository.get()). When you call  service.update(..., with_for_update=True) (or pass the richer dict form/ForUpdateArg), the initial SELECT ... FOR UPDATE runs, so the session holds the expected lock before any field copying or merges occur.
+
 .. changelog:: 1.8.0
     :date: 2025-10-28
 
