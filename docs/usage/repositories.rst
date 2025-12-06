@@ -253,7 +253,7 @@ For models using the :class:`SlugKey` mixin, there is a specialized Slug reposit
         return await repository.get_by_slug(slug)
 
 Query Repository
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 For complex custom queries:
 
