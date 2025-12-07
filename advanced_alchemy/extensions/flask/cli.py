@@ -42,7 +42,7 @@ def get_database_migration_plugin(app: "Flask") -> "AdvancedAlchemy":
     raise ImproperConfigurationError(msg)
 
 
-@click.group(name="database")
+@click.group(name="database", aliases=["db"])
 @with_appcontext
 def database_group() -> None:
     """Manage SQLAlchemy database components.
