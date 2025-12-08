@@ -6,8 +6,8 @@ from advanced_alchemy.types.password_hash.base import HashingBackend
 
 if TYPE_CHECKING:
     from sqlalchemy import BinaryExpression, ColumnElement
+    from pwdlib.hashers.base import HasherProtocol
 
-from pwdlib.hashers.base import HasherProtocol
 
 __all__ = ("PwdlibHasher",)
 
