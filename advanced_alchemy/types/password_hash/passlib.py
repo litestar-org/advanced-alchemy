@@ -2,12 +2,13 @@
 
 from typing import TYPE_CHECKING, Any, Union
 
-from passlib.context import CryptContext  # pyright: ignore
+
 
 from advanced_alchemy.types.password_hash.base import HashingBackend
 
 if TYPE_CHECKING:
     from sqlalchemy import BinaryExpression, ColumnElement
+    from passlib.context import CryptContext  # pyright: ignore
 
 __all__ = ("PasslibHasher",)
 
