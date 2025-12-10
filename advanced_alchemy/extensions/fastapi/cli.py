@@ -35,7 +35,7 @@ def get_database_migration_plugin(app: "FastAPI") -> "AdvancedAlchemy":  # pragm
 
 
 def register_database_commands(app: "FastAPI") -> click.Group:  # pragma: no cover
-    @click.group(name="database")
+    @click.group(name="database", aliases=["db"])
     @click.pass_context
     def database_group(ctx: click.Context) -> None:
         """Manage SQLAlchemy database components."""
