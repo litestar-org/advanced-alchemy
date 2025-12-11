@@ -343,7 +343,7 @@ or the [project-specific GitHub discussions page][project-discussions].
 [discord]: https://discord.gg/litestar
 [litestar-discussions]: https://github.com/orgs/litestar-org/discussions
 [project-discussions]: https://github.com/litestar-org/advanced-alchemy/discussions
-[project-docs]: https://advanced-alchemy.dev
+[project-docs]: https://docs.advanced-alchemy.litestar.dev
 [install-guide]: https://advanced-alchemy.dev/latest/#installation
 [fastapi-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/fastapi/fastapi_service.py
 [flask-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/flask/flask_services.py
