@@ -2,11 +2,10 @@
 
 from typing import TYPE_CHECKING, Any, Union
 
-from passlib.context import CryptContext  # pyright: ignore
-
 from advanced_alchemy.types.password_hash.base import HashingBackend
 
 if TYPE_CHECKING:
+    from passlib.context import CryptContext
     from sqlalchemy import BinaryExpression, ColumnElement
 
 __all__ = ("PasslibHasher",)
@@ -19,7 +18,7 @@ class PasslibHasher(HashingBackend):
     Install with `pip install passlib` or `uv pip install passlib`.
     """
 
-    def __init__(self, context: CryptContext) -> None:
+    def __init__(self, context: "CryptContext") -> None:
         """Initialize PasslibBackend.
 
         Args:
