@@ -3,6 +3,30 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.8.2
+    :date: 2025-12-12
+
+    .. change:: add `db` group alias
+        :type: feature
+        :pr: 622
+
+        Add a `db` shorthand alias to the `database` group.  This allows `litestar|alchemy db` or `litestar|alchemy database` to work interchangeably.
+
+    .. change:: import error while generating migrations
+        :type: bugfix
+        :pr: 630
+
+        Fixes `passlib` and `pwdlib` import errors while creating migrations
+
+        Cause:
+        We added the `sa.PasslibHasher = PasslibHasher` and `sa.PwdlibHasher = PwdlibHasher` types in `script.py.mako`. As a result, when a user installs only Advanced Alchemy and creates a migration, these files are imported. Since they reference types from `passlib` and `pwdlib`, which are not installed by default, the import fails and triggers this error.
+
+    .. change:: add missing type parameter to AsyncServiceT_co and SyncServiceT_…
+        :type: bugfix
+        :pr: 612
+
+        Discovered a runtime issue with an inconsistent type declaration when upgrading a litestar project to use version 1.8.0 introduced
+
 .. changelog:: 1.8.1
     :date: 2025-12-06
 
