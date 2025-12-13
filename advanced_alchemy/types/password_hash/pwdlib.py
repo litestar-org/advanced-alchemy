@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING, Any, Union
 from advanced_alchemy.types.password_hash.base import HashingBackend
 
 if TYPE_CHECKING:
+    from pwdlib.hashers.base import HasherProtocol
     from sqlalchemy import BinaryExpression, ColumnElement
-
-from pwdlib.hashers.base import HasherProtocol
 
 __all__ = ("PwdlibHasher",)
 
@@ -15,7 +14,7 @@ __all__ = ("PwdlibHasher",)
 class PwdlibHasher(HashingBackend):
     """Hashing backend using Pwdlib."""
 
-    def __init__(self, hasher: HasherProtocol) -> None:
+    def __init__(self, hasher: "HasherProtocol") -> None:
         """Initialize PwdlibBackend.
 
         Args:
