@@ -1,6 +1,8 @@
 """Tests for advanced_alchemy.utils.fixtures module."""
 
+import csv
 import gzip
+import io
 import json
 import tempfile
 import zipfile
@@ -24,7 +26,19 @@ def sample_data() -> "list[dict[str, Any]]":
 
 
 @pytest.fixture
-def temp_fixtures_dir(sample_data: "list[dict[str, Any]]") -> "Generator[Path, None, None]":
+def sample_csv_data() -> "list[dict[str, str]]":
+    """Sample CSV data for testing (note: CSV values are strings)."""
+    return [
+        {"id": "1", "name": "Alice", "email": "alice@example.com"},
+        {"id": "2", "name": "Bob", "email": "bob@example.com"},
+        {"id": "3", "name": "Charlie", "email": "charlie@example.com"},
+    ]
+
+
+@pytest.fixture
+def temp_fixtures_dir(
+    sample_data: "list[dict[str, Any]]", sample_csv_data: "list[dict[str, str]]"
+) -> "Generator[Path, None, None]":
     """Create temporary directory with test fixtures in various formats."""
     with tempfile.TemporaryDirectory() as temp_dir:
         fixtures_path = Path(temp_dir)
@@ -65,6 +79,57 @@ def temp_fixtures_dir(sample_data: "list[dict[str, Any]]") -> "Generator[Path, N
         no_json_zip_file = fixtures_path / "no_json.json.zip"
         with zipfile.ZipFile(no_json_zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("readme.txt", "No JSON files here")
+
+        # Create plain CSV fixture
+        csv_file = fixtures_path / "users_csv.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            if sample_csv_data:
+                writer = csv.DictWriter(f, fieldnames=sample_csv_data[0].keys())
+                writer.writeheader()
+                writer.writerows(sample_csv_data)
+
+        # Create gzipped CSV fixture
+        gz_csv_file = fixtures_path / "users_csv_gz.csv.gz"
+        with gzip.open(gz_csv_file, "wt", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=sample_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(sample_csv_data)
+
+        # Create zipped CSV fixture (single file)
+        zip_csv_file = fixtures_path / "users_csv_zip.csv.zip"
+        with zipfile.ZipFile(zip_csv_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            csv_content = io.StringIO()
+            writer = csv.DictWriter(csv_content, fieldnames=sample_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(sample_csv_data)
+            zf.writestr("users_csv_zip.csv", csv_content.getvalue())
+
+        # Create zipped CSV fixture with multiple files (should pick matching name)
+        multi_zip_csv_file = fixtures_path / "users_csv_multi.csv.zip"
+        with zipfile.ZipFile(multi_zip_csv_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            # Add a different CSV first
+            other_content = io.StringIO()
+            other_writer = csv.DictWriter(other_content, fieldnames=["other"])
+            other_writer.writeheader()
+            other_writer.writerow({"other": "data"})
+            zf.writestr("other.csv", other_content.getvalue())
+
+            # Add the actual fixture
+            csv_content = io.StringIO()
+            writer = csv.DictWriter(csv_content, fieldnames=sample_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(sample_csv_data)
+            zf.writestr("users_csv_multi.csv", csv_content.getvalue())
+
+        # Create empty CSV zip file (should raise error)
+        empty_csv_zip = fixtures_path / "empty_csv.csv.zip"
+        with zipfile.ZipFile(empty_csv_zip, "w", zipfile.ZIP_DEFLATED):
+            pass
+
+        # Create zip with no CSV files
+        no_csv_zip = fixtures_path / "no_csv.csv.zip"
+        with zipfile.ZipFile(no_csv_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("readme.txt", "No CSV files here")
 
         yield fixtures_path
 
@@ -168,7 +233,7 @@ class TestOpenFixture:
             open_fixture(temp_fixtures_dir, "nonexistent")
 
         assert "Could not find the nonexistent fixture" in str(exc_info.value)
-        assert "(tried .json, .json.gz, .json.zip with case variations)" in str(exc_info.value)
+        assert "(tried .json, .json.gz, .json.zip, .csv, .csv.gz, .csv.zip with case variations)" in str(exc_info.value)
 
     def test_empty_zip_file(self, temp_fixtures_dir: Path) -> None:
         """Test error handling for empty zip file."""
@@ -216,6 +281,113 @@ class TestOpenFixture:
 
         with pytest.raises(Exception):  # decode_json will raise an appropriate exception
             open_fixture(temp_fixtures_dir, "invalid")
+
+
+class TestOpenFixtureCSV:
+    """Test cases for CSV fixture loading."""
+
+    def test_open_plain_csv_fixture(self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]") -> None:
+        """Test loading plain CSV fixture."""
+        result = open_fixture(temp_fixtures_dir, "users_csv")
+        assert result == sample_csv_data
+        # Verify it's a list of dicts
+        assert isinstance(result, list)
+        assert all(isinstance(row, dict) for row in result)
+
+    def test_open_gzipped_csv_fixture(self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]") -> None:
+        """Test loading gzipped CSV fixture."""
+        result = open_fixture(temp_fixtures_dir, "users_csv_gz")
+        assert result == sample_csv_data
+
+    def test_open_zipped_csv_fixture(self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]") -> None:
+        """Test loading zipped CSV fixture."""
+        result = open_fixture(temp_fixtures_dir, "users_csv_zip")
+        assert result == sample_csv_data
+
+    def test_open_zipped_csv_fixture_multiple_files(
+        self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test loading zipped CSV fixture with multiple files, should prefer matching name."""
+        result = open_fixture(temp_fixtures_dir, "users_csv_multi")
+        assert result == sample_csv_data
+
+    def test_csv_values_are_strings(self, temp_fixtures_dir: Path) -> None:
+        """Test that CSV values are strings (important difference from JSON)."""
+        result = open_fixture(temp_fixtures_dir, "users_csv")
+        # CSV returns strings, not integers
+        assert result[0]["id"] == "1"
+        assert isinstance(result[0]["id"], str)
+
+    def test_json_priority_over_csv(
+        self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]", sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test that JSON fixtures are loaded before CSV when both exist."""
+        # Create both JSON and CSV fixtures with same name
+        json_file = temp_fixtures_dir / "priority_format.json"
+        csv_file = temp_fixtures_dir / "priority_format.csv"
+
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump(sample_data, f)
+
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=sample_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(sample_csv_data)
+
+        # Should load JSON first
+        result = open_fixture(temp_fixtures_dir, "priority_format")
+        assert result == sample_data  # JSON data, not CSV data
+
+        # Remove JSON, should load CSV
+        json_file.unlink()
+        result = open_fixture(temp_fixtures_dir, "priority_format")
+        assert result == sample_csv_data
+
+    def test_empty_csv_zip_file(self, temp_fixtures_dir: Path) -> None:
+        """Test error handling for empty CSV zip file."""
+        with pytest.raises(ValueError) as exc_info:
+            open_fixture(temp_fixtures_dir, "empty_csv")
+        assert "No CSV files found in zip archive" in str(exc_info.value)
+
+    def test_csv_zip_with_no_csv_files(self, temp_fixtures_dir: Path) -> None:
+        """Test error handling for zip file with no CSV files."""
+        with pytest.raises(ValueError) as exc_info:
+            open_fixture(temp_fixtures_dir, "no_csv")
+        assert "No CSV files found in zip archive" in str(exc_info.value)
+
+    def test_csv_with_special_characters(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV with special characters, quotes, and commas."""
+        special_data = [
+            {"name": "O'Brien", "description": "Has apostrophe"},
+            {"name": "Smith, Jr.", "description": "Has comma"},
+            {"name": 'Quote"Test', "description": "Has quote"},
+        ]
+
+        csv_file = temp_fixtures_dir / "special.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=special_data[0].keys())
+            writer.writeheader()
+            writer.writerows(special_data)
+
+        result = open_fixture(temp_fixtures_dir, "special")
+        assert result == special_data
+
+    def test_csv_with_unicode(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV with Unicode characters."""
+        unicode_data = [
+            {"name": "François", "city": "Zürich"},
+            {"name": "日本", "city": "東京"},
+            {"name": "Москва", "city": "Россия"},
+        ]
+
+        csv_file = temp_fixtures_dir / "unicode.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=unicode_data[0].keys())
+            writer.writeheader()
+            writer.writerows(unicode_data)
+
+        result = open_fixture(temp_fixtures_dir, "unicode")
+        assert result == unicode_data
 
 
 class TestOpenFixtureAsync:
@@ -300,7 +472,7 @@ class TestOpenFixtureAsync:
             await open_fixture_async(temp_fixtures_dir, "nonexistent")
 
         assert "Could not find the nonexistent fixture" in str(exc_info.value)
-        assert "(tried .json, .json.gz, .json.zip with case variations)" in str(exc_info.value)
+        assert "(tried .json, .json.gz, .json.zip, .csv, .csv.gz, .csv.zip with case variations)" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_empty_zip_file_async(self, temp_fixtures_dir: Path) -> None:
@@ -330,6 +502,65 @@ class TestOpenFixtureAsync:
         # Note: This test documents the expected behavior when anyio is not available.
         # In practice, anyio is a required dependency for this project.
         pass
+
+    # Async CSV Tests
+    @pytest.mark.asyncio
+    async def test_open_plain_csv_fixture_async(
+        self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test loading plain CSV fixture asynchronously."""
+        result = await open_fixture_async(temp_fixtures_dir, "users_csv")
+        assert result == sample_csv_data
+
+    @pytest.mark.asyncio
+    async def test_open_gzipped_csv_fixture_async(
+        self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test loading gzipped CSV fixture asynchronously."""
+        result = await open_fixture_async(temp_fixtures_dir, "users_csv_gz")
+        assert result == sample_csv_data
+
+    @pytest.mark.asyncio
+    async def test_open_zipped_csv_fixture_async(
+        self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test loading zipped CSV fixture asynchronously."""
+        result = await open_fixture_async(temp_fixtures_dir, "users_csv_zip")
+        assert result == sample_csv_data
+
+    @pytest.mark.asyncio
+    async def test_open_zipped_csv_fixture_multiple_files_async(
+        self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test loading zipped CSV fixture with multiple files asynchronously."""
+        result = await open_fixture_async(temp_fixtures_dir, "users_csv_multi")
+        assert result == sample_csv_data
+
+    @pytest.mark.asyncio
+    async def test_json_priority_over_csv_async(
+        self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]", sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test that JSON fixtures are loaded before CSV when both exist in async version."""
+        json_file = temp_fixtures_dir / "priority_async.json"
+        csv_file = temp_fixtures_dir / "priority_async.csv"
+
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump(sample_data, f)
+
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=sample_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(sample_csv_data)
+
+        result = await open_fixture_async(temp_fixtures_dir, "priority_async")
+        assert result == sample_data
+
+    @pytest.mark.asyncio
+    async def test_empty_csv_zip_file_async(self, temp_fixtures_dir: Path) -> None:
+        """Test error handling for empty CSV zip file in async version."""
+        with pytest.raises(ValueError) as exc_info:
+            await open_fixture_async(temp_fixtures_dir, "empty_csv")
+        assert "No CSV files found in zip archive" in str(exc_info.value)
 
 
 class TestIntegration:
@@ -394,3 +625,66 @@ class TestIntegration:
         zip_data = open_fixture(temp_fixtures_dir, "large")
 
         assert json_data == gz_data == zip_data == large_data
+
+    def test_csv_fixture_integration_sync(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV fixture loading in a realistic scenario."""
+        # Create a CSV fixture similar to real-world usage
+        states_data = [
+            {"abbreviation": "AL", "name": "Alabama"},
+            {"abbreviation": "AK", "name": "Alaska"},
+            {"abbreviation": "AZ", "name": "Arizona"},
+        ]
+
+        csv_file = temp_fixtures_dir / "us_state_lookup.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["abbreviation", "name"])
+            writer.writeheader()
+            writer.writerows(states_data)
+
+        # Load fixture
+        fixture_data = open_fixture(temp_fixtures_dir, "us_state_lookup")
+        assert fixture_data == states_data
+        assert len(fixture_data) == 3
+        assert fixture_data[0]["name"] == "Alabama"
+        assert fixture_data[0]["abbreviation"] == "AL"
+
+    @pytest.mark.asyncio
+    async def test_csv_fixture_integration_async(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV fixture loading in a realistic async scenario."""
+        states_data = [
+            {"abbreviation": "CA", "name": "California"},
+            {"abbreviation": "TX", "name": "Texas"},
+        ]
+
+        csv_file = temp_fixtures_dir / "states_async.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["abbreviation", "name"])
+            writer.writeheader()
+            writer.writerows(states_data)
+
+        fixture_data = await open_fixture_async(temp_fixtures_dir, "states_async")
+        assert fixture_data == states_data
+        assert len(fixture_data) == 2
+
+    def test_mixed_format_directory(
+        self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]", sample_csv_data: "list[dict[str, str]]"
+    ) -> None:
+        """Test loading from directory with mixed JSON and CSV fixtures."""
+        # Create JSON fixture
+        json_file = temp_fixtures_dir / "data_json.json"
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump(sample_data, f)
+
+        # Create CSV fixture
+        csv_file = temp_fixtures_dir / "data_csv.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=sample_csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(sample_csv_data)
+
+        # Both should load correctly
+        json_result = open_fixture(temp_fixtures_dir, "data_json")
+        csv_result = open_fixture(temp_fixtures_dir, "data_csv")
+
+        assert json_result == sample_data
+        assert csv_result == sample_csv_data
