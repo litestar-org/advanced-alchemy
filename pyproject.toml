@@ -48,11 +48,11 @@ requires-python = ">=3.9"
 version = "1.8.2"
 
 [project.urls]
-Changelog = "https://advanced-alchemy.dev/latest/changelog"
+Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
 Discord = "https://discord.gg/litestar"
-Documentation = "https://advanced-alchemy.dev/latest/"
+Documentation = "https://docs.advanced-alchemy.litestar.dev/latest/"
 Funding = "https://github.com/sponsors/litestar-org"
-Homepage = "https://advanced-alchemy.dev/latest/"
+Homepage = "https://docs.advanced-alchemy.litestar.dev/latest/"
 Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 

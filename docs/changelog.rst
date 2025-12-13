@@ -797,7 +797,7 @@
         :pr: 379
         :issue: 338
 
-        Fix query repositories list method according to [documentation](https://advanced-alchemy.dev/latest/usage/repositories.html#query-repository).
+        Fix query repositories list method according to [documentation](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories.html#query-repository).
 
         Now its return a list of tuples with values instead of first column of the query.
 
