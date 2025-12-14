@@ -63,6 +63,8 @@ from advanced_alchemy.utils.text import slugify
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
 
+    from advanced_alchemy.cache import CacheManager
+
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
@@ -107,6 +109,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
+        cache_manager: Optional["CacheManager"] = None,
         **kwargs: Any,
     ) -> None: ...
 
@@ -204,6 +207,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
     ) -> ModelT: ...
 
     def get_one(
@@ -465,6 +469,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         wrap_exceptions: bool = True,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        cache_manager: Optional["CacheManager"] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -482,6 +487,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            cache_manager: Optional cache manager for caching query results.
             **kwargs: Additional arguments.
 
         """
@@ -508,6 +514,15 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+        # Cache support - use explicit parameter or auto-retrieve from session.info
+        self._cache_manager: Optional[CacheManager] = None
+        if cache_manager is not None:
+            self._cache_manager = cache_manager
+        else:
+            session_cache_manager = session.info.get("cache_manager")
+            # Only use if it's actually a CacheManager (check class name to avoid MagicMock)
+            if session_cache_manager is not None and type(session_cache_manager).__name__ == "CacheManager":
+                self._cache_manager = session_cache_manager
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         """Get the uniquify value, preferring the method parameter over instance setting.
@@ -519,6 +534,26 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             bool: The uniquify value to use.
         """
         return bool(uniquify) if uniquify is not None else self._uniquify
+
+    def _queue_cache_invalidation(self, entity_id: Any) -> None:
+        """Queue a cache invalidation for an entity.
+
+        The invalidation will be processed after the transaction commits.
+        If the transaction rolls back, the pending invalidation is discarded.
+
+        This uses the global CacheInvalidationListener which must be set up
+        via setup_cache_listeners() during application initialization.
+
+        Args:
+            entity_id: The primary key value of the entity to invalidate.
+        """
+        if self._cache_manager is not None:
+            from advanced_alchemy._listeners import get_cache_tracker
+
+            model_name = self.model_type.__tablename__  # type: ignore[attr-defined]
+            tracker = get_cache_tracker(self.session, self._cache_manager)
+            if tracker is not None:
+                tracker.add_invalidation(model_name, entity_id)
 
     def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
@@ -712,6 +747,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._flush_or_commit(auto_commit=auto_commit)
             self._refresh(instance, auto_refresh=auto_refresh)
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(self.get_id_attribute_value(instance))
             return instance
 
     def add_many(
@@ -745,6 +782,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._flush_or_commit(auto_commit=auto_commit)
             for datum in data:
                 self._expunge(datum, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(datum))
             return data
 
     def delete(
@@ -791,10 +830,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 id_attribute=id_attribute,
                 load=load,
                 execution_options=execution_options,
+                use_cache=False,  # Always fetch from DB for delete
             )
             self.session.delete(instance)
             self._flush_or_commit(auto_commit=auto_commit)
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(item_id)
             return instance
 
     def delete_many(
@@ -892,6 +934,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidations (processed on commit)
+            for item_id in item_ids:
+                self._queue_cache_invalidation(item_id)
             return instances
 
     @staticmethod
@@ -1099,6 +1144,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -1114,15 +1160,42 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            use_cache: Whether to use the cache for this query. Defaults to ``True``.
+                Set to ``False`` to bypass the cache and always query the database.
 
         Returns:
             The retrieved instance.
+
+        Note:
+            When using caching, the returned instance is a detached snapshot that
+            does not have relationships loaded. If you need to access relationships,
+            either set ``use_cache=False`` or use ``session.merge()`` to attach
+            the cached instance to the current session.
         """
         self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
+
+        # Check cache first if enabled and no custom options are specified
+        # We skip cache for custom statements, load options, or FOR UPDATE queries
+        # since cached results wouldn't include these customizations
+        can_use_cache = (
+            use_cache
+            and self._cache_manager is not None
+            and statement is None
+            and load is None
+            and with_for_update is None
+            and (id_attribute is None or id_attribute == self.id_attribute)
+        )
+
+        if can_use_cache:
+            model_name = self.model_type.__tablename__  # type: ignore[attr-defined]
+            cached = self._cache_manager.get_entity_sync(model_name, item_id, self.model_type)  # type: ignore[union-attr]
+            if cached is not None:
+                return cached
+
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
@@ -1140,6 +1213,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
+
+            # Cache the result if caching is enabled
+            if can_use_cache and self._cache_manager is not None:
+                model_name = self.model_type.__tablename__  # type: ignore[attr-defined]
+                self._cache_manager.set_entity_sync(model_name, item_id, instance)
+
             return instance
 
     def get_one(
@@ -1521,6 +1600,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 load=load,
                 execution_options=execution_options,
                 with_for_update=with_for_update,
+                use_cache=False,  # Always fetch from DB for update
             )
             mapper = None
             with (
@@ -1582,6 +1662,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(item_id)
             return instance
 
     def update_many(
@@ -1656,6 +1738,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self._flush_or_commit(auto_commit=auto_commit)
                 for instance in instances:
                     self._expunge(instance, auto_expunge=auto_expunge)
+                    # Queue cache invalidation (processed on commit)
+                    self._queue_cache_invalidation(self.get_id_attribute_value(instance))
                 return instances
             self.session.execute(statement, data_to_update, execution_options=execution_options)
             self._flush_or_commit(auto_commit=auto_commit)
@@ -1669,6 +1753,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             )
             for instance in updated_instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidations (processed on commit)
+            for item_id in updated_ids:
+                self._queue_cache_invalidation(item_id)
             return updated_instances
 
     def _get_update_many_statement(

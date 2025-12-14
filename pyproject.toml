@@ -59,6 +59,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 [project.optional-dependencies]
 argon2 = ["argon2-cffi"]
 cli = ["rich-click"]
+dogpile = ["dogpile.cache>=1.0.0"]
 fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
 obstore = ["obstore"]
@@ -149,6 +150,7 @@ test = [
   "attrs",
   "cattrs",
   "dishka ; python_version >= \"3.10\"",
+  "dogpile.cache>=1.0.0",
   "pydantic-extra-types",
   "numpy",
   "pgvector",
@@ -460,17 +462,14 @@ module = [
   "argon2.*",
   "dishka",
   "dishka.*",
+  "dogpile",
+  "dogpile.*",
 ]
 
 [[tool.mypy.overrides]]
 follow_imports = "skip"
 ignore_missing_imports = true
-module = [
-  "pytest",
-  "pytest.*",
-  "_pytest",
-  "_pytest.*",
-]
+module = ["pytest", "pytest.*", "_pytest", "_pytest.*"]
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
