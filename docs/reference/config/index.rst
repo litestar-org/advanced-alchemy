@@ -15,5 +15,6 @@ Available API References
     asyncio
     common
     engine
+    routing
     sync
     types

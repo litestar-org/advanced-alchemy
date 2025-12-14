@@ -20,6 +20,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
     SESSION_TERMINUS_ASGI_EVENTS,
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
+from advanced_alchemy.routing.context import reset_routing_context
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine
@@ -246,6 +247,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         session = cast("Optional[AsyncSession]", get_aa_scope_state(scope, self.session_scope_key))
         if session is None:
+            # Reset routing context for request-scoped isolation when creating a new session
+            reset_routing_context()
             session_maker = cast("Callable[[], AsyncSession]", state[self.session_maker_app_state_key])
             session = session_maker()
             set_aa_scope_state(scope, self.session_scope_key, session)

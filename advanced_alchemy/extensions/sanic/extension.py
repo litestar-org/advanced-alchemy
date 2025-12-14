@@ -6,6 +6,7 @@ from sanic import Request, Sanic
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, MissingDependencyError
 from advanced_alchemy.extensions.sanic.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.routing.context import reset_routing_context
 
 try:
     from sanic_ext import Extend
@@ -196,7 +197,10 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         """
         session = getattr(request.ctx, config.session_key, None)
         if session is None:
-            setattr(request.ctx, config.session_key, config.get_session())
+            # Reset routing context for request-scoped isolation when creating a new session
+            reset_routing_context()
+            session = config.get_session()
+            setattr(request.ctx, config.session_key, session)
         return cast("Union[Session, AsyncSession]", session)
 
     def get_session(

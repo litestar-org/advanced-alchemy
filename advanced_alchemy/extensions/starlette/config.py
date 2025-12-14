@@ -19,6 +19,7 @@ from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
+from advanced_alchemy.routing.context import reset_routing_context
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
@@ -210,6 +211,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Processes the request, invokes the next middleware or route handler, and
         applies the session handler after the response is generated.
 
+        This method also resets the routing context at the start of each request
+        to ensure request-scoped isolation for read/write routing.
+
         Args:
             request (starlette.requests.Request): The incoming HTTP request.
             call_next (starlette.middleware.base.RequestResponseEndpoint):
@@ -218,6 +222,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             starlette.responses.Response: The HTTP response.
         """
+        # Reset routing context for request-scoped isolation
+        reset_routing_context()
+
         response = await call_next(request)
         session = cast("Optional[AsyncSession]", getattr(request.state, self.session_key, None))
         if session is not None:
@@ -352,6 +359,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Processes the request, invokes the next middleware or route handler, and
         applies the session handler after the response is generated.
 
+        This method also resets the routing context at the start of each request
+        to ensure request-scoped isolation for read/write routing.
+
         Args:
             request (starlette.requests.Request): The incoming HTTP request.
             call_next (starlette.middleware.base.RequestResponseEndpoint):
@@ -360,6 +370,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             starlette.responses.Response: The HTTP response.
         """
+        # Reset routing context for request-scoped isolation
+        reset_routing_context()
+
         response = await call_next(request)
         session = cast("Optional[Session]", getattr(request.state, self.session_key, None))
         if session is not None:
