@@ -53,6 +53,11 @@ async def _seed_item_tag_data_async(session: AsyncSession, item_model: Any, tag_
 
 def test_relationship_filter_many_to_many_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
     session, uuid_models = uuid_test_session_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -69,6 +74,11 @@ def test_relationship_filter_many_to_many_sync(uuid_test_session_sync: tuple[Ses
 
 def test_relationship_filter_negate_many_to_many_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
     session, uuid_models = uuid_test_session_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -88,6 +98,11 @@ def test_collection_filter_relationship_delegates_to_relationship_filter_sync(
     uuid_test_session_sync: tuple[Session, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -102,6 +117,11 @@ def test_collection_filter_relationship_delegates_to_relationship_filter_sync(
 
 def test_multifilter_relationship_filter_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
     session, uuid_models = uuid_test_session_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -125,6 +145,11 @@ def test_multifilter_relationship_filter_sync(uuid_test_session_sync: tuple[Sess
 
 def test_relationship_filter_many_to_one_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
     session, uuid_models = uuid_test_session_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     author_model: Any = uuid_models["author"]
     book_model: Any = uuid_models["book"]
 
@@ -193,6 +218,11 @@ async def test_relationship_filter_many_to_many_async(
     uuid_test_session_async: tuple[AsyncSession, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_async
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -212,6 +242,11 @@ async def test_multifilter_relationship_filter_async(
     uuid_test_session_async: tuple[AsyncSession, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_async
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
