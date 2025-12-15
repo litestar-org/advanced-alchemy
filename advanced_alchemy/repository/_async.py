@@ -758,21 +758,23 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         # In this case, use id_attribute for backward compatibility
         if len(pk_columns) == 0:
             id_attr = get_instrumented_attr(self.model_type, self.id_attribute)
-            return cast("ColumnElement[bool]", id_attr == pk_value)
+            result: ColumnElement[bool] = id_attr == pk_value
+            return result
 
         # Single primary key - accept scalar value only
         if len(pk_columns) == 1:
-            if isinstance(pk_value, (tuple, dict)) and not isinstance(pk_value, str):
+            if isinstance(pk_value, (tuple, dict)):
                 pk_type_name = type(pk_value).__name__
                 msg = (
                     f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
                     f"Expected a scalar value, got {pk_type_name}: {pk_value!r}"
                 )
                 raise ValueError(msg)
-            return cast("ColumnElement[bool]", pk_columns[0] == pk_value)
+            single_pk_result: ColumnElement[bool] = pk_columns[0] == pk_value
+            return single_pk_result
 
         # Composite primary key - require tuple or dict
-        if isinstance(pk_value, tuple) and not isinstance(pk_value, str):
+        if isinstance(pk_value, tuple):
             # Tuple format: values must match column order
             pk_tuple: tuple[Any, ...] = pk_value
             if len(pk_tuple) != len(pk_columns):
