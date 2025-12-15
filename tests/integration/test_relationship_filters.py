@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from sqlalchemy import ForeignKey, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import Engine, ForeignKey, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
 from advanced_alchemy.filters import CollectionFilter, ComparisonFilter, MultiFilter, RelationshipFilter
@@ -13,6 +13,35 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.xdist_group("relationship-filters"),
 ]
+
+
+# Skip unsupported engines at fixture setup time (before schema creation)
+@pytest.fixture
+def skip_unsupported_sync_engines(engine: Engine) -> None:
+    """Skip tests for engines that don't support UNIQUE constraints or have schema issues."""
+    dialect_name = getattr(engine.dialect, "name", "")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints (used by Tag model)
+    if dialect_name == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
+    # Skip Oracle - has schema isolation issues with xdist groups
+    if dialect_name.startswith("oracle"):
+        pytest.skip("Oracle has schema isolation issues with relationship filter tests")
+
+
+@pytest.fixture
+def skip_unsupported_async_engines(async_engine: AsyncEngine) -> None:
+    """Skip async tests for engines that don't support UNIQUE constraints."""
+    dialect_name = getattr(async_engine.dialect, "name", "")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if dialect_name == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
+    # Skip Oracle - has schema isolation issues with xdist groups
+    if dialect_name.startswith("oracle"):
+        pytest.skip("Oracle has schema isolation issues with relationship filter tests")
 
 
 def _seed_item_tag_data_sync(session: Session, item_model: Any, tag_model: Any) -> tuple[Any, Any]:
@@ -51,16 +80,15 @@ async def _seed_item_tag_data_async(session: AsyncSession, item_model: Any, tag_
     return tag_python, tag_sa
 
 
-def test_relationship_filter_many_to_many_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
+def test_relationship_filter_many_to_many_sync(
+    skip_unsupported_sync_engines: None,
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+) -> None:
     session, uuid_models = uuid_test_session_sync
 
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -76,16 +104,15 @@ def test_relationship_filter_many_to_many_sync(uuid_test_session_sync: tuple[Ses
     assert {i.name for i in items} == {"item-1", "item-2"}
 
 
-def test_relationship_filter_negate_many_to_many_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
+def test_relationship_filter_negate_many_to_many_sync(
+    skip_unsupported_sync_engines: None,
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+) -> None:
     session, uuid_models = uuid_test_session_sync
 
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -103,6 +130,7 @@ def test_relationship_filter_negate_many_to_many_sync(uuid_test_session_sync: tu
 
 
 def test_collection_filter_relationship_delegates_to_relationship_filter_sync(
+    skip_unsupported_sync_engines: None,
     uuid_test_session_sync: tuple[Session, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_sync
@@ -110,10 +138,6 @@ def test_collection_filter_relationship_delegates_to_relationship_filter_sync(
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -127,16 +151,15 @@ def test_collection_filter_relationship_delegates_to_relationship_filter_sync(
     assert {i.name for i in items} == {"item-1", "item-2"}
 
 
-def test_multifilter_relationship_filter_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
+def test_multifilter_relationship_filter_sync(
+    skip_unsupported_sync_engines: None,
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+) -> None:
     session, uuid_models = uuid_test_session_sync
 
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -159,16 +182,15 @@ def test_multifilter_relationship_filter_sync(uuid_test_session_sync: tuple[Sess
     assert {i.name for i in items} == {"item-1", "item-2"}
 
 
-def test_relationship_filter_many_to_one_sync(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
+def test_relationship_filter_many_to_one_sync(
+    skip_unsupported_sync_engines: None,
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+) -> None:
     session, uuid_models = uuid_test_session_sync
 
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     author_model: Any = uuid_models["author"]
     book_model: Any = uuid_models["book"]
@@ -189,13 +211,10 @@ def test_relationship_filter_many_to_one_sync(uuid_test_session_sync: tuple[Sess
 
 
 def test_relationship_filter_invalid_relationship_raises(
+    skip_unsupported_sync_engines: None,
     uuid_test_session_sync: tuple[Session, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_sync
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
 
@@ -206,12 +225,11 @@ def test_relationship_filter_invalid_relationship_raises(
         filter_.append_to_statement(stmt, item_model)
 
 
-def test_relationship_filter_join_negate_raises(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
+def test_relationship_filter_join_negate_raises(
+    skip_unsupported_sync_engines: None,
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+) -> None:
     session, uuid_models = uuid_test_session_sync
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     book_model: Any = uuid_models["book"]
 
@@ -245,6 +263,7 @@ def test_collection_filter_relationship_composite_pk_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_relationship_filter_many_to_many_async(
+    skip_unsupported_async_engines: None,
     uuid_test_session_async: tuple[AsyncSession, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_async
@@ -252,10 +271,6 @@ async def test_relationship_filter_many_to_many_async(
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -273,6 +288,7 @@ async def test_relationship_filter_many_to_many_async(
 
 @pytest.mark.asyncio
 async def test_multifilter_relationship_filter_async(
+    skip_unsupported_async_engines: None,
     uuid_test_session_async: tuple[AsyncSession, dict[str, type]],
 ) -> None:
     session, uuid_models = uuid_test_session_async
@@ -280,10 +296,6 @@ async def test_multifilter_relationship_filter_async(
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
-
-    # Skip Spanner - doesn't support direct UNIQUE constraints
-    if getattr(session.bind.dialect, "name", "") == "spanner":
-        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
