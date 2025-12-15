@@ -54,6 +54,7 @@ from sqlalchemy import (
     text,
     true,
 )
+from sqlalchemy.orm import class_mapper
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from typing_extensions import TypeAlias, TypedDict, TypeVar
@@ -61,7 +62,7 @@ from typing_extensions import TypeAlias, TypedDict, TypeVar
 from advanced_alchemy.base import ModelProtocol
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import InstrumentedAttribute
+    from sqlalchemy.orm import InstrumentedAttribute, RelationshipProperty
 
 __all__ = (
     "BeforeAfter",
@@ -83,6 +84,7 @@ __all__ = (
     "OnBeforeAfter",
     "OrderBy",
     "PaginationFilter",
+    "RelationshipFilter",
     "SearchFilter",
     "StatementFilter",
     "StatementFilterT",
@@ -118,6 +120,7 @@ class FilterMap(TypedDict):
     exists: "type[ExistsFilter]"
     not_exists: "type[NotExistsFilter]"
     filter_group: "type[FilterGroup]"
+    relationship: "type[RelationshipFilter]"
 
 
 class LogicalOperatorMap(TypedDict):
@@ -285,6 +288,9 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     The filter supports both ``IN`` and ``ANY`` operators for collection membership testing.
     Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
+
+    Enhanced to properly handle many-to-many relationships when used within MultiFilter
+    or directly on relationship attributes.
     """
 
     field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
@@ -300,6 +306,9 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         prefer_any: bool = False,
     ) -> StatementTypeT:
         """Apply a WHERE ... IN or WHERE ... ANY (...) clause to the statement.
+
+        Enhanced to detect relationship attributes and delegate to RelationshipFilter
+        for proper handling.
 
         Parameters
         ----------
@@ -317,11 +326,35 @@ class CollectionFilter(InAnyFilter, Generic[T]):
             Modified statement with the appropriate IN conditions
         """
         field = self._get_instrumented_attr(model, self.field_name)
+
         if self.values is None:
             return statement
         if not self.values:
             # Return empty result set by forcing a false condition
             return cast("StatementTypeT", statement.where(text("1=-1")))
+
+        # Check if field is a relationship
+        if hasattr(field, "property") and hasattr(field.property, "mapper"):
+            # This is a relationship - use RelationshipFilter logic
+            # Extract the primary key field from related model
+            related_pk = field.property.mapper.primary_key[0]
+
+            # Get the relationship name (field.key might be None for InstrumentedAttribute)
+            rel_name = field.key if hasattr(field, "key") and field.key else str(self.field_name)
+
+            # Create a RelationshipFilter with CollectionFilter on related PK
+            rel_filter = RelationshipFilter(
+                relationship=rel_name,
+                filters=[
+                    CollectionFilter(
+                        field_name=related_pk.key,
+                        values=self.values,
+                    )
+                ],
+            )
+            return rel_filter.append_to_statement(statement, model)
+
+        # Regular column - use existing logic
         if prefer_any:
             return cast("StatementTypeT", statement.where(any_(self.values) == field))  # type: ignore[arg-type]
         return cast("StatementTypeT", statement.where(field.in_(self.values)))
@@ -1070,6 +1103,283 @@ class NotExistsFilter(StatementFilter):
 
 
 @dataclass
+class RelationshipFilter(StatementFilter):
+    """Filter records based on related model fields.
+
+    This filter creates an EXISTS subquery that applies filters to a related
+    model, allowing efficient single-query filtering across relationships.
+
+    Supports:
+        - One-to-many relationships (Order.customer)
+        - Many-to-one relationships (Customer.orders)
+        - Many-to-many with secondary table (User.tags)
+        - Many-to-many with association objects (Article.article_keywords)
+        - Nested relationships (Order.customer.company)
+
+    Performance:
+        Uses correlated EXISTS subqueries for optimal query planning.
+        Single database round-trip regardless of nesting depth.
+
+    Examples:
+        Filter orders by customer country::
+
+            RelationshipFilter(
+                relationship="customer",
+                filters=[
+                    CollectionFilter("country", ["USA", "Canada"])
+                ],
+            )
+
+        Filter users by tag names (many-to-many)::
+
+            RelationshipFilter(
+                relationship="tags",
+                filters=[
+                    CollectionFilter("name", ["python", "sqlalchemy"])
+                ],
+            )
+
+        Nested filtering (orders from enterprise customers in USA)::
+
+            RelationshipFilter(
+                relationship="customer",
+                filters=[
+                    CollectionFilter("country", ["USA"]),
+                    RelationshipFilter(
+                        relationship="tier",
+                        filters=[
+                            ComparisonFilter("name", "eq", "Enterprise")
+                        ],
+                    ),
+                ],
+            )
+
+        Negative filtering (articles NOT in archived categories)::
+
+            RelationshipFilter(
+                relationship="category",
+                filters=[ComparisonFilter("archived", "eq", True)],
+                negate=True,
+            )
+
+    See Also:
+        - :class:`ExistsFilter`: For custom correlated subqueries
+        - :class:`CollectionFilter`: For IN/NOT IN filtering
+        - :class:`FilterGroup`: For combining multiple filters
+    """
+
+    relationship: Union[str, "InstrumentedAttribute[Any]"]
+    """Name of SQLAlchemy relationship attribute or the attribute itself."""
+
+    filters: list[StatementFilter]
+    """Filters to apply to the related model."""
+
+    negate: bool = False
+    """If True, uses NOT EXISTS instead of EXISTS."""
+
+    use_exists: bool = True
+    """If True (default), uses EXISTS subquery. If False, uses JOIN with DISTINCT."""
+
+    def _get_relationship_name(self) -> str:
+        """Extract relationship name from string or InstrumentedAttribute."""
+        if isinstance(self.relationship, str):
+            return self.relationship
+        return self.relationship.key
+
+    def _get_relationship_property(self, model: type[ModelT]) -> "RelationshipProperty[Any]":
+        """Get RelationshipProperty from model mapper.
+
+        Args:
+            model: SQLAlchemy model class
+
+        Returns:
+            RelationshipProperty: SQLAlchemy relationship property
+
+        Raises:
+            ValueError: If relationship not found on model
+        """
+        mapper = class_mapper(model)
+        rel_name = self._get_relationship_name()
+        if rel_name not in mapper.relationships:
+            msg = f"Relationship '{rel_name}' not found on model {model.__name__}"
+            raise ValueError(msg)
+        return mapper.relationships[rel_name]
+
+    def _build_exists_subquery(
+        self,
+        model: type[ModelT],
+        rel_prop: "RelationshipProperty[Any]",
+    ) -> ColumnElement[bool]:
+        """Build EXISTS subquery for relationship filtering.
+
+        Args:
+            model: Parent model class
+            rel_prop: SQLAlchemy relationship property
+
+        Returns:
+            ColumnElement[bool]: EXISTS or NOT EXISTS clause
+        """
+        related_model = rel_prop.mapper.class_
+
+        # Start with basic subquery
+        subquery = select(1).select_from(related_model)
+
+        # Apply all filters to the related model
+        for filter_ in self.filters:
+            if isinstance(filter_, ColumnElement):
+                subquery = subquery.where(filter_)
+            else:
+                subquery = filter_.append_to_statement(subquery, related_model)
+
+        # Add join condition based on relationship type
+        if rel_prop.secondary is not None:
+            # Many-to-many with secondary table
+            subquery = self._add_m2m_join_condition(subquery, model, rel_prop)
+        else:
+            # One-to-many or many-to-one
+            subquery = self._add_o2m_join_condition(subquery, model, rel_prop)
+
+        # Correlate with parent query
+        subquery = subquery.correlate(model)
+
+        # Create EXISTS or NOT EXISTS
+        exists_clause: ColumnElement[bool] = exists(subquery)
+        if self.negate:
+            exists_clause = not_(exists_clause)
+
+        return exists_clause
+
+    def _add_o2m_join_condition(
+        self,
+        subquery: Select[Any],
+        model: type[ModelT],
+        rel_prop: "RelationshipProperty[Any]",
+    ) -> Select[Any]:
+        """Add join condition for one-to-many or many-to-one relationship.
+
+        Args:
+            subquery: Subquery to modify
+            model: Parent model class
+            rel_prop: SQLAlchemy relationship property
+
+        Returns:
+            Select[Any]: Modified subquery with join condition
+        """
+        # Use the relationship's join condition directly
+        join_condition = rel_prop.primaryjoin
+
+        # The primaryjoin already contains the correlation references
+        # which will be handled by correlate() in _build_exists_subquery
+        return subquery.where(join_condition)
+
+    def _add_m2m_join_condition(
+        self,
+        subquery: Select[Any],
+        model: type[ModelT],
+        rel_prop: "RelationshipProperty[Any]",
+    ) -> Select[Any]:
+        """Add join condition for many-to-many relationship through secondary table.
+
+        Args:
+            subquery: Subquery to modify
+            model: Parent model class
+            rel_prop: SQLAlchemy relationship property
+
+        Returns:
+            Select[Any]: Modified subquery with join conditions
+
+        Raises:
+            ValueError: If secondary table is None
+        """
+        secondary_table = rel_prop.secondary
+        if secondary_table is None:
+            msg = "Expected secondary table but found None"
+            raise ValueError(msg)
+
+        # Many-to-many needs two join conditions:
+        # 1. related_model -> secondary (secondaryjoin)
+        # 2. secondary -> parent_model (primaryjoin)
+
+        # Join related model to secondary table
+        # Note: For many-to-many relationships, both secondaryjoin and primaryjoin
+        # are always set by SQLAlchemy (either explicitly or auto-inferred)
+        # We use explicit None comparison pattern for clarity
+        secondaryjoin = rel_prop.secondaryjoin
+        if secondaryjoin is not None:
+            subquery = subquery.where(secondaryjoin)
+
+        # Join secondary table to parent model (will be correlated)
+        # primaryjoin is always present for relationships
+        return subquery.where(rel_prop.primaryjoin)
+
+    def _build_join_query(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+        rel_prop: "RelationshipProperty[Any]",
+    ) -> StatementTypeT:
+        """Build JOIN-based query (alternative to EXISTS).
+
+        Args:
+            statement: SQLAlchemy statement to modify
+            model: Parent model class
+            rel_prop: SQLAlchemy relationship property
+
+        Returns:
+            StatementTypeT: Modified statement with JOIN
+
+        Note:
+            This is a future enhancement for cases where JOIN
+            might be more efficient than EXISTS.
+        """
+        # Only support SELECT statements for JOIN pattern
+        if not isinstance(statement, Select):
+            return statement
+
+        related_model = rel_prop.mapper.class_
+
+        # Add JOIN (statement is verified to be Select here)
+        joined_stmt = statement.join(rel_prop.entity)
+
+        # Apply filters
+        for filter_ in self.filters:
+            if isinstance(filter_, ColumnElement):
+                joined_stmt = joined_stmt.where(filter_)
+            else:
+                joined_stmt = filter_.append_to_statement(joined_stmt, related_model)
+
+        # Add DISTINCT to avoid duplicates and return
+        return joined_stmt.distinct()
+
+    def append_to_statement(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+    ) -> StatementTypeT:
+        """Apply relationship filter to statement.
+
+        Args:
+            statement: SQLAlchemy statement to modify
+            model: Parent model class
+
+        Returns:
+            StatementTypeT: Modified statement with relationship filter applied
+
+        Raises:
+            ValueError: If relationship not found on model
+        """
+        rel_prop = self._get_relationship_property(model)
+
+        if self.use_exists:
+            # EXISTS pattern (default, more efficient)
+            exists_clause = self._build_exists_subquery(model, rel_prop)
+            return cast("StatementTypeT", statement.where(exists_clause))
+
+        # JOIN pattern (for future use cases)
+        return self._build_join_query(statement, model, rel_prop)
+
+
+@dataclass
 class FilterGroup(StatementFilter):
     """A group of filters combined with a logical operator.
 
@@ -1144,6 +1454,7 @@ class MultiFilter(StatementFilter):
         "comparison": ComparisonFilter,
         "exists": ExistsFilter,
         "not_exists": NotExistsFilter,
+        "relationship": RelationshipFilter,
     }
 
     _logical_map: ClassVar[LogicalOperatorMap] = {
@@ -1241,5 +1552,6 @@ FilterTypes: TypeAlias = Union[
     ComparisonFilter,
     MultiFilter,
     FilterGroup,
+    RelationshipFilter,
 ]
 """Aggregate type alias of the types supported for collection filtering."""
