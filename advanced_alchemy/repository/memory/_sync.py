@@ -173,13 +173,13 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
             return (pk_value,)
 
         if isinstance(pk_value, tuple):
-            return pk_value
+            return cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
         if isinstance(pk_value, dict):
             pk_dict = cast("dict[str, Any]", pk_value)
             return tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names)
 
         # Scalar passed for composite PK - error
-        pk_type_name = type(pk_value).__name__
+        pk_type_name: str = type(pk_value).__name__
         msg = (
             f"Composite primary key for {self.model_type.__name__} requires "
             f"tuple or dict, got {pk_type_name}: {pk_value!r}"

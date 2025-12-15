@@ -762,11 +762,16 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         # Single primary key - accept scalar value only
         if len(pk_columns) == 1:
-            if isinstance(pk_value, (tuple, dict)):
-                pk_type_name = type(pk_value).__name__
+            if isinstance(pk_value, tuple):
                 msg = (
                     f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
-                    f"Expected a scalar value, got {pk_type_name}: {pk_value!r}"
+                    f"Expected a scalar value, got tuple: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            if isinstance(pk_value, dict):
+                msg = (
+                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Expected a scalar value, got dict: {pk_value!r}"
                 )
                 raise ValueError(msg)
             single_pk_result: ColumnElement[bool] = pk_columns[0] == pk_value
@@ -775,7 +780,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         # Composite primary key - require tuple or dict
         if isinstance(pk_value, tuple):
             # Tuple format: values must match column order
-            pk_tuple: tuple[Any, ...] = pk_value
+            pk_tuple = cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
             if len(pk_tuple) != len(pk_columns):
                 msg = (
                     f"Composite primary key for {self.model_type.__name__} has "
@@ -884,9 +889,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 pk_dict = cast("dict[str, Any]", pk_value)
                 normalized.append(tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names))
             elif isinstance(pk_value, tuple):
-                normalized.append(pk_value)
+                normalized.append(cast("tuple[Any, ...]", pk_value))  # type: ignore[redundant-cast]
             else:
-                pk_type_name = type(pk_value).__name__
+                pk_type_name: str = type(pk_value).__name__
                 msg = (
                     f"Composite primary key for {self.model_type.__name__} requires "
                     f"tuple or dict, got {pk_type_name}: {pk_value!r}"
