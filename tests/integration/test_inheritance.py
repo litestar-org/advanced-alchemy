@@ -7,17 +7,14 @@ This module tests all three SQLAlchemy inheritance patterns:
 """
 
 import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Optional
 
 import pytest
 from sqlalchemy import ForeignKey, MetaData, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from advanced_alchemy import base
-
-if TYPE_CHECKING:
-    pass
-
 
 # ============================================================================
 # Single Table Inheritance (STI) Tests
@@ -117,7 +114,7 @@ def test_sti_multi_level() -> None:
 
 @pytest.mark.integration
 @pytest.mark.sqlite
-def test_sti_crud_operations(session: Session, sqlite_engine: Any) -> None:
+def test_sti_crud_operations(sqlite_engine: Engine) -> None:
     """STI: CRUD operations work correctly with polymorphic models."""
     from sqlalchemy.orm import Session as SessionType
 
@@ -242,7 +239,7 @@ def test_jti_multiple_children() -> None:
 
 @pytest.mark.integration
 @pytest.mark.sqlite
-def test_jti_crud_operations(session: Session, sqlite_engine: Any) -> None:
+def test_jti_crud_operations(sqlite_engine: Engine) -> None:
     """JTI: CRUD operations with joined tables."""
     from sqlalchemy.orm import Session as SessionType
 
@@ -356,7 +353,7 @@ def test_cti_multiple_concrete_classes() -> None:
 
 @pytest.mark.integration
 @pytest.mark.sqlite
-def test_cti_crud_operations(session: Session, sqlite_engine: Any) -> None:
+def test_cti_crud_operations(sqlite_engine: Engine) -> None:
     """CTI: CRUD operations with concrete tables."""
     from sqlalchemy.orm import Session as SessionType
 
@@ -489,6 +486,10 @@ def test_no_inheritance_generates_tablename() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.filterwarnings(
+    "ignore:Mapper\\[Manager\\(employee_no_poly_id\\)\\] does not indicate a 'polymorphic_identity'.*:"
+    "sqlalchemy.exc.SAWarning"
+)
 def test_sti_without_polymorphic_identity_on_child() -> None:
     """STI child without explicit polymorphic_identity still uses parent table."""
     test_metadata = MetaData()

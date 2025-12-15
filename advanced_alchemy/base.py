@@ -3,7 +3,7 @@
 import contextlib
 import datetime
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, cast, runtime_checkable
 from uuid import UUID
 
@@ -216,64 +216,42 @@ class CommonTableAttributes(BasicAttributes):
         they share the parent's table. This hook enforces that rule.
 
         The detection logic identifies STI children by checking:
-        1. Class has ``polymorphic_identity`` in ``__mapper_args__`` (explicit STI child marker)
+        1. Class doesn't explicitly define ``__tablename__`` in its own ``__dict__``
         2. AND doesn't have ``concrete=True`` (which would make it CTI)
-        3. AND doesn't have ``polymorphic_on`` itself (which would make it a base)
-        4. AND doesn't explicitly define ``__tablename__`` in its own ``__dict__``
+        3. AND doesn't define ``polymorphic_on`` in its own ``__mapper_args__`` (which would make it a base)
+        4. AND inherits from a parent that defines ``polymorphic_on`` in ``__mapper_args__`` (STI hierarchy)
 
-        For children without ``polymorphic_identity`` but with a parent that has
-        ``polymorphic_on``, SQLAlchemy treats them as abstract intermediate classes
-        and will issue a warning. We don't modify ``__tablename__`` for these cases.
+        For intermediate classes without ``polymorphic_identity`` but with a parent that has
+        ``polymorphic_on``, SQLAlchemy can emit a warning. When an intermediate class should
+        not be instantiated, set ``polymorphic_abstract=True`` in ``__mapper_args__`` or mark it
+        with ``__abstract__ = True``.
 
         This allows both usage patterns:
         1. Auto-generated names (don't set ``__tablename__`` on parent)
         2. Explicit names (set ``__tablename__`` on parent, STI still works)
         """
-        # IMPORTANT: Modify the class BEFORE calling super().__init_subclass__()
-        # because super() triggers SQLAlchemy's declarative processing
-        mapper_args = getattr(cls, "__mapper_args__", {})
-
-        # Skip if this class explicitly defines its own __tablename__
         if "__tablename__" in cls.__dict__:
             super().__init_subclass__(**kwargs)
             return
 
-        # Skip if this is CTI (concrete table inheritance)
-        if mapper_args.get("concrete", False):
+        cls_dict = cast("Mapping[str, Any]", cls.__dict__)
+        own_mapper_args = cls_dict.get("__mapper_args__")
+        own_mapper_args_dict = cast("dict[str, Any]", own_mapper_args) if isinstance(own_mapper_args, dict) else {}
+
+        if own_mapper_args_dict.get("concrete", False):
             super().__init_subclass__(**kwargs)
             return
 
-        # Check if this class might be an STI child
-        # An STI child either has polymorphic_identity in its own __mapper_args__,
-        # or inherits from a parent with polymorphic_on
-        is_potential_sti_child = False
+        if "polymorphic_on" in own_mapper_args_dict:
+            super().__init_subclass__(**kwargs)
+            return
 
-        # Check if THIS class (not inherited) defines polymorphic_on
-        # If it does, it's a base class, not a child
-        if "__mapper_args__" in cls.__dict__:
-            own_mapper_args = cls.__dict__["__mapper_args__"]
-            if "polymorphic_on" in own_mapper_args:
-                # This is a base class, not a child - skip
-                super().__init_subclass__(**kwargs)
-                return
-
-        # Check if any parent has polymorphic_on (indicates we're in an STI hierarchy)
         for parent in cls.__mro__[1:]:
-            if not hasattr(parent, "__mapper_args__"):
-                continue
-            parent_mapper_args = getattr(parent, "__mapper_args__", {})
-            if "polymorphic_on" in parent_mapper_args:
-                # We're inheriting from a polymorphic base, so we're an STI child
-                is_potential_sti_child = True
+            parent_mapper_args = getattr(parent, "__mapper_args__", None)
+            if isinstance(parent_mapper_args, dict) and "polymorphic_on" in parent_mapper_args:
+                cls.__tablename__ = None  # type: ignore[misc]
                 break
 
-        if is_potential_sti_child and "__tablename__" not in cls.__dict__:
-            # For STI children that inherited an explicit __tablename__ from a parent,
-            # we need to explicitly set it to None so SQLAlchemy knows to use the parent's table.
-            # This overrides the inherited string value.
-            cls.__tablename__ = None  # type: ignore[misc]
-
-        # Now call super() which triggers SQLAlchemy's declarative system
         super().__init_subclass__(**kwargs)
 
     if TYPE_CHECKING:
@@ -359,40 +337,20 @@ class CommonTableAttributes(BasicAttributes):
                         __tablename__ = "manager"  # Independent table
                         __mapper_args__ = {"concrete": True}
             """
-            # Check if class explicitly defines __tablename__ in its own __dict__
-            if "__tablename__" in cls.__dict__:
-                value = cls.__dict__["__tablename__"]
-                # If explicitly set to None (e.g., by __init_subclass__ for STI), return None
-                if value is None:
-                    return None
-                return value
+            cls_dict = cast("Mapping[str, Any]", cls.__dict__)
+            if "__tablename__" in cls_dict:
+                return cast("Optional[str]", cls_dict["__tablename__"])
 
-            # Check if this is an STI child class that needs auto-detection
-            # This handles cases where the parent didn't explicitly set __tablename__
             mapper_args = getattr(cls, "__mapper_args__", {})
+            mapper_args_dict = cast("dict[str, Any]", mapper_args) if isinstance(mapper_args, dict) else {}
+            if mapper_args_dict.get("concrete", False) or "polymorphic_on" in mapper_args_dict:
+                return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
-            # Skip STI detection if this class defines polymorphic_on (it's a base, not a child)
-            if "polymorphic_on" not in mapper_args:
-                is_sti_child = False
-
-                # Check explicit STI marker
-                if "polymorphic_identity" in mapper_args:
-                    is_sti_child = True
-                else:
-                    # Check if any parent has polymorphic_on (indicates STI hierarchy)
-                    for parent in cls.__mro__[1:]:
-                        if not hasattr(parent, "__mapper_args__"):
-                            continue
-                        parent_mapper_args = getattr(parent, "__mapper_args__", {})
-                        if "polymorphic_on" in parent_mapper_args:
-                            is_sti_child = True
-                            break
-
-                if is_sti_child:
-                    # This is an STI child - return None to use parent's table
+            for parent in cls.__mro__[1:]:
+                parent_mapper_args = getattr(parent, "__mapper_args__", None)
+                if isinstance(parent_mapper_args, dict) and "polymorphic_on" in parent_mapper_args:
                     return None
 
-            # Generate table name from class name using snake_case conversion
             return table_name_regexp.sub(r"_\1", cls.__name__).lower()
 
 

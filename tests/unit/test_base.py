@@ -58,11 +58,11 @@ def test_identity_primary_key_generates_identity_ddl() -> None:
     class TestMixin(IdentityPrimaryKey):
         pass
 
-    class TestModel(TestMixin, BigIntBase):
+    class IdentityPrimaryKeyModel(TestMixin, BigIntBase):
         __tablename__ = "test_identity"
 
     # Get the CREATE TABLE statement
-    create_stmt = CreateTable(cast(Table, TestModel.__table__))
+    create_stmt = CreateTable(cast(Table, IdentityPrimaryKeyModel.__table__))
 
     # Test with PostgreSQL dialect
     pg_ddl = str(create_stmt.compile(dialect=postgresql.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
@@ -78,11 +78,11 @@ def test_identity_audit_base_generates_identity_ddl() -> None:
     """Test that IdentityAuditBase generates proper IDENTITY DDL for PostgreSQL."""
     from advanced_alchemy.base import IdentityAuditBase
 
-    class TestModel(IdentityAuditBase):
+    class IdentityAuditBaseModel(IdentityAuditBase):
         __tablename__ = "test_identity_audit"
 
     # Get the CREATE TABLE statement
-    create_stmt = CreateTable(cast(Table, TestModel.__table__))
+    create_stmt = CreateTable(cast(Table, IdentityAuditBaseModel.__table__))
 
     # Test with PostgreSQL dialect
     pg_ddl = str(create_stmt.compile(dialect=postgresql.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
@@ -101,11 +101,11 @@ def test_bigint_primary_key_still_uses_sequence() -> None:
     class TestMixin(BigIntPrimaryKey):
         pass
 
-    class TestModel(TestMixin, BigIntBase):
+    class BigIntPrimaryKeyModel(TestMixin, BigIntBase):
         __tablename__ = "test_bigint"
 
     # Get the CREATE TABLE statement
-    create_stmt = CreateTable(cast(Table, TestModel.__table__))
+    create_stmt = CreateTable(cast(Table, BigIntPrimaryKeyModel.__table__))
 
     # Test with PostgreSQL dialect
     pg_ddl = str(create_stmt.compile(dialect=postgresql.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
@@ -114,18 +114,18 @@ def test_bigint_primary_key_still_uses_sequence() -> None:
     assert "GENERATED" not in pg_ddl
     assert "IDENTITY" not in pg_ddl.upper()
     # The sequence is defined on the column but rendered separately
-    assert TestModel.__table__.c.id.default is not None
-    assert TestModel.__table__.c.id.default.name == "test_bigint_id_seq"
+    assert BigIntPrimaryKeyModel.__table__.c.id.default is not None
+    assert BigIntPrimaryKeyModel.__table__.c.id.default.name == "test_bigint_id_seq"
 
 
 def test_identity_ddl_for_oracle() -> None:
     """Test Identity DDL generation for Oracle."""
     from advanced_alchemy.base import IdentityAuditBase
 
-    class TestModel(IdentityAuditBase):
+    class OracleIdentityAuditBaseModel(IdentityAuditBase):
         __tablename__ = "test_oracle"
 
-    create_stmt = CreateTable(cast(Table, TestModel.__table__))
+    create_stmt = CreateTable(cast(Table, OracleIdentityAuditBaseModel.__table__))
     oracle_ddl = str(create_stmt.compile(dialect=oracle.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
 
     # Oracle should generate IDENTITY
@@ -136,10 +136,10 @@ def test_identity_ddl_for_mssql() -> None:
     """Test Identity DDL generation for SQL Server."""
     from advanced_alchemy.base import IdentityAuditBase
 
-    class TestModel(IdentityAuditBase):
+    class MSSQLIdentityAuditBaseModel(IdentityAuditBase):
         __tablename__ = "test_mssql"
 
-    create_stmt = CreateTable(cast(Table, TestModel.__table__))
+    create_stmt = CreateTable(cast(Table, MSSQLIdentityAuditBaseModel.__table__))
     mssql_ddl = str(create_stmt.compile(dialect=mssql.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
 
     # SQL Server should generate IDENTITY
@@ -150,12 +150,12 @@ def test_identity_works_with_sqlite() -> None:
     """Test that Identity columns work with SQLite (fallback to autoincrement)."""
     from advanced_alchemy.base import IdentityAuditBase
 
-    class TestModel(IdentityAuditBase):
+    class SQLiteIdentityAuditBaseModel(IdentityAuditBase):
         __tablename__ = "test_sqlite"
 
     # Create an in-memory SQLite engine
     engine = create_engine("sqlite:///:memory:")
-    cast(Table, TestModel.__table__).create(engine)
+    cast(Table, SQLiteIdentityAuditBaseModel.__table__).create(engine)
 
     # Should not raise any errors
     assert True  # If we get here, it worked
