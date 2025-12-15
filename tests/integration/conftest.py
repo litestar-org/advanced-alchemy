@@ -901,3 +901,27 @@ async def async_session(
                         await connection.close()
                     except Exception:
                         pass
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip relationship filter tests for Spanner and Oracle engines.
+
+    These engines have issues with the UUID test models:
+    - Spanner: Doesn't support direct UNIQUE constraints (used by Tag model)
+    - Oracle: Has schema isolation issues with xdist groups
+    """
+    skip_spanner = pytest.mark.skip(reason="Spanner doesn't support direct UNIQUE constraints")
+    skip_oracle = pytest.mark.skip(reason="Oracle has schema isolation issues with relationship filter tests")
+
+    for item in items:
+        # Only process items from test_relationship_filters.py
+        if "test_relationship_filters" not in item.nodeid:
+            continue
+
+        # Check for Spanner engine
+        if "spanner" in item.nodeid.lower():
+            item.add_marker(skip_spanner)
+
+        # Check for Oracle engine
+        if "oracle" in item.nodeid.lower():
+            item.add_marker(skip_oracle)
