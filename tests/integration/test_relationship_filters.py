@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
 from advanced_alchemy.filters import CollectionFilter, ComparisonFilter, MultiFilter, RelationshipFilter
 
@@ -141,6 +141,51 @@ def test_relationship_filter_many_to_one_sync(uuid_test_session_sync: tuple[Sess
 
     books = session.execute(stmt).scalars().all()
     assert {b.title for b in books} == {"The Mysterious Affair at Styles", "Murder on the Orient Express"}
+
+
+def test_relationship_filter_invalid_relationship_raises(
+    uuid_test_session_sync: tuple[Session, dict[str, type]],
+) -> None:
+    _session, uuid_models = uuid_test_session_sync
+    item_model: Any = uuid_models["item"]
+
+    stmt = select(item_model)
+    filter_ = RelationshipFilter(relationship="does_not_exist", filters=[])
+
+    with pytest.raises(ValueError, match="Relationship 'does_not_exist' not found on model"):
+        filter_.append_to_statement(stmt, item_model)
+
+
+def test_relationship_filter_join_negate_raises(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
+    _session, uuid_models = uuid_test_session_sync
+    book_model: Any = uuid_models["book"]
+
+    stmt = select(book_model)
+    filter_ = RelationshipFilter(relationship="author", filters=[], use_exists=False, negate=True)
+
+    with pytest.raises(ValueError, match="JOIN-based relationship filters do not support negate=True"):
+        filter_.append_to_statement(stmt, book_model)
+
+
+def test_collection_filter_relationship_composite_pk_raises() -> None:
+    class Base(DeclarativeBase):
+        pass
+
+    class Parent(Base):
+        __tablename__ = "rel_filter_parent"
+
+        id: Mapped[int] = mapped_column(primary_key=True)
+        children: Mapped[list[Child]] = relationship(back_populates="parent")
+
+    class Child(Base):
+        __tablename__ = "rel_filter_child"
+
+        parent_id: Mapped[int] = mapped_column(ForeignKey("rel_filter_parent.id"), primary_key=True)
+        seq: Mapped[int] = mapped_column(primary_key=True)
+        parent: Mapped[Parent] = relationship(back_populates="children")
+
+    with pytest.raises(ValueError, match="composite primary keys"):
+        CollectionFilter(field_name="children", values=[1]).append_to_statement(select(Parent), Parent)
 
 
 @pytest.mark.asyncio
