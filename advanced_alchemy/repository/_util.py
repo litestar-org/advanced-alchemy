@@ -12,6 +12,7 @@ from sqlalchemy.orm import (
     InstrumentedAttribute,
     MapperProperty,
     RelationshipProperty,
+    class_mapper,
     joinedload,
     lazyload,
     selectinload,
@@ -88,22 +89,95 @@ def get_instrumented_attr(
     return key
 
 
+def _convert_relationship_value(
+    value: Any,
+    related_model: type[ModelT],
+    is_collection: bool,
+) -> Any:
+    """Convert a relationship value, handling dicts, lists, and instances.
+
+    Args:
+        value: The value to convert (dict, list, model instance, or None).
+        related_model: The SQLAlchemy model class for the relationship.
+        is_collection: Whether this is a collection relationship (uselist=True).
+
+    Returns:
+        Converted value appropriate for the relationship type.
+    """
+    if value is None:
+        return None
+
+    if is_collection:
+        # One-to-many or many-to-many: expect a list
+        if not isinstance(value, (list, tuple)):
+            # Single item provided for collection - wrap in list
+            value = [value]
+        return [
+            model_from_dict(related_model, **item) if isinstance(item, dict) else item
+            for item in value  # pyright: ignore[reportUnknownVariableType]
+        ]
+    # One-to-one or many-to-one: expect single value
+    if isinstance(value, dict):
+        return model_from_dict(related_model, **value)
+    return value
+
+
 def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
     """Create an ORM model instance from a dictionary of attributes.
+
+    This function recursively converts nested dictionaries into their
+    corresponding SQLAlchemy model instances for relationship attributes.
 
     Args:
         model: The SQLAlchemy model class to instantiate.
         **kwargs: Keyword arguments containing model attribute values.
+            For relationship attributes, values can be:
+            - None: Sets the relationship to None
+            - dict: Recursively converted to the related model instance
+            - list[dict]: Each dict converted to related model instances
+            - Model instance: Passed through unchanged
 
     Returns:
         ModelT: A new instance of the model populated with the provided values.
+
+    Example:
+        Basic usage with nested relationships::
+
+            data = {
+                "name": "John Doe",
+                "profile": {"bio": "Developer"},
+                "addresses": [
+                    {"street": "123 Main St"},
+                    {"street": "456 Oak Ave"},
+                ],
+            }
+            user = model_from_dict(User, **data)
+            # user.profile is a Profile instance
+            # user.addresses is a list of Address instances
     """
-    data = {
-        attr_name: kwargs[attr_name]
-        for attr_name in model.__mapper__.attrs.keys()  # noqa: SIM118  # pyright: ignore[reportUnknownMemberType]
-        if attr_name in kwargs
-    }
-    return model(**data)
+    mapper = class_mapper(model)
+    converted_data: dict[str, Any] = {}
+
+    for attr_name in mapper.attrs.keys():  # noqa: SIM118
+        if attr_name not in kwargs:
+            continue
+
+        value = kwargs[attr_name]
+        attr = mapper.attrs[attr_name]
+
+        # Check if this attribute is a relationship
+        if isinstance(attr, RelationshipProperty):
+            related_model: type[ModelT] = attr.mapper.class_
+            converted_data[attr_name] = _convert_relationship_value(
+                value=value,
+                related_model=related_model,
+                is_collection=attr.uselist or False,
+            )
+        else:
+            # Regular column attribute - pass through
+            converted_data[attr_name] = value
+
+    return model(**converted_data)
 
 
 def get_abstract_loader_options(
