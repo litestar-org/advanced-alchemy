@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.session import JoinTransactionMode
     from sqlalchemy.sql import TableClause
 
+    from advanced_alchemy.cache.config import CacheConfig
+    from advanced_alchemy.cache.manager import CacheManager
     from advanced_alchemy.utils.dataclass import EmptyType
 
 __all__ = (
@@ -187,6 +189,35 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     - ``False``: Log warnings on file operation failures, don't raise exceptions
     - ``True`` (default): Raise exceptions on file operation failures
     """
+    cache_config: "Optional[CacheConfig]" = None
+    """Optional cache configuration for repository caching.
+
+    When provided, a :class:`CacheManager <advanced_alchemy.cache.CacheManager>` is created
+    and made available via ``session.info["cache_manager"]``. Repositories will automatically
+    use this cache manager if no explicit one is passed.
+
+    Example::
+
+        from advanced_alchemy.cache import CacheConfig
+        from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+        config = SQLAlchemyAsyncConfig(
+            connection_string="postgresql+asyncpg://...",
+            cache_config=CacheConfig(
+                backend="dogpile.cache.redis",
+                arguments={"host": "localhost", "port": 6379},
+            ),
+        )
+    """
+    enable_cache_listener: bool = True
+    """Enable cache invalidation listener.
+
+    When ``True`` (default) and ``cache_config`` is provided, the cache invalidation
+    listener is automatically registered. This ensures cache entries are invalidated
+    after successful commits and pending invalidations are discarded on rollback.
+    """
+    _cache_manager: "Optional[CacheManager]" = field(init=False, default=None, repr=False)
+    """Internal cache manager instance created from cache_config."""
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
@@ -214,12 +245,36 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
             setup_file_object_listeners()
 
+        # Initialize cache manager if cache_config is provided
+        if self.cache_config is not None:
+            from advanced_alchemy.cache.manager import CacheManager
+
+            self._cache_manager = CacheManager(self.cache_config)
+
+            if self.enable_cache_listener:
+                from advanced_alchemy._listeners import setup_cache_listeners
+
+                setup_cache_listeners()
+
         # Store file_object_raise_on_error in session_config.info
         # Ensure session_config.info is a dict (convert from Empty if needed)
         if self.session_config.info is Empty:
             self.session_config.info = {}
         if isinstance(self.session_config.info, dict):
             self.session_config.info["file_object_raise_on_error"] = self.file_object_raise_on_error
+            # Store cache_manager in session.info so repositories can auto-retrieve it
+            if self._cache_manager is not None:
+                self.session_config.info["cache_manager"] = self._cache_manager
+
+    @property
+    def cache_manager(self) -> "Optional[CacheManager]":
+        """Return the cache manager if configured.
+
+        Returns:
+            The :class:`CacheManager <advanced_alchemy.cache.CacheManager>` instance
+            or ``None`` if caching is not configured.
+        """
+        return self._cache_manager
 
     def __hash__(self) -> int:  # pragma: no cover
         return hash(

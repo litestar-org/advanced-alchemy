@@ -9,7 +9,7 @@ should be a SQLAlchemy model.
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, ClassVar, Generic, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Optional, Union, cast
 
 from sqlalchemy import Select
 from sqlalchemy import inspect as sa_inspect
@@ -40,6 +40,9 @@ from advanced_alchemy.service.typing import (
     is_pydantic_model,
 )
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
+
+if TYPE_CHECKING:
+    from advanced_alchemy.cache import CacheManager
 
 
 class SQLAlchemySyncQueryService(ResultConverter):
@@ -120,6 +123,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        cache_manager: Optional["CacheManager"] = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -137,6 +141,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            cache_manager: Optional cache manager for caching query results.
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         load = load if load is not None else self.loader_options
@@ -157,6 +162,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options=execution_options,
             uniquify=self._get_uniquify(uniquify),
             count_with_window_function=count_with_window_function,
+            cache_manager=cache_manager,
             **repo_kwargs,
         )
 
@@ -492,6 +498,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
         """List of records and total count returned by query.
@@ -507,6 +514,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            use_cache: Whether to use the repository cache for this query.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -524,6 +532,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                use_cache=use_cache,
                 **kwargs,
             ),
         )
@@ -586,6 +595,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -600,6 +610,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            use_cache: Whether to use the repository cache for this query.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -616,6 +627,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                use_cache=use_cache,
                 **kwargs,
             ),
         )

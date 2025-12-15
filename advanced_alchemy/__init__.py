@@ -1,6 +1,7 @@
 from advanced_alchemy import (
     alembic,
     base,
+    cache,
     cli,
     config,
     exceptions,
@@ -16,6 +17,7 @@ from advanced_alchemy import (
 __all__ = (
     "alembic",
     "base",
+    "cache",
     "cli",
     "config",
     "exceptions",
