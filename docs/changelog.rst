@@ -3,24 +3,6 @@
 1.x Changelog
 =============
 
-.. changelog:: 1.8.3
-    :date: unreleased
-
-    .. change:: fix nested dict conversion in model_from_dict
-        :type: bugfix
-        :issue: 556
-
-        Fixed regression where service.create() failed when passing nested
-        dictionaries for relationship data. The model_from_dict() function
-        now recursively converts nested dicts to SQLAlchemy model instances
-        for relationship attributes.
-
-        - Detect relationships using SQLAlchemy mapper inspection
-        - Recursively convert nested dicts for one-to-one relationships
-        - Convert list of dicts for one-to-many/many-to-many relationships
-        - Handle None, empty lists, and mixed lists correctly
-        - Preserve backward compatibility for non-nested usage
-
 .. changelog:: 1.8.2
     :date: 2025-12-12
 
