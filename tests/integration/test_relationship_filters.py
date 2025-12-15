@@ -58,6 +58,10 @@ def test_relationship_filter_many_to_many_sync(uuid_test_session_sync: tuple[Ses
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -78,6 +82,10 @@ def test_relationship_filter_negate_many_to_many_sync(uuid_test_session_sync: tu
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -103,6 +111,10 @@ def test_collection_filter_relationship_delegates_to_relationship_filter_sync(
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -121,6 +133,10 @@ def test_multifilter_relationship_filter_sync(uuid_test_session_sync: tuple[Sess
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
@@ -150,6 +166,10 @@ def test_relationship_filter_many_to_one_sync(uuid_test_session_sync: tuple[Sess
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     author_model: Any = uuid_models["author"]
     book_model: Any = uuid_models["book"]
 
@@ -171,7 +191,12 @@ def test_relationship_filter_many_to_one_sync(uuid_test_session_sync: tuple[Sess
 def test_relationship_filter_invalid_relationship_raises(
     uuid_test_session_sync: tuple[Session, dict[str, type]],
 ) -> None:
-    _session, uuid_models = uuid_test_session_sync
+    session, uuid_models = uuid_test_session_sync
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     item_model: Any = uuid_models["item"]
 
     stmt = select(item_model)
@@ -182,7 +207,12 @@ def test_relationship_filter_invalid_relationship_raises(
 
 
 def test_relationship_filter_join_negate_raises(uuid_test_session_sync: tuple[Session, dict[str, type]]) -> None:
-    _session, uuid_models = uuid_test_session_sync
+    session, uuid_models = uuid_test_session_sync
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     book_model: Any = uuid_models["book"]
 
     stmt = select(book_model)
@@ -223,6 +253,10 @@ async def test_relationship_filter_many_to_many_async(
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
 
@@ -246,6 +280,10 @@ async def test_multifilter_relationship_filter_async(
     # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
+
+    # Skip Spanner - doesn't support direct UNIQUE constraints
+    if getattr(session.bind.dialect, "name", "") == "spanner":
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
 
     item_model: Any = uuid_models["item"]
     tag_model: Any = uuid_models["tag"]
