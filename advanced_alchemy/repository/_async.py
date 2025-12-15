@@ -762,37 +762,40 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         # Single primary key - accept scalar value only
         if len(pk_columns) == 1:
-            if isinstance(pk_value, (tuple, dict)) and not isinstance(pk_value, str):  # type: ignore[unreachable]
+            if isinstance(pk_value, (tuple, dict)) and not isinstance(pk_value, str):
+                pk_type_name = type(pk_value).__name__
                 msg = (
                     f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
-                    f"Expected a scalar value, got {type(pk_value).__name__}: {pk_value!r}"
+                    f"Expected a scalar value, got {pk_type_name}: {pk_value!r}"
                 )
                 raise ValueError(msg)
             return cast("ColumnElement[bool]", pk_columns[0] == pk_value)
 
         # Composite primary key - require tuple or dict
-        if isinstance(pk_value, tuple) and not isinstance(pk_value, str):  # type: ignore[unreachable]
+        if isinstance(pk_value, tuple) and not isinstance(pk_value, str):
             # Tuple format: values must match column order
-            if len(pk_value) != len(pk_columns):
+            pk_tuple: tuple[Any, ...] = pk_value
+            if len(pk_tuple) != len(pk_columns):
                 msg = (
                     f"Composite primary key for {self.model_type.__name__} has "
                     f"{len(pk_columns)} columns {list(pk_attr_names)}, "
-                    f"but {len(pk_value)} values provided: {pk_value!r}"
+                    f"but {len(pk_tuple)} values provided: {pk_tuple!r}"
                 )
                 raise ValueError(msg)
             # Validate no None values in PK
-            for i, val in enumerate(pk_value):
+            for i, val in enumerate(pk_tuple):
                 if val is None:
                     msg = (
                         f"Primary key value for '{pk_attr_names[i]}' cannot be None "
                         f"in composite key for {self.model_type.__name__}"
                     )
                     raise ValueError(msg)
-            return and_(*[col == val for col, val in zip(pk_columns, pk_value)])
+            return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
 
         if isinstance(pk_value, dict):
             # Dict format: keys must be ORM attribute names
-            provided_keys = set(pk_value.keys())
+            pk_dict = cast("dict[str, Any]", pk_value)
+            provided_keys = set(pk_dict.keys())
             required_keys = set(pk_attr_names)
 
             missing_keys = required_keys - provided_keys
@@ -805,7 +808,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
             # Validate no None values in PK
             for attr_name in pk_attr_names:
-                if pk_value[attr_name] is None:
+                if pk_dict[attr_name] is None:
                     msg = (
                         f"Primary key value for '{attr_name}' cannot be None "
                         f"in composite key for {self.model_type.__name__}"
@@ -813,7 +816,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                     raise ValueError(msg)
 
             # Build filter using attribute names
-            return and_(*[col == pk_value[attr_name] for col, attr_name in zip(pk_columns, pk_attr_names)])
+            return and_(*[col == pk_dict[attr_name] for col, attr_name in zip(pk_columns, pk_attr_names)])
 
         # Scalar passed for composite PK - error
         msg = (
@@ -877,13 +880,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         normalized: list[tuple[Any, ...]] = []
         for pk_value in item_ids:
             if isinstance(pk_value, dict):
-                normalized.append(tuple(pk_value[attr_name] for attr_name in self._pk_attr_names))
+                pk_dict = cast("dict[str, Any]", pk_value)
+                normalized.append(tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names))
             elif isinstance(pk_value, tuple):
                 normalized.append(pk_value)
             else:
+                pk_type_name = type(pk_value).__name__
                 msg = (
                     f"Composite primary key for {self.model_type.__name__} requires "
-                    f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}"
+                    f"tuple or dict, got {pk_type_name}: {pk_value!r}"
                 )
                 raise TypeError(msg)
         return normalized
@@ -1164,10 +1169,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                     pk_filter = tuple_(*self._pk_columns).in_(chunk)
 
                     if self._dialect.delete_executemany_returning:
-                        returning_delete_stmt = cast(
-                            "ReturningDelete[tuple[ModelT]]",
-                            delete(self.model_type).where(pk_filter).returning(self.model_type),
-                        )
+                        returning_delete_stmt = delete(self.model_type).where(pk_filter).returning(self.model_type)
                         if execution_options:
                             returning_delete_stmt = returning_delete_stmt.execution_options(**execution_options)
                         instances.extend(await self.session.scalars(returning_delete_stmt))

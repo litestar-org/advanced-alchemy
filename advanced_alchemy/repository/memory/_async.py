@@ -174,12 +174,14 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         if isinstance(pk_value, tuple):
             return pk_value
         if isinstance(pk_value, dict):
-            return tuple(pk_value[attr_name] for attr_name in self._pk_attr_names)
+            pk_dict = cast("dict[str, Any]", pk_value)
+            return tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names)
 
         # Scalar passed for composite PK - error
+        pk_type_name = type(pk_value).__name__
         msg = (
             f"Composite primary key for {self.model_type.__name__} requires "
-            f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}"
+            f"tuple or dict, got {pk_type_name}: {pk_value!r}"
         )
         raise ValueError(msg)
 
@@ -193,7 +195,9 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             String key for the in-memory store.
         """
         pk_tuple = self._normalize_pk_to_tuple(pk_value)
-        return str(pk_tuple) if len(pk_tuple) > 1 else str(pk_tuple[0])
+        if len(pk_tuple) > 1:
+            return str(pk_tuple)
+        return str(pk_tuple[0]) if pk_tuple else ""
 
     def _get_store_key_from_instance(self, instance: ModelT) -> str:
         """Generate a store key from a model instance.
@@ -205,8 +209,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             String key for the in-memory store.
         """
         pk_value = self._extract_pk_value(instance)
-        if isinstance(pk_value, tuple):
-            return str(pk_value)
         return str(pk_value)
 
     @staticmethod
