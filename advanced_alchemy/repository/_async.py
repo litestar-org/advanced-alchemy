@@ -1,9 +1,12 @@
 import contextlib
+import dataclasses
 import datetime
 import decimal
+import hashlib
 import random
 import string
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -39,8 +42,10 @@ from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.elements import UnaryExpression
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 
+from advanced_alchemy._serialization import encode_json
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
 from advanced_alchemy.repository._util import (
@@ -76,6 +81,128 @@ DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
     datetime.time,
     datetime.timedelta,
 }
+
+
+def _sort_kv_by_key_str(kv: tuple[object, object]) -> str:
+    return str(kv[0])
+
+
+def _sort_normalized_value(value: Any) -> str:
+    return encode_json(_canonicalize_cache_key_value(value))
+
+
+def _normalize_cache_key_value(value: Any) -> Any:
+    """Normalize values into a deterministic JSON-serializable form.
+
+    Used for list/list_and_count cache keys.
+    """
+    if value is None or isinstance(value, (int, float, str, bool)):
+        return value
+
+    result: Any
+    if isinstance(value, bytes):
+        result = {"__bytes__": value.hex()}
+    elif isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        result = {"__datetime__": value.isoformat()}
+    elif isinstance(value, datetime.timedelta):
+        result = {"__timedelta__": value.total_seconds()}
+    elif isinstance(value, decimal.Decimal):
+        result = {"__decimal__": str(value)}
+    elif isinstance(value, set):
+        value_set = cast("set[Any]", value)  # type: ignore[redundant-cast]
+        normalized = [_normalize_cache_key_value(v) for v in value_set]
+        normalized.sort(key=_sort_normalized_value)
+        result = normalized
+    elif isinstance(value, (list, tuple)):
+        value_seq = cast("Sequence[Any]", value)
+        result = [_normalize_cache_key_value(v) for v in value_seq]
+    elif isinstance(value, dict):
+        value_dict = cast("dict[object, object]", value)
+        normalized_dict: dict[str, Any] = {}
+        for k, v in sorted(value_dict.items(), key=_sort_kv_by_key_str):
+            normalized_dict[str(k)] = _normalize_cache_key_value(v)
+        result = normalized_dict
+    elif dataclasses.is_dataclass(value) and not isinstance(value, type):
+        result = _normalize_cache_key_value(dataclasses.asdict(value))
+    elif isinstance(value, InstrumentedAttribute):
+        result = {"__attr__": value.key}
+    elif isinstance(value, ColumnElement):
+        # Safe fallback for non-dataclass expressions in ordering/kwargs.
+        value_expr = cast("ColumnElement[Any]", value)  # type: ignore[redundant-cast]
+        result = {"__sql__": str(value_expr)}
+    else:
+        result = {"__repr__": repr(value)}
+
+    return result
+
+
+def _canonicalize_cache_key_value(value: Any) -> Any:
+    """Convert dict-like objects into a stable, ordered representation."""
+    if isinstance(value, Mapping):
+        value_map = cast("Mapping[object, object]", value)
+        return [
+            [str(k), _canonicalize_cache_key_value(v)] for k, v in sorted(value_map.items(), key=_sort_kv_by_key_str)
+        ]
+    if isinstance(value, list):
+        value_list = cast("list[Any]", value)  # type: ignore[redundant-cast]
+        return [_canonicalize_cache_key_value(v) for v in value_list]
+    return value
+
+
+def _build_list_cache_key(
+    *,
+    model_name: str,
+    version_token: str,
+    method: str,
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+    kwargs: dict[str, Any],
+    order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+    execution_options: dict[str, Any],
+    uniquify: bool,
+    count_with_window_function: Optional[bool] = None,
+) -> Optional[str]:
+    """Build a stable cache key for list/list_and_count operations.
+
+    Returns None if the query specification includes non-cacheable filter
+    expressions (e.g., raw SQLAlchemy boolean expressions).
+    """
+    normalized_filters: list[dict[str, Any]] = []
+    for filter_ in filters:
+        if isinstance(filter_, ColumnElement):
+            return None
+        normalized_filters.append({"type": filter_.__class__.__name__, "data": _normalize_cache_key_value(filter_)})
+
+    normalized_order_by: Optional[list[Any]] = None
+    if order_by is not None:
+        order_items = order_by if isinstance(order_by, list) else [order_by]
+        normalized_order_by = []
+        for item in order_items:
+            if isinstance(item, UnaryExpression):
+                normalized_order_by.append({"expr": str(item)})
+            else:
+                col, desc = item
+                normalized_order_by.append({"col": _normalize_cache_key_value(col), "desc": bool(desc)})
+
+    payload: dict[str, Any] = {
+        "method": method,
+        "model": model_name,
+        "version": version_token,
+        "filters": normalized_filters,
+        "kwargs": _normalize_cache_key_value(kwargs),
+        "order_by": normalized_order_by,
+        "execution_options": _normalize_cache_key_value(execution_options),
+        "uniquify": uniquify,
+    }
+    if count_with_window_function is not None:
+        payload["count_with_window_function"] = bool(count_with_window_function)
+
+    try:
+        encoded = encode_json(_canonicalize_cache_key_value(payload)).encode("utf-8")
+    except TypeError:  # pragma: no cover
+        return None
+
+    digest = hashlib.sha256(encoded).hexdigest()
+    return f"{model_name}:{method}:{digest}"
 
 
 @runtime_checkable
@@ -347,6 +474,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]: ...
@@ -360,6 +488,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]: ...
@@ -529,6 +658,26 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             bool: The uniquify value to use.
         """
         return bool(uniquify) if uniquify is not None else self._uniquify
+
+    def _queue_cache_invalidation(self, entity_id: Any) -> None:
+        """Queue a cache invalidation for an entity.
+
+        The invalidation will be processed after the transaction commits.
+        If the transaction rolls back, the pending invalidation is discarded.
+
+        This uses the global CacheInvalidationListener which must be set up
+        via setup_cache_listeners() during application initialization.
+
+        Args:
+            entity_id: The primary key value of the entity to invalidate.
+        """
+        if self._cache_manager is not None:
+            from advanced_alchemy._listeners import get_cache_tracker
+
+            model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+            tracker = get_cache_tracker(self.session, self._cache_manager)
+            if tracker is not None:
+                tracker.add_invalidation(model_name, entity_id)
 
     def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
@@ -969,6 +1118,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         load=load,
                         execution_options=execution_options,
                         auto_expunge=auto_expunge,
+                        use_cache=False,  # Always fetch from DB for delete_where
                         **kwargs,
                     ),
                 )
@@ -983,6 +1133,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance))
             return instances
 
     async def exists(
@@ -1100,6 +1252,253 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
 
+    async def _get_uncached_impl(
+        self,
+        item_id: Any,
+        *,
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        with_for_update: ForUpdateParameter,
+    ) -> ModelT:
+        """Fetch an entity from the database without using cache."""
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
+            resolved_execution_options = self._get_execution_options(execution_options)
+            resolved_statement = self.statement if statement is None else statement
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            resolved_id_attribute = id_attribute if id_attribute is not None else self.id_attribute
+            resolved_statement = self._get_base_stmt(
+                statement=resolved_statement,
+                loader_options=loader_options,
+                execution_options=resolved_execution_options,
+            )
+            resolved_statement = self._filter_select_by_kwargs(resolved_statement, [(resolved_id_attribute, item_id)])
+            resolved_statement = self._apply_for_update_options(resolved_statement, with_for_update)
+            instance = (
+                await self._execute(resolved_statement, uniquify=loader_options_have_wildcard)
+            ).scalar_one_or_none()
+            instance = self.check_not_found(instance)
+            self._expunge(instance, auto_expunge=auto_expunge)
+            return instance
+
+    async def _get_cached_creator(
+        self,
+        model_name: str,
+        item_id: Any,
+        *,
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        with_for_update: ForUpdateParameter,
+    ) -> ModelT:
+        """Singleflight creator for get(id) caching (async)."""
+        if self._cache_manager is None:
+            return await self._get_uncached_impl(
+                item_id,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
+            )
+
+        existing = await self._cache_manager.get_entity_async(model_name, item_id, self.model_type)
+        if existing is not None:
+            return existing
+
+        instance = await self._get_uncached_impl(
+            item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+        )
+        await self._cache_manager.set_entity_async(model_name, item_id, instance)
+        return instance
+
+    async def _list_uncached_impl(
+        self,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+    ) -> list[ModelT]:
+        """Fetch a list of entities from the database without using cache."""
+        self._uniquify = self._get_uniquify(uniquify)
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
+            resolved_execution_options = self._get_execution_options(execution_options)
+            resolved_statement = self.statement if statement is None else statement
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            resolved_statement = self._get_base_stmt(
+                statement=resolved_statement,
+                loader_options=loader_options,
+                execution_options=resolved_execution_options,
+            )
+            if order_by is None:
+                order_by = self.order_by if self.order_by is not None else []
+            resolved_statement = self._apply_order_by(statement=resolved_statement, order_by=order_by)
+            resolved_statement = self._apply_filters(*filters, statement=resolved_statement)
+            resolved_statement = self._filter_select_by_kwargs(resolved_statement, kwargs)
+            result = await self._execute(resolved_statement, uniquify=loader_options_have_wildcard)
+            instances = list(result.scalars())
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+            return cast("list[ModelT]", instances)
+
+    async def _list_cached_creator(
+        self,
+        cache_key: str,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+    ) -> list[ModelT]:
+        """Singleflight creator for list caching (async)."""
+        if self._cache_manager is None:
+            return await self._list_uncached_impl(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+            )
+
+        existing = await self._cache_manager.get_list_async(cache_key, self.model_type)
+        if existing is not None:
+            return existing
+
+        instances = await self._list_uncached_impl(
+            filters=filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            kwargs=kwargs,
+            uniquify=uniquify,
+        )
+        await self._cache_manager.set_list_async(cache_key, list(instances))
+        return list(instances)
+
+    async def _list_and_count_uncached_impl(
+        self,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        count_with_window_function: bool,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+    ) -> tuple[list[ModelT], int]:
+        """Fetch a list+count payload from the database without using cache."""
+        self._uniquify = self._get_uniquify(uniquify)
+        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
+            return await self._list_and_count_basic(
+                *filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                load=load,
+                execution_options=execution_options,
+                order_by=order_by,
+                error_messages=error_messages,
+                **kwargs,
+            )
+        return await self._list_and_count_window(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            load=load,
+            execution_options=execution_options,
+            error_messages=error_messages,
+            order_by=order_by,
+            **kwargs,
+        )
+
+    async def _list_and_count_cached_creator(
+        self,
+        cache_key: str,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        count_with_window_function: bool,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+    ) -> tuple[list[ModelT], int]:
+        """Singleflight creator for list_and_count caching (async)."""
+        if self._cache_manager is None:
+            return await self._list_and_count_uncached_impl(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+            )
+
+        existing = await self._cache_manager.get_list_and_count_async(cache_key, self.model_type)
+        if existing is not None:
+            return existing
+
+        instances, count = await self._list_and_count_uncached_impl(
+            filters=filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            count_with_window_function=count_with_window_function,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            kwargs=kwargs,
+            uniquify=uniquify,
+        )
+        await self._cache_manager.set_list_and_count_async(cache_key, list(instances), count)
+        return list(instances), count
+
     async def get(
         self,
         item_id: Any,
@@ -1134,31 +1533,60 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             The retrieved instance.
         """
         self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
+        resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+
+        resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
+        resolved_id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = id_attribute
+        if isinstance(resolved_id_attribute, InstrumentedAttribute):
+            resolved_id_attribute = resolved_id_attribute.key
+
+        cache_manager = self._cache_manager
+        if (
+            use_cache
+            and cache_manager is not None
+            and bool(resolved_auto_expunge)
+            and statement is None
+            and load is None
+            and with_for_update is None
+            and (resolved_id_attribute is None or resolved_id_attribute == self.id_attribute)
+            and not self._default_loader_options
+            and not self._default_execution_options
+            and execution_options is None
         ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
-            statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            id_attribute = id_attribute if id_attribute is not None else self.id_attribute
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+            cached = await cache_manager.get_entity_async(model_name, item_id, self.model_type)
+            if cached is not None:
+                return cached
+
+            return await cache_manager.singleflight_async(
+                f"{model_name}:get:{item_id}",
+                partial(
+                    self._get_cached_creator,
+                    model_name,
+                    item_id,
+                    auto_expunge=auto_expunge,
+                    statement=statement,
+                    id_attribute=resolved_id_attribute,
+                    error_messages=resolved_error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    with_for_update=with_for_update,
+                ),
             )
-            statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
-            statement = self._apply_for_update_options(statement, with_for_update)
-            instance = (await self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
-            instance = self.check_not_found(instance)
-            self._expunge(instance, auto_expunge=auto_expunge)
-            return instance
+
+        return await self._get_uncached_impl(
+            item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            error_messages=resolved_error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+        )
 
     async def get_one(
         self,
@@ -1737,6 +2165,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
@@ -1753,7 +2182,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
-            bind_group: Optional routing group to use for the operation.
+            use_cache: Whether to use the cache for this query. Defaults to ``True``.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1763,32 +2192,84 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
         self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
+        resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
-            return await self._list_and_count_basic(
-                *filters,
+
+        resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
+        resolved_execution_options = self._get_execution_options(execution_options)
+        resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
+
+        cache_manager = self._cache_manager
+        if not (
+            use_cache
+            and bool(resolved_auto_expunge)
+            and cache_manager is not None
+            and statement is None
+            and load is None
+            and not self._default_loader_options
+        ):
+            return await self._list_and_count_uncached_impl(
+                filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
                 load=load,
                 execution_options=execution_options,
-                order_by=order_by,
-                error_messages=error_messages,
-                bind_group=bind_group,
-                **kwargs,
+                kwargs=kwargs,
+                uniquify=uniquify,
             )
-        return await self._list_and_count_window(
-            *filters,
-            auto_expunge=auto_expunge,
-            statement=statement,
-            load=load,
-            execution_options=execution_options,
-            error_messages=error_messages,
-            order_by=order_by,
-            bind_group=bind_group,
-            **kwargs,
+
+        model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+        version_token = await cache_manager.get_model_version_async(model_name)
+        cache_key = _build_list_cache_key(
+            model_name=model_name,
+            version_token=version_token,
+            method="list_and_count",
+            filters=filters,
+            kwargs=kwargs,
+            order_by=resolved_order_by,
+            execution_options=resolved_execution_options,
+            uniquify=self._uniquify,
+            count_with_window_function=count_with_window_function,
+        )
+        if cache_key is None:
+            return await self._list_and_count_uncached_impl(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+            )
+
+        cached = await cache_manager.get_list_and_count_async(cache_key, self.model_type)
+        if cached is not None:
+            return cached
+
+        return await cache_manager.singleflight_async(
+            cache_key,
+            partial(
+                self._list_and_count_cached_creator,
+                cache_key,
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+            ),
         )
 
     def _expunge(self, instance: "ModelT", auto_expunge: "Optional[bool]") -> None:
@@ -2076,6 +2557,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(self.get_id_attribute_value(instance))
             return instance
 
     async def upsert_many(
@@ -2224,6 +2707,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]:
@@ -2239,41 +2723,88 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
-            bind_group: Optional routing group to use for the operation.
+            use_cache: Whether to use the cache for this query. Defaults to ``True``.
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances, after filtering applied.
         """
         self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
+        resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+
+        resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
+        resolved_execution_options = self._get_execution_options(execution_options)
+        resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
+
+        cache_manager = self._cache_manager
+        if not (
+            use_cache
+            and bool(resolved_auto_expunge)
+            and cache_manager is not None
+            and statement is None
+            and load is None
+            and not self._default_loader_options
         ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
-            statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
+            return await self._list_uncached_impl(
+                filters=filters,
+                auto_expunge=auto_expunge,
                 statement=statement,
-                loader_options=loader_options,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
                 execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
             )
-            if order_by is None:
-                order_by = self.order_by if self.order_by is not None else []
-            statement = self._apply_order_by(statement=statement, order_by=order_by)
-            statement = self._apply_filters(*filters, statement=statement)
-            statement = self._filter_select_by_kwargs(statement, kwargs)
-            result = await self._execute(statement, uniquify=loader_options_have_wildcard)
-            instances = list(result.scalars())
-            for instance in instances:
-                self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("list[ModelT]", instances)
+
+        model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+        version_token = await cache_manager.get_model_version_async(model_name)
+        cache_key = _build_list_cache_key(
+            model_name=model_name,
+            version_token=version_token,
+            method="list",
+            filters=filters,
+            kwargs=kwargs,
+            order_by=resolved_order_by,
+            execution_options=resolved_execution_options,
+            uniquify=self._uniquify,
+        )
+        if cache_key is None:
+            return await self._list_uncached_impl(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+            )
+
+        cached = await cache_manager.get_list_async(cache_key, self.model_type)
+        if cached is not None:
+            return cached
+
+        return await cache_manager.singleflight_async(
+            cache_key,
+            partial(
+                self._list_cached_creator,
+                cache_key,
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+            ),
+        )
 
     @classmethod
     async def check_health(cls, session: Union[AsyncSession, async_scoped_session[AsyncSession]]) -> bool:

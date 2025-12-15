@@ -456,6 +456,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         return self._find_or_raise_not_found(item_id)
@@ -744,6 +745,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
@@ -753,6 +755,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]:

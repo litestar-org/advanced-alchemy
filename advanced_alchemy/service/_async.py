@@ -514,6 +514,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
@@ -530,7 +531,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
-            bind_group: The bind group to use for the operation.
+            use_cache: Whether to use the repository cache for this query.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -548,7 +549,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
-                bind_group=bind_group,
+                use_cache=use_cache,
                 **kwargs,
             ),
         )
@@ -611,6 +612,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
@@ -626,7 +628,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
-            bind_group: The bind group to use for the operation.
+            use_cache: Whether to use the repository cache for this query.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -643,7 +645,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
-                bind_group=bind_group,
+                use_cache=use_cache,
                 **kwargs,
             ),
         )

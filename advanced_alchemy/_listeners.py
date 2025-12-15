@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 _active_file_operations: set[asyncio.Task[Any]] = set()
 """Stores active file operations to prevent them from being garbage collected."""
+_active_cache_operations: set[asyncio.Task[Any]] = set()
+"""Stores active cache invalidation operations to prevent them from being garbage collected."""
 # Context variable to hold the session tracker instance for the current session context
 _current_session_tracker: contextvars.ContextVar[Optional["FileObjectSessionTracker"]] = contextvars.ContextVar(
     "_current_session_tracker",
@@ -442,6 +444,214 @@ def setup_file_object_listeners(registry: Optional["StorageRegistry"] = None) ->
             event.listen(AsyncSession, event_name, listener_func)
 
     set_async_context(False)
+
+
+# Cache invalidation support
+_CACHE_TRACKER_KEY = "_aa_cache_tracker"
+
+
+class CacheInvalidationTracker:
+    """Tracks pending cache invalidations for a session transaction.
+
+    This tracker collects entity invalidations during a transaction and
+    processes them only after a successful commit. On rollback, the
+    pending invalidations are discarded.
+
+    Note:
+        Model version bumps are also deferred to commit to ensure rollbacks
+        don't invalidate list caches when no DB change occurred.
+    """
+
+    __slots__ = ("_cache_manager", "_pending_invalidations", "_pending_model_bumps")
+
+    def __init__(self, cache_manager: "CacheManager") -> None:
+        self._cache_manager = cache_manager
+        self._pending_invalidations: list[tuple[str, Any]] = []
+        self._pending_model_bumps: set[str] = set()
+
+    def add_invalidation(self, model_name: str, entity_id: Any) -> None:
+        """Queue an entity for cache invalidation.
+
+        The actual invalidation and model version bump are deferred until
+        commit() is called, ensuring rollbacks don't affect the cache.
+
+        Args:
+            model_name: The model/table name.
+            entity_id: The entity's primary key value.
+        """
+        self._pending_invalidations.append((model_name, entity_id))
+        # Queue model version bump for list query invalidation (deferred to commit)
+        self._pending_model_bumps.add(model_name)
+
+    def commit(self) -> None:
+        """Process all pending invalidations after successful commit."""
+        # First bump model versions for list query invalidation
+        for model_name in self._pending_model_bumps:
+            self._cache_manager.bump_model_version_sync(model_name)
+        self._pending_model_bumps.clear()
+
+        # Then invalidate individual entities
+        for model_name, entity_id in self._pending_invalidations:
+            self._cache_manager.invalidate_entity_sync(model_name, entity_id)
+        self._pending_invalidations.clear()
+
+    def rollback(self) -> None:
+        """Discard pending invalidations on rollback."""
+        self._pending_invalidations.clear()
+        self._pending_model_bumps.clear()
+
+    async def commit_async(self) -> None:
+        """Process all pending invalidations after successful commit (async-safe).
+
+        This method performs cache I/O using the CacheManager async APIs so that
+        dogpile backends (often sync network clients) never block the event loop.
+        """
+        # First bump model versions for list query invalidation
+        for model_name in self._pending_model_bumps:
+            await self._cache_manager.bump_model_version_async(model_name)
+        self._pending_model_bumps.clear()
+
+        # Then invalidate individual entities
+        for model_name, entity_id in self._pending_invalidations:
+            await self._cache_manager.invalidate_entity_async(model_name, entity_id)
+        self._pending_invalidations.clear()
+
+
+def get_cache_tracker(
+    session: "Union[Session, AsyncSession, scoped_session[Session], async_scoped_session[AsyncSession]]",
+    cache_manager: Optional["CacheManager"] = None,
+    create: bool = True,
+) -> Optional["CacheInvalidationTracker"]:
+    """Get or create a cache invalidation tracker for the session.
+
+    The tracker is stored on session.info to ensure proper scoping
+    per session instance and avoid ContextVar collisions.
+
+    Args:
+        session: The SQLAlchemy session instance (sync or async, including scoped sessions).
+        cache_manager: The CacheManager instance (required if create=True).
+        create: Whether to create a new tracker if one doesn't exist.
+
+    Returns:
+        The cache tracker or None if not available.
+    """
+    tracker: Optional[CacheInvalidationTracker] = session.info.get(_CACHE_TRACKER_KEY)
+    if tracker is None and create and cache_manager is not None:
+        tracker = CacheInvalidationTracker(cache_manager)
+        session.info[_CACHE_TRACKER_KEY] = tracker
+    return tracker
+
+
+class CacheInvalidationListener:
+    """Manages cache invalidation during SQLAlchemy Session transactions.
+
+    This listener hooks into the SQLAlchemy Session event lifecycle to
+    handle cache invalidation in a transaction-safe manner.
+
+    How it Works:
+
+    1.  **Event Registration (`setup_cache_listeners`):**
+        Registers `after_commit` and `after_rollback` listeners globally
+        on the Session class.
+
+    2.  **Tracking Changes:**
+        During mutations (add, update, delete), repositories call
+        `get_cache_tracker()` and add invalidations via `add_invalidation()`.
+
+    3.  **Processing (`after_commit`):**
+        After successful commit, all pending invalidations are processed
+        and the tracker is cleared.
+
+    4.  **Discarding (`after_rollback`):**
+        On rollback, pending invalidations are discarded without processing.
+    """
+
+    @classmethod
+    def _is_listener_enabled(cls, session: "Session") -> bool:
+        """Check if cache listener is enabled for this session."""
+        enable_listener = True
+
+        session_info = getattr(session, "info", {})
+        if "enable_cache_listener" in session_info:
+            return bool(session_info["enable_cache_listener"])
+
+        options_sources: list[Optional[Union[Callable[[], dict[str, Any]], dict[str, Any]]]] = []
+        if session.bind:
+            options_sources.append(getattr(session.bind, "execution_options", None))
+            sync_engine = getattr(session.bind, "sync_engine", None)
+            if sync_engine:
+                options_sources.append(getattr(sync_engine, "execution_options", None))
+        options_sources.append(getattr(session, "execution_options", None))
+
+        for options_source in options_sources:
+            if options_source is None:
+                continue
+
+            options: Optional[dict[str, Any]] = None
+            if callable(options_source):
+                try:
+                    result = options_source()
+                    if isinstance(result, dict):  # pyright: ignore
+                        options = result
+                except Exception as e:
+                    logger.debug("Error calling execution_options source: %s", e)
+            else:
+                options = options_source
+
+            if options is not None and "enable_cache_listener" in options:
+                enable_listener = bool(options["enable_cache_listener"])
+                break
+
+        return enable_listener
+
+    @classmethod
+    def after_commit(cls, session: "Session") -> None:
+        """Process cache invalidations after a successful commit."""
+        if not cls._is_listener_enabled(session):
+            return
+
+        tracker = get_cache_tracker(session, create=False)
+        if tracker:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop: sync usage, perform invalidation inline.
+                tracker.commit()
+            else:
+                # Running loop: schedule async invalidation so commit doesn't block.
+                task = asyncio.create_task(tracker.commit_async())
+                _active_cache_operations.add(task)
+                task.add_done_callback(_active_cache_operations.discard)
+            session.info.pop(_CACHE_TRACKER_KEY, None)
+
+    @classmethod
+    def after_rollback(cls, session: "Session") -> None:
+        """Discard pending cache invalidations after a rollback."""
+        tracker = get_cache_tracker(session, create=False)
+        if tracker:
+            tracker.rollback()
+            session.info.pop(_CACHE_TRACKER_KEY, None)
+
+
+def setup_cache_listeners() -> None:
+    """Register cache invalidation event listeners globally.
+
+    This should be called once during application initialization to enable
+    automatic cache invalidation for repositories using a CacheManager.
+    """
+    from sqlalchemy.event import contains
+    from sqlalchemy.orm import Session
+
+    listeners = {
+        "after_commit": CacheInvalidationListener.after_commit,
+        "after_rollback": CacheInvalidationListener.after_rollback,
+    }
+
+    for event_name, listener_func in listeners.items():
+        if not contains(Session, event_name, listener_func):
+            event.listen(Session, event_name, listener_func)
+
+    logger.debug("Cache invalidation listeners registered")
 
 
 # Existing listener (keep it)
