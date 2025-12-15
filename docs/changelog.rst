@@ -3,28 +3,6 @@
 1.x Changelog
 =============
 
-.. changelog:: Unreleased
-    :date: TBD
-
-    .. change:: Read/Write Routing
-        :type: feature
-
-        Automatic routing of read operations to read replicas while directing write operations to the primary database.
-
-        Features:
-
-        - ``RoutingSession`` and ``RoutingAsyncSession`` - Session classes with routing logic via ``get_bind()``
-        - ``RoutingConfig`` - Configuration for primary database and read replicas
-        - ``RoutingStrategy`` - Round-robin and random replica selection strategies
-        - ``ReplicaSelector`` - Abstract base with ``RoundRobinSelector`` and ``RandomSelector`` implementations
-        - ``primary_context()`` and ``replica_context()`` - Context managers for explicit routing control
-        - Sticky-after-write behavior for read-your-writes consistency (configurable)
-        - FOR UPDATE detection (automatically routes to primary)
-        - Commit-aware stickiness reset
-        - Framework integration with automatic context reset (Litestar, FastAPI, Flask, Sanic, Starlette)
-        - Comprehensive documentation in ``docs/usage/routing.rst`` and ``docs/reference/routing.rst``
-        - 97 unit tests + 21 integration tests (99% coverage)
-
 .. changelog:: 1.8.2
     :date: 2025-12-12
 
