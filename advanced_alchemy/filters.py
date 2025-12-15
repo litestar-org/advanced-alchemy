@@ -22,7 +22,7 @@ See Also:
 import datetime
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from operator import attrgetter
 from typing import (
@@ -333,24 +333,26 @@ class CollectionFilter(InAnyFilter, Generic[T]):
             # Return empty result set by forcing a false condition
             return cast("StatementTypeT", statement.where(text("1=-1")))
 
-        # Check if field is a relationship
-        if hasattr(field, "property") and hasattr(field.property, "mapper"):
-            # This is a relationship - use RelationshipFilter logic
-            # Extract the primary key field from related model
-            related_pk = field.property.mapper.primary_key[0]
+        # Check if field is a relationship attribute and delegate to RelationshipFilter.
+        #
+        # This is primarily used to fix Issue #505 where many-to-many relationships
+        # previously produced invalid SQL when used with MultiFilter.
+        prop = getattr(field, "property", None)
+        mapper = getattr(prop, "mapper", None)
+        if mapper is not None:
+            related_pk = list(mapper.primary_key)
+            if len(related_pk) != 1:
+                msg = (
+                    "CollectionFilter does not support relationship filters against related models with composite "
+                    f"primary keys (relationship={getattr(field, 'key', self.field_name)!r}). "
+                    "Use RelationshipFilter with explicit filters instead."
+                )
+                raise ValueError(msg)
 
-            # Get the relationship name (field.key might be None for InstrumentedAttribute)
-            rel_name = field.key if hasattr(field, "key") and field.key else str(self.field_name)
-
-            # Create a RelationshipFilter with CollectionFilter on related PK
+            relationship_attr = cast("InstrumentedAttribute[Any]", field)
             rel_filter = RelationshipFilter(
-                relationship=rel_name,
-                filters=[
-                    CollectionFilter(
-                        field_name=related_pk.key,
-                        values=self.values,
-                    )
-                ],
+                relationship=relationship_attr,
+                filters=[CollectionFilter(field_name=related_pk[0].key, values=self.values)],
             )
             return rel_filter.append_to_statement(statement, model)
 
@@ -1171,7 +1173,7 @@ class RelationshipFilter(StatementFilter):
     relationship: Union[str, "InstrumentedAttribute[Any]"]
     """Name of SQLAlchemy relationship attribute or the attribute itself."""
 
-    filters: list[StatementFilter]
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]]
     """Filters to apply to the related model."""
 
     negate: bool = False
@@ -1221,8 +1223,20 @@ class RelationshipFilter(StatementFilter):
         """
         related_model = rel_prop.mapper.class_
 
-        # Start with basic subquery
-        subquery = select(1).select_from(related_model)
+        # Start with basic subquery and ensure required FROM elements are present.
+        #
+        # For many-to-many relationships, the subquery must include the secondary table,
+        # otherwise the join conditions may reference columns that are not present in FROM.
+        subquery = select(1)
+        if rel_prop.secondary is not None:
+            secondary_table = rel_prop.secondary
+            secondaryjoin = rel_prop.secondaryjoin
+            if secondaryjoin is None:
+                msg = "Many-to-many relationship is missing required secondary join configuration."
+                raise ValueError(msg)
+            subquery = subquery.select_from(related_model).join(secondary_table, secondaryjoin)
+        else:
+            subquery = subquery.select_from(related_model)
 
         # Apply all filters to the related model
         for filter_ in self.filters:
@@ -1233,14 +1247,15 @@ class RelationshipFilter(StatementFilter):
 
         # Add join condition based on relationship type
         if rel_prop.secondary is not None:
-            # Many-to-many with secondary table
-            subquery = self._add_m2m_join_condition(subquery, model, rel_prop)
+            # Many-to-many with secondary table: correlation is expressed via primaryjoin.
+            subquery = subquery.where(rel_prop.primaryjoin)
         else:
             # One-to-many or many-to-one
             subquery = self._add_o2m_join_condition(subquery, model, rel_prop)
 
         # Correlate with parent query
-        subquery = subquery.correlate(model)
+        parent_table = class_mapper(model).local_table
+        subquery = subquery.correlate(parent_table)
 
         # Create EXISTS or NOT EXISTS
         exists_clause: ColumnElement[bool] = exists(subquery)
@@ -1272,46 +1287,6 @@ class RelationshipFilter(StatementFilter):
         # which will be handled by correlate() in _build_exists_subquery
         return subquery.where(join_condition)
 
-    def _add_m2m_join_condition(
-        self,
-        subquery: Select[Any],
-        model: type[ModelT],
-        rel_prop: "RelationshipProperty[Any]",
-    ) -> Select[Any]:
-        """Add join condition for many-to-many relationship through secondary table.
-
-        Args:
-            subquery: Subquery to modify
-            model: Parent model class
-            rel_prop: SQLAlchemy relationship property
-
-        Returns:
-            Select[Any]: Modified subquery with join conditions
-
-        Raises:
-            ValueError: If secondary table is None
-        """
-        secondary_table = rel_prop.secondary
-        if secondary_table is None:
-            msg = "Expected secondary table but found None"
-            raise ValueError(msg)
-
-        # Many-to-many needs two join conditions:
-        # 1. related_model -> secondary (secondaryjoin)
-        # 2. secondary -> parent_model (primaryjoin)
-
-        # Join related model to secondary table
-        # Note: For many-to-many relationships, both secondaryjoin and primaryjoin
-        # are always set by SQLAlchemy (either explicitly or auto-inferred)
-        # We use explicit None comparison pattern for clarity
-        secondaryjoin = rel_prop.secondaryjoin
-        if secondaryjoin is not None:
-            subquery = subquery.where(secondaryjoin)
-
-        # Join secondary table to parent model (will be correlated)
-        # primaryjoin is always present for relationships
-        return subquery.where(rel_prop.primaryjoin)
-
     def _build_join_query(
         self,
         statement: StatementTypeT,
@@ -1339,7 +1314,8 @@ class RelationshipFilter(StatementFilter):
         related_model = rel_prop.mapper.class_
 
         # Add JOIN (statement is verified to be Select here)
-        joined_stmt = statement.join(rel_prop.entity)
+        relationship_attr = getattr(model, rel_prop.key)
+        joined_stmt = statement.join(relationship_attr)
 
         # Apply filters
         for filter_ in self.filters:
@@ -1369,6 +1345,10 @@ class RelationshipFilter(StatementFilter):
             ValueError: If relationship not found on model
         """
         rel_prop = self._get_relationship_property(model)
+
+        if not self.use_exists and self.negate:
+            msg = "JOIN-based relationship filters do not support negate=True. Use the default EXISTS strategy instead."
+            raise ValueError(msg)
 
         if self.use_exists:
             # EXISTS pattern (default, more efficient)
@@ -1495,44 +1475,69 @@ class MultiFilter(StatementFilter):
                     statement = filter_group.append_to_statement(statement, model)
         return statement
 
-    def _create_filter(self, condition: dict[str, Any]) -> Optional[StatementFilter]:
-        """Create a filter instance from a condition dictionary.
-
-        Args:
-            condition: Dictionary defining a filter
-
-        Returns:
-            Optional[StatementFilter]: Filter instance if successfully created, None otherwise
-        """
-        # Check if condition is a nested logical group
+    def _create_nested_filter_group(self, condition: dict[str, Any]) -> Optional[FilterGroup]:
         logical_keys = set(self._logical_map.keys())
-        intersect = logical_keys.intersection(condition.keys())
-        if intersect:
-            # It's a nested filter group
-            for key in intersect:
-                operator = self._logical_map.get(key)
-                if operator and isinstance(condition.get(key), list):
-                    nested_filters = []
-                    for cond in condition[key]:
-                        filter_instance = self._create_filter(cond)
-                        if filter_instance is not None:
-                            nested_filters.append(filter_instance)  # pyright: ignore
+        group_keys = logical_keys.intersection(condition.keys())
+        for key in group_keys:
+            operator = self._logical_map.get(key)
+            nested_conditions = condition.get(key)
+            if operator is None or not isinstance(nested_conditions, list):
+                continue
 
-                    if nested_filters:
-                        return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore
-        else:
-            # Regular filter
-            filter_type = condition.get("type")
-            if filter_type is not None and isinstance(filter_type, str):
-                filter_class = self._filter_map.get(filter_type)
-                if filter_class is not None:
-                    try:
-                        # Create a copy of the condition without the type key
-                        filter_args = {k: v for k, v in condition.items() if k != "type"}
-                        return filter_class(**filter_args)  # type: ignore
-                    except Exception:  # noqa: BLE001
-                        return None
+            nested_filters: list[StatementFilter] = []
+            for nested in cast("list[object]", nested_conditions):
+                if isinstance(nested, dict):
+                    nested_filter = self._create_filter(cast("dict[str, Any]", nested))
+                    if nested_filter is not None:
+                        nested_filters.append(nested_filter)
+
+            if nested_filters:
+                return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore[arg-type]
         return None
+
+    def _create_relationship_filter(self, condition: dict[str, Any]) -> Optional[RelationshipFilter]:
+        relationship = condition.get("relationship")
+        nested_conditions = condition.get("filters", [])
+        if not isinstance(relationship, str) or not isinstance(nested_conditions, list):
+            return None
+
+        nested_filters: list[Union[StatementFilter, ColumnElement[bool]]] = []
+        for nested in cast("list[object]", nested_conditions):
+            if isinstance(nested, dict):
+                nested_filter = self._create_filter(cast("dict[str, Any]", nested))
+                if nested_filter is not None:
+                    nested_filters.append(nested_filter)
+
+        return RelationshipFilter(
+            relationship=relationship,
+            filters=nested_filters,
+            negate=bool(condition.get("negate", False)),
+            use_exists=bool(condition.get("use_exists", True)),
+        )
+
+    def _create_filter(self, condition: dict[str, Any]) -> Optional[StatementFilter]:
+        """Create a filter instance from a condition dictionary."""
+        nested_group = self._create_nested_filter_group(condition)
+        if nested_group is not None:
+            return nested_group
+
+        filter_type = condition.get("type")
+        if not isinstance(filter_type, str):
+            return None
+
+        if filter_type == "relationship":
+            return self._create_relationship_filter(condition)
+
+        filter_class = self._filter_map.get(filter_type)
+        if filter_class is None:
+            return None
+
+        try:
+            filter_args = {k: v for k, v in condition.items() if k != "type"}
+            filter_cls = cast("type[StatementFilter]", filter_class)
+            return filter_cls(**filter_args)
+        except Exception:  # noqa: BLE001
+            return None
 
 
 # Define FilterTypes using direct class references
