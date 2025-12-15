@@ -10,7 +10,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
-    List,
     Literal,
     Optional,
     Protocol,
@@ -26,12 +25,14 @@ from sqlalchemy import (
     Select,
     TextClause,
     Update,
+    and_,
     any_,
     delete,
     inspect,
     over,
     select,
     text,
+    tuple_,
     update,
 )
 from sqlalchemy import func as sql_func
@@ -58,7 +59,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
     was_attribute_set,
 )
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, T
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, T
 from advanced_alchemy.service.typing import schema_dump
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
@@ -77,13 +78,13 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     """Base Protocol"""
 
     id_attribute: str
-    match_fields: Optional[Union[List[str], str]] = None
+    match_fields: Optional[Union[list[str], str]] = None
     statement: Select[tuple[ModelT]]
     session: Union[Session, scoped_session[Session]]
     auto_expunge: bool
     auto_refresh: bool
     auto_commit: bool
-    order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None
+    order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None
     error_messages: Optional[ErrorMessages] = None
     wrap_exceptions: bool = True
 
@@ -97,7 +98,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool = False,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
         **kwargs: Any,
@@ -134,7 +135,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def add_many(
         self,
-        data: List[ModelT],
+        data: list[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -144,7 +145,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -157,7 +158,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def delete_many(
         self,
-        item_ids: List[Any],
+        item_ids: list[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -194,7 +195,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -235,7 +236,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -252,7 +253,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -294,7 +295,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def update_many(
         self,
-        data: List[ModelT],
+        data: list[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -302,13 +303,13 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
-    ) -> List[ModelT]: ...
+    ) -> list[ModelT]: ...
 
     def _get_update_many_statement(
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[list[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]: ...
 
@@ -321,7 +322,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -330,17 +331,17 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def upsert_many(
         self,
-        data: List[ModelT],
+        data: list[ModelT],
         *,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
-    ) -> List[ModelT]: ...
+    ) -> list[ModelT]: ...
 
     def list_and_count(
         self,
@@ -351,11 +352,11 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[ModelT], int]: ...
+    ) -> tuple[list[ModelT], int]: ...
 
     def list(
         self,
@@ -365,11 +366,11 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> List[ModelT]: ...
+    ) -> list[ModelT]: ...
 
     @classmethod
     def check_health(cls, session: Union[Session, scoped_session[Session]]) -> bool: ...
@@ -456,7 +457,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     replace instead of merge the model's loaded relationships with the ones specified in the ``load`` or ``default_loader_options`` configuration."""
     execution_options: Optional[dict[str, Any]] = None
     """Default execution options for the repository."""
-    match_fields: Optional[Union[List[str], str]] = None
+    match_fields: Optional[Union[list[str], str]] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: bool = False
     """Optionally apply the ``unique()`` method to results before returning.
@@ -479,7 +480,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -537,6 +538,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self._cache_manager = cache_manager if cache_manager is not None else session.info.get("cache_manager")
         # Default bind group for all operations (can be overridden per-method)
         self._bind_group = bind_group
+        # Cache primary key columns for composite key support
+        self._pk_columns, self._pk_attr_names = get_primary_key_info(self.model_type)
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         """Get the uniquify value, preferring the method parameter over instance setting.
@@ -586,7 +589,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if tracker is not None:
                 tracker.add_invalidation(cast("str", model_name), entity_id, bind_group)
 
-    def _type_must_use_in_instead_of_any(self, matched_values: "List[Any]", field_type: "Any" = None) -> bool:
+    def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
 
         Uses SQLAlchemy's type introspection to detect types that may have DBAPI
@@ -617,7 +620,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
 
-    def _get_unique_values(self, values: "List[Any]") -> "List[Any]":
+    def _get_unique_values(self, values: "list[Any]") -> "list[Any]":
         """Get unique values from a list, handling unhashable types safely.
 
         Args:
@@ -632,7 +635,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         try:
             # Fast path for hashable types
             seen: set[Any] = set()
-            unique_values: List[Any] = []
+            unique_values: list[Any] = []
             for value in values:
                 if value not in seen:
                     unique_values.append(value)
@@ -704,6 +707,180 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
 
+    def _is_composite_pk(self) -> bool:
+        """Check if model has a composite (multi-column) primary key.
+
+        Returns:
+            True if the model has 2 or more primary key columns, False otherwise.
+
+        Examples:
+            >>> repo._is_composite_pk()  # For model with single PK
+            False
+            >>> repo._is_composite_pk()  # For model with (user_id, role_id) PK
+            True
+        """
+        return len(self._pk_columns) > 1
+
+    def _build_pk_filter(self, pk_value: PrimaryKeyType) -> ColumnElement[bool]:
+        """Build a WHERE clause for primary key lookup.
+
+        Supports single and composite primary keys with flexible input formats.
+
+        Args:
+            pk_value: Primary key value(s).
+                - For single PK: scalar value (int, str, UUID, etc.)
+                - For composite PK: tuple of values in column order, or dict mapping attribute names to values
+
+        Returns:
+            SQLAlchemy WHERE clause expression.
+
+        Raises:
+            ValueError: If the input format doesn't match the primary key structure.
+
+        Examples:
+            # Single primary key
+            >>> filter = repo._build_pk_filter(123)
+            >>> # Generates: WHERE id = 123
+
+            # Composite primary key (tuple format)
+            >>> filter = repo._build_pk_filter((1, 5))
+            >>> # Generates: WHERE user_id = 1 AND role_id = 5
+
+            # Composite primary key (dict format)
+            >>> filter = repo._build_pk_filter({"user_id": 1, "role_id": 5})
+            >>> # Generates: WHERE user_id = 1 AND role_id = 5
+        """
+        pk_columns = self._pk_columns
+        pk_attr_names = self._pk_attr_names
+
+        # Single primary key - accept scalar value only
+        if len(pk_columns) == 1:
+            if isinstance(pk_value, (tuple, dict)) and not isinstance(pk_value, str):  # type: ignore[unreachable]
+                msg = (
+                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Expected a scalar value, got {type(pk_value).__name__}: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            return cast("ColumnElement[bool]", pk_columns[0] == pk_value)
+
+        # Composite primary key - require tuple or dict
+        if isinstance(pk_value, tuple) and not isinstance(pk_value, str):  # type: ignore[unreachable]
+            # Tuple format: values must match column order
+            if len(pk_value) != len(pk_columns):
+                msg = (
+                    f"Composite primary key for {self.model_type.__name__} has "
+                    f"{len(pk_columns)} columns {list(pk_attr_names)}, "
+                    f"but {len(pk_value)} values provided: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            # Validate no None values in PK
+            for i, val in enumerate(pk_value):
+                if val is None:
+                    msg = (
+                        f"Primary key value for '{pk_attr_names[i]}' cannot be None "
+                        f"in composite key for {self.model_type.__name__}"
+                    )
+                    raise ValueError(msg)
+            return and_(*[col == val for col, val in zip(pk_columns, pk_value)])
+
+        if isinstance(pk_value, dict):
+            # Dict format: keys must be ORM attribute names
+            provided_keys = set(pk_value.keys())
+            required_keys = set(pk_attr_names)
+
+            missing_keys = required_keys - provided_keys
+            if missing_keys:
+                msg = (
+                    f"Composite primary key for {self.model_type.__name__} requires "
+                    f"attributes {sorted(required_keys)}, but missing: {sorted(missing_keys)}"
+                )
+                raise ValueError(msg)
+
+            # Validate no None values in PK
+            for attr_name in pk_attr_names:
+                if pk_value[attr_name] is None:
+                    msg = (
+                        f"Primary key value for '{attr_name}' cannot be None "
+                        f"in composite key for {self.model_type.__name__}"
+                    )
+                    raise ValueError(msg)
+
+            # Build filter using attribute names
+            return and_(*[col == pk_value[attr_name] for col, attr_name in zip(pk_columns, pk_attr_names)])
+
+        # Scalar passed for composite PK - error
+        msg = (
+            f"Composite primary key for {self.model_type.__name__} requires "
+            f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}. "
+            f"Expected columns: {list(pk_attr_names)}"
+        )
+        raise ValueError(msg)
+
+    def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
+        """Extract the primary key value(s) from a model instance.
+
+        Args:
+            instance: Model instance to extract primary key from.
+
+        Returns:
+            - For single PK: scalar value (int, str, UUID, etc.)
+            - For composite PK: tuple of values in column order
+
+        Examples:
+            # Single primary key
+            >>> user = User(id=123, name="Alice")
+            >>> repo._extract_pk_value(user)
+            123
+
+            # Composite primary key
+            >>> assignment = UserRole(user_id=1, role_id=5)
+            >>> repo._extract_pk_value(assignment)
+            (1, 5)
+        """
+        if len(self._pk_columns) == 1:
+            # Single PK - return scalar value
+            return getattr(instance, self._pk_attr_names[0])
+
+        # Composite PK - return tuple of values
+        return tuple(getattr(instance, attr_name) for attr_name in self._pk_attr_names)
+
+    def _pk_values_present(self, instance: ModelT) -> bool:
+        """Check if all primary key values are set on an instance.
+
+        Args:
+            instance: Model instance to check.
+
+        Returns:
+            True if all PK values are non-None, False otherwise.
+        """
+        return all(getattr(instance, attr_name, None) is not None for attr_name in self._pk_attr_names)
+
+    def _normalize_pk_values_to_tuples(self, item_ids: list[PrimaryKeyType]) -> list[tuple[Any, ...]]:
+        """Normalize a list of composite primary key values to tuples.
+
+        Args:
+            item_ids: List of PK values (dicts or tuples).
+
+        Returns:
+            List of tuples with values in PK column order.
+
+        Raises:
+            TypeError: If a value is not a dict or tuple.
+        """
+        normalized: list[tuple[Any, ...]] = []
+        for pk_value in item_ids:
+            if isinstance(pk_value, dict):
+                normalized.append(tuple(pk_value[attr_name] for attr_name in self._pk_attr_names))
+            elif isinstance(pk_value, tuple):
+                normalized.append(pk_value)
+            else:
+                msg = (
+                    f"Composite primary key for {self.model_type.__name__} requires "
+                    f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}"
+                )
+                raise TypeError(msg)
+        return normalized
+
     @staticmethod
     def check_not_found(item_or_none: Optional[ModelT]) -> ModelT:
         """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
@@ -733,7 +910,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_loader_options(
         self,
         loader_options: Optional[LoadSpec],
-    ) -> Union[tuple[List[_AbstractLoad], bool], tuple[None, bool]]:
+    ) -> Union[tuple[list[_AbstractLoad], bool], tuple[None, bool]]:
         if loader_options is None:
             # use the defaults set at initialization
             return self._default_loader_options, self._loader_options_have_wildcards or self._uniquify
@@ -785,7 +962,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def add_many(
         self,
-        data: List[ModelT],
+        data: list[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -821,7 +998,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -835,11 +1012,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Delete instance identified by ``item_id``.
 
         Args:
-            item_id: Identifier of instance to be deleted.
+            item_id: Identifier of instance to be deleted. For single primary keys,
+                pass a scalar value. For composite primary keys, pass a tuple of values
+                in column order or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Note: Only applies to single-column lookups.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -849,6 +1029,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The deleted instance.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await user_repo.delete(123)
+
+            # Composite primary key
+            >>> deleted = await user_role_repo.delete((user_id, role_id))
 
         """
         self._uniquify = self._get_uniquify(uniquify)
@@ -880,7 +1067,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def delete_many(
         self,
-        item_ids: List[Any],
+        item_ids: list[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -892,16 +1079,21 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
-        """Delete instance identified by `item_id`.
+        """Delete multiple instances identified by ``item_ids``.
 
         Args:
-            item_ids: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning.
+            item_ids: List of identifiers of instances to be deleted.
+                For single primary keys, pass a list of scalar values.
+                For composite primary keys, pass a list of tuples (values in column order)
+                or a list of dicts (mapping attribute names to values).
+            auto_expunge: Remove objects from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Note: Only applies to single-column lookups.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
-                Defaults to `950` if left unset.
+                Defaults to `950` if left unset. For composite keys, this is automatically
+                divided by the number of PK columns.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -911,6 +1103,27 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The deleted instances.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await user_repo.delete_many([1, 2, 3])
+
+            # Composite primary key (tuple format)
+            >>> deleted = await user_role_repo.delete_many(
+            ...     [
+            ...         (1, 5),
+            ...         (1, 6),
+            ...         (2, 5),
+            ...     ]
+            ... )
+
+            # Composite primary key (dict format)
+            >>> deleted = await user_role_repo.delete_many(
+            ...     [
+            ...         {"user_id": 1, "role_id": 5},
+            ...         {"user_id": 1, "role_id": 6},
+            ...     ]
+            ... )
 
         """
         self._uniquify = self._get_uniquify(uniquify)
@@ -927,55 +1140,93 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
-            id_attribute = get_instrumented_attr(
-                self.model_type,
-                id_attribute if id_attribute is not None else self.id_attribute,
-            )
-            instances: List[ModelT] = []
-            if self._prefer_any:
-                chunk_size = len(item_ids) + 1
-            chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
-            for idx in range(0, len(item_ids), chunk_size):
-                chunk = item_ids[idx : min(idx + chunk_size, len(item_ids))]
-                if self._dialect.delete_executemany_returning:
-                    instances.extend(
-                        self.session.scalars(
+            instances: list[ModelT] = []
+
+            # Determine if using composite key path or single column path
+            use_composite_path = id_attribute is None and self._is_composite_pk()
+
+            if use_composite_path:
+                # Composite primary key path using tuple_().in_()
+                # Adjust chunk size for composite keys (divide by number of PK columns)
+                base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+                effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
+                normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
+
+                for idx in range(0, len(normalized_ids), effective_chunk_size):
+                    chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
+                    pk_filter = tuple_(*self._pk_columns).in_(chunk)
+
+                    if self._dialect.delete_executemany_returning:
+                        returning_delete_stmt = cast(
+                            "ReturningDelete[tuple[ModelT]]",
+                            delete(self.model_type).where(pk_filter).returning(self.model_type),
+                        )
+                        if execution_options:
+                            returning_delete_stmt = returning_delete_stmt.execution_options(**execution_options)
+                        instances.extend(self.session.scalars(returning_delete_stmt))
+                    else:
+                        # Select first, then delete
+                        select_stmt = select(self.model_type).where(pk_filter)
+                        if loader_options:
+                            select_stmt = select_stmt.options(*loader_options)
+                        if execution_options:
+                            select_stmt = select_stmt.execution_options(**execution_options)
+                        instances.extend(self.session.scalars(select_stmt))
+
+                        plain_delete_stmt = delete(self.model_type).where(pk_filter)
+                        if execution_options:
+                            plain_delete_stmt = plain_delete_stmt.execution_options(**execution_options)
+                        self.session.execute(plain_delete_stmt)
+            else:
+                # Single column path (existing behavior)
+                id_attr = get_instrumented_attr(
+                    self.model_type,
+                    id_attribute if id_attribute is not None else self.id_attribute,
+                )
+                if self._prefer_any:
+                    chunk_size = len(item_ids) + 1
+                chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+                for idx in range(0, len(item_ids), chunk_size):
+                    chunk = cast("list[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
+                    if self._dialect.delete_executemany_returning:
+                        instances.extend(
+                            self.session.scalars(
+                                self._get_delete_many_statement(
+                                    statement_type="delete",
+                                    model_type=self.model_type,
+                                    id_attribute=id_attr,
+                                    id_chunk=chunk,
+                                    supports_returning=self._dialect.delete_executemany_returning,
+                                    loader_options=loader_options,
+                                    execution_options=execution_options,
+                                ),
+                            ),
+                        )
+                    else:
+                        instances.extend(
+                            self.session.scalars(
+                                self._get_delete_many_statement(
+                                    statement_type="select",
+                                    model_type=self.model_type,
+                                    id_attribute=id_attr,
+                                    id_chunk=chunk,
+                                    supports_returning=self._dialect.delete_executemany_returning,
+                                    loader_options=loader_options,
+                                    execution_options=execution_options,
+                                ),
+                            ),
+                        )
+                        self.session.execute(
                             self._get_delete_many_statement(
                                 statement_type="delete",
                                 model_type=self.model_type,
-                                id_attribute=id_attribute,
+                                id_attribute=id_attr,
                                 id_chunk=chunk,
                                 supports_returning=self._dialect.delete_executemany_returning,
                                 loader_options=loader_options,
                                 execution_options=execution_options,
                             ),
-                        ),
-                    )
-                else:
-                    instances.extend(
-                        self.session.scalars(
-                            self._get_delete_many_statement(
-                                statement_type="select",
-                                model_type=self.model_type,
-                                id_attribute=id_attribute,
-                                id_chunk=chunk,
-                                supports_returning=self._dialect.delete_executemany_returning,
-                                loader_options=loader_options,
-                                execution_options=execution_options,
-                            ),
-                        ),
-                    )
-                    self.session.execute(
-                        self._get_delete_many_statement(
-                            statement_type="delete",
-                            model_type=self.model_type,
-                            id_attribute=id_attribute,
-                            id_chunk=chunk,
-                            supports_returning=self._dialect.delete_executemany_returning,
-                            loader_options=loader_options,
-                            execution_options=execution_options,
-                        ),
-                    )
+                        )
             self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -1044,7 +1295,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             )
             statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
             statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
-            instances: List[ModelT] = []
+            instances: list[ModelT] = []
             if self._dialect.delete_executemany_returning:
                 instances.extend(self.session.scalars(statement.returning(model_type)))
             else:
@@ -1118,7 +1369,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_base_stmt(
         *,
         statement: StatementTypeT,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[list[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> StatementTypeT:
         """Get base statement with options applied.
@@ -1167,10 +1418,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *,
         model_type: type[ModelT],
         id_attribute: InstrumentedAttribute[Any],
-        id_chunk: List[Any],
+        id_chunk: list[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[list[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
         # Base statement is static
@@ -1213,13 +1464,20 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             resolved_execution_options = self._get_execution_options(execution_options)
             resolved_statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            resolved_id_attribute = id_attribute if id_attribute is not None else self.id_attribute
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
                 execution_options=resolved_execution_options,
             )
-            resolved_statement = self._filter_select_by_kwargs(resolved_statement, [(resolved_id_attribute, item_id)])
+            # Use composite-key-aware filter when id_attribute is not overridden
+            if id_attribute is None:
+                resolved_statement = resolved_statement.where(self._build_pk_filter(item_id))
+            else:
+                # Legacy path: custom id_attribute (single column lookup only)
+                resolved_id_attribute = id_attribute if id_attribute is not None else self.id_attribute
+                resolved_statement = self._filter_select_by_kwargs(
+                    resolved_statement, [(resolved_id_attribute, item_id)]
+                )
             resolved_statement = self._apply_for_update_options(resolved_statement, with_for_update)
             instance = (self._execute(resolved_statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
@@ -1278,14 +1536,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> List[ModelT]:
+    ) -> list[ModelT]:
         """Fetch a list of entities from the database without using cache."""
         self._uniquify = self._get_uniquify(uniquify)
         with wrap_sqlalchemy_exception(
@@ -1312,7 +1570,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("List[ModelT]", instances)
+            return cast("list[ModelT]", instances)
 
     def _list_cached_creator(
         self,
@@ -1321,14 +1579,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> List[ModelT]:
+    ) -> list[ModelT]:
         """Singleflight creator for list caching (async)."""
         if self._cache_manager is None:
             return self._list_from_db(
@@ -1370,14 +1628,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
         count_with_window_function: bool,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> tuple[List[ModelT], int]:
+    ) -> tuple[list[ModelT], int]:
         """Fetch a list+count payload from the database without using cache."""
         self._uniquify = self._get_uniquify(uniquify)
         resolved_bind_group = self._resolve_bind_group(bind_group)
@@ -1414,14 +1672,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
         count_with_window_function: bool,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> tuple[List[ModelT], int]:
+    ) -> tuple[list[ModelT], int]:
         """Singleflight creator for list_and_count caching (async)."""
         if self._cache_manager is None:
             return self._list_and_count_from_db(
@@ -1460,7 +1718,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -1476,11 +1734,15 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """Get instance identified by `item_id`.
 
         Args:
-            item_id: Identifier of the instance to be retrieved.
+            item_id: Identifier of the instance to be retrieved. For single primary keys,
+                pass a scalar value (int, str, UUID, etc.). For composite primary keys,
+                pass a tuple of values in column order or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Note: Only applies to single-column lookups. For composite primary keys,
+                this parameter is ignored and the primary key columns are used automatically.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1492,6 +1754,22 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Returns:
             The retrieved instance.
+
+        Examples:
+            # Single primary key
+            >>> user = await user_repo.get(123)
+
+            # Composite primary key (tuple format)
+            >>> assignment = await user_role_repo.get((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> assignment = await user_role_repo.get(
+            ...     {"user_id": 1, "role_id": 5}
+            ... )
+
+        Raises:
+            NotFoundError: If no instance is found with the given primary key.
+            ValueError: If the input format doesn't match the primary key structure.
         """
         self._uniquify = self._get_uniquify(uniquify)
         resolved_error_messages = self._get_error_messages(
@@ -1683,7 +1961,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -1779,7 +2057,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -2038,7 +2316,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def update_many(
         self,
-        data: List[ModelT],
+        data: list[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -2047,7 +2325,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> List[ModelT]:
+    ) -> list[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
         This function has an optimized bulk update based on the configured SQL dialect:
@@ -2075,7 +2353,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         supports_updated_at = hasattr(self.model_type, "updated_at")
-        data_to_update: List[dict[str, Any]] = []
+        data_to_update: list[dict[str, Any]] = []
         for v in data:
             if isinstance(v, self.model_type) or (hasattr(v, "to_dict") and callable(v.to_dict)):
                 update_payload = v.to_dict()
@@ -2119,7 +2397,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._flush_or_commit(auto_commit=auto_commit)
 
             # For non-RETURNING backends, fetch updated instances from database
-            updated_ids: List[Any] = [item[self.id_attribute] for item in data_to_update]
+            updated_ids: list[Any] = [item[self.id_attribute] for item in data_to_update]
             updated_instances = self.list(
                 getattr(self.model_type, self.id_attribute).in_(updated_ids),
                 load=loader_options,
@@ -2136,7 +2414,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Union[List[_AbstractLoad], None],
+        loader_options: Union[list[_AbstractLoad], None],
         execution_options: Union[dict[str, Any], None],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         # Base update statement is static
@@ -2154,7 +2432,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2162,7 +2440,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[ModelT], int]:
+    ) -> tuple[list[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -2332,13 +2610,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[ModelT], int]:
+    ) -> tuple[list[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -2381,7 +2659,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._filter_select_by_kwargs(statement, kwargs)
             result = self._execute(statement.add_columns(over(sql_func.count())), uniquify=loader_options_have_wildcard)
             count: int = 0
-            instances: List[ModelT] = []
+            instances: list[ModelT] = []
             for i, (instance, count_value) in enumerate(result):
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -2394,13 +2672,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[ModelT], int]:
+    ) -> tuple[list[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -2452,7 +2730,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if count == 0:
                 return [], 0
             result = self._execute(statement, uniquify=loader_options_have_wildcard)
-            instances: List[ModelT] = []
+            instances: list[ModelT] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -2461,7 +2739,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     @staticmethod
     def _get_count_stmt(
         statement: Select[tuple[ModelT]],
-        loader_options: Optional[List[_AbstractLoad]],  # noqa: ARG004
+        loader_options: Optional[list[_AbstractLoad]],  # noqa: ARG004
         execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
@@ -2481,7 +2759,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2564,18 +2842,18 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def upsert_many(
         self,
-        data: List[ModelT],
+        data: list[ModelT],
         *,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> List[ModelT]:
+    ) -> list[ModelT]:
         """Modify or create multiple instances.
 
         Update instances with the attribute values present on `data`, or create a new instance if
@@ -2608,13 +2886,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        instances: List[ModelT] = []
-        data_to_update: List[ModelT] = []
-        data_to_insert: List[ModelT] = []
+        instances: list[ModelT] = []
+        data_to_update: list[ModelT] = []
+        data_to_insert: list[ModelT] = []
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
-        match_filter: List[Union[StatementFilter, ColumnElement[bool]]] = []
+        match_filter: list[Union[StatementFilter, ColumnElement[bool]]] = []
         if match_fields:
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
@@ -2670,14 +2948,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
-    def _get_object_ids(self, existing_objs: List[ModelT]) -> List[Any]:
+    def _get_object_ids(self, existing_objs: list[ModelT]) -> list[Any]:
         return [obj_id for datum in existing_objs if (obj_id := getattr(datum, self.id_attribute)) is not None]
 
     def _get_match_fields(
         self,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         id_attribute: Optional[str] = None,
-    ) -> Optional[List[str]]:
+    ) -> Optional[list[str]]:
         id_attribute = id_attribute or self.id_attribute
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
@@ -2686,10 +2964,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def _merge_on_match_fields(
         self,
-        data: List[ModelT],
-        existing_data: List[ModelT],
-        match_fields: Optional[Union[List[str], str]] = None,
-    ) -> List[ModelT]:
+        data: list[ModelT],
+        existing_data: list[ModelT],
+        match_fields: Optional[Union[list[str], str]] = None,
+    ) -> list[ModelT]:
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
@@ -2707,7 +2985,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2715,7 +2993,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> List[ModelT]:
+    ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -3043,7 +3321,7 @@ class SQLAlchemySyncQueryRepository:
         count_with_window_function: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[Row[Any]], int]:
+    ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
 
         Args:
@@ -3064,7 +3342,7 @@ class SQLAlchemySyncQueryRepository:
         statement: Select[Any],
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[Row[Any]], int]:
+    ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
 
         Args:
@@ -3083,7 +3361,7 @@ class SQLAlchemySyncQueryRepository:
             execution_options = {"bind_group": bind_group} if bind_group else None
             result = self.execute(statement, execution_options=execution_options)
             count: int = 0
-            instances: List[Row[Any]] = []
+            instances: list[Row[Any]] = []
             for i, (instance, count_value) in enumerate(result):
                 instances.append(instance)
                 if i == 0:
@@ -3099,7 +3377,7 @@ class SQLAlchemySyncQueryRepository:
         statement: Select[Any],
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[List[Row[Any]], int]:
+    ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
 
         Args:
@@ -3119,12 +3397,12 @@ class SQLAlchemySyncQueryRepository:
             )
             count = count_result.scalar_one()
             result = self.execute(statement, execution_options=execution_options)
-            instances: List[Row[Any]] = []
+            instances: list[Row[Any]] = []
             for (instance,) in result:
                 instances.append(instance)
             return instances, count
 
-    def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> List[Row[Any]]:
+    def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> list[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:

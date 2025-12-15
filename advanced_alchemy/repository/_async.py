@@ -18,18 +18,21 @@ from typing import (
 )
 
 from sqlalchemy import (
+    Column,
     Delete,
     Result,
     Row,
     Select,
     TextClause,
     Update,
+    and_,
     any_,
     delete,
     inspect,
     over,
     select,
     text,
+    tuple_,
     update,
 )
 from sqlalchemy import func as sql_func
@@ -57,7 +60,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
     was_attribute_set,
 )
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, T
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, T
 from advanced_alchemy.service.typing import schema_dump
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
@@ -143,7 +146,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
 
     async def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -156,7 +159,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
 
     async def delete_many(
         self,
-        item_ids: List[Any],
+        item_ids: List[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -193,7 +196,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
 
     async def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -536,6 +539,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self._cache_manager = cache_manager if cache_manager is not None else session.info.get("cache_manager")
         # Default bind group for all operations (can be overridden per-method)
         self._bind_group = bind_group
+        # Cache primary key columns for composite key support
+        self._pk_columns, self._pk_attr_names = get_primary_key_info(self.model_type)
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         """Get the uniquify value, preferring the method parameter over instance setting.
@@ -703,6 +708,180 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
 
+    def _is_composite_pk(self) -> bool:
+        """Check if model has a composite (multi-column) primary key.
+
+        Returns:
+            True if the model has 2 or more primary key columns, False otherwise.
+
+        Examples:
+            >>> repo._is_composite_pk()  # For model with single PK
+            False
+            >>> repo._is_composite_pk()  # For model with (user_id, role_id) PK
+            True
+        """
+        return len(self._pk_columns) > 1
+
+    def _build_pk_filter(self, pk_value: PrimaryKeyType) -> ColumnElement[bool]:
+        """Build a WHERE clause for primary key lookup.
+
+        Supports single and composite primary keys with flexible input formats.
+
+        Args:
+            pk_value: Primary key value(s).
+                - For single PK: scalar value (int, str, UUID, etc.)
+                - For composite PK: tuple of values in column order, or dict mapping attribute names to values
+
+        Returns:
+            SQLAlchemy WHERE clause expression.
+
+        Raises:
+            ValueError: If the input format doesn't match the primary key structure.
+
+        Examples:
+            # Single primary key
+            >>> filter = repo._build_pk_filter(123)
+            >>> # Generates: WHERE id = 123
+
+            # Composite primary key (tuple format)
+            >>> filter = repo._build_pk_filter((1, 5))
+            >>> # Generates: WHERE user_id = 1 AND role_id = 5
+
+            # Composite primary key (dict format)
+            >>> filter = repo._build_pk_filter({"user_id": 1, "role_id": 5})
+            >>> # Generates: WHERE user_id = 1 AND role_id = 5
+        """
+        pk_columns = self._pk_columns
+        pk_attr_names = self._pk_attr_names
+
+        # Single primary key - accept scalar value only
+        if len(pk_columns) == 1:
+            if isinstance(pk_value, (tuple, dict)) and not isinstance(pk_value, str):  # type: ignore[unreachable]
+                msg = (
+                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Expected a scalar value, got {type(pk_value).__name__}: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            return cast("ColumnElement[bool]", pk_columns[0] == pk_value)
+
+        # Composite primary key - require tuple or dict
+        if isinstance(pk_value, tuple) and not isinstance(pk_value, str):  # type: ignore[unreachable]
+            # Tuple format: values must match column order
+            if len(pk_value) != len(pk_columns):
+                msg = (
+                    f"Composite primary key for {self.model_type.__name__} has "
+                    f"{len(pk_columns)} columns {list(pk_attr_names)}, "
+                    f"but {len(pk_value)} values provided: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            # Validate no None values in PK
+            for i, val in enumerate(pk_value):
+                if val is None:
+                    msg = (
+                        f"Primary key value for '{pk_attr_names[i]}' cannot be None "
+                        f"in composite key for {self.model_type.__name__}"
+                    )
+                    raise ValueError(msg)
+            return and_(*[col == val for col, val in zip(pk_columns, pk_value)])
+
+        if isinstance(pk_value, dict):
+            # Dict format: keys must be ORM attribute names
+            provided_keys = set(pk_value.keys())
+            required_keys = set(pk_attr_names)
+
+            missing_keys = required_keys - provided_keys
+            if missing_keys:
+                msg = (
+                    f"Composite primary key for {self.model_type.__name__} requires "
+                    f"attributes {sorted(required_keys)}, but missing: {sorted(missing_keys)}"
+                )
+                raise ValueError(msg)
+
+            # Validate no None values in PK
+            for attr_name in pk_attr_names:
+                if pk_value[attr_name] is None:
+                    msg = (
+                        f"Primary key value for '{attr_name}' cannot be None "
+                        f"in composite key for {self.model_type.__name__}"
+                    )
+                    raise ValueError(msg)
+
+            # Build filter using attribute names
+            return and_(*[col == pk_value[attr_name] for col, attr_name in zip(pk_columns, pk_attr_names)])
+
+        # Scalar passed for composite PK - error
+        msg = (
+            f"Composite primary key for {self.model_type.__name__} requires "
+            f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}. "
+            f"Expected columns: {list(pk_attr_names)}"
+        )
+        raise ValueError(msg)
+
+    def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
+        """Extract the primary key value(s) from a model instance.
+
+        Args:
+            instance: Model instance to extract primary key from.
+
+        Returns:
+            - For single PK: scalar value (int, str, UUID, etc.)
+            - For composite PK: tuple of values in column order
+
+        Examples:
+            # Single primary key
+            >>> user = User(id=123, name="Alice")
+            >>> repo._extract_pk_value(user)
+            123
+
+            # Composite primary key
+            >>> assignment = UserRole(user_id=1, role_id=5)
+            >>> repo._extract_pk_value(assignment)
+            (1, 5)
+        """
+        if len(self._pk_columns) == 1:
+            # Single PK - return scalar value
+            return getattr(instance, self._pk_attr_names[0])
+
+        # Composite PK - return tuple of values
+        return tuple(getattr(instance, attr_name) for attr_name in self._pk_attr_names)
+
+    def _pk_values_present(self, instance: ModelT) -> bool:
+        """Check if all primary key values are set on an instance.
+
+        Args:
+            instance: Model instance to check.
+
+        Returns:
+            True if all PK values are non-None, False otherwise.
+        """
+        return all(getattr(instance, attr_name, None) is not None for attr_name in self._pk_attr_names)
+
+    def _normalize_pk_values_to_tuples(self, item_ids: list[PrimaryKeyType]) -> list[tuple[Any, ...]]:
+        """Normalize a list of composite primary key values to tuples.
+
+        Args:
+            item_ids: List of PK values (dicts or tuples).
+
+        Returns:
+            List of tuples with values in PK column order.
+
+        Raises:
+            TypeError: If a value is not a dict or tuple.
+        """
+        normalized: list[tuple[Any, ...]] = []
+        for pk_value in item_ids:
+            if isinstance(pk_value, dict):
+                normalized.append(tuple(pk_value[attr_name] for attr_name in self._pk_attr_names))
+            elif isinstance(pk_value, tuple):
+                normalized.append(pk_value)
+            else:
+                msg = (
+                    f"Composite primary key for {self.model_type.__name__} requires "
+                    f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}"
+                )
+                raise TypeError(msg)
+        return normalized
+
     @staticmethod
     def check_not_found(item_or_none: Optional[ModelT]) -> ModelT:
         """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
@@ -820,7 +999,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -834,11 +1013,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         """Delete instance identified by ``item_id``.
 
         Args:
-            item_id: Identifier of instance to be deleted.
+            item_id: Identifier of instance to be deleted. For single primary keys,
+                pass a scalar value. For composite primary keys, pass a tuple of values
+                in column order or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Note: Only applies to single-column lookups.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -848,6 +1030,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Returns:
             The deleted instance.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await user_repo.delete(123)
+
+            # Composite primary key
+            >>> deleted = await user_role_repo.delete((user_id, role_id))
 
         """
         self._uniquify = self._get_uniquify(uniquify)
@@ -879,7 +1068,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def delete_many(
         self,
-        item_ids: List[Any],
+        item_ids: List[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -891,16 +1080,21 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
-        """Delete instance identified by `item_id`.
+        """Delete multiple instances identified by ``item_ids``.
 
         Args:
-            item_ids: Identifier of instance to be deleted.
-            auto_expunge: Remove object from session before returning.
+            item_ids: List of identifiers of instances to be deleted.
+                For single primary keys, pass a list of scalar values.
+                For composite primary keys, pass a list of tuples (values in column order)
+                or a list of dicts (mapping attribute names to values).
+            auto_expunge: Remove objects from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Note: Only applies to single-column lookups.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
-                Defaults to `950` if left unset.
+                Defaults to `950` if left unset. For composite keys, this is automatically
+                divided by the number of PK columns.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -910,6 +1104,27 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Returns:
             The deleted instances.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await user_repo.delete_many([1, 2, 3])
+
+            # Composite primary key (tuple format)
+            >>> deleted = await user_role_repo.delete_many(
+            ...     [
+            ...         (1, 5),
+            ...         (1, 6),
+            ...         (2, 5),
+            ...     ]
+            ... )
+
+            # Composite primary key (dict format)
+            >>> deleted = await user_role_repo.delete_many(
+            ...     [
+            ...         {"user_id": 1, "role_id": 5},
+            ...         {"user_id": 1, "role_id": 6},
+            ...     ]
+            ... )
 
         """
         self._uniquify = self._get_uniquify(uniquify)
@@ -926,55 +1141,93 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
-            id_attribute = get_instrumented_attr(
-                self.model_type,
-                id_attribute if id_attribute is not None else self.id_attribute,
-            )
             instances: List[ModelT] = []
-            if self._prefer_any:
-                chunk_size = len(item_ids) + 1
-            chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
-            for idx in range(0, len(item_ids), chunk_size):
-                chunk = item_ids[idx : min(idx + chunk_size, len(item_ids))]
-                if self._dialect.delete_executemany_returning:
-                    instances.extend(
-                        await self.session.scalars(
+
+            # Determine if using composite key path or single column path
+            use_composite_path = id_attribute is None and self._is_composite_pk()
+
+            if use_composite_path:
+                # Composite primary key path using tuple_().in_()
+                # Adjust chunk size for composite keys (divide by number of PK columns)
+                base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+                effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
+                normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
+
+                for idx in range(0, len(normalized_ids), effective_chunk_size):
+                    chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
+                    pk_filter = tuple_(*self._pk_columns).in_(chunk)
+
+                    if self._dialect.delete_executemany_returning:
+                        returning_delete_stmt = cast(
+                            "ReturningDelete[tuple[ModelT]]",
+                            delete(self.model_type).where(pk_filter).returning(self.model_type),
+                        )
+                        if execution_options:
+                            returning_delete_stmt = returning_delete_stmt.execution_options(**execution_options)
+                        instances.extend(await self.session.scalars(returning_delete_stmt))
+                    else:
+                        # Select first, then delete
+                        select_stmt = select(self.model_type).where(pk_filter)
+                        if loader_options:
+                            select_stmt = select_stmt.options(*loader_options)
+                        if execution_options:
+                            select_stmt = select_stmt.execution_options(**execution_options)
+                        instances.extend(await self.session.scalars(select_stmt))
+
+                        plain_delete_stmt = delete(self.model_type).where(pk_filter)
+                        if execution_options:
+                            plain_delete_stmt = plain_delete_stmt.execution_options(**execution_options)
+                        await self.session.execute(plain_delete_stmt)
+            else:
+                # Single column path (existing behavior)
+                id_attr = get_instrumented_attr(
+                    self.model_type,
+                    id_attribute if id_attribute is not None else self.id_attribute,
+                )
+                if self._prefer_any:
+                    chunk_size = len(item_ids) + 1
+                chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+                for idx in range(0, len(item_ids), chunk_size):
+                    chunk = cast("List[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
+                    if self._dialect.delete_executemany_returning:
+                        instances.extend(
+                            await self.session.scalars(
+                                self._get_delete_many_statement(
+                                    statement_type="delete",
+                                    model_type=self.model_type,
+                                    id_attribute=id_attr,
+                                    id_chunk=chunk,
+                                    supports_returning=self._dialect.delete_executemany_returning,
+                                    loader_options=loader_options,
+                                    execution_options=execution_options,
+                                ),
+                            ),
+                        )
+                    else:
+                        instances.extend(
+                            await self.session.scalars(
+                                self._get_delete_many_statement(
+                                    statement_type="select",
+                                    model_type=self.model_type,
+                                    id_attribute=id_attr,
+                                    id_chunk=chunk,
+                                    supports_returning=self._dialect.delete_executemany_returning,
+                                    loader_options=loader_options,
+                                    execution_options=execution_options,
+                                ),
+                            ),
+                        )
+                        await self.session.execute(
                             self._get_delete_many_statement(
                                 statement_type="delete",
                                 model_type=self.model_type,
-                                id_attribute=id_attribute,
+                                id_attribute=id_attr,
                                 id_chunk=chunk,
                                 supports_returning=self._dialect.delete_executemany_returning,
                                 loader_options=loader_options,
                                 execution_options=execution_options,
                             ),
-                        ),
-                    )
-                else:
-                    instances.extend(
-                        await self.session.scalars(
-                            self._get_delete_many_statement(
-                                statement_type="select",
-                                model_type=self.model_type,
-                                id_attribute=id_attribute,
-                                id_chunk=chunk,
-                                supports_returning=self._dialect.delete_executemany_returning,
-                                loader_options=loader_options,
-                                execution_options=execution_options,
-                            ),
-                        ),
-                    )
-                    await self.session.execute(
-                        self._get_delete_many_statement(
-                            statement_type="delete",
-                            model_type=self.model_type,
-                            id_attribute=id_attribute,
-                            id_chunk=chunk,
-                            supports_returning=self._dialect.delete_executemany_returning,
-                            loader_options=loader_options,
-                            execution_options=execution_options,
-                        ),
-                    )
+                        )
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -1212,13 +1465,20 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             resolved_execution_options = self._get_execution_options(execution_options)
             resolved_statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            resolved_id_attribute = id_attribute if id_attribute is not None else self.id_attribute
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
                 execution_options=resolved_execution_options,
             )
-            resolved_statement = self._filter_select_by_kwargs(resolved_statement, [(resolved_id_attribute, item_id)])
+            # Use composite-key-aware filter when id_attribute is not overridden
+            if id_attribute is None:
+                resolved_statement = resolved_statement.where(self._build_pk_filter(item_id))
+            else:
+                # Legacy path: custom id_attribute (single column lookup only)
+                resolved_id_attribute = id_attribute if id_attribute is not None else self.id_attribute
+                resolved_statement = self._filter_select_by_kwargs(
+                    resolved_statement, [(resolved_id_attribute, item_id)]
+                )
             resolved_statement = self._apply_for_update_options(resolved_statement, with_for_update)
             instance = (
                 await self._execute(resolved_statement, uniquify=loader_options_have_wildcard)
@@ -1463,7 +1723,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
     async def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -1479,11 +1739,15 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         """Get instance identified by `item_id`.
 
         Args:
-            item_id: Identifier of the instance to be retrieved.
+            item_id: Identifier of the instance to be retrieved. For single primary keys,
+                pass a scalar value (int, str, UUID, etc.). For composite primary keys,
+                pass a tuple of values in column order or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Note: Only applies to single-column lookups. For composite primary keys,
+                this parameter is ignored and the primary key columns are used automatically.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -1495,6 +1759,22 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         Returns:
             The retrieved instance.
+
+        Examples:
+            # Single primary key
+            >>> user = await user_repo.get(123)
+
+            # Composite primary key (tuple format)
+            >>> assignment = await user_role_repo.get((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> assignment = await user_role_repo.get(
+            ...     {"user_id": 1, "role_id": 5}
+            ... )
+
+        Raises:
+            NotFoundError: If no instance is found with the given primary key.
+            ValueError: If the input format doesn't match the primary key structure.
         """
         self._uniquify = self._get_uniquify(uniquify)
         resolved_error_messages = self._get_error_messages(
