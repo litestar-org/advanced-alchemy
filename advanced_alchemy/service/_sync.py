@@ -9,7 +9,7 @@ should be a SQLAlchemy model.
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, ClassVar, Generic, List, Optional, Union, cast
+from typing import Any, ClassVar, Generic, Optional, Union, cast
 
 from sqlalchemy import Select
 from sqlalchemy import inspect as sa_inspect
@@ -24,7 +24,7 @@ from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, Imp
 from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, SQLAlchemySyncRepositoryT
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     UNSET,
@@ -97,7 +97,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     """Default loader options for the repository."""
     execution_options: ClassVar[Optional[dict[str, Any]]] = None
     """Default execution options for the repository."""
-    match_fields: ClassVar[Optional[Union[List[str], str]]] = None
+    match_fields: ClassVar[Optional[Union[list[str], str]]] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
@@ -113,7 +113,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
         load: Optional[LoadSpec] = None,
@@ -258,7 +258,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         statement: Optional[Select[tuple[ModelT]]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
@@ -273,10 +273,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
         Args:
             item_id: Identifier of instance to be retrieved.
+                For single primary key models, pass a scalar value (int, str, UUID, etc.).
+                For composite primary key models, pass a tuple of values in column order,
+                or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -286,6 +290,16 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
         Returns:
             Representation of instance with identifier `item_id`.
+
+        Examples:
+            # Single primary key
+            >>> user = await service.get(123)
+
+            # Composite primary key (tuple format)
+            >>> assignment = await service.get((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> assignment = await service.get({"user_id": 1, "role_id": 5})
         """
         return cast(
             "ModelT",
@@ -463,16 +477,16 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         if operation and (op := operation_map.get(operation)):
             data = op(data)
         if is_dict(data):
-            return model_from_dict(self.model_type, **data)
+            return model_from_dict(model=self.model_type, **data)
         if is_pydantic_model(data):
             return model_from_dict(
-                self.model_type,
+                model=self.model_type,
                 **data.model_dump(exclude_unset=True),
             )
 
         if is_msgspec_struct(data):
             return model_from_dict(
-                self.model_type,
+                model=self.model_type,
                 **{
                     f: getattr(data, f)
                     for f in data.__struct_fields__
@@ -489,14 +503,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 return value is not attrs_nothing
 
             return model_from_dict(
-                self.model_type,
+                model=self.model_type,
                 **asdict(data, filter=filter_unset),
             )
 
         # Fallback for objects with __dict__ (e.g., regular classes)
         if hasattr(data, "__dict__") and not isinstance(data, self.model_type):
             return model_from_dict(
-                self.model_type,
+                model=self.model_type,
                 **data.__dict__,
             )
 
@@ -508,7 +522,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -608,7 +622,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -725,7 +739,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.add_many(
-                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -871,7 +885,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.update_many(
-                cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -892,7 +906,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -954,7 +968,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -986,7 +1000,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.upsert_many(
-                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_expunge=auto_expunge,
                 auto_commit=auto_commit,
                 no_merge=no_merge,
@@ -1002,7 +1016,7 @@ class SQLAlchemySyncRepositoryService(
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -1069,7 +1083,7 @@ class SQLAlchemySyncRepositoryService(
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        match_fields: Optional[Union[list[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -1130,7 +1144,7 @@ class SQLAlchemySyncRepositoryService(
 
     def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -1145,10 +1159,14 @@ class SQLAlchemySyncRepositoryService(
 
         Args:
             item_id: Identifier of instance to be deleted.
+                For single primary key models, pass a scalar value (int, str, UUID, etc.).
+                For composite primary key models, pass a tuple of values in column order,
+                or a dict mapping attribute names to values.
             auto_commit: Commit objects before returning.
             auto_expunge: Remove object from session before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -1158,6 +1176,16 @@ class SQLAlchemySyncRepositoryService(
 
         Returns:
             Representation of the deleted instance.
+
+        Examples:
+            # Single primary key
+            >>> deleted_user = await service.delete(123)
+
+            # Composite primary key (tuple format)
+            >>> deleted = await service.delete((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> deleted = await service.delete({"user_id": 1, "role_id": 5})
         """
         return cast(
             "ModelT",
@@ -1176,7 +1204,7 @@ class SQLAlchemySyncRepositoryService(
 
     def delete_many(
         self,
-        item_ids: List[Any],
+        item_ids: list[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -1191,11 +1219,14 @@ class SQLAlchemySyncRepositoryService(
         """Wrap repository bulk instance deletion.
 
         Args:
-            item_ids: Identifier of instance to be deleted.
+            item_ids: List of identifiers of instances to be deleted.
+                For single primary key models, pass a list of scalar values.
+                For composite primary key models, pass a list of tuples or dicts.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
                 Defaults to `950` if left unset.
             error_messages: An optional dictionary of templates to use
@@ -1207,6 +1238,26 @@ class SQLAlchemySyncRepositoryService(
 
         Returns:
             Representation of removed instances.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await service.delete_many([1, 2, 3])
+
+            # Composite primary key (tuple format)
+            >>> deleted = await service.delete_many(
+            ...     [
+            ...         (user_id_1, role_id_1),
+            ...         (user_id_2, role_id_2),
+            ...     ]
+            ... )
+
+            # Composite primary key (dict format)
+            >>> deleted = await service.delete_many(
+            ...     [
+            ...         {"user_id": 1, "role_id": 5},
+            ...         {"user_id": 1, "role_id": 6},
+            ...     ]
+            ... )
         """
         return cast(
             "Sequence[ModelT]",

@@ -753,6 +753,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         pk_columns = self._pk_columns
         pk_attr_names = self._pk_attr_names
 
+        # Fallback for models without mapped primary key (e.g., mock objects)
+        # In this case, use id_attribute for backward compatibility
+        if len(pk_columns) == 0:
+            id_attr = get_instrumented_attr(self.model_type, self.id_attribute)
+            return cast("ColumnElement[bool]", id_attr == pk_value)
+
         # Single primary key - accept scalar value only
         if len(pk_columns) == 1:
             if isinstance(pk_value, (tuple, dict)) and not isinstance(pk_value, str):  # type: ignore[unreachable]
