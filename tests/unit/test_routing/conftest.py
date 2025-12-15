@@ -22,4 +22,3 @@ def _reset_routing_context() -> Iterator[None]:
         yield
     finally:
         reset_routing_context()
-
