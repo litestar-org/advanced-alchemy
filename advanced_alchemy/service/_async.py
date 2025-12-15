@@ -303,6 +303,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         **kwargs: Any,
     ) -> ModelT:
         """Wrap repository scalar operation.
@@ -316,6 +317,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -331,6 +333,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                with_for_update=with_for_update,
                 **kwargs,
             ),
         )
@@ -344,6 +347,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Wrap repository scalar operation.
@@ -357,6 +361,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -372,6 +377,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                with_for_update=with_for_update,
                 **kwargs,
             ),
         )
