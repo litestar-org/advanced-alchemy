@@ -8,6 +8,10 @@ from typing import Any, Callable
 __all__ = ("CacheConfig",)
 
 
+def _default_arguments() -> dict[str, Any]:
+    return {}
+
+
 @dataclass
 class CacheConfig:
     """Configuration for a dogpile.cache region.
@@ -54,7 +58,7 @@ class CacheConfig:
     Set to ``-1`` for no expiration. Default is 3600 (1 hour).
     """
 
-    arguments: dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=_default_arguments)
     """Backend-specific configuration arguments.
 
     These are passed directly to the dogpile.cache backend.
@@ -100,4 +104,18 @@ class CacheConfig:
 
     The function should accept bytes and a model class,
     returning an instance of that class.
+    """
+
+    region_factory: Callable[[CacheConfig], Any] | None = None
+    """Optional hook to construct a cache region instance.
+
+    This exists to keep the repository/service integration stable even if
+    Advanced Alchemy swaps the underlying cache backend in the future.
+
+    If provided, :class:`~advanced_alchemy.cache.CacheManager` will call this
+    factory instead of using ``dogpile.cache.make_region()``.
+
+    The returned object must implement the subset of dogpile's region API that
+    AA relies on (e.g. ``get()``, ``set()``, ``delete()``, ``invalidate()``,
+    and optionally ``get_or_create()``).
     """

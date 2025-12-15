@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import pytest
-from sqlalchemy import Engine, String
+from sqlalchemy import Engine, String, event
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -61,7 +62,7 @@ def get_cached_author_model(engine_dialect_name: str, worker_id: str) -> type[De
                 "__module__": __name__,
                 "name": mapped_column(String(length=100)),
                 "bio": mapped_column(String(length=500), nullable=True),
-                "__annotations__": {"name": Mapped[str], "bio": Mapped[str | None]},
+                "__annotations__": {"name": Mapped[str], "bio": Mapped[Optional[str]]},
             },
         )
 
@@ -72,7 +73,10 @@ def get_cached_author_model(engine_dialect_name: str, worker_id: str) -> type[De
 
 def get_worker_id(request: pytest.FixtureRequest) -> str:
     """Get worker ID for pytest-xdist or 'master' for single process."""
-    return getattr(request.config, "workerinput", {}).get("workerid", "master")
+    workerinput = getattr(request.config, "workerinput", None)
+    if isinstance(workerinput, dict):
+        return cast("str", workerinput.get("workerid", "master"))
+    return "master"
 
 
 @pytest.fixture
@@ -119,10 +123,10 @@ async def test_async_repository_get_uses_cache(
         async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
         async with async_session_factory() as session:
 
-            class CachedAuthorRepository(SQLAlchemyAsyncRepository[CachedAuthor]):  # type: ignore[type-var]
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
                 model_type = CachedAuthor
 
-            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager)
+            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager, auto_expunge=True)
 
             # Create an author
             author = CachedAuthor(name="John Doe", bio="Author bio")
@@ -172,10 +176,10 @@ async def test_async_repository_get_use_cache_false_bypasses_cache(
         async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
         async with async_session_factory() as session:
 
-            class CachedAuthorRepository(SQLAlchemyAsyncRepository[CachedAuthor]):  # type: ignore[type-var]
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
                 model_type = CachedAuthor
 
-            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager)
+            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager, auto_expunge=True)
 
             # Create an author
             author = CachedAuthor(name="Jane Doe")
@@ -218,7 +222,7 @@ async def test_async_repository_without_cache_manager_works(
         async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
         async with async_session_factory() as session:
 
-            class CachedAuthorRepository(SQLAlchemyAsyncRepository[CachedAuthor]):  # type: ignore[type-var]
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
                 model_type = CachedAuthor
 
             repo = CachedAuthorRepository(session=session)  # No cache_manager
@@ -257,10 +261,10 @@ async def test_async_repository_cache_disabled_config(
         async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
         async with async_session_factory() as session:
 
-            class CachedAuthorRepository(SQLAlchemyAsyncRepository[CachedAuthor]):  # type: ignore[type-var]
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
                 model_type = CachedAuthor
 
-            repo = CachedAuthorRepository(session=session, cache_manager=disabled_cache_manager)
+            repo = CachedAuthorRepository(session=session, cache_manager=disabled_cache_manager, auto_expunge=True)
 
             # Should work but not cache anything
             author = CachedAuthor(name="Test")
@@ -271,6 +275,201 @@ async def test_async_repository_cache_disabled_config(
             assert retrieved.name == "Test"
 
     finally:
+        async with aiosqlite_engine.begin() as conn:
+            await conn.run_sync(CachedAuthor.metadata.drop_all)
+
+
+@pytest.mark.asyncio
+@pytest.mark.aiosqlite
+@pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
+async def test_async_repository_list_uses_cache_and_invalidates_on_commit(
+    aiosqlite_engine: AsyncEngine,
+    memory_cache_manager: CacheManager,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Test async repository list() caching and version-token invalidation."""
+    from sqlalchemy.ext.asyncio import AsyncSession as AS
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    worker_id = get_worker_id(request)
+    CachedAuthor = get_cached_author_model("aiosqlite_list", worker_id)
+
+    async with aiosqlite_engine.begin() as conn:
+        await conn.run_sync(CachedAuthor.metadata.create_all)
+
+    query_count = 0
+
+    def before_cursor_execute(_conn: object, _cursor: object, statement: str, *_: object) -> None:
+        nonlocal query_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            query_count += 1
+
+    event.listen(aiosqlite_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+
+    try:
+        async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
+        async with async_session_factory() as session:
+
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
+                model_type = CachedAuthor
+
+            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager, auto_expunge=True)
+
+            author = CachedAuthor(name="List Test", bio="Bio")
+            await repo.add(author)
+            await session.commit()
+
+            # Ensure we start from a known version token
+            model_name = CachedAuthor.__tablename__
+            version_before = memory_cache_manager.get_model_version_sync(model_name)
+
+            query_count = 0
+            authors_1 = await repo.list()
+            assert len(authors_1) == 1
+            assert query_count > 0
+
+            query_count = 0
+            authors_2 = await repo.list()
+            assert len(authors_2) == 1
+            assert query_count == 0
+
+            # Mutate + commit should bump model version token (invalidating list caches)
+            author = await repo.get(author.id, use_cache=False)
+            author.bio = "Updated"
+            await repo.update(author)
+            await session.commit()
+
+            # Wait for eventual async invalidation tasks to complete
+            import advanced_alchemy._listeners as listeners
+
+            if listeners._active_cache_operations:
+                await asyncio.gather(*list(listeners._active_cache_operations))
+
+            version_after = memory_cache_manager.get_model_version_sync(model_name)
+            assert version_after != version_before
+
+            query_count = 0
+            authors_3 = await repo.list()
+            assert len(authors_3) == 1
+            assert query_count > 0
+
+    finally:
+        event.remove(aiosqlite_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+        async with aiosqlite_engine.begin() as conn:
+            await conn.run_sync(CachedAuthor.metadata.drop_all)
+
+
+@pytest.mark.asyncio
+@pytest.mark.aiosqlite
+@pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
+async def test_async_repository_list_and_count_uses_cache(
+    aiosqlite_engine: AsyncEngine,
+    memory_cache_manager: CacheManager,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Test async repository list_and_count() caching."""
+    from sqlalchemy.ext.asyncio import AsyncSession as AS
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    worker_id = get_worker_id(request)
+    CachedAuthor = get_cached_author_model("aiosqlite_list_and_count", worker_id)
+
+    async with aiosqlite_engine.begin() as conn:
+        await conn.run_sync(CachedAuthor.metadata.create_all)
+
+    query_count = 0
+
+    def before_cursor_execute(_conn: object, _cursor: object, statement: str, *_: object) -> None:
+        nonlocal query_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            query_count += 1
+
+    event.listen(aiosqlite_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+
+    try:
+        async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
+        async with async_session_factory() as session:
+
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
+                model_type = CachedAuthor
+
+            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager, auto_expunge=True)
+
+            await repo.add(CachedAuthor(name="A1"))
+            await repo.add(CachedAuthor(name="A2"))
+            await session.commit()
+
+            query_count = 0
+            items_1, count_1 = await repo.list_and_count()
+            assert count_1 == 2
+            assert len(items_1) == 2
+            assert query_count > 0
+
+            query_count = 0
+            items_2, count_2 = await repo.list_and_count()
+            assert count_2 == 2
+            assert len(items_2) == 2
+            assert query_count == 0
+
+    finally:
+        event.remove(aiosqlite_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+        async with aiosqlite_engine.begin() as conn:
+            await conn.run_sync(CachedAuthor.metadata.drop_all)
+
+
+@pytest.mark.asyncio
+@pytest.mark.aiosqlite
+@pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
+async def test_async_repository_get_singleflight_coalesces_concurrent_misses(
+    aiosqlite_engine: AsyncEngine,
+    memory_cache_manager: CacheManager,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Test per-process async singleflight reduces stampedes on cache miss."""
+    from sqlalchemy.ext.asyncio import AsyncSession as AS
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    worker_id = get_worker_id(request)
+    CachedAuthor = get_cached_author_model("aiosqlite_singleflight", worker_id)
+
+    async with aiosqlite_engine.begin() as conn:
+        await conn.run_sync(CachedAuthor.metadata.create_all)
+
+    query_count = 0
+
+    def before_cursor_execute(_conn: object, _cursor: object, statement: str, *_: object) -> None:
+        nonlocal query_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            query_count += 1
+
+    event.listen(aiosqlite_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+
+    try:
+        async_session_factory = async_sessionmaker(aiosqlite_engine, class_=AS, expire_on_commit=False)
+        async with async_session_factory() as session:
+
+            class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
+                model_type = CachedAuthor
+
+            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager, auto_expunge=True)
+
+            author = CachedAuthor(name="SF")
+            await repo.add(author)
+            await session.commit()
+
+            author_id = author.id
+            model_name = CachedAuthor.__tablename__
+
+            # Force cache miss for this entity
+            memory_cache_manager.invalidate_entity_sync(model_name, author_id)
+
+            query_count = 0
+            results = await asyncio.gather(*[repo.get(author_id) for _ in range(10)])
+            assert all(r.id == author_id for r in results)
+            assert query_count == 1
+
+    finally:
+        event.remove(aiosqlite_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
         async with aiosqlite_engine.begin() as conn:
             await conn.run_sync(CachedAuthor.metadata.drop_all)
 
@@ -297,10 +496,10 @@ def test_sync_repository_get_uses_cache(
         session_factory = sessionmaker(sqlite_engine)
         with session_factory() as session:
 
-            class CachedAuthorRepository(SQLAlchemySyncRepository[CachedAuthor]):  # type: ignore[type-var]
+            class CachedAuthorRepository(SQLAlchemySyncRepository[Any]):
                 model_type = CachedAuthor
 
-            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager)
+            repo = CachedAuthorRepository(session=session, cache_manager=memory_cache_manager, auto_expunge=True)
 
             # Create an author
             author = CachedAuthor(name="John Doe", bio="Author bio")
@@ -340,7 +539,7 @@ def test_sync_repository_without_cache_manager_works(
         session_factory = sessionmaker(sqlite_engine)
         with session_factory() as session:
 
-            class CachedAuthorRepository(SQLAlchemySyncRepository[CachedAuthor]):  # type: ignore[type-var]
+            class CachedAuthorRepository(SQLAlchemySyncRepository[Any]):
                 model_type = CachedAuthor
 
             repo = CachedAuthorRepository(session=session)  # No cache_manager

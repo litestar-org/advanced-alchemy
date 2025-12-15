@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import concurrent.futures
 import logging
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+import threading
+import uuid
+from functools import partial
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 
 from advanced_alchemy.cache._null import NO_VALUE, NullRegion
 from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
     from dogpile.cache import CacheRegion
 
     from advanced_alchemy.cache.config import CacheConfig
@@ -24,14 +32,20 @@ logger = logging.getLogger("advanced_alchemy.cache")
 T = TypeVar("T")
 
 # Check if dogpile.cache is installed
+_dogpile_cache_installed = False
+_dogpile_no_value: Any = NO_VALUE
+_make_region: Any = None
 try:
-    from dogpile.cache import make_region
-    from dogpile.cache.api import NO_VALUE as DOGPILE_NO_VALUE
+    from dogpile.cache import make_region as _make_region
+    from dogpile.cache.api import NO_VALUE as DOGPILE_CACHE_NO_VALUE
 
-    DOGPILE_CACHE_INSTALLED = True
+    _dogpile_cache_installed = True
+    _dogpile_no_value = DOGPILE_CACHE_NO_VALUE
 except ImportError:
-    DOGPILE_NO_VALUE = NO_VALUE
-    DOGPILE_CACHE_INSTALLED = False
+    pass
+
+DOGPILE_CACHE_INSTALLED = _dogpile_cache_installed
+DOGPILE_NO_VALUE = _dogpile_no_value
 
 
 class CacheManager:
@@ -84,8 +98,12 @@ class CacheManager:
     """
 
     __slots__ = (
+        "_async_inflight",
+        "_async_inflight_lock",
         "_model_versions",
         "_region",
+        "_sync_inflight",
+        "_sync_inflight_lock",
         "config",
     )
 
@@ -97,7 +115,24 @@ class CacheManager:
         """
         self.config = config
         self._region: CacheRegion | NullRegion | None = None
-        self._model_versions: dict[str, int] = {}
+        # Model version tokens are stored in-cache for cross-process consistency.
+        # Use a random token per commit to avoid lost updates without requiring
+        # backend-specific atomic increment support.
+        self._model_versions: dict[str, str] = {}
+
+        # Per-process singleflight registries (async and sync).
+        # These are best-effort; they reduce stampedes within a single process.
+        self._async_inflight: dict[str, asyncio.Task[Any]] = {}
+        self._async_inflight_lock: asyncio.Lock | None = None
+        self._sync_inflight: dict[str, concurrent.futures.Future[Any]] = {}
+        self._sync_inflight_lock = threading.Lock()
+
+    @property
+    def _inflight_lock_async(self) -> asyncio.Lock:
+        """Lazily create the asyncio lock used for async singleflight."""
+        if self._async_inflight_lock is None:
+            self._async_inflight_lock = asyncio.Lock()
+        return self._async_inflight_lock
 
     @property
     def region(self) -> CacheRegion | NullRegion:
@@ -114,13 +149,23 @@ class CacheManager:
             self._region = self._create_region()
         return self._region
 
-    def _create_region(self) -> CacheRegion | NullRegion:
+    def _create_region(self) -> CacheRegion | NullRegion:  # noqa: PLR0911
         """Create and configure the dogpile.cache region.
 
         Returns:
             A configured CacheRegion or NullRegion if dogpile.cache
             is not installed or configuration fails.
         """
+        if self.config.region_factory is not None:
+            try:
+                created_region = cast("CacheRegion | NullRegion", self.config.region_factory(self.config))
+            except Exception:
+                logger.exception("Failed to construct cache region via region_factory, using NullRegion")
+                return NullRegion()
+            else:
+                logger.debug("Configured cache region via region_factory")
+                return created_region
+
         if not DOGPILE_CACHE_INSTALLED:
             logger.info("dogpile.cache is not installed, using NullRegion")
             return NullRegion()
@@ -130,7 +175,9 @@ class CacheManager:
             return NullRegion()
 
         try:
-            region: CacheRegion = make_region().configure(
+            if _make_region is None:  # pragma: no cover
+                return NullRegion()
+            region: CacheRegion = _make_region().configure(
                 self.config.backend,
                 expiration_time=self.config.expiration_time,
                 arguments=self.config.arguments,
@@ -141,6 +188,15 @@ class CacheManager:
         else:
             logger.debug("Configured cache region with backend: %s", self.config.backend)
             return region
+
+    def _singleflight_async_cleanup(self, key: str, task: asyncio.Task[Any], *_: Any) -> None:
+        """Cleanup callback for async singleflight tasks.
+
+        This runs in the event loop thread; we can safely mutate the in-flight
+        dict directly without scheduling another task.
+        """
+        if self._async_inflight.get(key) is task:
+            self._async_inflight.pop(key, None)
 
     def _make_key(self, key: str) -> str:
         """Generate a full cache key with the configured prefix.
@@ -157,7 +213,7 @@ class CacheManager:
     # Sync Methods (canonical implementations)
     # =========================================================================
 
-    def get_sync(self, key: str) -> Any:
+    def get_sync(self, key: str) -> object:
         """Get a value from the cache (sync).
 
         Args:
@@ -215,11 +271,20 @@ class CacheManager:
         """
         if not self.config.enabled:
             return creator()
-        return self.region.get_or_create(
-            self._make_key(key),
-            creator,
-            expiration_time=expiration_time or self.config.expiration_time,
-        )
+        region = self.region
+        full_key = self._make_key(key)
+        if hasattr(region, "get_or_create"):
+            return region.get_or_create(
+                full_key,
+                creator,
+                expiration_time=expiration_time or self.config.expiration_time,
+            )
+        cached = region.get(full_key)
+        if cached is not DOGPILE_NO_VALUE and cached is not NO_VALUE:
+            return cast("T", cached)
+        value = creator()
+        region.set(full_key, value)
+        return value
 
     def get_entity_sync(
         self,
@@ -242,10 +307,14 @@ class CacheManager:
 
         if cached is DOGPILE_NO_VALUE or cached is NO_VALUE:
             return None
+        if not isinstance(cached, (bytes, bytearray)):
+            self.delete_sync(key)
+            return None
 
         deserializer = self.config.deserializer or default_deserializer
         try:
-            result: T = deserializer(cached, model_class)
+            payload = bytes(cached) if isinstance(cached, bytearray) else cached
+            result: T = deserializer(payload, model_class)
         except Exception:
             logger.exception("Failed to deserialize cached entity %s:%s", model_name, entity_id)
             # Remove corrupted cache entry
@@ -290,30 +359,30 @@ class CacheManager:
         self.delete_sync(key)
         logger.debug("Invalidated cache for %s:%s", model_name, entity_id)
 
-    def bump_model_version_sync(self, model_name: str) -> int:
-        """Increment the version number for a model (sync).
+    def bump_model_version_sync(self, model_name: str) -> str:
+        """Bump the version token for a model (sync).
 
         This is used for version-based invalidation of list queries.
         When a model is created, updated, or deleted, the version is
-        bumped, which effectively invalidates all list query caches
-        that include that model's version in their cache key.
+        bumped to a new random token, which effectively invalidates all
+        list query caches that include that token in their cache key.
 
         Args:
             model_name: The model/table name.
 
         Returns:
-            The new version number.
+            The new version token.
         """
-        self._model_versions[model_name] = self._model_versions.get(model_name, 0) + 1
-        version = self._model_versions[model_name]
+        token = uuid.uuid4().hex
+        self._model_versions[model_name] = token
 
         # Store in cache for distributed consistency
-        self.set_sync(f"{model_name}:version", version)
-        logger.debug("Bumped version for %s to %d", model_name, version)
-        return version
+        self.set_sync(f"{model_name}:version", token)
+        logger.debug("Bumped version token for %s to %s", model_name, token)
+        return token
 
-    def get_model_version_sync(self, model_name: str) -> int:
-        """Get the current version number for a model (sync).
+    def get_model_version_sync(self, model_name: str) -> str:
+        """Get the current version token for a model (sync).
 
         This is used to include the version in list query cache keys,
         ensuring that list caches are invalidated when models change.
@@ -322,7 +391,7 @@ class CacheManager:
             model_name: The model/table name.
 
         Returns:
-            The current version number (0 if not set).
+            The current version token ("0" if not set).
         """
         # Check local cache first
         if model_name in self._model_versions:
@@ -330,11 +399,130 @@ class CacheManager:
 
         # Check distributed cache
         cached = self.get_sync(f"{model_name}:version")
-        if cached is not DOGPILE_NO_VALUE and cached is not NO_VALUE:
-            self._model_versions[model_name] = int(cached)
-            return self._model_versions[model_name]
+        if cached is not DOGPILE_NO_VALUE and cached is not NO_VALUE and isinstance(cached, str):
+            self._model_versions[model_name] = cached
+            return cached
 
-        return 0
+        return "0"
+
+    def get_list_sync(self, key: str, model_class: type[T]) -> list[T] | None:
+        """Get a cached list of entities (sync).
+
+        The list is stored as base64-encoded serialized entity payloads.
+
+        Args:
+            key: Cache key (without prefix).
+            model_class: Model class for deserialization.
+
+        Returns:
+            A list of detached model instances or None if not found.
+        """
+        cached = self.get_sync(key)
+        if cached is DOGPILE_NO_VALUE or cached is NO_VALUE:
+            return None
+        if not isinstance(cached, list):
+            return None
+
+        cached_list = cast("list[Any]", cached)  # type: ignore[redundant-cast]
+        deserializer = self.config.deserializer or default_deserializer
+        results: list[T] = []
+        try:
+            for item in cached_list:
+                if not isinstance(item, str):
+                    return None
+                raw = base64.b64decode(item.encode("ascii"))
+                results.append(deserializer(raw, model_class))
+        except Exception:
+            logger.exception("Failed to deserialize cached list for key %s", key)
+            self.delete_sync(key)
+            return None
+        return results
+
+    def set_list_sync(self, key: str, items: list[Any]) -> None:
+        """Cache a list of entities (sync).
+
+        Args:
+            key: Cache key (without prefix).
+            items: List of entities to cache.
+        """
+        serializer = self.config.serializer or default_serializer
+        try:
+            payload = [base64.b64encode(serializer(item)).decode("ascii") for item in items]
+            self.set_sync(key, payload)
+        except Exception:
+            logger.exception("Failed to serialize cached list for key %s", key)
+
+    def get_list_and_count_sync(self, key: str, model_class: type[T]) -> tuple[list[T], int] | None:
+        """Get a cached list+count payload (sync)."""
+        cached = self.get_sync(key)
+        if cached is DOGPILE_NO_VALUE or cached is NO_VALUE:
+            return None
+        if not isinstance(cached, dict):
+            return None
+
+        cached_payload: dict[str, Any] = cast("dict[str, Any]", cached)
+        items_raw = cached_payload.get("items")
+        count_raw = cached_payload.get("count")
+        if not isinstance(items_raw, list) or not isinstance(count_raw, int):
+            return None
+
+        items_list = cast("list[Any]", items_raw)  # type: ignore[redundant-cast]
+        deserializer = self.config.deserializer or default_deserializer
+        results: list[T] = []
+        try:
+            for item in items_list:
+                if not isinstance(item, str):
+                    return None
+                raw = base64.b64decode(item.encode("ascii"))
+                results.append(deserializer(raw, model_class))
+        except Exception:
+            logger.exception("Failed to deserialize cached list_and_count for key %s", key)
+            self.delete_sync(key)
+            return None
+        return results, count_raw
+
+    def set_list_and_count_sync(self, key: str, items: list[Any], count: int) -> None:
+        """Cache a list+count payload (sync)."""
+        serializer = self.config.serializer or default_serializer
+        try:
+            payload = {
+                "items": [base64.b64encode(serializer(item)).decode("ascii") for item in items],
+                "count": count,
+            }
+            self.set_sync(key, payload)
+        except Exception:
+            logger.exception("Failed to serialize cached list_and_count for key %s", key)
+
+    def singleflight_sync(self, key: str, creator: Callable[[], T]) -> T:
+        """Coalesce concurrent sync cache misses per-process.
+
+        This reduces stampedes in thread-based sync apps. It does not provide
+        cross-process locking.
+        """
+        with self._sync_inflight_lock:
+            future: concurrent.futures.Future[Any] | None = self._sync_inflight.get(key)
+            if future is None:
+                future = concurrent.futures.Future()
+                self._sync_inflight[key] = future
+                is_owner = True
+            else:
+                is_owner = False
+
+        if not is_owner:
+            return cast("T", future.result())
+
+        try:
+            result = creator()
+        except Exception as e:
+            future.set_exception(e)
+            raise
+        else:
+            future.set_result(result)
+            return result
+        finally:
+            with self._sync_inflight_lock:
+                if self._sync_inflight.get(key) is future:
+                    self._sync_inflight.pop(key, None)
 
     def invalidate_all_sync(self) -> None:
         """Invalidate all cached values (sync).
@@ -352,7 +540,7 @@ class CacheManager:
     # Async Methods (thin wrappers using async_() for thread offloading)
     # =========================================================================
 
-    async def get_async(self, key: str) -> Any:
+    async def get_async(self, key: str) -> object:
         """Get a value from the cache (async).
 
         Args:
@@ -452,8 +640,8 @@ class CacheManager:
         """
         await async_(self.invalidate_entity_sync)(model_name, entity_id)
 
-    async def bump_model_version_async(self, model_name: str) -> int:
-        """Increment the version number for a model (async).
+    async def bump_model_version_async(self, model_name: str) -> str:
+        """Bump the version token for a model (async).
 
         This is used for version-based invalidation of list queries.
         When a model is created, updated, or deleted, the version is
@@ -464,12 +652,12 @@ class CacheManager:
             model_name: The model/table name.
 
         Returns:
-            The new version number.
+            The new version token.
         """
         return await async_(self.bump_model_version_sync)(model_name)
 
-    async def get_model_version_async(self, model_name: str) -> int:
-        """Get the current version number for a model (async).
+    async def get_model_version_async(self, model_name: str) -> str:
+        """Get the current version token for a model (async).
 
         This is used to include the version in list query cache keys,
         ensuring that list caches are invalidated when models change.
@@ -478,9 +666,41 @@ class CacheManager:
             model_name: The model/table name.
 
         Returns:
-            The current version number (0 if not set).
+            The current version token ("0" if not set).
         """
         return await async_(self.get_model_version_sync)(model_name)
+
+    async def get_list_async(self, key: str, model_class: type[T]) -> list[T] | None:
+        """Get a cached list of entities (async)."""
+        return await async_(self.get_list_sync)(key, model_class)
+
+    async def set_list_async(self, key: str, items: list[Any]) -> None:
+        """Cache a list of entities (async)."""
+        await async_(self.set_list_sync)(key, items)
+
+    async def get_list_and_count_async(self, key: str, model_class: type[T]) -> tuple[list[T], int] | None:
+        """Get a cached list+count payload (async)."""
+        return await async_(self.get_list_and_count_sync)(key, model_class)
+
+    async def set_list_and_count_async(self, key: str, items: list[Any], count: int) -> None:
+        """Cache a list+count payload (async)."""
+        await async_(self.set_list_and_count_sync)(key, items, count)
+
+    async def singleflight_async(self, key: str, creator: Callable[[], Coroutine[Any, Any, T]]) -> T:
+        """Coalesce concurrent async cache misses per-process.
+
+        The creator is invoked once per key at a time; concurrent callers
+        await the same in-flight task. This does not provide cross-process
+        locking.
+        """
+        async with self._inflight_lock_async:
+            task = self._async_inflight.get(key)
+            if task is None:
+                task = asyncio.create_task(creator())
+                self._async_inflight[key] = task
+                task.add_done_callback(partial(self._singleflight_async_cleanup, key))
+
+        return await asyncio.shield(task)
 
     async def invalidate_all_async(self) -> None:
         """Invalidate all cached values (async).

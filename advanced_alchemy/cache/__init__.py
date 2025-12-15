@@ -10,7 +10,7 @@ Features:
     - Version-based invalidation for list queries
     - JSON serialization for cached models (configurable)
     - Graceful degradation when dogpile.cache is not installed
-    - Protection against thundering herd via dogpile locking
+    - Per-process singleflight to reduce stampedes on cache miss
 
 Example:
     Basic setup with memory cache::
@@ -57,7 +57,7 @@ Example:
 
 Note:
     This module requires the optional ``dogpile.cache`` dependency.
-    Install with: ``pip install advanced-alchemy[cache]``
+    Install with: ``pip install advanced-alchemy[dogpile]``
 
     Without dogpile.cache installed, the cache manager will use a
     NullRegion that provides the same interface but doesn't cache.

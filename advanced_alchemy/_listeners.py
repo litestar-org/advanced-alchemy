@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 _active_file_operations: set[asyncio.Task[Any]] = set()
 """Stores active file operations to prevent them from being garbage collected."""
+_active_cache_operations: set[asyncio.Task[Any]] = set()
+"""Stores active cache invalidation operations to prevent them from being garbage collected."""
 # Context variable to hold the session tracker instance for the current session context
 _current_session_tracker: contextvars.ContextVar[Optional["FileObjectSessionTracker"]] = contextvars.ContextVar(
     "_current_session_tracker",
@@ -500,6 +502,22 @@ class CacheInvalidationTracker:
         self._pending_invalidations.clear()
         self._pending_model_bumps.clear()
 
+    async def commit_async(self) -> None:
+        """Process all pending invalidations after successful commit (async-safe).
+
+        This method performs cache I/O using the CacheManager async APIs so that
+        dogpile backends (often sync network clients) never block the event loop.
+        """
+        # First bump model versions for list query invalidation
+        for model_name in self._pending_model_bumps:
+            await self._cache_manager.bump_model_version_async(model_name)
+        self._pending_model_bumps.clear()
+
+        # Then invalidate individual entities
+        for model_name, entity_id in self._pending_invalidations:
+            await self._cache_manager.invalidate_entity_async(model_name, entity_id)
+        self._pending_invalidations.clear()
+
 
 def get_cache_tracker(
     session: "Union[Session, AsyncSession, scoped_session[Session], async_scoped_session[AsyncSession]]",
@@ -596,7 +614,16 @@ class CacheInvalidationListener:
 
         tracker = get_cache_tracker(session, create=False)
         if tracker:
-            tracker.commit()
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop: sync usage, perform invalidation inline.
+                tracker.commit()
+            else:
+                # Running loop: schedule async invalidation so commit doesn't block.
+                task = asyncio.create_task(tracker.commit_async())
+                _active_cache_operations.add(task)
+                task.add_done_callback(_active_cache_operations.discard)
             session.info.pop(_CACHE_TRACKER_KEY, None)
 
     @classmethod

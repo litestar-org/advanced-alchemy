@@ -16,6 +16,7 @@ def test_cache_config_defaults() -> None:
     assert config.enabled is True
     assert config.serializer is None
     assert config.deserializer is None
+    assert config.region_factory is None
 
 
 def test_cache_config_custom_backend() -> None:

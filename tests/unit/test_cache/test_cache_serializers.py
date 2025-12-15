@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import datetime
-import json
 from decimal import Decimal
 from uuid import UUID
 
 import pytest
 
-from advanced_alchemy.cache.serializers import _json_decoder, _json_encoder
+from advanced_alchemy._serialization import decode_json, encode_json
+from advanced_alchemy.cache.serializers import _decode_special_types, _json_decoder, _json_encoder
 
 
 def test_json_encoder_datetime() -> None:
@@ -181,7 +181,7 @@ def test_json_decoder_non_special_type() -> None:
 
 
 def test_roundtrip_json_encoding() -> None:
-    """Test roundtrip encoding and decoding with json module."""
+    """Test roundtrip encoding and decoding using AA JSON utilities."""
     test_data = {
         "datetime": datetime.datetime(2025, 12, 14, 10, 30, 0),
         "date": datetime.date(2025, 12, 14),
@@ -193,11 +193,19 @@ def test_roundtrip_json_encoding() -> None:
         "set": {1, 2, 3},
     }
 
-    # Encode
-    json_str = json.dumps(test_data, default=_json_encoder)
+    encoded: dict[str, object] = {}
+    for k, v in test_data.items():
+        try:
+            encoded[k] = _json_encoder(v)
+        except TypeError:
+            encoded[k] = v
 
-    # Decode
-    result = json.loads(json_str, object_hook=_json_decoder)
+    # Encode via AA serializer
+    json_str = encode_json(encoded)
+
+    # Decode via AA parser + our special-type walker
+    raw = decode_json(json_str)
+    result = _decode_special_types(raw)
 
     assert result["datetime"] == test_data["datetime"]
     assert result["date"] == test_data["date"]

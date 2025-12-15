@@ -8,8 +8,14 @@ __all__ = ("NullRegion",)
 
 T = TypeVar("T")
 
+
 # Sentinel value to indicate a cache miss (compatible with dogpile.cache.api.NO_VALUE)
-NO_VALUE: Any = type("NO_VALUE", (), {"__repr__": lambda _: "<NO_VALUE>"})()
+class _NoValue:
+    def __repr__(self) -> str:
+        return "<NO_VALUE>"
+
+
+NO_VALUE: Any = _NoValue()
 
 
 class NullRegion:

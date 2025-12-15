@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 from uuid import UUID
+
+from advanced_alchemy._serialization import decode_json, encode_json
 
 __all__ = (
     "default_deserializer",
@@ -55,7 +56,8 @@ def _json_encoder(obj: Any) -> Any:  # noqa: PLR0911
     if isinstance(obj, UUID):
         return {"__type__": "uuid", "value": str(obj)}
     if isinstance(obj, (set, frozenset)):
-        return {"__type__": "set", "value": list(obj)}
+        items: list[Any] = list(cast("set[Any] | frozenset[Any]", obj))  # type: ignore[redundant-cast]
+        return {"__type__": "set", "value": items}
     msg = f"Object of type {type(obj).__name__} is not JSON serializable"
     raise TypeError(msg)
 
@@ -93,6 +95,31 @@ def _json_decoder(obj: dict[str, Any]) -> Any:  # noqa: PLR0911
         return set(value)
 
     return obj
+
+
+def _decode_special_types(value: Any) -> Any:
+    """Recursively decode special type markers.
+
+    When using ``encode_json`` (msgspec/orjson/json fallback), we can't rely on
+    stdlib json's ``object_hook`` callback. This helper decodes the special
+    ``{"__type__": ..., "value": ...}`` structures produced by ``_json_encoder``.
+    """
+    if isinstance(value, list):
+        value_list = cast("list[Any]", value)  # type: ignore[redundant-cast]
+        return [_decode_special_types(v) for v in value_list]
+
+    if not isinstance(value, dict):
+        return value
+
+    # Decode any nested values first
+    value_dict = cast("dict[Any, Any]", value)  # type: ignore[redundant-cast]
+    decoded: dict[str, Any] = {str(k): _decode_special_types(v) for k, v in value_dict.items()}
+
+    # Then decode "typed" marker dicts
+    if "__type__" in decoded and "value" in decoded:
+        return _json_decoder(decoded)
+
+    return decoded
 
 
 def default_serializer(model: Any) -> bytes:
@@ -133,9 +160,14 @@ def default_serializer(model: Any) -> bytes:
         if getattr(column, "_insert_sentinel", False):
             continue
         value = getattr(model, column.key)
-        data[column.key] = value
+        try:
+            # Encode special types into JSON-friendly marker structures.
+            data[column.key] = _json_encoder(value)
+        except TypeError:
+            # Leave unknown types alone; encode_json has its own hooks/fallbacks.
+            data[column.key] = value
 
-    return json.dumps(data, default=_json_encoder).encode("utf-8")
+    return encode_json(data).encode("utf-8")
 
 
 def default_deserializer(data: bytes, model_class: type[T]) -> T:
@@ -168,7 +200,8 @@ def default_deserializer(data: bytes, model_class: type[T]) -> T:
             user = default_deserializer(data, User)
             # user is a detached User instance
     """
-    parsed = json.loads(data.decode("utf-8"), object_hook=_json_decoder)
+    parsed_raw = decode_json(data)
+    parsed = _decode_special_types(parsed_raw)
 
     # Validate model class matches
     serialized_model = parsed.pop(_MODEL_KEY, None)
