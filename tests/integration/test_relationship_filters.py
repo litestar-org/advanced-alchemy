@@ -214,7 +214,7 @@ def test_relationship_filter_invalid_relationship_raises(
     skip_unsupported_sync_engines: None,
     uuid_test_session_sync: tuple[Session, dict[str, type]],
 ) -> None:
-    session, uuid_models = uuid_test_session_sync
+    _session, uuid_models = uuid_test_session_sync
 
     item_model: Any = uuid_models["item"]
 
@@ -229,7 +229,7 @@ def test_relationship_filter_join_negate_raises(
     skip_unsupported_sync_engines: None,
     uuid_test_session_sync: tuple[Session, dict[str, type]],
 ) -> None:
-    session, uuid_models = uuid_test_session_sync
+    _session, uuid_models = uuid_test_session_sync
 
     book_model: Any = uuid_models["book"]
 
