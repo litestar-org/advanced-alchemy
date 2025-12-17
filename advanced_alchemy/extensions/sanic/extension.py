@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
 
 from sanic import Request, Sanic
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError, MissingDependencyError
@@ -21,7 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover
 if TYPE_CHECKING:
     from sanic import Sanic
     from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncEngine
     from sqlalchemy.orm import Session
 
 
