@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
 
 from sanic import Request, Sanic
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError, MissingDependencyError
 from advanced_alchemy.extensions.sanic.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
@@ -197,6 +198,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         session = getattr(request.ctx, config.session_key, None)
         if session is None:
             setattr(request.ctx, config.session_key, config.get_session())
+        set_async_context(isinstance(session, AsyncSession))
         return cast("Union[Session, AsyncSession]", session)
 
     def get_session(
