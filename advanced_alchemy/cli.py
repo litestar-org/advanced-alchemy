@@ -23,16 +23,12 @@ def get_alchemy_group() -> "Group":
         The Advanced Alchemy CLI group.
     """
     from advanced_alchemy.exceptions import MissingDependencyError
+    from advanced_alchemy.utils.cli_tools import click, group
 
-    try:
-        import rich_click as click
-    except ImportError:
-        try:
-            import click  # type: ignore[no-redef]
-        except ImportError as e:
-            raise MissingDependencyError(package="click", install_package="cli") from e
+    if click is None:  # pragma: no cover - defensive guard
+        raise MissingDependencyError(package="click", install_package="cli")
 
-    @click.group(name="alchemy")
+    @group(name="alchemy")  # pyright: ignore
     @click.option(
         "--config",
         help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config.alchemy_configs')",
@@ -85,16 +81,9 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     Returns:
         The database group with the migration commands added.
     """
-    from advanced_alchemy.exceptions import MissingDependencyError
-
-    try:
-        import rich_click as click
-    except ImportError:
-        try:
-            import click  # type: ignore[no-redef]
-        except ImportError as e:
-            raise MissingDependencyError(package="click", install_package="cli") from e
     from rich import get_console
+
+    from advanced_alchemy.utils.cli_tools import click
 
     console = get_console()
 
