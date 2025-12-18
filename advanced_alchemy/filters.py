@@ -425,7 +425,7 @@ class LimitOffset(PaginationFilter):
             :class:`sqlalchemy.sql.expression.Select`: SQLAlchemy SELECT statement
         """
         if isinstance(statement, Select):
-            return statement.limit(self.limit).offset(self.offset)
+            statement = cast("StatementTypeT", statement.limit(self.limit).offset(self.offset))
         return statement
 
 
@@ -467,12 +467,13 @@ class OrderBy(StatementFilter):
         See Also:
             :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY
         """
-        if not isinstance(statement, Select):
-            return statement
-        field = self._get_instrumented_attr(model, self.field_name)
-        if self.sort_order == "desc":
-            return statement.order_by(field.desc())
-        return statement.order_by(field.asc())
+        if isinstance(statement, Select):
+            field = self._get_instrumented_attr(model, self.field_name)
+            if self.sort_order == "desc":
+                statement = cast("StatementTypeT", statement.order_by(field.desc()))
+            else:
+                statement = cast("StatementTypeT", statement.order_by(field.asc()))
+        return statement
 
 
 @dataclass

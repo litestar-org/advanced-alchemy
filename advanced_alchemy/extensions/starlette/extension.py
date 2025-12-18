@@ -84,7 +84,7 @@ class AdvancedAlchemy:
 
         @asynccontextmanager
         async def wrapped_lifespan(app: "Starlette") -> AsyncGenerator[Any, None]:  # pragma: no cover
-            async with self.lifespan(app), original_lifespan(app) as state:
+            async with self.lifespan(app), original_lifespan(app) as state:  # type: ignore[misc]
                 yield state
 
         app.router.lifespan_context = wrapped_lifespan

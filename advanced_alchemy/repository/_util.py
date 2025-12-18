@@ -338,9 +338,9 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         Returns:
             StatementTypeT: The ordered SQL statement.
         """
-        if not isinstance(statement, Select):
-            return statement
-        return statement.order_by(field.desc() if is_desc else field.asc())
+        if isinstance(statement, Select):
+            statement = cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))
+        return statement
 
 
 def column_has_defaults(column: Any) -> bool:

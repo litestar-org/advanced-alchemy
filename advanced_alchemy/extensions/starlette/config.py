@@ -10,7 +10,7 @@ from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from sqlalchemy.exc import OperationalError
-from starlette.concurrency import run_in_threadpool
+from starlette.concurrency import run_in_threadpool  # pyright: ignore[reportUnknownVariableType]
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing_extensions import Literal
 
@@ -151,7 +151,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             app, f"advanced_alchemy_async_session_maker_{self.session_maker_key}"
         )
 
-        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
+        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
@@ -272,7 +272,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         with self.engine_instance.begin() as conn:
             try:
                 await run_in_threadpool(
-                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all, conn
+                    lambda: metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all(
+                        conn
+                    )
                 )
             except OperationalError as exc:
                 _echo(f" * Could not create target metadata. Reason: {exc}")
@@ -291,7 +293,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             app, f"advanced_alchemy_sync_session_maker_{self.session_maker_key}"
         )
         _ = self.create_session_maker()
-        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)
+        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
