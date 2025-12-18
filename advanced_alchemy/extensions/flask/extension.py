@@ -16,6 +16,7 @@ from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLA
 from advanced_alchemy.utils.portals import Portal, PortalProvider
 
 if TYPE_CHECKING:
+    import click
     from flask import Flask
 
 
@@ -112,7 +113,8 @@ class AdvancedAlchemy:
         app.teardown_appcontext(self._teardown_appcontext)
 
         app.extensions["advanced_alchemy"] = self
-        app.cli.add_command(database_group)
+        db_group_cmd = cast("click.Command", database_group)
+        app.cli.add_command(db_group_cmd)
 
     def _teardown_appcontext(self, exception: "Optional[BaseException]" = None) -> None:
         """Clean up resources when the application context ends."""
