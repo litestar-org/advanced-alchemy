@@ -125,3 +125,56 @@ def test_command_wrapper_stores_aliases_on_plain_click(monkeypatch: pytest.Monke
     def ping() -> None: ...
 
     assert getattr(ping, "aliases", ()) == ("p",)
+
+
+def test_parent_group_resolves_child_aliases_plain_click(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Parent group (like Litestar CLI) should resolve aliases of child groups.
+
+    This tests the scenario where a child group with aliases is added to a parent
+    group that was created with plain click (not our wrapper). The global patch
+    should make the parent group alias-aware.
+    """
+    mod = _reload_utils_click(monkeypatch, "none")
+
+    # Create a parent group using base click (simulating Litestar's main CLI)
+    @base_click.group(name="main")
+    def parent_group() -> None:
+        pass
+
+    # Create child group with aliases (simulating database_group)
+    @mod.group(name="database", aliases=("db",))
+    def child_group() -> None:
+        pass
+
+    # Add child to parent (this is what Litestar does)
+    parent_group.add_command(child_group)
+
+    # Parent should resolve "db" to "database"
+    ctx = base_click.Context(parent_group)
+    resolved = parent_group.get_command(ctx, "db")
+
+    assert resolved is not None
+    assert resolved.name == "database"
+
+
+def test_parent_group_resolves_child_aliases_old_rich_click(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Parent group resolves aliases with old rich-click (< 1.9.0)."""
+    mod = _reload_utils_click(monkeypatch, "old")
+
+    # Create a parent group using base click
+    @base_click.group(name="main")
+    def parent_group() -> None:
+        pass
+
+    # Create child group with aliases
+    @mod.group(name="database", aliases=("db",))
+    def child_group() -> None:
+        pass
+
+    parent_group.add_command(child_group)
+
+    ctx = base_click.Context(parent_group)
+    resolved = parent_group.get_command(ctx, "db")
+
+    assert resolved is not None
+    assert resolved.name == "database"
