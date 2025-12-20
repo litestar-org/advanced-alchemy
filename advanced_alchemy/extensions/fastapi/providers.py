@@ -224,13 +224,13 @@ def provide_service(  # noqa: PLR0915
         A dependency provider for the service.
     """
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
-        config = cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key))
+        async_config = cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key))
 
         async def provide_async_service(
             request: Request,
             db_session: AsyncSession = Depends(extension.provide_session(key)),  # noqa: B008
         ) -> AsyncGenerator[AsyncServiceT_co, None]:  # type: ignore[union-attr,unused-ignore]
-            session_key = config.session_key if config else "db_session"
+            session_key = async_config.session_key if async_config else "db_session"
 
             # Mark session as generator-managed to prevent middleware cleanup
             setattr(request.state, f"{session_key}_generator_managed", True)
@@ -240,7 +240,7 @@ def provide_service(  # noqa: PLR0915
                 async with service_class.new(  # type: ignore[union-attr,unused-ignore]
                     session=db_session,  # type: ignore[arg-type, unused-ignore]
                     statement=statement,
-                    config=config,  # type: ignore[arg-type]
+                    config=async_config,  # type: ignore[arg-type]
                     error_messages=error_messages,
                     load=load,
                     execution_options=execution_options,
@@ -254,7 +254,7 @@ def provide_service(  # noqa: PLR0915
             finally:
                 # Get response status stored by middleware
                 response_status = getattr(request.state, f"{session_key}_response_status", None)
-                commit_mode = config.commit_mode if config else "manual"
+                commit_mode = async_config.commit_mode if async_config else "manual"
 
                 try:
                     should_commit = (
@@ -280,13 +280,13 @@ def provide_service(  # noqa: PLR0915
 
         return provide_async_service
 
-    config = cast("Optional[SQLAlchemySyncConfig]", extension.get_config(key))
+    sync_config = cast("Optional[SQLAlchemySyncConfig]", extension.get_config(key))
 
     def provide_sync_service(
         request: Request,
         db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
     ) -> Generator[SyncServiceT_co, None, None]:
-        session_key = config.session_key if config else "db_session"
+        session_key = sync_config.session_key if sync_config else "db_session"
 
         # Mark session as generator-managed to prevent middleware cleanup
         setattr(request.state, f"{session_key}_generator_managed", True)
@@ -296,7 +296,7 @@ def provide_service(  # noqa: PLR0915
             with service_class.new(
                 session=db_session,  # type: ignore[arg-type, unused-ignore]
                 statement=statement,
-                config=config,
+                config=sync_config,
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
@@ -310,7 +310,7 @@ def provide_service(  # noqa: PLR0915
         finally:
             # Get response status stored by middleware
             response_status = getattr(request.state, f"{session_key}_response_status", None)
-            commit_mode = config.commit_mode if config else "manual"
+            commit_mode = sync_config.commit_mode if sync_config else "manual"
 
             try:
                 should_commit = (
