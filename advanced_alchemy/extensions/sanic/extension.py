@@ -3,7 +3,9 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
 
 from sanic import Request, Sanic
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError, MissingDependencyError
 from advanced_alchemy.extensions.sanic.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.routing.context import reset_routing_context
@@ -21,7 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover
 if TYPE_CHECKING:
     from sanic import Sanic
     from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncEngine
     from sqlalchemy.orm import Session
 
 
@@ -197,10 +199,10 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         """
         session = getattr(request.ctx, config.session_key, None)
         if session is None:
-            # Reset routing context for request-scoped isolation when creating a new session
             reset_routing_context()
             session = config.get_session()
             setattr(request.ctx, config.session_key, session)
+        set_async_context(isinstance(session, AsyncSession))
         return cast("Union[Session, AsyncSession]", session)
 
     def get_session(
