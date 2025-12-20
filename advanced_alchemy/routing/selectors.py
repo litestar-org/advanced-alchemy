@@ -4,9 +4,7 @@ This module provides different strategies for selecting which read replica
 to use for read operations.
 """
 
-from __future__ import annotations
-
-import random
+import secrets
 import threading
 from abc import ABC, abstractmethod
 from itertools import cycle
@@ -91,11 +89,11 @@ class RoundRobinSelector(ReplicaSelector[EngineT]):
         Creating a round-robin selector::
 
             selector = RoundRobinSelector(replica_engines)
-            engine1 = selector.next()  # Returns first replica
-            engine2 = selector.next()  # Returns second replica
-            engine3 = (
-                selector.next()
-            )  # Returns first replica again (if only 2 replicas)
+            engine1 = selector.next()
+            engine2 = selector.next()
+            engine3 = selector.next()
+
+        This cycles through replicas in order and wraps back to the first.
     """
 
     __slots__ = ("_cycle", "_lock")
@@ -137,7 +135,7 @@ class RandomSelector(ReplicaSelector[EngineT]):
         Creating a random selector::
 
             selector = RandomSelector(replica_engines)
-            engine = selector.next()  # Returns a random replica
+            engine = selector.next()
     """
 
     __slots__ = ()
@@ -154,4 +152,4 @@ class RandomSelector(ReplicaSelector[EngineT]):
         if not self._replicas:
             msg = "No replicas configured for random selection"
             raise RuntimeError(msg)
-        return random.choice(self._replicas)  # noqa: S311
+        return secrets.choice(self._replicas)

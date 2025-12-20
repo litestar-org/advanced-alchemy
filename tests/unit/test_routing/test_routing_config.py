@@ -3,8 +3,6 @@
 Tests the configuration classes used for read/write routing setup.
 """
 
-from __future__ import annotations
-
 from advanced_alchemy.config.routing import ReplicaConfig, RoutingConfig, RoutingStrategy
 
 
@@ -238,7 +236,6 @@ def test_get_replica_configs_from_strings() -> None:
     assert all(isinstance(r, ReplicaConfig) for r in replica_configs)
     assert replica_configs[0].connection_string == "postgresql://replica1:5432/db"
     assert replica_configs[1].connection_string == "postgresql://replica2:5432/db"
-    # Default values should be set
     assert replica_configs[0].weight == 1
     assert replica_configs[0].name == ""
 
@@ -288,11 +285,9 @@ def test_get_replica_configs_mixed() -> None:
 
     assert len(replica_configs) == 2
     assert all(isinstance(r, ReplicaConfig) for r in replica_configs)
-    # String converted to ReplicaConfig with defaults
     assert replica_configs[0].connection_string == "postgresql://replica1:5432/db"
     assert replica_configs[0].weight == 1
     assert replica_configs[0].name == ""
-    # ReplicaConfig preserved
     assert replica_configs[1].connection_string == "postgresql://replica2:5432/db"
     assert replica_configs[1].weight == 3
     assert replica_configs[1].name == "replica-2"

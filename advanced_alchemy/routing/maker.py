@@ -4,16 +4,14 @@ This module provides session maker classes that create routing-aware sessions
 with properly configured primary and replica engines.
 """
 
-from __future__ import annotations
-
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 from advanced_alchemy.routing.selectors import RandomSelector, ReplicaSelector, RoundRobinSelector
-from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSession
+from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSyncSession
 
 __all__ = (
     "RoutingAsyncSessionMaker",
@@ -24,7 +22,7 @@ __all__ = (
 class RoutingSyncSessionMaker:
     """Factory for creating sync routing sessions.
 
-    This class creates :class:`RoutingSession` instances with properly
+    This class creates :class:`RoutingSyncSession` instances with properly
     configured primary and replica engines.
 
     Example:
@@ -41,7 +39,6 @@ class RoutingSyncSessionMaker:
                 engine_config={"pool_size": 10},
             )
 
-            # Create a session
             session = maker()
     """
 
@@ -57,8 +54,8 @@ class RoutingSyncSessionMaker:
     def __init__(
         self,
         routing_config: RoutingConfig,
-        engine_config: dict[str, Any] | None = None,
-        session_config: dict[str, Any] | None = None,
+        engine_config: Optional[dict[str, Any]] = None,
+        session_config: Optional[dict[str, Any]] = None,
         create_engine_callable: Callable[[str], Engine] = create_engine,
     ) -> None:
         """Initialize the session maker.
@@ -73,19 +70,16 @@ class RoutingSyncSessionMaker:
         self._engine_config = engine_config or {}
         self._session_config = session_config or {}
 
-        # Create primary engine
         self._primary_engine = self._create_engine(
             routing_config.primary_connection_string,
             create_engine_callable,
         )
 
-        # Create replica engines
         self._replica_engines: list[Engine] = []
         for connection_string in routing_config.get_replica_connection_strings():
             engine = self._create_engine(connection_string, create_engine_callable)
             self._replica_engines.append(engine)
 
-        # Create replica selector
         self._replica_selector = self._create_selector(
             self._replica_engines,
             routing_config.routing_strategy,
@@ -108,7 +102,6 @@ class RoutingSyncSessionMaker:
         try:
             return create_engine_callable(connection_string, **self._engine_config)
         except TypeError:
-            # Some dialects don't support all engine options
             config = self._engine_config.copy()
             config.pop("json_deserializer", None)
             config.pop("json_serializer", None)
@@ -132,16 +125,18 @@ class RoutingSyncSessionMaker:
             return RandomSelector(engines)
         return RoundRobinSelector(engines)
 
-    def __call__(self) -> RoutingSession:
+    def __call__(self) -> RoutingSyncSession:
         """Create a new routing session.
 
+        Any ``bind`` passed in the session config is ignored because
+        routing controls bind selection.
+
         Returns:
-            A new :class:`RoutingSession` instance.
+            A new :class:`RoutingSyncSession` instance.
         """
         session_config = self._session_config.copy()
-        # Remove bind from session config - routing handles this
         session_config.pop("bind", None)
-        return RoutingSession(
+        return RoutingSyncSession(
             primary_engine=self._primary_engine,
             replica_selector=self._replica_selector,
             routing_config=self._routing_config,
@@ -193,7 +188,6 @@ class RoutingAsyncSessionMaker:
                 engine_config={"pool_size": 10},
             )
 
-            # Create a session
             async with maker() as session:
                 result = await session.execute(select(User))
     """
@@ -210,8 +204,8 @@ class RoutingAsyncSessionMaker:
     def __init__(
         self,
         routing_config: RoutingConfig,
-        engine_config: dict[str, Any] | None = None,
-        session_config: dict[str, Any] | None = None,
+        engine_config: Optional[dict[str, Any]] = None,
+        session_config: Optional[dict[str, Any]] = None,
         create_engine_callable: Callable[[str], AsyncEngine] = create_async_engine,
     ) -> None:
         """Initialize the async session maker.
@@ -226,19 +220,16 @@ class RoutingAsyncSessionMaker:
         self._engine_config = engine_config or {}
         self._session_config = session_config or {}
 
-        # Create primary async engine
         self._primary_engine = self._create_engine(
             routing_config.primary_connection_string,
             create_engine_callable,
         )
 
-        # Create replica async engines
         self._replica_engines: list[AsyncEngine] = []
         for connection_string in routing_config.get_replica_connection_strings():
             engine = self._create_engine(connection_string, create_engine_callable)
             self._replica_engines.append(engine)
 
-        # Create replica selector
         self._replica_selector = self._create_selector(
             self._replica_engines,
             routing_config.routing_strategy,
@@ -261,7 +252,6 @@ class RoutingAsyncSessionMaker:
         try:
             return create_engine_callable(connection_string, **self._engine_config)
         except TypeError:
-            # Some dialects don't support all engine options
             config = self._engine_config.copy()
             config.pop("json_deserializer", None)
             config.pop("json_serializer", None)
@@ -288,11 +278,13 @@ class RoutingAsyncSessionMaker:
     def __call__(self) -> RoutingAsyncSession:
         """Create a new async routing session.
 
+        Any ``bind`` passed in the session config is ignored because
+        routing controls bind selection.
+
         Returns:
             A new :class:`RoutingAsyncSession` instance.
         """
         session_config = self._session_config.copy()
-        # Remove bind from session config - routing handles this
         session_config.pop("bind", None)
         return RoutingAsyncSession(
             primary_engine=self._primary_engine,

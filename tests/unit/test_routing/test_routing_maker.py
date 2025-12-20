@@ -3,21 +3,17 @@
 Tests the factory classes that create routing sessions.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 from advanced_alchemy.routing.maker import RoutingAsyncSessionMaker, RoutingSyncSessionMaker
 from advanced_alchemy.routing.selectors import RandomSelector, RoundRobinSelector
-from advanced_alchemy.routing.session import RoutingSession
-
-if TYPE_CHECKING:
-    from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncEngine
+from advanced_alchemy.routing.session import RoutingSyncSession
 
 
 @pytest.fixture
@@ -67,7 +63,6 @@ def test_sync_session_maker_creates_round_robin_selector_by_default(
         create_engine_callable=create_mock_engine,
     )
 
-    # Access the internal selector
     session = maker()
     assert isinstance(session._replica_selector, RoundRobinSelector)
 
@@ -95,7 +90,7 @@ def test_sync_session_maker_creates_random_selector(routing_config: RoutingConfi
 
 
 def test_sync_session_maker_call_creates_session(routing_config: RoutingConfig) -> None:
-    """Test that calling the maker creates a RoutingSession."""
+    """Test that calling the maker creates a RoutingSyncSession."""
 
     def create_mock_engine(url: str, **kwargs: Any) -> Engine:
         return MagicMock(spec=["dispose"])
@@ -107,7 +102,7 @@ def test_sync_session_maker_call_creates_session(routing_config: RoutingConfig) 
 
     session = maker()
 
-    assert isinstance(session, RoutingSession)
+    assert isinstance(session, RoutingSyncSession)
     assert session._routing_config is routing_config
 
 
@@ -128,8 +123,7 @@ def test_sync_session_maker_passes_engine_config() -> None:
         create_engine_callable=mock_create_engine,
     )
 
-    # Verify create_engine was called with engine_config
-    assert mock_create_engine.call_count == 2  # Primary + 1 replica
+    assert mock_create_engine.call_count == 2
     for call in mock_create_engine.call_args_list:
         _, kwargs = call
         assert kwargs.get("pool_size") == 10
@@ -173,8 +167,7 @@ def test_sync_session_maker_close_all_disposes_engines(routing_config: RoutingCo
 
     maker.close_all()
 
-    # Verify all engines were disposed
-    assert len(mock_engines) == 3  # Primary + 2 replicas
+    assert len(mock_engines) == 3
     for engine in mock_engines:
         engine.dispose.assert_called_once()
 
@@ -186,14 +179,12 @@ def test_sync_session_maker_handles_engine_creation_errors() -> None:
         read_replicas=["postgresql://replica1:5432/db"],
     )
 
-    # Mock create_engine that raises TypeError on first call, succeeds on retry
     call_count = 0
 
     def create_mock_engine(url: str, **kwargs: Any) -> Engine:
         nonlocal call_count
         call_count += 1
 
-        # Fail if json_serializer is present (simulating unsupported option)
         if "json_serializer" in kwargs:
             raise TypeError("json_serializer not supported")
 
@@ -209,7 +200,6 @@ def test_sync_session_maker_handles_engine_creation_errors() -> None:
         create_engine_callable=create_mock_engine,
     )
 
-    # Should have engines despite TypeError
     assert maker.primary_engine is not None
     assert len(maker.replica_engines) == 1
 
@@ -248,7 +238,6 @@ def test_async_session_maker_creates_round_robin_selector_by_default(
         create_engine_callable=create_mock_async_engine,
     )
 
-    # Check the maker's internal selector
     assert isinstance(maker._replica_selector, RoundRobinSelector)
 
 
@@ -270,7 +259,6 @@ def test_async_session_maker_creates_random_selector(routing_config: RoutingConf
         create_engine_callable=create_mock_async_engine,
     )
 
-    # Check the maker's internal selector
     assert isinstance(maker._replica_selector, RandomSelector)
 
 
@@ -292,7 +280,6 @@ def test_async_session_maker_call_creates_session(routing_config: RoutingConfig)
         create_engine_callable=create_mock_async_engine,
     )
 
-    # We can test that the maker has the right config
     assert maker.primary_engine is not None
     assert len(maker.replica_engines) == 2
 
@@ -316,8 +303,7 @@ def test_async_session_maker_passes_engine_config() -> None:
         create_engine_callable=mock_create_engine,
     )
 
-    # Verify create_async_engine was called with engine_config
-    assert mock_create_engine.call_count == 2  # Primary + 1 replica
+    assert mock_create_engine.call_count == 2
     for call in mock_create_engine.call_args_list:
         _, kwargs = call
         assert kwargs.get("pool_size") == 10
@@ -337,7 +323,6 @@ async def test_async_session_maker_close_all_disposes_engines(
         engine = MagicMock(spec=["dispose", "sync_engine"])
         engine.sync_engine = MagicMock()
 
-        # Make dispose return a coroutine
         async def mock_dispose() -> None:
             pass
 
@@ -352,8 +337,7 @@ async def test_async_session_maker_close_all_disposes_engines(
 
     await maker.close_all()
 
-    # Verify all engines were disposed
-    assert len(mock_engines) == 3  # Primary + 2 replicas
+    assert len(mock_engines) == 3
     for engine in mock_engines:
         engine.dispose.assert_called_once()
 
@@ -365,7 +349,6 @@ def test_async_session_maker_handles_engine_creation_errors() -> None:
         read_replicas=["postgresql://replica1:5432/db"],
     )
 
-    # Mock that raises TypeError on json_serializer
     def create_mock_async_engine(url: str, **kwargs: Any) -> AsyncEngine:
         if "json_serializer" in kwargs:
             raise TypeError("json_serializer not supported")
@@ -383,7 +366,6 @@ def test_async_session_maker_handles_engine_creation_errors() -> None:
         create_engine_callable=create_mock_async_engine,
     )
 
-    # Should succeed after retrying without json_serializer
     assert maker.primary_engine is not None
     assert len(maker.replica_engines) == 1
 
@@ -436,7 +418,6 @@ def test_sync_session_maker_removes_bind_from_session_config(
     def create_mock_engine(url: str, **kwargs: Any) -> Engine:
         return MagicMock(spec=["dispose"])
 
-    # Try to pass bind in session_config (should be removed)
     session_config = {"bind": MagicMock(), "expire_on_commit": False}
 
     maker = RoutingSyncSessionMaker(
@@ -445,9 +426,8 @@ def test_sync_session_maker_removes_bind_from_session_config(
         create_engine_callable=create_mock_engine,
     )
 
-    # Should not raise an error, bind should be removed
     session = maker()
-    assert isinstance(session, RoutingSession)
+    assert isinstance(session, RoutingSyncSession)
 
 
 def test_async_session_maker_stores_session_config(
@@ -460,7 +440,6 @@ def test_async_session_maker_stores_session_config(
         engine.sync_engine = MagicMock()
         return engine
 
-    # Pass session_config
     session_config = {"expire_on_commit": False}
 
     maker = RoutingAsyncSessionMaker(
@@ -469,5 +448,4 @@ def test_async_session_maker_stores_session_config(
         create_engine_callable=create_mock_async_engine,
     )
 
-    # Verify session config was stored
     assert maker._session_config == session_config

@@ -4,11 +4,9 @@ These tests verify that the routing module correctly routes read operations to
 replicas and write operations to the primary database with real sessions.
 """
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Generator
-from typing import TYPE_CHECKING
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -22,26 +20,17 @@ from advanced_alchemy.routing import (
     RoundRobinSelector,
     RoutingAsyncSession,
     RoutingAsyncSessionMaker,
-    RoutingSession,
+    RoutingSyncSession,
     RoutingSyncSessionMaker,
     primary_context,
     replica_context,
     reset_routing_context,
 )
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.xdist_group("routing"),
 ]
-
-
-# ---------------------------------------------------------------------------
-# Test Models
-# ---------------------------------------------------------------------------
 
 
 class RoutingTestBase(DeclarativeBase):
@@ -57,11 +46,6 @@ class User(RoutingTestBase):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(100))
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -83,13 +67,11 @@ def sync_routing_engines(routing_test_db_paths: dict[str, Path]) -> Generator[di
         "replica2": create_engine(f"sqlite:///{routing_test_db_paths['replica2']}"),
     }
 
-    # Create tables on all databases
     for engine in engines.values():
         RoutingTestBase.metadata.create_all(engine)
 
     yield engines
 
-    # Cleanup
     for engine in engines.values():
         engine.dispose()
 
@@ -137,7 +119,6 @@ def sync_session_maker(
 
     maker = RoutingSyncSessionMaker(routing_config=config)
 
-    # Create tables
     RoutingTestBase.metadata.create_all(maker.primary_engine)
     for engine in maker.replica_engines:
         RoutingTestBase.metadata.create_all(engine)
@@ -167,12 +148,7 @@ def async_session_maker(
     yield maker
 
 
-# ---------------------------------------------------------------------------
-# Sync Routing Session Tests
-# ---------------------------------------------------------------------------
-
-
-class TestSyncRoutingSession:
+class TestRoutingSyncSession:
     """Integration tests for sync routing sessions."""
 
     def test_write_goes_to_primary(self, sync_session_maker: RoutingSyncSessionMaker) -> None:
@@ -181,12 +157,10 @@ class TestSyncRoutingSession:
         session = sync_session_maker()
 
         try:
-            # Insert a user and commit to persist
             user = User(name="Test User")
             session.add(user)
             session.commit()
 
-            # Verify user exists on primary using a new session
             with Session(sync_session_maker.primary_engine) as primary_session:
                 result = primary_session.execute(select(User).where(User.name == "Test User")).scalar_one_or_none()
                 assert result is not None
@@ -202,17 +176,13 @@ class TestSyncRoutingSession:
         session = sync_session_maker()
 
         try:
-            # First, seed data directly on primary (bypassing routing)
             with Session(sync_session_maker.primary_engine) as primary_session:
                 primary_session.add(User(id="primary-user", name="Primary User"))
                 primary_session.commit()
 
-            # Perform a write to trigger stickiness
             session.add(User(name="Trigger Write"))
             session.flush()
 
-            # After write, reads should go to primary (sticky)
-            # So we should find the "Primary User" we added
             stmt = select(User).where(User.id == "primary-user")
             result = session.execute(stmt).scalar_one_or_none()
             assert result is not None
@@ -229,14 +199,10 @@ class TestSyncRoutingSession:
         session = sync_session_maker()
 
         try:
-            # Add data to primary
             user = User(name="Test User")
             session.add(user)
             session.commit()
 
-            # After commit, stickiness should be reset
-            # Next read should go to a replica
-            # We can verify this by checking the context var was reset
             from advanced_alchemy.routing.context import stick_to_primary_var
 
             assert not stick_to_primary_var.get()
@@ -251,19 +217,15 @@ class TestSyncRoutingSession:
         session = sync_session_maker()
 
         try:
-            # Add data to trigger stickiness
             session.add(User(name="Test User"))
             session.flush()
 
-            # Verify stickiness is set
             from advanced_alchemy.routing.context import stick_to_primary_var
 
             assert stick_to_primary_var.get()
 
-            # Rollback
             session.rollback()
 
-            # Stickiness should be reset
             assert not stick_to_primary_var.get()
 
         finally:
@@ -276,13 +238,10 @@ class TestSyncRoutingSession:
         session = sync_session_maker()
 
         try:
-            # Seed data on primary only
             with Session(sync_session_maker.primary_engine) as primary_session:
                 primary_session.add(User(id="primary-only", name="Primary Only"))
                 primary_session.commit()
 
-            # Without primary_context, read might go to replica (empty)
-            # With primary_context, read must go to primary
             with primary_context():
                 result = session.execute(select(User).where(User.id == "primary-only")).scalar_one_or_none()
                 assert result is not None
@@ -298,19 +257,14 @@ class TestSyncRoutingSession:
         session = sync_session_maker()
 
         try:
-            # Trigger stickiness with a write
             session.add(User(name="Trigger Write"))
             session.flush()
 
-            # Verify stickiness is set
             from advanced_alchemy.routing.context import stick_to_primary_var
 
             assert stick_to_primary_var.get()
 
-            # With replica_context, reads should be allowed on replicas
-            # (overriding stickiness)
             with replica_context():
-                # force_primary should be False, allowing replicas
                 from advanced_alchemy.routing.context import force_primary_var
 
                 assert not force_primary_var.get()
@@ -321,12 +275,7 @@ class TestSyncRoutingSession:
             reset_routing_context()
 
 
-# ---------------------------------------------------------------------------
-# Async Routing Session Tests
-# ---------------------------------------------------------------------------
-
-
-class TestAsyncRoutingSession:
+class TestRoutingAsyncSession:
     """Integration tests for async routing sessions."""
 
     @pytest.mark.asyncio
@@ -334,7 +283,6 @@ class TestAsyncRoutingSession:
         """Test that async INSERT statements are routed to primary."""
         reset_routing_context()
 
-        # Create tables
         async with async_session_maker.primary_engine.begin() as conn:
             await conn.run_sync(RoutingTestBase.metadata.create_all)
         for replica_engine in async_session_maker.replica_engines:
@@ -344,12 +292,10 @@ class TestAsyncRoutingSession:
         session = async_session_maker()
 
         try:
-            # Insert a user and commit
             user = User(name="Async Test User")
             session.add(user)
             await session.commit()
 
-            # Verify user exists on primary
             async with AsyncSession(async_session_maker.primary_engine) as primary_session:
                 result = await primary_session.execute(select(User).where(User.name == "Async Test User"))
                 user_result = result.scalar_one_or_none()
@@ -360,7 +306,6 @@ class TestAsyncRoutingSession:
             await session.close()
             reset_routing_context()
 
-        # Cleanup
         await async_session_maker.close_all()
 
     @pytest.mark.asyncio
@@ -368,11 +313,9 @@ class TestAsyncRoutingSession:
         """Test that primary_context() works with async sessions."""
         reset_routing_context()
 
-        # Create tables
         async with async_session_maker.primary_engine.begin() as conn:
             await conn.run_sync(RoutingTestBase.metadata.create_all)
 
-        # Seed data on primary
         async with AsyncSession(async_session_maker.primary_engine) as primary_session:
             primary_session.add(User(id="async-primary", name="Async Primary"))
             await primary_session.commit()
@@ -390,7 +333,6 @@ class TestAsyncRoutingSession:
             await session.close()
             reset_routing_context()
 
-        # Cleanup
         await async_session_maker.close_all()
 
     @pytest.mark.asyncio
@@ -398,7 +340,6 @@ class TestAsyncRoutingSession:
         """Test that async commit resets stickiness."""
         reset_routing_context()
 
-        # Create tables
         async with async_session_maker.primary_engine.begin() as conn:
             await conn.run_sync(RoutingTestBase.metadata.create_all)
 
@@ -407,30 +348,20 @@ class TestAsyncRoutingSession:
         try:
             from advanced_alchemy.routing.context import stick_to_primary_var
 
-            # Add user to trigger stickiness
             session.add(User(name="Commit Test User"))
             await session.flush()
 
-            # Verify stickiness
             assert stick_to_primary_var.get()
 
-            # Commit
             await session.commit()
 
-            # Stickiness should be reset
             assert not stick_to_primary_var.get()
 
         finally:
             await session.close()
             reset_routing_context()
 
-        # Cleanup
         await async_session_maker.close_all()
-
-
-# ---------------------------------------------------------------------------
-# Session Maker Tests
-# ---------------------------------------------------------------------------
 
 
 class TestRoutingSyncSessionMaker:
@@ -447,7 +378,7 @@ class TestRoutingSyncSessionMaker:
 
         try:
             session = maker()
-            assert isinstance(session, RoutingSession)
+            assert isinstance(session, RoutingSyncSession)
             assert session._primary_engine is maker.primary_engine
         finally:
             maker.close_all()
@@ -466,17 +397,14 @@ class TestRoutingSyncSessionMaker:
         maker = RoutingSyncSessionMaker(routing_config=config)
 
         try:
-            # Verify selector type
             assert maker._replica_selector is not None
             selector = maker._replica_selector
             assert isinstance(selector, RoundRobinSelector)
 
-            # Verify round-robin behavior
             first = selector.next()
             second = selector.next()
             third = selector.next()
 
-            # Third should cycle back to first
             assert first == third
             assert first != second
 
@@ -523,11 +451,6 @@ class TestRoutingAsyncSessionMaker:
             await maker.close_all()
 
 
-# ---------------------------------------------------------------------------
-# Context Isolation Tests
-# ---------------------------------------------------------------------------
-
-
 class TestContextIsolation:
     """Tests for context variable isolation between concurrent requests."""
 
@@ -543,13 +466,12 @@ class TestContextIsolation:
             reset_routing_context()
             session = sync_session_maker()
             try:
-                # Set stickiness via write
                 session.add(User(name="Task 1"))
                 session.flush()
 
                 from advanced_alchemy.routing.context import stick_to_primary_var
 
-                barrier.wait()  # Sync with task2
+                barrier.wait()
                 results["task1_sticky"] = stick_to_primary_var.get()
             finally:
                 session.rollback()
@@ -560,10 +482,9 @@ class TestContextIsolation:
             reset_routing_context()
             session = sync_session_maker()
             try:
-                barrier.wait()  # Sync with task1
+                barrier.wait()
                 from advanced_alchemy.routing.context import stick_to_primary_var
 
-                # Task2 should NOT be sticky (independent context)
                 results["task2_sticky"] = stick_to_primary_var.get()
             finally:
                 session.close()
@@ -575,14 +496,12 @@ class TestContextIsolation:
             f1.result()
             f2.result()
 
-        # Task1 should be sticky, Task2 should not
         assert results["task1_sticky"] is True
         assert results["task2_sticky"] is False
 
     @pytest.mark.asyncio
     async def test_async_context_isolation(self, async_session_maker: RoutingAsyncSessionMaker) -> None:
         """Test that async context variables are isolated per task."""
-        # Create tables
         async with async_session_maker.primary_engine.begin() as conn:
             await conn.run_sync(RoutingTestBase.metadata.create_all)
 
@@ -598,8 +517,8 @@ class TestContextIsolation:
 
                 from advanced_alchemy.routing.context import stick_to_primary_var
 
-                event.set()  # Signal task2
-                await asyncio.sleep(0.1)  # Give task2 time to check
+                event.set()
+                await asyncio.sleep(0.1)
                 results["task1_sticky"] = stick_to_primary_var.get()
             finally:
                 await session.rollback()
@@ -610,7 +529,7 @@ class TestContextIsolation:
             reset_routing_context()
             session = async_session_maker()
             try:
-                await event.wait()  # Wait for task1
+                await event.wait()
 
                 from advanced_alchemy.routing.context import stick_to_primary_var
 
@@ -624,13 +543,7 @@ class TestContextIsolation:
         assert results["task1_sticky"] is True
         assert results["task2_sticky"] is False
 
-        # Cleanup
         await async_session_maker.close_all()
-
-
-# ---------------------------------------------------------------------------
-# Edge Case Tests
-# ---------------------------------------------------------------------------
 
 
 class TestEdgeCases:
@@ -640,7 +553,7 @@ class TestEdgeCases:
         """Test that without replicas, all operations go to primary."""
         config = RoutingConfig(
             primary_connection_string=f"sqlite:///{routing_test_db_paths['primary']}",
-            read_replicas=[],  # No replicas
+            read_replicas=[],
         )
 
         maker = RoutingSyncSessionMaker(routing_config=config)
@@ -650,12 +563,10 @@ class TestEdgeCases:
             reset_routing_context()
             session = maker()
 
-            # Seed primary
             with Session(maker.primary_engine) as direct_session:
                 direct_session.add(User(id="no-replica-test", name="No Replica User"))
                 direct_session.commit()
 
-            # Read should go to primary (only option)
             result = session.execute(select(User).where(User.id == "no-replica-test")).scalar_one_or_none()
             assert result is not None
             assert result.name == "No Replica User"
@@ -670,7 +581,7 @@ class TestEdgeCases:
         config = RoutingConfig(
             primary_connection_string=f"sqlite:///{routing_test_db_paths['primary']}",
             read_replicas=[f"sqlite:///{routing_test_db_paths['replica1']}"],
-            enabled=False,  # Routing disabled
+            enabled=False,
         )
 
         maker = RoutingSyncSessionMaker(routing_config=config)
@@ -680,12 +591,10 @@ class TestEdgeCases:
             reset_routing_context()
             session = maker()
 
-            # Seed primary
             with Session(maker.primary_engine) as direct_session:
                 direct_session.add(User(id="disabled-test", name="Disabled Routing User"))
                 direct_session.commit()
 
-            # Even reads should go to primary when routing is disabled
             result = session.execute(select(User).where(User.id == "disabled-test")).scalar_one_or_none()
             assert result is not None
 
@@ -698,7 +607,6 @@ class TestEdgeCases:
         """Test that FOR UPDATE queries route to primary."""
         reset_routing_context()
 
-        # Seed data on primary
         with Session(sync_session_maker.primary_engine) as direct_session:
             direct_session.add(User(id="for-update-test", name="For Update User"))
             direct_session.commit()
@@ -706,7 +614,6 @@ class TestEdgeCases:
         session = sync_session_maker()
 
         try:
-            # FOR UPDATE should route to primary even without prior writes
             stmt = select(User).where(User.id == "for-update-test").with_for_update()
             result = session.execute(stmt).scalar_one_or_none()
             assert result is not None
@@ -715,11 +622,6 @@ class TestEdgeCases:
         finally:
             session.close()
             reset_routing_context()
-
-
-# ---------------------------------------------------------------------------
-# Nested Context Tests
-# ---------------------------------------------------------------------------
 
 
 class TestNestedContexts:
@@ -737,10 +639,8 @@ class TestNestedContexts:
             with primary_context():
                 assert force_primary_var.get()
 
-            # Should still be True after inner context exits
             assert force_primary_var.get()
 
-        # Should be False after outer context exits
         assert not force_primary_var.get()
         reset_routing_context()
 
@@ -750,7 +650,6 @@ class TestNestedContexts:
         session = sync_session_maker()
 
         try:
-            # Trigger stickiness
             session.add(User(name="Sticky User"))
             session.flush()
 
@@ -763,7 +662,6 @@ class TestNestedContexts:
 
             with replica_context():
                 assert not force_primary_var.get()
-                # Stickiness is still set but force_primary is False
 
                 with replica_context():
                     assert not force_primary_var.get()
@@ -785,10 +683,8 @@ class TestNestedContexts:
             assert force_primary_var.get()
 
             with replica_context():
-                # replica_context sets force_primary to False
                 assert not force_primary_var.get()
 
-            # After replica_context exits, primary_context restores True
             assert force_primary_var.get()
 
         assert not force_primary_var.get()

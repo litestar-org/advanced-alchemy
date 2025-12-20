@@ -3,8 +3,6 @@
 Tests the context-based state management for routing decisions.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from advanced_alchemy.routing.context import (
@@ -20,7 +18,6 @@ from advanced_alchemy.routing.context import (
 
 def test_context_vars_default_values() -> None:
     """Test that context variables have correct default values."""
-    # Reset to ensure clean state
     reset_routing_context()
 
     assert stick_to_primary_var.get() is False
@@ -38,14 +35,12 @@ def test_set_sticky_primary() -> None:
 
 def test_reset_routing_context() -> None:
     """Test that reset_routing_context resets all flags."""
-    # Set both flags
     stick_to_primary_var.set(True)
     force_primary_var.set(True)
 
     assert stick_to_primary_var.get() is True
     assert force_primary_var.get() is True
 
-    # Reset
     reset_routing_context()
 
     assert stick_to_primary_var.get() is False
@@ -93,7 +88,6 @@ def test_primary_context_forces_primary() -> None:
     with primary_context():
         assert force_primary_var.get() is True
 
-    # Should be reset after context
     assert force_primary_var.get() is False
 
 
@@ -111,13 +105,14 @@ def test_primary_context_resets_on_exception() -> None:
     """Test that primary_context resets the flag even on exception."""
     reset_routing_context()
 
-    with pytest.raises(ValueError):
+    def _raise_in_primary_context() -> None:
         with primary_context():
             assert force_primary_var.get() is True
             raise ValueError("test exception")
 
-    # Should still be reset after exception
-    assert force_primary_var.get() is False  # type: ignore[unreachable]
+    pytest.raises(ValueError, _raise_in_primary_context)
+
+    assert force_primary_var.get() is False
 
 
 def test_primary_context_nested() -> None:
@@ -145,7 +140,6 @@ def test_replica_context_clears_sticky_flag() -> None:
     with replica_context():
         assert stick_to_primary_var.get() is False
 
-    # replica_context properly resets to previous value using tokens
     assert stick_to_primary_var.get() is True
 
 
@@ -159,7 +153,6 @@ def test_replica_context_clears_force_flag() -> None:
     with replica_context():
         assert force_primary_var.get() is False
 
-    # replica_context properly resets to previous value using tokens
     assert force_primary_var.get() is True
 
 
@@ -173,7 +166,6 @@ def test_replica_context_clears_both_flags() -> None:
         assert stick_to_primary_var.get() is False
         assert force_primary_var.get() is False
 
-    # replica_context properly resets to previous values using tokens
     assert stick_to_primary_var.get() is True
     assert force_primary_var.get() is True
 
@@ -184,14 +176,15 @@ def test_replica_context_resets_on_exception() -> None:
     stick_to_primary_var.set(True)
     force_primary_var.set(True)
 
-    with pytest.raises(ValueError):
+    def _raise_in_replica_context() -> None:
         with replica_context():
             assert stick_to_primary_var.get() is False
             assert force_primary_var.get() is False
             raise ValueError("test exception")
 
-    # Should be reset to previous values (using tokens)
-    assert stick_to_primary_var.get() is True  # type: ignore[unreachable]
+    pytest.raises(ValueError, _raise_in_replica_context)
+
+    assert stick_to_primary_var.get() is True
     assert force_primary_var.get() is True
 
 
@@ -201,17 +194,14 @@ def test_context_vars_are_isolated_per_context() -> None:
 
     reset_routing_context()
 
-    # Create a context with force_primary set
     def set_force() -> None:
         force_primary_var.set(True)
 
     ctx = copy_context()
     ctx.run(set_force)
 
-    # Main context should still be False
     assert force_primary_var.get() is False
 
-    # Run in the copied context
     assert ctx.run(lambda: force_primary_var.get()) is True
 
 
@@ -219,24 +209,18 @@ def test_primary_and_replica_contexts_can_be_nested() -> None:
     """Test that primary_context and replica_context can be nested."""
     reset_routing_context()
 
-    # Start with sticky set
     stick_to_primary_var.set(True)
 
     with replica_context():
-        # Sticky should be cleared
         assert stick_to_primary_var.get() is False
         assert force_primary_var.get() is False
 
         with primary_context():
-            # Force should be set
             assert force_primary_var.get() is True
-            # Sticky still False (set by replica_context)
             assert stick_to_primary_var.get() is False
 
-        # After primary_context, force should be cleared back to False (set by replica_context)
         assert force_primary_var.get() is False
 
-    # After replica_context, sticky should be restored to True, force to False
     assert stick_to_primary_var.get() is True
     assert force_primary_var.get() is False
 
@@ -249,11 +233,7 @@ def test_context_manager_as_decorator_not_supported() -> None:
     """
     reset_routing_context()
 
-    # This should work as expected
     with primary_context():
         assert force_primary_var.get() is True
 
-    # But decorating a function won't work as expected
-    # (the context would be set during decoration, not during call)
-    # This is just documenting the expected behavior
     assert force_primary_var.get() is False

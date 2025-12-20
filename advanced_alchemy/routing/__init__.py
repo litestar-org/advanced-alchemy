@@ -26,16 +26,12 @@ Example:
             replica_context,
         )
 
-        # Force all operations to primary
         with primary_context():
             user = await repo.get(user_id)
 
-        # Allow reads on replicas even after writes
         with replica_context():
             users = await repo.list()
 """
-
-from __future__ import annotations
 
 from advanced_alchemy.routing.context import (
     force_primary_var,
@@ -46,20 +42,16 @@ from advanced_alchemy.routing.context import (
 )
 from advanced_alchemy.routing.maker import RoutingAsyncSessionMaker, RoutingSyncSessionMaker
 from advanced_alchemy.routing.selectors import RandomSelector, ReplicaSelector, RoundRobinSelector
-from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSession
+from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSyncSession
 
 __all__ = (
-    # Selectors
     "RandomSelector",
     "ReplicaSelector",
     "RoundRobinSelector",
-    # Sessions
     "RoutingAsyncSession",
-    # Session makers
     "RoutingAsyncSessionMaker",
-    "RoutingSession",
+    "RoutingSyncSession",
     "RoutingSyncSessionMaker",
-    # Context managers and variables
     "force_primary_var",
     "primary_context",
     "replica_context",

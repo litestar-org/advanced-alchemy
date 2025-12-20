@@ -5,14 +5,9 @@ enabling automatic routing of read operations to read replicas while directing
 write operations to the primary database.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from typing import Union
 
 __all__ = (
     "ReplicaConfig",
@@ -33,6 +28,11 @@ class RoutingStrategy(Enum):
 
     RANDOM = auto()
     """Select replicas randomly."""
+
+
+def _default_read_replicas() -> list[Union[str, "ReplicaConfig"]]:
+    """Return an empty list for read replica configuration."""
+    return []
 
 
 @dataclass
@@ -104,7 +104,7 @@ class RoutingConfig:
     primary_connection_string: str
     """Connection string for the primary (write) database."""
 
-    read_replicas: Sequence[str | ReplicaConfig] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    read_replicas: list[Union[str, ReplicaConfig]] = field(default_factory=_default_read_replicas)
     """Read replica connection strings or configs.
 
     Can be a list of connection strings or :class:`ReplicaConfig` instances

@@ -5,8 +5,6 @@ That state is process-local, so it can leak between tests when running without x
 xdist schedules related tests onto the same worker.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterator
 
 import pytest

@@ -3,17 +3,12 @@
 Tests different strategies for selecting read replicas.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import Engine
 
 from advanced_alchemy.routing.selectors import RandomSelector, RoundRobinSelector
-
-if TYPE_CHECKING:
-    from sqlalchemy import Engine
 
 
 @pytest.fixture
@@ -42,12 +37,10 @@ def test_round_robin_selector_cycles_through_replicas(mock_engines: list[Engine]
     """Test that RoundRobinSelector cycles through replicas in order."""
     selector = RoundRobinSelector(mock_engines)
 
-    # First cycle
     assert selector.next() is mock_engines[0]
     assert selector.next() is mock_engines[1]
     assert selector.next() is mock_engines[2]
 
-    # Second cycle - should start over
     assert selector.next() is mock_engines[0]
     assert selector.next() is mock_engines[1]
     assert selector.next() is mock_engines[2]
@@ -58,7 +51,6 @@ def test_round_robin_selector_single_replica() -> None:
     engine = MagicMock(name="single_engine")
     selector = RoundRobinSelector([engine])
 
-    # Should always return the same engine
     assert selector.next() is engine
     assert selector.next() is engine
     assert selector.next() is engine
@@ -80,8 +72,7 @@ def test_round_robin_selector_thread_safe(mock_engines: list[Engine]) -> None:
     results: list[Engine] = []
 
     def worker() -> None:
-        for _ in range(10):
-            results.append(selector.next())  # noqa: PERF401
+        results.extend([selector.next() for _ in range(10)])
 
     threads = [threading.Thread(target=worker) for _ in range(5)]
     for thread in threads:
@@ -89,7 +80,6 @@ def test_round_robin_selector_thread_safe(mock_engines: list[Engine]) -> None:
     for thread in threads:
         thread.join()
 
-    # All 50 results should be valid engines
     assert len(results) == 50
     assert all(engine in mock_engines for engine in results)
 
@@ -114,7 +104,6 @@ def test_random_selector_returns_valid_replica(mock_engines: list[Engine]) -> No
     """Test that RandomSelector returns valid replicas."""
     selector = RandomSelector(mock_engines)
 
-    # Get 100 selections and verify all are valid
     selections = [selector.next() for _ in range(100)]
 
     assert all(engine in mock_engines for engine in selections)
@@ -124,18 +113,12 @@ def test_random_selector_distributes_randomly(mock_engines: list[Engine]) -> Non
     """Test that RandomSelector distributes selections across replicas."""
     selector = RandomSelector(mock_engines)
 
-    # Get many selections
     selections = [selector.next() for _ in range(1000)]
 
-    # Count selections per engine
     counts = {engine: selections.count(engine) for engine in mock_engines}
 
-    # All engines should be selected at least once
     assert all(count > 0 for count in counts.values())
 
-    # Distribution should be roughly even (with some randomness tolerance)
-    # Each engine should get roughly 333 selections (1000 / 3)
-    # Allow +/- 100 for randomness
     for count in counts.values():
         assert 200 < count < 450, f"Distribution not random enough: {counts}"
 
@@ -145,7 +128,6 @@ def test_random_selector_single_replica() -> None:
     engine = MagicMock(name="single_engine")
     selector = RandomSelector([engine])
 
-    # Should always return the same engine
     assert selector.next() is engine
     assert selector.next() is engine
     assert selector.next() is engine

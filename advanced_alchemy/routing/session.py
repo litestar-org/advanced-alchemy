@@ -4,9 +4,7 @@ This module provides custom SQLAlchemy session classes that implement
 read/write routing via the ``get_bind()`` method.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sqlalchemy import Delete, Insert, Update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,11 +28,11 @@ if TYPE_CHECKING:
 
 __all__ = (
     "RoutingAsyncSession",
-    "RoutingSession",
+    "RoutingSyncSession",
 )
 
 
-class RoutingSession(Session):
+class RoutingSyncSession(Session):
     """Synchronous session with read/write routing via ``get_bind()``.
 
     This session class extends SQLAlchemy's :class:`Session` to provide
@@ -55,15 +53,15 @@ class RoutingSession(Session):
         _routing_config: Configuration for routing behavior.
     """
 
-    _primary_engine: Engine
-    _replica_selector: ReplicaSelector[Engine]
-    _routing_config: RoutingConfig
+    _primary_engine: "Engine"
+    _replica_selector: "ReplicaSelector[Engine]"
+    _routing_config: "RoutingConfig"
 
     def __init__(
         self,
-        primary_engine: Engine | None = None,
-        replica_selector: ReplicaSelector[Engine] | None = None,
-        routing_config: RoutingConfig | None = None,
+        primary_engine: "Engine",
+        replica_selector: "ReplicaSelector[Engine]",
+        routing_config: "RoutingConfig",
         **kwargs: Any,
     ) -> None:
         """Initialize the routing session.
@@ -74,25 +72,19 @@ class RoutingSession(Session):
             routing_config: Configuration for routing behavior.
             **kwargs: Additional arguments passed to the parent Session.
         """
-        # Don't pass bind to parent - we handle binding in get_bind()
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
         super().__init__(**kwargs)
-
-        # Store routing components (may be set later for async sessions)
-        if primary_engine is not None:
-            self._primary_engine = primary_engine
-        if replica_selector is not None:
-            self._replica_selector = replica_selector
-        if routing_config is not None:
-            self._routing_config = routing_config
+        self._primary_engine = primary_engine
+        self._replica_selector = replica_selector
+        self._routing_config = routing_config
 
     def get_bind(
         self,
-        mapper: Mapper[Any] | type[Any] | None = None,
-        clause: Any | None = None,
+        mapper: Optional[Union["Mapper[Any]", type[Any]]] = None,
+        clause: Optional[Any] = None,
         **kwargs: Any,
-    ) -> Engine:
+    ) -> "Engine":
         """Route to primary or replica based on operation and context.
 
         This method implements the routing logic:
@@ -112,17 +104,15 @@ class RoutingSession(Session):
         Returns:
             The appropriate engine (primary or replica).
         """
-        # Check if we should use primary
         if self._should_use_primary(clause):
             return self._primary_engine
 
-        # Read operation - use replica if available
         if self._replica_selector.has_replicas():
             return self._replica_selector.next()
 
         return self._primary_engine
 
-    def _should_use_primary(self, clause: Any) -> bool:
+    def _should_use_primary(self, clause: Optional[Any]) -> bool:
         """Determine if the operation should use the primary database.
 
         Args:
@@ -131,34 +121,28 @@ class RoutingSession(Session):
         Returns:
             ``True`` if primary should be used.
         """
-        # Always primary if routing disabled
         if not self._routing_config.enabled:
             return True
 
-        # Force primary takes precedence
         if force_primary_var.get():
             return True
 
-        # Stick to primary after write
         if stick_to_primary_var.get():
             return True
 
-        # Flushing always goes to primary (and sets stickiness since flush = write)
         if self._flushing:
             if self._routing_config.sticky_after_write:
                 set_sticky_primary()
             return True
 
-        # Write statements go to primary
         if clause is not None and isinstance(clause, (Insert, Update, Delete)):
             if self._routing_config.sticky_after_write:
                 set_sticky_primary()
             return True
 
-        # Check for FOR UPDATE - routes to primary
         return self._has_for_update(clause)
 
-    def _has_for_update(self, clause: Any) -> bool:
+    def _has_for_update(self, clause: Optional[Any]) -> bool:
         """Check if the clause has FOR UPDATE.
 
         Args:
@@ -169,7 +153,6 @@ class RoutingSession(Session):
         """
         if clause is None:
             return False
-        # Check for _for_update_arg attribute on select statements
         for_update_arg = getattr(clause, "_for_update_arg", None)
         return for_update_arg is not None
 
@@ -196,7 +179,7 @@ class RoutingSession(Session):
 class RoutingAsyncSession(AsyncSession):
     """Async session with read/write routing support.
 
-    This session class wraps :class:`RoutingSession` to provide
+    This session class wraps :class:`RoutingSyncSession` to provide
     async routing capabilities. The actual routing logic is handled
     by the underlying sync session class.
 
@@ -204,22 +187,19 @@ class RoutingAsyncSession(AsyncSession):
         Creating a routing async session::
 
             session = RoutingAsyncSession(
-                sync_session_class=RoutingSession,
-                sync_session_class_args={
-                    "primary_engine": primary_engine,
-                    "replica_selector": selector,
-                    "routing_config": config,
-                },
+                primary_engine=primary_engine,
+                replica_selector=selector,
+                routing_config=config,
             )
     """
 
-    sync_session_class: type[RoutingSession] = RoutingSession  # pyright: ignore[reportIncompatibleVariableOverride]
+    sync_session_class: "type[Session]" = RoutingSyncSession
 
     def __init__(
         self,
-        primary_engine: AsyncEngine,
-        replica_selector: ReplicaSelector[AsyncEngine],
-        routing_config: RoutingConfig,
+        primary_engine: "AsyncEngine",
+        replica_selector: "ReplicaSelector[AsyncEngine]",
+        routing_config: "RoutingConfig",
         **kwargs: Any,
     ) -> None:
         """Initialize the async routing session.
@@ -230,34 +210,21 @@ class RoutingAsyncSession(AsyncSession):
             routing_config: Configuration for routing behavior.
             **kwargs: Additional arguments passed to the parent AsyncSession.
         """
-        # Store our routing components for the sync session
-        # The sync session is created internally by AsyncSession
-        # and we need to pass our routing components to it
-        sync_session_class_args = {
-            "primary_engine": primary_engine.sync_engine,
-            "replica_selector": _SyncReplicaSelectorWrapper(replica_selector),
-            "routing_config": routing_config,
-        }
-        # Don't pass bind to parent - routing is handled by sync session's get_bind()
         kwargs.pop("bind", None)
+        kwargs.pop("binds", None)
         super().__init__(
-            sync_session_class=RoutingSession,
+            sync_session_class=RoutingSyncSession,
+            primary_engine=primary_engine.sync_engine,
+            replica_selector=_SyncReplicaSelectorWrapper(replica_selector),
+            routing_config=routing_config,
             **kwargs,
         )
-        # Store references for access
         self._primary_engine = primary_engine
         self._replica_selector = replica_selector
         self._routing_config = routing_config
-        # Update the sync session with routing components
-        # These are "private" attributes on RoutingSession but we need to set them
-        # from here because AsyncSession creates the sync session internally
-        # Type ignores needed because sync_session is typed as Session, not RoutingSession
-        self.sync_session._primary_engine = sync_session_class_args["primary_engine"]  # type: ignore[attr-defined]  # noqa: SLF001
-        self.sync_session._replica_selector = sync_session_class_args["replica_selector"]  # type: ignore[attr-defined]  # noqa: SLF001
-        self.sync_session._routing_config = sync_session_class_args["routing_config"]  # type: ignore[attr-defined]  # noqa: SLF001
 
     @property
-    def primary_engine(self) -> AsyncEngine:
+    def primary_engine(self) -> "AsyncEngine":
         """Get the primary async engine.
 
         Returns:
@@ -266,7 +233,7 @@ class RoutingAsyncSession(AsyncSession):
         return self._primary_engine
 
     @property
-    def routing_config(self) -> RoutingConfig:
+    def routing_config(self) -> "RoutingConfig":
         """Get the routing configuration.
 
         Returns:
@@ -283,7 +250,7 @@ class _SyncReplicaSelectorWrapper:
 
     __slots__ = ("_async_selector",)
 
-    def __init__(self, async_selector: ReplicaSelector[AsyncEngine]) -> None:
+    def __init__(self, async_selector: "ReplicaSelector[AsyncEngine]") -> None:
         """Initialize the wrapper.
 
         Args:
@@ -299,7 +266,7 @@ class _SyncReplicaSelectorWrapper:
         """
         return self._async_selector.has_replicas()
 
-    def next(self) -> Engine:
+    def next(self) -> "Engine":
         """Get the next replica's sync engine.
 
         Returns:

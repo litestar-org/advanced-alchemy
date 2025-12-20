@@ -4,14 +4,9 @@ This module provides the context-based state management for routing decisions,
 including the sticky-to-primary behavior after writes.
 """
 
-from __future__ import annotations
-
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 __all__ = (
     "force_primary_var",
@@ -22,7 +17,6 @@ __all__ = (
 )
 
 
-# Context variable for sticky-to-primary state after writes
 stick_to_primary_var: ContextVar[bool] = ContextVar("stick_to_primary", default=False)
 """Context variable tracking if we should stick to primary after a write.
 
@@ -30,7 +24,6 @@ When ``True``, all operations (including reads) will use the primary database
 until the context is reset (typically after commit/rollback).
 """
 
-# Context variable for forcing primary regardless of operation type
 force_primary_var: ContextVar[bool] = ContextVar("force_primary", default=False)
 """Context variable for explicitly forcing all operations to primary.
 
@@ -51,8 +44,7 @@ def primary_context() -> Generator[None, None, None]:
 
             from advanced_alchemy.routing import primary_context
 
-            async with primary_context():
-                # All queries in this block use primary
+            with primary_context():
                 user = await repo.get(user_id)
                 orders = await order_repo.list()
 
@@ -82,15 +74,11 @@ def replica_context() -> Generator[None, None, None]:
 
             from advanced_alchemy.routing import replica_context
 
-            # After a write, stickiness is set
             await repo.add(user)
 
-            # This read will still use primary due to stickiness
             user = await repo.get(user_id)
 
-            # But within replica_context, reads use replicas
-            async with replica_context():
-                # This may return stale data if replica hasn't caught up
+            with replica_context():
                 users = await repo.list()
 
     Yields:
@@ -118,10 +106,7 @@ def reset_routing_context() -> None:
 
             await session.commit()
             reset_routing_context()
-            # Now reads can use replicas again
     """
-    # Reset by setting to default values
-    # Note: We can't use reset() without tokens, so we set to defaults
     stick_to_primary_var.set(False)
     force_primary_var.set(False)
 

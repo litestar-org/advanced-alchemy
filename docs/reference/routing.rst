@@ -41,7 +41,7 @@ Configuration Classes
 Session Classes
 ~~~~~~~~~~~~~~~
 
-.. autoclass:: advanced_alchemy.routing.RoutingSession
+.. autoclass:: advanced_alchemy.routing.RoutingSyncSession
     :members:
     :undoc-members:
     :special-members: __init__
