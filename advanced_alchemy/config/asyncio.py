@@ -11,6 +11,7 @@ from advanced_alchemy.config.common import (
     GenericSessionConfig,
     GenericSQLAlchemyConfig,
 )
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm import Session
 
+    from advanced_alchemy.config.routing import RoutingConfig
     from advanced_alchemy.utils.dataclass import EmptyType
 
 __all__ = (
@@ -54,6 +56,26 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
 
     Note:
         The alembic configuration options are documented in the Alembic documentation.
+
+    Example:
+        Basic async configuration::
+
+            config = SQLAlchemyAsyncConfig(
+                connection_string="postgresql+asyncpg://user:pass@localhost/db",
+            )
+
+        Configuration with read/write routing::
+
+            from advanced_alchemy.config.routing import RoutingConfig
+
+            config = SQLAlchemyAsyncConfig(
+                routing_config=RoutingConfig(
+                    primary_connection_string="postgresql+asyncpg://user:pass@primary/db",
+                    read_replicas=[
+                        "postgresql+asyncpg://user:pass@replica/db"
+                    ],
+                ),
+            )
     """
 
     create_engine_callable: "Callable[[str], AsyncEngine]" = create_async_engine
@@ -69,12 +91,59 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
 
     The configuration options are documented in the Alembic documentation.
     """
+    routing_config: "Optional[RoutingConfig]" = None
+    """Optional read/write routing configuration.
+
+    When provided, enables automatic routing of read operations to replicas
+    and write operations to the primary database.
+
+    .. note::
+        When using ``routing_config``, do not set ``connection_string``.
+        The primary connection is specified in the routing config.
+    """
+
+    def __post_init__(self) -> None:
+        # Validate routing config vs connection_string
+        if self.routing_config is not None and self.connection_string is not None:
+            msg = "Provide either 'connection_string' or 'routing_config', not both"
+            raise ImproperConfigurationError(msg)
+        # If routing_config is set, use its primary as the connection_string for compatibility
+        if self.routing_config is not None:
+            self.connection_string = self.routing_config.primary_connection_string
+        super().__post_init__()
 
     def __hash__(self) -> int:
         return super().__hash__()
 
     def __eq__(self, other: object) -> bool:
         return super().__eq__(other)
+
+    def create_session_maker(self) -> "Callable[[], AsyncSession]":
+        """Get a session maker.
+
+        If routing is configured, returns a routing-aware session maker.
+        Otherwise, returns a standard session maker.
+
+        Returns:
+            A callable that creates session instances.
+        """
+        if self.session_maker:
+            return self.session_maker
+
+        # Use routing session maker if routing is configured
+        if self.routing_config is not None:
+            from advanced_alchemy.routing import RoutingAsyncSessionMaker
+
+            routing_maker = RoutingAsyncSessionMaker(
+                routing_config=self.routing_config,
+                engine_config=self.engine_config_dict,
+                session_config=self.session_config_dict,
+            )
+            self.session_maker = routing_maker
+            return routing_maker
+
+        # Default behavior from parent
+        return super().create_session_maker()
 
     @asynccontextmanager
     async def get_session(
