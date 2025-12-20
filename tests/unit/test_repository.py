@@ -1990,3 +1990,263 @@ def test_was_attribute_set_with_nonexistent_attribute() -> None:
 
     # Nonexistent attribute should return False (attr_state is None)
     assert was_attribute_set(instance, mapper, "nonexistent_field") is False
+
+
+# Tests for nested dict handling in model_from_dict (Issue #556)
+
+
+def test_model_from_dict_nested_single_dict() -> None:
+    """Test single nested dict is converted to model instance."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    data = {
+        "title": "Test Book",
+        "author": {"name": "Test Author"},
+    }
+    book = model_from_dict(UUIDBook, **data)
+
+    assert book.title == "Test Book"
+    assert isinstance(book.author, UUIDAuthor)
+    assert book.author.name == "Test Author"
+
+
+def test_model_from_dict_nested_list_of_dicts() -> None:
+    """Test list of nested dicts are converted to model instances."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    data = {
+        "name": "Test Author",
+        "books": [
+            {"title": "Book 1"},
+            {"title": "Book 2"},
+        ],
+    }
+    author = model_from_dict(UUIDAuthor, **data)
+
+    assert author.name == "Test Author"
+    assert len(author.books) == 2
+    assert all(isinstance(b, UUIDBook) for b in author.books)
+    assert author.books[0].title == "Book 1"
+    assert author.books[1].title == "Book 2"
+
+
+def test_model_from_dict_deeply_nested() -> None:
+    """Test deeply nested structures (2+ levels) - author with books, each book with author."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    # Create a book with nested author that has nested books
+    # Note: SQLAlchemy's back_populates will automatically add the outer book
+    # to author.books, so we get 3 books total (the outer book + 2 nested)
+    data = {
+        "title": "Test Book",
+        "author": {
+            "name": "Test Author",
+            "books": [
+                {"title": "Another Book 1"},
+                {"title": "Another Book 2"},
+            ],
+        },
+    }
+    book = model_from_dict(UUIDBook, **data)
+
+    assert book.title == "Test Book"
+    assert isinstance(book.author, UUIDAuthor)
+    assert book.author.name == "Test Author"
+    # Due to back_populates, author.books contains the outer book + 2 nested books = 3 total
+    assert len(book.author.books) == 3
+    assert all(isinstance(b, UUIDBook) for b in book.author.books)
+    # The first two are from the nested data
+    titles = {b.title for b in book.author.books}
+    assert "Another Book 1" in titles
+    assert "Another Book 2" in titles
+    assert "Test Book" in titles
+
+
+def test_model_from_dict_none_relationship() -> None:
+    """Test None value for relationship is preserved."""
+    from tests.fixtures.uuid.models import UUIDBook
+
+    data = {"title": "Orphan Book", "author": None}
+    book = model_from_dict(UUIDBook, **data)
+
+    assert book.title == "Orphan Book"
+    assert book.author is None
+
+
+def test_model_from_dict_empty_list_relationship() -> None:
+    """Test empty list for relationship is preserved."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    data = {"name": "Author Without Books", "books": []}
+    author = model_from_dict(UUIDAuthor, **data)
+
+    assert author.name == "Author Without Books"
+    assert author.books == []
+
+
+def test_model_from_dict_mixed_list() -> None:
+    """Test list with both dicts and model instances."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    existing_book = UUIDBook(title="Existing Book")
+    data = {
+        "name": "Test Author",
+        "books": [
+            existing_book,
+            {"title": "New Book"},
+        ],
+    }
+    author = model_from_dict(UUIDAuthor, **data)
+
+    assert len(author.books) == 2
+    assert author.books[0] is existing_book
+    assert isinstance(author.books[1], UUIDBook)
+    assert author.books[1].title == "New Book"
+
+
+def test_model_from_dict_preserves_existing_instance() -> None:
+    """Test that existing model instances are passed through unchanged."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    existing_author = UUIDAuthor(name="Existing")
+    data = {
+        "title": "Test Book",
+        "author": existing_author,
+    }
+    book = model_from_dict(UUIDBook, **data)
+
+    assert book.author is existing_author
+
+
+def test_model_from_dict_single_item_for_collection() -> None:
+    """Test single dict provided for collection relationship is wrapped in list."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    data = {
+        "name": "Test Author",
+        "books": {"title": "Single Book"},  # Single dict instead of list
+    }
+    author = model_from_dict(UUIDAuthor, **data)
+
+    assert len(author.books) == 1
+    assert isinstance(author.books[0], UUIDBook)
+    assert author.books[0].title == "Single Book"
+
+
+def test_model_from_dict_performance_baseline() -> None:
+    """Ensure minimal overhead for non-nested dicts."""
+    import time
+
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    data = {"name": "Test Author", "string_field": "test"}
+
+    # Warm up
+    for _ in range(100):
+        model_from_dict(UUIDAuthor, **data)
+
+    # Benchmark
+    start = time.perf_counter()
+    for _ in range(10000):
+        model_from_dict(UUIDAuthor, **data)
+    elapsed = time.perf_counter() - start
+
+    # Should complete quickly (< 1 second for 10k iterations)
+    assert elapsed < 1.0
+
+
+def test_model_from_dict_performance_nested() -> None:
+    """Benchmark nested dict conversion."""
+    import time
+
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    data = {
+        "name": "Test Author",
+        "books": [{"title": f"Book {i}"} for i in range(10)],
+    }
+
+    # Warm up
+    for _ in range(100):
+        model_from_dict(UUIDAuthor, **data)
+
+    start = time.perf_counter()
+    for _ in range(1000):
+        model_from_dict(UUIDAuthor, **data)
+    elapsed = time.perf_counter() - start
+
+    # Should complete reasonably (< 2 seconds for 1k iterations with 10 children)
+    assert elapsed < 2.0
+
+
+def test_model_from_dict_many_to_many_relationship() -> None:
+    """Test nested dict handling for many-to-many relationships."""
+    from tests.fixtures.uuid.models import UUIDItem, UUIDTag
+
+    data = {
+        "name": "Test Item",
+        "tags": [
+            {"name": "Tag 1"},
+            {"name": "Tag 2"},
+        ],
+    }
+    item = model_from_dict(UUIDItem, **data)
+
+    assert item.name == "Test Item"
+    assert len(item.tags) == 2
+    assert all(isinstance(t, UUIDTag) for t in item.tags)
+    assert item.tags[0].name == "Tag 1"
+    assert item.tags[1].name == "Tag 2"
+
+
+def test_model_from_dict_tuple_for_collection() -> None:
+    """Test tuple provided for collection relationship is handled correctly."""
+    from tests.fixtures.uuid.models import UUIDAuthor, UUIDBook
+
+    data = {
+        "name": "Test Author",
+        "books": ({"title": "Book 1"}, {"title": "Book 2"}),  # Tuple instead of list
+    }
+    author = model_from_dict(UUIDAuthor, **data)
+
+    assert len(author.books) == 2
+    assert all(isinstance(b, UUIDBook) for b in author.books)
+
+
+def test_convert_relationship_value_helper() -> None:
+    """Test the _convert_relationship_value helper function directly."""
+    from advanced_alchemy.repository._util import _convert_relationship_value
+    from tests.fixtures.uuid.models import UUIDBook
+
+    # Test None
+    assert _convert_relationship_value(None, UUIDBook, is_collection=False) is None
+    assert _convert_relationship_value(None, UUIDBook, is_collection=True) is None
+
+    # Test single dict for non-collection
+    result = _convert_relationship_value({"title": "Test"}, UUIDBook, is_collection=False)
+    assert isinstance(result, UUIDBook)
+    assert result.title == "Test"
+
+    # Test single dict for collection (should wrap in list)
+    result = _convert_relationship_value({"title": "Test"}, UUIDBook, is_collection=True)
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], UUIDBook)
+
+    # Test list of dicts for collection
+    result = _convert_relationship_value(
+        [{"title": "Book 1"}, {"title": "Book 2"}],
+        UUIDBook,
+        is_collection=True,
+    )
+    assert isinstance(result, list)
+    assert len(result) == 2
+
+    # Test existing instance pass-through
+    existing = UUIDBook(title="Existing")
+    result = _convert_relationship_value(existing, UUIDBook, is_collection=False)
+    assert result is existing
+
+    # Test existing instance in collection
+    result = _convert_relationship_value([existing], UUIDBook, is_collection=True)
+    assert result[0] is existing
