@@ -210,6 +210,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Processes the request, invokes the next middleware or route handler, and
         applies the session handler after the response is generated.
 
+        For generator-managed sessions (e.g., from provide_service()), the middleware
+        stores the response status but skips cleanup, allowing the generator to handle
+        commit/rollback/close operations properly.
+
         Args:
             request (starlette.requests.Request): The incoming HTTP request.
             call_next (starlette.middleware.base.RequestResponseEndpoint):
@@ -219,8 +223,17 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             starlette.responses.Response: The HTTP response.
         """
         response = await call_next(request)
+
+        # Store response status for generator dependencies to access during cleanup
+        setattr(request.state, f"{self.session_key}_response_status", response.status_code)
+
         session = cast("Optional[AsyncSession]", getattr(request.state, self.session_key, None))
-        if session is not None:
+
+        # Check if session is managed by a generator dependency (e.g., provide_service)
+        is_generator_managed = getattr(request.state, f"{self.session_key}_generator_managed", False)
+
+        if session is not None and not is_generator_managed:
+            # Only handle cleanup for non-generator-managed sessions
             await self.session_handler(session=session, request=request, response=response)
 
         return response
@@ -352,6 +365,10 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Processes the request, invokes the next middleware or route handler, and
         applies the session handler after the response is generated.
 
+        For generator-managed sessions (e.g., from provide_service()), the middleware
+        stores the response status but skips cleanup, allowing the generator to handle
+        commit/rollback/close operations properly.
+
         Args:
             request (starlette.requests.Request): The incoming HTTP request.
             call_next (starlette.middleware.base.RequestResponseEndpoint):
@@ -361,8 +378,17 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             starlette.responses.Response: The HTTP response.
         """
         response = await call_next(request)
+
+        # Store response status for generator dependencies to access during cleanup
+        setattr(request.state, f"{self.session_key}_response_status", response.status_code)
+
         session = cast("Optional[Session]", getattr(request.state, self.session_key, None))
-        if session is not None:
+
+        # Check if session is managed by a generator dependency (e.g., provide_service)
+        is_generator_managed = getattr(request.state, f"{self.session_key}_generator_managed", False)
+
+        if session is not None and not is_generator_managed:
+            # Only handle cleanup for non-generator-managed sessions
             await self.session_handler(session=session, request=request, response=response)
 
         return response
