@@ -32,7 +32,7 @@ try:
     _rich_click_available = True
     _rich_click_aliases_supported = "aliases" in _rich_group_init_params
     _rich_group_cls = RichGroup
-except ImportError:  # Fall back to plain click
+except ImportError:
     import click  # type: ignore[no-redef]
 
 _RICH_CLICK_AVAILABLE: Final[bool] = _rich_click_available
@@ -46,6 +46,7 @@ __all__ = [
 ]
 
 P = ParamSpec("P")
+_base_click_group: "type[click.Group]" = click.Group
 
 
 def _supports_aliases_param(cls: type[Any]) -> bool:
@@ -89,8 +90,6 @@ class AliasedGroup(click.Group):
         all_aliases: tuple[str, ...] = tuple(aliases or ()) + tuple(getattr(cmd, "aliases", ()) or ())
         for alias in all_aliases:
             self._alias_mapping[alias] = command_name
-
-        # Ensure the primary command name is not stored as an alias
         self._alias_mapping.pop(command_name, None)
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> Optional[click.Command]:
@@ -105,6 +104,70 @@ class AliasedGroup(click.Group):
             return cmd_name, cmd, remaining_args
         canonical_name = cmd.name or cmd_name
         return canonical_name, cmd, remaining_args
+
+
+def _patch_group_class_for_aliases(group_cls: type[click.Group]) -> None:
+    """Patch a click.Group subclass to support aliases if not already supported.
+
+    This ensures parent groups (which we don't control) can resolve
+    aliases of child groups that were created with aliases.
+
+    Args:
+        group_cls: The group class to patch (e.g., click.Group, RichGroup).
+    """
+    if _supports_aliases_param(group_cls):
+        return
+
+    if getattr(group_cls, "_aa_alias_patched", False):
+        return
+
+    _original_add_command = group_cls.add_command
+    _original_get_command = group_cls.get_command
+
+    def _patched_add_command(
+        self: click.Group,
+        cmd: click.Command,
+        name: Optional[str] = None,
+        aliases: Optional[Iterable[str]] = None,
+    ) -> None:
+        _original_add_command(self, cmd, name)
+        if not hasattr(self, "_alias_mapping"):
+            self._alias_mapping = {}  # type: ignore[attr-defined]
+        command_name = name or cmd.name
+        if command_name:
+            all_aliases = tuple(aliases or ()) + tuple(getattr(cmd, "aliases", ()) or ())
+            for alias in all_aliases:
+                self._alias_mapping[alias] = command_name  # type: ignore[attr-defined]
+            self._alias_mapping.pop(command_name, None)  # type: ignore[attr-defined]
+
+    def _patched_get_command(
+        self: click.Group,
+        ctx: click.Context,
+        cmd_name: str,
+    ) -> Optional[click.Command]:
+        alias_mapping: dict[str, str] = getattr(self, "_alias_mapping", {})
+        resolved_name: str = alias_mapping.get(cmd_name, cmd_name)
+        return _original_get_command(self, ctx, resolved_name)
+
+    group_cls.add_command = _patched_add_command  # type: ignore[method-assign]
+    group_cls.get_command = _patched_get_command  # type: ignore[method-assign]
+    group_cls._aa_alias_patched = True  # type: ignore[attr-defined]  # noqa: SLF001
+
+
+def _patch_click_group_for_aliases() -> None:
+    """Patch click.Group (and RichGroup if present) to support aliases.
+
+    This function patches the base click.Group class so that ANY group
+    (including parent groups we don't control like Litestar's main CLI)
+    can properly resolve aliases of child commands/groups.
+    """
+    _patch_group_class_for_aliases(_base_click_group)
+
+    if _RICH_CLICK_AVAILABLE and not _RICH_CLICK_ALIASES_SUPPORTED and _rich_group_cls is not None:
+        _patch_group_class_for_aliases(_rich_group_cls)
+
+
+_patch_click_group_for_aliases()
 
 
 def _alias_enabled_group_class(cls: Optional[type[click.Group]], aliases: Optional[Iterable[str]]) -> type[click.Group]:
