@@ -22,7 +22,7 @@ repos:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.14.5"
+    rev: "v0.14.9"
     hooks:
       # Run the linter.
       - id: ruff
@@ -37,6 +37,6 @@ repos:
       - id: codespell
         additional_dependencies: [tomli]
   - repo: https://github.com/sphinx-contrib/sphinx-lint
-    rev: "v1.0.1"
+    rev: "v1.0.2"
     hooks:
       - id: sphinx-lint

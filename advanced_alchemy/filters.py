@@ -78,6 +78,8 @@ __all__ = (
     "NotExistsFilter",
     "NotInCollectionFilter",
     "NotInSearchFilter",
+    "NotNullFilter",
+    "NullFilter",
     "OnBeforeAfter",
     "OrderBy",
     "PaginationFilter",
@@ -107,6 +109,8 @@ class FilterMap(TypedDict):
     collection: "type[CollectionFilter[Any]]"
     not_in_collection: "type[NotInCollectionFilter[Any]]"
     limit_offset: "type[LimitOffset]"
+    null: "type[NullFilter]"
+    not_null: "type[NotNullFilter]"
     order_by: "type[OrderBy]"
     search: "type[SearchFilter]"
     not_in_search: "type[NotInSearchFilter]"
@@ -379,6 +383,112 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         return cast("StatementTypeT", statement.where(field.notin_(self.values)))
 
 
+@dataclass
+class NullFilter(StatementFilter):
+    """Filter for NULL values (IS NULL).
+
+    This filter creates IS NULL conditions for database fields.
+    Use this to find records where a field has no value.
+
+    Example:
+        Basic NULL filtering::
+
+            from advanced_alchemy.filters import NullFilter
+
+            # Find records where email_verified_at is NULL
+            null_filter = NullFilter("email_verified_at")
+            unverified = await repo.list(null_filter)
+
+        With multiple filters::
+
+            from advanced_alchemy.filters import (
+                NullFilter,
+                CollectionFilter,
+            )
+
+            # Find unverified users in specific roles
+            filters = [
+                NullFilter("email_verified_at"),
+                CollectionFilter("role", ["admin", "moderator"]),
+            ]
+            results = await repo.list(*filters)
+
+    See Also:
+        - :class:`NotNullFilter`: Filter for NOT NULL values
+        - :class:`CollectionFilter`: Filter by collection membership
+        - :meth:`sqlalchemy.sql.expression.ColumnOperators.is_`: IS NULL operator
+    """
+
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Apply IS NULL condition to the statement.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with IS NULL condition applied
+        """
+        field = self._get_instrumented_attr(model, self.field_name)
+        return cast("StatementTypeT", statement.where(field.is_(None)))
+
+
+@dataclass
+class NotNullFilter(StatementFilter):
+    """Filter for NOT NULL values (IS NOT NULL).
+
+    This filter creates IS NOT NULL conditions for database fields.
+    Use this to find records where a field has a value.
+
+    Example:
+        Basic NOT NULL filtering::
+
+            from advanced_alchemy.filters import NotNullFilter
+
+            # Find records where email_verified_at is NOT NULL
+            not_null_filter = NotNullFilter("email_verified_at")
+            verified = await repo.list(not_null_filter)
+
+        With multiple filters::
+
+            from advanced_alchemy.filters import (
+                NotNullFilter,
+                CollectionFilter,
+            )
+
+            # Find verified users in specific roles
+            filters = [
+                NotNullFilter("email_verified_at"),
+                CollectionFilter("role", ["admin", "moderator"]),
+            ]
+            results = await repo.list(*filters)
+
+    See Also:
+        - :class:`NullFilter`: Filter for NULL values
+        - :class:`CollectionFilter`: Filter by collection membership
+        - :meth:`sqlalchemy.sql.expression.ColumnOperators.is_not`: IS NOT NULL operator
+    """
+
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Apply IS NOT NULL condition to the statement.
+
+        Args:
+            statement: The SQLAlchemy statement to modify
+            model: The SQLAlchemy model class
+
+        Returns:
+            StatementTypeT: Modified statement with IS NOT NULL condition applied
+        """
+        field = self._get_instrumented_attr(model, self.field_name)
+        return cast("StatementTypeT", statement.where(field.is_not(None)))
+
+
 class PaginationFilter(StatementFilter, ABC):
     """Abstract base class for pagination filters.
 
@@ -425,7 +535,7 @@ class LimitOffset(PaginationFilter):
             :class:`sqlalchemy.sql.expression.Select`: SQLAlchemy SELECT statement
         """
         if isinstance(statement, Select):
-            return statement.limit(self.limit).offset(self.offset)
+            statement = cast("StatementTypeT", statement.limit(self.limit).offset(self.offset))
         return statement
 
 
@@ -467,12 +577,13 @@ class OrderBy(StatementFilter):
         See Also:
             :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY
         """
-        if not isinstance(statement, Select):
-            return statement
-        field = self._get_instrumented_attr(model, self.field_name)
-        if self.sort_order == "desc":
-            return statement.order_by(field.desc())
-        return statement.order_by(field.asc())
+        if isinstance(statement, Select):
+            field = self._get_instrumented_attr(model, self.field_name)
+            if self.sort_order == "desc":
+                statement = cast("StatementTypeT", statement.order_by(field.desc()))
+            else:
+                statement = cast("StatementTypeT", statement.order_by(field.asc()))
+        return statement
 
 
 @dataclass
@@ -1024,6 +1135,8 @@ class MultiFilter(StatementFilter):
         "collection": CollectionFilter,
         "not_in_collection": NotInCollectionFilter,
         "limit_offset": LimitOffset,
+        "null": NullFilter,
+        "not_null": NotNullFilter,
         "order_by": OrderBy,
         "search": SearchFilter,
         "not_in_search": NotInSearchFilter,
@@ -1117,6 +1230,8 @@ FilterTypes: TypeAlias = Union[
     OnBeforeAfter,
     CollectionFilter[Any],
     LimitOffset,
+    NullFilter,
+    NotNullFilter,
     OrderBy,
     SearchFilter,
     NotInCollectionFilter[Any],

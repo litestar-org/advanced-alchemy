@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timezone
+from typing import Optional
 
 import pytest
 from pytest import FixtureRequest
@@ -18,6 +19,8 @@ from advanced_alchemy.filters import (
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
+    NotNullFilter,
+    NullFilter,
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
@@ -67,7 +70,13 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
                 "title": mapped_column(String(length=100)),
                 "release_date": mapped_column(),
                 "genre": mapped_column(String(length=50)),
-                "__annotations__": {"title": Mapped[str], "release_date": Mapped[datetime], "genre": Mapped[str]},
+                "director": mapped_column(String(length=100), nullable=True),
+                "__annotations__": {
+                    "title": Mapped[str],
+                    "release_date": Mapped[datetime],
+                    "genre": Mapped[str],
+                    "director": Mapped[Optional[str]],
+                },
             },
         )  # type: ignore[valid-type,misc]
 
@@ -166,12 +175,23 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
     # CockroachDB and Spanner require UUID primary keys to be provided
     dialect_name = getattr(session.bind.dialect, "name", "")
     movie_data = [
-        {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
-        {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc), "genre": "Comedy"},
+        {
+            "title": "The Matrix",
+            "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc),
+            "genre": "Action",
+            "director": "Wachowskis",
+        },
+        {
+            "title": "The Hangover",
+            "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc),
+            "genre": "Comedy",
+            "director": None,  # NULL director for testing NullFilter
+        },
         {
             "title": "Shawshank Redemption",
             "release_date": datetime(1994, 10, 14, tzinfo=timezone.utc),
             "genre": "Drama",
+            "director": "Frank Darabont",
         },
     ]
 
@@ -1147,6 +1167,193 @@ def test_not_in_collection_filter_prefer_any(session: Session, movie_model_sync:
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 3  # Should return all movies
+
+
+def test_null_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NullFilter matches NULL records."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test IS NULL filter on director field
+    null_filter = NullFilter("director")
+    statement = null_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return only "The Hangover" which has NULL director
+    assert len(results) == 1
+    assert results[0].title == "The Hangover"
+    assert results[0].director is None
+
+
+def test_not_null_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NotNullFilter matches NOT NULL records."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test NotNullFilter on director field
+    not_null_filter = NotNullFilter("director")
+    statement = not_null_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return "The Matrix" and "Shawshank Redemption" which have directors
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+
+def test_null_filter_combined_with_other_filters(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NullFilter combined with other filters using AND logic."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test NullFilter combined with CollectionFilter
+    # Find movies with a director AND genre is Action or Drama
+    not_null_filter = NotNullFilter("director")
+    collection_filter = CollectionFilter("genre", ["Action", "Drama"])
+
+    statement = select(Movie)
+    statement = not_null_filter.append_to_statement(statement, Movie)
+    statement = collection_filter.append_to_statement(statement, Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return "The Matrix" (Action) and "Shawshank Redemption" (Drama)
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+
+def test_null_filter_with_multi_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NullFilter with MultiFilter JSON/dict input."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test MultiFilter with null filter
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {"type": "null", "field_name": "director"},
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return only "The Hangover" with NULL director
+    assert len(results) == 1
+    assert results[0].title == "The Hangover"
+
+
+def test_not_null_filter_with_multi_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NotNullFilter with MultiFilter JSON/dict input."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test MultiFilter with not_null filter
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {"type": "not_null", "field_name": "director"},
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return "The Matrix" and "Shawshank Redemption" with directors
+    assert len(results) == 2
+    assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
+
+
+def test_null_filter_empty_result(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NullFilter returns empty list when no matches."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test NullFilter on title field (which is never NULL)
+    null_filter = NullFilter("title")
+    statement = null_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return empty list since no titles are NULL
+    assert len(results) == 0
+
+
+def test_null_filter_with_instrumented_attribute(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Test NullFilter with InstrumentedAttribute (Model.field)."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    # Test with InstrumentedAttribute
+    null_filter = NullFilter(Movie.director)
+    statement = null_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+
+    # Should return only "The Hangover" which has NULL director
+    assert len(results) == 1
+    assert results[0].title == "The Hangover"
 
 
 # Session-level teardown to ensure tables are dropped

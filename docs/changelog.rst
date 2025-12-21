@@ -3,6 +3,64 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.8.2
+    :date: 2025-12-12
+
+    .. change:: add `db` group alias
+        :type: feature
+        :pr: 622
+
+        Add a `db` shorthand alias to the `database` group.  This allows `litestar|alchemy db` or `litestar|alchemy database` to work interchangeably.
+
+    .. change:: import error while generating migrations
+        :type: bugfix
+        :pr: 630
+
+        Fixes `passlib` and `pwdlib` import errors while creating migrations
+
+        Cause:
+        We added the `sa.PasslibHasher = PasslibHasher` and `sa.PwdlibHasher = PwdlibHasher` types in `script.py.mako`. As a result, when a user installs only Advanced Alchemy and creates a migration, these files are imported. Since they reference types from `passlib` and `pwdlib`, which are not installed by default, the import fails and triggers this error.
+
+    .. change:: add missing type parameter to AsyncServiceT_co and SyncServiceT_…
+        :type: bugfix
+        :pr: 612
+
+        Discovered a runtime issue with an inconsistent type declaration when upgrading a litestar project to use version 1.8.0 introduced
+
+.. changelog:: 1.8.1
+    :date: 2025-12-06
+
+    .. change:: pin default installed python to 3.10
+        :type: bugfix
+        :pr: 601
+
+        Update the installation process to set the default Python version to 3.10 instead of 3.9.
+
+        There are some testing & docs packages we use that are causing issues.  We can pin 3.10 until 3.9 support is removed.  There is still a CI tests for 3.9
+
+    .. change:: adding string representation to PasswordHash and EncryptedString
+        :type: bugfix
+        :pr: 598
+        :issue: 596
+
+        Add string representation while generating migrations for models with `PasswordHash` or `EncryptedString` columns.
+
+    .. change:: error message handling and isolation in repositories
+        :type: bugfix
+        :pr: 605
+        :issue: 597
+
+        Correct error message retrieval and ensure that error message overrides are isolated for different repository instances. This improves the clarity and reliability of error messages across the application.
+
+    .. change:: correct race condition in `with_for_update`
+        :type: bugfix
+        :pr: 607
+
+        This corrects an issue in the `with_for_update` behavior:
+
+        - Before the change, passing `with_for_update` to service.update() or repository.update() only affected the post-flush session.refresh() call. The row that gets copied and mutated was always retrieved with a plain SELECT, so two concurrent writers could both read the same version
+        - Now the `with_for_update` flag is honored when the row is first fetched (both in the  service’s item_id branch and inside SQLAlchemyAsyncRepository.get()). When you call  service.update(..., with_for_update=True) (or pass the richer dict form/ForUpdateArg), the initial SELECT ... FOR UPDATE runs, so the session holds the expected lock before any field copying or merges occur.
+
 .. changelog:: 1.8.0
     :date: 2025-10-28
 
@@ -739,7 +797,7 @@
         :pr: 379
         :issue: 338
 
-        Fix query repositories list method according to [documentation](https://advanced-alchemy.dev/latest/usage/repositories.html#query-repository).
+        Fix query repositories list method according to [documentation](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories.html#query-repository).
 
         Now its return a list of tuples with values instead of first column of the query.
 

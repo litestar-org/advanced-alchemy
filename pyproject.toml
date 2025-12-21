@@ -45,14 +45,14 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.8.0"
+version = "1.8.2"
 
 [project.urls]
-Changelog = "https://advanced-alchemy.dev/latest/changelog"
+Changelog = "https://docs.advanced-alchemy.litestar.dev/latest/changelog"
 Discord = "https://discord.gg/litestar"
-Documentation = "https://advanced-alchemy.dev/latest/"
+Documentation = "https://docs.advanced-alchemy.litestar.dev/latest/"
 Funding = "https://github.com/sponsors/litestar-org"
-Homepage = "https://advanced-alchemy.dev/latest/"
+Homepage = "https://docs.advanced-alchemy.litestar.dev/latest/"
 Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
@@ -174,7 +174,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.8.0"
+current_version = "1.8.2"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
