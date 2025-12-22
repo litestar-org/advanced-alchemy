@@ -4,11 +4,7 @@ from typing import TYPE_CHECKING
 from litestar.cli._utils import LitestarGroup  # pyright: ignore
 
 from advanced_alchemy.cli import add_migration_commands
-
-try:
-    import rich_click as click
-except ImportError:
-    import click  # type: ignore[no-redef]
+from advanced_alchemy.utils.cli_tools import click, group
 
 if TYPE_CHECKING:
     from litestar import Litestar
@@ -37,7 +33,7 @@ def get_database_migration_plugin(app: "Litestar") -> "SQLAlchemyInitPlugin":
     raise ImproperConfigurationError(msg)
 
 
-@click.group(cls=LitestarGroup, name="database", aliases=["db"])
+@group(cls=LitestarGroup, name="database", aliases=["db"])  # pyright: ignore
 def database_group(ctx: "click.Context") -> None:
     """Manage SQLAlchemy database components."""
     ctx.obj = {"app": ctx.obj, "configs": get_database_migration_plugin(ctx.obj.app).config}

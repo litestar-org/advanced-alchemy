@@ -9,12 +9,7 @@ from typing import TYPE_CHECKING, cast
 from flask.cli import with_appcontext
 
 from advanced_alchemy.cli import add_migration_commands
-
-try:
-    import rich_click as click
-except ImportError:
-    import click  # type: ignore[no-redef]
-
+from advanced_alchemy.utils.cli_tools import click, group
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -42,17 +37,16 @@ def get_database_migration_plugin(app: "Flask") -> "AdvancedAlchemy":
     raise ImproperConfigurationError(msg)
 
 
-@click.group(name="database", aliases=["db"])
+@group(name="database", aliases=["db"])  # pyright: ignore
 @with_appcontext
 def database_group() -> None:
     """Manage SQLAlchemy database components.
 
     This command group provides database management commands like migrations.
     """
-
     ctx = cast("click.Context", click.get_current_context())
     app = ctx.obj.load_app()
     ctx.obj = {"app": app, "configs": get_database_migration_plugin(app).config}
 
 
-add_migration_commands(database_group)
+add_migration_commands(database_group)  # pyright: ignore

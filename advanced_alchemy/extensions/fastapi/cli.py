@@ -1,11 +1,7 @@
 from typing import TYPE_CHECKING, Optional, cast
 
-try:
-    import rich_click as click
-except ImportError:
-    import click  # type: ignore[no-redef]
-
 from advanced_alchemy.cli import add_migration_commands
+from advanced_alchemy.utils.cli_tools import click, group
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -35,7 +31,7 @@ def get_database_migration_plugin(app: "FastAPI") -> "AdvancedAlchemy":  # pragm
 
 
 def register_database_commands(app: "FastAPI") -> click.Group:  # pragma: no cover
-    @click.group(name="database", aliases=["db"])
+    @group(name="database", aliases=["db"])
     @click.pass_context
     def database_group(ctx: click.Context) -> None:
         """Manage SQLAlchemy database components."""
