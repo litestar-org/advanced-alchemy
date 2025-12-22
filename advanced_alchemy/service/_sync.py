@@ -24,7 +24,7 @@ from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, Imp
 from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, SQLAlchemySyncRepositoryT
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     UNSET,
@@ -252,7 +252,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         statement: Optional[Select[tuple[ModelT]]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
@@ -266,10 +266,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
         Args:
             item_id: Identifier of instance to be retrieved.
+                For single primary key models, pass a scalar value (int, str, UUID, etc.).
+                For composite primary key models, pass a tuple of values in column order,
+                or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -278,6 +282,16 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
         Returns:
             Representation of instance with identifier `item_id`.
+
+        Examples:
+            # Single primary key
+            >>> user = await service.get(123)
+
+            # Composite primary key (tuple format)
+            >>> assignment = await service.get((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> assignment = await service.get({"user_id": 1, "role_id": 5})
         """
         return cast(
             "ModelT",
@@ -1078,7 +1092,7 @@ class SQLAlchemySyncRepositoryService(
 
     def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -1092,10 +1106,14 @@ class SQLAlchemySyncRepositoryService(
 
         Args:
             item_id: Identifier of instance to be deleted.
+                For single primary key models, pass a scalar value (int, str, UUID, etc.).
+                For composite primary key models, pass a tuple of values in column order,
+                or a dict mapping attribute names to values.
             auto_commit: Commit objects before returning.
             auto_expunge: Remove object from session before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -1104,6 +1122,16 @@ class SQLAlchemySyncRepositoryService(
 
         Returns:
             Representation of the deleted instance.
+
+        Examples:
+            # Single primary key
+            >>> deleted_user = await service.delete(123)
+
+            # Composite primary key (tuple format)
+            >>> deleted = await service.delete((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> deleted = await service.delete({"user_id": 1, "role_id": 5})
         """
         return cast(
             "ModelT",
@@ -1121,7 +1149,7 @@ class SQLAlchemySyncRepositoryService(
 
     def delete_many(
         self,
-        item_ids: list[Any],
+        item_ids: list[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -1135,11 +1163,14 @@ class SQLAlchemySyncRepositoryService(
         """Wrap repository bulk instance deletion.
 
         Args:
-            item_ids: Identifier of instance to be deleted.
+            item_ids: List of identifiers of instances to be deleted.
+                For single primary key models, pass a list of scalar values.
+                For composite primary key models, pass a list of tuples or dicts.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
                 Defaults to `950` if left unset.
             error_messages: An optional dictionary of templates to use
@@ -1150,6 +1181,26 @@ class SQLAlchemySyncRepositoryService(
 
         Returns:
             Representation of removed instances.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await service.delete_many([1, 2, 3])
+
+            # Composite primary key (tuple format)
+            >>> deleted = await service.delete_many(
+            ...     [
+            ...         (user_id_1, role_id_1),
+            ...         (user_id_2, role_id_2),
+            ...     ]
+            ... )
+
+            # Composite primary key (dict format)
+            >>> deleted = await service.delete_many(
+            ...     [
+            ...         {"user_id": 1, "role_id": 5},
+            ...         {"user_id": 1, "role_id": 6},
+            ...     ]
+            ... )
         """
         return cast(
             "Sequence[ModelT]",

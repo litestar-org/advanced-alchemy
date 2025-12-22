@@ -16,7 +16,7 @@ from sqlalchemy import (
     StatementLambdaElement,
     Update,
 )
-from sqlalchemy.orm import InstrumentedAttribute, Session
+from sqlalchemy.orm import InstrumentedAttribute, Session, class_mapper
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql.dml import ReturningUpdate
@@ -43,7 +43,7 @@ from advanced_alchemy.repository.memory.base import (
     SQLAlchemyInMemoryStore,
     SQLAlchemyMultiStore,
 )
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.text import slugify
 
@@ -116,6 +116,100 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def __init_subclass__(cls) -> None:
         cls.__database_registry__[cls] = cls.__database__  # type: ignore[index]
+
+    @property
+    def _pk_columns(self) -> tuple[Any, ...]:
+        """Get primary key columns from the model mapper.
+
+        Returns:
+            Tuple of Column objects representing the primary key.
+        """
+        mapper = class_mapper(self.model_type)
+        return tuple(mapper.primary_key)
+
+    @property
+    def _pk_attr_names(self) -> tuple[str, ...]:
+        """Get primary key attribute names from the model mapper.
+
+        Returns:
+            Tuple of attribute names for primary key columns.
+        """
+        return tuple(col.name for col in self._pk_columns)
+
+    def _is_composite_pk(self) -> bool:
+        """Check if model has a composite (multi-column) primary key.
+
+        Returns:
+            True if the model has 2 or more primary key columns, False otherwise.
+        """
+        return len(self._pk_columns) > 1
+
+    def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
+        """Extract the primary key value(s) from a model instance.
+
+        Args:
+            instance: Model instance to extract primary key from.
+
+        Returns:
+            - For single PK: scalar value
+            - For composite PK: tuple of values in column order
+        """
+        if len(self._pk_columns) == 1:
+            return getattr(instance, self._pk_attr_names[0])
+        return tuple(getattr(instance, attr_name) for attr_name in self._pk_attr_names)
+
+    def _normalize_pk_to_tuple(self, pk_value: PrimaryKeyType) -> tuple[Any, ...]:
+        """Normalize a primary key value to a tuple for consistent storage key generation.
+
+        Args:
+            pk_value: Primary key value (scalar, tuple, or dict).
+
+        Returns:
+            Tuple representation of the primary key.
+        """
+        if len(self._pk_columns) == 1:
+            # Single PK - wrap scalar in tuple
+            return (pk_value,)
+
+        if isinstance(pk_value, tuple):
+            return cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
+        if isinstance(pk_value, dict):
+            pk_dict = cast("dict[str, Any]", pk_value)
+            return tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names)
+
+        # Scalar passed for composite PK - error
+        pk_type_name: str = type(pk_value).__name__
+        msg = (
+            f"Composite primary key for {self.model_type.__name__} requires "
+            f"tuple or dict, got {pk_type_name}: {pk_value!r}"
+        )
+        raise ValueError(msg)
+
+    def _get_store_key(self, pk_value: PrimaryKeyType) -> str:
+        """Generate a store key from a primary key value.
+
+        Args:
+            pk_value: Primary key value (scalar, tuple, or dict).
+
+        Returns:
+            String key for the in-memory store.
+        """
+        pk_tuple = self._normalize_pk_to_tuple(pk_value)
+        if len(pk_tuple) > 1:
+            return str(pk_tuple)
+        return str(pk_tuple[0]) if pk_tuple else ""
+
+    def _get_store_key_from_instance(self, instance: ModelT) -> str:
+        """Generate a store key from a model instance.
+
+        Args:
+            instance: Model instance to generate key from.
+
+        Returns:
+            String key for the in-memory store.
+        """
+        pk_value = self._extract_pk_value(instance)
+        return str(pk_value)
 
     @staticmethod
     def _get_error_messages(
@@ -418,8 +512,20 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     ) -> tuple[list[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
 
-    def _find_or_raise_not_found(self, id_: Any) -> ModelT:
-        return self.check_not_found(self.__collection__().get_or_none(id_))
+    def _find_or_raise_not_found(self, id_: PrimaryKeyType) -> ModelT:
+        """Find an item by primary key or raise NotFoundError.
+
+        Args:
+            id_: Primary key value (scalar, tuple, or dict).
+
+        Returns:
+            The found model instance.
+
+        Raises:
+            NotFoundError: If no instance found with the given primary key.
+        """
+        store_key = self._get_store_key(id_)
+        return self.check_not_found(self.__collection__().get_or_none(store_key))
 
     @staticmethod
     def _find_one_or_raise_error(result: list[ModelT]) -> ModelT:
@@ -446,7 +552,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
         statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
@@ -622,7 +728,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
     ) -> ModelT:
-        self._find_or_raise_not_found(self.__collection__().key(data))
+        pk_value = self._extract_pk_value(data)
+        self._find_or_raise_not_found(pk_value)
         return self.__collection__().update(data)
 
     def update_many(
@@ -640,7 +747,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -650,14 +757,15 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
     ) -> ModelT:
+        store_key = self._get_store_key(item_id)
         try:
             return self._find_or_raise_not_found(item_id)
         finally:
-            self.__collection__().remove(item_id)
+            self.__collection__().remove(store_key)
 
     def delete_many(
         self,
-        item_ids: list[Any],
+        item_ids: list[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -670,9 +778,10 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     ) -> list[ModelT]:
         deleted: list[ModelT] = []
         for id_ in item_ids:
-            if obj := self.__collection__().get_or_none(id_):
+            store_key = self._get_store_key(id_)
+            if obj := self.__collection__().get_or_none(store_key):
                 deleted.append(obj)
-                self.__collection__().remove(id_)
+                self.__collection__().remove(store_key)
         return deleted
 
     def delete_where(
@@ -690,7 +799,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         result = self.__collection__().list()
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
-        item_ids = [getattr(model, self.id_attribute) for model in models]
+        item_ids: list[PrimaryKeyType] = [self._extract_pk_value(model) for model in models]
         return self.delete_many(item_ids=item_ids)
 
     def upsert(
