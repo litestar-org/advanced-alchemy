@@ -33,6 +33,7 @@ Let's build upon our blog example by creating services for posts:
 .. code-block:: python
 
     import datetime
+    from typing import Optional
 
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
@@ -46,9 +47,9 @@ Let's build upon our blog example by creating services for posts:
 
 
     class PostUpdate(BaseModel):
-        title: str | None = None
-        content: str | None = None
-        published: bool | None = None
+        title: Optional[str] = None
+        content: Optional[str] = None
+        published: Optional[bool] = None
 
 
     class PostResponse(BaseModel):
@@ -121,95 +122,86 @@ The code below shows a service coordinating posts and tags.
         repository_type = PostRepository
         match_fields = ["title"]
 
-        # Override creation behavior to handle tags
-        async def create(self, data: ModelDictT[Post], **kwargs: Any) -> Post:
-            """Create a new post with tags, if provided."""
-            data_dict = schema_dump(data)
-            tags_added = data_dict.pop("tags", [])
-            data = data_dict
-
-            post = await self.to_model(data, "create")
+        async def to_model_on_create(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
+            """Convert and enrich data for post creation, handling tags."""
+            data = schema_dump(data)
+            tags_added = data.pop("tags", [])
+            data = await super().to_model(data)
 
             if tags_added:
-                tags_added = [schema_dump(tag) for tag in tags_added]
-                post.tags.extend(
+                data.tags.extend(
                     [
-                        await Tag.as_unique_async(self.repository.session, name=tag["name"], slug=slugify(tag["name"]))
+                        await Tag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
                         for tag in tags_added
                     ],
                 )
-            return await super().create(data=post, **kwargs)
+            return data
 
-        # Override update behavior to handle tags
-        async def update(
-            self,
-            data: ModelDictT[Post],
-            item_id: Any | None = None,
-            **kwargs: Any,
-        ) -> Post:
-            """Update a post with tags, if provided."""
-            data_dict = schema_dump(data)
-            tags_updated = data_dict.pop("tags", [])
-
-            # Determine the effective item_id - either from parameter or from the data itself
-            effective_item_id = item_id if item_id is not None else data_dict.get("id")
-
-            # Get existing post to access current tags
-            if effective_item_id is not None:
-                existing_post = await self.get(effective_item_id)
-                existing_tags = [tag.name for tag in existing_post.tags]
-            else:
-                existing_tags = []
-
-            post = await self.to_model(data_dict, "update")
+        async def to_model_on_update(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
+            """Convert and enrich data for post update, handling tags."""
+            data = schema_dump(data)
+            tags_updated = data.pop("tags", [])
+            post = await super().to_model(data)
 
             if tags_updated:
-                tags_updated = [schema_dump(tag) for tag in tags_updated]
-                # Determine tags to remove and add
-                tags_to_remove = [tag for tag in post.tags if tag.name not in [t["name"] for t in tags_updated]]
-                tags_to_add = [tag for tag in tags_updated if tag["name"] not in existing_tags]
+                existing_tags = [tag.name for tag in post.tags]
+                tags_to_remove = [tag for tag in post.tags if tag.name not in tags_updated]
+                tags_to_add = [tag for tag in tags_updated if tag not in existing_tags]
 
                 for tag_rm in tags_to_remove:
                     post.tags.remove(tag_rm)
 
                 post.tags.extend(
                     [
-                        await Tag.as_unique_async(self.repository.session, name=tag["name"], slug=slugify(tag["name"]))
+                        await Tag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
                         for tag in tags_to_add
                     ],
                 )
+            return post
 
-            return await super().update(data=post, item_id=effective_item_id, **kwargs)
+Working with Slugs
+------------------
 
-        # A custom write operation
-        async def publish_post(
-            self,
-            post_id: int,
-            publish: bool = True,
-        ) -> PostResponse:
-            """Publish or unpublish a post."""
-            post = await self.update(
-                item_id=post_id,
-                data={"published": publish},
-                auto_commit=True,
-            )
-            return self.to_schema(post, schema_type=PostResponse)
+Services can automatically generate URL-friendly slugs using the ``SQLAlchemyAsyncSlugRepository``.
+Here's an example service for managing tags with automatic slug generation:
 
-        # A custom read operation
-        async def get_recent_posts(
-            self,
-            days: int = 7,
-            limit: int = 10,
-            offset: int = 0,
-        ) -> OffsetPagination[PostResponse]:
-            """Get recent published posts."""
-            posts = await self.list(
-                Post.published.is_(True),
-                Post.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=days)),
-                LimitOffset(limit=limit, offset=offset),
-                order_by=[Post.created_at.desc()],
-            )
-            return self.to_schema(posts, schema_type=PostResponse)
+.. code-block:: python
+
+    from advanced_alchemy.repository import SQLAlchemyAsyncSlugRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, schema_dump, is_dict_without_field, is_dict_with_field
+    from advanced_alchemy.service.typing import ModelDictT
+
+    class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
+        """Tag service with automatic slug generation."""
+
+        class TagRepository(SQLAlchemyAsyncSlugRepository[Tag]):
+            """Tag repository."""
+
+            model_type = Tag
+
+        repository_type = TagRepository
+        match_fields = ["name"]
+
+        async def to_model_on_create(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
+            """Generate slug on tag creation if not provided."""
+            data = schema_dump(data)
+            if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
+                data["slug"] = await self.repository.get_available_slug(data["name"])
+            return data
+
+        async def to_model_on_update(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
+            """Update slug if name changes."""
+            data = schema_dump(data)
+            if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
+                data["slug"] = await self.repository.get_available_slug(data["name"])
+            return data
+
+        async def to_model_on_upsert(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
+            """Generate slug on upsert if needed."""
+            data = schema_dump(data)
+            if is_dict_without_field(data, "slug") and (tag_name := data.get("name")) is not None:
+                data["slug"] = await self.repository.get_available_slug(tag_name)
+            return data
 
 Schema Integration
 ------------------
@@ -287,17 +279,21 @@ Services now provide comprehensive support for SQLAlchemy query results:
     from sqlalchemy import select
 
     # Direct support for SQLAlchemy Row objects
-    query_results = await db_session.execute(select(Post))
-    rows = query_results.fetchall()  # Returns list[Row[Any]]
+    result = await db_session.execute(select(Post))
+    post = result.scalar_one()  # Returns Post model
 
-    # Convert Row objects to schema types
-    post_data = post_service.to_schema(rows[0][0], schema_type=PostSchema)
-    posts_list = post_service.to_schema([row[0] for row in rows], schema_type=PostSchema)
+    # Convert model to schema type
+    post_data = post_service.to_schema(post, schema_type=PostSchema)
+
+    # Working with multiple results
+    result = await db_session.execute(select(Post))
+    posts = result.scalars().all()  # Returns list of Post models
+    posts_list = post_service.to_schema(posts, schema_type=PostSchema)
 
     # Also supports RowMapping objects
-    row_mapping = await db_session.execute(select(Post))
-    row_mapping_results = row_mapping.mappings().first()['Post']
-    mapping_data = post_service.to_schema(row_mapping_results, schema_type=PostSchema)
+    result = await db_session.execute(select(Post))
+    row_mapping = result.mappings().first()
+    mapping_data = post_service.to_schema(row_mapping["Post"], schema_type=PostSchema)
 
 
 Framework Integration
