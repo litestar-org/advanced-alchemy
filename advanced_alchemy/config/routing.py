@@ -42,14 +42,7 @@ def _default_engines() -> dict[str, list[Union[str, "EngineConfig"]]]:
 
 @dataclass
 class EngineConfig:
-    """Configuration for a single database engine.
-
-    Attributes:
-        connection_string: Database connection string.
-        weight: Relative weight for load balancing (higher = more traffic).
-            Only used with certain routing strategies.
-        name: Optional human-readable name for the engine.
-    """
+    """Configuration for a single database engine."""
 
     connection_string: str
     """Connection string for the engine."""
@@ -71,17 +64,6 @@ class RoutingConfig:
 
     This configuration enables automatic routing of database operations
     to different engine groups (e.g., writer, reader, analytics).
-
-    Attributes:
-        primary_connection_string: Legacy: Connection string for the default (writer) database.
-        read_replicas: Legacy: List of read replica connection strings or configs.
-        engines: Dictionary mapping group names to lists of engine configs.
-        default_group: Name of the group to use for write operations (default: "default").
-        read_group: Name of the group to use for read operations (default: "read").
-        routing_strategy: Strategy for selecting engines within a group.
-        enabled: Enable/disable routing.
-        sticky_after_write: Stick to writer after first write in context.
-        reset_stickiness_on_commit: Reset stickiness after commit.
     """
 
     primary_connection_string: Optional[str] = None

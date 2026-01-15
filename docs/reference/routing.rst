@@ -28,18 +28,12 @@ Configuration Classes
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: advanced_alchemy.config.routing.RoutingConfig
-    :members:
-    :undoc-members:
     :no-index:
 
 .. autoclass:: advanced_alchemy.config.routing.ReplicaConfig
-    :members:
-    :undoc-members:
     :no-index:
 
 .. autoclass:: advanced_alchemy.config.routing.RoutingStrategy
-    :members:
-    :undoc-members:
     :no-index:
 
 Session Classes
