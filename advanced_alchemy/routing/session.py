@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from advanced_alchemy.routing.context import (
+    bind_group_var,
     force_primary_var,
     reset_routing_context,
     set_sticky_primary,
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Mapper
 
     from advanced_alchemy.config.routing import RoutingConfig
-    from advanced_alchemy.routing.selectors import ReplicaSelector
+    from advanced_alchemy.routing.selectors import EngineSelector
 
 
 __all__ = (
@@ -36,47 +37,44 @@ class RoutingSyncSession(Session):
     """Synchronous session with read/write routing via ``get_bind()``.
 
     This session class extends SQLAlchemy's :class:`Session` to provide
-    automatic routing of read operations to replicas and write operations
-    to the primary database.
+    automatic routing of operations to different engine groups (e.g. writer/reader).
 
     The routing decision is made in ``get_bind()`` based on:
-    1. Whether routing is enabled
-    2. The ``force_primary`` context variable
-    3. The ``stick_to_primary`` context variable (set after writes)
-    4. Whether the session is flushing
-    5. The type of statement being executed (INSERT/UPDATE/DELETE vs SELECT)
-    6. Whether FOR UPDATE is being used
+    1. Execution options (``bind_group``)
+    2. Context variables (``bind_group``, ``force_primary``)
+    3. Stickiness state
+    4. Operation type (Write vs Read)
 
     Attributes:
-        _primary_engine: The primary (write) database engine.
-        _replica_selector: Selector for choosing read replicas.
+        _default_engine: The default (write) database engine.
+        _selectors: Map of group names to engine selectors.
         _routing_config: Configuration for routing behavior.
     """
 
-    _primary_engine: "Engine"
-    _replica_selector: "ReplicaSelector[Engine]"
+    _default_engine: "Engine"
+    _selectors: "dict[str, EngineSelector[Engine]]"
     _routing_config: "RoutingConfig"
 
     def __init__(
         self,
-        primary_engine: "Engine",
-        replica_selector: "ReplicaSelector[Engine]",
         routing_config: "RoutingConfig",
+        selectors: "dict[str, EngineSelector[Engine]]",
+        default_engine: "Engine",
         **kwargs: Any,
     ) -> None:
         """Initialize the routing session.
 
         Args:
-            primary_engine: The primary (write) database engine.
-            replica_selector: Selector for choosing read replicas.
             routing_config: Configuration for routing behavior.
+            selectors: Map of group names to engine selectors.
+            default_engine: The default (fallback/write) engine.
             **kwargs: Additional arguments passed to the parent Session.
         """
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
         super().__init__(**kwargs)
-        self._primary_engine = primary_engine
-        self._replica_selector = replica_selector
+        self._default_engine = default_engine
+        self._selectors = selectors
         self._routing_config = routing_config
 
     def get_bind(
@@ -85,16 +83,7 @@ class RoutingSyncSession(Session):
         clause: Optional[Any] = None,
         **kwargs: Any,
     ) -> "Engine":
-        """Route to primary or replica based on operation and context.
-
-        This method implements the routing logic:
-        1. If routing is disabled, use primary
-        2. If ``force_primary`` is set, use primary
-        3. If ``stick_to_primary`` is set (after a write), use primary
-        4. If flushing, use primary
-        5. If the statement is INSERT/UPDATE/DELETE, use primary and set stickiness
-        6. If FOR UPDATE is requested, use primary
-        7. Otherwise, use a replica if available
+        """Route to appropriate engine based on operation and context.
 
         Args:
             mapper: Optional mapper for the operation.
@@ -102,24 +91,52 @@ class RoutingSyncSession(Session):
             **kwargs: Additional keyword arguments.
 
         Returns:
-            The appropriate engine (primary or replica).
+            The selected engine.
         """
-        if self._should_use_primary(clause):
-            return self._primary_engine
+        # 1. Check for explicit bind group in execution options
+        if clause is not None and hasattr(clause, "_execution_options"):
+            bind_group = clause._execution_options.get("bind_group")  # noqa: SLF001
+            if bind_group:
+                return self._get_engine_for_group(bind_group)
 
-        if self._replica_selector.has_replicas():
-            return self._replica_selector.next()
+        # 2. Check context variable for bind group
+        bind_group = bind_group_var.get()
+        if bind_group:
+            return self._get_engine_for_group(bind_group)
 
-        return self._primary_engine
+        # 3. Check if we should force/stick to default (writer)
+        if self._should_use_default_group(clause):
+            return self._get_engine_for_group(self._routing_config.default_group)
 
-    def _should_use_primary(self, clause: Optional[Any]) -> bool:
-        """Determine if the operation should use the primary database.
+        # 4. Read operation -> use read group
+        return self._get_engine_for_group(self._routing_config.read_group)
+
+    def _get_engine_for_group(self, group: str) -> "Engine":
+        """Get an engine for the specified group.
+
+        Args:
+            group: Name of the engine group.
+
+        Returns:
+            An engine from the group, or the default engine if group not found.
+        """
+        if group in self._selectors:
+            selector = self._selectors[group]
+            if selector.has_engines():
+                return selector.next()
+
+        # Fallback to default engine if group has no selector/engines
+        # or if it's the default group and we want to be safe
+        return self._default_engine
+
+    def _should_use_default_group(self, clause: Optional[Any]) -> bool:
+        """Determine if the operation should use the default (writer) group.
 
         Args:
             clause: The SQL clause being executed.
 
         Returns:
-            ``True`` if primary should be used.
+            ``True`` if default group should be used.
         """
         if not self._routing_config.enabled:
             return True
@@ -157,21 +174,13 @@ class RoutingSyncSession(Session):
         return for_update_arg is not None
 
     def commit(self) -> None:
-        """Commit the transaction and optionally reset stickiness.
-
-        After a successful commit, the sticky-to-primary state is reset
-        if ``reset_stickiness_on_commit`` is enabled in the config.
-        """
+        """Commit the transaction and reset routing state."""
         super().commit()
         if self._routing_config.reset_stickiness_on_commit:
             reset_routing_context()
 
     def rollback(self) -> None:
-        """Rollback the transaction and reset stickiness.
-
-        On rollback, the sticky-to-primary state is always reset since
-        the write that caused the stickiness was rolled back.
-        """
+        """Rollback the transaction and reset routing state."""
         super().rollback()
         reset_routing_context()
 
@@ -179,58 +188,51 @@ class RoutingSyncSession(Session):
 class RoutingAsyncSession(AsyncSession):
     """Async session with read/write routing support.
 
-    This session class wraps :class:`RoutingSyncSession` to provide
-    async routing capabilities. The actual routing logic is handled
-    by the underlying sync session class.
-
-    Example:
-        Creating a routing async session::
-
-            session = RoutingAsyncSession(
-                primary_engine=primary_engine,
-                replica_selector=selector,
-                routing_config=config,
-            )
+    Wraps :class:`RoutingSyncSession` to provide async routing capabilities.
     """
 
     sync_session_class: "type[Session]" = RoutingSyncSession
 
     def __init__(
         self,
-        primary_engine: "AsyncEngine",
-        replica_selector: "ReplicaSelector[AsyncEngine]",
         routing_config: "RoutingConfig",
+        selectors: "dict[str, EngineSelector[AsyncEngine]]",
+        default_engine: "AsyncEngine",
         **kwargs: Any,
     ) -> None:
         """Initialize the async routing session.
 
         Args:
-            primary_engine: The primary (write) async database engine.
-            replica_selector: Selector for choosing read replicas.
             routing_config: Configuration for routing behavior.
+            selectors: Map of group names to async engine selectors.
+            default_engine: The default (fallback/write) async engine.
             **kwargs: Additional arguments passed to the parent AsyncSession.
         """
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
+
+        # Convert async selectors to sync selectors for the wrapped session
+        sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
+
         super().__init__(
             sync_session_class=RoutingSyncSession,
-            primary_engine=primary_engine.sync_engine,
-            replica_selector=_SyncReplicaSelectorWrapper(replica_selector),
             routing_config=routing_config,
+            selectors=sync_selectors,
+            default_engine=default_engine.sync_engine,
             **kwargs,
         )
-        self._primary_engine = primary_engine
-        self._replica_selector = replica_selector
+        self._default_engine = default_engine
+        self._selectors = selectors
         self._routing_config = routing_config
 
     @property
     def primary_engine(self) -> "AsyncEngine":
-        """Get the primary async engine.
+        """Get the primary (default) async engine.
 
         Returns:
-            The primary database engine.
+            The default database engine.
         """
-        return self._primary_engine
+        return self._default_engine
 
     @property
     def routing_config(self) -> "RoutingConfig":
@@ -242,34 +244,34 @@ class RoutingAsyncSession(AsyncSession):
         return self._routing_config
 
 
-class _SyncReplicaSelectorWrapper:
-    """Wrapper to adapt async replica selector for sync session.
+class _SyncEngineSelectorWrapper:
+    """Wrapper to adapt async engine selector for sync session.
 
     This wrapper extracts sync engines from async engines in the selector.
     """
 
     __slots__ = ("_async_selector",)
 
-    def __init__(self, async_selector: "ReplicaSelector[AsyncEngine]") -> None:
+    def __init__(self, async_selector: "EngineSelector[AsyncEngine]") -> None:
         """Initialize the wrapper.
 
         Args:
-            async_selector: The async replica selector to wrap.
+            async_selector: The async engine selector to wrap.
         """
         self._async_selector = async_selector
 
-    def has_replicas(self) -> bool:
-        """Check if any replicas are configured.
+    def has_engines(self) -> bool:
+        """Check if any engines are configured.
 
         Returns:
-            ``True`` if replicas are available.
+            ``True`` if at least one engine is available.
         """
-        return self._async_selector.has_replicas()
+        return self._async_selector.has_engines()
 
     def next(self) -> "Engine":
-        """Get the next replica's sync engine.
+        """Get the next engine's sync engine.
 
         Returns:
-            The sync engine for the next replica.
+            The sync engine for the next selection.
         """
         return self._async_selector.next().sync_engine

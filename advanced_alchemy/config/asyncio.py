@@ -110,6 +110,12 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         # If routing_config is set, use its primary as the connection_string for compatibility
         if self.routing_config is not None:
             self.connection_string = self.routing_config.primary_connection_string
+            if self.connection_string is None:
+                # Try to get from default group engines
+                configs = self.routing_config.get_engine_configs(self.routing_config.default_group)
+                if configs:
+                    self.connection_string = configs[0].connection_string
+
         super().__post_init__()
 
     def __hash__(self) -> int:

@@ -157,15 +157,90 @@ Queries with ``FOR UPDATE`` are automatically routed to the primary:
         result = await session.execute(stmt)
         user = result.scalar_one()
 
+Advanced Routing with Bind Groups
+---------------------------------
+
+While the primary/read-replica pattern is common, you might need more complex routing scenarios, such as:
+
+- Dedicated analytics database
+- Region-specific replicas
+- Separate reporting databases
+- Multiple primary databases (sharding)
+
+You can achieve this by defining **Bind Groups** in your configuration.
+
+Configuration
+~~~~~~~~~~~~~
+
+Use the ``engines`` dictionary to define named groups of engines:
+
+.. code-block:: python
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.routing import RoutingConfig
+
+    config = SQLAlchemyAsyncConfig(
+        routing_config=RoutingConfig(
+            # Define multiple engine groups
+            engines={
+                "default": ["postgresql+asyncpg://primary:5432/db"],
+                "read": ["postgresql+asyncpg://replica1:5432/db"],
+                "analytics": ["postgresql+asyncpg://analytics:5432/db"],
+                "reporting": [
+                    "postgresql+asyncpg://report-1:5432/db",
+                    "postgresql+asyncpg://report-2:5432/db",
+                ],
+            },
+            default_group="default",
+            read_group="read",
+        ),
+    )
+
+Using Bind Groups
+~~~~~~~~~~~~~~~~~
+
+You can route operations to specific groups using context managers or explicit parameters.
+
+**Context Manager**
+
+Use ``use_bind_group`` to route all operations within a block to a specific group:
+
+.. code-block:: python
+
+    from advanced_alchemy.routing import use_bind_group
+
+    async with session_maker() as session:
+        repo = UserRepository(session=session)
+
+        # Route to analytics database
+        with use_bind_group("analytics"):
+            stats = await repo.count()
+
+        # Route to reporting group (load balanced if multiple engines)
+        with use_bind_group("reporting"):
+            report = await repo.list()
+
+**Explicit Parameter**
+
+All repository methods accept a ``bind_group`` parameter:
+
+.. code-block:: python
+
+    # Query directly from analytics group
+    users = await repo.list(bind_group="analytics")
+
+    # Count from reporting group
+    count = await repo.count(bind_group="reporting")
+
 Context Managers
 ----------------
 
 Use context managers for explicit control over routing:
 
-Force Primary
-~~~~~~~~~~~~~
+Primary Context
+~~~~~~~~~~~~~~~
 
-Force all operations to use the primary database:
+Force operations to use the default (primary) group. This is an alias for ``use_bind_group("default")``:
 
 .. code-block:: python
 
@@ -174,17 +249,14 @@ Force all operations to use the primary database:
     async with session_maker() as session:
         repo = UserRepository(session=session)
 
-        # Force this read to use primary
+        # Force this read to use primary (e.g. for critical consistency)
         with primary_context():
             critical_user = await repo.get(user_id)
 
-        # Back to normal routing (read uses replica)
-        users = await repo.list()
+Replica Context
+~~~~~~~~~~~~~~~
 
-Force Replica
-~~~~~~~~~~~~~
-
-Temporarily disable sticky-after-write to allow replica reads:
+Force operations to use the read group. This is an alias for ``use_bind_group("read")``:
 
 .. code-block:: python
 
@@ -193,24 +265,20 @@ Temporarily disable sticky-after-write to allow replica reads:
     async with session_maker() as session:
         repo = UserRepository(session=session)
 
-        # Write operation
-        await repo.add(User(name="Alice"))
-
-        # Force replica read (even though we just wrote)
+        # Force read from replica (even if sticky-primary is active)
         with replica_context():
-            users = await repo.list()  # Uses replica (may not see Alice yet)
+            users = await repo.list()
 
 Temporarily Disable Routing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Disable routing to send all traffic to primary:
+Disable routing to send all traffic to the default primary engine:
 
 .. code-block:: python
 
     config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://...",
-        read_replicas=["..."],
-        enabled=False,  # All traffic to primary
+        engines={"default": ["..."], "read": ["..."]},
+        enabled=False,  # All traffic to default group's first engine
     )
 
 Framework Integration

@@ -190,6 +190,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool: ...
 
@@ -204,6 +205,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     def get_one(
@@ -215,6 +217,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT: ...
 
@@ -227,6 +230,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]: ...
 
@@ -268,6 +272,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int: ...
 
@@ -343,6 +348,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]: ...
 
@@ -355,6 +361,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]: ...
 
@@ -379,6 +386,7 @@ class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[Mode
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Get a model instance by its slug.
@@ -388,6 +396,7 @@ class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[Mode
             error_messages: Optional custom error message templates.
             load: Specification for eager loading of relationships.
             execution_options: Options for statement execution.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Additional filtering criteria.
 
         Returns:
@@ -984,6 +993,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
@@ -995,6 +1005,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1010,6 +1021,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load=load,
             execution_options=execution_options,
             error_messages=error_messages,
+            bind_group=bind_group,
             **kwargs,
         )
         return existing > 0
@@ -1101,6 +1113,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -1116,6 +1129,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             The retrieved instance.
@@ -1128,6 +1142,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1154,6 +1172,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -1168,6 +1187,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1182,6 +1202,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1208,6 +1232,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -1222,6 +1247,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1235,6 +1261,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1429,6 +1459,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
         """Get the count of records returned by a query.
@@ -1441,6 +1472,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1454,6 +1486,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1706,6 +1742,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1721,6 +1758,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1743,6 +1781,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 order_by=order_by,
                 error_messages=error_messages,
+                bind_group=bind_group,
                 **kwargs,
             )
         return self._list_and_count_window(
@@ -1753,6 +1792,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options=execution_options,
             error_messages=error_messages,
             order_by=order_by,
+            bind_group=bind_group,
             **kwargs,
         )
 
@@ -1822,6 +1862,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1835,6 +1876,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1847,6 +1889,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1879,6 +1925,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1892,6 +1939,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1904,6 +1952,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -2177,6 +2229,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
@@ -2191,6 +2244,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2204,6 +2258,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                if execution_options is None:
+                    execution_options = {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -2299,6 +2357,7 @@ class SQLAlchemySyncSlugRepository(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Select record by slug value.
@@ -2312,6 +2371,7 @@ class SQLAlchemySyncSlugRepository(
             execution_options=execution_options,
             error_messages=error_messages,
             uniquify=uniquify,
+            bind_group=bind_group,
         )
 
     def get_available_slug(
@@ -2382,12 +2442,14 @@ class SQLAlchemySyncQueryRepository:
     def get_one(
         self,
         statement: Select[tuple[Any]],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Row[Any]:
         """Get instance identified by ``kwargs``.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2395,18 +2457,21 @@ class SQLAlchemySyncQueryRepository:
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = (self.execute(statement)).scalar_one_or_none()
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            instance = (self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
             return self.check_not_found(instance)
 
     def get_one_or_none(
         self,
         statement: Select[Any],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[Row[Any]]:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2414,14 +2479,16 @@ class SQLAlchemySyncQueryRepository:
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = (self.execute(statement)).scalar_one_or_none()
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            instance = (self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
             return instance or None
 
-    def count(self, statement: Select[Any], **kwargs: Any) -> int:
+    def count(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> int:
         """Get the count of records returned by a query.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2432,13 +2499,15 @@ class SQLAlchemySyncQueryRepository:
                 None,
             )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            results = self.execute(statement)
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            results = self.execute(statement, execution_options=execution_options)
             return results.scalar_one()  # type: ignore
 
     def list_and_count(
         self,
         statement: Select[Any],
         count_with_window_function: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
@@ -2446,18 +2515,20 @@ class SQLAlchemySyncQueryRepository:
         Args:
             statement: To facilitate customization of the underlying select query.
             count_with_window_function: Force list and count to use two queries instead of an analytical window function.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
         if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
-            return self._list_and_count_basic(statement=statement, **kwargs)
-        return self._list_and_count_window(statement=statement, **kwargs)
+            return self._list_and_count_basic(statement=statement, bind_group=bind_group, **kwargs)
+        return self._list_and_count_window(statement=statement, bind_group=bind_group, **kwargs)
 
     def _list_and_count_window(
         self,
         statement: Select[Any],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
@@ -2465,6 +2536,7 @@ class SQLAlchemySyncQueryRepository:
         Args:
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2474,7 +2546,8 @@ class SQLAlchemySyncQueryRepository:
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            result = self.execute(statement)
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            result = self.execute(statement, execution_options=execution_options)
             count: int = 0
             instances: list[Row[Any]] = []
             for i, (instance, count_value) in enumerate(result):
@@ -2490,12 +2563,14 @@ class SQLAlchemySyncQueryRepository:
     def _list_and_count_basic(
         self,
         statement: Select[Any],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
 
         Args:
             statement: To facilitate customization of the underlying select query. .
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2504,19 +2579,23 @@ class SQLAlchemySyncQueryRepository:
 
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            count_result = self.session.execute(self._get_count_stmt(statement))
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            count_result = self.session.execute(
+                self._get_count_stmt(statement), execution_options=execution_options or {}
+            )
             count = count_result.scalar_one()
-            result = self.execute(statement)
+            result = self.execute(statement, execution_options=execution_options)
             instances: list[Row[Any]] = []
             for (instance,) in result:
                 instances.append(instance)
             return instances, count
 
-    def list(self, statement: Select[Any], **kwargs: Any) -> list[Row[Any]]:
+    def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> list[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2524,7 +2603,8 @@ class SQLAlchemySyncQueryRepository:
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            result = self.execute(statement)
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            result = self.execute(statement, execution_options=execution_options)
             return list(result.all())
 
     def _filter_statement_by_kwargs(
@@ -2572,5 +2652,6 @@ class SQLAlchemySyncQueryRepository:
         statement: Union[
             ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Update, Delete, Select[Any]
         ],
+        execution_options: Optional[dict[str, Any]] = None,
     ) -> Result[Any]:
-        return self.session.execute(statement)
+        return self.session.execute(statement, execution_options=execution_options or {})

@@ -7,7 +7,7 @@ write operations to the primary database.
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Union
+from typing import Optional, Union
 
 __all__ = (
     "ReplicaConfig",
@@ -17,43 +17,52 @@ __all__ = (
 
 
 class RoutingStrategy(Enum):
-    """Strategy for selecting read replicas.
+    """Strategy for selecting engines from a group.
 
-    Determines how the routing layer chooses which replica to use
-    for read operations when multiple replicas are configured.
+    Determines how the routing layer chooses which engine to use
+    when multiple engines are configured for a routing group.
     """
 
     ROUND_ROBIN = auto()
-    """Cycle through replicas in order."""
+    """Cycle through engines in order."""
 
     RANDOM = auto()
-    """Select replicas randomly."""
+    """Select engines randomly."""
 
 
-def _default_read_replicas() -> list[Union[str, "ReplicaConfig"]]:
+def _default_read_replicas() -> list[Union[str, "EngineConfig"]]:
     """Return an empty list for read replica configuration."""
     return []
 
 
+def _default_engines() -> dict[str, list[Union[str, "EngineConfig"]]]:
+    """Return default empty engines map."""
+    return {}
+
+
 @dataclass
-class ReplicaConfig:
-    """Configuration for a single read replica.
+class EngineConfig:
+    """Configuration for a single database engine.
 
     Attributes:
-        connection_string: Database connection string for the replica.
+        connection_string: Database connection string.
         weight: Relative weight for load balancing (higher = more traffic).
             Only used with certain routing strategies.
-        name: Optional human-readable name for the replica.
+        name: Optional human-readable name for the engine.
     """
 
     connection_string: str
-    """Connection string for the read replica."""
+    """Connection string for the engine."""
 
     weight: int = 1
     """Relative weight for load balancing (higher weight = more traffic)."""
 
     name: str = ""
-    """Optional human-readable name for this replica."""
+    """Optional human-readable name for this engine."""
+
+
+# Alias for backward compatibility
+ReplicaConfig = EngineConfig
 
 
 @dataclass
@@ -61,103 +70,89 @@ class RoutingConfig:
     """Read/Write routing configuration.
 
     This configuration enables automatic routing of database operations
-    to primary (write) or replica (read) databases.
+    to different engine groups (e.g., writer, reader, analytics).
 
     Attributes:
-        primary_connection_string: Connection string for the primary (write) database.
-        read_replicas: List of read replica connection strings or configs.
-        routing_strategy: Strategy for selecting read replicas.
-        enabled: Enable/disable routing (all to primary when False).
-        sticky_after_write: Stick to primary after first write in context.
+        primary_connection_string: Legacy: Connection string for the default (writer) database.
+        read_replicas: Legacy: List of read replica connection strings or configs.
+        engines: Dictionary mapping group names to lists of engine configs.
+        default_group: Name of the group to use for write operations (default: "default").
+        read_group: Name of the group to use for read operations (default: "read").
+        routing_strategy: Strategy for selecting engines within a group.
+        enabled: Enable/disable routing.
+        sticky_after_write: Stick to writer after first write in context.
         reset_stickiness_on_commit: Reset stickiness after commit.
+    """
+
+    primary_connection_string: Optional[str] = None
+    """Legacy: Connection string for the primary (write) database.
+    Mapped to ``engines[default_group]``.
+    """
+
+    read_replicas: list[Union[str, EngineConfig]] = field(default_factory=_default_read_replicas)
+    """Legacy: Read replica connection strings or configs.
+    Mapped to ``engines[read_group]``.
+    """
+
+    engines: dict[str, list[Union[str, EngineConfig]]] = field(default_factory=_default_engines)
+    """Dictionary mapping group names to lists of engine configs.
 
     Example:
-        Basic configuration with a single replica::
+        .. code-block:: python
 
-            config = RoutingConfig(
-                primary_connection_string="postgresql+asyncpg://user:pass@primary:5432/db",
-                read_replicas=[
-                    "postgresql+asyncpg://user:pass@replica1:5432/db"
-                ],
-            )
-
-        Configuration with multiple weighted replicas::
-
-            config = RoutingConfig(
-                primary_connection_string="postgresql+asyncpg://user:pass@primary:5432/db",
-                read_replicas=[
-                    ReplicaConfig(
-                        connection_string="postgresql+asyncpg://user:pass@replica1:5432/db",
-                        weight=2,
-                        name="replica-1",
-                    ),
-                    ReplicaConfig(
-                        connection_string="postgresql+asyncpg://user:pass@replica2:5432/db",
-                        weight=1,
-                        name="replica-2",
-                    ),
-                ],
-                routing_strategy=RoutingStrategy.ROUND_ROBIN,
-            )
+            {
+                "writer": ["postgres://primary"],
+                "reader": ["postgres://rep1", "postgres://rep2"],
+                "analytics": ["postgres://warehouse"]
+            }
     """
 
-    primary_connection_string: str
-    """Connection string for the primary (write) database."""
+    default_group: str = "default"
+    """Name of the group to use for write operations."""
 
-    read_replicas: list[Union[str, ReplicaConfig]] = field(default_factory=_default_read_replicas)
-    """Read replica connection strings or configs.
-
-    Can be a list of connection strings or :class:`ReplicaConfig` instances
-    for more control over replica configuration.
-    """
+    read_group: str = "read"
+    """Name of the group to use for read operations."""
 
     routing_strategy: RoutingStrategy = RoutingStrategy.ROUND_ROBIN
-    """Strategy for selecting read replicas.
-
-    Defaults to round-robin for even distribution.
-    """
+    """Strategy for selecting engines within a group."""
 
     enabled: bool = True
-    """Enable/disable routing.
-
-    When ``False``, all traffic goes to the primary database.
-    Useful for testing or temporarily disabling routing.
-    """
+    """Enable/disable routing."""
 
     sticky_after_write: bool = True
-    """Stick to primary after first write in context (read-your-writes).
-
-    When ``True`` (default), after any write operation in the current context,
-    all subsequent read operations will also use the primary database until
-    the transaction is committed. This prevents read-after-write inconsistency
-    due to replica lag.
-    """
+    """Stick to writer after first write in context (read-your-writes)."""
 
     reset_stickiness_on_commit: bool = True
-    """Reset stickiness after commit.
+    """Reset stickiness after commit."""
 
-    When ``True`` (default), the sticky-to-primary state is reset after
-    a successful commit, allowing subsequent reads to use replicas again.
-    """
+    def __post_init__(self) -> None:
+        """Normalize configuration."""
+        # Migrate legacy config to engines map
+        if self.primary_connection_string:
+            if self.default_group not in self.engines:
+                self.engines[self.default_group] = []
+            self.engines[self.default_group].insert(
+                0, EngineConfig(connection_string=self.primary_connection_string, name="primary")
+            )
 
-    def get_replica_connection_strings(self) -> list[str]:
-        """Get all replica connection strings.
+        if self.read_replicas:
+            if self.read_group not in self.engines:
+                self.engines[self.read_group] = []
+            self.engines[self.read_group].extend(self.read_replicas)
+
+    def get_engine_configs(self, group: str) -> list[EngineConfig]:
+        """Get engine configs for a specific group.
+
+        Args:
+            group: Name of the engine group.
 
         Returns:
-            List of connection strings for all configured replicas.
+            List of :class:`EngineConfig` instances.
         """
-        return [
-            replica.connection_string if isinstance(replica, ReplicaConfig) else replica
-            for replica in self.read_replicas
-        ]
+        if group not in self.engines:
+            return []
 
-    def get_replica_configs(self) -> list[ReplicaConfig]:
-        """Get all replicas as ReplicaConfig instances.
-
-        Returns:
-            List of :class:`ReplicaConfig` instances.
-        """
+        configs = self.engines[group]
         return [
-            replica if isinstance(replica, ReplicaConfig) else ReplicaConfig(connection_string=replica)
-            for replica in self.read_replicas
+            config if isinstance(config, EngineConfig) else EngineConfig(connection_string=config) for config in configs
         ]

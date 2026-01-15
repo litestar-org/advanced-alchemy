@@ -27,129 +27,150 @@ __all__ = (
 EngineT = TypeVar("EngineT", bound="Union[Engine, AsyncEngine]")
 
 
-class ReplicaSelector(ABC, Generic[EngineT]):
-    """Abstract base class for replica selection strategies.
+class EngineSelector(ABC, Generic[EngineT]):
+    """Abstract base class for engine selection strategies.
 
     Subclasses implement different algorithms for choosing which
-    replica to use for read operations.
+    engine to use for operations.
 
     Attributes:
-        _replicas: List of replica engines to select from.
+        _engines: List of engines to select from.
     """
 
-    __slots__ = ("_replicas",)
+    __slots__ = ("_engines",)
 
-    def __init__(self, replicas: list[EngineT]) -> None:
-        """Initialize the selector with a list of replica engines.
+    def __init__(self, engines: list[EngineT]) -> None:
+        """Initialize the selector with a list of engines.
 
         Args:
-            replicas: List of replica database engines.
+            engines: List of database engines.
         """
-        self._replicas = replicas
+        self._engines = engines
 
-    def has_replicas(self) -> bool:
-        """Check if any replicas are configured.
+    def has_engines(self) -> bool:
+        """Check if any engines are configured.
 
         Returns:
-            ``True`` if at least one replica is available.
+            ``True`` if at least one engine is available.
         """
-        return len(self._replicas) > 0
+        return len(self._engines) > 0
+
+    def has_replicas(self) -> bool:
+        """Check if any replicas are configured (alias for has_engines).
+
+        Returns:
+            ``True`` if at least one engine is available.
+        """
+        return self.has_engines()
+
+    @property
+    def engines(self) -> list[EngineT]:
+        """Get the list of engines.
+
+        Returns:
+            List of configured engines.
+        """
+        return self._engines
 
     @property
     def replicas(self) -> list[EngineT]:
-        """Get the list of replica engines.
+        """Get the list of replica engines (alias for engines).
 
         Returns:
-            List of configured replica engines.
+            List of configured engines.
         """
-        return self._replicas
+        return self.engines
 
     @abstractmethod
     def next(self) -> EngineT:
-        """Select the next replica engine to use.
+        """Select the next engine to use.
 
         Returns:
-            The selected replica engine.
+            The selected engine.
 
         Raises:
-            RuntimeError: If no replicas are available.
+            RuntimeError: If no engines are available.
         """
         ...
 
 
-class RoundRobinSelector(ReplicaSelector[EngineT]):
-    """Round-robin replica selection.
+# Alias for backward compatibility
+ReplicaSelector = EngineSelector
 
-    Cycles through replicas in order, distributing load evenly
-    across all available replicas.
+
+class RoundRobinSelector(EngineSelector[EngineT]):
+    """Round-robin engine selection.
+
+    Cycles through engines in order, distributing load evenly
+    across all available engines.
 
     This selector is thread-safe.
 
     Example:
         Creating a round-robin selector::
 
-            selector = RoundRobinSelector(replica_engines)
+            selector = RoundRobinSelector(engines)
             engine1 = selector.next()
             engine2 = selector.next()
             engine3 = selector.next()
 
-        This cycles through replicas in order and wraps back to the first.
+        This cycles through engines in order and wraps back to the first.
     """
 
     __slots__ = ("_cycle", "_lock")
 
-    def __init__(self, replicas: list[EngineT]) -> None:
+    def __init__(self, engines: list[EngineT]) -> None:
         """Initialize the round-robin selector.
 
         Args:
-            replicas: List of replica database engines.
+            engines: List of database engines.
         """
-        super().__init__(replicas)
-        self._cycle: Iterator[EngineT] = cycle(replicas) if replicas else iter([])
+        super().__init__(engines)
+        self._cycle: Iterator[EngineT] = cycle(engines) if engines else iter([])
         self._lock = threading.Lock()
 
     def next(self) -> EngineT:
-        """Select the next replica in round-robin order.
+        """Select the next engine in round-robin order.
 
         Returns:
-            The next replica engine in the cycle.
+            The next engine in the cycle.
 
         Raises:
-            RuntimeError: If no replicas are configured.
+            RuntimeError: If no engines are configured.
         """
-        if not self._replicas:
-            msg = "No replicas configured for round-robin selection"
+        if not self._engines:
+            msg = "No engines configured for round-robin selection"
             raise RuntimeError(msg)
         with self._lock:
             return next(self._cycle)
 
 
-class RandomSelector(ReplicaSelector[EngineT]):
-    """Random replica selection.
+class RandomSelector(EngineSelector[EngineT]):
+    """Random engine selection.
 
-    Selects replicas randomly, which can help with load distribution
-    when replicas have varying capacity or when you want to avoid
+    Selects engines randomly, which can help with load distribution
+    when engines have varying capacity or when you want to avoid
     predictable patterns.
 
     Example:
         Creating a random selector::
 
-            selector = RandomSelector(replica_engines)
+            selector = RandomSelector(engines)
             engine = selector.next()
     """
 
     __slots__ = ()
 
     def next(self) -> EngineT:
-        """Select a random replica.
+        """Select a random engine.
 
         Returns:
-            A randomly selected replica engine.
+            A randomly selected engine.
 
         Raises:
-            RuntimeError: If no replicas are configured.
+            RuntimeError: If no engines are configured.
         """
-        if not self._replicas:
-            msg = "No replicas configured for random selection"
+        if not self._engines:
+            msg = "No engines configured for random selection"
             raise RuntimeError(msg)
-        return secrets.choice(self._replicas)
+        return secrets.choice(self._engines)

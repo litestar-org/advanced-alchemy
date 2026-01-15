@@ -7,13 +7,16 @@ including the sticky-to-primary behavior after writes.
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+from typing import Optional
 
 __all__ = (
+    "bind_group_var",
     "force_primary_var",
     "primary_context",
     "replica_context",
     "reset_routing_context",
     "stick_to_primary_var",
+    "use_bind_group",
 )
 
 
@@ -29,6 +32,13 @@ force_primary_var: ContextVar[bool] = ContextVar("force_primary", default=False)
 
 When ``True``, all operations will use the primary database regardless
 of operation type or stickiness state.
+"""
+
+bind_group_var: ContextVar[Optional[str]] = ContextVar("bind_group", default=None)
+"""Context variable for explicitly selecting a bind group.
+
+When set, this overrides the automatic routing logic to use the specified
+engine group (e.g., "analytics", "reader").
 """
 
 
@@ -93,6 +103,34 @@ def replica_context() -> Generator[None, None, None]:
         force_primary_var.reset(force_token)
 
 
+@contextmanager
+def use_bind_group(name: str) -> Generator[None, None, None]:
+    """Force operations to use a specific bind group.
+
+    Use this context manager to route operations to a specific group of engines,
+    such as "analytics" or "reporting".
+
+    Example:
+        Route a query to the analytics database::
+
+            from advanced_alchemy.routing import use_bind_group
+
+            with use_bind_group("analytics"):
+                data = await repo.list()
+
+    Args:
+        name: Name of the bind group to use.
+
+    Yields:
+        None
+    """
+    token: Token[Optional[str]] = bind_group_var.set(name)
+    try:
+        yield
+    finally:
+        bind_group_var.reset(token)
+
+
 def reset_routing_context() -> None:
     """Reset all routing context variables to their defaults.
 
@@ -109,6 +147,7 @@ def reset_routing_context() -> None:
     """
     stick_to_primary_var.set(False)
     force_primary_var.set(False)
+    bind_group_var.set(None)
 
 
 def set_sticky_primary() -> None:

@@ -20,7 +20,8 @@ Key Features
 - **Sticky-After-Write**: Ensures read-your-writes consistency by routing reads to primary after writes
 - **FOR UPDATE Detection**: Automatically routes ``SELECT ... FOR UPDATE`` to primary
 - **Multiple Replica Support**: Round-robin or random selection across multiple replicas
-- **Context Managers**: Explicit control with ``primary_context()`` and ``replica_context()``
+- **Agnostic Bind Group Routing**: Define and route to arbitrary groups (e.g., "analytics", "reporting")
+- **Context Managers**: Explicit control with ``primary_context()``, ``replica_context()``, and ``use_bind_group()``
 - **Framework Integration**: Built-in support for Litestar, FastAPI, Flask, Sanic, Starlette
 
 Configuration Classes
@@ -29,14 +30,17 @@ Configuration Classes
 .. autoclass:: advanced_alchemy.config.routing.RoutingConfig
     :members:
     :undoc-members:
+    :no-index:
 
 .. autoclass:: advanced_alchemy.config.routing.ReplicaConfig
     :members:
     :undoc-members:
+    :no-index:
 
 .. autoclass:: advanced_alchemy.config.routing.RoutingStrategy
     :members:
     :undoc-members:
+    :no-index:
 
 Session Classes
 ~~~~~~~~~~~~~~~
@@ -83,6 +87,8 @@ Context Managers
 .. autofunction:: advanced_alchemy.routing.primary_context
 
 .. autofunction:: advanced_alchemy.routing.replica_context
+
+.. autofunction:: advanced_alchemy.routing.use_bind_group
 
 .. autofunction:: advanced_alchemy.routing.reset_routing_context
 

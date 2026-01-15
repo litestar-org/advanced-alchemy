@@ -14,7 +14,7 @@ from advanced_alchemy.routing.context import (
     reset_routing_context,
     stick_to_primary_var,
 )
-from advanced_alchemy.routing.selectors import RoundRobinSelector
+from advanced_alchemy.routing.selectors import EngineSelector, RoundRobinSelector
 from advanced_alchemy.routing.session import RoutingSyncSession
 
 
@@ -61,9 +61,10 @@ def routing_session(
     """Create a routing session for testing."""
     reset_routing_context()
 
+    selectors: dict[str, EngineSelector[Engine]] = {routing_config.read_group: mock_replica_selector}
     return RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=mock_replica_selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=routing_config,
     )
 
@@ -74,14 +75,15 @@ def test_routing_session_initialization(
     routing_config: RoutingConfig,
 ) -> None:
     """Test RoutingSyncSession initialization."""
+    selectors: dict[str, EngineSelector[Engine]] = {routing_config.read_group: mock_replica_selector}
     session = RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=mock_replica_selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=routing_config,
     )
 
-    assert session._primary_engine is mock_primary_engine
-    assert session._replica_selector is mock_replica_selector
+    assert session._default_engine is mock_primary_engine
+    assert session._selectors[routing_config.read_group] is mock_replica_selector
     assert session._routing_config is routing_config
 
 
@@ -103,6 +105,7 @@ def test_get_bind_routes_insert_to_primary(
 ) -> None:
     """Test that INSERT queries route to primary."""
     stmt = MagicMock(spec=Insert)
+    stmt._execution_options = {}
 
     engine = routing_session.get_bind(clause=stmt)
 
@@ -115,6 +118,7 @@ def test_get_bind_routes_update_to_primary(
 ) -> None:
     """Test that UPDATE queries route to primary."""
     stmt = MagicMock(spec=Update)
+    stmt._execution_options = {}
 
     engine = routing_session.get_bind(clause=stmt)
 
@@ -127,6 +131,7 @@ def test_get_bind_routes_delete_to_primary(
 ) -> None:
     """Test that DELETE queries route to primary."""
     stmt = MagicMock(spec=Delete)
+    stmt._execution_options = {}
 
     engine = routing_session.get_bind(clause=stmt)
 
@@ -139,6 +144,7 @@ def test_get_bind_sticky_after_write(
 ) -> None:
     """Test that reads stick to primary after a write."""
     insert_stmt = MagicMock(spec=Insert)
+    insert_stmt._execution_options = {}
     routing_session.get_bind(clause=insert_stmt)
 
     select_stmt = select(1)
@@ -171,9 +177,10 @@ def test_get_bind_with_routing_disabled(
         enabled=False,
     )
 
+    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: mock_replica_selector}
     session = RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=mock_replica_selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=config,
     )
 
@@ -243,9 +250,11 @@ def test_get_bind_no_replicas_falls_back_to_primary(
 
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
+    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: selector}
+
     session = RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=config,
     )
 
@@ -278,6 +287,7 @@ def test_commit_resets_stickiness(
 ) -> None:
     """Test that commit resets sticky-to-primary state."""
     insert_stmt = MagicMock(spec=Insert)
+    insert_stmt._execution_options = {}
     routing_session.get_bind(clause=insert_stmt)
 
     assert stick_to_primary_var.get() is True
@@ -302,13 +312,15 @@ def test_commit_no_reset_when_disabled(
         reset_stickiness_on_commit=False,
     )
 
+    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: mock_replica_selector}
     session = RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=mock_replica_selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=config,
     )
 
     insert_stmt = MagicMock(spec=Insert)
+    insert_stmt._execution_options = {}
     session.get_bind(clause=insert_stmt)
 
     session.commit()
@@ -326,6 +338,7 @@ def test_rollback_resets_stickiness(
 ) -> None:
     """Test that rollback resets sticky-to-primary state."""
     insert_stmt = MagicMock(spec=Insert)
+    insert_stmt._execution_options = {}
     routing_session.get_bind(clause=insert_stmt)
 
     assert stick_to_primary_var.get() is True
@@ -351,13 +364,15 @@ def test_sticky_disabled_writes_dont_set_flag(
         sticky_after_write=False,
     )
 
+    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: mock_replica_selector}
     session = RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=mock_replica_selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=config,
     )
 
     insert_stmt = MagicMock(spec=Insert)
+    insert_stmt._execution_options = {}
     session.get_bind(clause=insert_stmt)
 
     assert stick_to_primary_var.get() is False
@@ -388,9 +403,11 @@ def test_get_bind_with_none_clause_and_no_replicas(
 
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
+    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: selector}
+
     session = RoutingSyncSession(
-        primary_engine=mock_primary_engine,
-        replica_selector=selector,
+        default_engine=mock_primary_engine,
+        selectors=selectors,
         routing_config=config,
     )
 
@@ -405,9 +422,10 @@ def test_has_for_update_detects_for_update_clause() -> None:
     primary_engine: Engine = MagicMock()
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
+    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: selector}
     session = RoutingSyncSession(
-        primary_engine=primary_engine,
-        replica_selector=selector,
+        default_engine=primary_engine,
+        selectors=selectors,
         routing_config=config,
     )
 

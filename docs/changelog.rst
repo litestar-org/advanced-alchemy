@@ -21,7 +21,7 @@
         Cause:
         We added the `sa.PasslibHasher = PasslibHasher` and `sa.PwdlibHasher = PwdlibHasher` types in `script.py.mako`. As a result, when a user installs only Advanced Alchemy and creates a migration, these files are imported. Since they reference types from `passlib` and `pwdlib`, which are not installed by default, the import fails and triggers this error.
 
-    .. change:: add missing type parameter to AsyncServiceT_co and SyncServiceT_…
+    .. change:: add missing type parameter to AsyncServiceT_co and SyncServiceT_co
         :type: bugfix
         :pr: 612
 

@@ -21,7 +21,7 @@ def test_routing_async_session_class_attribute_sync_session_class() -> None:
 
 def test_sync_replica_selector_wrapper_has_replicas() -> None:
     """Test _SyncReplicaSelectorWrapper.has_replicas()."""
-    from advanced_alchemy.routing.session import _SyncReplicaSelectorWrapper
+    from advanced_alchemy.routing.session import _SyncEngineSelectorWrapper
 
     async_engines: list[AsyncEngine] = []
     for i in range(2):
@@ -30,24 +30,24 @@ def test_sync_replica_selector_wrapper_has_replicas() -> None:
         async_engines.append(async_engine)
 
     async_selector: RoundRobinSelector[AsyncEngine] = RoundRobinSelector(async_engines)
-    wrapper = _SyncReplicaSelectorWrapper(async_selector)
+    wrapper = _SyncEngineSelectorWrapper(async_selector)
 
     assert wrapper.has_replicas() is True
 
 
 def test_sync_replica_selector_wrapper_has_no_replicas() -> None:
     """Test _SyncReplicaSelectorWrapper.has_replicas() with empty selector."""
-    from advanced_alchemy.routing.session import _SyncReplicaSelectorWrapper
+    from advanced_alchemy.routing.session import _SyncEngineSelectorWrapper
 
     async_selector: RoundRobinSelector[AsyncEngine] = RoundRobinSelector([])
-    wrapper = _SyncReplicaSelectorWrapper(async_selector)
+    wrapper = _SyncEngineSelectorWrapper(async_selector)
 
     assert wrapper.has_replicas() is False
 
 
 def test_sync_replica_selector_wrapper_next() -> None:
     """Test _SyncReplicaSelectorWrapper.next() returns sync engine."""
-    from advanced_alchemy.routing.session import _SyncReplicaSelectorWrapper
+    from advanced_alchemy.routing.session import _SyncEngineSelectorWrapper
 
     async_engines: list[AsyncEngine] = []
     for i in range(2):
@@ -56,7 +56,7 @@ def test_sync_replica_selector_wrapper_next() -> None:
         async_engines.append(async_engine)
 
     async_selector: RoundRobinSelector[AsyncEngine] = RoundRobinSelector(async_engines)
-    wrapper = _SyncReplicaSelectorWrapper(async_selector)
+    wrapper = _SyncEngineSelectorWrapper(async_selector)
 
     sync_engine = wrapper.next()
 
@@ -65,7 +65,7 @@ def test_sync_replica_selector_wrapper_next() -> None:
 
 def test_sync_replica_selector_wrapper_cycles_through_sync_engines() -> None:
     """Test _SyncReplicaSelectorWrapper cycles through sync engines."""
-    from advanced_alchemy.routing.session import _SyncReplicaSelectorWrapper
+    from advanced_alchemy.routing.session import _SyncEngineSelectorWrapper
 
     async_engines: list[AsyncEngine] = []
     for i in range(2):
@@ -74,7 +74,7 @@ def test_sync_replica_selector_wrapper_cycles_through_sync_engines() -> None:
         async_engines.append(async_engine)
 
     async_selector: RoundRobinSelector[AsyncEngine] = RoundRobinSelector(async_engines)
-    wrapper = _SyncReplicaSelectorWrapper(async_selector)
+    wrapper = _SyncEngineSelectorWrapper(async_selector)
 
     sync_engine_0 = wrapper.next()
     assert sync_engine_0 is async_engines[0].sync_engine

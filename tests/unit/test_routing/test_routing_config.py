@@ -149,16 +149,16 @@ def test_routing_config_no_reset_on_commit() -> None:
 
 
 def test_get_replica_connection_strings_empty() -> None:
-    """Test get_replica_connection_strings with no replicas."""
+    """Test get_engine_configs with no replicas."""
     config = RoutingConfig(primary_connection_string="postgresql://primary:5432/db")
 
-    connection_strings = config.get_replica_connection_strings()
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
 
     assert connection_strings == []
 
 
 def test_get_replica_connection_strings_from_strings() -> None:
-    """Test get_replica_connection_strings with string replicas."""
+    """Test get_engine_configs with string replicas."""
     config = RoutingConfig(
         primary_connection_string="postgresql://primary:5432/db",
         read_replicas=[
@@ -167,7 +167,7 @@ def test_get_replica_connection_strings_from_strings() -> None:
         ],
     )
 
-    connection_strings = config.get_replica_connection_strings()
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
 
     assert connection_strings == [
         "postgresql://replica1:5432/db",
@@ -176,7 +176,7 @@ def test_get_replica_connection_strings_from_strings() -> None:
 
 
 def test_get_replica_connection_strings_from_configs() -> None:
-    """Test get_replica_connection_strings with ReplicaConfig objects."""
+    """Test get_engine_configs with ReplicaConfig objects."""
     config = RoutingConfig(
         primary_connection_string="postgresql://primary:5432/db",
         read_replicas=[
@@ -185,7 +185,7 @@ def test_get_replica_connection_strings_from_configs() -> None:
         ],
     )
 
-    connection_strings = config.get_replica_connection_strings()
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
 
     assert connection_strings == [
         "postgresql://replica1:5432/db",
@@ -194,7 +194,7 @@ def test_get_replica_connection_strings_from_configs() -> None:
 
 
 def test_get_replica_connection_strings_mixed() -> None:
-    """Test get_replica_connection_strings with mixed replicas."""
+    """Test get_engine_configs with mixed replicas."""
     config = RoutingConfig(
         primary_connection_string="postgresql://primary:5432/db",
         read_replicas=[
@@ -203,7 +203,7 @@ def test_get_replica_connection_strings_mixed() -> None:
         ],
     )
 
-    connection_strings = config.get_replica_connection_strings()
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
 
     assert connection_strings == [
         "postgresql://replica1:5432/db",
@@ -212,16 +212,16 @@ def test_get_replica_connection_strings_mixed() -> None:
 
 
 def test_get_replica_configs_empty() -> None:
-    """Test get_replica_configs with no replicas."""
+    """Test get_engine_configs with no replicas."""
     config = RoutingConfig(primary_connection_string="postgresql://primary:5432/db")
 
-    replica_configs = config.get_replica_configs()
+    replica_configs = config.get_engine_configs(config.read_group)
 
     assert replica_configs == []
 
 
 def test_get_replica_configs_from_strings() -> None:
-    """Test get_replica_configs converts strings to ReplicaConfig objects."""
+    """Test get_engine_configs converts strings to ReplicaConfig objects."""
     config = RoutingConfig(
         primary_connection_string="postgresql://primary:5432/db",
         read_replicas=[
@@ -230,7 +230,7 @@ def test_get_replica_configs_from_strings() -> None:
         ],
     )
 
-    replica_configs = config.get_replica_configs()
+    replica_configs = config.get_engine_configs(config.read_group)
 
     assert len(replica_configs) == 2
     assert all(isinstance(r, ReplicaConfig) for r in replica_configs)
@@ -241,7 +241,7 @@ def test_get_replica_configs_from_strings() -> None:
 
 
 def test_get_replica_configs_from_configs() -> None:
-    """Test get_replica_configs returns ReplicaConfig objects as-is."""
+    """Test get_engine_configs returns ReplicaConfig objects as-is."""
     config = RoutingConfig(
         primary_connection_string="postgresql://primary:5432/db",
         read_replicas=[
@@ -258,7 +258,7 @@ def test_get_replica_configs_from_configs() -> None:
         ],
     )
 
-    replica_configs = config.get_replica_configs()
+    replica_configs = config.get_engine_configs(config.read_group)
 
     assert len(replica_configs) == 2
     assert replica_configs[0].weight == 2
@@ -268,7 +268,7 @@ def test_get_replica_configs_from_configs() -> None:
 
 
 def test_get_replica_configs_mixed() -> None:
-    """Test get_replica_configs with mixed string and ReplicaConfig replicas."""
+    """Test get_engine_configs with mixed string and ReplicaConfig replicas."""
     config = RoutingConfig(
         primary_connection_string="postgresql://primary:5432/db",
         read_replicas=[
@@ -281,7 +281,7 @@ def test_get_replica_configs_mixed() -> None:
         ],
     )
 
-    replica_configs = config.get_replica_configs()
+    replica_configs = config.get_engine_configs(config.read_group)
 
     assert len(replica_configs) == 2
     assert all(isinstance(r, ReplicaConfig) for r in replica_configs)

@@ -10,7 +10,8 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
-from advanced_alchemy.routing.selectors import RandomSelector, ReplicaSelector, RoundRobinSelector
+from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.routing.selectors import EngineSelector, RandomSelector, RoundRobinSelector
 from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSyncSession
 
 __all__ = (
@@ -23,18 +24,17 @@ class RoutingSyncSessionMaker:
     """Factory for creating sync routing sessions.
 
     This class creates :class:`RoutingSyncSession` instances with properly
-    configured primary and replica engines.
+    configured engines and routing selectors.
 
     Example:
         Creating a routing session maker::
 
             maker = RoutingSyncSessionMaker(
                 routing_config=RoutingConfig(
-                    primary_connection_string="postgresql://...",
-                    read_replicas=[
-                        "postgresql://replica1/...",
-                        "postgresql://replica2/...",
-                    ],
+                    engines={
+                        "writer": ["postgresql://primary"],
+                        "reader": ["postgresql://replica1"],
+                    }
                 ),
                 engine_config={"pool_size": 10},
             )
@@ -43,11 +43,11 @@ class RoutingSyncSessionMaker:
     """
 
     __slots__ = (
+        "_default_engine",
         "_engine_config",
-        "_primary_engine",
-        "_replica_engines",
-        "_replica_selector",
+        "_engines",
         "_routing_config",
+        "_selectors",
         "_session_config",
     )
 
@@ -70,20 +70,37 @@ class RoutingSyncSessionMaker:
         self._engine_config = engine_config or {}
         self._session_config = session_config or {}
 
-        self._primary_engine = self._create_engine(
-            routing_config.primary_connection_string,
-            create_engine_callable,
-        )
+        self._engines: dict[str, list[Engine]] = {}
+        self._selectors: dict[str, EngineSelector[Engine]] = {}
 
-        self._replica_engines: list[Engine] = []
-        for connection_string in routing_config.get_replica_connection_strings():
-            engine = self._create_engine(connection_string, create_engine_callable)
-            self._replica_engines.append(engine)
+        # Initialize engines and selectors for all groups
+        for group in routing_config.engines:
+            engines_for_group: list[Engine] = []
+            for config in routing_config.get_engine_configs(group):
+                engine = self._create_engine(config.connection_string, create_engine_callable)
+                engines_for_group.append(engine)
 
-        self._replica_selector = self._create_selector(
-            self._replica_engines,
-            routing_config.routing_strategy,
-        )
+            if engines_for_group:
+                self._engines[group] = engines_for_group
+                self._selectors[group] = self._create_selector(
+                    engines_for_group,
+                    routing_config.routing_strategy,
+                )
+
+        # Set default engine (required)
+        default_group = routing_config.default_group
+        if (
+            default_group not in self._engines or not self._engines[default_group]
+        ) and not routing_config.primary_connection_string:
+            # Only raise if strict legacy check fails too?
+            # Actually, post_init maps primary_connection_string to engines, so we just check engines.
+            msg = (
+                f"Default group '{default_group}' has no engines configured. "
+                "Ensure 'engines' contains this group or 'primary_connection_string' is set."
+            )
+            raise ImproperConfigurationError(msg)
+
+        self._default_engine = self._engines[default_group][0]
 
     def _create_engine(
         self,
@@ -111,11 +128,11 @@ class RoutingSyncSessionMaker:
         self,
         engines: list[Engine],
         strategy: RoutingStrategy,
-    ) -> ReplicaSelector[Engine]:
-        """Create a replica selector for the given strategy.
+    ) -> EngineSelector[Engine]:
+        """Create an engine selector for the given strategy.
 
         Args:
-            engines: List of replica engines.
+            engines: List of engines.
             strategy: The routing strategy to use.
 
         Returns:
@@ -137,53 +154,55 @@ class RoutingSyncSessionMaker:
         session_config = self._session_config.copy()
         session_config.pop("bind", None)
         return RoutingSyncSession(
-            primary_engine=self._primary_engine,
-            replica_selector=self._replica_selector,
             routing_config=self._routing_config,
+            selectors=self._selectors,
+            default_engine=self._default_engine,
             **session_config,
         )
 
     @property
     def primary_engine(self) -> Engine:
-        """Get the primary engine.
+        """Get the primary (default) engine.
 
         Returns:
             The primary database engine.
         """
-        return self._primary_engine
+        return self._default_engine
 
     @property
     def replica_engines(self) -> list[Engine]:
-        """Get the replica engines.
+        """Get the replica engines (from read_group).
 
         Returns:
             List of replica database engines.
         """
-        return self._replica_engines
+        return self._engines.get(self._routing_config.read_group, [])
 
     def close_all(self) -> None:
         """Close all engines and release connections.
 
         Call this when shutting down to properly release database connections.
         """
-        self._primary_engine.dispose()
-        for engine in self._replica_engines:
-            engine.dispose()
+        for engine_list in self._engines.values():
+            for engine in engine_list:
+                engine.dispose()
 
 
 class RoutingAsyncSessionMaker:
     """Factory for creating async routing sessions.
 
     This class creates :class:`RoutingAsyncSession` instances with properly
-    configured primary and replica async engines.
+    configured async engines and routing selectors.
 
     Example:
         Creating an async routing session maker::
 
             maker = RoutingAsyncSessionMaker(
                 routing_config=RoutingConfig(
-                    primary_connection_string="postgresql+asyncpg://...",
-                    read_replicas=["postgresql+asyncpg://replica1/..."],
+                    engines={
+                        "writer": ["postgresql+asyncpg://primary"],
+                        "reader": ["postgresql+asyncpg://replica1"],
+                    }
                 ),
                 engine_config={"pool_size": 10},
             )
@@ -193,11 +212,11 @@ class RoutingAsyncSessionMaker:
     """
 
     __slots__ = (
+        "_default_engine",
         "_engine_config",
-        "_primary_engine",
-        "_replica_engines",
-        "_replica_selector",
+        "_engines",
         "_routing_config",
+        "_selectors",
         "_session_config",
     )
 
@@ -220,20 +239,33 @@ class RoutingAsyncSessionMaker:
         self._engine_config = engine_config or {}
         self._session_config = session_config or {}
 
-        self._primary_engine = self._create_engine(
-            routing_config.primary_connection_string,
-            create_engine_callable,
-        )
+        self._engines: dict[str, list[AsyncEngine]] = {}
+        self._selectors: dict[str, EngineSelector[AsyncEngine]] = {}
 
-        self._replica_engines: list[AsyncEngine] = []
-        for connection_string in routing_config.get_replica_connection_strings():
-            engine = self._create_engine(connection_string, create_engine_callable)
-            self._replica_engines.append(engine)
+        # Initialize engines and selectors for all groups
+        for group in routing_config.engines:
+            engines_for_group: list[AsyncEngine] = []
+            for config in routing_config.get_engine_configs(group):
+                engine = self._create_engine(config.connection_string, create_engine_callable)
+                engines_for_group.append(engine)
 
-        self._replica_selector = self._create_selector(
-            self._replica_engines,
-            routing_config.routing_strategy,
-        )
+            if engines_for_group:
+                self._engines[group] = engines_for_group
+                self._selectors[group] = self._create_selector(
+                    engines_for_group,
+                    routing_config.routing_strategy,
+                )
+
+        # Set default engine (required)
+        default_group = routing_config.default_group
+        if default_group not in self._engines or not self._engines[default_group]:
+            msg = (
+                f"Default group '{default_group}' has no engines configured. "
+                "Ensure 'engines' contains this group or 'primary_connection_string' is set."
+            )
+            raise ImproperConfigurationError(msg)
+
+        self._default_engine = self._engines[default_group][0]
 
     def _create_engine(
         self,
@@ -261,8 +293,8 @@ class RoutingAsyncSessionMaker:
         self,
         engines: list[AsyncEngine],
         strategy: RoutingStrategy,
-    ) -> ReplicaSelector[AsyncEngine]:
-        """Create a replica selector for the given strategy.
+    ) -> EngineSelector[AsyncEngine]:
+        """Create an engine selector for the given strategy.
 
         Args:
             engines: List of replica async engines.
@@ -287,35 +319,35 @@ class RoutingAsyncSessionMaker:
         session_config = self._session_config.copy()
         session_config.pop("bind", None)
         return RoutingAsyncSession(
-            primary_engine=self._primary_engine,
-            replica_selector=self._replica_selector,
             routing_config=self._routing_config,
+            selectors=self._selectors,
+            default_engine=self._default_engine,
             **session_config,
         )
 
     @property
     def primary_engine(self) -> AsyncEngine:
-        """Get the primary async engine.
+        """Get the primary (default) async engine.
 
         Returns:
             The primary database async engine.
         """
-        return self._primary_engine
+        return self._default_engine
 
     @property
     def replica_engines(self) -> list[AsyncEngine]:
-        """Get the replica async engines.
+        """Get the replica async engines (from read_group).
 
         Returns:
             List of replica database async engines.
         """
-        return self._replica_engines
+        return self._engines.get(self._routing_config.read_group, [])
 
     async def close_all(self) -> None:
         """Close all engines and release connections.
 
         Call this when shutting down to properly release database connections.
         """
-        await self._primary_engine.dispose()
-        for engine in self._replica_engines:
-            await engine.dispose()
+        for engine_list in self._engines.values():
+            for engine in engine_list:
+                await engine.dispose()

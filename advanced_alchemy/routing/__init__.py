@@ -39,6 +39,7 @@ from advanced_alchemy.routing.context import (
     replica_context,
     reset_routing_context,
     stick_to_primary_var,
+    use_bind_group,
 )
 from advanced_alchemy.routing.maker import RoutingAsyncSessionMaker, RoutingSyncSessionMaker
 from advanced_alchemy.routing.selectors import RandomSelector, ReplicaSelector, RoundRobinSelector
@@ -57,4 +58,5 @@ __all__ = (
     "replica_context",
     "reset_routing_context",
     "stick_to_primary_var",
+    "use_bind_group",
 )

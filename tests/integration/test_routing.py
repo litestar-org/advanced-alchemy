@@ -379,7 +379,7 @@ class TestRoutingSyncSessionMaker:
         try:
             session = maker()
             assert isinstance(session, RoutingSyncSession)
-            assert session._primary_engine is maker.primary_engine
+            assert session._default_engine is maker.primary_engine
         finally:
             maker.close_all()
 
@@ -397,8 +397,8 @@ class TestRoutingSyncSessionMaker:
         maker = RoutingSyncSessionMaker(routing_config=config)
 
         try:
-            assert maker._replica_selector is not None
-            selector = maker._replica_selector
+            assert maker._selectors["read"] is not None
+            selector = maker._selectors["read"]
             assert isinstance(selector, RoundRobinSelector)
 
             first = selector.next()
@@ -425,7 +425,7 @@ class TestRoutingSyncSessionMaker:
         maker = RoutingSyncSessionMaker(routing_config=config)
 
         try:
-            assert isinstance(maker._replica_selector, RandomSelector)
+            assert isinstance(maker._selectors["read"], RandomSelector)
         finally:
             maker.close_all()
 
