@@ -171,7 +171,7 @@ def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
             converted_data[attr_name] = _convert_relationship_value(
                 value=value,
                 related_model=related_model,
-                is_collection=attr.uselist or False,
+                is_collection=attr.uselist,
             )
         else:
             # Regular column attribute - pass through
