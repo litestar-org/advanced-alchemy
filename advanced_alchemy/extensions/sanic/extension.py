@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError, MissingDependencyError
 from advanced_alchemy.extensions.sanic.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.routing.context import reset_routing_context
 
 try:
     from sanic_ext import Extend
@@ -198,6 +199,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         """
         session = getattr(request.ctx, config.session_key, None)
         if session is None:
+            reset_routing_context()
             session = config.get_session()
             setattr(request.ctx, config.session_key, session)
         set_async_context(isinstance(session, AsyncSession))

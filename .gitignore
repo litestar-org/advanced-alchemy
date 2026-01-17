@@ -186,3 +186,6 @@ requirements
 AGENTS.md
 CLAUDE.md
 GEMINI.md
+
+tools/scripts/detect_mcp_tools.py
+.geminiignore

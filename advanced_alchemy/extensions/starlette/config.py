@@ -19,6 +19,7 @@ from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
+from advanced_alchemy.routing.context import reset_routing_context
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
@@ -222,6 +223,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             starlette.responses.Response: The HTTP response.
         """
+        # Reset routing context for request-scoped isolation
+        reset_routing_context()
+
         response = await call_next(request)
 
         # Store response status for generator dependencies to access during cleanup
@@ -377,6 +381,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             starlette.responses.Response: The HTTP response.
         """
+        # Reset routing context for request-scoped isolation
+        reset_routing_context()
+
         response = await call_next(request)
 
         # Store response status for generator dependencies to access during cleanup

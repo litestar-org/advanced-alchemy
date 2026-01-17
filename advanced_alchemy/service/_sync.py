@@ -191,6 +191,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
         """Count of records returned by query.
@@ -203,6 +204,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
             **kwargs: key value pairs of filter types.
 
         Returns:
@@ -215,6 +217,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load=load,
             execution_options=execution_options,
             uniquify=self._get_uniquify(uniquify),
+            bind_group=bind_group,
             **kwargs,
         )
 
@@ -225,6 +228,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
         """Wrap repository exists operation.
@@ -236,6 +240,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
             **kwargs: Keyword arguments for attribute based filtering.
 
         Returns:
@@ -247,6 +252,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load=load,
             execution_options=execution_options,
             uniquify=self._get_uniquify(uniquify),
+            bind_group=bind_group,
             **kwargs,
         )
 
@@ -261,6 +267,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
 
@@ -275,6 +282,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
 
         Returns:
             Representation of instance with identifier `item_id`.
@@ -290,6 +298,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -303,6 +312,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
         """Wrap repository scalar operation.
@@ -317,6 +327,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: The bind group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -333,6 +344,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 with_for_update=with_for_update,
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -347,6 +359,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Wrap repository scalar operation.
@@ -361,6 +374,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: The bind group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -377,6 +391,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 with_for_update=with_for_update,
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -498,6 +513,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
         """List of records and total count returned by query.
@@ -513,6 +529,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -530,6 +547,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -592,6 +610,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -606,6 +625,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -622,6 +642,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
                 **kwargs,
             ),
         )

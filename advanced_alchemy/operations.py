@@ -36,10 +36,8 @@ See Also:
 - :mod:`advanced_alchemy.extensions` : Additional database extensions
 """
 
-from __future__ import annotations
-
 import re
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 from uuid import UUID
 
 from sqlalchemy import Insert, Table, bindparam, literal_column, select, text
@@ -112,10 +110,10 @@ class MergeStatement(Executable, ClauseElement):
     def __init__(
         self,
         table: Table,
-        source: ClauseElement | str,
+        source: Union[ClauseElement, str],
         on_condition: ClauseElement,
-        when_matched_update: dict[str, Any] | None = None,
-        when_not_matched_insert: dict[str, Any] | None = None,
+        when_matched_update: Optional[dict[str, Any]] = None,
+        when_not_matched_insert: Optional[dict[str, Any]] = None,
     ) -> None:
         """Initialize a MERGE statement.
 
@@ -138,7 +136,7 @@ POSTGRES_MERGE_VERSION = 15
 
 
 @compiles(MergeStatement)
-def compile_merge_default(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
+def compile_merge_default(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
     """Default compilation - raises error for unsupported dialects."""
     _ = element, kwargs  # Unused parameters
     dialect_name = compiler.dialect.name
@@ -147,7 +145,7 @@ def compile_merge_default(element: MergeStatement, compiler: SQLCompiler, **kwar
 
 
 @compiles(MergeStatement, "oracle")
-def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
+def compile_merge_oracle(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
     """Compile MERGE statement for Oracle."""
     table_name = element.table.name
 
@@ -197,7 +195,7 @@ def compile_merge_oracle(element: MergeStatement, compiler: SQLCompiler, **kwarg
 
 
 @compiles(MergeStatement, "postgresql")
-def compile_merge_postgresql(element: MergeStatement, compiler: SQLCompiler, **kwargs: Any) -> str:
+def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
     """Compile MERGE statement for PostgreSQL 15+."""
     dialect = compiler.dialect
     if (
@@ -288,8 +286,8 @@ class OnConflictUpsert:
         table: Table,
         values: dict[str, Any],
         conflict_columns: list[str],
-        update_columns: list[str] | None = None,
-        dialect_name: str | None = None,
+        update_columns: Optional[list[str]] = None,
+        dialect_name: Optional[str] = None,
         validate_identifiers: bool = False,
     ) -> Insert:
         """Create a dialect-specific upsert statement.
@@ -352,8 +350,8 @@ class OnConflictUpsert:
         table: Table,
         values: dict[str, Any],
         conflict_columns: list[str],
-        update_columns: list[str] | None = None,
-        dialect_name: str | None = None,
+        update_columns: Optional[list[str]] = None,
+        dialect_name: Optional[str] = None,
         validate_identifiers: bool = False,
     ) -> tuple[MergeStatement, dict[str, Any]]:
         """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
@@ -391,7 +389,7 @@ class OnConflictUpsert:
             update_columns = [col for col in values if col not in conflict_columns]
 
         additional_params: dict[str, Any] = {}
-        source: ClauseElement | str
+        source: Union[ClauseElement, str]
         insert_columns: list[str]
         when_not_matched_insert: dict[str, Any]
 
