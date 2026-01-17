@@ -31,6 +31,7 @@ Repository & Services
     repository
     filters
     service
+    routing
 
 Framework Integration
 ---------------------

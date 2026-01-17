@@ -101,6 +101,19 @@ Advanced Alchemy provides powerful filtering capabilities:
             Post.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7))
         )
 
+Explicit Routing
+~~~~~~~~~~~~~~~~
+
+All read and count operations support an optional ``bind_group`` parameter for explicit routing control:
+
+.. code-block:: python
+
+    # Query from a specific bind group (e.g., 'analytics')
+    posts = await repository.list(bind_group="analytics")
+
+    # Count from 'reporting' group
+    count = await repository.count(bind_group="reporting")
+
 Pagination
 ----------
 

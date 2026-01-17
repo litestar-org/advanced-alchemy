@@ -9,6 +9,7 @@ from advanced_alchemy.config.common import (
     SessionT,
 )
 from advanced_alchemy.config.engine import EngineConfig
+from advanced_alchemy.config.routing import ReplicaConfig, RoutingConfig, RoutingStrategy
 from advanced_alchemy.config.sync import AlembicSyncConfig, SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.config.types import CommitStrategy, TypeDecodersSequence, TypeEncodersMap
 
@@ -23,6 +24,9 @@ __all__ = (
     "GenericAlembicConfig",
     "GenericSQLAlchemyConfig",
     "GenericSessionConfig",
+    "ReplicaConfig",
+    "RoutingConfig",
+    "RoutingStrategy",
     "SQLAlchemyAsyncConfig",
     "SQLAlchemySyncConfig",
     "SessionMakerT",
