@@ -156,26 +156,29 @@ def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
             # user.addresses is a list of Address instances
     """
     mapper = class_mapper(model)
+    mapper_attrs = mapper.attrs
     converted_data: dict[str, Any] = {}
 
-    for attr_name in mapper.attrs.keys():  # noqa: SIM118
-        if attr_name not in kwargs:
+    # Iterate over kwargs instead of mapper.attrs for better performance
+    # when only a subset of attributes is provided (O(InputKeys) vs O(TotalColumns))
+    for key, value in kwargs.items():
+        # Skip keys that aren't mapped attributes (e.g., extra fields)
+        if key not in mapper_attrs:
             continue
 
-        value = kwargs[attr_name]
-        attr = mapper.attrs[attr_name]
+        attr = mapper_attrs[key]
 
         # Check if this attribute is a relationship
         if isinstance(attr, RelationshipProperty):
             related_model: type[ModelT] = attr.mapper.class_
-            converted_data[attr_name] = _convert_relationship_value(
+            converted_data[key] = _convert_relationship_value(
                 value=value,
                 related_model=related_model,
-                is_collection=attr.uselist,
+                is_collection=attr.uselist or False,
             )
         else:
             # Regular column attribute - pass through
-            converted_data[attr_name] = value
+            converted_data[key] = value
 
     return model(**converted_data)
 
