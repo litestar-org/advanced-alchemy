@@ -1,0 +1,1 @@
+"""FastAPI extension integration tests."""
