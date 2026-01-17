@@ -60,7 +60,7 @@ def test_round_robin_selector_no_replicas_raises() -> None:
     """Test that RoundRobinSelector raises RuntimeError when no replicas configured."""
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
-    with pytest.raises(RuntimeError, match="No replicas configured for round-robin selection"):
+    with pytest.raises(RuntimeError, match="No engines configured for round-robin selection"):
         selector.next()
 
 
@@ -137,7 +137,7 @@ def test_random_selector_no_replicas_raises() -> None:
     """Test that RandomSelector raises RuntimeError when no replicas configured."""
     selector: RandomSelector[Engine] = RandomSelector([])
 
-    with pytest.raises(RuntimeError, match="No replicas configured for random selection"):
+    with pytest.raises(RuntimeError, match="No engines configured for random selection"):
         selector.next()
 
 

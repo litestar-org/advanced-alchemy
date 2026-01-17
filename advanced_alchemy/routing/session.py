@@ -268,6 +268,14 @@ class _SyncEngineSelectorWrapper:
         """
         return self._async_selector.has_engines()
 
+    def has_replicas(self) -> bool:
+        """Check if any replicas are configured (alias for has_engines).
+
+        Returns:
+            ``True`` if at least one engine is available.
+        """
+        return self.has_engines()
+
     def next(self) -> "Engine":
         """Get the next engine's sync engine.
 

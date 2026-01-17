@@ -238,7 +238,7 @@ def test_async_session_maker_creates_round_robin_selector_by_default(
         create_engine_callable=create_mock_async_engine,
     )
 
-    assert isinstance(maker._replica_selector, RoundRobinSelector)
+    assert isinstance(maker._selectors[routing_config.read_group], RoundRobinSelector)
 
 
 def test_async_session_maker_creates_random_selector(routing_config: RoutingConfig) -> None:
@@ -259,7 +259,7 @@ def test_async_session_maker_creates_random_selector(routing_config: RoutingConf
         create_engine_callable=create_mock_async_engine,
     )
 
-    assert isinstance(maker._replica_selector, RandomSelector)
+    assert isinstance(maker._selectors[config.read_group], RandomSelector)
 
 
 def test_async_session_maker_call_creates_session(routing_config: RoutingConfig) -> None:
