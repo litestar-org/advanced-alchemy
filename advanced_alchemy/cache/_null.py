@@ -1,16 +1,21 @@
 """Null cache region implementation for when dogpile.cache is not installed."""
 
-from __future__ import annotations
-
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 __all__ = ("NullRegion",)
 
 T = TypeVar("T")
 
 
-# Sentinel value to indicate a cache miss (compatible with dogpile.cache.api.NO_VALUE)
 class _NoValue:
+    """Sentinel value to indicate a cache miss.
+
+    This is compatible with ``dogpile.cache.api.NO_VALUE`` and is used
+    when dogpile.cache is not installed to maintain API compatibility.
+    """
+
+    __slots__ = ()
+
     def __repr__(self) -> str:
         return "<NO_VALUE>"
 
@@ -30,7 +35,7 @@ class NullRegion:
 
     __slots__ = ()
 
-    def get(self, key: str, expiration_time: int | None = None) -> Any:
+    def get(self, key: str, expiration_time: Optional[int] = None) -> Any:
         """Get a value from the cache (always returns NO_VALUE).
 
         Args:
@@ -46,7 +51,7 @@ class NullRegion:
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: int | None = None,
+        expiration_time: Optional[int] = None,
     ) -> T:
         """Get or create a value (always calls the creator).
 
@@ -81,10 +86,10 @@ class NullRegion:
     def configure(
         self,
         backend: str,
-        expiration_time: int | None = None,
-        arguments: dict[str, Any] | None = None,
+        expiration_time: Optional[int] = None,
+        arguments: Optional[dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> NullRegion:
+    ) -> "NullRegion":
         """Configure the region (no-op, returns self).
 
         Args:

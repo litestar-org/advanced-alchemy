@@ -13,34 +13,39 @@ Features:
     - Per-process singleflight to reduce stampedes on cache miss
 
 Example:
-    Basic setup with memory cache::
+    Using the config system (recommended)::
 
-        from advanced_alchemy.cache import CacheConfig, CacheManager
+        from advanced_alchemy.cache import CacheConfig
+        from advanced_alchemy.config import SQLAlchemyAsyncConfig
         from advanced_alchemy.repository import (
             SQLAlchemyAsyncRepository,
         )
 
-        # Configure caching
-        cache_config = CacheConfig(
-            backend="dogpile.cache.memory",
-            expiration_time=300,  # 5 minutes
+        # Configure database with caching
+        db_config = SQLAlchemyAsyncConfig(
+            connection_string="sqlite+aiosqlite:///app.db",
+            cache_config=CacheConfig(
+                backend="dogpile.cache.memory",
+                expiration_time=300,
+            ),
         )
-        cache_manager = CacheManager(cache_config)
+
+        # Cache listeners are auto-registered, cache_manager is stored
+        # in session.info and auto-retrieved by repositories.
 
 
-        # Use with repository
         class UserRepository(SQLAlchemyAsyncRepository[User]):
             model_type = User
-            cache_config = cache_config
 
 
-        repo = UserRepository(
-            session=session, cache_manager=cache_manager
-        )
-        user = await repo.get(1)  # First call hits DB and caches
-        user = await repo.get(
-            1
-        )  # Second call returns cached result
+        async with db_config.get_session() as session:
+            repo = UserRepository(session=session)
+            user = await repo.get(
+                1
+            )  # First call hits DB and caches
+            user = await repo.get(
+                1
+            )  # Second call returns cached result
 
     Redis configuration::
 
@@ -62,14 +67,24 @@ Note:
     Without dogpile.cache installed, the cache manager will use a
     NullRegion that provides the same interface but doesn't cache.
 
-Setup:
-    To enable automatic cache invalidation, call ``setup_cache_listeners()``
-    during application initialization::
+Manual Setup:
+    If not using the config system, call ``setup_cache_listeners()``
+    during application initialization and pass cache_manager explicitly::
 
-        from advanced_alchemy.cache import setup_cache_listeners
+        from advanced_alchemy.cache import (
+            CacheConfig,
+            CacheManager,
+            setup_cache_listeners,
+        )
 
-        # Call once at startup
+        cache_manager = CacheManager(
+            CacheConfig(backend="dogpile.cache.memory")
+        )
         setup_cache_listeners()
+
+        repo = UserRepository(
+            session=session, cache_manager=cache_manager
+        )
 """
 
 from advanced_alchemy._listeners import setup_cache_listeners

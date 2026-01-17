@@ -1,23 +1,20 @@
 """Cache manager for dogpile.cache integration with SQLAlchemy repositories."""
 
-from __future__ import annotations
-
 import asyncio
 import base64
 import concurrent.futures
 import logging
 import threading
 import uuid
+from collections.abc import Coroutine
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
 from advanced_alchemy.cache._null import NO_VALUE, NullRegion
 from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
-
     from dogpile.cache import CacheRegion
 
     from advanced_alchemy.cache.config import CacheConfig
@@ -31,7 +28,7 @@ logger = logging.getLogger("advanced_alchemy.cache")
 
 T = TypeVar("T")
 
-# Check if dogpile.cache is installed
+# Runtime detection of dogpile.cache availability
 _dogpile_cache_installed = False
 _dogpile_no_value: Any = NO_VALUE
 _make_region: Any = None
@@ -44,8 +41,11 @@ try:
 except ImportError:
     pass
 
-DOGPILE_CACHE_INSTALLED = _dogpile_cache_installed
-DOGPILE_NO_VALUE = _dogpile_no_value
+DOGPILE_CACHE_INSTALLED: bool = _dogpile_cache_installed
+"""Whether dogpile.cache is installed and available."""
+
+DOGPILE_NO_VALUE: Any = _dogpile_no_value
+"""Sentinel value indicating a cache miss (from dogpile or NullRegion)."""
 
 
 class CacheManager:
@@ -107,23 +107,29 @@ class CacheManager:
         "config",
     )
 
-    def __init__(self, config: CacheConfig) -> None:
+    def __init__(self, config: "CacheConfig") -> None:
         """Initialize the cache manager.
 
         Args:
             config: Configuration for the cache region.
+
+        Note:
+            Model version tokens are stored in-cache for cross-process consistency.
+            A random token is used per commit to avoid lost updates without requiring
+            backend-specific atomic increment support.
+
+            Per-process singleflight registries (async and sync) are best-effort;
+            they reduce stampedes within a single process but do not provide
+            cross-process locking.
         """
         self.config = config
-        self._region: CacheRegion | NullRegion | None = None
         # Model version tokens are stored in-cache for cross-process consistency.
         # Use a random token per commit to avoid lost updates without requiring
         # backend-specific atomic increment support.
+        self._region: Optional[Union["CacheRegion", NullRegion]] = None  # noqa: UP037
         self._model_versions: dict[str, str] = {}
-
-        # Per-process singleflight registries (async and sync).
-        # These are best-effort; they reduce stampedes within a single process.
         self._async_inflight: dict[str, asyncio.Task[Any]] = {}
-        self._async_inflight_lock: asyncio.Lock | None = None
+        self._async_inflight_lock: Optional[asyncio.Lock] = None
         self._sync_inflight: dict[str, concurrent.futures.Future[Any]] = {}
         self._sync_inflight_lock = threading.Lock()
 
@@ -135,7 +141,7 @@ class CacheManager:
         return self._async_inflight_lock
 
     @property
-    def region(self) -> CacheRegion | NullRegion:
+    def region(self) -> Union["CacheRegion", NullRegion]:
         """Get the cache region, creating it if necessary.
 
         The region is lazily initialized on first access. If dogpile.cache
@@ -149,7 +155,7 @@ class CacheManager:
             self._region = self._create_region()
         return self._region
 
-    def _create_region(self) -> CacheRegion | NullRegion:  # noqa: PLR0911
+    def _create_region(self) -> Union["CacheRegion", NullRegion]:  # noqa: PLR0911
         """Create and configure the dogpile.cache region.
 
         Returns:
@@ -158,7 +164,7 @@ class CacheManager:
         """
         if self.config.region_factory is not None:
             try:
-                created_region = cast("CacheRegion | NullRegion", self.config.region_factory(self.config))
+                created_region = cast("Union[CacheRegion, NullRegion]", self.config.region_factory(self.config))
             except Exception:
                 logger.exception("Failed to construct cache region via region_factory, using NullRegion")
                 return NullRegion()
@@ -177,7 +183,7 @@ class CacheManager:
         try:
             if _make_region is None:  # pragma: no cover
                 return NullRegion()
-            region: CacheRegion = _make_region().configure(
+            region: "CacheRegion" = _make_region().configure(  # noqa: UP037
                 self.config.backend,
                 expiration_time=self.config.expiration_time,
                 arguments=self.config.arguments,
@@ -249,7 +255,7 @@ class CacheManager:
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: int | None = None,
+        expiration_time: Optional[int] = None,
     ) -> T:
         """Get a value from cache or create it using the creator function (sync).
 
@@ -291,7 +297,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         model_class: type[T],
-    ) -> T | None:
+    ) -> Optional[T]:
         """Get a cached entity by model name and ID (sync).
 
         Args:
@@ -405,7 +411,7 @@ class CacheManager:
 
         return "0"
 
-    def get_list_sync(self, key: str, model_class: type[T]) -> list[T] | None:
+    def get_list_sync(self, key: str, model_class: type[T]) -> Optional[list[T]]:
         """Get a cached list of entities (sync).
 
         The list is stored as base64-encoded serialized entity payloads.
@@ -452,7 +458,7 @@ class CacheManager:
         except Exception:
             logger.exception("Failed to serialize cached list for key %s", key)
 
-    def get_list_and_count_sync(self, key: str, model_class: type[T]) -> tuple[list[T], int] | None:
+    def get_list_and_count_sync(self, key: str, model_class: type[T]) -> Optional[tuple[list[T], int]]:
         """Get a cached list+count payload (sync)."""
         cached = self.get_sync(key)
         if cached is DOGPILE_NO_VALUE or cached is NO_VALUE:
@@ -500,7 +506,7 @@ class CacheManager:
         cross-process locking.
         """
         with self._sync_inflight_lock:
-            future: concurrent.futures.Future[Any] | None = self._sync_inflight.get(key)
+            future: Optional[concurrent.futures.Future[Any]] = self._sync_inflight.get(key)
             if future is None:
                 future = concurrent.futures.Future()
                 self._sync_inflight[key] = future
@@ -572,7 +578,7 @@ class CacheManager:
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: int | None = None,
+        expiration_time: Optional[int] = None,
     ) -> T:
         """Get a value from cache or create it using the creator function (async).
 
@@ -600,7 +606,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         model_class: type[T],
-    ) -> T | None:
+    ) -> Optional[T]:
         """Get a cached entity by model name and ID (async).
 
         Args:
@@ -670,7 +676,7 @@ class CacheManager:
         """
         return await async_(self.get_model_version_sync)(model_name)
 
-    async def get_list_async(self, key: str, model_class: type[T]) -> list[T] | None:
+    async def get_list_async(self, key: str, model_class: type[T]) -> Optional[list[T]]:
         """Get a cached list of entities (async)."""
         return await async_(self.get_list_sync)(key, model_class)
 
@@ -678,7 +684,7 @@ class CacheManager:
         """Cache a list of entities (async)."""
         await async_(self.set_list_sync)(key, items)
 
-    async def get_list_and_count_async(self, key: str, model_class: type[T]) -> tuple[list[T], int] | None:
+    async def get_list_and_count_async(self, key: str, model_class: type[T]) -> Optional[tuple[list[T], int]]:
         """Get a cached list+count payload (async)."""
         return await async_(self.get_list_and_count_sync)(key, model_class)
 

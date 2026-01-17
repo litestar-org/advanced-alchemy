@@ -1,11 +1,11 @@
 """Serialization utilities for caching SQLAlchemy models."""
 
-from __future__ import annotations
-
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar, Union, cast
 from uuid import UUID
+
+from sqlalchemy import inspect as sa_inspect
 
 from advanced_alchemy._serialization import decode_json, encode_json
 
@@ -16,9 +16,11 @@ __all__ = (
 
 T = TypeVar("T")
 
-# Metadata keys used in serialized data
 _MODEL_KEY = "__aa_model__"
+"""Metadata key for the model class name in serialized data."""
+
 _TABLE_KEY = "__aa_table__"
+"""Metadata key for the table name in serialized data."""
 
 
 def _json_encoder(obj: Any) -> Any:  # noqa: PLR0911
@@ -56,7 +58,7 @@ def _json_encoder(obj: Any) -> Any:  # noqa: PLR0911
     if isinstance(obj, UUID):
         return {"__type__": "uuid", "value": str(obj)}
     if isinstance(obj, (set, frozenset)):
-        items: list[Any] = list(cast("set[Any] | frozenset[Any]", obj))  # type: ignore[redundant-cast]
+        items: list[Any] = list(cast("Union[set[Any], frozenset[Any]]", obj))  # type: ignore[redundant-cast]
         return {"__type__": "set", "value": items}
     msg = f"Object of type {type(obj).__name__} is not JSON serializable"
     raise TypeError(msg)
@@ -147,8 +149,6 @@ def default_serializer(model: Any) -> bytes:
             data = default_serializer(user)
             # b'{"__aa_model__": "User", "__aa_table__": "users", "id": 1, ...}'
     """
-    from sqlalchemy import inspect as sa_inspect
-
     mapper = sa_inspect(model.__class__)
     data: dict[str, Any] = {
         _MODEL_KEY: model.__class__.__name__,

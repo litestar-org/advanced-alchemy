@@ -1,9 +1,7 @@
 """Configuration classes for dogpile.cache integration."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 __all__ = ("CacheConfig",)
 
@@ -88,7 +86,7 @@ class CacheConfig:
     debugging or testing.
     """
 
-    serializer: Callable[[Any], bytes] | None = None
+    serializer: Optional[Callable[[Any], bytes]] = None
     """Custom serializer function.
 
     If ``None``, uses the default JSON serializer which handles
@@ -97,7 +95,7 @@ class CacheConfig:
     The function should accept any value and return bytes.
     """
 
-    deserializer: Callable[[bytes, type[Any]], Any] | None = None
+    deserializer: Optional[Callable[[bytes, "type[Any]"], Any]] = None
     """Custom deserializer function.
 
     If ``None``, uses the default JSON deserializer.
@@ -106,7 +104,7 @@ class CacheConfig:
     returning an instance of that class.
     """
 
-    region_factory: Callable[[CacheConfig], Any] | None = None
+    region_factory: Optional[Callable[["CacheConfig"], Any]] = None
     """Optional hook to construct a cache region instance.
 
     This exists to keep the repository/service integration stable even if
