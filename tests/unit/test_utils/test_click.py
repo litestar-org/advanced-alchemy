@@ -178,3 +178,139 @@ def test_parent_group_resolves_child_aliases_old_rich_click(monkeypatch: pytest.
 
     assert resolved is not None
     assert resolved.name == "database"
+
+
+def test_alias_collision_last_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When two commands register the same alias, last registration wins."""
+    mod = _reload_utils_click(monkeypatch, "none")
+
+    @mod.group(name="main")
+    def main_group() -> None:
+        pass
+
+    @mod.command(name="command-one", aliases=("c",))
+    def cmd_one() -> None:
+        pass
+
+    @mod.command(name="command-two", aliases=("c",))
+    def cmd_two() -> None:
+        pass
+
+    main_group.add_command(cmd_one)
+    main_group.add_command(cmd_two)
+
+    ctx = base_click.Context(main_group)
+    resolved = main_group.get_command(ctx, "c")
+
+    # Last registered command with alias "c" wins
+    assert resolved is not None
+    assert resolved.name == "command-two"
+
+
+def test_non_aliased_command_lookup_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure patching doesn't break normal command lookup without aliases."""
+    mod = _reload_utils_click(monkeypatch, "none")
+
+    @mod.group(name="main")
+    def main_group() -> None:
+        pass
+
+    @mod.command(name="simple")
+    def simple_cmd() -> None:
+        pass
+
+    @mod.command(name="another", aliases=("a",))
+    def another_cmd() -> None:
+        pass
+
+    main_group.add_command(simple_cmd)
+    main_group.add_command(another_cmd)
+
+    ctx = base_click.Context(main_group)
+
+    # Non-aliased command should resolve by name
+    simple_resolved = main_group.get_command(ctx, "simple")
+    assert simple_resolved is not None
+    assert simple_resolved.name == "simple"
+
+    # Aliased command should resolve by both name and alias
+    another_by_name = main_group.get_command(ctx, "another")
+    another_by_alias = main_group.get_command(ctx, "a")
+    assert another_by_name is not None
+    assert another_by_alias is not None
+    assert another_by_name.name == "another"
+    assert another_by_alias.name == "another"
+
+
+def test_new_rich_click_child_with_plain_click_parent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """New rich-click child group added to plain click parent group.
+
+    This validates the integration scenario where a child group using
+    new rich-click (with native alias support) is added to a parent group
+    that was created with plain click.
+    """
+    mod = _reload_utils_click(monkeypatch, "new")
+
+    # Create parent with plain click (simulating framework CLI)
+    @base_click.group(name="main")
+    def parent_group() -> None:
+        pass
+
+    # Create child with new rich-click (native aliases)
+    @mod.group(name="database", aliases=("db",))
+    def child_group() -> None:
+        pass
+
+    parent_group.add_command(child_group)
+
+    ctx = base_click.Context(parent_group)
+
+    # Should resolve both by name and alias
+    by_name = parent_group.get_command(ctx, "database")
+    by_alias = parent_group.get_command(ctx, "db")
+
+    assert by_name is not None
+    assert by_name.name == "database"
+    assert by_alias is not None
+    assert by_alias.name == "database"
+
+
+def test_command_name_not_added_to_own_alias_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A command's own name is not added to the alias mapping.
+
+    This ensures that looking up a command by its canonical name works
+    through normal click resolution, not through alias mapping.
+    """
+    mod = _reload_utils_click(monkeypatch, "none")
+
+    @mod.group(name="main")
+    def main_group() -> None:
+        pass
+
+    @mod.command(name="status", aliases=("st", "stat"))
+    def status_cmd() -> None:
+        pass
+
+    main_group.add_command(status_cmd)
+
+    ctx = base_click.Context(main_group)
+
+    # Command resolves by canonical name (through normal click)
+    by_name = main_group.get_command(ctx, "status")
+    # And by aliases (through alias mapping)
+    by_alias_st = main_group.get_command(ctx, "st")
+    by_alias_stat = main_group.get_command(ctx, "stat")
+
+    assert by_name is not None
+    assert by_alias_st is not None
+    assert by_alias_stat is not None
+    assert by_name.name == "status"
+    assert by_alias_st.name == "status"
+    assert by_alias_stat.name == "status"
+
+    # The alias mapping should NOT contain the command's own name
+    # This is why we do `self._alias_mapping.pop(command_name, None)`
+    alias_mapping = getattr(main_group, "_alias_mapping", {})
+    assert "status" not in alias_mapping
+    assert "st" in alias_mapping
+    assert "stat" in alias_mapping

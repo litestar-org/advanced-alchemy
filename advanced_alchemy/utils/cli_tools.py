@@ -81,8 +81,9 @@ class AliasedGroup(click.Group):
         cmd: click.Command,
         name: Optional[str] = None,
         aliases: Optional[Iterable[str]] = None,
+        **kwargs: Any,
     ) -> None:
-        super().add_command(cmd, name)
+        super().add_command(cmd, name, **kwargs)
         command_name = name or cmd.name
         if command_name is None:
             return
@@ -129,8 +130,9 @@ def _patch_group_class_for_aliases(group_cls: type[click.Group]) -> None:
         cmd: click.Command,
         name: Optional[str] = None,
         aliases: Optional[Iterable[str]] = None,
+        **kwargs: Any,
     ) -> None:
-        _original_add_command(self, cmd, name)
+        _original_add_command(self, cmd, name, **kwargs)
         if not hasattr(self, "_alias_mapping"):
             self._alias_mapping = {}  # type: ignore[attr-defined]
         command_name = name or cmd.name
