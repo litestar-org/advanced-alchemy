@@ -1510,6 +1510,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
@@ -1526,6 +1527,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            use_cache: Whether to use caching for this query (default True).
             bind_group: Optional routing group to use for the operation.
 
         Returns:
@@ -2182,6 +2184,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the cache for this query. Defaults to ``True``.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2721,6 +2724,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the cache for this query. Defaults to ``True``.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:

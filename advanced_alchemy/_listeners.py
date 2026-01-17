@@ -11,9 +11,11 @@ from sqlalchemy import event
 from sqlalchemy.inspection import inspect
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session, UOWTransaction
+    from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
+    from sqlalchemy.orm import Session, UOWTransaction, scoped_session
     from sqlalchemy.orm.state import InstanceState
 
+    from advanced_alchemy.cache import CacheManager
     from advanced_alchemy.types.file_object import FileObjectSessionTracker, StorageRegistry
 
 _active_file_operations: set[asyncio.Task[Any]] = set()

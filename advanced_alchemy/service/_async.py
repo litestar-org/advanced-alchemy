@@ -532,6 +532,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the repository cache for this query.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -629,6 +630,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the repository cache for this query.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
