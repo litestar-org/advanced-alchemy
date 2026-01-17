@@ -80,7 +80,7 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
 
 
 def test_inject_engine(app: Sanic[Any, Any], alchemy: AdvancedAlchemy) -> None:
-    @app.get("/")
+    @app.get("/")  # type: ignore[misc]
     async def handler(request: Request) -> HTTPResponse:
         assert isinstance(getattr(request.app.ctx, alchemy.get_config().engine_key), (Engine, AsyncEngine))
         return HTTPResponse(status=200)
