@@ -68,6 +68,8 @@ from advanced_alchemy.utils.text import slugify
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
 
+    from advanced_alchemy.cache.manager import CacheManager
+
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
@@ -589,6 +591,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     count_with_window_function: bool = True
     """Use an analytical window function to count results.  This allows the count to be performed in a single query.
     """
+    _cache_manager: Optional["CacheManager"] = None
+    """Cache manager instance for repository-level caching. Set via ``cache_manager`` kwarg or retrieved from ``session.info``."""
 
     def __init__(
         self,
@@ -605,6 +609,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         wrap_exceptions: bool = True,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        cache_manager: Optional["CacheManager"] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -622,6 +627,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            cache_manager: Optional cache manager for repository-level caching. If not provided, retrieved from ``session.info``.
             **kwargs: Additional arguments.
 
         """
@@ -648,6 +654,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+        # Cache manager: from explicit param or session.info (set by SQLAlchemyAsyncConfig)
+        self._cache_manager = cache_manager if cache_manager is not None else session.info.get("cache_manager")
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         """Get the uniquify value, preferring the method parameter over instance setting.

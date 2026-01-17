@@ -8,19 +8,18 @@ import threading
 import uuid
 from collections.abc import Coroutine
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, cast
 
-from advanced_alchemy.cache._null import NO_VALUE, NullRegion
+from advanced_alchemy.cache._null import NO_VALUE, NullRegion, SyncCacheRegionProtocol
 from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
-    from dogpile.cache import CacheRegion
-
     from advanced_alchemy.cache.config import CacheConfig
 
 __all__ = (
     "DOGPILE_CACHE_INSTALLED",
+    "DOGPILE_NO_VALUE",
     "CacheManager",
 )
 
@@ -28,23 +27,41 @@ logger = logging.getLogger("advanced_alchemy.cache")
 
 T = TypeVar("T")
 
-# Runtime detection of dogpile.cache availability
-_dogpile_cache_installed = False
-_dogpile_no_value: Any = NO_VALUE
-_make_region: Any = None
+# Type alias for the make_region factory function
+MakeRegionFunc = Callable[[], SyncCacheRegionProtocol]
+
+
+# Stub implementations for when dogpile.cache is not installed
+def _make_region_stub() -> SyncCacheRegionProtocol:
+    """Stub make_region that returns a NullRegion when dogpile.cache is not installed."""
+    return NullRegion()
+
+
+_dogpile_no_value_stub: object = NO_VALUE
+"""Stub NO_VALUE sentinel when dogpile.cache is not installed."""
+
+
+# Try to import real dogpile.cache implementation at runtime
+_make_region: MakeRegionFunc
+_dogpile_no_value: object
 try:
-    from dogpile.cache import make_region as _make_region
-    from dogpile.cache.api import NO_VALUE as DOGPILE_CACHE_NO_VALUE
+    from dogpile.cache import (  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+        make_region as _make_region_real,  # pyright: ignore[reportUnknownVariableType]
+    )
+    from dogpile.cache.api import (  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+        NO_VALUE as _dogpile_no_value_real,  # noqa: N811  # pyright: ignore[reportUnknownVariableType]
+    )
 
-    _dogpile_cache_installed = True
-    _dogpile_no_value = DOGPILE_CACHE_NO_VALUE
-except ImportError:
-    pass
+    _make_region = cast("MakeRegionFunc", _make_region_real)
+    _dogpile_no_value = cast("object", _dogpile_no_value_real)
+    DOGPILE_CACHE_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 
-DOGPILE_CACHE_INSTALLED: bool = _dogpile_cache_installed
-"""Whether dogpile.cache is installed and available."""
+except ImportError:  # pragma: no cover
+    _make_region = _make_region_stub
+    _dogpile_no_value = _dogpile_no_value_stub
+    DOGPILE_CACHE_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
-DOGPILE_NO_VALUE: Any = _dogpile_no_value
+DOGPILE_NO_VALUE: object = _dogpile_no_value
 """Sentinel value indicating a cache miss (from dogpile or NullRegion)."""
 
 
@@ -126,7 +143,7 @@ class CacheManager:
         # Model version tokens are stored in-cache for cross-process consistency.
         # Use a random token per commit to avoid lost updates without requiring
         # backend-specific atomic increment support.
-        self._region: Optional[Union["CacheRegion", NullRegion]] = None  # noqa: UP037
+        self._region: Optional[SyncCacheRegionProtocol] = None
         self._model_versions: dict[str, str] = {}
         self._async_inflight: dict[str, asyncio.Task[Any]] = {}
         self._async_inflight_lock: Optional[asyncio.Lock] = None
@@ -141,7 +158,7 @@ class CacheManager:
         return self._async_inflight_lock
 
     @property
-    def region(self) -> Union["CacheRegion", NullRegion]:
+    def region(self) -> SyncCacheRegionProtocol:
         """Get the cache region, creating it if necessary.
 
         The region is lazily initialized on first access. If dogpile.cache
@@ -155,7 +172,7 @@ class CacheManager:
             self._region = self._create_region()
         return self._region
 
-    def _create_region(self) -> Union["CacheRegion", NullRegion]:  # noqa: PLR0911
+    def _create_region(self) -> SyncCacheRegionProtocol:
         """Create and configure the dogpile.cache region.
 
         Returns:
@@ -164,7 +181,7 @@ class CacheManager:
         """
         if self.config.region_factory is not None:
             try:
-                created_region = cast("Union[CacheRegion, NullRegion]", self.config.region_factory(self.config))
+                created_region = cast("SyncCacheRegionProtocol", self.config.region_factory(self.config))
             except Exception:
                 logger.exception("Failed to construct cache region via region_factory, using NullRegion")
                 return NullRegion()
@@ -181,9 +198,7 @@ class CacheManager:
             return NullRegion()
 
         try:
-            if _make_region is None:  # pragma: no cover
-                return NullRegion()
-            region: "CacheRegion" = _make_region().configure(  # noqa: UP037
+            region: SyncCacheRegionProtocol = _make_region().configure(
                 self.config.backend,
                 expiration_time=self.config.expiration_time,
                 arguments=self.config.arguments,

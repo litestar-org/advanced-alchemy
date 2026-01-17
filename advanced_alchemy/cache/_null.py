@@ -1,10 +1,77 @@
 """Null cache region implementation for when dogpile.cache is not installed."""
 
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Awaitable
+from typing import Any, Callable, Optional, Protocol, TypeVar
 
-__all__ = ("NullRegion",)
+__all__ = (
+    "NO_VALUE",
+    "AsyncCacheRegionProtocol",
+    "NullRegion",
+    "SyncCacheRegionProtocol",
+)
 
 T = TypeVar("T")
+
+
+class SyncCacheRegionProtocol(Protocol):
+    """Protocol defining the synchronous cache region interface used by CacheManager.
+
+    This protocol is compatible with both dogpile.cache.CacheRegion and NullRegion.
+    """
+
+    def get(self, key: str, expiration_time: Optional[int] = None) -> Any: ...
+
+    def get_or_create(
+        self,
+        key: str,
+        creator: Callable[[], T],
+        expiration_time: Optional[int] = None,
+    ) -> T: ...
+
+    def set(self, key: str, value: Any) -> None: ...
+
+    def delete(self, key: str) -> None: ...
+
+    def invalidate(self) -> None: ...
+
+    def configure(
+        self,
+        backend: str,
+        expiration_time: Optional[int] = None,
+        arguments: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> "SyncCacheRegionProtocol": ...
+
+
+class AsyncCacheRegionProtocol(Protocol):
+    """Protocol defining the asynchronous cache region interface.
+
+    This protocol defines async versions of cache region operations,
+    suitable for use with native async cache backends.
+    """
+
+    async def get(self, key: str, expiration_time: Optional[int] = None) -> Any: ...
+
+    async def get_or_create(
+        self,
+        key: str,
+        creator: Callable[[], Awaitable[T]],
+        expiration_time: Optional[int] = None,
+    ) -> T: ...
+
+    async def set(self, key: str, value: Any) -> None: ...
+
+    async def delete(self, key: str) -> None: ...
+
+    async def invalidate(self) -> None: ...
+
+    async def configure(
+        self,
+        backend: str,
+        expiration_time: Optional[int] = None,
+        arguments: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> "AsyncCacheRegionProtocol": ...
 
 
 class _NoValue:
