@@ -220,6 +220,7 @@ filterwarnings = [
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
+  "ignore:You are using a Python version \\(.*\\) which Google will stop supporting.*:FutureWarning:google.api_core._python_version_support",
   "ignore::DeprecationWarning:websockets.connection",
   "ignore::DeprecationWarning:websockets.legacy",
   "ignore:Accessing argon2.__version__ is deprecated:DeprecationWarning:passlib.handlers.argon2",
