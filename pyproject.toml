@@ -60,6 +60,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 [project.optional-dependencies]
 argon2 = ["argon2-cffi"]
 cli = ["rich-click"]
+dogpile = ["dogpile.cache"]
 fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
 obstore = ["obstore"]
@@ -467,12 +468,7 @@ module = [
 [[tool.mypy.overrides]]
 follow_imports = "skip"
 ignore_missing_imports = true
-module = [
-  "pytest",
-  "pytest.*",
-  "_pytest",
-  "_pytest.*",
-]
+module = ["pytest", "pytest.*", "_pytest", "_pytest.*"]
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
@@ -562,6 +558,7 @@ SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
 SQLAlchemyAsyncRepositoryProtocol = "SQLAlchemySyncRepositoryProtocol"
 "SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
+"async_scoped_session" = "scoped_session"
 "bump_model_version_async" = "bump_model_version_sync"
 "get_entity_async" = "get_entity_sync"
 "get_list_and_count_async" = "get_list_and_count_sync"
@@ -572,7 +569,6 @@ SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
 "set_list_and_count_async" = "set_list_and_count_sync"
 "set_list_async" = "set_list_sync"
 "singleflight_async" = "singleflight_sync"
-"async_scoped_session" = "scoped_session"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
