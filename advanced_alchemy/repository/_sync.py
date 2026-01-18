@@ -1423,11 +1423,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 loader_options=loader_options,
                 execution_options=resolved_execution_options,
             )
-            # Use composite-key-aware filter when id_attribute is not overridden
+            # Default: use primary key (handles both single and composite PKs)
             if id_attribute is None:
                 resolved_statement = resolved_statement.where(self._build_pk_filter(item_id))
             else:
-                # Legacy path: custom id_attribute (single column lookup only)
+                # Custom id_attribute override: lookup by user-specified column
                 resolved_statement = self._filter_select_by_kwargs(resolved_statement, [(id_attribute, item_id)])
             resolved_statement = self._apply_for_update_options(resolved_statement, with_for_update)
             instance = (self._execute(resolved_statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
