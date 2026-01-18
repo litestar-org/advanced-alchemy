@@ -312,6 +312,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         model_class: type[T],
+        bind_group: Optional[str] = None,
     ) -> Optional[T]:
         """Get a cached entity by model name and ID (sync).
 
@@ -319,11 +320,14 @@ class CacheManager:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
             model_class: The SQLAlchemy model class for deserialization.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, entity caches are namespaced by bind_group to
+                prevent data leaks between database shards/replicas.
 
         Returns:
             The cached model instance or None if not found.
         """
-        key = f"{model_name}:get:{entity_id}"
+        key = f"{model_name}:{bind_group}:get:{entity_id}" if bind_group else f"{model_name}:get:{entity_id}"
         cached = self.get_sync(key)
 
         if cached is DOGPILE_NO_VALUE or cached is NO_VALUE:
@@ -349,6 +353,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         entity: Any,
+        bind_group: Optional[str] = None,
     ) -> None:
         """Cache an entity (sync).
 
@@ -356,8 +361,11 @@ class CacheManager:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
             entity: The SQLAlchemy model instance to cache.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, entity caches are namespaced by bind_group to
+                prevent data leaks between database shards/replicas.
         """
-        key = f"{model_name}:get:{entity_id}"
+        key = f"{model_name}:{bind_group}:get:{entity_id}" if bind_group else f"{model_name}:get:{entity_id}"
         serializer = self.config.serializer or default_serializer
 
         try:
@@ -366,7 +374,7 @@ class CacheManager:
         except Exception:
             logger.exception("Failed to serialize entity %s:%s", model_name, entity_id)
 
-    def invalidate_entity_sync(self, model_name: str, entity_id: Any) -> None:
+    def invalidate_entity_sync(self, model_name: str, entity_id: Any, bind_group: Optional[str] = None) -> None:
         """Invalidate the cache for a specific entity (sync).
 
         This should be called after an entity is created, updated, or deleted
@@ -375,10 +383,13 @@ class CacheManager:
         Args:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, only the cache entry for that bind_group is
+                invalidated.
         """
-        key = f"{model_name}:get:{entity_id}"
+        key = f"{model_name}:{bind_group}:get:{entity_id}" if bind_group else f"{model_name}:get:{entity_id}"
         self.delete_sync(key)
-        logger.debug("Invalidated cache for %s:%s", model_name, entity_id)
+        logger.debug("Invalidated cache for %s:%s (bind_group=%s)", model_name, entity_id, bind_group)
 
     def bump_model_version_sync(self, model_name: str) -> str:
         """Bump the version token for a model (sync).
@@ -621,6 +632,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         model_class: type[T],
+        bind_group: Optional[str] = None,
     ) -> Optional[T]:
         """Get a cached entity by model name and ID (async).
 
@@ -628,17 +640,21 @@ class CacheManager:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
             model_class: The SQLAlchemy model class for deserialization.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, entity caches are namespaced by bind_group to
+                prevent data leaks between database shards/replicas.
 
         Returns:
             The cached model instance or None if not found.
         """
-        return await async_(self.get_entity_sync)(model_name, entity_id, model_class)
+        return await async_(self.get_entity_sync)(model_name, entity_id, model_class, bind_group)
 
     async def set_entity_async(
         self,
         model_name: str,
         entity_id: Any,
         entity: Any,
+        bind_group: Optional[str] = None,
     ) -> None:
         """Cache an entity (async).
 
@@ -646,10 +662,13 @@ class CacheManager:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
             entity: The SQLAlchemy model instance to cache.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, entity caches are namespaced by bind_group to
+                prevent data leaks between database shards/replicas.
         """
-        await async_(self.set_entity_sync)(model_name, entity_id, entity)
+        await async_(self.set_entity_sync)(model_name, entity_id, entity, bind_group)
 
-    async def invalidate_entity_async(self, model_name: str, entity_id: Any) -> None:
+    async def invalidate_entity_async(self, model_name: str, entity_id: Any, bind_group: Optional[str] = None) -> None:
         """Invalidate the cache for a specific entity (async).
 
         This should be called after an entity is created, updated, or deleted
@@ -658,8 +677,11 @@ class CacheManager:
         Args:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, only the cache entry for that bind_group is
+                invalidated.
         """
-        await async_(self.invalidate_entity_sync)(model_name, entity_id)
+        await async_(self.invalidate_entity_sync)(model_name, entity_id, bind_group)
 
     async def bump_model_version_async(self, model_name: str) -> str:
         """Bump the version token for a model (async).

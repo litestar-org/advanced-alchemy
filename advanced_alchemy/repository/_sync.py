@@ -265,6 +265,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     def add_many(
@@ -274,6 +275,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]: ...
 
     def delete(
@@ -286,6 +288,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     def delete_many(
@@ -299,6 +302,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]: ...
 
     def delete_where(
@@ -310,6 +314,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
         sanity_check: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]: ...
 
@@ -376,6 +381,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
 
@@ -391,6 +397,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
 
@@ -418,6 +425,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     def update_many(
@@ -429,6 +437,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]: ...
 
     def _get_update_many_statement(
@@ -452,6 +461,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     def upsert_many(
@@ -465,6 +475,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]: ...
 
     def list_and_count(
@@ -593,6 +604,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     """
     _cache_manager: Optional["CacheManager"] = None
     """Cache manager instance for repository-level caching. Set via ``cache_manager`` kwarg or retrieved from ``session.info``."""
+    _bind_group: Optional[str] = None
+    """Default bind group for routing operations (e.g., to read replicas). Can be overridden per-method."""
 
     def __init__(
         self,
@@ -610,6 +623,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         cache_manager: Optional["CacheManager"] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -628,6 +642,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
             cache_manager: Optional cache manager for repository-level caching. If not provided, retrieved from ``session.info``.
+            bind_group: Optional default routing group to use for all operations. Can be overridden per-method.
             **kwargs: Additional arguments.
 
         """
@@ -656,6 +671,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
         # Cache manager: from explicit param or session.info (set by SQLAlchemyAsyncConfig)
         self._cache_manager = cache_manager if cache_manager is not None else session.info.get("cache_manager")
+        # Default bind group for all operations (can be overridden per-method)
+        self._bind_group = bind_group
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         """Get the uniquify value, preferring the method parameter over instance setting.
@@ -668,7 +685,18 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """
         return bool(uniquify) if uniquify is not None else self._uniquify
 
-    def _queue_cache_invalidation(self, entity_id: Any) -> None:
+    def _resolve_bind_group(self, bind_group: Optional[str] = None) -> Optional[str]:
+        """Resolve the bind_group to use, preferring method parameter over instance default.
+
+        Args:
+            bind_group: Optional override for the bind_group setting.
+
+        Returns:
+            The bind_group to use, or None if not set.
+        """
+        return bind_group if bind_group is not None else self._bind_group
+
+    def _queue_cache_invalidation(self, entity_id: Any, bind_group: Optional[str] = None) -> None:
         """Queue a cache invalidation for an entity.
 
         The invalidation will be processed after the transaction commits.
@@ -679,6 +707,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Args:
             entity_id: The primary key value of the entity to invalidate.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, only the cache entry for that bind_group is
+                invalidated.
         """
         if self._cache_manager is not None:
             from advanced_alchemy._listeners import get_cache_tracker
@@ -686,7 +717,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
             tracker = get_cache_tracker(self.session, self._cache_manager)
             if tracker is not None:
-                tracker.add_invalidation(model_name, entity_id)
+                tracker.add_invalidation(model_name, entity_id, bind_group)
 
     def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
@@ -855,6 +886,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -865,10 +897,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The added instance.
         """
+        _ = bind_group  # Reserved for future multi-master routing
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -889,6 +923,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Add many `data` to the collection.
 
@@ -898,10 +933,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The added instances.
         """
+        _ = bind_group  # Reserved for future multi-master routing
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -926,6 +963,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
 
@@ -940,6 +978,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The deleted instance.
@@ -953,12 +992,17 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             instance = self.get(
                 item_id,
                 id_attribute=id_attribute,
                 load=load,
                 execution_options=execution_options,
+                bind_group=bind_group,
             )
             self.session.delete(instance)
             self._flush_or_commit(auto_commit=auto_commit)
@@ -977,6 +1021,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Delete instance identified by `item_id`.
 
@@ -993,6 +1038,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The deleted instances.
@@ -1006,6 +1052,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
@@ -1076,6 +1126,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Delete instances specified by referenced kwargs and filters.
@@ -1090,6 +1141,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
             **kwargs: Arguments to apply to a delete
 
         Raises:
@@ -1107,6 +1159,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
@@ -1128,6 +1184,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                         execution_options=execution_options,
                         auto_expunge=auto_expunge,
                         use_cache=False,  # Always fetch from DB for delete_where
+                        bind_group=bind_group,
                         **kwargs,
                     ),
                 )
@@ -1143,7 +1200,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 # Queue cache invalidation (processed on commit)
-                self._queue_cache_invalidation(self.get_id_attribute_value(instance))
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance), resolved_bind_group)
             return instances
 
     def exists(
@@ -1261,7 +1318,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
 
-    def _get_uncached_impl(
+    def _get_from_db(
         self,
         item_id: Any,
         *,
@@ -1272,11 +1329,16 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         with_for_update: ForUpdateParameter,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Fetch an entity from the database without using cache."""
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             resolved_execution_options = self._get_execution_options(execution_options)
             resolved_statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1305,10 +1367,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         with_for_update: ForUpdateParameter,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Singleflight creator for get(id) caching (async)."""
         if self._cache_manager is None:
-            return self._get_uncached_impl(
+            return self._get_from_db(
                 item_id,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -1317,13 +1380,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 load=load,
                 execution_options=execution_options,
                 with_for_update=with_for_update,
+                bind_group=bind_group,
             )
 
-        existing = self._cache_manager.get_entity_sync(model_name, item_id, self.model_type)
+        existing = self._cache_manager.get_entity_sync(model_name, item_id, self.model_type, bind_group=bind_group)
         if existing is not None:
             return existing
 
-        instance = self._get_uncached_impl(
+        instance = self._get_from_db(
             item_id,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1332,11 +1396,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load=load,
             execution_options=execution_options,
             with_for_update=with_for_update,
+            bind_group=bind_group,
         )
-        self._cache_manager.set_entity_sync(model_name, item_id, instance)
+        self._cache_manager.set_entity_sync(model_name, item_id, instance, bind_group=bind_group)
         return instance
 
-    def _list_uncached_impl(
+    def _list_from_db(
         self,
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
@@ -1348,12 +1413,17 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         """Fetch a list of entities from the database without using cache."""
         self._uniquify = self._get_uniquify(uniquify)
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             resolved_execution_options = self._get_execution_options(execution_options)
             resolved_statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1386,10 +1456,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         """Singleflight creator for list caching (async)."""
         if self._cache_manager is None:
-            return self._list_uncached_impl(
+            return self._list_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -1399,13 +1470,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             )
 
         existing = self._cache_manager.get_list_sync(cache_key, self.model_type)
         if existing is not None:
             return existing
 
-        instances = self._list_uncached_impl(
+        instances = self._list_from_db(
             filters=filters,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1415,11 +1487,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options=execution_options,
             kwargs=kwargs,
             uniquify=uniquify,
+            bind_group=bind_group,
         )
         self._cache_manager.set_list_sync(cache_key, list(instances))
         return list(instances)
 
-    def _list_and_count_uncached_impl(
+    def _list_and_count_from_db(
         self,
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
@@ -1432,9 +1505,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
     ) -> tuple[list[ModelT], int]:
         """Fetch a list+count payload from the database without using cache."""
         self._uniquify = self._get_uniquify(uniquify)
+        resolved_bind_group = self._resolve_bind_group(bind_group)
+        if resolved_bind_group:
+            execution_options = dict(execution_options) if execution_options else {}
+            execution_options["bind_group"] = resolved_bind_group
         if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
             return self._list_and_count_basic(
                 *filters,
@@ -1471,10 +1549,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
     ) -> tuple[list[ModelT], int]:
         """Singleflight creator for list_and_count caching (async)."""
         if self._cache_manager is None:
-            return self._list_and_count_uncached_impl(
+            return self._list_and_count_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -1485,13 +1564,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             )
 
         existing = self._cache_manager.get_list_and_count_sync(cache_key, self.model_type)
         if existing is not None:
             return existing
 
-        instances, count = self._list_and_count_uncached_impl(
+        instances, count = self._list_and_count_from_db(
             filters=filters,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1502,6 +1582,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options=execution_options,
             kwargs=kwargs,
             uniquify=uniquify,
+            bind_group=bind_group,
         )
         self._cache_manager.set_list_and_count_sync(cache_key, list(instances), count)
         return list(instances), count
@@ -1553,6 +1634,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             resolved_id_attribute = resolved_id_attribute.key
 
         cache_manager = self._cache_manager
+        # Resolve bind_group for cache key namespacing
+        resolved_bind_group = self._resolve_bind_group(bind_group)
+
         if (
             use_cache
             and cache_manager is not None
@@ -1566,12 +1650,18 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             and execution_options is None
         ):
             model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
-            cached = cache_manager.get_entity_sync(model_name, item_id, self.model_type)
+            cached = cache_manager.get_entity_sync(model_name, item_id, self.model_type, bind_group=resolved_bind_group)
             if cached is not None:
                 return cached
 
+            # Include bind_group in singleflight key to prevent cross-shard cache pollution
+            singleflight_key = (
+                f"{model_name}:{resolved_bind_group}:get:{item_id}"
+                if resolved_bind_group
+                else f"{model_name}:get:{item_id}"
+            )
             return cache_manager.singleflight_sync(
-                f"{model_name}:get:{item_id}",
+                singleflight_key,
                 partial(
                     self._get_cached_creator,
                     model_name,
@@ -1583,10 +1673,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     load=load,
                     execution_options=execution_options,
                     with_for_update=with_for_update,
+                    bind_group=resolved_bind_group,
                 ),
             )
 
-        return self._get_uncached_impl(
+        return self._get_from_db(
             item_id,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1595,6 +1686,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load=load,
             execution_options=execution_options,
             with_for_update=with_for_update,
+            bind_group=bind_group,
         )
 
     def get_one(
@@ -1731,6 +1823,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
@@ -1754,6 +1847,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1782,6 +1876,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 **match_filter,
                 load=load,
                 execution_options=execution_options,
+                bind_group=bind_group,
             )
             if not existing:
                 return (
@@ -1790,6 +1885,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                         auto_commit=auto_commit,
                         auto_expunge=auto_expunge,
                         auto_refresh=auto_refresh,
+                        bind_group=bind_group,
                     ),
                     True,
                 )
@@ -1822,6 +1918,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
@@ -1843,6 +1940,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1866,7 +1964,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 }
             else:
                 match_filter = kwargs
-            existing = self.get_one(*filters, **match_filter, load=load, execution_options=execution_options)
+            existing = self.get_one(
+                *filters, **match_filter, load=load, execution_options=execution_options, bind_group=bind_group
+            )
             updated = False
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, MISSING)
@@ -1954,6 +2054,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -1975,6 +2076,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The updated instance.
@@ -1997,6 +2099,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 load=load,
                 execution_options=execution_options,
                 with_for_update=with_for_update,
+                bind_group=bind_group,
             )
             mapper = None
             with (
@@ -2070,6 +2173,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
@@ -2087,6 +2191,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The updated instances.
@@ -2110,6 +2215,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
@@ -2142,6 +2251,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 getattr(self.model_type, self.id_attribute).in_(updated_ids),
                 load=loader_options,
                 execution_options=execution_options,
+                bind_group=bind_group,
             )
             for instance in updated_instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -2220,7 +2330,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             and load is None
             and not self._default_loader_options
         ):
-            return self._list_and_count_uncached_impl(
+            return self._list_and_count_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -2231,6 +2341,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             )
 
         model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
@@ -2247,7 +2358,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             count_with_window_function=count_with_window_function,
         )
         if cache_key is None:
-            return self._list_and_count_uncached_impl(
+            return self._list_and_count_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -2258,6 +2369,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             )
 
         cached = cache_manager.get_list_and_count_sync(cache_key, self.model_type)
@@ -2279,6 +2391,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             ),
         )
 
@@ -2498,6 +2611,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Modify or create instance.
 
@@ -2522,6 +2636,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The updated or created instance.
@@ -2541,13 +2656,16 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
             match_filter = data.to_dict(exclude={self.id_attribute})
-        existing = self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
+        existing = self.get_one_or_none(
+            load=load, execution_options=execution_options, bind_group=bind_group, **match_filter
+        )
         if not existing:
             return self.add(
                 data,
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
+                bind_group=bind_group,
             )
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
@@ -2566,7 +2684,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             )
             self._expunge(instance, auto_expunge=auto_expunge)
             # Queue cache invalidation (processed on commit)
-            self._queue_cache_invalidation(self.get_id_attribute_value(instance))
+            self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return instance
 
     def upsert_many(
@@ -2581,6 +2699,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         """Modify or create multiple instances.
 
@@ -2604,6 +2723,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             The updated or created instance.
@@ -2638,6 +2758,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 load=load,
                 execution_options=execution_options,
                 auto_expunge=False,
+                bind_group=bind_group,
             )
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
@@ -2656,7 +2777,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     data_to_insert.append(datum)
             if data_to_insert:
                 instances.extend(
-                    self.add_many(data_to_insert, auto_commit=False, auto_expunge=False),
+                    self.add_many(data_to_insert, auto_commit=False, auto_expunge=False, bind_group=bind_group),
                 )
             if data_to_update:
                 instances.extend(
@@ -2666,6 +2787,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                         auto_expunge=False,
                         load=load,
                         execution_options=execution_options,
+                        bind_group=bind_group,
                     ),
                 )
             self._flush_or_commit(auto_commit=auto_commit)
@@ -2757,7 +2879,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             and load is None
             and not self._default_loader_options
         ):
-            return self._list_uncached_impl(
+            return self._list_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -2767,6 +2889,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             )
 
         model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
@@ -2782,7 +2905,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             uniquify=self._uniquify,
         )
         if cache_key is None:
-            return self._list_uncached_impl(
+            return self._list_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -2792,6 +2915,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             )
 
         cached = cache_manager.get_list_sync(cache_key, self.model_type)
@@ -2812,6 +2936,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                bind_group=bind_group,
             ),
         )
 

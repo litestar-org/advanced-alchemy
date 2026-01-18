@@ -468,10 +468,10 @@ class CacheInvalidationTracker:
 
     def __init__(self, cache_manager: "CacheManager") -> None:
         self._cache_manager = cache_manager
-        self._pending_invalidations: list[tuple[str, Any]] = []
+        self._pending_invalidations: list[tuple[str, Any, Optional[str]]] = []
         self._pending_model_bumps: set[str] = set()
 
-    def add_invalidation(self, model_name: str, entity_id: Any) -> None:
+    def add_invalidation(self, model_name: str, entity_id: Any, bind_group: Optional[str] = None) -> None:
         """Queue an entity for cache invalidation.
 
         The actual invalidation and model version bump are deferred until
@@ -480,8 +480,11 @@ class CacheInvalidationTracker:
         Args:
             model_name: The model/table name.
             entity_id: The entity's primary key value.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, only the cache entry for that bind_group is
+                invalidated.
         """
-        self._pending_invalidations.append((model_name, entity_id))
+        self._pending_invalidations.append((model_name, entity_id, bind_group))
         # Queue model version bump for list query invalidation (deferred to commit)
         self._pending_model_bumps.add(model_name)
 
@@ -493,8 +496,8 @@ class CacheInvalidationTracker:
         self._pending_model_bumps.clear()
 
         # Then invalidate individual entities
-        for model_name, entity_id in self._pending_invalidations:
-            self._cache_manager.invalidate_entity_sync(model_name, entity_id)
+        for model_name, entity_id, bind_group in self._pending_invalidations:
+            self._cache_manager.invalidate_entity_sync(model_name, entity_id, bind_group)
         self._pending_invalidations.clear()
 
     def rollback(self) -> None:
@@ -514,8 +517,8 @@ class CacheInvalidationTracker:
         self._pending_model_bumps.clear()
 
         # Then invalidate individual entities
-        for model_name, entity_id in self._pending_invalidations:
-            await self._cache_manager.invalidate_entity_async(model_name, entity_id)
+        for model_name, entity_id, bind_group in self._pending_invalidations:
+            await self._cache_manager.invalidate_entity_async(model_name, entity_id, bind_group)
         self._pending_invalidations.clear()
 
 

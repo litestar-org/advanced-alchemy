@@ -508,6 +508,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         kwargs_ = self._exclude_unused_kwargs(kwargs)
@@ -544,6 +545,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         kwargs_ = self._exclude_unused_kwargs(kwargs)
@@ -594,6 +596,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         try:
             self.__database__.add(self.model_type, data)
@@ -609,6 +612,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         for obj in data:
             self.add(obj)  # pyright: ignore[reportCallIssue]
@@ -628,6 +632,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         self._find_or_raise_not_found(self.__collection__().key(data))
         return self.__collection__().update(data)
@@ -642,6 +647,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         return [self.__collection__().update(obj) for obj in data if obj in self.__collection__()]
 
@@ -656,6 +662,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         try:
             return self._find_or_raise_not_found(item_id)
@@ -674,6 +681,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         deleted: list[ModelT] = []
         for id_ in item_ids:
@@ -692,6 +700,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         result = self.__collection__().list()
@@ -714,6 +723,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
@@ -732,6 +742,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         return [self.upsert(item) for item in data]
 
