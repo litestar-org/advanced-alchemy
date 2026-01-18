@@ -16,6 +16,7 @@ Core Components
     base
     mixins/index
     config/index
+    cache
     operations
     types
     exceptions
