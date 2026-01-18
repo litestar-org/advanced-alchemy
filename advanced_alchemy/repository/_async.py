@@ -1006,6 +1006,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             await self.session.delete(instance)
             await self._flush_or_commit(auto_commit=auto_commit)
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(item_id, bind_group)
             return instance
 
     async def delete_many(
@@ -1109,6 +1111,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return instances
 
     @staticmethod
@@ -2166,6 +2170,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return instance
 
     async def update_many(
@@ -2260,6 +2266,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             for instance in updated_instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return updated_instances
 
     def _get_update_many_statement(
