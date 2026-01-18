@@ -45,10 +45,10 @@ _dogpile_no_value_stub: object = NO_VALUE
 _make_region: MakeRegionFunc
 _dogpile_no_value: object
 try:
-    from dogpile.cache import (  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+    from dogpile.cache import (  # pyright: ignore[reportMissingImports]
         make_region as _make_region_real,  # pyright: ignore[reportUnknownVariableType]
     )
-    from dogpile.cache.api import (  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+    from dogpile.cache.api import (  # pyright: ignore[reportMissingImports]
         NO_VALUE as _dogpile_no_value_real,  # noqa: N811  # pyright: ignore[reportUnknownVariableType]
     )
 

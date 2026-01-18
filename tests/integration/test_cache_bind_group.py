@@ -186,7 +186,9 @@ async def test_async_repository_get_with_bind_group_uses_separate_cache(
             assert author1.name == "Test Author"
 
             # Verify default cache was populated
-            cached_default = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
+            cached_default = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group=None
+            )
             assert cached_default is not None
 
             # Get with bind_group="shard_a" - should cache to shard_a key
@@ -194,18 +196,24 @@ async def test_async_repository_get_with_bind_group_uses_separate_cache(
             assert author2.name == "Test Author"
 
             # Verify shard_a cache was populated
-            cached_shard_a = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+            cached_shard_a = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+            )
             assert cached_shard_a is not None
 
             # Invalidate only shard_a cache
             memory_cache_manager.invalidate_entity_sync(table_name, author_id, bind_group="shard_a")
 
             # Verify default cache still exists
-            cached_default_after = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
+            cached_default_after = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group=None
+            )
             assert cached_default_after is not None, "Default cache should still exist"
 
             # Verify shard_a cache was invalidated
-            cached_shard_a_after = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+            cached_shard_a_after = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+            )
             assert cached_shard_a_after is None, "shard_a cache should be invalidated"
 
     finally:
@@ -370,7 +378,9 @@ def test_sync_repository_get_with_bind_group_uses_separate_cache(
             assert author1.name == "Test Author"
 
             # Verify default cache was populated
-            cached_default = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
+            cached_default = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group=None
+            )
             assert cached_default is not None
 
             # Get with bind_group="shard_a"
@@ -378,15 +388,23 @@ def test_sync_repository_get_with_bind_group_uses_separate_cache(
             assert author2.name == "Test Author"
 
             # Verify shard_a cache was populated
-            cached_shard_a = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+            cached_shard_a = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+            )
             assert cached_shard_a is not None
 
             # Invalidate only shard_a
             memory_cache_manager.invalidate_entity_sync(table_name, author_id, bind_group="shard_a")
 
             # Verify default still cached, shard_a invalidated
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None) is not None
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a") is None
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
+                is not None
+            )
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+                is None
+            )
 
     finally:
         BindGroupAuthor.metadata.drop_all(sqlite_engine)
@@ -483,7 +501,9 @@ async def test_async_repository_uses_default_bind_group_for_cache(
             await repo.get(author_id)
 
             # Verify cache was populated for default_shard bind_group
-            cached = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="default_shard")
+            cached = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="default_shard"
+            )
             assert cached is not None, "Cache should use default bind_group from constructor"
 
             # Verify no cache for None bind_group
@@ -539,8 +559,12 @@ async def test_async_repository_explicit_bind_group_overrides_default(
             await repo.get(author_id, bind_group="override_shard")
 
             # Verify cache was populated for override_shard, not default_shard
-            cached_override = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="override_shard")
-            cached_default = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="default_shard")
+            cached_override = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="override_shard"
+            )
+            cached_default = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="default_shard"
+            )
 
             assert cached_override is not None, "Cache should be for override_shard"
             assert cached_default is None, "No cache for default_shard when overridden"
@@ -596,9 +620,15 @@ async def test_cache_manager_entity_methods_with_bind_group(
             memory_cache_manager.set_entity_sync(table_name, author_id, author, bind_group="shard_b")
 
             # Test get_entity_sync returns correct cached entity per bind_group
-            cached_default = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
-            cached_shard_a = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
-            cached_shard_b = memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_b")
+            cached_default = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group=None
+            )
+            cached_shard_a = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+            )
+            cached_shard_b = memory_cache_manager.get_entity_sync(
+                table_name, author_id, BindGroupAuthor, bind_group="shard_b"
+            )
 
             assert cached_default is not None
             assert cached_shard_a is not None
@@ -613,9 +643,18 @@ async def test_cache_manager_entity_methods_with_bind_group(
             memory_cache_manager.invalidate_entity_sync(table_name, author_id, bind_group="shard_a")
 
             # Verify only shard_a was invalidated
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None) is not None
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a") is None
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_b") is not None
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
+                is not None
+            )
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+                is None
+            )
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_b")
+                is not None
+            )
 
     finally:
         async with aiosqlite_engine.begin() as conn:
@@ -657,8 +696,12 @@ async def test_cache_manager_async_entity_methods_with_bind_group(
             await memory_cache_manager.set_entity_async(table_name, author_id, author, bind_group="shard_a")
 
             # Verify both cached correctly
-            cached_default = await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group=None)
-            cached_shard_a = await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+            cached_default = await memory_cache_manager.get_entity_async(
+                table_name, author_id, BindGroupAuthor, bind_group=None
+            )
+            cached_shard_a = await memory_cache_manager.get_entity_async(
+                table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+            )
 
             assert cached_default is not None
             assert cached_shard_a is not None
@@ -669,8 +712,16 @@ async def test_cache_manager_async_entity_methods_with_bind_group(
             await memory_cache_manager.invalidate_entity_async(table_name, author_id, bind_group="shard_a")
 
             # Verify only shard_a was invalidated
-            assert await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group=None) is not None
-            assert await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group="shard_a") is None
+            assert (
+                await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group=None)
+                is not None
+            )
+            assert (
+                await memory_cache_manager.get_entity_async(
+                    table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+                )
+                is None
+            )
 
     finally:
         async with aiosqlite_engine.begin() as conn:
@@ -725,9 +776,18 @@ async def test_cache_invalidation_tracker_commit_with_bind_group(
             tracker.commit()
 
             # Verify only shard_a was invalidated
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None) is not None
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a") is None
-            assert memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_b") is not None
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group=None)
+                is not None
+            )
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_a")
+                is None
+            )
+            assert (
+                memory_cache_manager.get_entity_sync(table_name, author_id, BindGroupAuthor, bind_group="shard_b")
+                is not None
+            )
 
     finally:
         async with aiosqlite_engine.begin() as conn:
@@ -776,8 +836,16 @@ async def test_cache_invalidation_tracker_async_commit_with_bind_group(
             await tracker.commit_async()
 
             # Verify only shard_a was invalidated
-            assert await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group=None) is not None
-            assert await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group="shard_a") is None
+            assert (
+                await memory_cache_manager.get_entity_async(table_name, author_id, BindGroupAuthor, bind_group=None)
+                is not None
+            )
+            assert (
+                await memory_cache_manager.get_entity_async(
+                    table_name, author_id, BindGroupAuthor, bind_group="shard_a"
+                )
+                is None
+            )
 
     finally:
         async with aiosqlite_engine.begin() as conn:
