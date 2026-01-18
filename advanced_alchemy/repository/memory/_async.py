@@ -131,10 +131,14 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     def _pk_attr_names(self) -> tuple[str, ...]:
         """Get primary key attribute names from the model mapper.
 
+        Uses mapper.get_property_by_column() to get ORM attribute names,
+        which may differ from column names when using Column("sql_name").
+
         Returns:
-            Tuple of attribute names for primary key columns.
+            Tuple of ORM attribute names for primary key columns.
         """
-        return tuple(col.name for col in self._pk_columns)
+        mapper = class_mapper(self.model_type)
+        return tuple(mapper.get_property_by_column(col).key for col in self._pk_columns)
 
     def _is_composite_pk(self) -> bool:
         """Check if model has a composite (multi-column) primary key.

@@ -7,12 +7,15 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final, Literal, Optional, Protocol, Union, cast, overload
 
 from sqlalchemy import (
+    Column,
     Delete,
     Dialect,
     Select,
     UnaryExpression,
     Update,
+    inspect,
 )
+from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import (
     InstrumentedAttribute,
     MapperProperty,
@@ -225,6 +228,111 @@ def get_instrumented_attr(
     if isinstance(key, str):
         return cast("InstrumentedAttribute[Any]", getattr(model, key))
     return key
+
+
+def get_primary_key_info(
+    model: type[ModelProtocol],
+) -> tuple[tuple["Column[Any]", ...], tuple[str, ...]]:
+    """Extract primary key columns and attribute names from a SQLAlchemy model.
+
+    This function safely inspects a model to retrieve its primary key information,
+    handling cases where the model may not be properly mapped (e.g., mock objects
+    in tests).
+
+    Args:
+        model: SQLAlchemy model class to inspect.
+
+    Returns:
+        A tuple of (pk_columns, pk_attr_names) where:
+            - pk_columns: Tuple of Column objects representing the primary key
+            - pk_attr_names: Tuple of ORM attribute names for the primary key columns
+
+        Returns empty tuples if the model cannot be inspected (e.g., unmapped models).
+
+    Example:
+        >>> pk_columns, pk_attr_names = get_primary_key_info(UserRole)
+        >>> # For a model with composite key (user_id, role_id):
+        >>> # pk_columns = (Column('user_id', ...), Column('role_id', ...))
+        >>> # pk_attr_names = ('user_id', 'role_id')
+    """
+    try:
+        mapper = inspect(model)
+    except NoInspectionAvailable:
+        return (), ()
+    else:
+        pk_columns: tuple[Column[Any], ...] = tuple(mapper.primary_key)  # type: ignore[union-attr]
+        pk_attr_names: tuple[str, ...] = tuple(
+            mapper.get_property_by_column(col).key  # type: ignore[union-attr]
+            for col in pk_columns
+        )
+        return pk_columns, pk_attr_names
+
+
+def validate_composite_pk_value(
+    pk_value: Any,
+    pk_attr_names: tuple[str, ...],
+    model_name: str,
+) -> tuple[Any, ...]:
+    """Validate and normalize a composite primary key value to a tuple.
+
+    Args:
+        pk_value: Primary key value (must be tuple or dict for composite PKs).
+        pk_attr_names: Tuple of ORM attribute names for the PK columns.
+        model_name: Model class name for error messages.
+
+    Returns:
+        Validated tuple of PK values in column order.
+
+    Raises:
+        TypeError: If pk_value is not a tuple or dict.
+        ValueError: If tuple length is wrong, dict is missing keys, or any value is None.
+    """
+    num_pk_columns = len(pk_attr_names)
+
+    if isinstance(pk_value, tuple):
+        pk_tuple = cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
+        if len(pk_tuple) != num_pk_columns:
+            msg = (
+                f"Composite primary key for {model_name} has "
+                f"{num_pk_columns} columns {list(pk_attr_names)}, "
+                f"but {len(pk_tuple)} values provided: {pk_tuple!r}"
+            )
+            raise ValueError(msg)
+        # Validate no None values
+        for i, val in enumerate(pk_tuple):
+            if val is None:
+                msg = f"Primary key value for '{pk_attr_names[i]}' cannot be None in composite key for {model_name}"
+                raise ValueError(msg)
+        return pk_tuple
+
+    if isinstance(pk_value, dict):
+        pk_dict = cast("dict[str, Any]", pk_value)
+        provided_keys = set(pk_dict.keys())
+        required_keys = set(pk_attr_names)
+        missing_keys = required_keys - provided_keys
+        if missing_keys:
+            msg = (
+                f"Composite primary key for {model_name} requires "
+                f"attributes {sorted(required_keys)}, but missing: {sorted(missing_keys)}"
+            )
+            raise ValueError(msg)
+        # Validate no None values and build tuple
+        result_values: list[Any] = []
+        for attr_name in pk_attr_names:
+            val = pk_dict[attr_name]
+            if val is None:
+                msg = f"Primary key value for '{attr_name}' cannot be None in composite key for {model_name}"
+                raise ValueError(msg)
+            result_values.append(val)
+        return tuple(result_values)
+
+    # Not a valid type for composite PK
+    pk_type_name = type(pk_value).__name__
+    msg = (
+        f"Composite primary key for {model_name} requires tuple or dict, "
+        f"got {pk_type_name}: {pk_value!r}. Expected columns: {list(pk_attr_names)}"
+    )
+    raise TypeError(msg)
 
 
 def _convert_relationship_value(

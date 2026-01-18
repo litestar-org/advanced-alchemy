@@ -57,6 +57,8 @@ from advanced_alchemy.repository._util import (
     compare_values,
     get_abstract_loader_options,
     get_instrumented_attr,
+    get_primary_key_info,
+    validate_composite_pk_value,
     was_attribute_set,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, T
@@ -777,60 +779,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             single_pk_result: ColumnElement[bool] = pk_columns[0] == pk_value
             return single_pk_result
 
-        # Composite primary key - require tuple or dict
-        if isinstance(pk_value, tuple):
-            # Tuple format: values must match column order
-            pk_tuple = cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
-            if len(pk_tuple) != len(pk_columns):
-                msg = (
-                    f"Composite primary key for {self.model_type.__name__} has "
-                    f"{len(pk_columns)} columns {list(pk_attr_names)}, "
-                    f"but {len(pk_tuple)} values provided: {pk_tuple!r}"
-                )
-                raise ValueError(msg)
-            # Validate no None values in PK
-            for i, val in enumerate(pk_tuple):
-                if val is None:
-                    msg = (
-                        f"Primary key value for '{pk_attr_names[i]}' cannot be None "
-                        f"in composite key for {self.model_type.__name__}"
-                    )
-                    raise ValueError(msg)
-            return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
-
-        if isinstance(pk_value, dict):
-            # Dict format: keys must be ORM attribute names
-            pk_dict = cast("dict[str, Any]", pk_value)
-            provided_keys = set(pk_dict.keys())
-            required_keys = set(pk_attr_names)
-
-            missing_keys = required_keys - provided_keys
-            if missing_keys:
-                msg = (
-                    f"Composite primary key for {self.model_type.__name__} requires "
-                    f"attributes {sorted(required_keys)}, but missing: {sorted(missing_keys)}"
-                )
-                raise ValueError(msg)
-
-            # Validate no None values in PK
-            for attr_name in pk_attr_names:
-                if pk_dict[attr_name] is None:
-                    msg = (
-                        f"Primary key value for '{attr_name}' cannot be None "
-                        f"in composite key for {self.model_type.__name__}"
-                    )
-                    raise ValueError(msg)
-
-            # Build filter using attribute names
-            return and_(*[col == pk_dict[attr_name] for col, attr_name in zip(pk_columns, pk_attr_names)])
-
-        # Scalar passed for composite PK - error
-        msg = (
-            f"Composite primary key for {self.model_type.__name__} requires "
-            f"tuple or dict, got {type(pk_value).__name__}: {pk_value!r}. "
-            f"Expected columns: {list(pk_attr_names)}"
-        )
-        raise ValueError(msg)
+        pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, self.model_type.__name__)
+        return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
 
     def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
         """Extract the primary key value(s) from a model instance.
@@ -882,22 +832,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         Raises:
             TypeError: If a value is not a dict or tuple.
+            ValueError: If tuple length doesn't match PK columns, dict is missing keys, or values are None.
         """
-        normalized: list[tuple[Any, ...]] = []
-        for pk_value in item_ids:
-            if isinstance(pk_value, dict):
-                pk_dict = cast("dict[str, Any]", pk_value)
-                normalized.append(tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names))
-            elif isinstance(pk_value, tuple):
-                normalized.append(cast("tuple[Any, ...]", pk_value))  # type: ignore[redundant-cast]
-            else:
-                pk_type_name: str = type(pk_value).__name__
-                msg = (
-                    f"Composite primary key for {self.model_type.__name__} requires "
-                    f"tuple or dict, got {pk_type_name}: {pk_value!r}"
-                )
-                raise TypeError(msg)
-        return normalized
+        pk_attr_names = self._pk_attr_names
+        model_name = self.model_type.__name__
+        return [validate_composite_pk_value(pk_value, pk_attr_names, model_name) for pk_value in item_ids]
 
     @staticmethod
     def check_not_found(item_or_none: Optional[ModelT]) -> ModelT:
@@ -1779,7 +1718,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
             # Composite primary key (dict format)
             >>> assignment = await user_role_repo.get(
-            ...     {"user_id": 1, "role_id": 5}
+            ...     {
+            ...         "user_id": 1,
+            ...         "role_id": 5,
+            ...     }
             ... )
 
         Raises:
