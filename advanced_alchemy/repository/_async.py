@@ -713,10 +713,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if self._cache_manager is not None:
             from advanced_alchemy._listeners import get_cache_tracker
 
-            model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+            # Check if model_type has __tablename__ (may not exist in mock scenarios)
+            model_name = getattr(self.model_type, "__tablename__", None)
+            if model_name is None:
+                return
             tracker = get_cache_tracker(self.session, self._cache_manager)
             if tracker is not None:
-                tracker.add_invalidation(model_name, entity_id, bind_group)
+                tracker.add_invalidation(cast("str", model_name), entity_id, bind_group)
 
     def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
