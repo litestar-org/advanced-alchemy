@@ -1110,6 +1110,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
                 for idx in range(0, len(normalized_ids), effective_chunk_size):
                     chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
+                    # MSSQL doesn't support tuple().in_() syntax, use OR of AND conditions instead
                     pk_filter = (
                         or_(*[self._build_pk_filter(pk_tuple) for pk_tuple in chunk])
                         if self._dialect.name == "mssql"
