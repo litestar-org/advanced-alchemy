@@ -472,6 +472,11 @@ ignore_missing_imports = true
 module = ["pytest", "pytest.*", "_pytest", "_pytest.*"]
 
 [[tool.mypy.overrides]]
+follow_imports = "skip"
+ignore_missing_imports = true
+module = ["sphinx", "sphinx.*"]
+
+[[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
 warn_unused_ignores = false
 
