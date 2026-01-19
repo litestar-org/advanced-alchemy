@@ -539,7 +539,6 @@ exclude = [
   "tests/helpers.py",
   "tests/docker_service_fixtures.py",
   "examples/flask/flask_services.py",
-  "advanced_alchemy/service/_sync.py",
 ]
 include = ["advanced_alchemy"]
 pythonVersion = "3.9"

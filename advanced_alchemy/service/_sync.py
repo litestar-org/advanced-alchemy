@@ -6,6 +6,8 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
+# pyright: reportPrivateUsage=false
+
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from functools import cached_property
@@ -1259,20 +1261,16 @@ class SQLAlchemySyncRepositoryService(
             >>> deleted = await service.delete_many([1, 2, 3])
 
             # Composite primary key (tuple format)
-            >>> deleted = await service.delete_many(
-            ...     [
-            ...         (user_id_1, role_id_1),
-            ...         (user_id_2, role_id_2),
-            ...     ]
-            ... )
+            >>> deleted = await service.delete_many([
+            ...     (user_id_1, role_id_1),
+            ...     (user_id_2, role_id_2),
+            ... ])
 
             # Composite primary key (dict format)
-            >>> deleted = await service.delete_many(
-            ...     [
-            ...         {"user_id": 1, "role_id": 5},
-            ...         {"user_id": 1, "role_id": 6},
-            ...     ]
-            ... )
+            >>> deleted = await service.delete_many([
+            ...     {"user_id": 1, "role_id": 5},
+            ...     {"user_id": 1, "role_id": 6},
+            ... ])
         """
         return cast(
             "Sequence[ModelT]",
