@@ -1,5 +1,6 @@
 import csv
 import gzip
+import io
 import zipfile
 from functools import partial
 from typing import TYPE_CHECKING, Any, Union
@@ -74,6 +75,7 @@ def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> 
         (base_path / f"{fixture_name.upper()}.json.zip", "json_zip"),
         (base_path / f"{fixture_name}.json.zip", "json_zip"),
         (base_path / f"{fixture_name}.csv", "csv_plain"),
+        (base_path / f"{fixture_name.upper()}.csv", "csv_plain"),  # Uppercase plain CSV
         (base_path / f"{fixture_name.upper()}.csv.gz", "csv_gzip"),
         (base_path / f"{fixture_name}.csv.gz", "csv_gzip"),
         (base_path / f"{fixture_name.upper()}.csv.zip", "csv_zip"),
@@ -110,14 +112,14 @@ def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> 
 
                 # CSV handling
                 if file_type == "csv_plain":
-                    with fixture_path.open(mode="r", encoding="utf-8", newline="") as f:
+                    with fixture_path.open(mode="r", encoding="utf-8-sig", newline="") as f:
                         reader = csv.DictReader(f)
                         return list(reader)
                 if file_type == "csv_gzip":
                     with fixture_path.open(mode="rb") as f:
                         compressed_data = f.read()
-                    f_data = gzip.decompress(compressed_data).decode("utf-8")
-                    reader = csv.DictReader(f_data.splitlines())
+                    f_data = gzip.decompress(compressed_data).decode("utf-8-sig")
+                    reader = csv.DictReader(io.StringIO(f_data))
                     return list(reader)
                 if file_type == "csv_zip":
                     with zipfile.ZipFile(fixture_path, mode="r") as zf:
@@ -131,8 +133,8 @@ def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> 
                         csv_file = next((name for name in csv_files if name == f"{fixture_name}.csv"), csv_files[0])
 
                         with zf.open(csv_file, mode="r") as f:
-                            f_data = f.read().decode("utf-8")
-                    reader = csv.DictReader(f_data.splitlines())
+                            f_data = f.read().decode("utf-8-sig")
+                    reader = csv.DictReader(io.StringIO(f_data))
                     return list(reader)
                 continue  # Skip unknown file types
             except (OSError, zipfile.BadZipFile, gzip.BadGzipFile) as exc:
@@ -173,9 +175,9 @@ def _read_csv_zip_file(path: "AsyncPath", name: str) -> "list[dict[str, Any]]":
         csv_file = next((file for file in csv_files if file == f"{name}.csv"), csv_files[0])
 
         with zf.open(csv_file, mode="r") as f:
-            f_data = f.read().decode("utf-8")
+            f_data = f.read().decode("utf-8-sig")
 
-    reader = csv.DictReader(f_data.splitlines())
+    reader = csv.DictReader(io.StringIO(f_data))
     return list(reader)
 
 
@@ -247,6 +249,7 @@ async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_na
         (base_path / f"{fixture_name.upper()}.json.zip", "json_zip"),
         (base_path / f"{fixture_name}.json.zip", "json_zip"),
         (base_path / f"{fixture_name}.csv", "csv_plain"),
+        (base_path / f"{fixture_name.upper()}.csv", "csv_plain"),  # Uppercase plain CSV
         (base_path / f"{fixture_name.upper()}.csv.gz", "csv_gzip"),
         (base_path / f"{fixture_name}.csv.gz", "csv_gzip"),
         (base_path / f"{fixture_name.upper()}.csv.zip", "csv_zip"),
@@ -279,12 +282,12 @@ async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_na
 
                 # CSV handling
                 if file_type == "csv_plain":
-                    async with await fixture_path.open(mode="r", encoding="utf-8") as f:
+                    async with await fixture_path.open(mode="r", encoding="utf-8-sig") as f:
                         f_data = await f.read()
 
                     # Parse CSV in thread pool to avoid blocking
                     def _parse_csv(data: str) -> "list[dict[str, Any]]":
-                        reader = csv.DictReader(data.splitlines())
+                        reader = csv.DictReader(io.StringIO(data))
                         return list(reader)
 
                     return await async_(partial(_parse_csv, f_data))()
@@ -293,8 +296,8 @@ async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_na
                         compressed_csv: bytes = await f.read()  # type: ignore[assignment]
 
                     def _decompress_and_parse_csv(data: bytes) -> "list[dict[str, Any]]":
-                        decompressed = gzip.decompress(data).decode("utf-8")
-                        reader = csv.DictReader(decompressed.splitlines())
+                        decompressed = gzip.decompress(data).decode("utf-8-sig")
+                        reader = csv.DictReader(io.StringIO(decompressed))
                         return list(reader)
 
                     return await async_(partial(_decompress_and_parse_csv, compressed_csv))()

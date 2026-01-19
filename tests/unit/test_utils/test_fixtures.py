@@ -389,6 +389,119 @@ class TestOpenFixtureCSV:
         result = open_fixture(temp_fixtures_dir, "unicode")
         assert result == unicode_data
 
+    def test_csv_with_embedded_newlines(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV with embedded newlines in quoted fields (RFC 4180 compliance)."""
+        # This is a critical test - embedded newlines must be preserved
+        csv_content = """name,description
+Alice,"Line 1
+Line 2"
+Bob,"Simple description"
+Charlie,"Multiple
+embedded
+newlines"
+"""
+        csv_file = temp_fixtures_dir / "embedded_newlines.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = open_fixture(temp_fixtures_dir, "embedded_newlines")
+        assert len(result) == 3
+        assert result[0]["name"] == "Alice"
+        assert result[0]["description"] == "Line 1\nLine 2"  # Newline must be preserved
+        assert result[1]["description"] == "Simple description"
+        assert result[2]["description"] == "Multiple\nembedded\nnewlines"
+
+    def test_csv_with_embedded_newlines_gzip(self, temp_fixtures_dir: Path) -> None:
+        """Test gzipped CSV with embedded newlines in quoted fields."""
+        csv_content = """name,description
+Alice,"Line 1
+Line 2"
+"""
+        gz_file = temp_fixtures_dir / "embedded_newlines_gz.csv.gz"
+        with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = open_fixture(temp_fixtures_dir, "embedded_newlines_gz")
+        assert len(result) == 1
+        assert result[0]["description"] == "Line 1\nLine 2"  # Newline must be preserved
+
+    def test_csv_with_embedded_newlines_zip(self, temp_fixtures_dir: Path) -> None:
+        """Test zipped CSV with embedded newlines in quoted fields."""
+        csv_content = """name,description
+Alice,"Line 1
+Line 2"
+"""
+        zip_file = temp_fixtures_dir / "embedded_newlines_zip.csv.zip"
+        with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("embedded_newlines_zip.csv", csv_content)
+
+        result = open_fixture(temp_fixtures_dir, "embedded_newlines_zip")
+        assert len(result) == 1
+        assert result[0]["description"] == "Line 1\nLine 2"  # Newline must be preserved
+
+    def test_csv_with_utf8_bom(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV with UTF-8 BOM (common in Excel exports)."""
+        # UTF-8 BOM is \ufeff at the start of the file
+        csv_content = "\ufeffname,value\nAlice,1\nBob,2\n"
+        csv_file = temp_fixtures_dir / "bom.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = open_fixture(temp_fixtures_dir, "bom")
+        assert len(result) == 2
+        # BOM should be stripped, so first key should be "name" not "\ufeffname"
+        assert "name" in result[0]
+        assert "\ufeffname" not in result[0]
+        assert result[0]["name"] == "Alice"
+
+    def test_csv_with_utf8_bom_gzip(self, temp_fixtures_dir: Path) -> None:
+        """Test gzipped CSV with UTF-8 BOM."""
+        csv_content = "\ufeffname,value\nAlice,1\n"
+        # Write as bytes to preserve BOM
+        gz_file = temp_fixtures_dir / "bom_gz.csv.gz"
+        with gzip.open(gz_file, "wb") as f:
+            f.write(csv_content.encode("utf-8"))
+
+        result = open_fixture(temp_fixtures_dir, "bom_gz")
+        assert len(result) == 1
+        assert "name" in result[0]
+        assert "\ufeffname" not in result[0]
+
+    def test_csv_with_utf8_bom_zip(self, temp_fixtures_dir: Path) -> None:
+        """Test zipped CSV with UTF-8 BOM."""
+        csv_content = "\ufeffname,value\nAlice,1\n"
+        zip_file = temp_fixtures_dir / "bom_zip.csv.zip"
+        with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            # Write as bytes to preserve BOM
+            zf.writestr("bom_zip.csv", csv_content.encode("utf-8"))
+
+        result = open_fixture(temp_fixtures_dir, "bom_zip")
+        assert len(result) == 1
+        assert "name" in result[0]
+        assert "\ufeffname" not in result[0]
+
+    def test_csv_empty_data_rows(self, temp_fixtures_dir: Path) -> None:
+        """Test CSV with headers only (no data rows)."""
+        csv_content = "name,email,age\n"
+        csv_file = temp_fixtures_dir / "headers_only.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = open_fixture(temp_fixtures_dir, "headers_only")
+        assert result == []  # Empty list, no rows
+
+    def test_uppercase_plain_csv(self, temp_fixtures_dir: Path) -> None:
+        """Test loading uppercase plain CSV file."""
+        csv_content = "name,value\nUPPER,1\n"
+        csv_file = temp_fixtures_dir / "UPPERTEST.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        # Should find UPPERTEST.csv when searching for "uppertest"
+        result = open_fixture(temp_fixtures_dir, "uppertest")
+        assert len(result) == 1
+        assert result[0]["name"] == "UPPER"
+
 
 class TestOpenFixtureAsync:
     """Test cases for asynchronous open_fixture_async function."""
@@ -561,6 +674,96 @@ class TestOpenFixtureAsync:
         with pytest.raises(ValueError) as exc_info:
             await open_fixture_async(temp_fixtures_dir, "empty_csv")
         assert "No CSV files found in zip archive" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_csv_with_embedded_newlines_async(self, temp_fixtures_dir: Path) -> None:
+        """Test async CSV loading with embedded newlines in quoted fields."""
+        csv_content = """name,description
+Alice,"Line 1
+Line 2"
+"""
+        csv_file = temp_fixtures_dir / "embedded_async.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = await open_fixture_async(temp_fixtures_dir, "embedded_async")
+        assert len(result) == 1
+        assert result[0]["description"] == "Line 1\nLine 2"
+
+    @pytest.mark.asyncio
+    async def test_csv_with_embedded_newlines_gzip_async(self, temp_fixtures_dir: Path) -> None:
+        """Test async gzipped CSV loading with embedded newlines."""
+        csv_content = """name,description
+Alice,"Line 1
+Line 2"
+"""
+        gz_file = temp_fixtures_dir / "embedded_gz_async.csv.gz"
+        with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = await open_fixture_async(temp_fixtures_dir, "embedded_gz_async")
+        assert len(result) == 1
+        assert result[0]["description"] == "Line 1\nLine 2"
+
+    @pytest.mark.asyncio
+    async def test_csv_with_embedded_newlines_zip_async(self, temp_fixtures_dir: Path) -> None:
+        """Test async zipped CSV loading with embedded newlines."""
+        csv_content = """name,description
+Alice,"Line 1
+Line 2"
+"""
+        zip_file = temp_fixtures_dir / "embedded_zip_async.csv.zip"
+        with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("embedded_zip_async.csv", csv_content)
+
+        result = await open_fixture_async(temp_fixtures_dir, "embedded_zip_async")
+        assert len(result) == 1
+        assert result[0]["description"] == "Line 1\nLine 2"
+
+    @pytest.mark.asyncio
+    async def test_csv_with_utf8_bom_async(self, temp_fixtures_dir: Path) -> None:
+        """Test async CSV loading with UTF-8 BOM."""
+        csv_content = "\ufeffname,value\nAlice,1\n"
+        csv_file = temp_fixtures_dir / "bom_async.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = await open_fixture_async(temp_fixtures_dir, "bom_async")
+        assert len(result) == 1
+        assert "name" in result[0]
+        assert "\ufeffname" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_csv_reads(self, temp_fixtures_dir: Path) -> None:
+        """Test concurrent async reads of the same CSV fixture."""
+        import asyncio
+
+        csv_content = "name,value\nAlice,1\nBob,2\n"
+        csv_file = temp_fixtures_dir / "concurrent.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        # Perform 5 concurrent reads
+        results = await asyncio.gather(*(open_fixture_async(temp_fixtures_dir, "concurrent") for _ in range(5)))
+
+        # All results should be identical
+        assert len(results) == 5
+        for result in results:
+            assert len(result) == 2
+            assert result[0]["name"] == "Alice"
+            assert result[1]["name"] == "Bob"
+
+    @pytest.mark.asyncio
+    async def test_uppercase_plain_csv_async(self, temp_fixtures_dir: Path) -> None:
+        """Test async loading of uppercase plain CSV file."""
+        csv_content = "name,value\nUPPER,1\n"
+        csv_file = temp_fixtures_dir / "UPPERASYNC.csv"
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+
+        result = await open_fixture_async(temp_fixtures_dir, "upperasync")
+        assert len(result) == 1
+        assert result[0]["name"] == "UPPER"
 
 
 class TestIntegration:
