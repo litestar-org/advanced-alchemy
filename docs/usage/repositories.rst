@@ -208,6 +208,8 @@ Delete Where
         return await repository.delete_where(Post.published.is_(False))
 
 
+.. _composite-primary-keys:
+
 Composite Primary Keys
 ----------------------
 

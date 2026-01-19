@@ -93,7 +93,7 @@ Services provide high-level methods for common operations:
         return post_service.to_schema(post, schema_type=PostResponse)
 
 Composite Primary Keys
-~~~~~~~~~~~~~~~~~~~~~~
+**********************
 
 Services fully support models with composite primary keys using the same formats as repositories.
 Pass primary key values as tuples or dictionaries when using ``get``, ``update``, or ``delete`` methods:
@@ -112,8 +112,7 @@ Pass primary key values as tuples or dictionaries when using ``get``, ``update``
     # Delete multiple by composite keys
     await user_role_service.delete_many([(1, 5), (1, 6), (2, 5)])
 
-See :ref:`Composite Primary Keys <repositories:Composite Primary Keys>` in the Repositories documentation
-for more details on supported formats.
+See :ref:`composite-primary-keys` in the Repositories documentation for more details on supported formats.
 
 Complex Operations
 -------------------
