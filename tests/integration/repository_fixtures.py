@@ -160,6 +160,21 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             files_data: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
             file_metadata: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
 
+        class IntegrationUUIDUserRole(base.BasicAttributes, BaseClass.registry.generate_base()):  # type: ignore[misc,name-defined]
+            """Model with composite primary key for testing composite PK support.
+
+            Inherits BasicAttributes to get to_dict() method for upsert operations.
+            """
+
+            __tablename__ = f"uuid_user_role_{worker_id}"
+
+            user_id: Mapped[int] = mapped_column(primary_key=True)
+            role_id: Mapped[int] = mapped_column(primary_key=True)
+            assigned_at: Mapped[datetime.datetime] = mapped_column(
+                default=lambda: datetime.datetime.now(datetime.timezone.utc)
+            )
+            is_active: Mapped[bool] = mapped_column(default=True)
+
     else:  # bigint
         # Use the patched BigInt base classes - all should use the same registry
         BaseClass = base.BigIntAuditBase  # type: ignore[assignment]
@@ -273,6 +288,21 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             files_data: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
             file_metadata: Mapped[Optional[dict]] = mapped_column(JsonB, nullable=True)
 
+        class BigIntUserRole(base.BasicAttributes, BaseClass.registry.generate_base()):  # type: ignore[misc,name-defined]
+            """Model with composite primary key for testing composite PK support.
+
+            Inherits BasicAttributes to get to_dict() method for upsert operations.
+            """
+
+            __tablename__ = f"bigint_user_role_{worker_id}"
+
+            user_id: Mapped[int] = mapped_column(primary_key=True)
+            role_id: Mapped[int] = mapped_column(primary_key=True)
+            assigned_at: Mapped[datetime.datetime] = mapped_column(
+                default=lambda: datetime.datetime.now(datetime.timezone.utc)
+            )
+            is_active: Mapped[bool] = mapped_column(default=True)
+
     # Return all models
     if base_type == "uuid":
         return {
@@ -286,6 +316,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             "tag": IntegrationUUIDTag,
             "model_with_fetched_value": IntegrationUUIDModelWithFetchedValue,
             "file_document": IntegrationUUIDFileDocument,
+            "user_role": IntegrationUUIDUserRole,
         }
     # bigint
     return {
@@ -299,6 +330,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
         "tag": BigIntTag,
         "model_with_fetched_value": BigIntModelWithFetchedValue,
         "file_document": BigIntFileDocument,
+        "user_role": BigIntUserRole,
     }
 
 
@@ -349,6 +381,26 @@ class TestDataManager:
                         "long_secret": "It's clobbering time.",
                     },
                 ],
+                "user_roles": [
+                    {
+                        "user_id": 1,
+                        "role_id": 10,
+                        "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                        "is_active": True,
+                    },
+                    {
+                        "user_id": 1,
+                        "role_id": 20,
+                        "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "is_active": True,
+                    },
+                    {
+                        "user_id": 2,
+                        "role_id": 10,
+                        "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                        "is_active": False,
+                    },
+                ],
             }
         # bigint
         return {
@@ -391,6 +443,26 @@ class TestDataManager:
                     "long_secret": "It's clobbering time.",
                 },
             ],
+            "user_roles": [
+                {
+                    "user_id": 1,
+                    "role_id": 10,
+                    "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                    "is_active": True,
+                },
+                {
+                    "user_id": 1,
+                    "role_id": 20,
+                    "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "is_active": True,
+                },
+                {
+                    "user_id": 2,
+                    "role_id": 10,
+                    "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                    "is_active": False,
+                },
+            ],
         }
 
     @classmethod
@@ -414,6 +486,8 @@ class TestDataManager:
             session.execute(insert(models["rule"]), seed_data["rules"])
         if "secret" in models:
             session.execute(insert(models["secret"]), seed_data["secrets"])
+        if "user_role" in models:
+            session.execute(insert(models["user_role"]), seed_data["user_roles"])
 
         session.flush()  # Ensure data is written but don't commit yet
 
@@ -438,6 +512,8 @@ class TestDataManager:
             await session.execute(insert(models["rule"]), seed_data["rules"])
         if "secret" in models:
             await session.execute(insert(models["secret"]), seed_data["secrets"])
+        if "user_role" in models:
+            await session.execute(insert(models["user_role"]), seed_data["user_roles"])
 
         await session.flush()  # Ensure data is written but don't commit yet
 
@@ -976,6 +1052,8 @@ async def seed_test_data_async(session: AsyncSession, models: "dict[str, type]",
         await session.execute(insert(models["rule"]), seed_data["rules"])
     if "secret" in models:
         await session.execute(insert(models["secret"]), seed_data["secrets"])
+    if "user_role" in models:
+        await session.execute(insert(models["user_role"]), seed_data["user_roles"])
     await session.flush()  # Ensure data is written but don't commit yet
 
 
@@ -990,6 +1068,8 @@ def seed_test_data_sync(session: Session, models: "dict[str, type]", pk_type: st
         session.execute(insert(models["rule"]), seed_data["rules"])
     if "secret" in models:
         session.execute(insert(models["secret"]), seed_data["secrets"])
+    if "user_role" in models:
+        session.execute(insert(models["user_role"]), seed_data["user_roles"])
     session.flush()  # Ensure data is written but don't commit yet
 
 

@@ -45,7 +45,7 @@ from advanced_alchemy.filters import (
     StatementTypeT,
 )
 from advanced_alchemy.repository._typing import arrays_equal, is_numpy_array
-from advanced_alchemy.repository.typing import ModelT, OrderingPair
+from advanced_alchemy.repository.typing import ModelT, OrderingPair, PrimaryKeyType
 
 DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
     int,
@@ -333,6 +333,139 @@ def validate_composite_pk_value(
         f"got {pk_type_name}: {pk_value!r}. Expected columns: {list(pk_attr_names)}"
     )
     raise TypeError(msg)
+
+
+def is_composite_pk(pk_columns: tuple[Any, ...]) -> bool:
+    """Check if a primary key has multiple columns.
+
+    Args:
+        pk_columns: Tuple of primary key Column objects.
+
+    Returns:
+        True if the model has 2 or more primary key columns, False otherwise.
+
+    Example:
+        >>> is_composite_pk(repo._pk_columns)  # Single PK model
+        False
+        >>> is_composite_pk(
+        ...     repo._pk_columns
+        ... )  # Model with (user_id, role_id) PK
+        True
+    """
+    return len(pk_columns) > 1
+
+
+def extract_pk_value_from_instance(
+    instance: ModelProtocol,
+    pk_attr_names: tuple[str, ...],
+) -> PrimaryKeyType:
+    """Extract the primary key value(s) from a model instance.
+
+    Args:
+        instance: Model instance to extract primary key from.
+        pk_attr_names: Tuple of ORM attribute names for the PK columns.
+
+    Returns:
+        - For single PK: scalar value (int, str, UUID, etc.)
+        - For composite PK: tuple of values in column order
+
+    Example:
+        # Single primary key
+        >>> user = User(id=123, name="Alice")
+        >>> extract_pk_value_from_instance(user, ("id",))
+        123
+
+        # Composite primary key
+        >>> assignment = UserRole(user_id=1, role_id=5)
+        >>> extract_pk_value_from_instance(
+        ...     assignment, ("user_id", "role_id")
+        ... )
+        (1, 5)
+    """
+    if len(pk_attr_names) == 1:
+        return getattr(instance, pk_attr_names[0])
+    return tuple(getattr(instance, attr_name) for attr_name in pk_attr_names)
+
+
+def pk_values_present(
+    instance: ModelProtocol,
+    pk_attr_names: tuple[str, ...],
+) -> bool:
+    """Check if all primary key values are set on an instance.
+
+    Args:
+        instance: Model instance to check.
+        pk_attr_names: Tuple of ORM attribute names for the PK columns.
+
+    Returns:
+        True if all PK values are non-None, False otherwise.
+
+    Example:
+        >>> user = User(id=123)
+        >>> pk_values_present(user, ("id",))
+        True
+
+        >>> user = User(id=None)
+        >>> pk_values_present(user, ("id",))
+        False
+    """
+    return all(getattr(instance, attr_name, None) is not None for attr_name in pk_attr_names)
+
+
+def normalize_pk_to_tuple(
+    pk_value: PrimaryKeyType,
+    pk_attr_names: tuple[str, ...],
+    model_name: str,
+) -> tuple[Any, ...]:
+    """Normalize a primary key value to tuple format.
+
+    This function converts various PK input formats (scalar, tuple, dict) to
+    a consistent tuple format for internal processing.
+
+    Args:
+        pk_value: Primary key value (scalar, tuple, or dict).
+        pk_attr_names: Tuple of ORM attribute names for the PK columns.
+        model_name: Model class name for error messages.
+
+    Returns:
+        Tuple representation of the primary key.
+
+    Raises:
+        ValueError: If composite PK is passed a scalar value.
+
+    Example:
+        # Single PK - wraps scalar in tuple
+        >>> normalize_pk_to_tuple(123, ("id",), "User")
+        (123,)
+
+        # Composite PK - tuple passes through
+        >>> normalize_pk_to_tuple(
+        ...     (1, 5), ("user_id", "role_id"), "UserRole"
+        ... )
+        (1, 5)
+
+        # Composite PK - dict converted to tuple
+        >>> normalize_pk_to_tuple(
+        ...     {"user_id": 1, "role_id": 5},
+        ...     ("user_id", "role_id"),
+        ...     "UserRole",
+        ... )
+        (1, 5)
+    """
+    if len(pk_attr_names) == 1:
+        # Single PK - wrap scalar in tuple
+        return (pk_value,)
+
+    if isinstance(pk_value, tuple):
+        return cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
+    if isinstance(pk_value, dict):
+        pk_dict = cast("dict[str, Any]", pk_value)
+        return tuple(pk_dict[attr_name] for attr_name in pk_attr_names)
+
+    # Scalar passed for composite PK - error
+    pk_type_name = type(pk_value).__name__
+    msg = f"Composite primary key for {model_name} requires tuple or dict, got {pk_type_name}: {pk_value!r}"
+    raise ValueError(msg)
 
 
 def _convert_relationship_value(

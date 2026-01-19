@@ -820,6 +820,12 @@ class SQLAlchemySyncRepositoryService(
                         setattr(existing_instance, attr.key, value)
 
             data = existing_instance
+        elif id_attribute is None and self.repository._is_composite_pk():  # pyright: ignore[reportUnknownMemberType]
+            # For composite PKs, check if all PK values are present
+            if not self.repository._pk_values_present(data):  # pyright: ignore[reportUnknownMemberType]
+                pk_names = ", ".join(self.repository._pk_attr_names)  # pyright: ignore[reportUnknownMemberType]
+                msg = f"Could not identify composite PK values. Required attributes: {pk_names}"
+                raise RepositoryError(msg)
         elif (
             self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
                 item=data,
@@ -940,8 +946,17 @@ class SQLAlchemySyncRepositoryService(
             Updated or created representation.
         """
         data = self.to_model(data, "upsert")
-        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
-        if item_id is not None:
+        # Handle ID extraction and setting for single-column PKs
+        # For composite PKs, the repository's upsert() handles this directly
+        if item_id is None:
+            if self.repository._is_composite_pk():  # pyright: ignore[reportUnknownMemberType]
+                # For composite PKs, extract the full PK if present
+                if self.repository._pk_values_present(data):  # pyright: ignore[reportUnknownMemberType]
+                    item_id = self.repository._extract_pk_value(data)  # pyright: ignore[reportUnknownMemberType]
+            else:
+                item_id = self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
+        if item_id is not None and not self.repository._is_composite_pk():  # pyright: ignore[reportUnknownMemberType]
+            # Only set single-column ID (composite PK values are already on the instance)
             self.repository.set_id_attribute_value(item_id, data)  # pyright: ignore[reportUnknownMemberType]
         return cast(
             "ModelT",

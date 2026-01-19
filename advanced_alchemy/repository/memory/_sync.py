@@ -36,7 +36,15 @@ from advanced_alchemy.filters import (
     StatementFilter,
 )
 from advanced_alchemy.repository._sync import SQLAlchemySyncRepositoryProtocol, SQLAlchemySyncSlugRepositoryProtocol
-from advanced_alchemy.repository._util import DEFAULT_ERROR_MESSAGE_TEMPLATES, LoadSpec, compare_values
+from advanced_alchemy.repository._util import (
+    DEFAULT_ERROR_MESSAGE_TEMPLATES,
+    LoadSpec,
+    compare_values,
+    extract_pk_value_from_instance,
+    is_composite_pk,
+    normalize_pk_to_tuple,
+    pk_values_present,
+)
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
     InMemoryStore,
@@ -147,7 +155,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         Returns:
             True if the model has 2 or more primary key columns, False otherwise.
         """
-        return len(self._pk_columns) > 1
+        return is_composite_pk(self._pk_columns)
 
     def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
         """Extract the primary key value(s) from a model instance.
@@ -159,9 +167,18 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
             - For single PK: scalar value
             - For composite PK: tuple of values in column order
         """
-        if len(self._pk_columns) == 1:
-            return getattr(instance, self._pk_attr_names[0])
-        return tuple(getattr(instance, attr_name) for attr_name in self._pk_attr_names)
+        return extract_pk_value_from_instance(instance, self._pk_attr_names)
+
+    def _pk_values_present(self, instance: ModelT) -> bool:
+        """Check if all primary key values are set on an instance.
+
+        Args:
+            instance: Model instance to check.
+
+        Returns:
+            True if all PK values are non-None, False otherwise.
+        """
+        return pk_values_present(instance, self._pk_attr_names)
 
     def _normalize_pk_to_tuple(self, pk_value: PrimaryKeyType) -> tuple[Any, ...]:
         """Normalize a primary key value to a tuple for consistent storage key generation.
@@ -172,23 +189,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         Returns:
             Tuple representation of the primary key.
         """
-        if len(self._pk_columns) == 1:
-            # Single PK - wrap scalar in tuple
-            return (pk_value,)
-
-        if isinstance(pk_value, tuple):
-            return cast("tuple[Any, ...]", pk_value)  # type: ignore[redundant-cast]
-        if isinstance(pk_value, dict):
-            pk_dict = cast("dict[str, Any]", pk_value)
-            return tuple(pk_dict[attr_name] for attr_name in self._pk_attr_names)
-
-        # Scalar passed for composite PK - error
-        pk_type_name: str = type(pk_value).__name__
-        msg = (
-            f"Composite primary key for {self.model_type.__name__} requires "
-            f"tuple or dict, got {pk_type_name}: {pk_value!r}"
-        )
-        raise ValueError(msg)
+        return normalize_pk_to_tuple(pk_value, self._pk_attr_names, self.model_type.__name__)
 
     def _get_store_key(self, pk_value: PrimaryKeyType) -> str:
         """Generate a store key from a primary key value.

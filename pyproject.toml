@@ -361,7 +361,7 @@ classmethod-decorators = [
 "advanced_alchemy/alembic/templates/*/env.py" = ["INP001"]
 "advanced_alchemy/repository/*.py" = ['C901', 'UP006', 'UP035']
 "advanced_alchemy/repository/memory/*.py" = ['UP006', 'UP035']
-"advanced_alchemy/service/*.py" = ["PLR0911", "UP006", "UP035"]
+"advanced_alchemy/service/*.py" = ["PLR0911", "SLF001", "UP006", "UP035"]
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
 "examples/litestar/*.py" = ["PLR6301", "DOC", "B008"]
@@ -539,11 +539,13 @@ exclude = [
   "tests/helpers.py",
   "tests/docker_service_fixtures.py",
   "examples/flask/flask_services.py",
+  "advanced_alchemy/service/_sync.py",
 ]
 include = ["advanced_alchemy"]
 pythonVersion = "3.9"
 reportMissingTypeStubs = false
 reportPrivateImportUsage = false
+reportPrivateUsage = false
 reportUnknownArgumentType = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
