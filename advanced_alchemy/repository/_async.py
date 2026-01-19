@@ -1110,7 +1110,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
                 for idx in range(0, len(normalized_ids), effective_chunk_size):
                     chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
-                    pk_filter = tuple_(*self._pk_columns).in_(chunk)
+                    pk_filter = (
+                        or_(*[self._build_pk_filter(pk_tuple) for pk_tuple in chunk])
+                        if self._dialect.name == "mssql"
+                        else tuple_(*self._pk_columns).in_(chunk)
+                    )
 
                     if self._dialect.delete_executemany_returning:
                         returning_delete_stmt = delete(self.model_type).where(pk_filter).returning(self.model_type)

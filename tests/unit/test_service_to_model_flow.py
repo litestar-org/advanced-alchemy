@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.repository._util import get_primary_key_info
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.service.typing import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
 
@@ -33,6 +34,8 @@ class MockRepository(SQLAlchemyAsyncRepository[MockModel]):
         # Don't call super().__init__ to avoid needing session
         self.model_type = MockModel
         self.id_attribute = "id"
+        # Initialize PK info for composite PK support
+        self._pk_columns, self._pk_attr_names = get_primary_key_info(MockModel)
 
 
 class MockSyncRepository(SQLAlchemySyncRepository[MockModel]):
@@ -44,6 +47,8 @@ class MockSyncRepository(SQLAlchemySyncRepository[MockModel]):
         # Don't call super().__init__ to avoid needing session
         self.model_type = MockModel
         self.id_attribute = "id"
+        # Initialize PK info for composite PK support
+        self._pk_columns, self._pk_attr_names = get_primary_key_info(MockModel)
 
 
 class TrackingService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository]):
