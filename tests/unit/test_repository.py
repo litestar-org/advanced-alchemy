@@ -389,12 +389,14 @@ async def test_sqlalchemy_repo_get_with_for_update(
     statement.options.return_value = statement
     statement.execution_options.return_value = statement
     statement.with_for_update.return_value = statement
+    statement.where.return_value = statement  # Required for composite PK path
     mock_repo.statement = statement
 
     mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
     mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
     mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
     mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    mocker.patch.object(mock_repo, "_build_pk_filter", return_value=MagicMock())  # Mock the PK filter
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = MagicMock()
     execute = mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
@@ -414,12 +416,14 @@ async def test_sqlalchemy_repo_get_with_for_update_dict(
     statement.options.return_value = statement
     statement.execution_options.return_value = statement
     statement.with_for_update.return_value = statement
+    statement.where.return_value = statement  # Required for composite PK path
     mock_repo.statement = statement
 
     mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
     mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
     mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
     mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    mocker.patch.object(mock_repo, "_build_pk_filter", return_value=MagicMock())  # Mock the PK filter
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = MagicMock()
     mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
@@ -442,12 +446,14 @@ async def test_sqlalchemy_repo_get_with_for_update_arg(
     statement.options.return_value = statement
     statement.execution_options.return_value = statement
     statement.with_for_update.return_value = statement
+    statement.where.return_value = statement  # Required for composite PK path
     mock_repo.statement = statement
 
     mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
     mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
     mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
     mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    mocker.patch.object(mock_repo, "_build_pk_filter", return_value=MagicMock())  # Mock the PK filter
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = MagicMock()
     mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
