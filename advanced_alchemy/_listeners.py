@@ -55,23 +55,6 @@ def get_file_tracker(
     return tracker
 
 
-def _get_session_tracker(
-    create: bool = True, session: Optional["Session"] = None
-) -> Optional["FileObjectSessionTracker"]:
-    """Legacy helper for session tracker retrieval.
-
-    Args:
-        create: Whether to create a new tracker if one doesn't exist.
-        session: The SQLAlchemy session instance.
-
-    Returns:
-        The file tracker or None if not available.
-    """
-    if session is None:
-        return None
-    return get_file_tracker(session, create=create)
-
-
 logger = logging.getLogger("advanced_alchemy")
 
 
@@ -294,13 +277,6 @@ class FileObjectInspector:
                 elif isinstance(original_value, (list, MutableList)):
                     for item in original_value:  # pyright: ignore
                         tracker.add_pending_delete(cast("FileObject", item))
-
-
-def _inspect_attribute_changes(
-    instance: Any,
-    tracker: "FileObjectSessionTracker",
-) -> None:
-    FileObjectInspector.inspect_instance(instance, tracker)
 
 
 class BaseFileObjectListener:  # pragma: no cover
@@ -674,6 +650,42 @@ class AsyncCacheListener(BaseCacheListener):
             task = asyncio.create_task(tracker.commit_async())
             _active_cache_operations.add(task)
             task.add_done_callback(_active_cache_operations.discard)
+            session.info.pop(_CACHE_TRACKER_KEY, None)
+
+    @classmethod
+    def after_rollback(cls, session: "Session") -> None:
+        """Discard pending cache invalidations after a rollback."""
+        tracker = get_cache_tracker(session, create=False)
+        if tracker:
+            tracker.rollback()
+            session.info.pop(_CACHE_TRACKER_KEY, None)
+
+
+class CacheInvalidationListener(BaseCacheListener):
+    """Unified cache invalidation listener for sync and async contexts.
+
+    This class preserves the historical behavior of choosing sync vs async
+    invalidation based on whether a running event loop is detected.
+    """
+
+    @classmethod
+    def after_commit(cls, session: "Session") -> None:
+        """Process cache invalidations after a successful commit."""
+        if not cls._is_listener_enabled(session):
+            return
+
+        tracker = get_cache_tracker(session, create=False)
+        if tracker:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop: sync usage, perform invalidation inline.
+                tracker.commit()
+            else:
+                # Running loop: schedule async invalidation so commit doesn't block.
+                task = asyncio.create_task(tracker.commit_async())
+                _active_cache_operations.add(task)
+                task.add_done_callback(_active_cache_operations.discard)
             session.info.pop(_CACHE_TRACKER_KEY, None)
 
     @classmethod
