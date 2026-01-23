@@ -69,6 +69,19 @@ class NoValue:
 NO_VALUE = NoValue()
 
 
+def is_async_context() -> bool:
+    """Check if we are currently in an async context (event loop is running).
+
+    Returns:
+        True if an event loop is running, False otherwise.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
 class CapacityLimiter:
     """Limits the number of concurrent operations using a semaphore."""
 
