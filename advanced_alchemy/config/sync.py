@@ -142,7 +142,10 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             self.session_maker = super().create_session_maker()
 
         if isinstance(self.session_maker, sessionmaker):
-            session_maker = cast(sessionmaker[Session], self.session_maker)
+            session_maker = cast(
+                "sessionmaker[Session]",
+                self.session_maker,  # pyright: ignore[reportUnknownMemberType]
+            )
             if self.enable_file_object_listener:
                 event.listen(session_maker, "before_flush", SyncFileObjectListener.before_flush)
                 event.listen(session_maker, "after_commit", SyncFileObjectListener.after_commit)
@@ -152,8 +155,10 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             event.listen(session_maker, "after_commit", SyncCacheListener.after_commit)
             event.listen(session_maker, "after_rollback", SyncCacheListener.after_rollback)
 
-        assert self.session_maker is not None
-        return self.session_maker
+        if self.session_maker is None:  # pyright: ignore
+            msg = "Session maker was not initialized."  # type: ignore[unreachable]
+            raise ImproperConfigurationError(msg)
+        return cast("sessionmaker[Session]", self.session_maker)  # pyright: ignore[reportUnknownMemberType]
 
     @contextmanager
     def get_session(self) -> "Generator[Session, None, None]":

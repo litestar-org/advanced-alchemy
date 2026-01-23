@@ -155,10 +155,13 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             )
             self.session_maker = routing_maker
         else:
-            self.session_maker = super().create_session_maker()
+            self.session_maker = cast("Callable[[], AsyncSession]", super().create_session_maker())  # pyright: ignore
 
         if isinstance(self.session_maker, async_sessionmaker):
-            session_maker = cast(async_sessionmaker[AsyncSession], self.session_maker)
+            session_maker = cast(
+                "async_sessionmaker[AsyncSession]",
+                self.session_maker,  # pyright: ignore[reportUnknownMemberType]
+            )
             if self.enable_file_object_listener:
                 event.listen(session_maker, "before_flush", AsyncFileObjectListener.before_flush)
                 event.listen(session_maker, "after_commit", AsyncFileObjectListener.after_commit)
@@ -168,8 +171,10 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             event.listen(session_maker, "after_commit", AsyncCacheListener.after_commit)
             event.listen(session_maker, "after_rollback", AsyncCacheListener.after_rollback)
 
-        assert self.session_maker is not None
-        return self.session_maker
+        if self.session_maker is None:  # pyright: ignore
+            msg = "Session maker was not initialized."  # type: ignore[unreachable]
+            raise ImproperConfigurationError(msg)
+        return cast("async_sessionmaker[AsyncSession]", self.session_maker)  # pyright: ignore[reportUnknownMemberType]
 
     @asynccontextmanager
     async def get_session(
