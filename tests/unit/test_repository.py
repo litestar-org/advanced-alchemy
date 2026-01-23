@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import decimal
 from collections.abc import AsyncGenerator, Collection, Generator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 from uuid import uuid4
@@ -13,10 +14,10 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, column
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
@@ -33,7 +34,12 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
 )
-from advanced_alchemy.repository._util import column_has_defaults, model_from_dict
+from advanced_alchemy.repository._util import (
+    _build_list_cache_key,
+    _normalize_cache_key_value,
+    column_has_defaults,
+    model_from_dict,
+)
 from advanced_alchemy.service.typing import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -1456,6 +1462,73 @@ def test_column_object_with_no_default_attributes() -> None:
 
     # Should return False since no default attributes are present
     assert column_has_defaults(minimal_column) is False
+
+
+def test_normalize_cache_key_value_handles_structures() -> None:
+    """Normalize cache key values for common structures."""
+
+    @dataclass
+    class Payload:
+        name: str
+        ids: set[int]
+
+    class CacheBase(DeclarativeBase):
+        pass
+
+    class CacheModel(CacheBase):
+        __tablename__ = "cache_model"
+
+        id: Mapped[int] = mapped_column(primary_key=True)
+
+    normalized = _normalize_cache_key_value(Payload(name="alpha", ids={2, 1}))
+    assert normalized == {"name": "alpha", "ids": [1, 2]}
+    assert _normalize_cache_key_value(CacheModel.id) == {"__attr__": "id"}
+    assert _normalize_cache_key_value(column("name")) == {"__sql__": "name"}
+    assert "__repr__" in _normalize_cache_key_value(object())
+
+
+def test_build_list_cache_key_stable_for_unordered_inputs() -> None:
+    """Cache keys should remain stable for unordered inputs."""
+    filters = [CollectionFilter(field_name="id", values={2, 1})]
+    key_a = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=filters,
+        kwargs={"meta": {"b": 2, "a": 1}},
+        order_by=[("name", False)],
+        execution_options={"stream_results": True},
+        uniquify=True,
+    )
+    key_b = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=[CollectionFilter(field_name="id", values={1, 2})],
+        kwargs={"meta": {"a": 1, "b": 2}},
+        order_by=[("name", False)],
+        execution_options={"stream_results": True},
+        uniquify=True,
+    )
+
+    assert key_a is not None
+    assert key_a == key_b
+
+
+def test_build_list_cache_key_returns_none_for_raw_filters() -> None:
+    """Raw SQLAlchemy expressions should skip caching."""
+    key = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=[column("id") == 1],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+    )
+
+    assert key is None
 
 
 def test_model_from_dict_includes_relationship_attributes() -> None:

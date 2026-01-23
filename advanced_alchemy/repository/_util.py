@@ -1,5 +1,10 @@
-from collections.abc import Iterable, Sequence
-from typing import Any, Literal, Optional, Protocol, Union, cast, overload
+# ruff: noqa: PLR0911
+import dataclasses
+import datetime
+import decimal
+import hashlib
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Final, Literal, Optional, Protocol, Union, cast, overload
 
 from sqlalchemy import (
     Delete,
@@ -26,6 +31,7 @@ from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.elements import Label
 from typing_extensions import TypeAlias
 
+from advanced_alchemy._serialization import encode_complex_type, encode_json
 from advanced_alchemy.base import ModelProtocol
 from advanced_alchemy.exceptions import ErrorMessages
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
@@ -38,6 +44,19 @@ from advanced_alchemy.filters import (
 from advanced_alchemy.repository._typing import arrays_equal, is_numpy_array
 from advanced_alchemy.repository.typing import ModelT, OrderingPair
 
+DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
+    int,
+    float,
+    str,
+    bool,
+    bytes,
+    decimal.Decimal,
+    datetime.date,
+    datetime.datetime,
+    datetime.time,
+    datetime.timedelta,
+}
+
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
     _AbstractLoad,
@@ -49,6 +68,125 @@ SingleLoad: TypeAlias = Union[
 LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
 ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
 LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
+
+
+def _sort_kv_by_key_str(kv: tuple[object, object]) -> str:
+    return str(kv[0])
+
+
+def _sort_normalized_value(value: Any) -> str:
+    return encode_json(_canonicalize_cache_key_value(value))
+
+
+def _normalize_cache_key_value(value: Any) -> Any:
+    """Normalize values into a deterministic JSON-serializable form.
+
+    Used for list/list_and_count cache keys.
+    """
+    if value is None or isinstance(value, (int, float, str, bool)):
+        return value
+
+    # Try shared encoder first for scalars (datetime, uuid, bytes, etc)
+    if (
+        not isinstance(value, (list, tuple, set, frozenset, dict))
+        and (encoded := encode_complex_type(value)) is not None
+    ):
+        return encoded
+
+    if isinstance(value, set):
+        value_set = cast("set[Any]", value)  # type: ignore[redundant-cast]
+        normalized = [_normalize_cache_key_value(v) for v in value_set]
+        normalized.sort(key=_sort_normalized_value)
+        return normalized
+    if isinstance(value, (list, tuple)):
+        value_seq = cast("Sequence[Any]", value)
+        return [_normalize_cache_key_value(v) for v in value_seq]
+    if isinstance(value, dict):
+        value_dict = cast("dict[object, object]", value)
+        normalized_dict: dict[str, Any] = {}
+        for k, v in sorted(value_dict.items(), key=_sort_kv_by_key_str):
+            normalized_dict[str(k)] = _normalize_cache_key_value(v)
+        return normalized_dict
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):  # pyright: ignore[reportUnknownArgumentType]
+        return _normalize_cache_key_value(dataclasses.asdict(value))
+    if isinstance(value, InstrumentedAttribute):
+        return {"__attr__": value.key}
+    if isinstance(value, ColumnElement):
+        # Safe fallback for non-dataclass expressions in ordering/kwargs.
+        value_expr = cast("ColumnElement[Any]", value)  # type: ignore[redundant-cast]
+        return {"__sql__": str(value_expr)}
+
+    return {"__repr__": repr(value)}  # pyright: ignore[reportUnknownArgumentType]
+
+
+def _canonicalize_cache_key_value(value: Any) -> Any:
+    """Convert dict-like objects into a stable, ordered representation."""
+    if isinstance(value, Mapping):
+        value_map = cast("Mapping[object, object]", value)
+        return [
+            [str(k), _canonicalize_cache_key_value(v)] for k, v in sorted(value_map.items(), key=_sort_kv_by_key_str)
+        ]
+    if isinstance(value, list):
+        value_list = cast("list[Any]", value)  # type: ignore[redundant-cast]
+        return [_canonicalize_cache_key_value(v) for v in value_list]
+    return value
+
+
+def _build_list_cache_key(  # pyright: ignore[reportUnusedFunction]
+    *,
+    model_name: str,
+    version_token: str,
+    method: str,
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+    kwargs: dict[str, Any],
+    order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+    execution_options: dict[str, Any],
+    uniquify: bool,
+    count_with_window_function: Optional[bool] = None,
+) -> Optional[str]:
+    """Build a stable cache key for list/list_and_count operations.
+
+    Returns None if the query specification includes non-cacheable filter
+    expressions (e.g., raw SQLAlchemy boolean expressions).
+    """
+    normalized_filters: list[dict[str, Any]] = []
+    for filter_ in filters:
+        if isinstance(filter_, ColumnElement):
+            return None
+        normalized_filters.append({"type": filter_.__class__.__name__, "data": _normalize_cache_key_value(filter_)})
+
+    normalized_order_by: Optional[list[Any]] = None
+    if order_by is not None:
+        order_items = order_by if isinstance(order_by, list) else [order_by]
+        normalized_order_by = []
+        for item in order_items:
+            if isinstance(item, UnaryExpression):
+                normalized_order_by.append({"expr": str(item)})
+            else:
+                col, desc = item
+                normalized_order_by.append({"col": _normalize_cache_key_value(col), "desc": bool(desc)})
+
+    payload: dict[str, Any] = {
+        "method": method,
+        "model": model_name,
+        "version": version_token,
+        "filters": normalized_filters,
+        "kwargs": _normalize_cache_key_value(kwargs),
+        "order_by": normalized_order_by,
+        "execution_options": _normalize_cache_key_value(execution_options),
+        "uniquify": uniquify,
+    }
+    if count_with_window_function is not None:
+        payload["count_with_window_function"] = bool(count_with_window_function)
+
+    try:
+        encoded = encode_json(_canonicalize_cache_key_value(payload)).encode("utf-8")
+    except TypeError:  # pragma: no cover
+        return None
+
+    digest = hashlib.sha256(encoded).hexdigest()
+    return f"{model_name}:{method}:{digest}"
+
 
 OrderByT: TypeAlias = Union[
     str,
