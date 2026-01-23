@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 from sqlalchemy import event
 from sqlalchemy.inspection import inspect
 
+from advanced_alchemy.utils.deprecation import warn_deprecation
+from advanced_alchemy.utils.sync_tools import is_async_context as _is_async_context_util
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session, UOWTransaction, scoped_session
@@ -79,22 +82,34 @@ def _get_session_tracker(
 logger = logging.getLogger("advanced_alchemy")
 
 
-def set_async_context(is_async: bool = True) -> Optional[contextvars.Token[bool]]:
+def set_async_context(is_async: bool = True) -> None:  # noqa: ARG001
     """Set the async context flag.
 
     .. deprecated:: 2.0.0
         This function is no longer needed as listeners are now explicitly sync or async.
     """
-    return _is_async_context.set(is_async)
+    warn_deprecation(
+        version="2.0.0",
+        deprecated_name="set_async_context",
+        kind="function",
+        removal_in="3.0.0",
+        info="Listeners are now explicitly sync or async, so this context flag is no longer needed.",
+    )
 
 
-def reset_async_context(token: contextvars.Token[bool]) -> None:
+def reset_async_context(token: Any) -> None:  # noqa: ARG001
     """Reset the async context flag using the provided token.
 
     .. deprecated:: 2.0.0
         This function is no longer needed as listeners are now explicitly sync or async.
     """
-    _is_async_context.reset(token)
+    warn_deprecation(
+        version="2.0.0",
+        deprecated_name="reset_async_context",
+        kind="function",
+        removal_in="3.0.0",
+        info="Listeners are now explicitly sync or async, so this context flag is no longer needed.",
+    )
 
 
 def is_async_context() -> bool:
@@ -103,7 +118,15 @@ def is_async_context() -> bool:
     .. deprecated:: 2.0.0
         This function is no longer needed as listeners are now explicitly sync or async.
     """
-    return _is_async_context.get()
+    warn_deprecation(
+        version="2.0.0",
+        deprecated_name="is_async_context",
+        kind="function",
+        removal_in="3.0.0",
+        alternative="advanced_alchemy.utils.sync_tools.is_async_context",
+        info="This function in `_listeners` is deprecated. Use the utility in `sync_tools` or relying on explicit listener classes.",
+    )
+    return _is_async_context_util()
 
 
 class FileObjectInspector:
