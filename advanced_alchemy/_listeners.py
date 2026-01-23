@@ -2,6 +2,7 @@
 """Application ORM configuration."""
 
 import asyncio
+import datetime
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
@@ -12,12 +13,12 @@ from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.sync_tools import is_async_context as _is_async_context_util
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
     from sqlalchemy.orm import Session, UOWTransaction, scoped_session
     from sqlalchemy.orm.state import InstanceState
 
     from advanced_alchemy.cache import CacheManager
-    from advanced_alchemy.types.file_object import FileObjectSessionTracker, StorageRegistry
+    from advanced_alchemy.types.file_object import FileObject, FileObjectSessionTracker, StorageRegistry
 
 _active_file_operations: set[asyncio.Task[Any]] = set()
 """Stores active file operations to prevent them from being garbage collected."""
@@ -154,7 +155,6 @@ class FileObjectInspector:
     @staticmethod
     def handle_single_attribute(attr_state: Any, tracker: "FileObjectSessionTracker") -> None:
         """Handle inspection of a single FileObject attribute."""
-        from advanced_alchemy.types.file_object import FileObject
 
         history = attr_state.history
         current_value: Optional[FileObject] = history.added[0] if history.added else None
@@ -187,9 +187,7 @@ class FileObjectInspector:
         items_to_save: dict[FileObject, Any] = {}
 
         current_list_instance: Optional[MutableList[FileObject]] = getattr(instance, attr_name, None)
-        original_list_from_history: Optional[MutableList[FileObject]] = (
-            history.deleted[0] if history.deleted else None
-        )
+        original_list_from_history: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
         current_list_from_history: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
 
         # 1. Deletions from Mutations (Primary source: _pending_removed set)
@@ -281,7 +279,7 @@ class FileObjectInspector:
         tracker: "FileObjectSessionTracker",
     ) -> None:
         """Process an instance that is being deleted from the session."""
-        from advanced_alchemy.types.file_object import FileObject, StoredObject
+        from advanced_alchemy.types.file_object import StoredObject
         from advanced_alchemy.types.mutables import MutableList
 
         for attr_name, attr in mapper.column_attrs.items():
@@ -449,7 +447,7 @@ class AsyncFileObjectListener(BaseFileObjectListener):
         t.add_done_callback(lambda _: _active_file_operations.remove(t))
 
 
-class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):  # type: ignore[misc]
+class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):
     """Legacy FileObject listener that handles both sync and async via runtime checks.
 
     .. deprecated:: 1.9.0
@@ -687,46 +685,33 @@ class AsyncCacheListener(BaseCacheListener):
             session.info.pop(_CACHE_TRACKER_KEY, None)
 
 
-class CacheInvalidationListener(SyncCacheListener, AsyncCacheListener):  # type: ignore[misc]
-    """Legacy cache invalidation listener that handles both sync and async via runtime checks.
-
-    .. deprecated:: 1.9.0
-        Use :class:`SyncCacheListener` or :class:`AsyncCacheListener` instead.
-    """
-
-    @classmethod
-    def after_commit(cls, session: "Session") -> None:
-        if is_async_context():
-            AsyncCacheListener.after_commit(session)
-        else:
-            SyncCacheListener.after_commit(session)
-
-    @classmethod
-    def after_rollback(cls, session: "Session") -> None:
-        if is_async_context():
-            AsyncCacheListener.after_rollback(session)
-        else:
-            SyncCacheListener.after_rollback(session)
-
-
 def setup_cache_listeners() -> None:
     """Register cache invalidation event listeners globally.
 
-    .. deprecated:: 1.9.0
-        This function registers listeners globally on the Session class.
-        Prefer using scoped listeners via SQLAlchemyConfig.
+    This registers both sync and async listeners on their respective session types.
+    For more control, prefer using scoped listeners via SQLAlchemyConfig.
     """
     from sqlalchemy.event import contains
+    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    listeners = {
-        "after_commit": CacheInvalidationListener.after_commit,
-        "after_rollback": CacheInvalidationListener.after_rollback,
+    # Register sync listeners on Session
+    sync_listeners = {
+        "after_commit": SyncCacheListener.after_commit,
+        "after_rollback": SyncCacheListener.after_rollback,
     }
-
-    for event_name, listener_func in listeners.items():
+    for event_name, listener_func in sync_listeners.items():
         if not contains(Session, event_name, listener_func):
             event.listen(Session, event_name, listener_func)
+
+    # Register async listeners on AsyncSession
+    async_listeners = {
+        "after_commit": AsyncCacheListener.after_commit,
+        "after_rollback": AsyncCacheListener.after_rollback,
+    }
+    for event_name, listener_func in async_listeners.items():
+        if not contains(AsyncSession, event_name, listener_func):
+            event.listen(AsyncSession, event_name, listener_func)
 
     logger.debug("Cache invalidation listeners registered")
 

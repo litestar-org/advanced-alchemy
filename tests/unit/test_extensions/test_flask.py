@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import cast
@@ -141,7 +142,15 @@ def test_async_extension_init(setup_database: Path) -> None:
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session("async")
         assert isinstance(session, AsyncSession)
-        assert is_async_context() is True
+        # Note: is_async_context() is deprecated since v1.9.0. The actual return value
+        # depends on whether an event loop is running in the calling thread.
+        # Flask's portal provider runs async in a separate thread, so the calling thread
+        # may not have an event loop. We just verify the deprecation warning is raised.
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            is_async_context()
+            assert len(w) >= 1
+            assert any("deprecated" in str(warning.message).lower() for warning in w)
         extension.portal_provider.stop()
 
 
