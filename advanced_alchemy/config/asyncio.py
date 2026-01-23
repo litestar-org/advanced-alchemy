@@ -155,7 +155,7 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             )
             self.session_maker = routing_maker
         else:
-            self.session_maker = cast("Callable[[], AsyncSession]", super().create_session_maker())  # pyright: ignore
+            self.session_maker = cast("Callable[[], AsyncSession]", super().create_session_maker())  # type: ignore[redundant-cast]
 
         if isinstance(self.session_maker, async_sessionmaker):
             session_maker = cast(
