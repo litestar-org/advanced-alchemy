@@ -1,5 +1,4 @@
 # ruff: noqa: C901
-import inspect as stdlib_inspect
 import logging
 from collections.abc import Collection, Generator
 from collections.abc import Set as AbstractSet
@@ -297,7 +296,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     def get_property_fields(cls, model_type: "type[DeclarativeBase]") -> "dict[str, FieldDefinition]":
         """Get fields defined as @property or @cached_property on the model.
 
-        Uses inspect.getmembers() to detect properties from the model class and mixins.
+        Uses the model class dictionary to detect properties from the model class and its MRO.
         Properties are marked read-only; setter support is not implemented.
 
         Args:
@@ -310,32 +309,32 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         sqla_internal_properties = {"awaitable_attrs", "registry", "metadata"}
 
         properties: dict[str, FieldDefinition] = {}
-        for name, member in stdlib_inspect.getmembers(
-            model_type, predicate=lambda x: isinstance(x, (property, cached_property))
-        ):
-            if name in sqla_internal_properties:
-                continue
-
-            if isinstance(member, cached_property):
-                func = member.func
-            elif isinstance(member, property):
-                if member.fget is None:
+        # Iterate over the MRO to find all properties, starting from the model itself
+        # and moving up through mixins and base classes.
+        for cls_ in reversed(model_type.__mro__):
+            for name, member in cls_.__dict__.items():
+                if name.startswith("_") or name in sqla_internal_properties or name in properties:
                     continue
-                func = member.fget
-            else:
-                continue
 
-            try:
-                sig = ParsedSignature.from_fn(func, namespace)
-                properties[name] = replace(sig.return_type, name=name)
-            except (AttributeError, TypeError, ValueError) as e:
-                logger.debug(
-                    "could not parse type hint for property %s.%s: %s, using Any type",
-                    model_type.__name__,
-                    name,
-                    e,
-                )
-                properties[name] = FieldDefinition.from_annotation(Any, name=name)
+                if isinstance(member, (property, cached_property)):
+                    if isinstance(member, cached_property):
+                        func = member.func
+                    else:
+                        if member.fget is None:
+                            continue
+                        func = member.fget
+
+                    try:
+                        sig = ParsedSignature.from_fn(func, namespace)
+                        properties[name] = replace(sig.return_type, name=name)
+                    except (AttributeError, TypeError, ValueError) as e:
+                        logger.debug(
+                            "could not parse type hint for property %s.%s: %s, using Any type",
+                            model_type.__name__,
+                            name,
+                            e,
+                        )
+                        properties[name] = FieldDefinition.from_annotation(Any, name=name)
 
         return properties
 

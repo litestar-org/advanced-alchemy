@@ -6,176 +6,179 @@ import datetime
 from decimal import Decimal
 from uuid import UUID
 
-import pytest
+from advanced_alchemy._serialization import (
+    _decode_typed_marker,
+    decode_complex_type,
+    decode_json,
+    encode_complex_type,
+    encode_json,
+)
 
-from advanced_alchemy._serialization import decode_json, encode_json
-from advanced_alchemy.cache.serializers import _decode_special_types, _json_decoder, _json_encoder
 
-
-def test_json_encoder_datetime() -> None:
+def test_encode_complex_type_datetime() -> None:
     """Test encoding datetime objects."""
     dt = datetime.datetime(2025, 12, 14, 10, 30, 0)
 
-    result = _json_encoder(dt)
+    result = encode_complex_type(dt)
 
     assert result == {"__type__": "datetime", "value": "2025-12-14T10:30:00"}
 
 
-def test_json_encoder_date() -> None:
+def test_encode_complex_type_date() -> None:
     """Test encoding date objects."""
     d = datetime.date(2025, 12, 14)
 
-    result = _json_encoder(d)
+    result = encode_complex_type(d)
 
     assert result == {"__type__": "date", "value": "2025-12-14"}
 
 
-def test_json_encoder_time() -> None:
+def test_encode_complex_type_time() -> None:
     """Test encoding time objects."""
     t = datetime.time(10, 30, 45)
 
-    result = _json_encoder(t)
+    result = encode_complex_type(t)
 
     assert result == {"__type__": "time", "value": "10:30:45"}
 
 
-def test_json_encoder_timedelta() -> None:
+def test_encode_complex_type_timedelta() -> None:
     """Test encoding timedelta objects."""
     td = datetime.timedelta(hours=2, minutes=30)
 
-    result = _json_encoder(td)
+    result = encode_complex_type(td)
 
     assert result == {"__type__": "timedelta", "value": 9000.0}
 
 
-def test_json_encoder_decimal() -> None:
+def test_encode_complex_type_decimal() -> None:
     """Test encoding Decimal objects."""
     dec = Decimal("123.45")
 
-    result = _json_encoder(dec)
+    result = encode_complex_type(dec)
 
     assert result == {"__type__": "decimal", "value": "123.45"}
 
 
-def test_json_encoder_bytes() -> None:
+def test_encode_complex_type_bytes() -> None:
     """Test encoding bytes objects."""
     b = b"\x01\x02\xff"
 
-    result = _json_encoder(b)
+    result = encode_complex_type(b)
 
     assert result == {"__type__": "bytes", "value": "0102ff"}
 
 
-def test_json_encoder_uuid() -> None:
+def test_encode_complex_type_uuid() -> None:
     """Test encoding UUID objects."""
     u = UUID("12345678-1234-5678-1234-567812345678")
 
-    result = _json_encoder(u)
+    result = encode_complex_type(u)
 
     assert result == {"__type__": "uuid", "value": "12345678-1234-5678-1234-567812345678"}
 
 
-def test_json_encoder_set() -> None:
+def test_encode_complex_type_set() -> None:
     """Test encoding set objects."""
     s = {1, 2, 3}
 
-    result = _json_encoder(s)
+    result = encode_complex_type(s)
 
     assert result["__type__"] == "set"
     assert set(result["value"]) == {1, 2, 3}
 
 
-def test_json_encoder_unsupported_type() -> None:
-    """Test encoding unsupported type raises TypeError."""
-    with pytest.raises(TypeError, match=r"Object of type.*is not JSON serializable"):
-        _json_encoder(lambda: None)
+def test_encode_complex_type_unsupported_type() -> None:
+    """Test encoding unsupported type returns None."""
+    result = encode_complex_type(lambda: None)
+    assert result is None
 
 
-def test_json_decoder_datetime() -> None:
+def test_decode_typed_marker_datetime() -> None:
     """Test decoding datetime objects."""
     data = {"__type__": "datetime", "value": "2025-12-14T10:30:00"}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, datetime.datetime)
     assert result == datetime.datetime(2025, 12, 14, 10, 30, 0)
 
 
-def test_json_decoder_date() -> None:
+def test_decode_typed_marker_date() -> None:
     """Test decoding date objects."""
     data = {"__type__": "date", "value": "2025-12-14"}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, datetime.date)
     assert result == datetime.date(2025, 12, 14)
 
 
-def test_json_decoder_time() -> None:
+def test_decode_typed_marker_time() -> None:
     """Test decoding time objects."""
     data = {"__type__": "time", "value": "10:30:45"}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, datetime.time)
     assert result == datetime.time(10, 30, 45)
 
 
-def test_json_decoder_timedelta() -> None:
+def test_decode_typed_marker_timedelta() -> None:
     """Test decoding timedelta objects."""
     data = {"__type__": "timedelta", "value": 9000.0}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, datetime.timedelta)
     assert result == datetime.timedelta(hours=2, minutes=30)
 
 
-def test_json_decoder_decimal() -> None:
+def test_decode_typed_marker_decimal() -> None:
     """Test decoding Decimal objects."""
     data = {"__type__": "decimal", "value": "123.45"}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, Decimal)
     assert result == Decimal("123.45")
 
 
-def test_json_decoder_bytes() -> None:
+def test_decode_typed_marker_bytes() -> None:
     """Test decoding bytes objects."""
     data = {"__type__": "bytes", "value": "0102ff"}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, bytes)
     assert result == b"\x01\x02\xff"
 
 
-def test_json_decoder_uuid() -> None:
+def test_decode_typed_marker_uuid() -> None:
     """Test decoding UUID objects."""
     data = {"__type__": "uuid", "value": "12345678-1234-5678-1234-567812345678"}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, UUID)
     assert result == UUID("12345678-1234-5678-1234-567812345678")
 
 
-def test_json_decoder_set() -> None:
+def test_decode_typed_marker_set() -> None:
     """Test decoding set objects."""
     data = {"__type__": "set", "value": [1, 2, 3]}
 
-    result = _json_decoder(data)
+    result = _decode_typed_marker(data)
 
     assert isinstance(result, set)
     assert result == {1, 2, 3}
 
 
-def test_json_decoder_non_special_type() -> None:
+def test_decode_complex_type_non_special_type() -> None:
     """Test decoding non-special type returns original dict."""
     data = {"foo": "bar"}
 
-    result = _json_decoder(data)
+    result = decode_complex_type(data)
 
     assert result == {"foo": "bar"}
 
@@ -195,9 +198,9 @@ def test_roundtrip_json_encoding() -> None:
 
     encoded: dict[str, object] = {}
     for k, v in test_data.items():
-        try:
-            encoded[k] = _json_encoder(v)
-        except TypeError:
+        if (enc := encode_complex_type(v)) is not None:
+            encoded[k] = enc
+        else:
             encoded[k] = v
 
     # Encode via AA serializer
@@ -205,7 +208,7 @@ def test_roundtrip_json_encoding() -> None:
 
     # Decode via AA parser + our special-type walker
     raw = decode_json(json_str)
-    result = _decode_special_types(raw)
+    result = decode_complex_type(raw)
 
     assert result["datetime"] == test_data["datetime"]
     assert result["date"] == test_data["date"]
