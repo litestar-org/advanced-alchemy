@@ -202,17 +202,6 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             self.metadata = metadata_registry.get(self.bind_key)
         else:
             metadata_registry.set(self.bind_key, self.metadata)
-        if self.enable_touch_updated_timestamp_listener:
-            from sqlalchemy import event
-            from sqlalchemy.orm import Session
-
-            from advanced_alchemy._listeners import touch_updated_timestamp
-
-            event.listen(Session, "before_flush", touch_updated_timestamp)
-        if self.enable_file_object_listener:
-            from advanced_alchemy._listeners import setup_file_object_listeners
-
-            setup_file_object_listeners()
 
         # Store file_object_raise_on_error in session_config.info
         # Ensure session_config.info is a dict (convert from Empty if needed)

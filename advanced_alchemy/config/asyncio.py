@@ -136,6 +136,14 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         if self.session_maker:
             return self.session_maker
 
+        from sqlalchemy import event
+
+        from advanced_alchemy._listeners import (
+            AsyncCacheListener,
+            AsyncFileObjectListener,
+            touch_updated_timestamp,
+        )
+
         # Use routing session maker if routing is configured
         if self.routing_config is not None:
             from advanced_alchemy.routing import RoutingAsyncSessionMaker
@@ -146,10 +154,20 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
                 session_config=self.session_config_dict,
             )
             self.session_maker = routing_maker
-            return routing_maker
+        else:
+            self.session_maker = super().create_session_maker()
 
-        # Default behavior from parent
-        return super().create_session_maker()
+        if isinstance(self.session_maker, async_sessionmaker):
+            if self.enable_file_object_listener:
+                event.listen(self.session_maker, "before_flush", AsyncFileObjectListener.before_flush)
+                event.listen(self.session_maker, "after_commit", AsyncFileObjectListener.after_commit)
+                event.listen(self.session_maker, "after_rollback", AsyncFileObjectListener.after_rollback)
+            if self.enable_touch_updated_timestamp_listener:
+                event.listen(self.session_maker, "before_flush", touch_updated_timestamp)
+            event.listen(self.session_maker, "after_commit", AsyncCacheListener.after_commit)
+            event.listen(self.session_maker, "after_rollback", AsyncCacheListener.after_rollback)
+
+        return self.session_maker
 
     @asynccontextmanager
     async def get_session(
@@ -161,6 +179,6 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             AsyncGenerator[AsyncSession, None]: An async context manager that yields an AsyncSession.
         """
         session_maker = self.create_session_maker()
-        set_async_context(True)  # Set context for standalone usage
+        set_async_context(True)
         async with session_maker() as session:
             yield session
