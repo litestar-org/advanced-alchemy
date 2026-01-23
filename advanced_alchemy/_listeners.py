@@ -77,14 +77,14 @@ logger = logging.getLogger("advanced_alchemy")
 def set_async_context(is_async: bool = True) -> None:  # noqa: ARG001
     """Set the async context flag.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         This function is no longer needed as listeners are now explicitly sync or async.
     """
     warn_deprecation(
-        version="2.0.0",
+        version="1.9.0",
         deprecated_name="set_async_context",
         kind="function",
-        removal_in="3.0.0",
+        removal_in="2.0.0",
         info="Listeners are now explicitly sync or async, so this context flag is no longer needed.",
     )
 
@@ -92,14 +92,14 @@ def set_async_context(is_async: bool = True) -> None:  # noqa: ARG001
 def reset_async_context(token: Any) -> None:  # noqa: ARG001
     """Reset the async context flag using the provided token.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         This function is no longer needed as listeners are now explicitly sync or async.
     """
     warn_deprecation(
-        version="2.0.0",
+        version="1.9.0",
         deprecated_name="reset_async_context",
         kind="function",
-        removal_in="3.0.0",
+        removal_in="2.0.0",
         info="Listeners are now explicitly sync or async, so this context flag is no longer needed.",
     )
 
@@ -107,14 +107,14 @@ def reset_async_context(token: Any) -> None:  # noqa: ARG001
 def is_async_context() -> bool:
     """Check if we're in an async context.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         This function is no longer needed as listeners are now explicitly sync or async.
     """
     warn_deprecation(
-        version="2.0.0",
+        version="1.9.0",
         deprecated_name="is_async_context",
         kind="function",
-        removal_in="3.0.0",
+        removal_in="2.0.0",
         alternative="advanced_alchemy.utils.sync_tools.is_async_context",
         info="This function in `_listeners` is deprecated. Use the utility in `sync_tools` or relying on explicit listener classes.",
     )
@@ -452,7 +452,7 @@ class AsyncFileObjectListener(BaseFileObjectListener):
 class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):  # type: ignore[misc]
     """Legacy FileObject listener that handles both sync and async via runtime checks.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         Use :class:`SyncFileObjectListener` or :class:`AsyncFileObjectListener` instead.
     """
 
@@ -474,7 +474,7 @@ class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):  # ty
 def setup_file_object_listeners(registry: Optional["StorageRegistry"] = None) -> None:  # noqa: ARG001
     """Registers the FileObject event listeners globally.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         This function registers listeners globally on the Session class.
         Prefer using scoped listeners via SQLAlchemyConfig.
     """
@@ -690,7 +690,7 @@ class AsyncCacheListener(BaseCacheListener):
 class CacheInvalidationListener(SyncCacheListener, AsyncCacheListener):  # type: ignore[misc]
     """Legacy cache invalidation listener that handles both sync and async via runtime checks.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         Use :class:`SyncCacheListener` or :class:`AsyncCacheListener` instead.
     """
 
@@ -712,7 +712,7 @@ class CacheInvalidationListener(SyncCacheListener, AsyncCacheListener):  # type:
 def setup_cache_listeners() -> None:
     """Register cache invalidation event listeners globally.
 
-    .. deprecated:: 2.0.0
+    .. deprecated:: 1.9.0
         This function registers listeners globally on the Session class.
         Prefer using scoped listeners via SQLAlchemyConfig.
     """
