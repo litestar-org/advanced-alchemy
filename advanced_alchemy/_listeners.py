@@ -2,8 +2,6 @@
 """Application ORM configuration."""
 
 import asyncio
-import contextvars
-import datetime
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
@@ -28,12 +26,6 @@ _active_cache_operations: set[asyncio.Task[Any]] = set()
 
 _FILE_TRACKER_KEY = "_aa_file_tracker"
 _CACHE_TRACKER_KEY = "_aa_cache_tracker"
-
-# Context variable to track if we're in an async context (legacy compatibility)
-_is_async_context: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "_is_async_context",
-    default=False,
-)
 
 
 def get_file_tracker(
