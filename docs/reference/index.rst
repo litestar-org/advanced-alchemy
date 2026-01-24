@@ -16,6 +16,7 @@ Core Components
     base
     mixins/index
     config/index
+    cache
     operations
     types
     exceptions
@@ -31,6 +32,7 @@ Repository & Services
     repository
     filters
     service
+    routing
 
 Framework Integration
 ---------------------

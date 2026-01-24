@@ -2,12 +2,12 @@
 Database Seeding and Fixture Loading
 ====================================
 
-Advanced Alchemy provides utilities for seeding your database with initial data through JSON fixtures. This documentation will show you how to create and load fixtures in both synchronous and asynchronous applications.
+Advanced Alchemy provides utilities for seeding your database with initial data through JSON or CSV fixtures. This documentation will show you how to create and load fixtures in both synchronous and asynchronous applications.
 
 Creating Fixtures
 -----------------
 
-Fixtures in Advanced Alchemy are simple JSON files that contain the data you want to seed. Each fixture file should:
+Fixtures in Advanced Alchemy are JSON or CSV files that contain the data you want to seed. Each fixture file should:
 
 1. Contain a JSON object or a JSON array of objects, where each object represents a row in your database table
 2. Include all required fields for your model
@@ -506,6 +506,7 @@ Tips for Efficient Seeding
 - Use ``upsert_many()`` to update your data if you are updating prices for example.
 - You can use the database seeding from your cli, app startup or any route.
 - For large datasets, consider chunking the data into smaller batches.
-- **Compressed Fixtures**: Large fixture files can be automatically compressed using gzip or zip formats. The system will automatically detect and decompress ``.gz`` and ``.zip`` files when loading fixtures, making it easier to manage large datasets while reducing storage space.
+- **Compressed Fixtures**: Large fixture files can be automatically compressed using gzip or zip formats. The system will automatically detect and decompress ``.json.gz``, ``.json.zip``, ``.csv.gz``, and ``.csv.zip`` files when loading fixtures, making it easier to manage large datasets while reducing storage space.
+- **CSV Fixtures**: For tabular data, CSV files can be used instead of JSON. CSV fixtures return a list of dictionaries where each row becomes a dictionary with column headers as keys. Note that CSV values are always strings, unlike JSON which preserves data types. JSON fixtures take priority over CSV when both exist with the same name.
 - When dealing with relationships, seed parent records before child records.
 - Consider using factory libraries like `Polyfactory <https://github.com/litestar-org/polyfactory>`__ for generating test data.

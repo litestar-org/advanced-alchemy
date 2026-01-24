@@ -17,7 +17,9 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     modeling
     repositories
     services
+    routing
     types
+    caching
     cli
     database_seeding
 

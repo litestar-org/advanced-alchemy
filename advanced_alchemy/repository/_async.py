@@ -1,9 +1,12 @@
 import contextlib
+import dataclasses
 import datetime
 import decimal
+import hashlib
 import random
 import string
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -39,8 +42,10 @@ from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.elements import UnaryExpression
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 
+from advanced_alchemy._serialization import encode_json
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
 from advanced_alchemy.repository._util import (
@@ -62,6 +67,8 @@ from advanced_alchemy.utils.text import slugify
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
 
+    from advanced_alchemy.cache.manager import CacheManager
+
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
@@ -76,6 +83,128 @@ DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
     datetime.time,
     datetime.timedelta,
 }
+
+
+def _sort_kv_by_key_str(kv: tuple[object, object]) -> str:
+    return str(kv[0])
+
+
+def _sort_normalized_value(value: Any) -> str:
+    return encode_json(_canonicalize_cache_key_value(value))
+
+
+def _normalize_cache_key_value(value: Any) -> Any:
+    """Normalize values into a deterministic JSON-serializable form.
+
+    Used for list/list_and_count cache keys.
+    """
+    if value is None or isinstance(value, (int, float, str, bool)):
+        return value
+
+    result: Any
+    if isinstance(value, bytes):
+        result = {"__bytes__": value.hex()}
+    elif isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        result = {"__datetime__": value.isoformat()}
+    elif isinstance(value, datetime.timedelta):
+        result = {"__timedelta__": value.total_seconds()}
+    elif isinstance(value, decimal.Decimal):
+        result = {"__decimal__": str(value)}
+    elif isinstance(value, set):
+        value_set = cast("set[Any]", value)  # type: ignore[redundant-cast]
+        normalized = [_normalize_cache_key_value(v) for v in value_set]
+        normalized.sort(key=_sort_normalized_value)
+        result = normalized
+    elif isinstance(value, (list, tuple)):
+        value_seq = cast("Sequence[Any]", value)
+        result = [_normalize_cache_key_value(v) for v in value_seq]
+    elif isinstance(value, dict):
+        value_dict = cast("dict[object, object]", value)
+        normalized_dict: dict[str, Any] = {}
+        for k, v in sorted(value_dict.items(), key=_sort_kv_by_key_str):
+            normalized_dict[str(k)] = _normalize_cache_key_value(v)
+        result = normalized_dict
+    elif dataclasses.is_dataclass(value) and not isinstance(value, type):
+        result = _normalize_cache_key_value(dataclasses.asdict(value))
+    elif isinstance(value, InstrumentedAttribute):
+        result = {"__attr__": value.key}
+    elif isinstance(value, ColumnElement):
+        # Safe fallback for non-dataclass expressions in ordering/kwargs.
+        value_expr = cast("ColumnElement[Any]", value)  # type: ignore[redundant-cast]
+        result = {"__sql__": str(value_expr)}
+    else:
+        result = {"__repr__": repr(value)}
+
+    return result
+
+
+def _canonicalize_cache_key_value(value: Any) -> Any:
+    """Convert dict-like objects into a stable, ordered representation."""
+    if isinstance(value, Mapping):
+        value_map = cast("Mapping[object, object]", value)
+        return [
+            [str(k), _canonicalize_cache_key_value(v)] for k, v in sorted(value_map.items(), key=_sort_kv_by_key_str)
+        ]
+    if isinstance(value, list):
+        value_list = cast("list[Any]", value)  # type: ignore[redundant-cast]
+        return [_canonicalize_cache_key_value(v) for v in value_list]
+    return value
+
+
+def _build_list_cache_key(
+    *,
+    model_name: str,
+    version_token: str,
+    method: str,
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+    kwargs: dict[str, Any],
+    order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+    execution_options: dict[str, Any],
+    uniquify: bool,
+    count_with_window_function: Optional[bool] = None,
+) -> Optional[str]:
+    """Build a stable cache key for list/list_and_count operations.
+
+    Returns None if the query specification includes non-cacheable filter
+    expressions (e.g., raw SQLAlchemy boolean expressions).
+    """
+    normalized_filters: list[dict[str, Any]] = []
+    for filter_ in filters:
+        if isinstance(filter_, ColumnElement):
+            return None
+        normalized_filters.append({"type": filter_.__class__.__name__, "data": _normalize_cache_key_value(filter_)})
+
+    normalized_order_by: Optional[list[Any]] = None
+    if order_by is not None:
+        order_items = order_by if isinstance(order_by, list) else [order_by]
+        normalized_order_by = []
+        for item in order_items:
+            if isinstance(item, UnaryExpression):
+                normalized_order_by.append({"expr": str(item)})
+            else:
+                col, desc = item
+                normalized_order_by.append({"col": _normalize_cache_key_value(col), "desc": bool(desc)})
+
+    payload: dict[str, Any] = {
+        "method": method,
+        "model": model_name,
+        "version": version_token,
+        "filters": normalized_filters,
+        "kwargs": _normalize_cache_key_value(kwargs),
+        "order_by": normalized_order_by,
+        "execution_options": _normalize_cache_key_value(execution_options),
+        "uniquify": uniquify,
+    }
+    if count_with_window_function is not None:
+        payload["count_with_window_function"] = bool(count_with_window_function)
+
+    try:
+        encoded = encode_json(_canonicalize_cache_key_value(payload)).encode("utf-8")
+    except TypeError:  # pragma: no cover
+        return None
+
+    digest = hashlib.sha256(encoded).hexdigest()
+    return f"{model_name}:{method}:{digest}"
 
 
 @runtime_checkable
@@ -135,6 +264,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     async def add_many(
@@ -144,6 +274,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]: ...
 
     async def delete(
@@ -156,6 +287,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     async def delete_many(
@@ -169,6 +301,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]: ...
 
     async def delete_where(
@@ -180,6 +313,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
         sanity_check: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]: ...
 
@@ -189,6 +323,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool: ...
 
@@ -203,6 +338,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     async def get_one(
@@ -214,6 +350,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT: ...
 
@@ -226,6 +363,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]: ...
 
@@ -242,6 +380,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
 
@@ -257,6 +396,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]: ...
 
@@ -267,6 +407,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int: ...
 
@@ -283,6 +424,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     async def update_many(
@@ -294,6 +436,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]: ...
 
     def _get_update_many_statement(
@@ -317,6 +460,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
     async def upsert_many(
@@ -330,6 +474,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]: ...
 
     async def list_and_count(
@@ -342,6 +487,8 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]: ...
 
@@ -354,6 +501,8 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]: ...
 
@@ -378,6 +527,7 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Get a model instance by its slug.
@@ -387,6 +537,7 @@ class SQLAlchemyAsyncSlugRepositoryProtocol(SQLAlchemyAsyncRepositoryProtocol[Mo
             error_messages: Optional custom error message templates.
             load: Specification for eager loading of relationships.
             execution_options: Options for statement execution.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Additional filtering criteria.
 
         Returns:
@@ -450,6 +601,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     count_with_window_function: bool = True
     """Use an analytical window function to count results.  This allows the count to be performed in a single query.
     """
+    _cache_manager: Optional["CacheManager"] = None
+    """Cache manager instance for repository-level caching. Set via ``cache_manager`` kwarg or retrieved from ``session.info``."""
+    _bind_group: Optional[str] = None
+    """Default bind group for routing operations (e.g., to read replicas). Can be overridden per-method."""
 
     def __init__(
         self,
@@ -466,6 +621,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         wrap_exceptions: bool = True,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        cache_manager: Optional["CacheManager"] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -483,6 +640,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            cache_manager: Optional cache manager for repository-level caching. If not provided, retrieved from ``session.info``.
+            bind_group: Optional default routing group to use for all operations. Can be overridden per-method.
             **kwargs: Additional arguments.
 
         """
@@ -509,6 +668,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
+        # Cache manager: from explicit param or session.info (set by SQLAlchemyAsyncConfig)
+        self._cache_manager = cache_manager if cache_manager is not None else session.info.get("cache_manager")
+        # Default bind group for all operations (can be overridden per-method)
+        self._bind_group = bind_group
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         """Get the uniquify value, preferring the method parameter over instance setting.
@@ -520,6 +683,43 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             bool: The uniquify value to use.
         """
         return bool(uniquify) if uniquify is not None else self._uniquify
+
+    def _resolve_bind_group(self, bind_group: Optional[str] = None) -> Optional[str]:
+        """Resolve the bind_group to use, preferring method parameter over instance default.
+
+        Args:
+            bind_group: Optional override for the bind_group setting.
+
+        Returns:
+            The bind_group to use, or None if not set.
+        """
+        return bind_group if bind_group is not None else self._bind_group
+
+    def _queue_cache_invalidation(self, entity_id: Any, bind_group: Optional[str] = None) -> None:
+        """Queue a cache invalidation for an entity.
+
+        The invalidation will be processed after the transaction commits.
+        If the transaction rolls back, the pending invalidation is discarded.
+
+        This uses the global CacheInvalidationListener which must be set up
+        via setup_cache_listeners() during application initialization.
+
+        Args:
+            entity_id: The primary key value of the entity to invalidate.
+            bind_group: Optional routing group for multi-master configurations.
+                When provided, only the cache entry for that bind_group is
+                invalidated.
+        """
+        if self._cache_manager is not None:
+            from advanced_alchemy._listeners import get_cache_tracker
+
+            # Check if model_type has __tablename__ (may not exist in mock scenarios)
+            model_name = getattr(self.model_type, "__tablename__", None)
+            if model_name is None:
+                return
+            tracker = get_cache_tracker(self.session, self._cache_manager)
+            if tracker is not None:
+                tracker.add_invalidation(cast("str", model_name), entity_id, bind_group)
 
     def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
@@ -688,6 +888,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Add ``data`` to the collection.
 
@@ -698,10 +899,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The added instance.
         """
+        _ = bind_group  # Reserved for future multi-master routing
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -722,6 +925,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Add many `data` to the collection.
 
@@ -731,10 +935,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The added instances.
         """
+        _ = bind_group  # Reserved for future multi-master routing
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -759,6 +965,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
 
@@ -773,6 +980,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The deleted instance.
@@ -786,16 +994,23 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             instance = await self.get(
                 item_id,
                 id_attribute=id_attribute,
                 load=load,
                 execution_options=execution_options,
+                bind_group=bind_group,
             )
             await self.session.delete(instance)
             await self._flush_or_commit(auto_commit=auto_commit)
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(item_id, bind_group)
             return instance
 
     async def delete_many(
@@ -810,6 +1025,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Delete instance identified by `item_id`.
 
@@ -826,6 +1042,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The deleted instances.
@@ -839,6 +1056,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             id_attribute = get_instrumented_attr(
@@ -893,6 +1114,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return instances
 
     @staticmethod
@@ -909,6 +1132,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Delete instances specified by referenced kwargs and filters.
@@ -923,6 +1147,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
             **kwargs: Arguments to apply to a delete
 
         Raises:
@@ -940,6 +1165,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
@@ -960,6 +1189,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         load=load,
                         execution_options=execution_options,
                         auto_expunge=auto_expunge,
+                        use_cache=False,  # Always fetch from DB for delete_where
+                        bind_group=bind_group,
                         **kwargs,
                     ),
                 )
@@ -974,6 +1205,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance), resolved_bind_group)
             return instances
 
     async def exists(
@@ -983,6 +1216,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
         """Return true if the object specified by ``kwargs`` exists.
@@ -994,6 +1228,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1009,6 +1244,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load=load,
             execution_options=execution_options,
             error_messages=error_messages,
+            bind_group=bind_group,
             **kwargs,
         )
         return existing > 0
@@ -1088,6 +1324,279 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         return statement.where(any_(id_chunk) == id_attribute)  # type: ignore[arg-type]
 
+    async def _get_from_db(
+        self,
+        item_id: Any,
+        *,
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        with_for_update: ForUpdateParameter,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Fetch an entity from the database without using cache."""
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
+            resolved_execution_options = self._get_execution_options(execution_options)
+            resolved_statement = self.statement if statement is None else statement
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            resolved_id_attribute = id_attribute if id_attribute is not None else self.id_attribute
+            resolved_statement = self._get_base_stmt(
+                statement=resolved_statement,
+                loader_options=loader_options,
+                execution_options=resolved_execution_options,
+            )
+            resolved_statement = self._filter_select_by_kwargs(resolved_statement, [(resolved_id_attribute, item_id)])
+            resolved_statement = self._apply_for_update_options(resolved_statement, with_for_update)
+            instance = (
+                await self._execute(resolved_statement, uniquify=loader_options_have_wildcard)
+            ).scalar_one_or_none()
+            instance = self.check_not_found(instance)
+            self._expunge(instance, auto_expunge=auto_expunge)
+            return instance
+
+    async def _get_cached_creator(
+        self,
+        model_name: str,
+        item_id: Any,
+        *,
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        with_for_update: ForUpdateParameter,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Singleflight creator for get(id) caching (async)."""
+        if self._cache_manager is None:
+            return await self._get_from_db(
+                item_id,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
+                bind_group=bind_group,
+            )
+
+        existing = await self._cache_manager.get_entity_async(
+            model_name, item_id, self.model_type, bind_group=bind_group
+        )
+        if existing is not None:
+            return existing
+
+        instance = await self._get_from_db(
+            item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+            bind_group=bind_group,
+        )
+        await self._cache_manager.set_entity_async(model_name, item_id, instance, bind_group=bind_group)
+        return instance
+
+    async def _list_from_db(
+        self,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
+    ) -> list[ModelT]:
+        """Fetch a list of entities from the database without using cache."""
+        self._uniquify = self._get_uniquify(uniquify)
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
+            resolved_execution_options = self._get_execution_options(execution_options)
+            resolved_statement = self.statement if statement is None else statement
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            resolved_statement = self._get_base_stmt(
+                statement=resolved_statement,
+                loader_options=loader_options,
+                execution_options=resolved_execution_options,
+            )
+            if order_by is None:
+                order_by = self.order_by if self.order_by is not None else []
+            resolved_statement = self._apply_order_by(statement=resolved_statement, order_by=order_by)
+            resolved_statement = self._apply_filters(*filters, statement=resolved_statement)
+            resolved_statement = self._filter_select_by_kwargs(resolved_statement, kwargs)
+            result = await self._execute(resolved_statement, uniquify=loader_options_have_wildcard)
+            instances = list(result.scalars())
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+            return cast("list[ModelT]", instances)
+
+    async def _list_cached_creator(
+        self,
+        cache_key: str,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
+    ) -> list[ModelT]:
+        """Singleflight creator for list caching (async)."""
+        if self._cache_manager is None:
+            return await self._list_from_db(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            )
+
+        existing = await self._cache_manager.get_list_async(cache_key, self.model_type)
+        if existing is not None:
+            return existing
+
+        instances = await self._list_from_db(
+            filters=filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            kwargs=kwargs,
+            uniquify=uniquify,
+            bind_group=bind_group,
+        )
+        await self._cache_manager.set_list_async(cache_key, list(instances))
+        return list(instances)
+
+    async def _list_and_count_from_db(
+        self,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        count_with_window_function: bool,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
+    ) -> tuple[list[ModelT], int]:
+        """Fetch a list+count payload from the database without using cache."""
+        self._uniquify = self._get_uniquify(uniquify)
+        resolved_bind_group = self._resolve_bind_group(bind_group)
+        if resolved_bind_group:
+            execution_options = dict(execution_options) if execution_options else {}
+            execution_options["bind_group"] = resolved_bind_group
+        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
+            return await self._list_and_count_basic(
+                *filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                load=load,
+                execution_options=execution_options,
+                order_by=order_by,
+                error_messages=error_messages,
+                **kwargs,
+            )
+        return await self._list_and_count_window(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            load=load,
+            execution_options=execution_options,
+            error_messages=error_messages,
+            order_by=order_by,
+            **kwargs,
+        )
+
+    async def _list_and_count_cached_creator(
+        self,
+        cache_key: str,
+        *,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        auto_expunge: Optional[bool],
+        statement: Optional[Select[tuple[ModelT]]],
+        count_with_window_function: bool,
+        order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        kwargs: dict[str, Any],
+        uniquify: Optional[bool],
+        bind_group: Optional[str] = None,
+    ) -> tuple[list[ModelT], int]:
+        """Singleflight creator for list_and_count caching (async)."""
+        if self._cache_manager is None:
+            return await self._list_and_count_from_db(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            )
+
+        existing = await self._cache_manager.get_list_and_count_async(cache_key, self.model_type)
+        if existing is not None:
+            return existing
+
+        instances, count = await self._list_and_count_from_db(
+            filters=filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            count_with_window_function=count_with_window_function,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            kwargs=kwargs,
+            uniquify=uniquify,
+            bind_group=bind_group,
+        )
+        await self._cache_manager.set_list_and_count_async(cache_key, list(instances), count)
+        return list(instances), count
+
     async def get(
         self,
         item_id: Any,
@@ -1100,6 +1609,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
 
@@ -1115,33 +1626,80 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            use_cache: Whether to use caching for this query (default True).
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             The retrieved instance.
         """
         self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
+        resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+
+        resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
+        resolved_id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = id_attribute
+        if isinstance(resolved_id_attribute, InstrumentedAttribute):
+            resolved_id_attribute = resolved_id_attribute.key
+
+        cache_manager = self._cache_manager
+        # Resolve bind_group for cache key namespacing
+        resolved_bind_group = self._resolve_bind_group(bind_group)
+
+        if (
+            use_cache
+            and cache_manager is not None
+            and bool(resolved_auto_expunge)
+            and statement is None
+            and load is None
+            and with_for_update is None
+            and (resolved_id_attribute is None or resolved_id_attribute == self.id_attribute)
+            and not self._default_loader_options
+            and not self._default_execution_options
+            and execution_options is None
         ):
-            execution_options = self._get_execution_options(execution_options)
-            statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            id_attribute = id_attribute if id_attribute is not None else self.id_attribute
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+            cached = await cache_manager.get_entity_async(
+                model_name, item_id, self.model_type, bind_group=resolved_bind_group
             )
-            statement = self._filter_select_by_kwargs(statement, [(id_attribute, item_id)])
-            statement = self._apply_for_update_options(statement, with_for_update)
-            instance = (await self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
-            instance = self.check_not_found(instance)
-            self._expunge(instance, auto_expunge=auto_expunge)
-            return instance
+            if cached is not None:
+                return cached
+
+            # Include bind_group in singleflight key to prevent cross-shard cache pollution
+            singleflight_key = (
+                f"{model_name}:{resolved_bind_group}:get:{item_id}"
+                if resolved_bind_group
+                else f"{model_name}:get:{item_id}"
+            )
+            return await cache_manager.singleflight_async(
+                singleflight_key,
+                partial(
+                    self._get_cached_creator,
+                    model_name,
+                    item_id,
+                    auto_expunge=auto_expunge,
+                    statement=statement,
+                    id_attribute=resolved_id_attribute,
+                    error_messages=resolved_error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    with_for_update=with_for_update,
+                    bind_group=resolved_bind_group,
+                ),
+            )
+
+        return await self._get_from_db(
+            item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            error_messages=resolved_error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+            bind_group=bind_group,
+        )
 
     async def get_one(
         self,
@@ -1153,6 +1711,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
         """Get instance identified by ``kwargs``.
@@ -1167,6 +1726,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1181,6 +1741,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1207,6 +1770,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
         """Get instance identified by ``kwargs`` or None if not found.
@@ -1221,6 +1785,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1234,6 +1799,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1267,6 +1835,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` or create if it doesn't exist.
@@ -1290,6 +1859,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1318,6 +1888,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 **match_filter,
                 load=load,
                 execution_options=execution_options,
+                bind_group=bind_group,
             )
             if not existing:
                 return (
@@ -1326,6 +1897,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         auto_commit=auto_commit,
                         auto_expunge=auto_expunge,
                         auto_refresh=auto_refresh,
+                        bind_group=bind_group,
                     ),
                     True,
                 )
@@ -1358,6 +1930,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Get instance identified by ``kwargs`` and update the model if the arguments are different.
@@ -1379,6 +1952,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1402,7 +1976,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 }
             else:
                 match_filter = kwargs
-            existing = await self.get_one(*filters, **match_filter, load=load, execution_options=execution_options)
+            existing = await self.get_one(
+                *filters, **match_filter, load=load, execution_options=execution_options, bind_group=bind_group
+            )
             updated = False
             for field_name, new_field_value in kwargs.items():
                 field = getattr(existing, field_name, MISSING)
@@ -1428,6 +2004,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
         """Get the count of records returned by a query.
@@ -1440,6 +2017,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1453,6 +2031,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1485,6 +2066,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Update instance with the attribute values present on `data`.
 
@@ -1506,6 +2088,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The updated instance.
@@ -1528,6 +2111,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 load=load,
                 execution_options=execution_options,
                 with_for_update=with_for_update,
+                bind_group=bind_group,
             )
             mapper = None
             with (
@@ -1589,6 +2173,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return instance
 
     async def update_many(
@@ -1601,6 +2187,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
@@ -1618,6 +2205,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The updated instances.
@@ -1641,6 +2229,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
             execution_options = self._get_execution_options(execution_options)
             loader_options = self._get_loader_options(load)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
@@ -1673,9 +2265,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 getattr(self.model_type, self.id_attribute).in_(updated_ids),
                 load=loader_options,
                 execution_options=execution_options,
+                bind_group=bind_group,
             )
             for instance in updated_instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
+                # Queue cache invalidation (processed on commit)
+                self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return updated_instances
 
     def _get_update_many_statement(
@@ -1705,6 +2300,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1720,6 +2317,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            use_cache: Whether to use the cache for this query. Defaults to ``True``.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1729,30 +2328,87 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
         self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
+        resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
-            return await self._list_and_count_basic(
-                *filters,
+
+        resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
+        resolved_execution_options = self._get_execution_options(execution_options)
+        resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
+
+        cache_manager = self._cache_manager
+        if not (
+            use_cache
+            and bool(resolved_auto_expunge)
+            and cache_manager is not None
+            and statement is None
+            and load is None
+            and not self._default_loader_options
+        ):
+            return await self._list_and_count_from_db(
+                filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
                 load=load,
                 execution_options=execution_options,
-                order_by=order_by,
-                error_messages=error_messages,
-                **kwargs,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
             )
-        return await self._list_and_count_window(
-            *filters,
-            auto_expunge=auto_expunge,
-            statement=statement,
-            load=load,
-            execution_options=execution_options,
-            error_messages=error_messages,
-            order_by=order_by,
-            **kwargs,
+
+        model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+        version_token = await cache_manager.get_model_version_async(model_name)
+        cache_key = _build_list_cache_key(
+            model_name=model_name,
+            version_token=version_token,
+            method="list_and_count",
+            filters=filters,
+            kwargs=kwargs,
+            order_by=resolved_order_by,
+            execution_options=resolved_execution_options,
+            uniquify=self._uniquify,
+            count_with_window_function=count_with_window_function,
+        )
+        if cache_key is None:
+            return await self._list_and_count_from_db(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            )
+
+        cached = await cache_manager.get_list_and_count_async(cache_key, self.model_type)
+        if cached is not None:
+            return cached
+
+        return await cache_manager.singleflight_async(
+            cache_key,
+            partial(
+                self._list_and_count_cached_creator,
+                cache_key,
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                count_with_window_function=count_with_window_function,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            ),
         )
 
     def _expunge(self, instance: "ModelT", auto_expunge: "Optional[bool]") -> None:
@@ -1821,6 +2477,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1834,6 +2491,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1846,6 +2504,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1880,6 +2541,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[ModelT], int]:
         """List records with total count.
@@ -1893,6 +2555,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1905,6 +2568,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
+            if bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
@@ -1963,6 +2629,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Modify or create instance.
 
@@ -1987,6 +2654,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group for multi-master configurations.
 
         Returns:
             The updated or created instance.
@@ -2006,13 +2674,16 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
             match_filter = data.to_dict(exclude={self.id_attribute})
-        existing = await self.get_one_or_none(load=load, execution_options=execution_options, **match_filter)
+        existing = await self.get_one_or_none(
+            load=load, execution_options=execution_options, bind_group=bind_group, **match_filter
+        )
         if not existing:
             return await self.add(
                 data,
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
+                bind_group=bind_group,
             )
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
@@ -2030,6 +2701,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
+            # Queue cache invalidation (processed on commit)
+            self._queue_cache_invalidation(self.get_id_attribute_value(instance), bind_group)
             return instance
 
     async def upsert_many(
@@ -2044,6 +2717,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> list[ModelT]:
         """Modify or create multiple instances.
 
@@ -2067,6 +2741,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             The updated or created instance.
@@ -2101,6 +2776,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 load=load,
                 execution_options=execution_options,
                 auto_expunge=False,
+                bind_group=bind_group,
             )
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
@@ -2119,7 +2795,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                     data_to_insert.append(datum)
             if data_to_insert:
                 instances.extend(
-                    await self.add_many(data_to_insert, auto_commit=False, auto_expunge=False),
+                    await self.add_many(data_to_insert, auto_commit=False, auto_expunge=False, bind_group=bind_group),
                 )
             if data_to_update:
                 instances.extend(
@@ -2129,6 +2805,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         auto_expunge=False,
                         load=load,
                         execution_options=execution_options,
+                        bind_group=bind_group,
                     ),
                 )
             await self._flush_or_commit(auto_commit=auto_commit)
@@ -2178,6 +2855,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> list[ModelT]:
         """Get a list of instances, optionally filtered.
@@ -2192,37 +2871,92 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            use_cache: Whether to use the cache for this query. Defaults to ``True``.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances, after filtering applied.
         """
         self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
+        resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+
+        resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
+        resolved_execution_options = self._get_execution_options(execution_options)
+        resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
+
+        cache_manager = self._cache_manager
+        if not (
+            use_cache
+            and bool(resolved_auto_expunge)
+            and cache_manager is not None
+            and statement is None
+            and load is None
+            and not self._default_loader_options
         ):
-            execution_options = self._get_execution_options(execution_options)
-            statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
+            return await self._list_from_db(
+                filters=filters,
+                auto_expunge=auto_expunge,
                 statement=statement,
-                loader_options=loader_options,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
                 execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
             )
-            if order_by is None:
-                order_by = self.order_by if self.order_by is not None else []
-            statement = self._apply_order_by(statement=statement, order_by=order_by)
-            statement = self._apply_filters(*filters, statement=statement)
-            statement = self._filter_select_by_kwargs(statement, kwargs)
-            result = await self._execute(statement, uniquify=loader_options_have_wildcard)
-            instances = list(result.scalars())
-            for instance in instances:
-                self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("list[ModelT]", instances)
+
+        model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+        version_token = await cache_manager.get_model_version_async(model_name)
+        cache_key = _build_list_cache_key(
+            model_name=model_name,
+            version_token=version_token,
+            method="list",
+            filters=filters,
+            kwargs=kwargs,
+            order_by=resolved_order_by,
+            execution_options=resolved_execution_options,
+            uniquify=self._uniquify,
+        )
+        if cache_key is None:
+            return await self._list_from_db(
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            )
+
+        cached = await cache_manager.get_list_async(cache_key, self.model_type)
+        if cached is not None:
+            return cached
+
+        return await cache_manager.singleflight_async(
+            cache_key,
+            partial(
+                self._list_cached_creator,
+                cache_key,
+                filters=filters,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                order_by=order_by,
+                error_messages=resolved_error_messages,
+                load=load,
+                execution_options=execution_options,
+                kwargs=kwargs,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            ),
+        )
 
     @classmethod
     async def check_health(cls, session: Union[AsyncSession, async_scoped_session[AsyncSession]]) -> bool:
@@ -2302,6 +3036,7 @@ class SQLAlchemyAsyncSlugRepository(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Select record by slug value.
@@ -2315,6 +3050,7 @@ class SQLAlchemyAsyncSlugRepository(
             execution_options=execution_options,
             error_messages=error_messages,
             uniquify=uniquify,
+            bind_group=bind_group,
         )
 
     async def get_available_slug(
@@ -2385,12 +3121,14 @@ class SQLAlchemyAsyncQueryRepository:
     async def get_one(
         self,
         statement: Select[tuple[Any]],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Row[Any]:
         """Get instance identified by ``kwargs``.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2398,18 +3136,21 @@ class SQLAlchemyAsyncQueryRepository:
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = (await self.execute(statement)).scalar_one_or_none()
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            instance = (await self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
             return self.check_not_found(instance)
 
     async def get_one_or_none(
         self,
         statement: Select[Any],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[Row[Any]]:
         """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2417,14 +3158,16 @@ class SQLAlchemyAsyncQueryRepository:
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            instance = (await self.execute(statement)).scalar_one_or_none()
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            instance = (await self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
             return instance or None
 
-    async def count(self, statement: Select[Any], **kwargs: Any) -> int:
+    async def count(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> int:
         """Get the count of records returned by a query.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2435,13 +3178,15 @@ class SQLAlchemyAsyncQueryRepository:
                 None,
             )
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            results = await self.execute(statement)
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            results = await self.execute(statement, execution_options=execution_options)
             return results.scalar_one()  # type: ignore
 
     async def list_and_count(
         self,
         statement: Select[Any],
         count_with_window_function: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
@@ -2449,18 +3194,20 @@ class SQLAlchemyAsyncQueryRepository:
         Args:
             statement: To facilitate customization of the underlying select query.
             count_with_window_function: Force list and count to use two queries instead of an analytical window function.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
         if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
-            return await self._list_and_count_basic(statement=statement, **kwargs)
-        return await self._list_and_count_window(statement=statement, **kwargs)
+            return await self._list_and_count_basic(statement=statement, bind_group=bind_group, **kwargs)
+        return await self._list_and_count_window(statement=statement, bind_group=bind_group, **kwargs)
 
     async def _list_and_count_window(
         self,
         statement: Select[Any],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
@@ -2468,6 +3215,7 @@ class SQLAlchemyAsyncQueryRepository:
         Args:
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2477,7 +3225,8 @@ class SQLAlchemyAsyncQueryRepository:
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            result = await self.execute(statement)
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            result = await self.execute(statement, execution_options=execution_options)
             count: int = 0
             instances: list[Row[Any]] = []
             for i, (instance, count_value) in enumerate(result):
@@ -2493,12 +3242,14 @@ class SQLAlchemyAsyncQueryRepository:
     async def _list_and_count_basic(
         self,
         statement: Select[Any],
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[list[Row[Any]], int]:
         """List records with total count.
 
         Args:
             statement: To facilitate customization of the underlying select query. .
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2507,19 +3258,23 @@ class SQLAlchemyAsyncQueryRepository:
 
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            count_result = await self.session.execute(self._get_count_stmt(statement))
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            count_result = await self.session.execute(
+                self._get_count_stmt(statement), execution_options=execution_options or {}
+            )
             count = count_result.scalar_one()
-            result = await self.execute(statement)
+            result = await self.execute(statement, execution_options=execution_options)
             instances: list[Row[Any]] = []
             for (instance,) in result:
                 instances.append(instance)
             return instances, count
 
-    async def list(self, statement: Select[Any], **kwargs: Any) -> list[Row[Any]]:
+    async def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> list[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:
             statement: To facilitate customization of the underlying select query.
+            bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -2527,7 +3282,8 @@ class SQLAlchemyAsyncQueryRepository:
         """
         with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
-            result = await self.execute(statement)
+            execution_options = {"bind_group": bind_group} if bind_group else None
+            result = await self.execute(statement, execution_options=execution_options)
             return list(result.all())
 
     def _filter_statement_by_kwargs(
@@ -2575,5 +3331,6 @@ class SQLAlchemyAsyncQueryRepository:
         statement: Union[
             ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Update, Delete, Select[Any]
         ],
+        execution_options: Optional[dict[str, Any]] = None,
     ) -> Result[Any]:
-        return await self.session.execute(statement)
+        return await self.session.execute(statement, execution_options=execution_options or {})

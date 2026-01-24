@@ -16,6 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python",
   "Topic :: Software Development",
   "Typing :: Typed",
@@ -59,6 +60,7 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 [project.optional-dependencies]
 argon2 = ["argon2-cffi"]
 cli = ["rich-click"]
+dogpile = ["dogpile.cache"]
 fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
 obstore = ["obstore"]
@@ -149,6 +151,7 @@ test = [
   "attrs",
   "cattrs",
   "dishka ; python_version >= \"3.10\"",
+  "dogpile.cache",
   "pydantic-extra-types",
   "numpy",
   "pgvector",
@@ -220,6 +223,7 @@ filterwarnings = [
   "ignore::DeprecationWarning:google.gcloud",
   "ignore::DeprecationWarning:google.iam",
   "ignore::DeprecationWarning:google",
+  "ignore:You are using a Python version \\(.*\\) which Google will stop supporting.*:FutureWarning:google.api_core._python_version_support",
   "ignore::DeprecationWarning:websockets.connection",
   "ignore::DeprecationWarning:websockets.legacy",
   "ignore:Accessing argon2.__version__ is deprecated:DeprecationWarning:passlib.handlers.argon2",
@@ -465,12 +469,12 @@ module = [
 [[tool.mypy.overrides]]
 follow_imports = "skip"
 ignore_missing_imports = true
-module = [
-  "pytest",
-  "pytest.*",
-  "_pytest",
-  "_pytest.*",
-]
+module = ["pytest", "pytest.*", "_pytest", "_pytest.*"]
+
+[[tool.mypy.overrides]]
+follow_imports = "skip"
+ignore_missing_imports = true
+module = ["sphinx", "sphinx.*"]
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
@@ -561,6 +565,16 @@ SQLAlchemyAsyncRepositoryProtocol = "SQLAlchemySyncRepositoryProtocol"
 "SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
 "async_scoped_session" = "scoped_session"
+"bump_model_version_async" = "bump_model_version_sync"
+"get_entity_async" = "get_entity_sync"
+"get_list_and_count_async" = "get_list_and_count_sync"
+"get_list_async" = "get_list_sync"
+"get_model_version_async" = "get_model_version_sync"
+"invalidate_entity_async" = "invalidate_entity_sync"
+"set_entity_async" = "set_entity_sync"
+"set_list_and_count_async" = "set_list_and_count_sync"
+"set_list_async" = "set_list_sync"
+"singleflight_async" = "singleflight_sync"
 "sqlalchemy.ext.asyncio.AsyncSession" = "sqlalchemy.orm.Session"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 

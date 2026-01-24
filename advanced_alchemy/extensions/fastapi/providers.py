@@ -5,6 +5,7 @@ This module contains functions to create dependency providers for filters,
 similar to the Litestar extension, but tailored for FastAPI.
 """
 
+import contextlib
 import datetime
 import inspect
 from collections.abc import AsyncGenerator, Generator
@@ -23,7 +24,7 @@ from typing import (
 )
 from uuid import UUID
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -151,6 +152,25 @@ class FilterConfig(TypedDict):
     """Fields that support in-collection filters. Can be a single field or a set of fields with type information."""
 
 
+def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
+    """Determine if we should commit based on status code and commit mode.
+
+    Args:
+        status_code: The HTTP response status code.
+        commit_mode: The configured commit mode.
+
+    Returns:
+        True if the transaction should be committed, False otherwise.
+    """
+    if commit_mode == "manual":
+        return False
+    if commit_mode == "autocommit":
+        return 200 <= status_code < 300  # noqa: PLR2004
+    if commit_mode == "autocommit_include_redirect":
+        return 200 <= status_code < 400  # noqa: PLR2004
+    return False
+
+
 @overload
 def provide_service(
     service_class: type["AsyncServiceT_co"],
@@ -181,7 +201,7 @@ def provide_service(
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
 
 
-def provide_service(
+def provide_service(  # noqa: PLR0915
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
     extension: AdvancedAlchemy,
@@ -195,18 +215,88 @@ def provide_service(
 ) -> Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None]]]:
     """Create a dependency provider for a service.
 
+    This function creates a generator-based dependency that manages
+    the service lifecycle. The generator owns the session lifecycle
+    and handles commit/rollback/close operations to ensure proper
+    connection pool management (especially important for asyncpg).
+
     Returns:
         A dependency provider for the service.
     """
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
+        async_config = cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key))
 
         async def provide_async_service(
+            request: Request,
             db_session: AsyncSession = Depends(extension.provide_session(key)),  # noqa: B008
         ) -> AsyncGenerator[AsyncServiceT_co, None]:  # type: ignore[union-attr,unused-ignore]
-            async with service_class.new(  # type: ignore[union-attr,unused-ignore]
+            session_key = async_config.session_key if async_config else "db_session"
+
+            # Mark session as generator-managed to prevent middleware cleanup
+            setattr(request.state, f"{session_key}_generator_managed", True)
+
+            exc_info: Optional[BaseException] = None
+            try:
+                async with service_class.new(  # type: ignore[union-attr,unused-ignore]
+                    session=db_session,  # type: ignore[arg-type, unused-ignore]
+                    statement=statement,
+                    config=async_config,  # type: ignore[arg-type]
+                    error_messages=error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    uniquify=uniquify,
+                    count_with_window_function=count_with_window_function,
+                ) as service:
+                    yield service
+            except BaseException as e:
+                exc_info = e
+                raise
+            finally:
+                # Get response status stored by middleware
+                response_status = getattr(request.state, f"{session_key}_response_status", None)
+                commit_mode = async_config.commit_mode if async_config else "manual"
+
+                try:
+                    should_commit = (
+                        exc_info is None
+                        and response_status is not None
+                        and _should_commit_for_status(response_status, commit_mode)
+                    )
+
+                    if should_commit:
+                        await db_session.commit()
+                    else:
+                        await db_session.rollback()
+                finally:
+                    await db_session.close()
+                    # Clean up request state
+                    for attr in [
+                        session_key,
+                        f"{session_key}_generator_managed",
+                        f"{session_key}_response_status",
+                    ]:
+                        with contextlib.suppress(AttributeError):
+                            delattr(request.state, attr)
+
+        return provide_async_service
+
+    sync_config = cast("Optional[SQLAlchemySyncConfig]", extension.get_config(key))
+
+    def provide_sync_service(
+        request: Request,
+        db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
+    ) -> Generator[SyncServiceT_co, None, None]:
+        session_key = sync_config.session_key if sync_config else "db_session"
+
+        # Mark session as generator-managed to prevent middleware cleanup
+        setattr(request.state, f"{session_key}_generator_managed", True)
+
+        exc_info: Optional[BaseException] = None
+        try:
+            with service_class.new(
                 session=db_session,  # type: ignore[arg-type, unused-ignore]
                 statement=statement,
-                config=cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key)),  # type: ignore[arg-type]
+                config=sync_config,
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
@@ -214,23 +304,35 @@ def provide_service(
                 count_with_window_function=count_with_window_function,
             ) as service:
                 yield service
+        except BaseException as e:
+            exc_info = e
+            raise
+        finally:
+            # Get response status stored by middleware
+            response_status = getattr(request.state, f"{session_key}_response_status", None)
+            commit_mode = sync_config.commit_mode if sync_config else "manual"
 
-        return provide_async_service
+            try:
+                should_commit = (
+                    exc_info is None
+                    and response_status is not None
+                    and _should_commit_for_status(response_status, commit_mode)
+                )
 
-    def provide_sync_service(
-        db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
-    ) -> Generator[SyncServiceT_co, None, None]:
-        with service_class.new(
-            session=db_session,  # type: ignore[arg-type, unused-ignore]
-            statement=statement,
-            config=cast("Optional[SQLAlchemySyncConfig]", extension.get_config(key)),
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            uniquify=uniquify,
-            count_with_window_function=count_with_window_function,
-        ) as service:
-            yield service
+                if should_commit:
+                    db_session.commit()
+                else:
+                    db_session.rollback()
+            finally:
+                db_session.close()
+                # Clean up request state
+                for attr in [
+                    session_key,
+                    f"{session_key}_generator_managed",
+                    f"{session_key}_response_status",
+                ]:
+                    with contextlib.suppress(AttributeError):
+                        delattr(request.state, attr)
 
     return provide_sync_service
 

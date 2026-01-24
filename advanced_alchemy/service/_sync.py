@@ -191,6 +191,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
         """Count of records returned by query.
@@ -203,6 +204,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
             **kwargs: key value pairs of filter types.
 
         Returns:
@@ -215,6 +217,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load=load,
             execution_options=execution_options,
             uniquify=self._get_uniquify(uniquify),
+            bind_group=bind_group,
             **kwargs,
         )
 
@@ -225,6 +228,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
         """Wrap repository exists operation.
@@ -236,6 +240,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
             **kwargs: Keyword arguments for attribute based filtering.
 
         Returns:
@@ -247,6 +252,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load=load,
             execution_options=execution_options,
             uniquify=self._get_uniquify(uniquify),
+            bind_group=bind_group,
             **kwargs,
         )
 
@@ -261,6 +267,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
 
@@ -275,6 +282,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
 
         Returns:
             Representation of instance with identifier `item_id`.
@@ -290,6 +298,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -303,6 +312,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
         """Wrap repository scalar operation.
@@ -317,6 +327,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: The bind group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -333,6 +344,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 with_for_update=with_for_update,
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -347,6 +359,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
         """Wrap repository scalar operation.
@@ -361,6 +374,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            bind_group: The bind group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -377,6 +391,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 with_for_update=with_for_update,
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -498,6 +513,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
         """List of records and total count returned by query.
@@ -513,6 +530,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            use_cache: Whether to use the repository cache for this query.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -530,6 +549,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                use_cache=use_cache,
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -592,6 +613,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -606,6 +629,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            use_cache: Whether to use the repository cache for this query.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -622,6 +647,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                use_cache=use_cache,
+                bind_group=bind_group,
                 **kwargs,
             ),
         )
@@ -641,6 +668,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> "ModelT":
         """Wrap repository instance creation.
 
@@ -651,6 +679,7 @@ class SQLAlchemySyncRepositoryService(
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Representation of created instance.
@@ -664,6 +693,7 @@ class SQLAlchemySyncRepositoryService(
                 auto_expunge=auto_expunge,
                 auto_refresh=auto_refresh,
                 error_messages=error_messages,
+                bind_group=bind_group,
             ),
         )
 
@@ -674,6 +704,7 @@ class SQLAlchemySyncRepositoryService(
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance creation.
 
@@ -683,6 +714,7 @@ class SQLAlchemySyncRepositoryService(
             auto_commit: Commit objects before returning.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Representation of created instances.
@@ -697,6 +729,7 @@ class SQLAlchemySyncRepositoryService(
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
+                bind_group=bind_group,
             ),
         )
 
@@ -715,6 +748,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> "ModelT":
         """Wrap repository update operation.
 
@@ -736,6 +770,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Raises:
             RepositoryError: If no configuration or session is provided.
@@ -757,6 +792,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 with_for_update=with_for_update,
+                bind_group=bind_group,
             )
 
             # Extract attributes from converted model to update existing instance
@@ -797,6 +833,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -810,6 +847,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance update.
 
@@ -822,6 +860,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Representation of updated instances.
@@ -839,6 +878,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -857,6 +897,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -879,6 +920,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Updated or created representation.
@@ -901,6 +943,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -916,6 +959,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
@@ -931,6 +975,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Updated or created representation.
@@ -950,6 +995,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -967,6 +1013,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -991,6 +1038,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1013,6 +1061,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
                 **validated_model.to_dict(),
             ),
         )
@@ -1030,6 +1079,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -1051,6 +1101,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
@@ -1072,6 +1123,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
                 **validated_model.to_dict(),
             ),
         )
@@ -1087,6 +1139,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> ModelT:
         """Wrap repository delete operation.
 
@@ -1101,6 +1154,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Representation of the deleted instance.
@@ -1116,6 +1170,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -1131,6 +1186,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
 
@@ -1147,6 +1203,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
 
         Returns:
             Representation of removed instances.
@@ -1163,6 +1220,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )
 
@@ -1176,6 +1234,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -1190,6 +1249,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
@@ -1206,6 +1266,7 @@ class SQLAlchemySyncRepositoryService(
                 load=load,
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
                 **kwargs,
             ),
         )

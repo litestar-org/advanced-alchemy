@@ -13,9 +13,11 @@ from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
 from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.routing.context import reset_routing_context
 from advanced_alchemy.utils.portals import Portal, PortalProvider
 
 if TYPE_CHECKING:
+    import click
     from flask import Flask
 
 
@@ -112,7 +114,8 @@ class AdvancedAlchemy:
         app.teardown_appcontext(self._teardown_appcontext)
 
         app.extensions["advanced_alchemy"] = self
-        app.cli.add_command(database_group)
+        db_group_cmd = cast("click.Command", database_group)
+        app.cli.add_command(db_group_cmd)
 
     def _teardown_appcontext(self, exception: "Optional[BaseException]" = None) -> None:
         """Clean up resources when the application context ends."""
@@ -145,6 +148,9 @@ class AdvancedAlchemy:
         session_key = f"advanced_alchemy_session_{bind_key}"
         if hasattr(g, session_key):
             return cast("Union[AsyncSession, Session]", getattr(g, session_key))
+
+        # Reset routing context for request-scoped isolation when creating a new session
+        reset_routing_context()
 
         session_maker = self._session_makers.get(bind_key)
         if session_maker is None:

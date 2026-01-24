@@ -1,4 +1,5 @@
 import logging
+import sys
 from collections.abc import AsyncGenerator, Generator
 from contextlib import suppress
 from pathlib import Path
@@ -222,6 +223,10 @@ async def async_session(
 
 
 @pytest.mark.xdist_group("file_object")
+@pytest.mark.xfail(
+    sys.version_info < (3, 10),
+    reason="s3fs endpoint_url parameter incompatible with Python 3.9",
+)
 async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
     minio_client: "Minio",
@@ -300,6 +305,10 @@ async def test_fsspec_s3_basic_operations_async(
 
 
 @pytest.mark.xdist_group("file_object")
+@pytest.mark.xfail(
+    sys.version_info < (3, 10),
+    reason="s3fs endpoint_url parameter incompatible with Python 3.9",
+)
 def test_fsspec_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
     minio_client: "Minio",
