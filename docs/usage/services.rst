@@ -19,17 +19,23 @@ Services provide:
 - Automatic schema validation and transformation
 - Support for SQLAlchemy query results (Row types) and RowMapping objects
 
+.. note::
+
+    The following example assumes the existence of the
+    ``Post`` model defined in :ref:`many_to_many_relationships` and the
+    ``Tag`` model defined in :ref:`using_unique_mixin`.
+
 Basic Service Usage
 -------------------
 
-Let's build upon our blog example by creating services for posts and tags:
+Let's build upon our blog example by creating services for posts:
 
 .. code-block:: python
 
     import datetime
-    from typing import Optional, List
-    from uuid import UUID
+    from typing import Optional
 
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
     from pydantic import BaseModel
 
@@ -37,27 +43,33 @@ Let's build upon our blog example by creating services for posts and tags:
     class PostCreate(BaseModel):
         title: str
         content: str
-        tag_names: List[str]
+        tag_names: list[str]
+
 
     class PostUpdate(BaseModel):
         title: Optional[str] = None
         content: Optional[str] = None
         published: Optional[bool] = None
 
+
     class PostResponse(BaseModel):
         id: int
         title: str
         content: str
         published: bool
-        published_at: Optional[datetime.datetime]
         created_at: datetime.datetime
         updated_at: datetime.datetime
-        tags: List["TagResponse"]
 
         model_config = {"from_attributes": True}
 
+
     class PostService(SQLAlchemyAsyncRepositoryService[Post]):
-        """Service for managing blog posts with automatic schema validation."""
+        """Post Service."""
+
+        class PostRepository(SQLAlchemyAsyncRepository[Post]):
+            """Post repository."""
+
+            model_type = Post
 
         repository_type = PostRepository
 
@@ -68,28 +80,17 @@ Services provide high-level methods for common operations:
 
 .. code-block:: python
 
-    async def create_post(
-        post_service: PostService,
-        data: PostCreate,
-    ) -> PostResponse:
-        """Create a post with associated tags."""
-        post = await post_service.create(
-            data,
-            auto_commit=True,
-        )
+    async def create_post(post_service: PostService, data: PostCreate) -> PostResponse:
+        post = await post_service.create(data=data, auto_commit=True)
         return post_service.to_schema(post, schema_type=PostResponse)
+
 
     async def update_post(
         post_service: PostService,
         post_id: int,
         data: PostUpdate,
     ) -> PostResponse:
-        """Update a post."""
-        post = await post_service.update(
-            item_id=post_id,
-            data=data,
-            auto_commit=True,
-        )
+        post = await post_service.update(item_id=post_id, data=data, auto_commit=True)
         return post_service.to_schema(post, schema_type=PostResponse)
 
 Complex Operations
@@ -98,118 +99,109 @@ Complex Operations
 Services can handle complex business logic involving multiple models.
 The code below shows a service coordinating posts and tags.
 
-.. note::
-
-    The following example assumes the existence of the
-    ``Post`` model defined in :ref:`many_to_many_relationships` and the
-    ``Tag`` model defined in :ref:`using_unique_mixin`.
-
 .. code-block:: python
 
-    from typing import List
-
-    from advanced_alchemy.exceptions import ErrorMessages
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+    import datetime
+    from typing import Any
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, schema_dump
     from advanced_alchemy.service.typing import ModelDictT
+    from advanced_alchemy.filters import LimitOffset
+    from advanced_alchemy.service.pagination import OffsetPagination
+    from advanced_alchemy.utils.text import slugify
 
-    from .models import Post, Tag
+    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+        """Post service for handling post operations with tag management."""
 
-    class PostService(SQLAlchemyAsyncRepositoryService[Post, PostRepository]):
+        class Repo(SQLAlchemyAsyncRepository[Post]):
+            """Post repository."""
+
+            model_type = Post
 
         loader_options = [Post.tags]
-        repository_type = PostRepository
-        match_fields = ["name"]
+        repository_type = Repo
+        match_fields = ["title"]
 
-        # Override creation behavior to handle tags
-        async def create(self, data: ModelDictT[Post], **kwargs) -> Post:
-            """Create a new post with tags, if provided."""
-            tags_added: list[str] = []
-            if isinstance(data, dict):
-                data["id"] = data.get("id", uuid4())
-                tags_added = data.pop("tags", [])
-            data = await self.to_model(data, "create")
+        async def to_model_on_create(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
+            """Convert and enrich data for post creation, handling tags."""
+            data = schema_dump(data)
+            tags_added = data.pop("tags", [])
+            data = await super().to_model(data)
+
             if tags_added:
                 data.tags.extend(
                     [
-                        await Tag.as_unique_async(self.repository.session, name=tag_text, slug=slugify(tag_text))
-                        for tag_text in tags_added
+                        await Tag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
+                        for tag in tags_added
                     ],
                 )
-            return await super().create(data=data, **kwargs)
+            return data
 
-        # Override update behavior to handle tags
-        async def update(
-            self,
-            data: ModelDictT[Post],
-            item_id: Any | None = None,
-            **kwargs,
-        ) -> Post:
-            """Update a post with tags, if provided."""
-            tags_updated: list[str] = []
-            if isinstance(data, dict):
-                tags_updated.extend(data.pop("tags", None) or [])
-                data["id"] = item_id
-                data = await self.to_model(data, "update")
-                existing_tags = [tag.name for tag in data.tags]
-                tags_to_remove = [tag for tag in data.tags if tag.name not in tags_updated]
+        async def to_model_on_update(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
+            """Convert and enrich data for post update, handling tags."""
+            data = schema_dump(data)
+            tags_updated = data.pop("tags", [])
+            post = await super().to_model(data)
+
+            if tags_updated:
+                existing_tags = [tag.name for tag in post.tags]
+                tags_to_remove = [tag for tag in post.tags if tag.name not in tags_updated]
                 tags_to_add = [tag for tag in tags_updated if tag not in existing_tags]
+
                 for tag_rm in tags_to_remove:
-                    data.tags.remove(tag_rm)
-                data.tags.extend(
+                    post.tags.remove(tag_rm)
+
+                post.tags.extend(
                     [
-                        await Tag.as_unique_async(self.repository.session, name=tag_text, slug=slugify(tag_text))
-                        for tag_text in tags_to_add
+                        await Tag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
+                        for tag in tags_to_add
                     ],
                 )
-            return await super().update(
-                data=data,
-                item_id=item_id,
-                **kwargs,
-            )
+            return post
 
-        # A custom write operation
-        async def publish_post(
-            self,
-            post_id: int,
-            publish: bool = True,
-        ) -> PostResponse:
-            """Publish or unpublish a post with timestamp."""
-            data = PostUpdate(
-                published=publish,
-                published_at=datetime.datetime.utcnow() if publish else None,
-            )
-            post = await self.repository.update(
-                item_id=post_id,
-                data=data,
-                auto_commit=True,
-            )
-            return self.to_schema(post, schema_type=PostResponse)
+Working with Slugs
+------------------
 
-        # A custom read operation
-        async def get_trending_posts(
-            self,
-            days: int = 7,
-            min_views: int = 100,
-        ) -> List[PostResponse]:
-            """Get trending posts based on view count and recency."""
-            posts = await self.post_service.list(
-                Post.published == True,
-                Post.created_at > (datetime.datetime.utcnow() - timedelta(days=days)),
-                Post.view_count >= min_views,
-                order_by=[Post.view_count.desc()],
-            )
-            return self.post_service.to_schema(posts, schema_type=PostResponse)
+Services can automatically generate URL-friendly slugs using the ``SQLAlchemyAsyncSlugRepository``.
+Here's an example service for managing tags with automatic slug generation:
 
-        # Override the default `to_model` to handle slugs
-        async def to_model(self, data: ModelDictT[Post], operation: str | None = None) -> Post:
-            """Convert a dictionary, msgspec Struct, or Pydantic model to a Post model. """
-            if (is_msgspec_struct(data) or is_pydantic_model(data)) and operation in {"create", "update"} and data.slug is None:
-                data.slug = await self.repository.get_available_slug(data.name)
-            if is_dict(data) and "slug" not in data and operation == "create":
+.. code-block:: python
+
+    from advanced_alchemy.repository import SQLAlchemyAsyncSlugRepository
+    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, schema_dump, is_dict_without_field, is_dict_with_field
+    from advanced_alchemy.service.typing import ModelDictT
+
+    class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
+        """Tag service with automatic slug generation."""
+
+        class Repo(SQLAlchemyAsyncSlugRepository[Tag]):
+            """Tag repository."""
+
+            model_type = Tag
+
+        repository_type = Repo
+        match_fields = ["name"]
+
+        async def to_model_on_create(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
+            """Generate slug on tag creation if not provided."""
+            data = schema_dump(data)
+            if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
                 data["slug"] = await self.repository.get_available_slug(data["name"])
-            if is_dict(data) and "slug" not in data and "name" in data and operation == "update":
+            return data
+
+        async def to_model_on_update(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
+            """Update slug if name changes."""
+            data = schema_dump(data)
+            if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
                 data["slug"] = await self.repository.get_available_slug(data["name"])
-            return await super().to_model(data, operation)
+            return data
+
+        async def to_model_on_upsert(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
+            """Generate slug on upsert if needed."""
+            data = schema_dump(data)
+            if is_dict_without_field(data, "slug") and (tag_name := data.get("name")) is not None:
+                data["slug"] = await self.repository.get_available_slug(tag_name)
+            return data
 
 Schema Integration
 ------------------
@@ -224,15 +216,16 @@ Pydantic Models
     from pydantic import BaseModel
     from typing import Optional
 
-    class UserSchema(BaseModel):
-        name: str
-        email: str
-        age: Optional[int] = None
+    class PostSchema(BaseModel):
+        id: int
+        title: str
+        content: str
+        published: bool
 
         model_config = {"from_attributes": True}
 
     # Convert database model to Pydantic schema
-    user_data = service.to_schema(user_model, schema_type=UserSchema)
+    post_data = post_service.to_schema(post_model, schema_type=PostSchema)
 
 Msgspec Structs
 ***************
@@ -242,13 +235,14 @@ Msgspec Structs
     from msgspec import Struct
     from typing import Optional
 
-    class UserStruct(Struct):
-        name: str
-        email: str
-        age: Optional[int] = None
+    class PostStruct(Struct):
+        id: int
+        title: str
+        content: str
+        published: bool
 
     # Convert database model to Msgspec struct
-    user_data = service.to_schema(user_model, schema_type=UserStruct)
+    post_data = post_service.to_schema(post_model, schema_type=PostStruct)
 
 Attrs Classes
 *************
@@ -259,13 +253,14 @@ Attrs Classes
     from typing import Optional
 
     @define
-    class UserAttrs:
-        name: str
-        email: str
-        age: Optional[int] = None
+    class PostAttrs:
+        id: int
+        title: str
+        content: str
+        published: bool
 
     # Convert database model to attrs class
-    user_data = service.to_schema(user_model, schema_type=UserAttrs)
+    post_data = post_service.to_schema(post_model, schema_type=PostAttrs)
 
 .. note::
 
@@ -284,16 +279,21 @@ Services now provide comprehensive support for SQLAlchemy query results:
     from sqlalchemy import select
 
     # Direct support for SQLAlchemy Row objects
-    query_results = await session.execute(select(User))
-    rows = query_results.fetchall()  # Returns list[Row[Any]]
+    result = await db_session.execute(select(Post))
+    post = result.scalar_one()  # Returns Post model
 
-    # Convert Row objects to schema types
-    user_data = service.to_schema(rows[0], schema_type=UserSchema)
-    users_paginated = service.to_schema(rows, schema_type=UserSchema)
+    # Convert model to schema type
+    post_data = post_service.to_schema(post, schema_type=PostSchema)
+
+    # Working with multiple results
+    result = await db_session.execute(select(Post))
+    posts = result.scalars().all()  # Returns list of Post models
+    posts_list = post_service.to_schema(posts, schema_type=PostSchema)
 
     # Also supports RowMapping objects
-    row_mapping_results = await session.execute(select(User)).mappings()
-    mapping_data = service.to_schema(row_mapping_results.first(), schema_type=UserSchema)
+    result = await db_session.execute(select(Post))
+    row_mapping = result.mappings().first()
+    mapping_data = post_service.to_schema(row_mapping["Post"], schema_type=PostSchema)
 
 
 Framework Integration
