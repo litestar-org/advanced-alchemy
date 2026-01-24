@@ -174,7 +174,7 @@ Here's an example service for managing tags with automatic slug generation:
     class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
         """Tag service with automatic slug generation."""
 
-        class TagRepository(SQLAlchemyAsyncSlugRepository[Tag]):
+        class Repo(SQLAlchemyAsyncSlugRepository[Tag]):
             """Tag repository."""
 
             model_type = Tag
