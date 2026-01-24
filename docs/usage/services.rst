@@ -119,7 +119,7 @@ The code below shows a service coordinating posts and tags.
             model_type = Post
 
         loader_options = [Post.tags]
-        repository_type = PostRepository
+        repository_type = Repo
         match_fields = ["title"]
 
         async def to_model_on_create(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
