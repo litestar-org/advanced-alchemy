@@ -113,7 +113,7 @@ The code below shows a service coordinating posts and tags.
     class PostService(SQLAlchemyAsyncRepositoryService[Post]):
         """Post service for handling post operations with tag management."""
 
-        class PostRepository(SQLAlchemyAsyncRepository[Post]):
+        class Repo(SQLAlchemyAsyncRepository[Post]):
             """Post repository."""
 
             model_type = Post
