@@ -179,7 +179,7 @@ Here's an example service for managing tags with automatic slug generation:
 
             model_type = Tag
 
-        repository_type = TagRepository
+        repository_type = Repo
         match_fields = ["name"]
 
         async def to_model_on_create(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
