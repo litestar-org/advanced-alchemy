@@ -1,5 +1,4 @@
 # ruff: noqa: C901
-import inspect as stdlib_inspect
 import logging
 from collections.abc import Collection, Generator
 from collections.abc import Set as AbstractSet
@@ -294,26 +293,38 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         return field_defs
 
     @classmethod
-    def get_property_fields(cls, model_type: "type[DeclarativeBase]") -> "dict[str, FieldDefinition]":
+    def _get_property_fields(
+        cls, model_type: "type[DeclarativeBase]", processed_fields: set[str]
+    ) -> "dict[str, FieldDefinition]":
         """Get fields defined as @property or @cached_property on the model.
 
-        Uses inspect.getmembers() to detect properties from the model class and mixins.
         Properties are marked read-only; setter support is not implemented.
 
         Args:
             model_type: The SQLAlchemy model type to extract properties from.
+            processed_fields: Fields to exclude
 
         Returns:
             A dictionary mapping property names to their field definitions.
         """
         namespace = cls.get_model_namespace(model_type)
         sqla_internal_properties = {"awaitable_attrs", "registry", "metadata"}
+        exclude = {*processed_fields, *sqla_internal_properties}
 
         properties: dict[str, FieldDefinition] = {}
-        for name, member in stdlib_inspect.getmembers(
-            model_type, predicate=lambda x: isinstance(x, (property, cached_property))
-        ):
-            if name in sqla_internal_properties:
+
+        # hint[janek]: don't use inspect.getmembers, as it will evaluate descriptors
+        # (including ORM descriptors, such as hybrid_property), which might have side
+        # effects. from 3.11 onwards, inspect.getmembers_static is available, which does
+        # not evaluate descriptors, however, for our use case, doing this manually still
+        # offers the advantage of being able to skip previously processed fields.
+        for name in dir(model_type):
+            if name in exclude:
+                continue
+
+            try:
+                member = getattr(model_type, name)
+            except AttributeError:
                 continue
 
             if isinstance(member, cached_property):
@@ -366,6 +377,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         # for each method name it is bound to. We only need to see it once, so track views of it here.
         seen_hybrid_descriptors: set[hybrid_property] = set()  # pyright: ignore[reportUnknownVariableType,reportMissingTypeArgument]
         skipped_descriptors: set[str] = set()
+        processed_fields: set[str] = set()
         for composite_property in mapper.composites:  # pragma: no cover
             for attr in composite_property.attrs:
                 if isinstance(attr, (MappedColumn, Column)):
@@ -373,9 +385,12 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 elif isinstance(attr, str):
                     skipped_descriptors.add(attr)
 
+        processed_fields.update(skipped_descriptors)
+
         yielded_sqla_keys: set[str] = set()  # Keep track of keys yielded by SQLAlchemy logic
 
         for key, orm_descriptor in mapper.all_orm_descriptors.items():
+            processed_fields.add(key)
             if is_hybrid_property := isinstance(orm_descriptor, hybrid_property):
                 if orm_descriptor in seen_hybrid_descriptors:
                     continue
@@ -406,7 +421,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 not is_hybrid_property and include_implicit_fields == "hybrid-only" and key not in model_type_hints
             )
 
-            # Descriptor is marked with with either Mark.READ_ONLY or Mark.WRITE_ONLY (see Case 1):
+            # Descriptor is marked with either Mark.READ_ONLY or Mark.WRITE_ONLY (see Case 1):
             # - always include it regardless of anything else.
             # Descriptor is not marked:
             # - It's implicit BUT config excludes anything implicit (see Case 2): exclude
@@ -430,7 +445,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 yielded_sqla_keys.add(definition.name)  # Track yielded key
                 yield definition
 
-        property_fields = cls.get_property_fields(model_type)
+        property_fields = cls._get_property_fields(model_type, processed_fields)
         for key, property_field_definition in property_fields.items():
             if key.startswith("_") or key in yielded_sqla_keys:
                 continue
