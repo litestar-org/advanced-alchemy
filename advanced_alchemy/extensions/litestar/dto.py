@@ -332,26 +332,21 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             elif isinstance(member, property):
                 if member.fget is None:
                     continue
+                func = member.fget
+            else:
+                continue
 
-                if isinstance(member, (property, cached_property)):
-                    if isinstance(member, cached_property):
-                        func = member.func
-                    else:
-                        if member.fget is None:
-                            continue
-                        func = member.fget
-
-                    try:
-                        sig = ParsedSignature.from_fn(func, namespace)
-                        properties[name] = replace(sig.return_type, name=name)
-                    except (AttributeError, TypeError, ValueError) as e:
-                        logger.debug(
-                            "could not parse type hint for property %s.%s: %s, using Any type",
-                            model_type.__name__,
-                            name,
-                            e,
-                        )
-                        properties[name] = FieldDefinition.from_annotation(Any, name=name)
+            try:
+                sig = ParsedSignature.from_fn(func, namespace)
+                properties[name] = replace(sig.return_type, name=name)
+            except (AttributeError, TypeError, ValueError) as e:
+                logger.debug(
+                    "could not parse type hint for property %s.%s: %s, using Any type",
+                    model_type.__name__,
+                    name,
+                    e,
+                )
+                properties[name] = FieldDefinition.from_annotation(Any, name=name)
 
         return properties
 

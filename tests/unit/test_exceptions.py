@@ -76,7 +76,7 @@ def test_wrap_sqlalchemy_exception_invalid_request_error() -> None:
 
 
 def test_wrap_sqlalchemy_exception_statement_error() -> None:
-    with pytest.raises(RepositoryError), wrap_sqlalchemy_exception():
+    with pytest.raises(IntegrityError), wrap_sqlalchemy_exception():
         raise StatementError("original", None, {}, Exception("original"))  # pyright: ignore[reportArgumentType]
 
 
