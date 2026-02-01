@@ -196,6 +196,11 @@ filename = "pyproject.toml"
 replace = 'version = "{new_version}"'
 search = 'version = "{current_version}"'
 
+[tool.uv]
+# NOTE: mysql-connector-python 9.6.0 (released 2026-01-21) removed Python 3.12+ wheels.
+# This is an Oracle packaging bug. Pinning to versions before that date until fixed.
+# Check https://pypi.org/project/mysql-connector-python/#files for updates.
+exclude-newer-package = { mysql-connector-python = "2026-01-20" }
 
 [build-system]
 build-backend = "hatchling.build"
