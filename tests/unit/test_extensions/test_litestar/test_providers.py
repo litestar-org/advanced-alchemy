@@ -477,7 +477,7 @@ def test_in_filter() -> None:
 
 def test_litestar_in_filter_values_are_isolated() -> None:
     """Ensure in-filter query params do not overwrite each other."""
-    filter_config = {"in_fields": ["first_name", "last_name"]}
+    filter_config: FilterConfig = {"in_fields": ["first_name", "last_name"]}
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
@@ -485,7 +485,8 @@ def test_litestar_in_filter_values_are_isolated() -> None:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, CollectionFilter):
-                response[filter_.field_name] = list(filter_.values or [])
+                field_name = str(filter_.field_name)
+                response[field_name] = list(filter_.values or [])
         return response
 
     app = Litestar(route_handlers=[handler], dependencies=filter_dependencies)
