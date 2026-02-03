@@ -700,30 +700,21 @@ class CacheInvalidationListener(BaseCacheListener):
 def setup_cache_listeners() -> None:
     """Register cache invalidation event listeners globally.
 
-    This registers both sync and async listeners on their respective session types.
+    This registers the unified listener on Session, which handles both sync
+    and async contexts by detecting a running event loop at commit time.
     For more control, prefer using scoped listeners via SQLAlchemyConfig.
     """
     from sqlalchemy.event import contains
-    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
-    # Register sync listeners on Session
-    sync_listeners = {
-        "after_commit": SyncCacheListener.after_commit,
-        "after_rollback": SyncCacheListener.after_rollback,
+    # Use the unified listener that handles both sync and async contexts
+    listeners = {
+        "after_commit": CacheInvalidationListener.after_commit,
+        "after_rollback": CacheInvalidationListener.after_rollback,
     }
-    for event_name, listener_func in sync_listeners.items():
+    for event_name, listener_func in listeners.items():
         if not contains(Session, event_name, listener_func):
             event.listen(Session, event_name, listener_func)
-
-    # Register async listeners on AsyncSession
-    async_listeners = {
-        "after_commit": AsyncCacheListener.after_commit,
-        "after_rollback": AsyncCacheListener.after_rollback,
-    }
-    for event_name, listener_func in async_listeners.items():
-        if not contains(AsyncSession, event_name, listener_func):
-            event.listen(AsyncSession, event_name, listener_func)
 
     logger.debug("Cache invalidation listeners registered")
 
