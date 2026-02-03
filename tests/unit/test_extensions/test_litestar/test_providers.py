@@ -475,6 +475,29 @@ def test_in_filter() -> None:
     assert f_none is None
 
 
+def test_litestar_in_filter_values_are_isolated() -> None:
+    """Ensure in-filter query params do not overwrite each other."""
+    filter_config = {"in_fields": ["first_name", "last_name"]}
+    filter_dependencies = create_filter_dependencies(filter_config)
+
+    @get("/test")
+    def handler(filters: list[FilterTypes]) -> dict[str, list[str]]:
+        response: dict[str, list[str]] = {}
+        for filter_ in filters:
+            if isinstance(filter_, CollectionFilter):
+                response[filter_.field_name] = list(filter_.values or [])
+        return response
+
+    app = Litestar(route_handlers=[handler], dependencies=filter_dependencies)
+    client = TestClient(app)
+
+    response = client.get("/test?firstNameIn=Sezer&lastNameIn=Tasan")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["first_name"] == ["Sezer"]
+    assert payload["last_name"] == ["Tasan"]
+
+
 def test_custom_dependency_defaults() -> None:
     """Test using custom dependency defaults."""
 
