@@ -50,7 +50,6 @@ extensions = [
     "auto_pytabs.sphinx_ext",
     "sphinx_copybutton",
     "sphinx_click",
-    "sphinx_toolbox.collapse",
     "sphinx_design",
     "sphinx_togglebutton",
     "sphinx_paramlinks",
