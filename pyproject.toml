@@ -622,5 +622,5 @@ SQLAlchemyAsyncSlugRepository = "SQLAlchemySyncSlugRepository"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.codespell]
-ignore-words-list = "selectin,fo,froms,notin"
+ignore-words-list = "selectin,fo,froms,notin,capfd"
 skip = 'pdm.lock, uv.lock, examples/us_state_lookup.json, docs/_static/favicon.svg, docs/changelog.rst, advanced_alchemy/types/file_object/file.py, docs/_static/syntax-highlighting.css'
