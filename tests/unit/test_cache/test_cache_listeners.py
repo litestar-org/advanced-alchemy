@@ -209,6 +209,6 @@ def test_base_cache_listener_execution_options() -> None:
 
 
 def test_setup_cache_listeners() -> None:
-    with patch("sqlalchemy.event.listen") as mock_listen:
+    with patch("advanced_alchemy._listeners.event.listen") as mock_listen:
         setup_cache_listeners()
         assert mock_listen.called

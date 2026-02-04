@@ -1444,7 +1444,7 @@ def test_setup_file_object_listeners() -> None:
     """Test setup_file_object_listeners registers event listeners."""
     from advanced_alchemy._listeners import setup_file_object_listeners
 
-    with patch("sqlalchemy.event.listen") as mock_listen:
+    with patch("advanced_alchemy._listeners.event.listen") as mock_listen:
         setup_file_object_listeners()
         assert mock_listen.called
 
