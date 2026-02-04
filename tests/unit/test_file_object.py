@@ -5,9 +5,10 @@ import logging
 import sys
 from pathlib import Path
 from typing import Callable, Optional
-from unittest.mock import AsyncMock, Mock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
 import pytest
+from sqlalchemy.orm import Session
 
 from advanced_alchemy.service.typing import PYDANTIC_INSTALLED, BaseModel
 from advanced_alchemy.types.file_object import FileObject
@@ -1023,3 +1024,496 @@ async def test_session_tracker_commit_async_delete_exceptions(
         assert any("error deleting file" in r.message for r in caplog.records)
     else:
         assert not any("error deleting file" in r.message for r in caplog.records)
+
+
+# --- FileObject Listener Tests (from _listeners module) ---
+
+
+def test_file_object_inspector_inspect_instance_no_state() -> None:
+    """Test FileObjectInspector when inspect returns None."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    instance = MagicMock()
+    tracker = MagicMock()
+    # Mock inspect to return None
+    with patch("advanced_alchemy._listeners.inspect", return_value=None):
+        FileObjectInspector.inspect_instance(instance, tracker)
+        # Should return early, no exception
+
+
+def test_file_object_inspector_inspect_instance_no_mapper() -> None:
+    """Test FileObjectInspector when state has no mapper."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    instance = MagicMock()
+    tracker = MagicMock()
+    mock_state = MagicMock()
+    mock_state.mapper = None
+
+    with patch("advanced_alchemy._listeners.inspect", return_value=mock_state):
+        FileObjectInspector.inspect_instance(instance, tracker)
+        # Should return early
+
+
+def test_file_object_inspector_inspect_instance_key_error() -> None:
+    """Test FileObjectInspector handles KeyError gracefully."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.file_object import StoredObject
+
+    instance = MagicMock()
+    tracker = MagicMock()
+    mock_state = MagicMock()
+    mock_mapper = MagicMock()
+    mock_state.mapper = mock_mapper
+
+    mock_attr = MagicMock()
+    mock_attr.expression.type = MagicMock(spec=StoredObject)
+
+    mock_mapper.column_attrs = {"file_col": mock_attr}
+    mock_state.attrs = {}  # Empty attrs, will trigger KeyError
+
+    with patch("advanced_alchemy._listeners.inspect", return_value=mock_state):
+        FileObjectInspector.inspect_instance(instance, tracker)
+        # Should handle KeyError gracefully
+
+
+def test_handle_single_attribute_added() -> None:
+    """Test handling single attribute when file is added."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    attr_state = MagicMock()
+
+    mock_file = MagicMock(spec=FileObject)
+    mock_file._pending_source_content = b"content"
+    mock_file._pending_source_path = None
+
+    attr_state.history.added = [mock_file]
+    attr_state.history.deleted = []
+
+    FileObjectInspector.handle_single_attribute(attr_state, tracker)
+
+    tracker.add_pending_save.assert_called_with(mock_file, b"content")
+
+
+def test_handle_single_attribute_deleted() -> None:
+    """Test handling single attribute when file is deleted."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    attr_state = MagicMock()
+
+    mock_file = MagicMock(spec=FileObject)
+    mock_file.path = "some/path"
+
+    attr_state.history.added = []
+    attr_state.history.deleted = [mock_file]
+
+    FileObjectInspector.handle_single_attribute(attr_state, tracker)
+
+    tracker.add_pending_delete.assert_called_with(mock_file)
+
+
+def test_handle_multiple_attribute() -> None:
+    """Test handling multiple attribute with deletion from pending removed."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.mutables import MutableList
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    instance = MagicMock()
+    attr_name = "files"
+    attr_state = MagicMock()
+
+    # Case: Deletion from pending removed
+    current_list = MagicMock(spec=MutableList)
+    deleted_item = MagicMock(spec=FileObject)
+    deleted_item.path = "path/to/delete"
+    current_list._pending_removed = {deleted_item}
+    current_list._pending_append = []
+
+    setattr(instance, attr_name, current_list)
+    attr_state.history.deleted = []
+    attr_state.history.added = []
+
+    FileObjectInspector.handle_multiple_attribute(instance, attr_name, attr_state, tracker)
+
+    tracker.add_pending_delete.assert_called_with(deleted_item)
+
+
+def test_handle_multiple_attribute_replacement() -> None:
+    """Test handling multiple attribute with list replacement."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    instance = MagicMock()
+    attr_name = "files"
+    attr_state = MagicMock()
+
+    # Case: List replacement
+    # Original list had item1, item2
+    # New list has item2 (so item1 removed)
+    item1 = MagicMock(spec=FileObject)
+    item1.path = "p1"
+    item2 = MagicMock(spec=FileObject)
+    item2.path = "p2"
+
+    # SQLAlchemy history.deleted contains the *value* that was deleted.
+    # For a list assignment replacing the whole list, it might be [old_list].
+    # The code expects history.deleted[0] to be the list.
+    attr_state.history.deleted = [[item1, item2]]  # original list wrapped in list
+    attr_state.history.added = [[item2]]  # new list wrapped in list
+
+    # We must mock getattr(instance, attr_name) to return None or regular list
+    setattr(instance, attr_name, [item2])
+
+    FileObjectInspector.handle_multiple_attribute(instance, attr_name, attr_state, tracker)
+
+    tracker.add_pending_delete.assert_called_with(item1)
+
+
+def test_handle_multiple_attribute_append_and_new() -> None:
+    """Test handling multiple attribute with appends and new items."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.mutables import MutableList
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    instance = MagicMock()
+    attr_name = "files"
+    attr_state = MagicMock()
+
+    current_list = MagicMock(spec=MutableList)
+    current_list._pending_removed = set()
+
+    item1 = MagicMock(spec=FileObject)
+    item1.path = None
+    item1._pending_content = b"d1"
+    item1._pending_source_path = None
+    # For item2, we want to test pending_source_path
+    item2 = MagicMock(spec=FileObject)
+    item2.path = None
+    item2._pending_source_path = "p2"
+    item2._pending_source_content = None
+
+    current_list._pending_append = [item1]
+
+    setattr(instance, attr_name, current_list)
+
+    # Case: New items in history.added
+    attr_state.history.deleted = []
+    attr_state.history.added = [[item2]]
+
+    FileObjectInspector.handle_multiple_attribute(instance, attr_name, attr_state, tracker)
+
+    tracker.add_pending_save.assert_any_call(item1, b"d1")
+    tracker.add_pending_save.assert_any_call(item2, "p2")
+
+
+def test_process_deleted_instance() -> None:
+    """Test processing a deleted instance for file cleanup."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.file_object import StoredObject
+
+    instance = MagicMock()
+    tracker = MagicMock()
+    mapper = MagicMock()
+
+    mock_attr = MagicMock()
+    mock_attr.expression.type = MagicMock(spec=StoredObject)
+    mock_attr.expression.type.multiple = False
+
+    mapper.column_attrs = {"file_col": mock_attr}
+
+    file_obj = MagicMock()
+    file_obj.path = "path"
+    setattr(instance, "file_col", file_obj)
+
+    FileObjectInspector.process_deleted_instance(instance, mapper, tracker)
+
+    tracker.add_pending_delete.assert_called_with(file_obj)
+
+
+def test_get_file_tracker_create() -> None:
+    """Test get_file_tracker creates a new tracker."""
+    from advanced_alchemy._listeners import get_file_tracker
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    result = get_file_tracker(session, create=True)
+    assert result is not None
+    assert session.info["_aa_file_tracker"] is result
+
+
+# --- BaseFileObjectListener Tests ---
+
+
+def test_base_file_object_listener_is_listener_enabled_default() -> None:
+    """Test BaseFileObjectListener enabled by default."""
+    from advanced_alchemy._listeners import BaseFileObjectListener
+
+    class TestBaseFileObjectListener(BaseFileObjectListener):
+        pass
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+    session.bind = None
+    session.execution_options = None
+
+    assert TestBaseFileObjectListener._is_listener_enabled(session) is True
+
+
+def test_base_file_object_listener_is_listener_enabled_session_info() -> None:
+    """Test BaseFileObjectListener can be disabled via session info."""
+    from advanced_alchemy._listeners import BaseFileObjectListener
+
+    class TestBaseFileObjectListener(BaseFileObjectListener):
+        pass
+
+    session = MagicMock(spec=Session)
+    session.info = {"enable_file_object_listener": False}
+
+    assert TestBaseFileObjectListener._is_listener_enabled(session) is False
+
+
+def test_base_file_object_listener_before_flush_disabled() -> None:
+    """Test before_flush returns early when listener is disabled."""
+    from advanced_alchemy._listeners import BaseFileObjectListener
+
+    class TestBaseFileObjectListener(BaseFileObjectListener):
+        pass
+
+    session = MagicMock(spec=Session)
+    session.info = {"enable_file_object_listener": False}
+
+    TestBaseFileObjectListener.before_flush(session, MagicMock(), None)
+    # Should return early
+    assert "_aa_file_tracker" not in session.info
+
+
+def test_base_file_object_listener_before_flush() -> None:
+    """Test before_flush processes session objects."""
+    from advanced_alchemy._listeners import BaseFileObjectListener
+
+    class TestBaseFileObjectListener(BaseFileObjectListener):
+        pass
+
+    session = MagicMock(spec=Session)
+    session.bind = MagicMock()
+    session.info = {}
+    session.new = []
+    session.dirty = []
+    session.deleted = []
+
+    # Mock get_file_tracker to return a tracker
+    with patch("advanced_alchemy._listeners.get_file_tracker") as mock_get_tracker:
+        mock_tracker = MagicMock()
+        mock_get_tracker.return_value = mock_tracker
+        TestBaseFileObjectListener.before_flush(session, MagicMock(), None)
+
+
+# --- SyncFileObjectListener Tests ---
+
+
+def test_sync_file_object_listener_after_commit() -> None:
+    """Test SyncFileObjectListener commits tracker on session commit."""
+    from advanced_alchemy._listeners import SyncFileObjectListener
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_file_tracker": tracker}
+
+    SyncFileObjectListener.after_commit(session)
+
+    tracker.commit.assert_called_once()
+    assert "_aa_file_tracker" not in session.info
+
+
+def test_sync_file_object_listener_after_rollback() -> None:
+    """Test SyncFileObjectListener rolls back tracker on session rollback."""
+    from advanced_alchemy._listeners import SyncFileObjectListener
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_file_tracker": tracker}
+
+    SyncFileObjectListener.after_rollback(session)
+
+    tracker.rollback.assert_called_once()
+    assert "_aa_file_tracker" not in session.info
+
+
+# --- AsyncFileObjectListener Tests ---
+
+
+@pytest.mark.asyncio
+async def test_async_file_object_listener_after_commit() -> None:
+    """Test AsyncFileObjectListener commits tracker asynchronously."""
+    from advanced_alchemy._listeners import AsyncFileObjectListener, _active_file_operations
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    tracker.commit_async = AsyncMock()
+    session.info = {"_aa_file_tracker": tracker}
+
+    AsyncFileObjectListener.after_commit(session)
+
+    # Find the task and await it
+    assert len(_active_file_operations) > 0
+    task = next(iter(_active_file_operations))
+    await task
+
+    assert "_aa_file_tracker" not in session.info
+    tracker.commit_async.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_file_object_listener_after_rollback() -> None:
+    """Test AsyncFileObjectListener rolls back tracker asynchronously."""
+    from advanced_alchemy._listeners import AsyncFileObjectListener, _active_file_operations
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    tracker.rollback_async = AsyncMock()
+    session.info = {"_aa_file_tracker": tracker}
+
+    AsyncFileObjectListener.after_rollback(session)
+
+    # Find the task and await it
+    assert len(_active_file_operations) > 0
+    task = next(iter(_active_file_operations))
+    await task
+
+    assert "_aa_file_tracker" not in session.info
+    tracker.rollback_async.assert_called_once()
+
+
+# --- FileObjectListener (Legacy) Tests ---
+
+
+def test_file_object_listener_legacy_sync() -> None:
+    """Test legacy FileObjectListener in sync context."""
+    from advanced_alchemy._listeners import FileObjectListener
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_file_tracker": tracker}
+
+    # patch is_async_context to return False
+    with patch("advanced_alchemy._listeners.is_async_context", return_value=False):
+        FileObjectListener.after_commit(session)
+        tracker.commit.assert_called_once()
+
+        session.info = {"_aa_file_tracker": tracker}  # put it back
+        FileObjectListener.after_rollback(session)
+        tracker.rollback.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_file_object_listener_legacy_async() -> None:
+    """Test legacy FileObjectListener in async context."""
+    from advanced_alchemy._listeners import FileObjectListener, _active_file_operations
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    tracker.commit_async = AsyncMock()
+    tracker.rollback_async = AsyncMock()
+    session.info = {"_aa_file_tracker": tracker}
+
+    # patch is_async_context to return True
+    with patch("advanced_alchemy._listeners.is_async_context", return_value=True):
+        FileObjectListener.after_commit(session)
+
+        # Await task
+        if _active_file_operations:
+            await next(iter(_active_file_operations))
+
+        session.info = {"_aa_file_tracker": tracker}
+        FileObjectListener.after_rollback(session)
+
+        # Await task
+        if _active_file_operations:
+            for t in list(_active_file_operations):
+                if not t.done():
+                    await t
+
+
+# --- Setup Tests ---
+
+
+def test_setup_file_object_listeners() -> None:
+    """Test setup_file_object_listeners registers event listeners."""
+    from advanced_alchemy._listeners import setup_file_object_listeners
+
+    with patch("sqlalchemy.event.listen") as mock_listen:
+        setup_file_object_listeners()
+        assert mock_listen.called
+
+
+# --- Utility/Shared Tests ---
+
+
+def test_touch_updated_timestamp() -> None:
+    """Test touch_updated_timestamp updates timestamps on dirty instances."""
+    import datetime
+
+    from advanced_alchemy._listeners import touch_updated_timestamp
+
+    session = MagicMock(spec=Session)
+    instance = MagicMock()
+    session.dirty = [instance]
+    session.new = []
+
+    with patch("advanced_alchemy._listeners.inspect") as mock_inspect:
+        state = MagicMock()
+        state.mapper.class_ = MagicMock()
+        state.mapper.class_.updated_at = "exists"
+        state.deleted = False
+
+        # Mock updated_at attribute state
+        attr_state = MagicMock()
+        attr_state.history.added = []  # No manual update
+        state.attrs.get.return_value = attr_state
+
+        mock_inspect.return_value = state
+
+        # Mock _has_persistent_column_changes to return True
+        with patch("advanced_alchemy._listeners._has_persistent_column_changes", return_value=True):
+            touch_updated_timestamp(session)
+
+            # Verify instance.updated_at was set
+            assert isinstance(instance.updated_at, datetime.datetime)
+
+
+def test_has_persistent_column_changes() -> None:
+    """Test _has_persistent_column_changes detects column modifications."""
+    from advanced_alchemy._listeners import _has_persistent_column_changes
+
+    state = MagicMock()
+    mapper = MagicMock()
+    attr = MagicMock()
+    attr.key = "some_col"
+    mapper.column_attrs = [attr]
+    state.mapper = mapper
+
+    attr_state = MagicMock()
+    attr_state.history.has_changes.return_value = True
+    state.attrs.get.return_value = attr_state
+
+    assert _has_persistent_column_changes(state) is True
+
+
+# --- Deprecation / Context Tests ---
+
+
+def test_deprecated_context_functions() -> None:
+    """Test deprecated async context functions emit warnings."""
+    from advanced_alchemy._listeners import is_async_context, reset_async_context, set_async_context
+
+    with pytest.warns(DeprecationWarning):
+        set_async_context(True)
+
+    with pytest.warns(DeprecationWarning):
+        reset_async_context(None)
+
+    with pytest.warns(DeprecationWarning):
+        is_async_context()

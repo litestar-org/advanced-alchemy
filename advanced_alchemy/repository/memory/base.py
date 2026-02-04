@@ -313,7 +313,7 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
                 continue
             remote_mapper = mappers[next(iter(column.foreign_keys))._table_key()]  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
             try:
-                obj = self.store(remote_mapper.class_).get(new_attrs.get(column.key, None))
+                obj = self.store(remote_mapper.class_).get(new_attrs.get(column.key))
             except KeyError:
                 continue
 

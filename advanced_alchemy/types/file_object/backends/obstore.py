@@ -142,7 +142,7 @@ class ObstoreBackend(StorageBackend):
             "max_concurrency": max_concurrency,
         }
         if not isinstance(self.fs, LocalStore):
-            put_params["attributes"] = attributes if attributes else None
+            put_params["attributes"] = attributes or None
 
         _ = self.fs.put(file_object.path, data, **put_params)
         info = self.fs.head(file_object.path)
@@ -198,7 +198,7 @@ class ObstoreBackend(StorageBackend):
             "max_concurrency": max_concurrency,
         }
         if not isinstance(self.fs, LocalStore):
-            put_params["attributes"] = attributes if attributes else None
+            put_params["attributes"] = attributes or None
 
         _ = await self.fs.put_async(file_object.path, data, **put_params)
         info = await self.fs.head_async(file_object.path)
