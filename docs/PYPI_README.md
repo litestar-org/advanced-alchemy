@@ -322,7 +322,7 @@ or the [project-specific GitHub discussions page][project-discussions].
 <!-- markdownlint-disable -->
 <hr />
 <p align="center">
-
+  
 </p>
 
 [litestar-org]: https://github.com/litestar-org

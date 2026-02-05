@@ -13,7 +13,7 @@ resolution-markers = [
 [options]
 
 [options.exclude-newer-package]
-mysql-connector-python = "2026-01-20T23:00:00Z"
+mysql-connector-python = "2026-01-21T00:00:00Z"
 
 [[package]]
 name = "accessible-pygments"
@@ -29,7 +29,7 @@ wheels = [
 
 [[package]]
 name = "advanced-alchemy"
-version = "1.8.2"
+version = "1.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic", version = "1.16.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
