@@ -1651,6 +1651,271 @@ def test_is_listener_enabled_extended() -> None:
     assert TestListener._is_listener_enabled(session) is True
 
 
+def test_file_object_inspector_skips_non_stored_object() -> None:
+    """FileObjectInspector skips columns that are not StoredObject type."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    instance = MagicMock()
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    mock_state = MagicMock()
+    mock_mapper = MagicMock()
+    mock_state.mapper = mock_mapper
+
+    # Non-StoredObject column
+    non_stored_attr = MagicMock()
+    non_stored_attr.expression.type = MagicMock()  # Not a StoredObject
+    mock_mapper.column_attrs = {"name": non_stored_attr}
+
+    with patch("advanced_alchemy._listeners.inspect", return_value=mock_state):
+        FileObjectInspector.inspect_instance(instance, tracker)
+
+    # tracker should not have been called since no StoredObject columns
+    tracker.add_pending_save.assert_not_called()
+    tracker.add_pending_delete.assert_not_called()
+
+
+def test_handle_single_attribute_pending_source_path() -> None:
+    """Test the elif branch for pending_source_path in handle_single_attribute."""
+    from advanced_alchemy._listeners import FileObjectInspector
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    attr_state = MagicMock()
+
+    mock_file = MagicMock(spec=FileObject)
+    mock_file._pending_source_content = None
+    mock_file._pending_source_path = "/path/to/source"
+
+    attr_state.history.added = [mock_file]
+    attr_state.history.deleted = []
+
+    FileObjectInspector.handle_single_attribute(attr_state, tracker)
+
+    tracker.add_pending_save.assert_called_with(mock_file, "/path/to/source")
+
+
+def test_before_flush_processes_new_dirty_deleted() -> None:
+    """Test before_flush processes new, dirty, and deleted instances."""
+    from advanced_alchemy._listeners import BaseFileObjectListener, FileObjectInspector
+
+    class TestListener(BaseFileObjectListener):
+        pass
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+    session.bind = MagicMock()
+
+    new_instance = MagicMock()
+    dirty_instance = MagicMock()
+    deleted_instance = MagicMock()
+
+    session.new = [new_instance]
+    session.dirty = [dirty_instance]
+    session.deleted = [deleted_instance]
+
+    # Mock inspect for deleted instance
+    deleted_state = MagicMock()
+    deleted_mapper = MagicMock()
+    deleted_state.mapper = deleted_mapper
+    # No StoredObject columns on deleted instance
+    non_stored = MagicMock()
+    non_stored.expression.type = MagicMock()
+    deleted_mapper.column_attrs = {"name": non_stored}
+
+    with (
+        patch("advanced_alchemy._listeners.get_file_tracker") as mock_get_tracker,
+        patch.object(FileObjectInspector, "inspect_instance") as mock_inspect,
+        patch("advanced_alchemy._listeners.inspect", return_value=deleted_state),
+    ):
+        mock_tracker = MagicMock()
+        mock_get_tracker.return_value = mock_tracker
+
+        TestListener.before_flush(session, MagicMock(), None)
+
+    # inspect_instance called for new and dirty
+    assert mock_inspect.call_count == 2
+    mock_inspect.assert_any_call(new_instance, mock_tracker)
+    mock_inspect.assert_any_call(dirty_instance, mock_tracker)
+
+
+def test_async_file_object_listener_no_tracker_commit() -> None:
+    """AsyncFileObjectListener.after_commit returns early when no tracker exists."""
+    from advanced_alchemy._listeners import AsyncFileObjectListener
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    AsyncFileObjectListener.after_commit(session)
+    # No exception, no task created
+
+
+def test_async_file_object_listener_no_tracker_rollback() -> None:
+    """AsyncFileObjectListener.after_rollback returns early when no tracker exists."""
+    from advanced_alchemy._listeners import AsyncFileObjectListener
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    AsyncFileObjectListener.after_rollback(session)
+    # No exception, no task created
+
+
+def test_sync_file_object_listener_no_tracker_commit() -> None:
+    """SyncFileObjectListener.after_commit is a no-op when no tracker exists."""
+    from advanced_alchemy._listeners import SyncFileObjectListener
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    SyncFileObjectListener.after_commit(session)
+    # No exception
+
+
+def test_sync_file_object_listener_no_tracker_rollback() -> None:
+    """SyncFileObjectListener.after_rollback is a no-op when no tracker exists."""
+    from advanced_alchemy._listeners import SyncFileObjectListener
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    SyncFileObjectListener.after_rollback(session)
+    # No exception
+
+
+def test_touch_updated_timestamp_with_column_changes() -> None:
+    """Test touch_updated_timestamp sets timestamp when persistent column changes detected."""
+    import datetime
+
+    from advanced_alchemy._listeners import touch_updated_timestamp
+
+    session = MagicMock(spec=Session)
+    instance = MagicMock()
+    session.dirty = [instance]
+    session.new = []
+
+    with patch("advanced_alchemy._listeners.inspect") as mock_inspect:
+        state = MagicMock()
+        state.mapper.class_ = MagicMock()
+        state.mapper.class_.updated_at = "exists"
+        state.deleted = False
+
+        # Mock updated_at attribute: no manual updates
+        attr_state = MagicMock()
+        attr_state.history.added = []
+        state.attrs.get.return_value = attr_state
+
+        # Mock a column with real changes
+        col_attr = MagicMock()
+        col_attr.key = "name"
+        col_attr_state = MagicMock()
+        col_attr_state.history.has_changes.return_value = True
+        state.mapper.column_attrs = [col_attr]
+        state.attrs.get.side_effect = lambda k: attr_state if k == "updated_at" else col_attr_state
+
+        mock_inspect.return_value = state
+
+        touch_updated_timestamp(session)
+
+        assert isinstance(instance.updated_at, datetime.datetime)
+
+
+def test_touch_updated_timestamp_skips_when_no_changes() -> None:
+    """Test touch_updated_timestamp does not set timestamp when no column changes."""
+    from advanced_alchemy._listeners import touch_updated_timestamp
+
+    session = MagicMock(spec=Session)
+    instance = MagicMock()
+    initial_value = instance.updated_at
+    session.dirty = [instance]
+    session.new = []
+
+    with patch("advanced_alchemy._listeners.inspect") as mock_inspect:
+        state = MagicMock()
+        state.mapper.class_ = MagicMock()
+        state.mapper.class_.updated_at = "exists"
+        state.deleted = False
+
+        attr_state = MagicMock()
+        attr_state.history.added = []
+        state.attrs.get.return_value = attr_state
+
+        # No column changes
+        col_attr = MagicMock()
+        col_attr.key = "name"
+        col_attr_state = MagicMock()
+        col_attr_state.history.has_changes.return_value = False
+        state.mapper.column_attrs = [col_attr]
+        state.attrs.get.side_effect = lambda k: attr_state if k == "updated_at" else col_attr_state
+
+        mock_inspect.return_value = state
+
+        touch_updated_timestamp(session)
+
+        # updated_at should not have been explicitly set to a datetime
+        # The MagicMock auto-creates attributes, so we check it wasn't set to a datetime
+        assert instance.updated_at is initial_value
+
+
+def test_touch_updated_timestamp_skips_explicit_user_assignment() -> None:
+    """Test touch_updated_timestamp respects explicit user assignments."""
+    from advanced_alchemy._listeners import touch_updated_timestamp
+
+    session = MagicMock(spec=Session)
+    instance = MagicMock()
+    session.dirty = [instance]
+    session.new = []
+
+    with patch("advanced_alchemy._listeners.inspect") as mock_inspect:
+        state = MagicMock()
+        state.mapper.class_ = MagicMock()
+        state.mapper.class_.updated_at = "exists"
+        state.deleted = False
+
+        # updated_at was explicitly set by user
+        attr_state = MagicMock()
+        attr_state.history.added = ["2025-01-01"]  # User set a value
+        state.attrs.get.return_value = attr_state
+
+        mock_inspect.return_value = state
+
+        touch_updated_timestamp(session)
+
+        # Should not overwrite user's value
+
+
+def test_get_file_tracker_no_create() -> None:
+    """Test get_file_tracker with create=False returns None when no tracker exists."""
+    from advanced_alchemy._listeners import get_file_tracker
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    result = get_file_tracker(session, create=False)
+    assert result is None
+
+
+def test_process_deleted_instance_none_value() -> None:
+    """Test process_deleted_instance skips None-valued FileObject attributes."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.file_object import StoredObject
+
+    instance = MagicMock()
+    tracker = MagicMock()
+    mapper = MagicMock()
+
+    mock_attr = MagicMock()
+    mock_attr.expression.type = MagicMock(spec=StoredObject)
+    mock_attr.expression.type.multiple = False
+
+    mapper.column_attrs = {"file_col": mock_attr}
+
+    # Value is None
+    setattr(instance, "file_col", None)
+
+    FileObjectInspector.process_deleted_instance(instance, mapper, tracker)
+
+    tracker.add_pending_delete.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_async_file_object_listener_error_handling(caplog: pytest.LogCaptureFixture) -> None:
     """Test error handling in AsyncFileObjectListener."""

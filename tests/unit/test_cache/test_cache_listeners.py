@@ -224,6 +224,124 @@ def test_base_cache_listener_execution_options() -> None:
     assert TestBaseCacheListener._is_listener_enabled(session) is True
 
 
+# --- Additional AsyncCacheListener Tests ---
+
+
+def test_async_cache_listener_disabled() -> None:
+    """AsyncCacheListener.after_commit returns early when listener is disabled."""
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_cache_tracker": tracker, "enable_cache_listener": False}
+
+    AsyncCacheListener.after_commit(session)
+
+    # Tracker should not be touched
+    tracker.commit.assert_not_called()
+    # Tracker should still be in info (not popped)
+    assert "_aa_cache_tracker" in session.info
+
+
+def test_async_cache_listener_no_tracker_commit() -> None:
+    """AsyncCacheListener.after_commit with no tracker is a no-op."""
+    session = MagicMock(spec=Session)
+    session.info = {"enable_cache_listener": True}
+    session.bind = None
+    session.execution_options = None
+
+    AsyncCacheListener.after_commit(session)
+    # No exception raised, no tracker to pop
+
+
+def test_async_cache_listener_no_tracker_rollback() -> None:
+    """AsyncCacheListener.after_rollback with no tracker is a no-op."""
+    session = MagicMock(spec=Session)
+    session.info = {"enable_cache_listener": True}
+
+    AsyncCacheListener.after_rollback(session)
+    # No exception raised
+
+
+def test_sync_cache_listener_no_tracker_commit() -> None:
+    """SyncCacheListener.after_commit with no tracker is a no-op."""
+    session = MagicMock(spec=Session)
+    session.info = {"enable_cache_listener": True}
+    session.bind = None
+    session.execution_options = None
+
+    SyncCacheListener.after_commit(session)
+    # No exception raised
+
+
+def test_sync_cache_listener_no_tracker_rollback() -> None:
+    """SyncCacheListener.after_rollback with no tracker is a no-op."""
+    session = MagicMock(spec=Session)
+    session.info = {"enable_cache_listener": True}
+
+    SyncCacheListener.after_rollback(session)
+    # No exception raised
+
+
+# --- Additional CacheInvalidationListener Tests ---
+
+
+def test_cache_invalidation_listener_sync_commit() -> None:
+    """CacheInvalidationListener.after_commit calls tracker.commit() in sync context."""
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_cache_tracker": tracker, "enable_cache_listener": True}
+
+    # Ensure no running event loop (sync context)
+    with patch("advanced_alchemy._listeners.asyncio.get_running_loop", side_effect=RuntimeError):
+        CacheInvalidationListener.after_commit(session)
+
+    tracker.commit.assert_called_once()
+    assert "_aa_cache_tracker" not in session.info
+
+
+def test_cache_invalidation_listener_rollback() -> None:
+    """CacheInvalidationListener.after_rollback calls tracker.rollback()."""
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_cache_tracker": tracker}
+
+    CacheInvalidationListener.after_rollback(session)
+
+    tracker.rollback.assert_called_once()
+    assert "_aa_cache_tracker" not in session.info
+
+
+def test_cache_invalidation_listener_rollback_no_tracker() -> None:
+    """CacheInvalidationListener.after_rollback with no tracker is a no-op."""
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    CacheInvalidationListener.after_rollback(session)
+    # No exception raised
+
+
+def test_cache_invalidation_listener_disabled() -> None:
+    """CacheInvalidationListener.after_commit returns early when disabled."""
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    session.info = {"_aa_cache_tracker": tracker, "enable_cache_listener": False}
+
+    CacheInvalidationListener.after_commit(session)
+
+    tracker.commit.assert_not_called()
+
+
+# --- Additional get_cache_tracker Tests ---
+
+
+def test_get_cache_tracker_create_no_manager_returns_none() -> None:
+    """get_cache_tracker with create=True but no cache_manager returns None."""
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    result = get_cache_tracker(session, cache_manager=None, create=True)
+    assert result is None
+
+
 # --- Setup Tests ---
 
 

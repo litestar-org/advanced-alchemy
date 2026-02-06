@@ -1531,6 +1531,109 @@ def test_build_list_cache_key_returns_none_for_raw_filters() -> None:
     assert key is None
 
 
+def test_normalize_cache_key_value_complex_types() -> None:
+    """Normalize cache key values for complex types (datetime, uuid, etc)."""
+    dt = datetime.datetime(2025, 12, 14, 10, 30, 0)
+    result = _normalize_cache_key_value(dt)
+    assert result == {"__type__": "datetime", "value": "2025-12-14T10:30:00"}
+
+    from uuid import UUID
+
+    u = UUID("12345678-1234-5678-1234-567812345678")
+    result = _normalize_cache_key_value(u)
+    assert result == {"__type__": "uuid", "value": "12345678-1234-5678-1234-567812345678"}
+
+    # bytes
+    result = _normalize_cache_key_value(b"\x01\x02")
+    assert result == {"__type__": "bytes", "value": "0102"}
+
+
+def test_normalize_cache_key_value_list_tuple() -> None:
+    """Normalize cache key values for list and tuple types."""
+    result = _normalize_cache_key_value([1, "two", 3.0])
+    assert result == [1, "two", 3.0]
+
+    result = _normalize_cache_key_value((True, None))
+    assert result == [True, None]
+
+
+def test_normalize_cache_key_value_none_and_primitives() -> None:
+    """Normalize cache key values for None and primitive types (early return)."""
+    assert _normalize_cache_key_value(None) is None
+    assert _normalize_cache_key_value(42) == 42
+    assert _normalize_cache_key_value(3.14) == 3.14
+    assert _normalize_cache_key_value("hello") == "hello"
+    assert _normalize_cache_key_value(True) is True
+
+
+def test_build_list_cache_key_with_unary_expression() -> None:
+    """UnaryExpression in order_by is serialized as string expression."""
+    from sqlalchemy import UnaryExpression, desc
+
+    # Create a real UnaryExpression
+    unary_expr = desc(column("name"))
+    assert isinstance(unary_expr, UnaryExpression)
+
+    key = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=[],
+        kwargs={},
+        order_by=[unary_expr],  # type: ignore[list-item]
+        execution_options={},
+        uniquify=False,
+    )
+
+    assert key is not None
+    assert key.startswith("CacheModel:list:")
+
+
+def test_build_list_cache_key_with_count_window_function() -> None:
+    """count_with_window_function param is included in cache key."""
+    key_with = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list_and_count",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        count_with_window_function=True,
+    )
+    key_without = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list_and_count",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        count_with_window_function=False,
+    )
+    key_default = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list_and_count",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+    )
+
+    assert key_with is not None
+    assert key_without is not None
+    assert key_default is not None
+    # Different values of count_with_window_function produce different keys
+    assert key_with != key_without
+    # None (omitted) differs from explicit True/False
+    assert key_default != key_with
+    assert key_default != key_without
+
+
 def test_model_from_dict_includes_relationship_attributes() -> None:
     """Test that model_from_dict includes relationship attributes from __mapper__.attrs.keys()."""
     from tests.fixtures.uuid.models import UUIDAuthor

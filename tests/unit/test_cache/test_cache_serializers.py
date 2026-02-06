@@ -247,6 +247,38 @@ def test_roundtrip_json_encoding() -> None:
     assert result["set"] == test_data["set"]
 
 
+def test_decode_typed_marker_unknown_type() -> None:
+    """Test _decode_typed_marker returns original dict for unknown __type__."""
+    data = {"__type__": "unknown_type", "value": "something"}
+
+    result = _decode_typed_marker(data)
+
+    # Should return the original dict unchanged
+    assert result == data
+    assert isinstance(result, dict)
+
+
+def test_default_serializer_plain_values_use_else_branch() -> None:
+    """Test that plain int/str values go through the else branch (encode_complex_type returns None)."""
+
+    class PlainModel(CacheBase):
+        """Model with only plain-type columns."""
+
+        __tablename__ = "plain_model"
+
+        id: Mapped[int] = mapped_column(primary_key=True)
+        name: Mapped[str] = mapped_column(String(length=50))
+
+    instance = PlainModel(id=42, name="test")
+    data = default_serializer(instance)
+    decoded = decode_json(data)
+
+    # Plain int and str should be stored directly (else branch)
+    assert decoded["id"] == 42
+    assert decoded["name"] == "test"
+    assert decoded["__aa_model__"] == "PlainModel"
+
+
 def test_default_serializer_encodes_complex_types() -> None:
     """default_serializer should encode complex types and include metadata."""
     instance = CacheModel(

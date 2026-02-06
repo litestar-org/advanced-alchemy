@@ -58,6 +58,55 @@ def get_file_tracker(
 logger = logging.getLogger("advanced_alchemy")
 
 
+def _is_listener_enabled(session: "Session", key: str) -> bool:
+    """Check if a listener is enabled for this session.
+
+    Checks session.info, engine execution_options (including sync_engine),
+    and session execution_options, in that priority order.
+
+    Args:
+        session: The SQLAlchemy session instance.
+        key: The key to check (e.g. ``"enable_file_object_listener"`` or ``"enable_cache_listener"``).
+
+    Returns:
+        Whether the listener is enabled.
+    """
+    enable_listener = True  # Enabled by default
+
+    session_info = getattr(session, "info", {})
+    if key in session_info:
+        return bool(session_info[key])
+
+    options_sources: list[Optional[Union[Callable[[], dict[str, Any]], dict[str, Any]]]] = []
+    if session.bind:
+        options_sources.append(getattr(session.bind, "execution_options", None))
+        sync_engine = getattr(session.bind, "sync_engine", None)
+        if sync_engine:
+            options_sources.append(getattr(sync_engine, "execution_options", None))
+    options_sources.append(getattr(session, "execution_options", None))
+
+    for options_source in options_sources:
+        if options_source is None:
+            continue
+
+        options: Optional[dict[str, Any]] = None
+        if callable(options_source):
+            try:
+                result = options_source()
+                if isinstance(result, dict):  # pyright: ignore
+                    options = result
+            except Exception as e:
+                logger.debug("Error calling execution_options source: %s", e)
+        else:
+            options = options_source
+
+        if options is not None and key in options:
+            enable_listener = bool(options[key])
+            break
+
+    return enable_listener
+
+
 def set_async_context(is_async: bool = True) -> None:  # noqa: ARG001
     """Set the async context flag.
 
@@ -284,43 +333,7 @@ class BaseFileObjectListener:
 
     @classmethod
     def _is_listener_enabled(cls, session: "Session") -> bool:
-        enable_listener = True  # Enabled by default
-
-        session_info = getattr(session, "info", {})
-        if "enable_file_object_listener" in session_info:
-            return bool(session_info["enable_file_object_listener"])
-
-        # Type hint for the list of potential option sources
-        options_sources: list[Optional[Union[Callable[[], dict[str, Any]], dict[str, Any]]]] = []
-        if session.bind:
-            options_sources.append(getattr(session.bind, "execution_options", None))
-            sync_engine = getattr(session.bind, "sync_engine", None)
-            if sync_engine:
-                options_sources.append(getattr(sync_engine, "execution_options", None))
-        options_sources.append(getattr(session, "execution_options", None))
-
-        for options_source in options_sources:
-            if options_source is None:
-                continue
-
-            options: Optional[dict[str, Any]] = None
-            if callable(options_source):
-                try:
-                    result = options_source()
-                    if isinstance(result, dict):  # pyright: ignore
-                        options = result
-                except Exception as e:
-                    logger.debug("Error calling execution_options source: %s", e)
-            else:
-                # If not None and not callable, assume it's the dict based on type hint
-                options = options_source
-
-            # Only perform the 'in' check if we successfully got a dictionary
-            if options is not None and "enable_file_object_listener" in options:
-                enable_listener = bool(options["enable_file_object_listener"])
-                break
-
-        return enable_listener
+        return _is_listener_enabled(session, "enable_file_object_listener")
 
     @classmethod
     def before_flush(cls, session: "Session", flush_context: "UOWTransaction", instances: Optional[object]) -> None:
@@ -577,40 +590,7 @@ class BaseCacheListener:
     @classmethod
     def _is_listener_enabled(cls, session: "Session") -> bool:
         """Check if cache listener is enabled for this session."""
-        enable_listener = True
-
-        session_info = getattr(session, "info", {})
-        if "enable_cache_listener" in session_info:
-            return bool(session_info["enable_cache_listener"])
-
-        options_sources: list[Optional[Union[Callable[[], dict[str, Any]], dict[str, Any]]]] = []
-        if session.bind:
-            options_sources.append(getattr(session.bind, "execution_options", None))
-            sync_engine = getattr(session.bind, "sync_engine", None)
-            if sync_engine:
-                options_sources.append(getattr(sync_engine, "execution_options", None))
-        options_sources.append(getattr(session, "execution_options", None))
-
-        for options_source in options_sources:
-            if options_source is None:
-                continue
-
-            options: Optional[dict[str, Any]] = None
-            if callable(options_source):
-                try:
-                    result = options_source()
-                    if isinstance(result, dict):  # pyright: ignore
-                        options = result
-                except Exception as e:
-                    logger.debug("Error calling execution_options source: %s", e)
-            else:
-                options = options_source
-
-            if options is not None and "enable_cache_listener" in options:
-                enable_listener = bool(options["enable_cache_listener"])
-                break
-
-        return enable_listener
+        return _is_listener_enabled(session, "enable_cache_listener")
 
 
 class SyncCacheListener(BaseCacheListener):
