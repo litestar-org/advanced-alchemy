@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 from litestar import Litestar, get
 from litestar.di import Provide
-from litestar.params import Dependency
 from litestar.openapi.config import OpenAPIConfig
+from litestar.params import Dependency
 from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
