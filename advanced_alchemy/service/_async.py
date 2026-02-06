@@ -464,16 +464,16 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         if operation and (op := operation_map.get(operation)):
             data = await op(data)
         if is_dict(data):
-            return model_from_dict(model=self.model_type, **data)
+            return model_from_dict(self.model_type, **data)
         if is_pydantic_model(data):
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **data.model_dump(exclude_unset=True),
             )
 
         if is_msgspec_struct(data):
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **{
                     f: getattr(data, f)
                     for f in data.__struct_fields__
@@ -490,14 +490,14 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 return value is not attrs_nothing
 
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **asdict(data, filter=filter_unset),
             )
 
         # Fallback for objects with __dict__ (e.g., regular classes)
         if hasattr(data, "__dict__") and not isinstance(data, self.model_type):
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **data.__dict__,
             )
 

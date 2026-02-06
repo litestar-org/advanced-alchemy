@@ -2389,6 +2389,29 @@ def test_model_from_dict_tuple_for_collection() -> None:
     assert all(isinstance(b, UUIDBook) for b in author.books)
 
 
+def test_model_from_dict_with_model_key() -> None:
+    """Regression test for https://github.com/litestar-org/advanced-alchemy/issues/668."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    data = {"name": "Test Author", "model": "some-model-value"}
+    author = model_from_dict(UUIDAuthor, **data)
+    assert author.name == "Test Author"
+
+
+def test_model_from_dict_with_mapped_model_field() -> None:
+    """Regression test for https://github.com/litestar-org/advanced-alchemy/issues/668."""
+
+    class UUIDCar(base.UUIDAuditBase):
+        make: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
+        model: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
+
+    data = {"make": "Advanced", "model": "Alchemy"}
+    car = model_from_dict(UUIDCar, **data)
+
+    assert car.make == "Advanced"
+    assert car.model == "Alchemy"
+
+
 def test_convert_relationship_value_helper() -> None:
     """Test the _convert_relationship_value helper function directly."""
     from advanced_alchemy.repository._util import _convert_relationship_value
