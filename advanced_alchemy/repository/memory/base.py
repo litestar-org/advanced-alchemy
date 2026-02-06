@@ -96,7 +96,7 @@ class InMemoryStore(Generic[T]):
     def remove(self, key: Any) -> T:
         return self._store.pop(self._resolve_key(key))
 
-    def list(self) -> list[T]:
+    def list(self) -> "list[T]":
         return list(self._store.values())
 
     def remove_all(self) -> None:

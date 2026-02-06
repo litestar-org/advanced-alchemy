@@ -2404,6 +2404,46 @@ def test_model_from_dict_with_model_key() -> None:
     assert author.name == "Test Author"
 
 
+def test_model_from_dict_with_mapped_model_field() -> None:
+    """Test that a mapped ``model`` field is not blocked by model_from_dict signature.
+
+    Regression test for https://github.com/litestar-org/advanced-alchemy/issues/668.
+    """
+
+    class UUIDCar(base.UUIDAuditBase):
+        make: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
+        model: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
+
+    data = {"make": "Advanced", "model": "Alchemy"}
+    car = model_from_dict(UUIDCar, **data)
+
+    assert car.make == "Advanced"
+    assert car.model == "Alchemy"
+
+
+def test_repository_and_service_annotations_are_accessible() -> None:
+    """Regression test for Python 3.14 lazy annotation evaluation shadowing."""
+    from advanced_alchemy.repository.memory.base import InMemoryStore
+    from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryReadService
+    from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryReadService
+
+    targets = (
+        SQLAlchemyAsyncRepository.__init__,
+        SQLAlchemySyncRepository.__init__,
+        SQLAlchemyAsyncRepository.list,
+        SQLAlchemySyncRepository.list,
+        SQLAlchemyAsyncRepositoryReadService.__init__,
+        SQLAlchemySyncRepositoryReadService.__init__,
+        SQLAlchemyAsyncRepositoryReadService.list,
+        SQLAlchemySyncRepositoryReadService.list,
+        InMemoryStore.list,
+    )
+
+    for target in targets:
+        annotations = getattr(target, "__annotations__", None)
+        assert isinstance(annotations, dict)
+
+
 def test_convert_relationship_value_helper() -> None:
     """Test the _convert_relationship_value helper function directly."""
     from advanced_alchemy.repository._util import _convert_relationship_value
