@@ -565,8 +565,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         The invalidation will be processed after the transaction commits.
         If the transaction rolls back, the pending invalidation is discarded.
 
-        This uses the global CacheInvalidationListener which must be set up
-        via setup_cache_listeners() during application initialization.
+        This uses cache listeners which must be set up via setup_cache_listeners()
+        during application initialization, or via scoped listeners in SQLAlchemyConfig.
 
         Args:
             entity_id: The primary key value of the entity to invalidate.

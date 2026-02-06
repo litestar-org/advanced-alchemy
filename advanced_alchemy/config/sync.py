@@ -2,7 +2,7 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -120,20 +120,45 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         if self.session_maker:
             return self.session_maker
 
+        from sqlalchemy import event
+
+        from advanced_alchemy._listeners import (
+            SyncCacheListener,
+            SyncFileObjectListener,
+            touch_updated_timestamp,
+        )
+
         # Use routing session maker if routing is configured
         if self.routing_config is not None:
             from advanced_alchemy.routing import RoutingSyncSessionMaker
 
-            routing_maker = RoutingSyncSessionMaker(
+            routing_maker: Callable[[], Session] = RoutingSyncSessionMaker(
                 routing_config=self.routing_config,
                 engine_config=self.engine_config_dict,
                 session_config=self.session_config_dict,
             )
             self.session_maker = routing_maker
-            return routing_maker
+        else:
+            self.session_maker = super().create_session_maker()
 
-        # Default behavior from parent
-        return super().create_session_maker()
+        if isinstance(self.session_maker, sessionmaker):
+            session_maker = cast(
+                "sessionmaker[Session]",
+                self.session_maker,  # pyright: ignore[reportUnknownMemberType]
+            )
+            if self.enable_file_object_listener:
+                event.listen(session_maker, "before_flush", SyncFileObjectListener.before_flush)
+                event.listen(session_maker, "after_commit", SyncFileObjectListener.after_commit)
+                event.listen(session_maker, "after_rollback", SyncFileObjectListener.after_rollback)
+            if self.enable_touch_updated_timestamp_listener:
+                event.listen(session_maker, "before_flush", touch_updated_timestamp)
+            event.listen(session_maker, "after_commit", SyncCacheListener.after_commit)
+            event.listen(session_maker, "after_rollback", SyncCacheListener.after_rollback)
+
+        if self.session_maker is None:  # pyright: ignore
+            msg = "Session maker was not initialized."  # type: ignore[unreachable]
+            raise ImproperConfigurationError(msg)
+        return cast("sessionmaker[Session]", self.session_maker)  # pyright: ignore[reportUnknownMemberType]
 
     @contextmanager
     def get_session(self) -> "Generator[Session, None, None]":
@@ -149,6 +174,6 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             ...     session.execute(...)
         """
         session_maker = self.create_session_maker()
-        set_async_context(False)  # Set context for standalone usage
+        set_async_context(False)
         with session_maker() as session:
             yield session

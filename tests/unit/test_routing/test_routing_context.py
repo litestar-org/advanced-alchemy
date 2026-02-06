@@ -110,7 +110,8 @@ def test_primary_context_resets_on_exception() -> None:
             assert force_primary_var.get() is True
             raise ValueError("test exception")
 
-    pytest.raises(ValueError, _raise_in_primary_context)
+    with pytest.raises(ValueError):
+        _raise_in_primary_context()
 
     assert force_primary_var.get() is False
 
@@ -182,7 +183,8 @@ def test_replica_context_resets_on_exception() -> None:
             assert force_primary_var.get() is False
             raise ValueError("test exception")
 
-    pytest.raises(ValueError, _raise_in_replica_context)
+    with pytest.raises(ValueError):
+        _raise_in_replica_context()
 
     assert stick_to_primary_var.get() is True
     assert force_primary_var.get() is True

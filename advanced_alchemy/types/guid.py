@@ -76,7 +76,7 @@ class GUID(TypeDecorator[UUID]):
         if value.__class__.__name__ == "UUID":
             return cast("UUID", value)
         if dialect.name == "spanner+spanner":
-            return UUID(bytes=b64decode(cast("str | Buffer", value)))
+            return UUID(bytes=b64decode(cast("Union[str, Buffer]", value)))
         if self.binary:
             return UUID(bytes=cast("bytes", value))
         return UUID(hex=cast("str", value))

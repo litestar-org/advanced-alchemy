@@ -959,7 +959,9 @@ async def test_file_object_save_with_different_data_types(storage_registry: Stor
     assert await obj2.get_content_async() == test_content
     assert obj2.get_content() == test_content
     # Cleanup
-    temp_path.unlink()
+    from advanced_alchemy.utils.sync_tools import async_
+
+    await async_(temp_path.unlink)()
 
 
 @pytest.mark.xdist_group("file_object")
