@@ -9,7 +9,7 @@ should be a SQLAlchemy model.
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, ClassVar, Generic, Optional, Union, cast
+from typing import Any, ClassVar, Generic, List, Optional, Union, cast
 
 from sqlalchemy import Select
 from sqlalchemy import inspect as sa_inspect
@@ -97,7 +97,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     """Default loader options for the repository."""
     execution_options: ClassVar[Optional[dict[str, Any]]] = None
     """Default execution options for the repository."""
-    match_fields: ClassVar["Optional[Union[list[str], str]]"] = None
+    match_fields: ClassVar[Optional[Union[List[str], str]]] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
@@ -113,7 +113,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
         load: Optional[LoadSpec] = None,
@@ -508,7 +508,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -608,7 +608,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -725,7 +725,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.add_many(
-                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -871,7 +871,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.update_many(
-                cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 error_messages=error_messages,
@@ -892,7 +892,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -954,7 +954,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -986,7 +986,7 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.upsert_many(
-                data=cast("list[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
+                data=cast("List[ModelT]", data),  # pyright: ignore[reportUnnecessaryCast]
                 auto_expunge=auto_expunge,
                 auto_commit=auto_commit,
                 no_merge=no_merge,
@@ -1002,7 +1002,7 @@ class SQLAlchemySyncRepositoryService(
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -1069,7 +1069,7 @@ class SQLAlchemySyncRepositoryService(
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -1176,7 +1176,7 @@ class SQLAlchemySyncRepositoryService(
 
     def delete_many(
         self,
-        item_ids: "list[Any]",
+        item_ids: List[Any],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,

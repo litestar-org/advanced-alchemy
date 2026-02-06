@@ -10,6 +10,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Final,
+    List,
     Literal,
     Optional,
     Protocol,
@@ -76,13 +77,13 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     """Base Protocol"""
 
     id_attribute: str
-    match_fields: "Optional[Union[list[str], str]]" = None
+    match_fields: Optional[Union[List[str], str]] = None
     statement: Select[tuple[ModelT]]
     session: Union[Session, scoped_session[Session]]
     auto_expunge: bool
     auto_refresh: bool
     auto_commit: bool
-    order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None
+    order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None
     error_messages: Optional[ErrorMessages] = None
     wrap_exceptions: bool = True
 
@@ -96,7 +97,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_commit: bool = False,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
         **kwargs: Any,
@@ -133,7 +134,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def add_many(
         self,
-        data: "list[ModelT]",
+        data: List[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -156,7 +157,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def delete_many(
         self,
-        item_ids: "list[Any]",
+        item_ids: List[Any],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -234,7 +235,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -251,7 +252,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -293,7 +294,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def update_many(
         self,
-        data: "list[ModelT]",
+        data: List[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -301,13 +302,13 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
-    ) -> "list[ModelT]": ...
+    ) -> List[ModelT]: ...
 
     def _get_update_many_statement(
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: "Optional[list[_AbstractLoad]]",
+        loader_options: Optional[List[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]: ...
 
@@ -320,7 +321,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -329,17 +330,17 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def upsert_many(
         self,
-        data: "list[ModelT]",
+        data: List[ModelT],
         *,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
-    ) -> "list[ModelT]": ...
+    ) -> List[ModelT]: ...
 
     def list_and_count(
         self,
@@ -350,11 +351,11 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[ModelT], int]": ...
+    ) -> tuple[List[ModelT], int]: ...
 
     def list(
         self,
@@ -364,11 +365,11 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "list[ModelT]": ...
+    ) -> List[ModelT]: ...
 
     @classmethod
     def check_health(cls, session: Union[Session, scoped_session[Session]]) -> bool: ...
@@ -455,7 +456,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     replace instead of merge the model's loaded relationships with the ones specified in the ``load`` or ``default_loader_options`` configuration."""
     execution_options: Optional[dict[str, Any]] = None
     """Default execution options for the repository."""
-    match_fields: "Optional[Union[list[str], str]]" = None
+    match_fields: Optional[Union[List[str], str]] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: bool = False
     """Optionally apply the ``unique()`` method to results before returning.
@@ -478,7 +479,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -585,7 +586,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if tracker is not None:
                 tracker.add_invalidation(cast("str", model_name), entity_id, bind_group)
 
-    def _type_must_use_in_instead_of_any(self, matched_values: "list[Any]", field_type: "Any" = None) -> bool:
+    def _type_must_use_in_instead_of_any(self, matched_values: List[Any], field_type: "Any" = None) -> bool:
         """Determine if field.in_() should be used instead of any_() for compatibility.
 
         Uses SQLAlchemy's type introspection to detect types that may have DBAPI
@@ -616,7 +617,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
 
-    def _get_unique_values(self, values: "list[Any]") -> "list[Any]":
+    def _get_unique_values(self, values: List[Any]) -> List[Any]:
         """Get unique values from a list, handling unhashable types safely.
 
         Args:
@@ -631,7 +632,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         try:
             # Fast path for hashable types
             seen: set[Any] = set()
-            unique_values: "list[Any]" = []
+            unique_values: List[Any] = []
             for value in values:
                 if value not in seen:
                     unique_values.append(value)
@@ -732,7 +733,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_loader_options(
         self,
         loader_options: Optional[LoadSpec],
-    ) -> "Union[tuple[list[_AbstractLoad], bool], tuple[None, bool]]":
+    ) -> Union[tuple[List[_AbstractLoad], bool], tuple[None, bool]]:
         if loader_options is None:
             # use the defaults set at initialization
             return self._default_loader_options, self._loader_options_have_wildcards or self._uniquify
@@ -784,7 +785,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def add_many(
         self,
-        data: "list[ModelT]",
+        data: List[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -879,7 +880,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def delete_many(
         self,
-        item_ids: "list[Any]",
+        item_ids: List[Any],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -930,7 +931,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self.model_type,
                 id_attribute if id_attribute is not None else self.id_attribute,
             )
-            instances: "list[ModelT]" = []
+            instances: List[ModelT] = []
             if self._prefer_any:
                 chunk_size = len(item_ids) + 1
             chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
@@ -1043,7 +1044,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             )
             statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
             statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
-            instances: "list[ModelT]" = []
+            instances: List[ModelT] = []
             if self._dialect.delete_executemany_returning:
                 instances.extend(self.session.scalars(statement.returning(model_type)))
             else:
@@ -1117,7 +1118,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_base_stmt(
         *,
         statement: StatementTypeT,
-        loader_options: "Optional[list[_AbstractLoad]]",
+        loader_options: Optional[List[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> StatementTypeT:
         """Get base statement with options applied.
@@ -1166,10 +1167,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *,
         model_type: type[ModelT],
         id_attribute: InstrumentedAttribute[Any],
-        id_chunk: "list[Any]",
+        id_chunk: List[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
-        loader_options: "Optional[list[_AbstractLoad]]",
+        loader_options: Optional[List[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
         # Base statement is static
@@ -1277,14 +1278,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]",
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> "list[ModelT]":
+    ) -> List[ModelT]:
         """Fetch a list of entities from the database without using cache."""
         self._uniquify = self._get_uniquify(uniquify)
         with wrap_sqlalchemy_exception(
@@ -1311,7 +1312,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-            return cast("list[ModelT]", instances)
+            return cast("List[ModelT]", instances)
 
     def _list_cached_creator(
         self,
@@ -1320,14 +1321,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]",
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> "list[ModelT]":
+    ) -> List[ModelT]:
         """Singleflight creator for list caching (async)."""
         if self._cache_manager is None:
             return self._list_from_db(
@@ -1369,14 +1370,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
         count_with_window_function: bool,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]",
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> "tuple[list[ModelT], int]":
+    ) -> tuple[List[ModelT], int]:
         """Fetch a list+count payload from the database without using cache."""
         self._uniquify = self._get_uniquify(uniquify)
         resolved_bind_group = self._resolve_bind_group(bind_group)
@@ -1413,14 +1414,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool],
         statement: Optional[Select[tuple[ModelT]]],
         count_with_window_function: bool,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]",
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
         bind_group: Optional[str] = None,
-    ) -> "tuple[list[ModelT], int]":
+    ) -> tuple[List[ModelT], int]:
         """Singleflight creator for list_and_count caching (async)."""
         if self._cache_manager is None:
             return self._list_and_count_from_db(
@@ -1682,7 +1683,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -1778,7 +1779,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -2037,7 +2038,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def update_many(
         self,
-        data: "list[ModelT]",
+        data: List[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -2046,7 +2047,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> "list[ModelT]":
+    ) -> List[ModelT]:
         """Update one or more instances with the attribute values present on `data`.
 
         This function has an optimized bulk update based on the configured SQL dialect:
@@ -2074,7 +2075,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             default_messages=self.error_messages,
         )
         supports_updated_at = hasattr(self.model_type, "updated_at")
-        data_to_update: "list[dict[str, Any]]" = []
+        data_to_update: List[dict[str, Any]] = []
         for v in data:
             if isinstance(v, self.model_type) or (hasattr(v, "to_dict") and callable(v.to_dict)):
                 update_payload = v.to_dict()
@@ -2118,7 +2119,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self._flush_or_commit(auto_commit=auto_commit)
 
             # For non-RETURNING backends, fetch updated instances from database
-            updated_ids: "list[Any]" = [item[self.id_attribute] for item in data_to_update]
+            updated_ids: List[Any] = [item[self.id_attribute] for item in data_to_update]
             updated_instances = self.list(
                 getattr(self.model_type, self.id_attribute).in_(updated_ids),
                 load=loader_options,
@@ -2135,7 +2136,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: "Union[list[_AbstractLoad], None]",
+        loader_options: Union[List[_AbstractLoad], None],
         execution_options: Union[dict[str, Any], None],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         # Base update statement is static
@@ -2153,7 +2154,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2161,7 +2162,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[ModelT], int]":
+    ) -> tuple[List[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -2331,13 +2332,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[ModelT], int]":
+    ) -> tuple[List[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -2380,7 +2381,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._filter_select_by_kwargs(statement, kwargs)
             result = self._execute(statement.add_columns(over(sql_func.count())), uniquify=loader_options_have_wildcard)
             count: int = 0
-            instances: "list[ModelT]" = []
+            instances: List[ModelT] = []
             for i, (instance, count_value) in enumerate(result):
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -2393,13 +2394,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[ModelT], int]":
+    ) -> tuple[List[ModelT], int]:
         """List records with total count.
 
         Args:
@@ -2451,7 +2452,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if count == 0:
                 return [], 0
             result = self._execute(statement, uniquify=loader_options_have_wildcard)
-            instances: "list[ModelT]" = []
+            instances: List[ModelT] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
@@ -2460,7 +2461,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     @staticmethod
     def _get_count_stmt(
         statement: Select[tuple[ModelT]],
-        loader_options: "Optional[list[_AbstractLoad]]",  # noqa: ARG004
+        loader_options: Optional[List[_AbstractLoad]],  # noqa: ARG004
         execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
@@ -2480,7 +2481,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2563,18 +2564,18 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def upsert_many(
         self,
-        data: "list[ModelT]",
+        data: List[ModelT],
         *,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> "list[ModelT]":
+    ) -> List[ModelT]:
         """Modify or create multiple instances.
 
         Update instances with the attribute values present on `data`, or create a new instance if
@@ -2607,13 +2608,13 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        instances: "list[ModelT]" = []
-        data_to_update: "list[ModelT]" = []
-        data_to_insert: "list[ModelT]" = []
+        instances: List[ModelT] = []
+        data_to_update: List[ModelT] = []
+        data_to_insert: List[ModelT] = []
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
-        match_filter: "list[Union[StatementFilter, ColumnElement[bool]]]" = []
+        match_filter: List[Union[StatementFilter, ColumnElement[bool]]] = []
         if match_fields:
             for field_name in match_fields:
                 field = get_instrumented_attr(self.model_type, field_name)
@@ -2669,14 +2670,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
 
-    def _get_object_ids(self, existing_objs: "list[ModelT]") -> "list[Any]":
+    def _get_object_ids(self, existing_objs: List[ModelT]) -> List[Any]:
         return [obj_id for datum in existing_objs if (obj_id := getattr(datum, self.id_attribute)) is not None]
 
     def _get_match_fields(
         self,
-        match_fields: "Optional[Union[list[str], str]]" = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         id_attribute: Optional[str] = None,
-    ) -> "Optional[list[str]]":
+    ) -> Optional[List[str]]:
         id_attribute = id_attribute or self.id_attribute
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
@@ -2685,10 +2686,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
     def _merge_on_match_fields(
         self,
-        data: "list[ModelT]",
-        existing_data: "list[ModelT]",
-        match_fields: "Optional[Union[list[str], str]]" = None,
-    ) -> "list[ModelT]":
+        data: List[ModelT],
+        existing_data: List[ModelT],
+        match_fields: Optional[Union[List[str], str]] = None,
+    ) -> List[ModelT]:
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             match_fields = [self.id_attribute]
@@ -2706,7 +2707,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
-        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2714,7 +2715,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "list[ModelT]":
+    ) -> List[ModelT]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -3042,7 +3043,7 @@ class SQLAlchemySyncQueryRepository:
         count_with_window_function: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[Row[Any]], int]":
+    ) -> tuple[List[Row[Any]], int]:
         """List records with total count.
 
         Args:
@@ -3063,7 +3064,7 @@ class SQLAlchemySyncQueryRepository:
         statement: Select[Any],
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[Row[Any]], int]":
+    ) -> tuple[List[Row[Any]], int]:
         """List records with total count.
 
         Args:
@@ -3082,7 +3083,7 @@ class SQLAlchemySyncQueryRepository:
             execution_options = {"bind_group": bind_group} if bind_group else None
             result = self.execute(statement, execution_options=execution_options)
             count: int = 0
-            instances: "list[Row[Any]]" = []
+            instances: List[Row[Any]] = []
             for i, (instance, count_value) in enumerate(result):
                 instances.append(instance)
                 if i == 0:
@@ -3098,7 +3099,7 @@ class SQLAlchemySyncQueryRepository:
         statement: Select[Any],
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> "tuple[list[Row[Any]], int]":
+    ) -> tuple[List[Row[Any]], int]:
         """List records with total count.
 
         Args:
@@ -3118,12 +3119,12 @@ class SQLAlchemySyncQueryRepository:
             )
             count = count_result.scalar_one()
             result = self.execute(statement, execution_options=execution_options)
-            instances: "list[Row[Any]]" = []
+            instances: List[Row[Any]] = []
             for (instance,) in result:
                 instances.append(instance)
             return instances, count
 
-    def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> "list[Row[Any]]":
+    def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> List[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:
