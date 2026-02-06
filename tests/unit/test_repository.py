@@ -1571,7 +1571,7 @@ def test_build_list_cache_key_with_unary_expression() -> None:
     from sqlalchemy import UnaryExpression, desc
 
     # Create a real UnaryExpression
-    unary_expr = desc(column("name"))
+    unary_expr = desc(column("name"))  # type: ignore[var-annotated]
     assert isinstance(unary_expr, UnaryExpression)
 
     key = _build_list_cache_key(
