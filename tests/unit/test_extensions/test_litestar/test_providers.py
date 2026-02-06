@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from litestar import Litestar, get
 from litestar.di import Provide
+from litestar.params import Dependency
 from litestar.openapi.config import OpenAPIConfig
 from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
@@ -446,13 +447,13 @@ def test_not_in_filter() -> None:
 
     # Test the provider function
     provider_func = deps["status_not_in_filter"].dependency
-    f = provider_func(values=["pending", "failed"])
+    f = provider_func(status_not_in=["pending", "failed"])
     assert isinstance(f, NotInCollectionFilter)
     assert f.field_name == "status"
     assert f.values == ["pending", "failed"]
 
     # Test with None
-    f_none = provider_func(values=None)
+    f_none = provider_func(status_not_in=None)
     assert f_none is None
 
 
@@ -465,13 +466,13 @@ def test_in_filter() -> None:
 
     # Test the provider function
     provider_func = deps["tag_in_filter"].dependency
-    f = provider_func(values=["python", "litestar"])
+    f = provider_func(tag_in=["python", "litestar"])
     assert isinstance(f, CollectionFilter)
     assert f.field_name == "tag"
     assert f.values == ["python", "litestar"]
 
     # Test with None
-    f_none = provider_func(values=None)
+    f_none = provider_func(tag_in=None)
     assert f_none is None
 
 
@@ -481,7 +482,7 @@ def test_litestar_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: list[FilterTypes]) -> dict[str, list[str]]:
+    def handler(filters: list[FilterTypes] = Dependency(skip_validation=True)) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, CollectionFilter):
@@ -505,7 +506,7 @@ def test_litestar_not_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: list[FilterTypes]) -> dict[str, list[str]]:
+    def handler(filters: list[FilterTypes] = Dependency(skip_validation=True)) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, NotInCollectionFilter):
