@@ -260,7 +260,7 @@ def _convert_relationship_value(
     return value
 
 
-def model_from_dict(model: type[ModelT], **kwargs: Any) -> ModelT:
+def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
     """Create an ORM model instance from a dictionary of attributes.
 
     This function recursively converts nested dictionaries into their

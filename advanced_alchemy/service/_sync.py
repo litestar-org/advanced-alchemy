@@ -97,7 +97,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     """Default loader options for the repository."""
     execution_options: ClassVar[Optional[dict[str, Any]]] = None
     """Default execution options for the repository."""
-    match_fields: ClassVar[Optional[Union[list[str], str]]] = None
+    match_fields: ClassVar["Optional[Union[list[str], str]]"] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
@@ -113,7 +113,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
         load: Optional[LoadSpec] = None,
@@ -463,16 +463,16 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         if operation and (op := operation_map.get(operation)):
             data = op(data)
         if is_dict(data):
-            return model_from_dict(model=self.model_type, **data)
+            return model_from_dict(self.model_type, **data)
         if is_pydantic_model(data):
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **data.model_dump(exclude_unset=True),
             )
 
         if is_msgspec_struct(data):
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **{
                     f: getattr(data, f)
                     for f in data.__struct_fields__
@@ -489,14 +489,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 return value is not attrs_nothing
 
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **asdict(data, filter=filter_unset),
             )
 
         # Fallback for objects with __dict__ (e.g., regular classes)
         if hasattr(data, "__dict__") and not isinstance(data, self.model_type):
             return model_from_dict(
-                model=self.model_type,
+                self.model_type,
                 **data.__dict__,
             )
 
@@ -508,7 +508,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -608,7 +608,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
         auto_expunge: Optional[bool] = None,
-        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        order_by: "Optional[Union[list[OrderingPair], OrderingPair]]" = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -892,7 +892,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[list[str], str]] = None,
+        match_fields: "Optional[Union[list[str], str]]" = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -954,7 +954,7 @@ class SQLAlchemySyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[list[str], str]] = None,
+        match_fields: "Optional[Union[list[str], str]]" = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -1002,7 +1002,7 @@ class SQLAlchemySyncRepositoryService(
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[list[str], str]] = None,
+        match_fields: "Optional[Union[list[str], str]]" = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -1069,7 +1069,7 @@ class SQLAlchemySyncRepositoryService(
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[list[str], str]] = None,
+        match_fields: "Optional[Union[list[str], str]]" = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -1176,7 +1176,7 @@ class SQLAlchemySyncRepositoryService(
 
     def delete_many(
         self,
-        item_ids: list[Any],
+        item_ids: "list[Any]",
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,

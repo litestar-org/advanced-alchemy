@@ -2389,6 +2389,21 @@ def test_model_from_dict_tuple_for_collection() -> None:
     assert all(isinstance(b, UUIDBook) for b in author.books)
 
 
+def test_model_from_dict_with_model_key() -> None:
+    """Test that model_from_dict works when the data dict contains a 'model' key.
+
+    Regression test for https://github.com/litestar-org/advanced-alchemy/issues/668.
+    Previously, passing **{"model": "value"} would collide with the `model` parameter.
+    """
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    # The 'model' key doesn't correspond to a real column, so it will be ignored,
+    # but it must NOT raise TypeError about duplicate 'model' argument.
+    data = {"name": "Test Author", "model": "some-model-value"}
+    author = model_from_dict(UUIDAuthor, **data)
+    assert author.name == "Test Author"
+
+
 def test_convert_relationship_value_helper() -> None:
     """Test the _convert_relationship_value helper function directly."""
     from advanced_alchemy.repository._util import _convert_relationship_value
