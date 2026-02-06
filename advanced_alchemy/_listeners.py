@@ -279,7 +279,7 @@ class FileObjectInspector:
                         tracker.add_pending_delete(cast("FileObject", item))
 
 
-class BaseFileObjectListener:  # pragma: no cover
+class BaseFileObjectListener:
     """Base class for FileObject event listeners."""
 
     @classmethod
@@ -720,7 +720,7 @@ def setup_cache_listeners() -> None:
 
 
 # Existing listener (keep it)
-def touch_updated_timestamp(session: "Session", *_: Any) -> None:  # pragma: no cover
+def touch_updated_timestamp(session: "Session", *_: Any) -> None:
     """Set timestamp on update.
 
     Called from SQLAlchemy's

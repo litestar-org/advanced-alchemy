@@ -174,6 +174,25 @@ def test_cache_invalidation_listener_after_commit_sync_context() -> None:
         pass
 
 
+@pytest.mark.asyncio
+async def test_cache_invalidation_listener_after_commit_async_context() -> None:
+    from advanced_alchemy._listeners import _active_cache_operations
+
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    tracker.commit_async = AsyncMock()
+    session.info = {"_aa_cache_tracker": tracker, "enable_cache_listener": True}
+
+    CacheInvalidationListener.after_commit(session)
+
+    # In async context (pytest-asyncio provides one), it should create a task
+    assert len(_active_cache_operations) > 0
+    task = next(iter(_active_cache_operations))
+    await task
+    assert "_aa_cache_tracker" not in session.info
+    tracker.commit_async.assert_called_once()
+
+
 # --- BaseCacheListener Tests ---
 
 

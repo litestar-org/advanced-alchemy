@@ -1520,3 +1520,162 @@ def test_deprecated_context_functions() -> None:
 
     with pytest.warns(DeprecationWarning):
         is_async_context()
+
+
+def test_handle_multiple_attribute_finalize() -> None:
+    """Test handling multiple attribute calls _finalize_pending."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.mutables import MutableList
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    instance = MagicMock()
+    attr_name = "files"
+    attr_state = MagicMock()
+
+    current_list = MagicMock(spec=MutableList)
+    current_list._pending_removed = set()
+    current_list._pending_append = []
+    setattr(instance, attr_name, current_list)
+
+    FileObjectInspector.handle_multiple_attribute(instance, attr_name, attr_state, tracker)
+
+    assert current_list._finalize_pending.called
+
+
+def test_handle_multiple_attribute_pending_save_branches() -> None:
+    """Test branches in handle_multiple_attribute for pending saves."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.mutables import MutableList
+
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    instance = MagicMock()
+    attr_name = "files"
+    attr_state = MagicMock()
+
+    current_list = MagicMock(spec=MutableList)
+    current_list._pending_removed = set()
+
+    item1 = MagicMock(spec=FileObject)
+    item1._pending_content = None
+    item1._pending_source_path = "p1"
+
+    current_list._pending_append = [item1]
+    setattr(instance, attr_name, current_list)
+
+    # item2 already in items_to_save (via history)
+    item2 = MagicMock(spec=FileObject)
+    item2._pending_source_content = b"d2"
+    attr_state.history.added = [[item2]]
+    attr_state.history.deleted = []
+
+    FileObjectInspector.handle_multiple_attribute(instance, attr_name, attr_state, tracker)
+
+    tracker.add_pending_save.assert_any_call(item1, "p1")
+    tracker.add_pending_save.assert_any_call(item2, b"d2")
+
+
+def test_process_deleted_instance_multiple() -> None:
+    """Test process_deleted_instance with multiple items."""
+    from advanced_alchemy._listeners import FileObjectInspector
+    from advanced_alchemy.types.file_object import StoredObject
+    from advanced_alchemy.types.mutables import MutableList
+
+    instance = MagicMock()
+    tracker = MagicMock()
+    mapper = MagicMock()
+
+    mock_attr = MagicMock()
+    mock_attr.expression.type = MagicMock(spec=StoredObject)
+    mock_attr.expression.type.multiple = True
+
+    mapper.column_attrs = {"files_col": mock_attr}
+
+    item1 = MagicMock(spec=FileObject)
+    item2 = MagicMock(spec=FileObject)
+
+    # Test with regular list
+    setattr(instance, "files_col", [item1, item2])
+    FileObjectInspector.process_deleted_instance(instance, mapper, tracker)
+    tracker.add_pending_delete.assert_any_call(item1)
+    tracker.add_pending_delete.assert_any_call(item2)
+
+    # Test with MutableList
+    tracker.reset_mock()
+    m_list = MutableList[FileObject]([item1, item2])
+    setattr(instance, "files_col", m_list)
+    FileObjectInspector.process_deleted_instance(instance, mapper, tracker)
+    tracker.add_pending_delete.assert_any_call(item1)
+    tracker.add_pending_delete.assert_any_call(item2)
+
+
+def test_is_listener_enabled_extended() -> None:
+    """Test _is_listener_enabled with various option sources."""
+    from advanced_alchemy._listeners import BaseFileObjectListener
+
+    class TestListener(BaseFileObjectListener):
+        pass
+
+    session = MagicMock(spec=Session)
+    session.info = {}
+
+    # 1. Disable via session.bind.execution_options (dict)
+    session.bind = MagicMock()
+    session.bind.execution_options = {"enable_file_object_listener": False}
+    assert TestListener._is_listener_enabled(session) is False
+
+    # 2. Disable via session.bind.execution_options (callable)
+    session.bind.execution_options = lambda: {"enable_file_object_listener": False}
+    assert TestListener._is_listener_enabled(session) is False
+
+    # 3. Disable via session.bind.sync_engine.execution_options
+    session.bind.execution_options = None
+    session.bind.sync_engine = MagicMock()
+    session.bind.sync_engine.execution_options = {"enable_file_object_listener": False}
+    assert TestListener._is_listener_enabled(session) is False
+
+    # 4. Disable via session.execution_options (dict)
+    session.bind = None
+    session.execution_options = {"enable_file_object_listener": False}
+    assert TestListener._is_listener_enabled(session) is False
+
+    # 5. Disable via session.execution_options (callable)
+    session.execution_options = lambda: {"enable_file_object_listener": False}
+    assert TestListener._is_listener_enabled(session) is False
+
+    # 6. Exception in callable execution_options
+    def raising_options() -> None:
+        raise ValueError("error")
+
+    session.execution_options = raising_options
+    # Should fallback to default True and not crash
+    assert TestListener._is_listener_enabled(session) is True
+
+
+@pytest.mark.asyncio
+async def test_async_file_object_listener_error_handling(caplog: pytest.LogCaptureFixture) -> None:
+    """Test error handling in AsyncFileObjectListener."""
+    import logging
+
+    from advanced_alchemy._listeners import AsyncFileObjectListener, _active_file_operations
+
+    caplog.set_level(logging.DEBUG)
+    session = MagicMock(spec=Session)
+    tracker = MagicMock()
+    tracker.commit_async = AsyncMock(side_effect=ValueError("commit error"))
+    tracker.rollback_async = AsyncMock(side_effect=ValueError("rollback error"))
+    session.info = {"_aa_file_tracker": tracker}
+
+    # Test commit error
+    caplog.clear()
+    AsyncFileObjectListener.after_commit(session)
+    while _active_file_operations:
+        await asyncio.gather(*_active_file_operations)
+    assert "An error occurred while committing a file object" in caplog.text
+
+    # Test rollback error
+    caplog.clear()
+    session.info = {"_aa_file_tracker": tracker}
+    AsyncFileObjectListener.after_rollback(session)
+    while _active_file_operations:
+        await asyncio.gather(*_active_file_operations)
+    assert "An error occurred during async FileObject rollback" in caplog.text
