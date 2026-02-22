@@ -23,7 +23,8 @@ Pre-release Versions
 ++++++++++++++++++++
 
 Before a new major release, we will make ``alpha``, ``beta``, and release candidate (``rc``) releases, numbered as
-``<major>.<minor>.<patch><release_type><number>``. For example, ``2.0.0alpha1``, ``2.0.0beta1``, ``2.0.0rc1``.
+``<major>.<minor>.<patch><release_type><number>`` following `PEP 440 <https://peps.python.org/pep-0440/>`_.
+For example, ``2.0.0a1``, ``2.0.0b1``, ``2.0.0rc1``.
 
 - ``alpha``
     Early developer preview. Features may not be complete and breaking changes can occur.

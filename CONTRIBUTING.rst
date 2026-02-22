@@ -145,3 +145,57 @@ Creating a new release
 10. **Publish to PyPI**
 
     - Approve the ``Latest Release`` workflow under ``Actions`` to publish the package to PyPI.
+
+Creating a pre-release
+----------------------
+
+Use pre-releases to publish alpha, beta, or release candidate versions. These follow
+`PEP 440 <https://peps.python.org/pep-0440/>`_ pre-release format (e.g., ``1.10.0a1``, ``1.10.0b1``, ``1.10.0rc1``).
+
+1. **Bump to a pre-release version**
+
+   .. code-block:: bash
+
+      make pre-release version=1.10.0a1    # First alpha
+      make pre-release version=1.10.0a2    # Second alpha
+      make pre-release version=1.10.0b1    # First beta
+      make pre-release version=1.10.0rc1   # First release candidate
+
+2. **Commit and push**
+
+   .. code-block:: bash
+
+      git add -A && git commit -m "chore(release): bump to v1.10.0a1"
+      git push origin HEAD
+
+3. **Create a GitHub pre-release**
+
+   .. code-block:: bash
+
+      gh release create v1.10.0a1 --prerelease --title "v1.10.0a1"
+
+4. **PyPI behavior**
+
+   PyPI automatically marks PEP 440 pre-release versions:
+
+   - Users **won't** get pre-releases via ``pip install advanced-alchemy``
+   - Users can opt-in via ``pip install --pre advanced-alchemy``
+   - Or pin explicitly: ``pip install advanced-alchemy==1.10.0a1``
+
+Graduating from pre-release to stable
+++++++++++++++++++++++++++++++++++++++
+
+From the last release candidate, bump the ``pre`` part to move past ``rc`` to ``stable``:
+
+.. code-block:: bash
+
+   make release bump=pre    # e.g. 1.10.0rc1 → 1.10.0
+
+Or skip to the next stable version directly:
+
+.. code-block:: bash
+
+   make release bump=patch  # From any version → next patch
+   make release bump=minor  # From any version → next minor
+
+Then follow the standard `Creating a new release`_ steps above.
