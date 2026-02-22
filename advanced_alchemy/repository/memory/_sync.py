@@ -149,7 +149,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         mapper = class_mapper(self.model_type)
         return tuple(mapper.get_property_by_column(col).key for col in self._pk_columns)
 
-    def _is_composite_pk(self) -> bool:
+    @property
+    def has_composite_pk(self) -> bool:
         """Check if model has a composite (multi-column) primary key.
 
         Returns:
@@ -157,7 +158,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         """
         return is_composite_pk(self._pk_columns)
 
-    def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
+    def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType:
         """Extract the primary key value(s) from a model instance.
 
         Args:
@@ -169,7 +170,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         """
         return extract_pk_value_from_instance(instance, self._pk_attr_names)
 
-    def _pk_values_present(self, instance: ModelT) -> bool:
+    def has_primary_key_values(self, instance: ModelT) -> bool:
         """Check if all primary key values are set on an instance.
 
         Args:
@@ -214,7 +215,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         Returns:
             String key for the in-memory store.
         """
-        pk_value = self._extract_pk_value(instance)
+        pk_value = self.get_primary_key_value(instance)
         return str(pk_value)
 
     @staticmethod
@@ -745,7 +746,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
-        pk_value = self._extract_pk_value(data)
+        pk_value = self.get_primary_key_value(data)
         self._find_or_raise_not_found(pk_value)
         return self.__collection__().update(data)
 
@@ -820,7 +821,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         result = self.__collection__().list()
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
-        item_ids: list[PrimaryKeyType] = [self._extract_pk_value(model) for model in models]
+        item_ids: list[PrimaryKeyType] = [self.get_primary_key_value(model) for model in models]
         return self.delete_many(item_ids=item_ids)
 
     def upsert(
