@@ -94,6 +94,13 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     error_messages: Optional[ErrorMessages] = None
     wrap_exceptions: bool = True
 
+    @property
+    def has_composite_pk(self) -> bool: ...
+
+    def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType: ...
+
+    def has_primary_key_values(self, instance: ModelT) -> bool: ...
+
     def __init__(
         self,
         *,
@@ -713,16 +720,17 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
 
-    def _is_composite_pk(self) -> bool:
+    @property
+    def has_composite_pk(self) -> bool:
         """Check if model has a composite (multi-column) primary key.
 
         Returns:
             True if the model has 2 or more primary key columns, False otherwise.
 
         Examples:
-            >>> repo._is_composite_pk()  # For model with single PK
+            >>> repo.has_composite_pk  # For model with single PK
             False
-            >>> repo._is_composite_pk()  # For model with (user_id, role_id) PK
+            >>> repo.has_composite_pk  # For model with (user_id, role_id) PK
             True
         """
         return is_composite_pk(self._pk_columns)
@@ -786,7 +794,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, self.model_type.__name__)
         return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
 
-    def _extract_pk_value(self, instance: ModelT) -> PrimaryKeyType:
+    def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType:
         """Extract the primary key value(s) from a model instance.
 
         Args:
@@ -799,17 +807,17 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Examples:
             # Single primary key
             >>> user = User(id=123, name="Alice")
-            >>> repo._extract_pk_value(user)
+            >>> repo.get_primary_key_value(user)
             123
 
             # Composite primary key
             >>> assignment = UserRole(user_id=1, role_id=5)
-            >>> repo._extract_pk_value(assignment)
+            >>> repo.get_primary_key_value(assignment)
             (1, 5)
         """
         return extract_pk_value_from_instance(instance, self._pk_attr_names)
 
-    def _pk_values_present(self, instance: ModelT) -> bool:
+    def has_primary_key_values(self, instance: ModelT) -> bool:
         """Check if all primary key values are set on an instance.
 
         Args:
@@ -1099,7 +1107,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             instances: List[ModelT] = []
 
             # Determine if using composite key path or single column path
-            use_composite_path = id_attribute is None and self._is_composite_pk()
+            use_composite_path = id_attribute is None and self.has_composite_pk
 
             if use_composite_path:
                 # Composite primary key path using tuple_().in_()
@@ -1188,8 +1196,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 # Queue cache invalidation (processed on commit)
-                # Use _extract_pk_value for composite PK support
-                self._queue_cache_invalidation(self._extract_pk_value(instance), bind_group)
+                # Use get_primary_key_value for composite PK support
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instances
 
     @staticmethod
@@ -1280,7 +1288,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 # Queue cache invalidation (processed on commit)
-                self._queue_cache_invalidation(self._extract_pk_value(instance), resolved_bind_group)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
             return instances
 
     async def exists(
@@ -2203,8 +2211,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
             # For composite PKs (when no id_attribute override), extract the full PK value
-            if id_attribute is None and self._is_composite_pk():
-                item_id = self._extract_pk_value(data)
+            if id_attribute is None and self.has_composite_pk:
+                item_id = self.get_primary_key_value(data)
             else:
                 item_id = self.get_id_attribute_value(
                     data,
@@ -2279,7 +2287,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             self._expunge(instance, auto_expunge=auto_expunge)
             # Queue cache invalidation (processed on commit)
-            self._queue_cache_invalidation(self._extract_pk_value(instance), bind_group)
+            self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instance
 
     async def update_many(
@@ -2365,7 +2373,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             await self._flush_or_commit(auto_commit=auto_commit)
 
             # For non-RETURNING backends, fetch updated instances from database
-            if self._is_composite_pk():
+            if self.has_composite_pk:
                 # Build composite PK filter using OR of AND conditions
                 pk_filters: List[ColumnElement[bool]] = []
                 for item in data_to_update:
@@ -2388,7 +2396,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             for instance in updated_instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 # Queue cache invalidation (processed on commit)
-                self._queue_cache_invalidation(self._extract_pk_value(instance), bind_group)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return updated_instances
 
     def _get_update_many_statement(
@@ -2788,14 +2796,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for field_name in match_fields
                 if getattr(data, field_name, None) is not None
             }
-        elif self._is_composite_pk() and self._pk_values_present(data):
+        elif self.has_composite_pk and self.has_primary_key_values(data):
             # For composite PKs, match on all PK columns
             match_filter = {attr: getattr(data, attr) for attr in self._pk_attr_names}
         elif getattr(data, self.id_attribute, None) is not None:
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
             # Exclude all PK columns when matching by non-PK fields
-            exclude_cols = set(self._pk_attr_names) if self._is_composite_pk() else {self.id_attribute}
+            exclude_cols = set(self._pk_attr_names) if self.has_composite_pk else {self.id_attribute}
             match_filter = data.to_dict(exclude=exclude_cols)
         existing = await self.get_one_or_none(
             load=load, execution_options=execution_options, bind_group=bind_group, **match_filter
@@ -2812,7 +2820,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
             # Exclude all PK columns when copying field values
-            exclude_cols = set(self._pk_attr_names) if self._is_composite_pk() else {self.id_attribute}
+            exclude_cols = set(self._pk_attr_names) if self.has_composite_pk else {self.id_attribute}
             for field_name, new_field_value in data.to_dict(exclude=exclude_cols).items():
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
@@ -2827,7 +2835,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             )
             self._expunge(instance, auto_expunge=auto_expunge)
             # Queue cache invalidation (processed on commit)
-            self._queue_cache_invalidation(self._extract_pk_value(instance), bind_group)
+            self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instance
 
     async def upsert_many(
@@ -2882,7 +2890,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             # Default to all PK columns for composite PKs, otherwise just id_attribute
-            match_fields = list(self._pk_attr_names) if self._is_composite_pk() else [self.id_attribute]
+            match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
         match_filter: List[Union[StatementFilter, ColumnElement[bool]]] = []
         if match_fields:
             for field_name in match_fields:
@@ -2916,7 +2924,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in data:
                 # Use extracted PK value which handles composite PKs (returns tuple)
-                datum_pk = self._extract_pk_value(datum)
+                datum_pk = self.get_primary_key_value(datum)
                 if datum_pk in existing_ids:
                     data_to_update.append(datum)
                 else:
@@ -2946,7 +2954,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         For composite PKs, returns tuples; for single PKs, returns scalar values.
         """
-        return [self._extract_pk_value(datum) for datum in existing_objs if self._pk_values_present(datum)]
+        return [self.get_primary_key_value(datum) for datum in existing_objs if self.has_primary_key_values(datum)]
 
     def _get_match_fields(
         self,
@@ -2968,13 +2976,13 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
             # Default to all PK columns for composite PKs, otherwise just id_attribute
-            match_fields = list(self._pk_attr_names) if self._is_composite_pk() else [self.id_attribute]
+            match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
         for existing_datum in existing_data:
             for datum in data:
                 match = all(
                     getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
                 )
-                if match and self._pk_values_present(existing_datum):
+                if match and self.has_primary_key_values(existing_datum):
                     # Copy all PK values from existing to datum (handles composite PKs)
                     for pk_attr in self._pk_attr_names:
                         setattr(datum, pk_attr, getattr(existing_datum, pk_attr))
