@@ -4,6 +4,8 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
+# pyright: reportPrivateUsage=false
+
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from functools import cached_property
@@ -25,7 +27,7 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncQueryRepository,
 )
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, SQLAlchemyAsyncRepositoryT
+from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemyAsyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.service.typing import (
     UNSET,
@@ -259,7 +261,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
 
     async def get(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         statement: Optional[Select[tuple[ModelT]]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
@@ -274,10 +276,14 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
 
         Args:
             item_id: Identifier of instance to be retrieved.
+                For single primary key models, pass a scalar value (int, str, UUID, etc.).
+                For composite primary key models, pass a tuple of values in column order,
+                or a dict mapping attribute names to values.
             auto_expunge: Remove object from session before returning.
             statement: To facilitate customization of the underlying select query.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set relationships to be loaded
@@ -287,6 +293,16 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
 
         Returns:
             Representation of instance with identifier `item_id`.
+
+        Examples:
+            # Single primary key
+            >>> user = await service.get(123)
+
+            # Composite primary key (tuple format)
+            >>> assignment = await service.get((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> assignment = await service.get({"user_id": 1, "role_id": 5})
         """
         return cast(
             "ModelT",
@@ -807,6 +823,12 @@ class SQLAlchemyAsyncRepositoryService(
                         setattr(existing_instance, attr.key, value)
 
             data = existing_instance
+        elif id_attribute is None and self.repository._is_composite_pk():  # pyright: ignore[reportUnknownMemberType]
+            # For composite PKs, check if all PK values are present
+            if not self.repository._pk_values_present(data):  # pyright: ignore[reportUnknownMemberType]
+                pk_names = ", ".join(self.repository._pk_attr_names)  # pyright: ignore[reportUnknownMemberType]
+                msg = f"Could not identify composite PK values. Required attributes: {pk_names}"
+                raise RepositoryError(msg)
         elif (
             self.repository.get_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
                 item=data,
@@ -927,8 +949,17 @@ class SQLAlchemyAsyncRepositoryService(
             Updated or created representation.
         """
         data = await self.to_model(data, "upsert")
-        item_id = item_id if item_id is not None else self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
-        if item_id is not None:
+        # Handle ID extraction and setting for single-column PKs
+        # For composite PKs, the repository's upsert() handles this directly
+        if item_id is None:
+            if self.repository._is_composite_pk():  # pyright: ignore[reportUnknownMemberType]
+                # For composite PKs, extract the full PK if present
+                if self.repository._pk_values_present(data):  # pyright: ignore[reportUnknownMemberType]
+                    item_id = self.repository._extract_pk_value(data)  # pyright: ignore[reportUnknownMemberType]
+            else:
+                item_id = self.repository.get_id_attribute_value(item=data)  # pyright: ignore[reportUnknownMemberType]
+        if item_id is not None and not self.repository._is_composite_pk():  # pyright: ignore[reportUnknownMemberType]
+            # Only set single-column ID (composite PK values are already on the instance)
             self.repository.set_id_attribute_value(item_id, data)  # pyright: ignore[reportUnknownMemberType]
         return cast(
             "ModelT",
@@ -1131,7 +1162,7 @@ class SQLAlchemyAsyncRepositoryService(
 
     async def delete(
         self,
-        item_id: Any,
+        item_id: PrimaryKeyType,
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -1146,10 +1177,14 @@ class SQLAlchemyAsyncRepositoryService(
 
         Args:
             item_id: Identifier of instance to be deleted.
+                For single primary key models, pass a scalar value (int, str, UUID, etc.).
+                For composite primary key models, pass a tuple of values in column order,
+                or a dict mapping attribute names to values.
             auto_commit: Commit objects before returning.
             auto_expunge: Remove object from session before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -1159,6 +1194,16 @@ class SQLAlchemyAsyncRepositoryService(
 
         Returns:
             Representation of the deleted instance.
+
+        Examples:
+            # Single primary key
+            >>> deleted_user = await service.delete(123)
+
+            # Composite primary key (tuple format)
+            >>> deleted = await service.delete((user_id, role_id))
+
+            # Composite primary key (dict format)
+            >>> deleted = await service.delete({"user_id": 1, "role_id": 5})
         """
         return cast(
             "ModelT",
@@ -1177,7 +1222,7 @@ class SQLAlchemyAsyncRepositoryService(
 
     async def delete_many(
         self,
-        item_ids: List[Any],
+        item_ids: List[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -1192,11 +1237,14 @@ class SQLAlchemyAsyncRepositoryService(
         """Wrap repository bulk instance deletion.
 
         Args:
-            item_ids: Identifier of instance to be deleted.
+            item_ids: List of identifiers of instances to be deleted.
+                For single primary key models, pass a list of scalar values.
+                For composite primary key models, pass a list of tuples or dicts.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
+                Only applicable for single primary key models.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
                 Defaults to `950` if left unset.
             error_messages: An optional dictionary of templates to use
@@ -1208,6 +1256,26 @@ class SQLAlchemyAsyncRepositoryService(
 
         Returns:
             Representation of removed instances.
+
+        Examples:
+            # Single primary key
+            >>> deleted = await service.delete_many([1, 2, 3])
+
+            # Composite primary key (tuple format)
+            >>> deleted = await service.delete_many(
+            ...     [
+            ...         (user_id_1, role_id_1),
+            ...         (user_id_2, role_id_2),
+            ...     ]
+            ... )
+
+            # Composite primary key (dict format)
+            >>> deleted = await service.delete_many(
+            ...     [
+            ...         {"user_id": 1, "role_id": 5},
+            ...         {"user_id": 1, "role_id": 6},
+            ...     ]
+            ... )
         """
         return cast(
             "Sequence[ModelT]",

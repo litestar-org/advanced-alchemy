@@ -208,6 +208,73 @@ Delete Where
         return await repository.delete_where(Post.published.is_(False))
 
 
+.. _composite-primary-keys:
+
+Composite Primary Keys
+----------------------
+
+Advanced Alchemy supports models with composite primary keys. For these models, the ``PrimaryKeyType``
+accepts several formats when identifying records:
+
+**Tuple Format** - Pass primary key values as a tuple in column definition order:
+
+.. code-block:: python
+
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from sqlalchemy import Column, ForeignKey, Integer, String
+    from sqlalchemy.orm import DeclarativeBase
+
+    class Base(DeclarativeBase):
+        pass
+
+    class UserRole(Base):
+        """Model with composite primary key."""
+        __tablename__ = "user_role"
+        user_id: int = Column(Integer, ForeignKey("user.id"), primary_key=True)
+        role_id: int = Column(Integer, ForeignKey("role.id"), primary_key=True)
+        permissions: str = Column(String, nullable=True)
+
+    class UserRoleRepository(SQLAlchemyAsyncRepository[UserRole]):
+        model_type = UserRole
+
+    async def get_user_role(db_session, user_id: int, role_id: int) -> UserRole:
+        repository = UserRoleRepository(session=db_session)
+        # Tuple format: values in column definition order
+        return await repository.get((user_id, role_id))
+
+**Dict Format** - Pass primary key values as a dictionary with column names as keys:
+
+.. code-block:: python
+
+    async def get_user_role_by_dict(db_session, user_id: int, role_id: int) -> UserRole:
+        repository = UserRoleRepository(session=db_session)
+        # Dict format: explicit column names
+        return await repository.get({"user_id": user_id, "role_id": role_id})
+
+**Bulk Operations with Composite Keys** - Use sequences of tuples or dicts:
+
+.. code-block:: python
+
+    async def delete_user_roles(db_session, role_assignments: list[tuple[int, int]]) -> None:
+        repository = UserRoleRepository(session=db_session)
+        # Delete multiple records by their composite keys
+        await repository.delete_many(role_assignments)
+
+    async def get_multiple_user_roles(db_session) -> list[UserRole]:
+        repository = UserRoleRepository(session=db_session)
+        # Get multiple records using dict format
+        return await repository.get_many([
+            {"user_id": 1, "role_id": 5},
+            {"user_id": 1, "role_id": 6},
+            {"user_id": 2, "role_id": 5},
+        ])
+
+.. note::
+
+    When using tuple format, ensure values are in the same order as the primary key columns
+    are defined on the model. Dict format is more explicit and avoids ordering issues.
+
+
 Transaction Management
 ----------------------
 

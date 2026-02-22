@@ -1009,3 +1009,381 @@ async def test_repo_update_many_with_model_instances_partial_fields_github_560(
 
     assert updated_by_id[author2.id].name == "Updated Two"
     assert updated_by_id[author2.id].dob == original_dob2  # Should be unchanged
+
+
+# =============================================================================
+# Composite Primary Key Tests
+# =============================================================================
+
+
+async def test_composite_pk_get_by_tuple(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test get() with composite primary key using tuple format."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    # Get using tuple format (user_id, role_id)
+    result = await maybe_async(user_role_repo.get((1, 10)))
+
+    assert result is not None
+    assert result.user_id == 1
+    assert result.role_id == 10
+    assert result.is_active is True
+
+
+async def test_composite_pk_get_by_dict(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test get() with composite primary key using dict format."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    # Get using dict format
+    result = await maybe_async(user_role_repo.get({"user_id": 1, "role_id": 20}))
+
+    assert result is not None
+    assert result.user_id == 1
+    assert result.role_id == 20
+    assert result.is_active is True
+
+
+async def test_composite_pk_get_not_found(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test get() with composite primary key raises NotFoundError for missing record."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get((999, 999)))
+
+
+async def test_composite_pk_delete_by_tuple(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test delete() with composite primary key using tuple format."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    # Delete using tuple format
+    deleted = await maybe_async(user_role_repo.delete((2, 10)))
+
+    assert deleted is not None
+    assert deleted.user_id == 2
+    assert deleted.role_id == 10
+
+    # Verify it's actually deleted
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get((2, 10)))
+
+
+async def test_composite_pk_delete_by_dict(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test delete() with composite primary key using dict format."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    # Delete using dict format
+    deleted = await maybe_async(user_role_repo.delete({"user_id": 1, "role_id": 20}))
+
+    assert deleted is not None
+    assert deleted.user_id == 1
+    assert deleted.role_id == 20
+
+    # Verify it's actually deleted
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get({"user_id": 1, "role_id": 20}))
+
+
+async def test_composite_pk_delete_many_by_tuples(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test delete_many() with composite primary key using list of tuples."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    # Delete multiple using tuple format
+    deleted = await maybe_async(
+        user_role_repo.delete_many(
+            [
+                (1, 10),
+                (1, 20),
+            ]
+        )
+    )
+
+    assert len(deleted) == 2
+
+    # Verify they're actually deleted
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get((1, 10)))
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get((1, 20)))
+
+    # The remaining record should still exist
+    remaining = await maybe_async(user_role_repo.get((2, 10)))
+    assert remaining is not None
+
+
+async def test_composite_pk_delete_many_by_dicts(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test delete_many() with composite primary key using list of dicts."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    # Delete multiple using dict format
+    deleted = await maybe_async(
+        user_role_repo.delete_many(
+            [
+                {"user_id": 1, "role_id": 10},
+                {"user_id": 2, "role_id": 10},
+            ]
+        )
+    )
+
+    assert len(deleted) == 2
+
+    # Verify they're actually deleted
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get((1, 10)))
+    with pytest.raises(NotFoundError):
+        await maybe_async(user_role_repo.get((2, 10)))
+
+
+async def test_composite_pk_count(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test count() works with composite primary key model."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    count = await maybe_async(user_role_repo.count())
+    assert count == 3  # We seeded 3 user_role records
+
+
+async def test_composite_pk_list(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test list() works with composite primary key model."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+
+    results = await maybe_async(user_role_repo.list())
+    assert len(results) == 3
+
+
+async def test_single_pk_with_tuple_raises_error(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test that passing a tuple to a single-PK model raises ValueError."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+
+    with pytest.raises(ValueError, match="single primary key"):
+        await maybe_async(author_repo.get((1, 2)))
+
+
+async def test_single_pk_with_dict_raises_error(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test that passing a dict to a single-PK model raises ValueError."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+
+    with pytest.raises(ValueError, match="single primary key"):
+        await maybe_async(author_repo.get({"id": 1}))
+
+
+# =============================================================================
+# Composite Primary Key Tests - Update/Upsert Operations
+# =============================================================================
+
+
+async def test_composite_pk_update(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test update() with composite primary key model."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+
+    # Get existing record
+    existing = await maybe_async(user_role_repo.get((1, 10)))
+    assert existing is not None
+    assert existing.is_active is True
+
+    # Update the record (create a new instance with the same PK)
+    updated_role = UserRole(user_id=1, role_id=10, is_active=False)
+    result = await maybe_async(user_role_repo.update(updated_role))
+
+    assert result is not None
+    assert result.user_id == 1
+    assert result.role_id == 10
+    assert result.is_active is False
+
+
+async def test_composite_pk_update_many(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test update_many() with composite primary key model."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+
+    # Update multiple records
+    updates = [
+        UserRole(user_id=1, role_id=10, is_active=False),
+        UserRole(user_id=1, role_id=20, is_active=False),
+    ]
+    results = await maybe_async(user_role_repo.update_many(updates))
+
+    assert len(results) == 2
+
+    # Verify the updates were applied
+    role1 = await maybe_async(user_role_repo.get((1, 10)))
+    role2 = await maybe_async(user_role_repo.get((1, 20)))
+    assert role1.is_active is False
+    assert role2.is_active is False
+
+
+async def test_composite_pk_upsert_update(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test upsert() updates existing record with composite primary key."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+
+    # Upsert with existing PK should update
+    upserted = UserRole(user_id=1, role_id=10, is_active=False)
+    result = await maybe_async(user_role_repo.upsert(upserted))
+
+    assert result is not None
+    assert result.user_id == 1
+    assert result.role_id == 10
+    assert result.is_active is False
+
+    # Verify via get
+    fetched = await maybe_async(user_role_repo.get((1, 10)))
+    assert fetched.is_active is False
+
+
+async def test_composite_pk_upsert_create(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test upsert() creates new record with composite primary key."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+
+    # Upsert with non-existing PK should create
+    new_role = UserRole(user_id=99, role_id=99, is_active=True)
+    result = await maybe_async(user_role_repo.upsert(new_role))
+
+    assert result is not None
+    assert result.user_id == 99
+    assert result.role_id == 99
+    assert result.is_active is True
+
+    # Verify via get
+    fetched = await maybe_async(user_role_repo.get((99, 99)))
+    assert fetched is not None
+    assert fetched.is_active is True
+
+
+async def test_composite_pk_upsert_many_mixed(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test upsert_many() with mix of creates and updates for composite PKs."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+
+    # Mix of existing (should update) and new (should create) records
+    data = [
+        UserRole(user_id=1, role_id=10, is_active=False),  # Existing - update
+        UserRole(user_id=88, role_id=88, is_active=True),  # New - create
+    ]
+    results = await maybe_async(user_role_repo.upsert_many(data))
+
+    assert len(results) == 2
+
+    # Verify the existing one was updated
+    updated = await maybe_async(user_role_repo.get((1, 10)))
+    assert updated.is_active is False
+
+    # Verify the new one was created
+    created = await maybe_async(user_role_repo.get((88, 88)))
+    assert created is not None
+    assert created.is_active is True
+
+
+async def test_composite_pk_upsert_many_all_new(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test upsert_many() with all new records for composite PKs."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+
+    # All new records
+    data = [
+        UserRole(user_id=100, role_id=100, is_active=True),
+        UserRole(user_id=101, role_id=101, is_active=False),
+    ]
+    results = await maybe_async(user_role_repo.upsert_many(data))
+
+    assert len(results) == 2
+
+    # Verify both were created
+    for user_id, role_id in [(100, 100), (101, 101)]:
+        created = await maybe_async(user_role_repo.get((user_id, role_id)))
+        assert created is not None

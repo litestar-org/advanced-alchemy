@@ -248,7 +248,26 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
         return res
 
     def key(self, obj: ModelT) -> str:
-        return str(getattr(obj, self.id_attribute))
+        """Generate a store key from a model instance.
+
+        Supports both single and composite primary keys.
+
+        Args:
+            obj: Model instance to generate key from.
+
+        Returns:
+            String key for storage. For composite keys, returns tuple representation.
+        """
+        mapper = object_mapper(obj)
+        pk_columns = mapper.primary_key
+
+        if len(pk_columns) == 1:
+            # Single PK - use simple string representation
+            return str(getattr(obj, self.id_attribute))
+
+        # Composite PK - use tuple of all PK values
+        pk_values = tuple(getattr(obj, col.name) for col in pk_columns)
+        return str(pk_values)
 
     def add(self, obj: ModelT) -> ModelT:
         self._set_defaults(obj)
