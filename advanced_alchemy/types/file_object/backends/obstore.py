@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
+from advanced_alchemy._serialization import encode_json
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_mtime_equivalent, get_or_generate_etag
 from advanced_alchemy.types.file_object.base import (
@@ -52,6 +53,28 @@ def schema_from_type(obj: Any) -> str:  # noqa: PLR0911
     if isinstance(obj, MemoryStore):
         return "memory"
     return "file"
+
+
+def _serialize_metadata_for_attributes(metadata: "dict[str, Any]") -> "dict[str, str]":
+    """Serialize metadata values to strings for obstore attributes.
+
+    Obstore attributes must be strings. Non-string values (lists, dicts, etc.)
+    are serialized using the project's ``encode_json`` to avoid TypeError when
+    passed to obstore's ``put()``.
+
+    Args:
+        metadata: The metadata dict from a FileObject.
+
+    Returns:
+        A dict with all values as strings.
+    """
+    result: dict[str, str] = {}
+    for key, value in metadata.items():
+        if isinstance(value, str):
+            result[key] = value
+        else:
+            result[key] = encode_json(value)
+    return result
 
 
 class ObstoreBackend(StorageBackend):
@@ -132,8 +155,9 @@ class ObstoreBackend(StorageBackend):
             attributes["Content-Type"] = file_object.content_type
 
         # Add any custom metadata from file_object.metadata
+        # Obstore attributes must be strings, so serialize non-string values to JSON
         if file_object.metadata:
-            attributes.update(file_object.metadata)
+            attributes.update(_serialize_metadata_for_attributes(file_object.metadata))
 
         # LocalStore doesn't support attributes parameter - skip it for local filesystem
         put_params: dict[str, Any] = {
@@ -188,8 +212,9 @@ class ObstoreBackend(StorageBackend):
             attributes["Content-Type"] = file_object.content_type
 
         # Add any custom metadata from file_object.metadata
+        # Obstore attributes must be strings, so serialize non-string values to JSON
         if file_object.metadata:
-            attributes.update(file_object.metadata)
+            attributes.update(_serialize_metadata_for_attributes(file_object.metadata))
 
         # LocalStore doesn't support attributes parameter - skip it for local filesystem
         put_params: dict[str, Any] = {
