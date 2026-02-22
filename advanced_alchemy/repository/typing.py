@@ -18,6 +18,7 @@ __all__ = (
     "ModelOrRowMappingT",
     "ModelT",
     "OrderingPair",
+    "PrimaryKeyType",
     "RowMappingT",
     "RowT",
     "SQLAlchemyAsyncRepositoryT",
@@ -79,6 +80,25 @@ A tuple of (column, ascending) where:
 - or a :class:`sqlalchemy.sql.elements.UnaryExpression` which is the standard way to express an ordering in SQLAlchemy
 
 This type is used to specify ordering criteria for repository queries.
+"""
+PrimaryKeyType: TypeAlias = Union[Any, tuple[Any, ...], dict[str, Any]]
+"""Type alias for primary key values.
+
+Supports three formats:
+- Scalar value (int, str, UUID, etc.) for single-column primary keys
+- Tuple of values for composite primary keys, in column order
+- Dict mapping attribute names to values for composite primary keys
+
+Examples:
+    # Single primary key
+    repo.get(123)
+    repo.get("abc-uuid")
+
+    # Composite primary key (tuple format - values in PK column order)
+    repo.get((user_id, role_id))
+
+    # Composite primary key (dict format - named attributes)
+    repo.get({"user_id": 1, "role_id": 5})
 """
 
 
