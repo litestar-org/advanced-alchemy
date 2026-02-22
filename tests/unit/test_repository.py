@@ -2426,3 +2426,29 @@ def test_convert_relationship_value_helper() -> None:
     # Test existing instance in collection
     result = _convert_relationship_value([existing], UUIDBook, is_collection=True)
     assert result[0] is existing
+
+
+def test_repository_and_service_annotations_are_accessible() -> None:
+    """Regression test for Python 3.14 lazy annotation evaluation shadowing.
+
+    On Python 3.14, bare ``list[...]`` in a class that defines a ``list()`` method
+    resolves to the method instead of the builtin type. Using ``typing.List`` avoids this.
+    """
+    import typing
+
+    from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
+    from advanced_alchemy.repository.memory._async import SQLAlchemyAsyncMockRepository
+    from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository
+    from advanced_alchemy.repository.memory.base import InMemoryStore
+
+    targets = [
+        SQLAlchemyAsyncRepository,
+        SQLAlchemySyncRepository,
+        SQLAlchemyAsyncMockRepository,
+        SQLAlchemySyncMockRepository,
+        InMemoryStore,
+    ]
+    for cls in targets:
+        annotations = typing.get_type_hints(cls.list)
+        assert isinstance(annotations, dict), f"{cls.__name__}.list annotations should be a dict"

@@ -2,7 +2,7 @@ import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Generic, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, List, Union, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
@@ -96,7 +96,7 @@ class InMemoryStore(Generic[T]):
     def remove(self, key: Any) -> T:
         return self._store.pop(self._resolve_key(key))
 
-    def list(self) -> list[T]:
+    def list(self) -> List[T]:
         return list(self._store.values())
 
     def remove_all(self) -> None:
@@ -235,7 +235,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
 
     @staticmethod
     def changed_attrs(data: ModelT) -> "Iterable[str]":  # pragma: no cover
-        res: list[str] = []
+        res: List[str] = []
         mapper = inspect(data)
         if mapper is None:
             msg = f"Cannot inspect {data.__class__} model"
