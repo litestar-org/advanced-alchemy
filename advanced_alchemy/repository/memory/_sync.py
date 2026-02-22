@@ -6,7 +6,7 @@ import re
 import string
 from collections import abc
 from collections.abc import Iterable
-from typing import Any, Optional, Union, cast, overload
+from typing import Any, List, Optional, Union, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import (
@@ -67,7 +67,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     """Default execution options for the repository."""
     model_type: type[ModelT]
     id_attribute: Any = "id"
-    match_fields: Optional[Union[list[str], str]] = None
+    match_fields: Optional[Union[List[str], str]] = None
     uniquify: bool = False
     _exclude_kwargs: set[str] = {
         "statement",
@@ -96,7 +96,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
         load: Optional[LoadSpec] = None,
@@ -310,7 +310,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         return {key: value for key, value in kwargs.items() if key not in self._exclude_kwargs}
 
     @staticmethod
-    def _apply_limit_offset_pagination(result: list[ModelT], limit: int, offset: int) -> list[ModelT]:
+    def _apply_limit_offset_pagination(result: List[ModelT], limit: int, offset: int) -> List[ModelT]:
         return result[offset:limit]
 
     def _extract_field_name(self, field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
@@ -334,19 +334,19 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _filter_in_collection(
         self,
-        result: list[ModelT],
+        result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         field_str = self._extract_field_name(field_name)
         return [item for item in result if getattr(item, field_str) in values]
 
     def _filter_not_in_collection(
         self,
-        result: list[ModelT],
+        result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         if not values:
             return result
         field_str = self._extract_field_name(field_name)
@@ -354,15 +354,15 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _filter_on_datetime_field(
         self,
-        result: list[ModelT],
+        result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         before: Optional[datetime.datetime] = None,
         after: Optional[datetime.datetime] = None,
         on_or_before: Optional[datetime.datetime] = None,
         on_or_after: Optional[datetime.datetime] = None,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         field_str = self._extract_field_name(field_name)
-        result_: list[ModelT] = []
+        result_: List[ModelT] = []
         for item in result:
             attr: datetime.datetime = getattr(item, field_str)
             if before is not None and attr < before:
@@ -377,14 +377,14 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     @staticmethod
     def _filter_by_like(
-        result: list[ModelT],
+        result: List[ModelT],
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         fields = {field_name} if isinstance(field_name, str) else field_name
-        items: list[ModelT] = []
+        items: List[ModelT] = []
         for field in fields:
             items.extend(
                 [
@@ -397,14 +397,14 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     @staticmethod
     def _filter_by_not_like(
-        result: list[ModelT],
+        result: List[ModelT],
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         fields = {field_name} if isinstance(field_name, str) else field_name
-        items: list[ModelT] = []
+        items: List[ModelT] = []
         for field in fields:
             items.extend(
                 [
@@ -420,7 +420,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         result: Iterable[ModelT],
         /,
         kwargs: Union[dict[Any, Any], Iterable[tuple[Any, Any]]],
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         kwargs_: dict[Any, Any] = kwargs if isinstance(kwargs, dict) else dict(*kwargs)  # pyright: ignore
         kwargs_ = self._exclude_unused_kwargs(kwargs_)  # pyright: ignore
         try:
@@ -430,18 +430,18 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _order_by(
         self,
-        result: list[ModelT],
+        result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         sort_desc: bool = False,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         return sorted(result, key=lambda item: getattr(item, self._extract_field_name(field_name)), reverse=sort_desc)
 
     def _apply_filters(
         self,
-        result: list[ModelT],
+        result: List[ModelT],
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         for filter_ in filters:
             if isinstance(filter_, LimitOffset):
                 if apply_pagination:
@@ -494,9 +494,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _get_match_fields(
         self,
-        match_fields: Union[list[str], str, None],
+        match_fields: Union[List[str], str, None],
         id_attribute: Optional[str] = None,
-    ) -> Optional[list[str]]:
+    ) -> Optional[List[str]]:
         id_attribute = id_attribute or self.id_attribute
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
@@ -507,7 +507,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[List[ModelT], int]:
         result = self.list(*filters, **kwargs)
         return result, len(result)
 
@@ -515,7 +515,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[List[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
 
     def _find_or_raise_not_found(self, id_: PrimaryKeyType) -> ModelT:
@@ -534,7 +534,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         return self.check_not_found(self.__collection__().get_or_none(store_key))
 
     @staticmethod
-    def _find_one_or_raise_error(result: list[ModelT]) -> ModelT:
+    def _find_one_or_raise_error(result: List[ModelT]) -> ModelT:
         if not result:
             msg = "No item found when one was expected"
             raise IntegrityError(msg)
@@ -547,7 +547,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[list[_AbstractLoad]],
+        loader_options: Optional[List[_AbstractLoad]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]
@@ -608,7 +608,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Union[list[str], str, None] = None,
+        match_fields: Union[List[str], str, None] = None,
         upsert: bool = True,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
@@ -646,7 +646,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def get_and_update(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Union[list[str], str, None] = None,
+        match_fields: Union[List[str], str, None] = None,
         attribute_names: Optional[Iterable[str]] = None,
         with_for_update: ForUpdateParameter = None,
         auto_commit: Optional[bool] = None,
@@ -718,13 +718,13 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def add_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         bind_group: Optional[str] = None,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         for obj in data:
             self.add(obj)  # pyright: ignore[reportCallIssue]
         return data
@@ -751,7 +751,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def update_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -760,7 +760,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         return [self.__collection__().update(obj) for obj in data if obj in self.__collection__()]
 
     def delete(
@@ -784,7 +784,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def delete_many(
         self,
-        item_ids: list[PrimaryKeyType],
+        item_ids: List[PrimaryKeyType],
         *,
         auto_commit: Optional[bool] = None,
         auto_expunge: Optional[bool] = None,
@@ -795,8 +795,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> list[ModelT]:
-        deleted: list[ModelT] = []
+    ) -> List[ModelT]:
+        deleted: List[ModelT] = []
         for id_ in item_ids:
             store_key = self._get_store_key(id_)
             if obj := self.__collection__().get_or_none(store_key):
@@ -816,7 +816,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         result = self.__collection__().list()
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
@@ -832,7 +832,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[list[str], str]] = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -846,18 +846,18 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def upsert_many(
         self,
-        data: list[ModelT],
+        data: List[ModelT],
         *,
         auto_expunge: Optional[bool] = None,
         auto_commit: Optional[bool] = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[list[str], str]] = None,
+        match_fields: Optional[Union[List[str], str]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         return [self.upsert(item) for item in data]
 
     def list_and_count(
@@ -866,7 +866,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -874,7 +874,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> tuple[list[ModelT], int]:
+    ) -> tuple[List[ModelT], int]:
         return self._list_and_count_basic(*filters, **kwargs)
 
     def list(
@@ -884,7 +884,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         use_cache: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> list[ModelT]:
+    ) -> List[ModelT]:
         result = self.__collection__().list()
         result = self._apply_filters(result, *filters)
         return self._filter_result_by_kwargs(result, kwargs)
