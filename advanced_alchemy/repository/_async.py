@@ -1119,7 +1119,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for idx in range(0, len(normalized_ids), effective_chunk_size):
                     chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
                     pk_filter = (
-                        or_(*[self._build_pk_filter(pk_tuple) for pk_tuple in chunk])
+                        or_(
+                            *[and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]) for pk_tuple in chunk]
+                        )
                         if self._dialect.name == "mssql"
                         else tuple_(*self._pk_columns).in_(chunk)
                     )
@@ -2378,7 +2380,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 pk_filters: List[ColumnElement[bool]] = []
                 for item in data_to_update:
                     pk_tuple = tuple(item[attr] for attr in self._pk_attr_names)
-                    pk_filters.append(self._build_pk_filter(pk_tuple))
+                    pk_filters.append(and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]))
                 updated_instances = await self.list(
                     or_(*pk_filters),
                     load=loader_options,
