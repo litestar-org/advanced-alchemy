@@ -96,6 +96,9 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     wrap_exceptions: bool = True
 
     @property
+    def pk_attr_names(self) -> tuple[str, ...]: ...
+
+    @property
     def has_composite_pk(self) -> bool: ...
 
     def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType: ...
@@ -720,6 +723,15 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             id_attribute = id_attribute.key
         setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
         return item
+
+    @property
+    def pk_attr_names(self) -> tuple[str, ...]:
+        """Get primary key attribute names.
+
+        Returns:
+            Tuple of ORM attribute names for primary key columns.
+        """
+        return self._pk_attr_names
 
     @property
     def has_composite_pk(self) -> bool:

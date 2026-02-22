@@ -4,8 +4,6 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
-# pyright: reportPrivateUsage=false
-
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from functools import cached_property
@@ -826,7 +824,7 @@ class SQLAlchemyAsyncRepositoryService(
         elif id_attribute is None and self.repository.has_composite_pk:
             # For composite PKs, check if all PK values are present
             if not self.repository.has_primary_key_values(data):
-                pk_names = ", ".join(self.repository._pk_attr_names)  # pyright: ignore[reportUnknownMemberType]
+                pk_names = ", ".join(self.repository.pk_attr_names)
                 msg = f"Could not identify composite PK values. Required attributes: {pk_names}"
                 raise RepositoryError(msg)
         elif (

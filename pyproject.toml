@@ -361,7 +361,7 @@ classmethod-decorators = [
 "advanced_alchemy/alembic/templates/*/env.py" = ["INP001"]
 "advanced_alchemy/repository/*.py" = ['C901', 'UP006', 'UP035']
 "advanced_alchemy/repository/memory/*.py" = ['UP006', 'UP035']
-"advanced_alchemy/service/*.py" = ["PLR0911", "SLF001", "UP006", "UP035"]
+"advanced_alchemy/service/*.py" = ["PLR0911", "UP006", "UP035"]
 "examples/flask.py" = ["ANN"]
 "examples/flask/*.py" = ["ANN"]
 "examples/litestar/*.py" = ["PLR6301", "DOC", "B008"]
@@ -467,9 +467,12 @@ module = [
   "s3fs.*",
   "argon2",
   "argon2.*",
-  "dishka",
-  "dishka.*",
 ]
+
+[[tool.mypy.overrides]]
+follow_imports = "skip"
+ignore_missing_imports = true
+module = ["dishka", "dishka.*"]
 
 [[tool.mypy.overrides]]
 follow_imports = "skip"
@@ -544,10 +547,7 @@ include = ["advanced_alchemy"]
 pythonVersion = "3.9"
 reportMissingTypeStubs = false
 reportPrivateImportUsage = false
-reportPrivateUsage = false
-reportUnknownArgumentType = false
 reportUnknownMemberType = false
-reportUnknownVariableType = false
 reportUnusedFunction = false
 strict = ["advanced_alchemy/**/*"]
 venv = ".venv"

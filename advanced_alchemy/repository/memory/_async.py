@@ -136,7 +136,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         return tuple(mapper.primary_key)
 
     @property
-    def _pk_attr_names(self) -> tuple[str, ...]:
+    def pk_attr_names(self) -> tuple[str, ...]:
         """Get primary key attribute names from the model mapper.
 
         Uses mapper.get_property_by_column() to get ORM attribute names,
@@ -167,7 +167,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             - For single PK: scalar value
             - For composite PK: tuple of values in column order
         """
-        return extract_pk_value_from_instance(instance, self._pk_attr_names)
+        return extract_pk_value_from_instance(instance, self.pk_attr_names)
 
     def has_primary_key_values(self, instance: ModelT) -> bool:
         """Check if all primary key values are set on an instance.
@@ -178,7 +178,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         Returns:
             True if all PK values are non-None, False otherwise.
         """
-        return pk_values_present(instance, self._pk_attr_names)
+        return pk_values_present(instance, self.pk_attr_names)
 
     def _normalize_pk_to_tuple(self, pk_value: PrimaryKeyType) -> tuple[Any, ...]:
         """Normalize a primary key value to a tuple for consistent storage key generation.
@@ -189,7 +189,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         Returns:
             Tuple representation of the primary key.
         """
-        return normalize_pk_to_tuple(pk_value, self._pk_attr_names, self.model_type.__name__)
+        return normalize_pk_to_tuple(pk_value, self.pk_attr_names, self.model_type.__name__)
 
     def _get_store_key(self, pk_value: PrimaryKeyType) -> str:
         """Generate a store key from a primary key value.
