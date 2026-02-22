@@ -513,7 +513,10 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
         return FieldDefinition.from_annotation(elem.type.python_type)
 
     if isinstance(elem, RelationshipProperty):
-        if elem.direction in {RelationshipDirection.ONETOMANY, RelationshipDirection.MANYTOMANY}:
+        if (
+            elem.direction in {RelationshipDirection.ONETOMANY, RelationshipDirection.MANYTOMANY}
+            and elem.uselist is not False
+        ):
             collection_type = FieldDefinition.from_annotation(elem.collection_class or list)  # pyright: ignore[reportUnknownMemberType]
             return FieldDefinition.from_annotation(collection_type.safe_generic_origin[elem.mapper.class_])
 
@@ -535,8 +538,9 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
 def detect_nullable_relationship(elem: RelationshipProperty[Any]) -> bool:
     """Detects if a relationship is nullable.
 
-    This attempts to decide if we should allow a ``None`` default value for a relationship by looking at the
-    foreign key fields. If all foreign key fields are nullable, then we allow a ``None`` default value.
+    For MANYTOONE relationships (FK on this side), checks if all FK columns are nullable.
+    For ONETOMANY with uselist=False (inverse side of one-to-one), the related object may not
+    exist since no local FK enforces it, so these are always treated as nullable.
 
     Args:
         elem: The relationship to check.
@@ -544,4 +548,6 @@ def detect_nullable_relationship(elem: RelationshipProperty[Any]) -> bool:
     Returns:
         bool: ``True`` if the relationship is nullable, ``False`` otherwise.
     """
-    return elem.direction == RelationshipDirection.MANYTOONE and all(c.nullable for c in elem.local_columns)
+    if elem.direction == RelationshipDirection.MANYTOONE:
+        return all(c.nullable for c in elem.local_columns)
+    return elem.direction == RelationshipDirection.ONETOMANY and elem.uselist is False
