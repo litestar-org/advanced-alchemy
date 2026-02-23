@@ -46,7 +46,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.9.0"
+version = "1.9.0b1"
 
 [project.urls]
 Changelog = "https://advanced-alchemy.litestar.dev/latest/changelog"
@@ -176,7 +176,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.9.0"
+current_version = "1.9.0b1"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -187,18 +187,15 @@ parse = """(?x)
 regex = false
 replace = "{new_version}"
 search = "{current_version}"
-serialize = [
-    "{major}.{minor}.{patch}{pre}{pre_n}",
-    "{major}.{minor}.{patch}",
-]
+serialize = ["{major}.{minor}.{patch}{pre}{pre_n}", "{major}.{minor}.{patch}"]
 sign_tags = false
 tag = false
 tag_message = "chore(release): v{new_version}"
 tag_name = "v{new_version}"
 
 [tool.bumpversion.parts.pre]
-optional_value = "stable"
 first_value = "stable"
+optional_value = "stable"
 values = ["a", "b", "rc", "stable"]
 
 [tool.bumpversion.parts.pre_n]
