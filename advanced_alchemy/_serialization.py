@@ -60,14 +60,22 @@ try:
 
 except ImportError:
     try:
-        from orjson import OPT_NAIVE_UTC, OPT_SERIALIZE_NUMPY, OPT_SERIALIZE_UUID
-        from orjson import dumps as _encode_json
-        from orjson import loads as decode_json  # type: ignore[no-redef,assignment]
+        from orjson import (  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+            OPT_NAIVE_UTC,  # pyright: ignore[reportUnknownVariableType]
+            OPT_SERIALIZE_NUMPY,  # pyright: ignore[reportUnknownVariableType]
+            OPT_SERIALIZE_UUID,  # pyright: ignore[reportUnknownVariableType]
+        )
+        from orjson import (  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+            dumps as _encode_json,  # pyright: ignore[reportUnknownVariableType]
+        )
+        from orjson import (  # type: ignore[no-redef,assignment,import-not-found]  # pyright: ignore[reportMissingImports]
+            loads as decode_json,  # pyright: ignore[reportUnknownVariableType,reportUnusedImport]
+        )
 
         def encode_json(data: Any) -> str:  # pragma: no cover
-            return _encode_json(
+            return _encode_json(  # type: ignore[no-any-return]
                 data, default=_type_to_string, option=OPT_SERIALIZE_NUMPY | OPT_NAIVE_UTC | OPT_SERIALIZE_UUID
-            ).decode("utf-8")  # type: ignore[no-any-return]
+            ).decode("utf-8")
 
     except ImportError:
         from json import dumps as encode_json  # type: ignore[assignment] # noqa: F401
