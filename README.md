@@ -36,6 +36,10 @@ offering:
 - Integration with major web frameworks including Litestar, Starlette, FastAPI, Sanic
 - Custom-built alembic configuration and CLI with optional framework integration
 - Utility base classes with audit columns, primary keys and utility functions
+- [SQLModel](https://sqlmodel.tiangolo.com/) compatibility — use `SQLModel` `table=True` models directly with repositories and services
+- Composite primary key support — work with multi-column primary keys across repositories, services, and bulk operations
+- Read/write replica routing with automatic query routing, round-robin/random replica selection, and sticky-primary mode
+- Dogpile caching integration for query result caching
 - Built in `File Object` data type for storing objects:
     - Unified interface for various storage backends ([`fsspec`](https://filesystem-spec.readthedocs.io/en/latest/) and [`obstore`](https://developmentseed.org/obstore/latest/))
     - Optional lifecycle event hooks integrated with SQLAlchemy's event system to automatically save and delete files as records are inserted, updated, or deleted.
@@ -49,7 +53,7 @@ offering:
 - Synchronous and asynchronous repositories featuring:
     - Common CRUD operations for SQLAlchemy models
     - Bulk inserts, updates, upserts, and deletes with dialect-specific enhancements
-    - Integrated counts, pagination, sorting, filtering with `LIKE`, `IN`, and dates before and/or after.
+    - Integrated counts, pagination, sorting, filtering with `LIKE`, `IN`, `IS NULL`/`IS NOT NULL`, and dates before and/or after.
 - Tested support for multiple database backends including:
     - SQLite via [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/) or [sqlite](https://docs.python.org/3/library/sqlite3.html)
     - Postgres via [asyncpg](https://magicstack.github.io/asyncpg/current/) or [psycopg3 (async or sync)](https://www.psycopg.org/psycopg3/)
