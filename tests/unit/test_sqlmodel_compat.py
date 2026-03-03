@@ -3,10 +3,13 @@
 Validates that SQLModel table=True models can be used with AA repositories and services.
 """
 
+from collections.abc import Generator
 from typing import Any, Optional, cast
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 sqlmodel = pytest.importorskip("sqlmodel")
 
@@ -14,6 +17,7 @@ from sqlmodel import Field as SQLModelField  # noqa: E402
 from sqlmodel import SQLModel  # noqa: E402
 
 from advanced_alchemy.base import ModelProtocol, model_to_dict  # noqa: E402
+from advanced_alchemy.repository import SQLAlchemySyncRepository  # noqa: E402
 from advanced_alchemy.repository._util import get_instrumented_attr, get_primary_key_info, model_from_dict  # noqa: E402
 from advanced_alchemy.service.typing import (  # noqa: E402
     is_pydantic_model,
@@ -284,3 +288,73 @@ def test_model_to_dict_roundtrip_via_model_from_dict() -> None:
     assert rebuilt.name == hero.name
     assert rebuilt.secret_name == hero.secret_name
     assert rebuilt.age == hero.age
+
+
+# ---------------------------------------------------------------------------
+# Chapter 4: Repository integration with SQLModel (in-memory SQLite)
+# ---------------------------------------------------------------------------
+
+
+class HeroRepository(SQLAlchemySyncRepository[HeroModel]):
+    """Repository for HeroModel."""
+
+    model_type = HeroModel
+
+
+@pytest.fixture()
+def hero_session() -> "Generator[Session, None, None]":
+    """Create an in-memory SQLite session with the HeroModel table."""
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session_factory = sessionmaker(engine, expire_on_commit=False)
+    with session_factory() as session:
+        yield session  # type: ignore[misc]
+
+
+def test_repo_update_many_with_sqlmodel(hero_session: "Session") -> None:
+    """Repository.update_many should handle SQLModel model instances via model_to_dict."""
+    repo = HeroRepository(session=hero_session)
+    hero = repo.add(HeroModel(name="Spider-Boy", secret_name="Pedro", age=10))
+    hero_session.commit()
+
+    hero.age = 20
+    updated = repo.update_many([hero])
+    hero_session.commit()
+    assert updated[0].age == 20
+
+
+def test_repo_upsert_creates_with_sqlmodel(hero_session: "Session") -> None:
+    """Repository.upsert should create a new SQLModel instance when not found."""
+    repo = HeroRepository(session=hero_session)
+    hero = HeroModel(name="Spider-Boy", secret_name="Pedro", age=10)
+    result = repo.upsert(hero)
+    hero_session.commit()
+    assert result.name == "Spider-Boy"
+    assert result.id is not None
+
+
+def test_repo_upsert_updates_with_sqlmodel(hero_session: "Session") -> None:
+    """Repository.upsert should update existing SQLModel instance when found by match_fields."""
+    repo = HeroRepository(session=hero_session)
+    existing = repo.add(HeroModel(name="Spider-Boy", secret_name="Pedro", age=10))
+    hero_session.commit()
+
+    updated_hero = HeroModel(name="Spider-Boy", secret_name="Pedro P", age=15)
+    result = repo.upsert(updated_hero, match_fields=["name"])
+    hero_session.commit()
+    assert result.id == existing.id
+    assert result.secret_name == "Pedro P"
+
+
+def test_repo_upsert_fallback_match_by_all_fields(hero_session: "Session") -> None:
+    """Repository.upsert should match by all non-PK fields when no id and no match_fields."""
+    repo = HeroRepository(session=hero_session)
+    repo.add(HeroModel(name="Spider-Boy", secret_name="Pedro", age=10))
+    hero_session.commit()
+
+    # No id set, no match_fields — triggers model_to_dict(data, exclude=exclude_cols) fallback
+    lookup = HeroModel(name="Spider-Boy", secret_name="Pedro", age=10)
+    result = repo.upsert(lookup)
+    hero_session.commit()
+    assert result.name == "Spider-Boy"
+    assert result.id is not None
