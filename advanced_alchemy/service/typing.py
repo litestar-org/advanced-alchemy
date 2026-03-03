@@ -384,12 +384,17 @@ def is_msgspec_struct_without_field(v: Any, field_name: str) -> "TypeGuard[Struc
 def is_schema(v: Any) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct, Pydantic model, or attrs instance.
 
+    SQLModel ``table=True`` models are excluded — they are ORM-mapped models,
+    not schemas that should be decomposed to dicts.
+
     Args:
         v: Value to check.
 
     Returns:
         bool
     """
+    if is_sqlmodel_table_model(v):
+        return False
     return is_msgspec_struct(v) or is_pydantic_model(v) or is_attrs_instance(v)
 
 
@@ -408,6 +413,8 @@ def is_schema_or_dict(v: Any) -> "TypeGuard[Union[SupportedSchemaModel, dict[str
 def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct, Pydantic model, or attrs instance with a specific field.
 
+    SQLModel ``table=True`` models are excluded.
+
     Args:
         v: Value to check.
         field_name: Field name to check for.
@@ -415,6 +422,8 @@ def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaM
     Returns:
         bool
     """
+    if is_sqlmodel_table_model(v):
+        return False
     return (
         is_msgspec_struct_with_field(v, field_name)
         or is_pydantic_model_with_field(v, field_name)
@@ -425,6 +434,8 @@ def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaM
 def is_schema_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct, Pydantic model, or attrs instance without a specific field.
 
+    SQLModel ``table=True`` models are excluded.
+
     Args:
         v: Value to check.
         field_name: Field name to check for.
@@ -432,7 +443,7 @@ def is_schema_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSche
     Returns:
         bool
     """
-    return not is_schema_with_field(v, field_name)
+    return is_schema(v) and not hasattr(v, field_name)
 
 
 def is_schema_or_dict_with_field(v: Any, field_name: str) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
@@ -460,7 +471,7 @@ def is_schema_or_dict_without_field(
     Returns:
         bool
     """
-    return not is_schema_or_dict_with_field(v, field_name)
+    return is_schema_or_dict(v) and not is_schema_or_dict_with_field(v, field_name)
 
 
 @overload

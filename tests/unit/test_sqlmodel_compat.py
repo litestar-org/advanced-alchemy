@@ -3,19 +3,28 @@
 Validates that SQLModel table=True models can be used with AA repositories and services.
 """
 
-from typing import Any, Optional
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
 
 sqlmodel = pytest.importorskip("sqlmodel")
 
-from sqlmodel import Field as SQLModelField
-from sqlmodel import SQLModel
+from sqlmodel import Field as SQLModelField  # noqa: E402
+from sqlmodel import SQLModel  # noqa: E402
 
-from advanced_alchemy.base import ModelProtocol, model_to_dict
-from advanced_alchemy.service.typing import is_sqlmodel_table_model, schema_dump
-
+from advanced_alchemy.base import ModelProtocol, model_to_dict  # noqa: E402
+from advanced_alchemy.service.typing import (  # noqa: E402
+    is_pydantic_model,
+    is_schema,
+    is_schema_or_dict,
+    is_schema_or_dict_with_field,
+    is_schema_or_dict_without_field,
+    is_schema_with_field,
+    is_schema_without_field,
+    is_sqlmodel_table_model,
+    schema_dump,
+)
 
 # ---------------------------------------------------------------------------
 # Test fixtures: SQLModel table models
@@ -157,3 +166,68 @@ def test_schema_dump_converts_plain_schema_to_dict() -> None:
     assert isinstance(result, dict)
     assert result["name"] == "test"
     assert result["age"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Chapter 2: is_schema() family excludes SQLModel table models
+# ---------------------------------------------------------------------------
+
+
+def test_is_pydantic_model_still_matches_sqlmodel_table() -> None:
+    """is_pydantic_model() is a structural check — SQLModel table models ARE BaseModel subclasses."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_pydantic_model(hero) is True
+
+
+def test_is_pydantic_model_matches_plain_schema() -> None:
+    """Plain SQLModel schemas are also BaseModel subclasses."""
+    schema = PlainSchema(name="test", age=5)
+    assert is_pydantic_model(schema) is True
+
+
+def test_is_schema_excludes_sqlmodel_table_instance() -> None:
+    """is_schema() is a semantic check — SQLModel table models are NOT schemas."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_schema(hero) is False
+
+
+def test_is_schema_includes_plain_sqlmodel_schema() -> None:
+    """Plain SQLModel schemas (no table) should still be recognized as schemas."""
+    schema = PlainSchema(name="test", age=5)
+    assert is_schema(schema) is True
+
+
+def test_is_schema_with_field_excludes_sqlmodel_table() -> None:
+    """is_schema_with_field() should return False for SQLModel table models."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_schema_with_field(hero, "name") is False
+
+
+def test_is_schema_with_field_includes_plain_schema() -> None:
+    """is_schema_with_field() should work for plain SQLModel schemas."""
+    schema = PlainSchema(name="test", age=5)
+    assert is_schema_with_field(schema, "name") is True
+
+
+def test_is_schema_without_field_excludes_sqlmodel_table() -> None:
+    """is_schema_without_field() should return False for SQLModel table models."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_schema_without_field(hero, "nonexistent") is False
+
+
+def test_is_schema_or_dict_excludes_sqlmodel_table() -> None:
+    """is_schema_or_dict() should return False for SQLModel table models."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_schema_or_dict(hero) is False
+
+
+def test_is_schema_or_dict_with_field_excludes_sqlmodel_table() -> None:
+    """is_schema_or_dict_with_field() should return False for SQLModel table models."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_schema_or_dict_with_field(hero, "name") is False
+
+
+def test_is_schema_or_dict_without_field_excludes_sqlmodel_table() -> None:
+    """is_schema_or_dict_without_field() should return False for SQLModel table models."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert is_schema_or_dict_without_field(hero, "nonexistent") is False
