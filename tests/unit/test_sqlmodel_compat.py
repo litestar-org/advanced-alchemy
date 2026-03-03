@@ -3,7 +3,7 @@
 Validates that SQLModel table=True models can be used with AA repositories and services.
 """
 
-from typing import Optional
+from typing import Any, Optional, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -83,7 +83,7 @@ def test_plain_schema_does_not_satisfy_protocol() -> None:
 def test_model_to_dict_with_sqlmodel() -> None:
     """model_to_dict should work with SQLModel table instances (no to_dict method)."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
-    result = model_to_dict(hero)
+    result = model_to_dict(cast(ModelProtocol, hero))
     assert result["id"] == 1
     assert result["name"] == "Spider-Boy"
     assert result["secret_name"] == "Pedro"
@@ -93,7 +93,7 @@ def test_model_to_dict_with_sqlmodel() -> None:
 def test_model_to_dict_with_exclude() -> None:
     """model_to_dict should respect the exclude parameter."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
-    result = model_to_dict(hero, exclude={"secret_name"})
+    result = model_to_dict(cast(ModelProtocol, hero), exclude={"secret_name"})
     assert "secret_name" not in result
     assert result["name"] == "Spider-Boy"
 
@@ -110,7 +110,7 @@ def test_model_to_dict_with_aa_model_delegates_to_to_dict() -> None:
 def test_model_to_dict_excludes_sentinel_fields() -> None:
     """model_to_dict should exclude sa_orm_sentinel and _sentinel by default."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
-    result = model_to_dict(hero)
+    result = model_to_dict(cast(ModelProtocol, hero))
     assert "sa_orm_sentinel" not in result
     assert "_sentinel" not in result
 
@@ -155,7 +155,7 @@ def test_is_sqlmodel_table_model_with_none() -> None:
 def test_schema_dump_preserves_sqlmodel_table_instance() -> None:
     """schema_dump should return SQLModel table instances as-is (not call model_dump)."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
-    result = schema_dump(hero)
+    result: Any = schema_dump(hero)
     # Should return the same instance, not a dict from model_dump()
     assert result is hero
 
@@ -258,27 +258,27 @@ def test_model_from_dict_with_partial_kwargs() -> None:
 
 def test_get_primary_key_info_with_sqlmodel() -> None:
     """get_primary_key_info should extract PK info from SQLModel table models."""
-    pk_columns, pk_attr_names = get_primary_key_info(HeroModel)
+    pk_columns, pk_attr_names = get_primary_key_info(cast("type[ModelProtocol]", HeroModel))
     assert len(pk_columns) == 1
     assert pk_attr_names == ("id",)
 
 
 def test_get_instrumented_attr_with_sqlmodel() -> None:
     """get_instrumented_attr should retrieve attributes from SQLModel table models."""
-    attr = get_instrumented_attr(HeroModel, "name")
+    attr = get_instrumented_attr(cast("type[ModelProtocol]", HeroModel), "name")
     assert attr.key == "name"
 
 
 def test_get_instrumented_attr_passthrough() -> None:
     """get_instrumented_attr should pass through InstrumentedAttribute objects."""
-    attr = get_instrumented_attr(HeroModel, HeroModel.name)  # type: ignore[arg-type]
+    attr = get_instrumented_attr(cast("type[ModelProtocol]", HeroModel), HeroModel.name)  # type: ignore[arg-type]
     assert attr.key == "name"
 
 
 def test_model_to_dict_roundtrip_via_model_from_dict() -> None:
     """model_to_dict -> model_from_dict should produce an equivalent instance."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
-    as_dict = model_to_dict(hero)
+    as_dict = model_to_dict(cast(ModelProtocol, hero))
     rebuilt = model_from_dict(HeroModel, **as_dict)
     assert rebuilt.id == hero.id
     assert rebuilt.name == hero.name

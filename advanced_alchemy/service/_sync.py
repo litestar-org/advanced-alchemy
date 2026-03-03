@@ -19,7 +19,7 @@ from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
 
-from advanced_alchemy.base import model_to_dict
+from advanced_alchemy.base import ModelProtocol, model_to_dict
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, ImproperConfigurationError, RepositoryError
 from advanced_alchemy.filters import StatementFilter
@@ -483,7 +483,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         if is_dict(data):
             return model_from_dict(self.model_type, **data)
         if is_sqlmodel_table_model(data):
-            return model_from_dict(self.model_type, **model_to_dict(data))
+            return model_from_dict(self.model_type, **model_to_dict(cast("ModelProtocol", data)))
         if is_pydantic_model(data):
             return model_from_dict(
                 self.model_type,

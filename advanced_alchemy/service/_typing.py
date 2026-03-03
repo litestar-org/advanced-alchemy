@@ -312,7 +312,7 @@ except ImportError:
 
 
 try:
-    import sqlmodel as _sqlmodel  # noqa: F401
+    import sqlmodel as _sqlmodel  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
     SQLMODEL_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:

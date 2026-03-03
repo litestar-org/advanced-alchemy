@@ -174,12 +174,13 @@ def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None)
     Returns:
         A dictionary of column names to values.
     """
-    if hasattr(instance, "to_dict") and callable(instance.to_dict):
-        return instance.to_dict(exclude=exclude)  # type: ignore[no-any-return]
+    to_dict_fn = getattr(instance, "to_dict", None)
+    if to_dict_fn is not None and callable(to_dict_fn):
+        return to_dict_fn(exclude=exclude)  # type: ignore[no-any-return]
 
-    exclude_fields = {"sa_orm_sentinel", "_sentinel"}
+    exclude_fields: set[str] = {"sa_orm_sentinel", "_sentinel"}
     with contextlib.suppress(AttributeError):
-        exclude_fields = exclude_fields.union(instance._sa_instance_state.unloaded)  # type: ignore[attr-defined]  # noqa: SLF001
+        exclude_fields = exclude_fields.union(cast("set[str]", instance._sa_instance_state.unloaded))  # type: ignore[attr-defined]  # noqa: SLF001
     if exclude:
         exclude_fields = exclude_fields.union(exclude)
     return {
