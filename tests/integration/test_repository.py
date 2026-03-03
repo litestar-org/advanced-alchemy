@@ -1387,3 +1387,154 @@ async def test_composite_pk_upsert_many_all_new(
     for user_id, role_id in [(100, 100), (101, 101)]:
         created = await maybe_async(user_role_repo.get((user_id, role_id)))
         assert created is not None
+
+
+async def test_repo_update_partial_does_not_clear_relationships_github_684(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test that partial update with a model instance does not clear relationships (GitHub Issue #684).
+
+    When updating with a model instance where only scalar fields are set
+    (e.g., Author(id=..., name="New Name")), the unset relationship fields
+    should NOT overwrite existing relationships with None/[].
+
+    Regression test for: https://github.com/litestar-org/advanced-alchemy/issues/684
+    """
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    book_model = models["book"]
+    author_repo = create_repository(session, author_model)
+    book_repo = create_repository(session, book_model)
+
+    # Create an author with a book using the relationship (so ORM tracks it)
+    author = author_model(name="Alice", dob=datetime.date(1980, 1, 1))
+    book = book_model(title="Great Book")
+    author.books = [book]
+    author = await maybe_async(author_repo.add(author))
+    author_id = author.id
+    await session.flush()
+
+    # Expire the session so the next get() does a fresh load with selectin
+    session.expire_all()
+
+    # Verify the relationship is set
+    fetched_author = await maybe_async(author_repo.get(author_id))
+    assert fetched_author.books is not None
+    assert len(fetched_author.books) == 1
+    book_id = fetched_author.books[0].id
+
+    # Expire again to clear the identity map before the update
+    session.expire_all()
+
+    # Partial update: only change name, do NOT touch the books relationship
+    partial_update = author_model(id=author_id, name="Bob")
+    updated_author = await maybe_async(author_repo.update(partial_update))
+
+    # Verify: name was updated
+    assert updated_author.name == "Bob"
+
+    # Expire and re-fetch to verify DB state
+    session.expire_all()
+    refetched = await maybe_async(author_repo.get(author_id))
+    assert refetched.books is not None, "BUG: books relationship was silently cleared during partial update"
+    assert len(refetched.books) == 1, "BUG: books relationship was silently cleared during partial update"
+    assert refetched.books[0].id == book_id
+
+    # Also verify the book still exists and is associated
+    refetched_book = await maybe_async(book_repo.get(book_id))
+    assert refetched_book.author_id == author_id, "BUG: book's author_id was cleared"
+
+
+async def test_repo_update_partial_does_not_crash_non_nullable_fk_github_684(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test that partial update on parent doesn't cause IntegrityError for non-nullable FK children (GitHub #684).
+
+    When a child has a non-nullable FK to a parent, partially updating the parent
+    (without touching the relationship) must not attempt to set the relationship to None,
+    which would violate the NOT NULL constraint.
+
+    Regression test for: https://github.com/litestar-org/advanced-alchemy/issues/684
+    """
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    book_model = models["book"]
+    author_repo = create_repository(session, author_model)
+    book_repo = create_repository(session, book_model)
+
+    # Create an author with a book (book.author_id is non-nullable)
+    author = author_model(name="Charlie", dob=datetime.date(1990, 5, 5))
+    book = book_model(title="Non-Nullable FK Book")
+    author.books = [book]
+    author = await maybe_async(author_repo.add(author))
+    author_id = author.id
+    await session.flush()
+    session.expire_all()
+
+    # Fetch the book to get its ID
+    fetched_author = await maybe_async(author_repo.get(author_id))
+    assert len(fetched_author.books) == 1
+    book_id = fetched_author.books[0].id
+    session.expire_all()
+
+    # Partial update of the book: only change title, don't touch author relationship
+    # The book's `author` relationship (with non-nullable FK) should not be cleared
+    partial_book = book_model(id=book_id, title="Updated Title", author_id=author_id)
+    # This should NOT raise IntegrityError
+    updated_book = await maybe_async(book_repo.update(partial_book))
+
+    assert updated_book.title == "Updated Title"
+    assert updated_book.author_id == author_id
+
+
+async def test_repo_update_explicit_relationship_still_works_github_684(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test that explicitly setting a relationship during update still works correctly (GitHub #684).
+
+    The fix for #684 should only skip relationships that were NOT explicitly set.
+    When a relationship IS explicitly set, it should still be updated normally.
+
+    Regression test for: https://github.com/litestar-org/advanced-alchemy/issues/684
+    """
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    book_model = models["book"]
+    author_repo = create_repository(session, author_model)
+    book_repo = create_repository(session, book_model)
+
+    # Create two authors
+    author1 = await maybe_async(author_repo.add(author_model(name="Author1", dob=datetime.date(1980, 1, 1))))
+    author2 = await maybe_async(author_repo.add(author_model(name="Author2", dob=datetime.date(1985, 2, 2))))
+    await session.flush()
+
+    # Save IDs before any expire_all() calls to avoid MissingGreenlet
+    author1_id = author1.id
+    author2_id = author2.id
+
+    # Create a book linked to author1 via the relationship
+    book = book_model(title="Transferable Book")
+    book.author = author1
+    book = await maybe_async(book_repo.add(book))
+    book_id = book.id
+    await session.flush()
+    session.expire_all()
+
+    # Verify initial state
+    fetched_book = await maybe_async(book_repo.get(book_id))
+    assert fetched_book.author_id == author1_id
+    session.expire_all()
+
+    # Explicitly update the book's author_id FK column to point to author2
+    # This verifies that explicitly set FK columns (which back relationships)
+    # are still properly applied during update
+    update_book = book_model(id=book_id, title="Transferred Book", author_id=author2_id)
+    updated_book = await maybe_async(book_repo.update(update_book))
+
+    assert updated_book.title == "Transferred Book"
+    assert updated_book.author_id == author2_id
+
+    # Verify in DB
+    session.expire_all()
+    refetched = await maybe_async(book_repo.get(book_id))
+    assert refetched.author_id == author2_id

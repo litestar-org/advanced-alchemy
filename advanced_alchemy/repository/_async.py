@@ -2276,6 +2276,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                             # Skip relationships with incompatible lazy loading strategies
                             continue
 
+                        # Only copy relationships that were explicitly set on the input instance
+                        # This prevents overwriting existing relationships with uninitialized
+                        # None/[] values from SQLAlchemy's auto-initialization
+                        if not was_attribute_set(data, mapper, relationship.key):
+                            continue
+
                         if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
                             # Skip relationships that cannot be handled by generic merge operations
                             if isinstance(new_value, list):
