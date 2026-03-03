@@ -24,6 +24,7 @@ from advanced_alchemy.service._typing import (
     LITESTAR_INSTALLED,
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
+    SQLMODEL_INSTALLED,
     UNSET,
     AttrsInstance,
     AttrsLike,
@@ -160,6 +161,31 @@ def is_pydantic_model(v: Any) -> TypeGuard[BaseModelLike]:
         except TypeError:
             return False
     return isinstance(v, BaseModel)
+
+
+def is_sqlmodel_table_model(v: Any) -> bool:
+    """Check if a value is a SQLModel table model instance or class.
+
+    Detects the dual nature of SQLModel ``table=True`` models: they are both
+    Pydantic ``BaseModel`` subclasses AND SQLAlchemy-mapped models (have ``__mapper__``).
+
+    This check fires BEFORE ``is_pydantic_model()`` to prevent SQLModel table
+    instances from being misidentified as plain Pydantic schemas.
+
+    Args:
+        v: Value to check (instance or class).
+
+    Returns:
+        bool: ``True`` if *v* is a SQLModel table model, ``False`` otherwise.
+    """
+    if not SQLMODEL_INSTALLED:
+        return False
+    if isinstance(v, type):
+        try:
+            return issubclass(v, BaseModel) and hasattr(v, "__mapper__")
+        except TypeError:
+            return False
+    return isinstance(v, BaseModel) and hasattr(v, "__mapper__")
 
 
 def is_msgspec_struct(v: Any) -> TypeGuard[StructLike]:
@@ -477,6 +503,8 @@ def schema_dump(
         return data
     if is_row_mapping(data):
         return dict(data)
+    if is_sqlmodel_table_model(data):
+        return cast("ModelT", data)  # type: ignore[no-return-any]
     if is_pydantic_model(data):
         return data.model_dump(exclude_unset=exclude_unset)
     if is_msgspec_struct(data):
@@ -514,6 +542,7 @@ __all__ = (
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
     "PYDANTIC_USE_FAILFAST",
+    "SQLMODEL_INSTALLED",
     "UNSET",
     "AttrsInstance",
     "AttrsLike",
@@ -564,6 +593,7 @@ __all__ = (
     "is_schema_or_dict_without_field",
     "is_schema_with_field",
     "is_schema_without_field",
+    "is_sqlmodel_table_model",
     "schema_dump",
     "structure",
     "unstructure",

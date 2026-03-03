@@ -72,6 +72,7 @@ __all__ = (
     "create_registry",
     "merge_table_arguments",
     "metadata_registry",
+    "model_to_dict",
     "orm_registry",
     "table_name_regexp",
 )
@@ -143,6 +144,9 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[Table
 class ModelProtocol(Protocol):
     """The base SQLAlchemy model protocol.
 
+    Defines the minimal contract for a SQLAlchemy-mapped model. Any class with
+    a mapper and table (including SQLModel ``table=True`` models) satisfies this protocol.
+
     Attributes:
         __table__ (:class:`sqlalchemy.sql.FromClause`): The table associated with the model.
         __mapper__ (:class:`sqlalchemy.orm.Mapper`): The mapper for the model.
@@ -154,13 +158,35 @@ class ModelProtocol(Protocol):
         __mapper__: Mapper[Any]
         __name__: str
 
-    def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
-        """Convert model to dictionary.
 
-        Returns:
-            Dict[str, Any]: A dict representation of the model
-        """
-        ...
+def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None) -> dict[str, Any]:
+    """Convert a mapped model instance to a dictionary.
+
+    Works with any SQLAlchemy-mapped model, including:
+    - Advanced Alchemy models (delegates to ``to_dict()``)
+    - SQLModel ``table=True`` models (uses mapper-based column iteration)
+    - Any other mapped class
+
+    Args:
+        instance: A SQLAlchemy-mapped model instance.
+        exclude: Optional set of field names to exclude from the output.
+
+    Returns:
+        A dictionary of column names to values.
+    """
+    if hasattr(instance, "to_dict") and callable(instance.to_dict):
+        return instance.to_dict(exclude=exclude)  # type: ignore[no-any-return]
+
+    exclude_fields = {"sa_orm_sentinel", "_sentinel"}
+    with contextlib.suppress(AttributeError):
+        exclude_fields = exclude_fields.union(instance._sa_instance_state.unloaded)  # type: ignore[attr-defined]  # noqa: SLF001
+    if exclude:
+        exclude_fields = exclude_fields.union(exclude)
+    return {
+        field: getattr(instance, field)
+        for field in instance.__mapper__.columns.keys()  # noqa: SIM118
+        if field not in exclude_fields
+    }
 
 
 class BasicAttributes:

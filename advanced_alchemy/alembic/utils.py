@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Union
 from sqlalchemy import Column, Engine, MetaData, String, Table
 from typing_extensions import TypeIs
 
+from advanced_alchemy.base import model_to_dict
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.utils.sync_tools import async_
 
@@ -114,7 +115,7 @@ async def dump_tables(
                     (SQLAlchemySyncRepository,),
                     exec_body=lambda ns, model=model: ns.setdefault("model_type", model),  # type: ignore[misc]
                 )
-                json_path.write_text(encode_json([row.to_dict() for row in repo(session=_session).list()]))
+                json_path.write_text(encode_json([model_to_dict(row) for row in repo(session=_session).list()]))
 
     async def _dump_table_async(session: "AbstractAsyncContextManager[AsyncSession]") -> None:
         from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -132,7 +133,7 @@ async def dump_tables(
                     (SQLAlchemyAsyncRepository,),
                     exec_body=lambda ns, model=model: ns.setdefault("model_type", model),  # type: ignore[misc]
                 )
-                json_path.write_text(encode_json([row.to_dict() for row in await repo(session=_session).list()]))
+                json_path.write_text(encode_json([model_to_dict(row) for row in await repo(session=_session).list()]))
 
     await async_(dump_dir.mkdir)(exist_ok=True)
 

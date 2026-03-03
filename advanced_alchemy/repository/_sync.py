@@ -46,6 +46,7 @@ from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 
+from advanced_alchemy.base import model_to_dict
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
 from advanced_alchemy.repository._util import (
@@ -2346,8 +2347,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         supports_updated_at = hasattr(self.model_type, "updated_at")
         data_to_update: List[dict[str, Any]] = []
         for v in data:
-            if isinstance(v, self.model_type) or (hasattr(v, "to_dict") and callable(v.to_dict)):
-                update_payload = v.to_dict()
+            if isinstance(v, self.model_type) or hasattr(v, "__mapper__"):
+                update_payload = model_to_dict(v)
             else:
                 update_payload = cast("dict[str, Any]", schema_dump(v))
 
@@ -2817,7 +2818,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         else:
             # Exclude all PK columns when matching by non-PK fields
             exclude_cols = set(self._pk_attr_names) if self.has_composite_pk else {self.id_attribute}
-            match_filter = data.to_dict(exclude=exclude_cols)
+            match_filter = model_to_dict(data, exclude=exclude_cols)
         existing = self.get_one_or_none(
             load=load, execution_options=execution_options, bind_group=bind_group, **match_filter
         )
@@ -2834,7 +2835,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         ):
             # Exclude all PK columns when copying field values
             exclude_cols = set(self._pk_attr_names) if self.has_composite_pk else {self.id_attribute}
-            for field_name, new_field_value in data.to_dict(exclude=exclude_cols).items():
+            for field_name, new_field_value in model_to_dict(data, exclude=exclude_cols).items():
                 field = getattr(existing, field_name, MISSING)
                 if field is not MISSING and not compare_values(field, new_field_value):  # pragma: no cover
                     setattr(existing, field_name, new_field_value)
