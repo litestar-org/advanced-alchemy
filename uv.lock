@@ -176,6 +176,8 @@ dev = [
     { name = "sphinxcontrib-mermaid", version = "2.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "sqlalchemy-cockroachdb" },
     { name = "sqlalchemy-spanner" },
+    { name = "sqlmodel", version = "0.0.34", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "sqlmodel", version = "0.0.37", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "starlette", version = "0.49.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "starlette", version = "0.52.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "time-machine", version = "2.19.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -328,6 +330,8 @@ test = [
     { name = "pytest-sugar" },
     { name = "pytest-xdist" },
     { name = "rich-click" },
+    { name = "sqlmodel", version = "0.0.34", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "sqlmodel", version = "0.0.37", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "time-machine", version = "2.19.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "time-machine", version = "3.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
@@ -424,6 +428,7 @@ dev = [
     { name = "sphinxcontrib-mermaid", specifier = ">=0.9.2" },
     { name = "sqlalchemy-cockroachdb", specifier = ">=2.0.2" },
     { name = "sqlalchemy-spanner", specifier = ">=1.7.0" },
+    { name = "sqlmodel" },
     { name = "starlette" },
     { name = "time-machine", specifier = ">=2.15.0" },
     { name = "types-aiofiles" },
@@ -533,6 +538,7 @@ test = [
     { name = "pytest-sugar", specifier = ">=1.0.0" },
     { name = "pytest-xdist", specifier = ">=3.6.1" },
     { name = "rich-click" },
+    { name = "sqlmodel" },
     { name = "time-machine", specifier = ">=2.15.0" },
 ]
 
@@ -7506,6 +7512,42 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8e/29/21698bb83e542f32e3581886671f39d94b1f7e8b190c24a8bfa994e62fd6/sqlalchemy_spanner-1.17.2.tar.gz", hash = "sha256:56ce4da7168a27442d80ffd71c29ed639b5056d7e69b1e69bb9c1e10190b67c4", size = 82745, upload-time = "2025-12-15T23:30:08.622Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/87/05be45a086116cea32cfa00fa0059d31b5345360dba7902ee640a1db793b/sqlalchemy_spanner-1.17.2-py3-none-any.whl", hash = "sha256:18713d4d78e0bf048eda0f7a5c80733e08a7b678b34349496415f37652efb12f", size = 31917, upload-time = "2025-12-15T23:30:07.356Z" },
+]
+
+[[package]]
+name = "sqlmodel"
+version = "0.0.34"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.10'",
+]
+dependencies = [
+    { name = "pydantic", marker = "python_full_version < '3.10'" },
+    { name = "sqlalchemy", marker = "python_full_version < '3.10'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/6a/b1b26d589063e53a08c10a2d7bc624cba63dec045a312758d68f550a4ea1/sqlmodel-0.0.34.tar.gz", hash = "sha256:577e4aae1ba96ee5038e03d8b1404c642dad1a92e628988cdf4ce68d27abe982", size = 96236, upload-time = "2026-02-16T19:06:34.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/ee/1910f4eee41af4268b0d8cd688a05fb8ea23e9e6c64b8710592df24a8c66/sqlmodel-0.0.34-py3-none-any.whl", hash = "sha256:aeabc8f0de32076a0ed9216e88568459d737fca1e7133bfc6d1c657920789a2d", size = 27445, upload-time = "2026-02-16T19:06:35.709Z" },
+]
+
+[[package]]
+name = "sqlmodel"
+version = "0.0.37"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
+    "python_full_version == '3.11.*'",
+    "python_full_version == '3.10.*'",
+]
+dependencies = [
+    { name = "pydantic", marker = "python_full_version >= '3.10'" },
+    { name = "sqlalchemy", marker = "python_full_version >= '3.10'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fb/26/1d2faa0fd5a765267f49751de533adac6b9ff9366c7c6e7692df4f32230f/sqlmodel-0.0.37.tar.gz", hash = "sha256:d2c19327175794faf50b1ee31cc966764f55b1dedefc046450bc5741a3d68352", size = 85527, upload-time = "2026-02-21T16:39:47.038Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/e1/7c8d18e737433f3b5bbe27b56a9072a9fcb36342b48f1bef34b6da1d61f2/sqlmodel-0.0.37-py3-none-any.whl", hash = "sha256:2137a4045ef3fd66a917a7717ada959a1ceb3630d95e1f6aaab39dd2c0aef278", size = 27224, upload-time = "2026-02-21T16:39:47.781Z" },
 ]
 
 [[package]]

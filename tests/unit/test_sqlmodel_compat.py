@@ -14,6 +14,7 @@ from sqlmodel import Field as SQLModelField  # noqa: E402
 from sqlmodel import SQLModel  # noqa: E402
 
 from advanced_alchemy.base import ModelProtocol, model_to_dict  # noqa: E402
+from advanced_alchemy.repository._util import get_instrumented_attr, get_primary_key_info, model_from_dict  # noqa: E402
 from advanced_alchemy.service.typing import (  # noqa: E402
     is_pydantic_model,
     is_schema,
@@ -231,3 +232,55 @@ def test_is_schema_or_dict_without_field_excludes_sqlmodel_table() -> None:
     """is_schema_or_dict_without_field() should return False for SQLModel table models."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
     assert is_schema_or_dict_without_field(hero, "nonexistent") is False
+
+
+# ---------------------------------------------------------------------------
+# Chapter 3: Repository utilities with SQLModel
+# ---------------------------------------------------------------------------
+
+
+def test_model_from_dict_creates_sqlmodel_instance() -> None:
+    """model_from_dict should create a SQLModel table instance from kwargs."""
+    hero = model_from_dict(HeroModel, id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    assert isinstance(hero, HeroModel)
+    assert hero.name == "Spider-Boy"
+    assert hero.secret_name == "Pedro"
+    assert hero.age == 10
+
+
+def test_model_from_dict_with_partial_kwargs() -> None:
+    """model_from_dict should handle partial kwargs (optional fields omitted)."""
+    hero = model_from_dict(HeroModel, name="Spider-Boy", secret_name="Pedro")
+    assert isinstance(hero, HeroModel)
+    assert hero.name == "Spider-Boy"
+    assert hero.age is None
+
+
+def test_get_primary_key_info_with_sqlmodel() -> None:
+    """get_primary_key_info should extract PK info from SQLModel table models."""
+    pk_columns, pk_attr_names = get_primary_key_info(HeroModel)
+    assert len(pk_columns) == 1
+    assert pk_attr_names == ("id",)
+
+
+def test_get_instrumented_attr_with_sqlmodel() -> None:
+    """get_instrumented_attr should retrieve attributes from SQLModel table models."""
+    attr = get_instrumented_attr(HeroModel, "name")
+    assert attr.key == "name"
+
+
+def test_get_instrumented_attr_passthrough() -> None:
+    """get_instrumented_attr should pass through InstrumentedAttribute objects."""
+    attr = get_instrumented_attr(HeroModel, HeroModel.name)  # type: ignore[arg-type]
+    assert attr.key == "name"
+
+
+def test_model_to_dict_roundtrip_via_model_from_dict() -> None:
+    """model_to_dict -> model_from_dict should produce an equivalent instance."""
+    hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
+    as_dict = model_to_dict(hero)
+    rebuilt = model_from_dict(HeroModel, **as_dict)
+    assert rebuilt.id == hero.id
+    assert rebuilt.name == hero.name
+    assert rebuilt.secret_name == hero.secret_name
+    assert rebuilt.age == hero.age
