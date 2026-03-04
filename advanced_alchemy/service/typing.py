@@ -46,6 +46,7 @@ from advanced_alchemy.service._typing import attrs_fields as fields
 from advanced_alchemy.service._typing import attrs_has as has
 from advanced_alchemy.service._typing import cattrs_structure as structure
 from advanced_alchemy.service._typing import cattrs_unstructure as unstructure
+from advanced_alchemy.typing import SQLMODEL_INSTALLED
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -160,6 +161,31 @@ def is_pydantic_model(v: Any) -> TypeGuard[BaseModelLike]:
         except TypeError:
             return False
     return isinstance(v, BaseModel)
+
+
+def is_sqlmodel_table_model(v: Any) -> bool:
+    """Check if a value is a SQLModel table model instance or class.
+
+    Detects the dual nature of SQLModel ``table=True`` models: they are both
+    Pydantic ``BaseModel`` subclasses AND SQLAlchemy-mapped models (have ``__mapper__``).
+
+    This check fires BEFORE ``is_pydantic_model()`` to prevent SQLModel table
+    instances from being misidentified as plain Pydantic schemas.
+
+    Args:
+        v: Value to check (instance or class).
+
+    Returns:
+        bool: ``True`` if *v* is a SQLModel table model, ``False`` otherwise.
+    """
+    if not SQLMODEL_INSTALLED:
+        return False
+    if isinstance(v, type):
+        try:
+            return issubclass(v, BaseModel) and hasattr(v, "__mapper__")
+        except TypeError:
+            return False
+    return isinstance(v, BaseModel) and hasattr(v, "__mapper__")
 
 
 def is_msgspec_struct(v: Any) -> TypeGuard[StructLike]:
@@ -358,12 +384,17 @@ def is_msgspec_struct_without_field(v: Any, field_name: str) -> "TypeGuard[Struc
 def is_schema(v: Any) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct, Pydantic model, or attrs instance.
 
+    SQLModel ``table=True`` models are excluded — they are ORM-mapped models,
+    not schemas that should be decomposed to dicts.
+
     Args:
         v: Value to check.
 
     Returns:
         bool
     """
+    if is_sqlmodel_table_model(v):
+        return False
     return is_msgspec_struct(v) or is_pydantic_model(v) or is_attrs_instance(v)
 
 
@@ -382,6 +413,8 @@ def is_schema_or_dict(v: Any) -> "TypeGuard[Union[SupportedSchemaModel, dict[str
 def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct, Pydantic model, or attrs instance with a specific field.
 
+    SQLModel ``table=True`` models are excluded.
+
     Args:
         v: Value to check.
         field_name: Field name to check for.
@@ -389,6 +422,8 @@ def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaM
     Returns:
         bool
     """
+    if is_sqlmodel_table_model(v):
+        return False
     return (
         is_msgspec_struct_with_field(v, field_name)
         or is_pydantic_model_with_field(v, field_name)
@@ -399,6 +434,8 @@ def is_schema_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaM
 def is_schema_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel]":
     """Check if a value is a msgspec Struct, Pydantic model, or attrs instance without a specific field.
 
+    SQLModel ``table=True`` models are excluded.
+
     Args:
         v: Value to check.
         field_name: Field name to check for.
@@ -406,7 +443,7 @@ def is_schema_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSche
     Returns:
         bool
     """
-    return not is_schema_with_field(v, field_name)
+    return is_schema(v) and not hasattr(v, field_name)
 
 
 def is_schema_or_dict_with_field(v: Any, field_name: str) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
@@ -434,7 +471,7 @@ def is_schema_or_dict_without_field(
     Returns:
         bool
     """
-    return not is_schema_or_dict_with_field(v, field_name)
+    return is_schema_or_dict(v) and not is_schema_or_dict_with_field(v, field_name)
 
 
 @overload
@@ -477,6 +514,8 @@ def schema_dump(
         return data
     if is_row_mapping(data):
         return dict(data)
+    if is_sqlmodel_table_model(data):
+        return cast("ModelT", data)  # type: ignore[no-return-any]
     if is_pydantic_model(data):
         return data.model_dump(exclude_unset=exclude_unset)
     if is_msgspec_struct(data):
@@ -564,6 +603,7 @@ __all__ = (
     "is_schema_or_dict_without_field",
     "is_schema_with_field",
     "is_schema_without_field",
+    "is_sqlmodel_table_model",
     "schema_dump",
     "structure",
     "unstructure",
