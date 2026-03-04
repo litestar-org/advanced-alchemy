@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapper,
+    class_mapper,
     declared_attr,
 )
 from sqlalchemy.orm import (
@@ -180,12 +181,13 @@ def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None)
 
     exclude_fields: set[str] = {"sa_orm_sentinel", "_sentinel"}
     with contextlib.suppress(AttributeError):
-        exclude_fields = exclude_fields.union(cast("set[str]", instance._sa_instance_state.unloaded))  # type: ignore[attr-defined]  # noqa: SLF001
+        exclude_fields = exclude_fields.union(cast("set[str]", instance._sa_instance_state.unloaded))  # type: ignore[attr-defined,union-attr]  # noqa: SLF001
     if exclude:
         exclude_fields = exclude_fields.union(exclude)
+    mapper = class_mapper(type(instance))
     return {
         field: getattr(instance, field)
-        for field in instance.__mapper__.columns.keys()  # noqa: SIM118
+        for field in mapper.columns.keys()  # noqa: SIM118
         if field not in exclude_fields
     }
 

@@ -4,7 +4,7 @@ Validates that SQLModel table=True models can be used with AA repositories and s
 """
 
 from collections.abc import Generator
-from typing import Any, Optional, cast
+from typing import Optional, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -159,9 +159,10 @@ def test_is_sqlmodel_table_model_with_none() -> None:
 def test_schema_dump_preserves_sqlmodel_table_instance() -> None:
     """schema_dump should return SQLModel table instances as-is (not call model_dump)."""
     hero = HeroModel(id=1, name="Spider-Boy", secret_name="Pedro", age=10)
-    result: Any = schema_dump(hero)
-    # Should return the same instance, not a dict from model_dump()
-    assert result is hero
+    result = schema_dump(hero)
+    # mypy can't see HeroModel as ModelProtocol (sqlmodel stubs lack __mapper__/__table__)
+    # so it resolves to the Any catch-all overload returning dict[str, Any]
+    assert result is hero  # type: ignore[comparison-overlap]
 
 
 def test_schema_dump_converts_plain_schema_to_dict() -> None:

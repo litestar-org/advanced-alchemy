@@ -24,7 +24,6 @@ from advanced_alchemy.service._typing import (
     LITESTAR_INSTALLED,
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
-    SQLMODEL_INSTALLED,
     UNSET,
     AttrsInstance,
     AttrsLike,
@@ -47,6 +46,7 @@ from advanced_alchemy.service._typing import attrs_fields as fields
 from advanced_alchemy.service._typing import attrs_has as has
 from advanced_alchemy.service._typing import cattrs_structure as structure
 from advanced_alchemy.service._typing import cattrs_unstructure as unstructure
+from advanced_alchemy.typing import SQLMODEL_INSTALLED
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -553,7 +553,6 @@ __all__ = (
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
     "PYDANTIC_USE_FAILFAST",
-    "SQLMODEL_INSTALLED",
     "UNSET",
     "AttrsInstance",
     "AttrsLike",

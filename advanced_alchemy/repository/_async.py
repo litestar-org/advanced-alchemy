@@ -2352,10 +2352,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         supports_updated_at = hasattr(self.model_type, "updated_at")
         data_to_update: List[dict[str, Any]] = []
         for v in data:
-            if isinstance(v, self.model_type) or hasattr(v, "__mapper__"):
-                update_payload = model_to_dict(v)
-            else:
-                update_payload = cast("dict[str, Any]", schema_dump(v))
+            update_payload = model_to_dict(v) if hasattr(v, "__mapper__") else schema_dump(cast("dict[str, Any]", v))
 
             if supports_updated_at and (update_payload.get("updated_at") is None):
                 update_payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc)
