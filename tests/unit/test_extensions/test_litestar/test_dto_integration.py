@@ -416,9 +416,12 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
+from unittest.mock import MagicMock
 
 from litestar import get
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
+
+method_call_mock = MagicMock()
 
 class Base(DeclarativeBase):
     pass
@@ -430,8 +433,13 @@ class Interval(Base):
     start: Mapped[int]
     end: Mapped[int]
 
+    @classmethod
+    def something(cls) -> None:
+        method_call_mock()
+
     @hybrid_property
     def length(self) -> int:
+        self.something()
         return self.end - self.start
 
 dto = SQLAlchemyDTO[Interval]
@@ -445,6 +453,11 @@ async def get_handler() -> Interval:
     with create_test_client(route_handlers=[module.get_handler]) as client:
         response = client.get("/")
         assert response.json() == {"id": 1, "start": 1, "end": 3, "length": 2}
+
+    # property should have only been accessed once - during serialisation.
+    # this is to prevent implicit descriptor access, as noted in
+    # https://github.com/litestar-org/advanced-alchemy/issues/646
+    assert module.method_call_mock.call_count == 1
 
 
 def test_dto_with_hybrid_property_expression(create_module: Callable[[str], ModuleType]) -> None:

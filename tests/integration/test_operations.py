@@ -120,7 +120,7 @@ async def test_table_async(
     yield cached_test_table
 
     # Fast data-only cleanup between tests
-    if dialect_name not in {"mock"} and "spanner" not in dialect_name:
+    if dialect_name != "mock" and "spanner" not in dialect_name:
         async with async_engine.begin() as conn:
             await conn.execute(cached_test_table.delete())
             await conn.commit()
@@ -255,7 +255,7 @@ def store_model_sync(
     yield cached_store_model
 
     # Fast data-only cleanup between tests
-    if dialect_name not in {"mock"} and "spanner" not in dialect_name:
+    if dialect_name != "mock" and "spanner" not in dialect_name:
         clean_tables(engine, cached_store_model.metadata)
 
     # Drop table at session end (handled by teardown)
@@ -296,7 +296,7 @@ async def store_model_async(
     yield cached_store_model
 
     # Fast data-only cleanup between tests
-    if dialect_name not in {"mock"} and "spanner" not in dialect_name:
+    if dialect_name != "mock" and "spanner" not in dialect_name:
         await async_clean_tables(async_engine, cached_store_model.metadata)
 
     # Drop table at session end (handled by teardown)

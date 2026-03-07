@@ -1040,7 +1040,7 @@ File storage features:
 Alternative Patterns
 --------------------
 
-.. collapse:: Repository-Only Pattern
+.. dropdown:: Repository-Only Pattern
 
     If for some reason you don't want to use the service layer abstraction, you can use repositories directly. This approach removes the services abstraction, but still offers the benefits of Advanced Alchemy's repository features:
 

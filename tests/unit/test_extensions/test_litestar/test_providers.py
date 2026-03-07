@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from litestar import Litestar, get
 from litestar.di import Provide
 from litestar.openapi.config import OpenAPIConfig
+from litestar.params import Dependency
 from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
@@ -446,13 +447,13 @@ def test_not_in_filter() -> None:
 
     # Test the provider function
     provider_func = deps["status_not_in_filter"].dependency
-    f = provider_func(values=["pending", "failed"])
+    f = provider_func(status_not_in=["pending", "failed"])
     assert isinstance(f, NotInCollectionFilter)
     assert f.field_name == "status"
     assert f.values == ["pending", "failed"]
 
     # Test with None
-    f_none = provider_func(values=None)
+    f_none = provider_func(status_not_in=None)
     assert f_none is None
 
 
@@ -465,14 +466,62 @@ def test_in_filter() -> None:
 
     # Test the provider function
     provider_func = deps["tag_in_filter"].dependency
-    f = provider_func(values=["python", "litestar"])
+    f = provider_func(tag_in=["python", "litestar"])
     assert isinstance(f, CollectionFilter)
     assert f.field_name == "tag"
     assert f.values == ["python", "litestar"]
 
     # Test with None
-    f_none = provider_func(values=None)
+    f_none = provider_func(tag_in=None)
     assert f_none is None
+
+
+def test_litestar_in_filter_values_are_isolated() -> None:
+    """Ensure in-filter query params do not overwrite each other."""
+    filter_config: FilterConfig = {"in_fields": ["first_name", "last_name"]}
+    filter_dependencies = create_filter_dependencies(filter_config)
+
+    @get("/test")
+    def handler(filters: list[FilterTypes] = Dependency(skip_validation=True)) -> dict[str, list[str]]:
+        response: dict[str, list[str]] = {}
+        for filter_ in filters:
+            if isinstance(filter_, CollectionFilter):
+                field_name = str(filter_.field_name)
+                response[field_name] = list(filter_.values or [])
+        return response
+
+    app = Litestar(route_handlers=[handler], dependencies=filter_dependencies)
+    client = TestClient(app)
+
+    response = client.get("/test?firstNameIn=Sezer&lastNameIn=Tasan")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["first_name"] == ["Sezer"]
+    assert payload["last_name"] == ["Tasan"]
+
+
+def test_litestar_not_in_filter_values_are_isolated() -> None:
+    """Ensure not-in-filter query params do not overwrite each other."""
+    filter_config: FilterConfig = {"not_in_fields": ["first_name", "last_name"]}
+    filter_dependencies = create_filter_dependencies(filter_config)
+
+    @get("/test")
+    def handler(filters: list[FilterTypes] = Dependency(skip_validation=True)) -> dict[str, list[str]]:
+        response: dict[str, list[str]] = {}
+        for filter_ in filters:
+            if isinstance(filter_, NotInCollectionFilter):
+                field_name = str(filter_.field_name)
+                response[field_name] = list(filter_.values or [])
+        return response
+
+    app = Litestar(route_handlers=[handler], dependencies=filter_dependencies)
+    client = TestClient(app)
+
+    response = client.get("/test?firstNameNotIn=Sezer&lastNameNotIn=Tasan")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["first_name"] == ["Sezer"]
+    assert payload["last_name"] == ["Tasan"]
 
 
 def test_custom_dependency_defaults() -> None:

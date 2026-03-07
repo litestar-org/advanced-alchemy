@@ -540,6 +540,47 @@ dto_type = SQLAlchemyDTO[Annotated[B, SQLAlchemyDTOConfig()]]
     assert model.a is None
 
 
+async def test_dto_nullable_one_to_one_inverse_relationship(
+    create_module: Callable[[str], ModuleType],
+    asgi_connection: Request[Any, Any, Any],
+) -> None:
+    """Test that nullable one-to-one relationships on the inverse side (no FK) are handled correctly.
+
+    Regression test for https://github.com/jolt-org/advanced-alchemy/issues/227.
+    When the FK is on the other model and uselist=False, the DTO should allow None.
+    """
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import Optional
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing_extensions import Annotated
+
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+class B(Base):
+    __tablename__ = "b"
+    a_id: Mapped[int] = mapped_column(ForeignKey("a.id"))
+    a: Mapped["A"] = relationship(back_populates="b")
+
+class A(Base):
+    __tablename__ = "a"
+    b: Mapped[Optional[B]] = relationship(back_populates="a")
+
+dto_type = SQLAlchemyDTO[Annotated[A, SQLAlchemyDTOConfig()]]
+""",
+    )
+    model = await get_model_from_dto(module.dto_type, module.A, asgi_connection, b'{"id": 1, "b": null}')
+    assert isinstance(model, module.A)
+    assert model.b is None
+
+
 async def test_forward_ref_relationship_resolution(
     create_module: Callable[[str], ModuleType],
     asgi_connection: Request[Any, Any, Any],

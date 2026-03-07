@@ -510,17 +510,38 @@ def _create_statement_filters(  # noqa: C901
             def create_not_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = field_def,  # type: ignore[assignment]
             ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
+                param_name = f"{field_name.name}_not_in"
+
                 def provide_not_in_filter(  # pyright: ignore
-                    values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore
-                        query=camelize(f"{field_name.name}_not_in"), default=None, required=False
-                    ),
+                    **kwargs: Any,
                 ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
+                    values = kwargs.get(param_name)
                     return (
                         NotInCollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
                         if values
                         else None
                     )
 
+                provide_not_in_filter.__name__ = f"provide_not_in_filter_{field_name.name}"
+                provide_not_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=Parameter(
+                                query=camelize(param_name),
+                                default=None,
+                                required=False,
+                            ),
+                            annotation=Optional[list[field_name.type_hint]],  # type: ignore
+                        )
+                    ],
+                    return_annotation=Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                )
+                provide_not_in_filter.__annotations__ = {
+                    param_name: Optional[list[field_name.type_hint]],  # type: ignore
+                    "return": Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                }
                 return provide_not_in_filter  # pyright: ignore
 
             provider = create_not_in_filter_provider(field_def)  # pyright: ignore
@@ -539,17 +560,38 @@ def _create_statement_filters(  # noqa: C901
             def create_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = field_def,  # type: ignore[assignment]
             ) -> Callable[..., Optional[CollectionFilter[Any]]]:
+                param_name = f"{field_name.name}_in"
+
                 def provide_in_filter(  # pyright: ignore
-                    values: Optional[list[field_name.type_hint]] = Parameter(  # type: ignore # pyright: ignore
-                        query=camelize(f"{field_name.name}_in"), default=None, required=False
-                    ),
+                    **kwargs: Any,
                 ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
+                    values = kwargs.get(param_name)
                     return (
                         CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
                         if values
                         else None
                     )
 
+                provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
+                provide_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=Parameter(
+                                query=camelize(param_name),
+                                default=None,
+                                required=False,
+                            ),
+                            annotation=Optional[list[field_name.type_hint]],  # type: ignore
+                        )
+                    ],
+                    return_annotation=Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                )
+                provide_in_filter.__annotations__ = {
+                    param_name: Optional[list[field_name.type_hint]],  # type: ignore
+                    "return": Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                }
                 return provide_in_filter  # pyright: ignore
 
             provider = create_in_filter_provider(field_def)  # type: ignore

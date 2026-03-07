@@ -339,12 +339,12 @@ or the [project-specific GitHub discussions page][project-discussions].
 </p>
 
 [litestar-org]: https://github.com/litestar-org
-[contributing]: https://docs.advanced-alchemy.litestar.dev/latest/contribution-guide.html
+[contributing]: https://advanced-alchemy.litestar.dev/latest/contribution-guide.html
 [discord]: https://discord.gg/litestar
 [litestar-discussions]: https://github.com/orgs/litestar-org/discussions
 [project-discussions]: https://github.com/litestar-org/advanced-alchemy/discussions
-[project-docs]: https://docs.advanced-alchemy.litestar.dev
-[install-guide]: https://docs.advanced-alchemy.litestar.dev/latest/#installation
+[project-docs]: https://advanced-alchemy.litestar.dev
+[install-guide]: https://advanced-alchemy.litestar.dev/latest/#installation
 [fastapi-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/fastapi/fastapi_service.py
 [flask-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/flask/flask_services.py
 [litestar-example]: https://github.com/litestar-org/advanced-alchemy/blob/main/examples/litestar/litestar_service.py

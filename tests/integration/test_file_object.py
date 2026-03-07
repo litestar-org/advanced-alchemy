@@ -959,7 +959,9 @@ async def test_file_object_save_with_different_data_types(storage_registry: Stor
     assert await obj2.get_content_async() == test_content
     assert obj2.get_content() == test_content
     # Cleanup
-    temp_path.unlink()
+    from advanced_alchemy.utils.sync_tools import async_
+
+    await async_(temp_path.unlink)()
 
 
 @pytest.mark.xdist_group("file_object")
@@ -1827,6 +1829,34 @@ async def test_obstore_content_type_and_metadata_passing(storage_registry: Stora
 
     assert updated_obj_sync.content_type == "application/json"
     assert updated_obj_sync.metadata == custom_metadata
+
+
+@pytest.mark.xdist_group("file_object")
+async def test_obstore_nested_metadata_serialization(storage_registry: StorageRegistry) -> None:
+    """Test that nested metadata (lists, dicts) doesn't crash obstore's put().
+
+    Regression test for https://github.com/jolt-org/advanced-alchemy/issues/676.
+    Obstore attributes must be strings; non-string values are JSON-serialized.
+    """
+    remove_listeners()
+    backend = storage_registry.get_backend("memory")
+
+    nested_metadata = {
+        "tags": ["sample", "test"],
+        "nested": {"key": "value", "count": 42},
+        "flat_string": "just-a-string",
+        "number": 123,
+    }
+
+    # Async path
+    obj = FileObject(backend=backend, filename="nested_async.txt", metadata=nested_metadata)
+    updated_obj = await backend.save_object_async(obj, b"async content")
+    assert updated_obj.metadata == nested_metadata
+
+    # Sync path
+    obj_sync = FileObject(backend=backend, filename="nested_sync.txt", metadata=nested_metadata)
+    updated_obj_sync = backend.save_object(obj_sync, b"sync content")
+    assert updated_obj_sync.metadata == nested_metadata
 
 
 @pytest.mark.xdist_group("file_object")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import decimal
 from collections.abc import AsyncGenerator, Collection, Generator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 from uuid import uuid4
@@ -13,10 +14,10 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, column
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
@@ -33,7 +34,12 @@ from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
 )
-from advanced_alchemy.repository._util import column_has_defaults, model_from_dict
+from advanced_alchemy.repository._util import (
+    _build_list_cache_key,
+    _normalize_cache_key_value,
+    column_has_defaults,
+    model_from_dict,
+)
 from advanced_alchemy.service.typing import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -389,12 +395,14 @@ async def test_sqlalchemy_repo_get_with_for_update(
     statement.options.return_value = statement
     statement.execution_options.return_value = statement
     statement.with_for_update.return_value = statement
+    statement.where.return_value = statement  # Required for composite PK path
     mock_repo.statement = statement
 
     mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
     mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
     mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
     mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    mocker.patch.object(mock_repo, "_build_pk_filter", return_value=MagicMock())  # Mock the PK filter
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = MagicMock()
     execute = mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
@@ -414,12 +422,14 @@ async def test_sqlalchemy_repo_get_with_for_update_dict(
     statement.options.return_value = statement
     statement.execution_options.return_value = statement
     statement.with_for_update.return_value = statement
+    statement.where.return_value = statement  # Required for composite PK path
     mock_repo.statement = statement
 
     mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
     mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
     mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
     mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    mocker.patch.object(mock_repo, "_build_pk_filter", return_value=MagicMock())  # Mock the PK filter
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = MagicMock()
     mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
@@ -442,12 +452,14 @@ async def test_sqlalchemy_repo_get_with_for_update_arg(
     statement.options.return_value = statement
     statement.execution_options.return_value = statement
     statement.with_for_update.return_value = statement
+    statement.where.return_value = statement  # Required for composite PK path
     mock_repo.statement = statement
 
     mocker.patch.object(mock_repo, "_get_loader_options", return_value=([], False))
     mocker.patch.object(mock_repo, "_get_base_stmt", return_value=statement)
     mocker.patch.object(mock_repo, "_apply_filters", return_value=statement)
     mocker.patch.object(mock_repo, "_filter_select_by_kwargs", return_value=statement)
+    mocker.patch.object(mock_repo, "_build_pk_filter", return_value=MagicMock())  # Mock the PK filter
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = MagicMock()
     mocker.patch.object(mock_repo, "_execute", return_value=execute_result)
@@ -1458,6 +1470,176 @@ def test_column_object_with_no_default_attributes() -> None:
     assert column_has_defaults(minimal_column) is False
 
 
+def test_normalize_cache_key_value_handles_structures() -> None:
+    """Normalize cache key values for common structures."""
+
+    @dataclass
+    class Payload:
+        name: str
+        ids: set[int]
+
+    class CacheBase(DeclarativeBase):
+        pass
+
+    class CacheModel(CacheBase):
+        __tablename__ = "cache_model"
+
+        id: Mapped[int] = mapped_column(primary_key=True)
+
+    normalized = _normalize_cache_key_value(Payload(name="alpha", ids={2, 1}))
+    assert normalized == {"name": "alpha", "ids": [1, 2]}
+    assert _normalize_cache_key_value(CacheModel.id) == {"__attr__": "id"}
+    assert _normalize_cache_key_value(column("name")) == {"__sql__": "name"}
+    assert "__repr__" in _normalize_cache_key_value(object())
+
+
+def test_build_list_cache_key_stable_for_unordered_inputs() -> None:
+    """Cache keys should remain stable for unordered inputs."""
+    filters = [CollectionFilter(field_name="id", values={2, 1})]
+    key_a = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=filters,
+        kwargs={"meta": {"b": 2, "a": 1}},
+        order_by=[("name", False)],
+        execution_options={"stream_results": True},
+        uniquify=True,
+    )
+    key_b = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=[CollectionFilter(field_name="id", values={1, 2})],
+        kwargs={"meta": {"a": 1, "b": 2}},
+        order_by=[("name", False)],
+        execution_options={"stream_results": True},
+        uniquify=True,
+    )
+
+    assert key_a is not None
+    assert key_a == key_b
+
+
+def test_build_list_cache_key_returns_none_for_raw_filters() -> None:
+    """Raw SQLAlchemy expressions should skip caching."""
+    key = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=[column("id") == 1],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+    )
+
+    assert key is None
+
+
+def test_normalize_cache_key_value_complex_types() -> None:
+    """Normalize cache key values for complex types (datetime, uuid, etc)."""
+    dt = datetime.datetime(2025, 12, 14, 10, 30, 0)
+    result = _normalize_cache_key_value(dt)
+    assert result == {"__type__": "datetime", "value": "2025-12-14T10:30:00"}
+
+    from uuid import UUID
+
+    u = UUID("12345678-1234-5678-1234-567812345678")
+    result = _normalize_cache_key_value(u)
+    assert result == {"__type__": "uuid", "value": "12345678-1234-5678-1234-567812345678"}
+
+    # bytes
+    result = _normalize_cache_key_value(b"\x01\x02")
+    assert result == {"__type__": "bytes", "value": "0102"}
+
+
+def test_normalize_cache_key_value_list_tuple() -> None:
+    """Normalize cache key values for list and tuple types."""
+    result = _normalize_cache_key_value([1, "two", 3.0])
+    assert result == [1, "two", 3.0]
+
+    result = _normalize_cache_key_value((True, None))
+    assert result == [True, None]
+
+
+def test_normalize_cache_key_value_none_and_primitives() -> None:
+    """Normalize cache key values for None and primitive types (early return)."""
+    assert _normalize_cache_key_value(None) is None
+    assert _normalize_cache_key_value(42) == 42
+    assert _normalize_cache_key_value(3.14) == 3.14
+    assert _normalize_cache_key_value("hello") == "hello"
+    assert _normalize_cache_key_value(True) is True
+
+
+def test_build_list_cache_key_with_unary_expression() -> None:
+    """UnaryExpression in order_by is serialized as string expression."""
+    from sqlalchemy import UnaryExpression, desc
+
+    # Create a real UnaryExpression
+    unary_expr = desc(column("name"))  # type: ignore[var-annotated]
+    assert isinstance(unary_expr, UnaryExpression)
+
+    key = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list",
+        filters=[],
+        kwargs={},
+        order_by=[unary_expr],  # type: ignore[list-item]
+        execution_options={},
+        uniquify=False,
+    )
+
+    assert key is not None
+    assert key.startswith("CacheModel:list:")
+
+
+def test_build_list_cache_key_with_count_window_function() -> None:
+    """count_with_window_function param is included in cache key."""
+    key_with = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list_and_count",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        count_with_window_function=True,
+    )
+    key_without = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list_and_count",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        count_with_window_function=False,
+    )
+    key_default = _build_list_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="list_and_count",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+    )
+
+    assert key_with is not None
+    assert key_without is not None
+    assert key_default is not None
+    # Different values of count_with_window_function produce different keys
+    assert key_with != key_without
+    # None (omitted) differs from explicit True/False
+    assert key_default != key_with
+    assert key_default != key_without
+
+
 def test_model_from_dict_includes_relationship_attributes() -> None:
     """Test that model_from_dict includes relationship attributes from __mapper__.attrs.keys()."""
     from tests.fixtures.uuid.models import UUIDAuthor
@@ -2213,6 +2395,29 @@ def test_model_from_dict_tuple_for_collection() -> None:
     assert all(isinstance(b, UUIDBook) for b in author.books)
 
 
+def test_model_from_dict_with_model_key() -> None:
+    """Regression test for https://github.com/litestar-org/advanced-alchemy/issues/668."""
+    from tests.fixtures.uuid.models import UUIDAuthor
+
+    data = {"name": "Test Author", "model": "some-model-value"}
+    author = model_from_dict(UUIDAuthor, **data)
+    assert author.name == "Test Author"
+
+
+def test_model_from_dict_with_mapped_model_field() -> None:
+    """Regression test for https://github.com/litestar-org/advanced-alchemy/issues/668."""
+
+    class UUIDCar(base.UUIDAuditBase):
+        make: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
+        model: Mapped[str] = mapped_column(String(length=50))  # pyright: ignore
+
+    data = {"make": "Advanced", "model": "Alchemy"}
+    car = model_from_dict(UUIDCar, **data)
+
+    assert car.make == "Advanced"
+    assert car.model == "Alchemy"
+
+
 def test_convert_relationship_value_helper() -> None:
     """Test the _convert_relationship_value helper function directly."""
     from advanced_alchemy.repository._util import _convert_relationship_value
@@ -2250,3 +2455,29 @@ def test_convert_relationship_value_helper() -> None:
     # Test existing instance in collection
     result = _convert_relationship_value([existing], UUIDBook, is_collection=True)
     assert result[0] is existing
+
+
+def test_repository_and_service_annotations_are_accessible() -> None:
+    """Regression test for Python 3.14 lazy annotation evaluation shadowing.
+
+    On Python 3.14, bare ``list[...]`` in a class that defines a ``list()`` method
+    resolves to the method instead of the builtin type. Using ``typing.List`` avoids this.
+    """
+    import typing
+
+    from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
+    from advanced_alchemy.repository._sync import SQLAlchemySyncRepository
+    from advanced_alchemy.repository.memory._async import SQLAlchemyAsyncMockRepository
+    from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository
+    from advanced_alchemy.repository.memory.base import InMemoryStore
+
+    targets = [
+        SQLAlchemyAsyncRepository,
+        SQLAlchemySyncRepository,
+        SQLAlchemyAsyncMockRepository,
+        SQLAlchemySyncMockRepository,
+        InMemoryStore,
+    ]
+    for cls in targets:
+        annotations = typing.get_type_hints(cls.list)
+        assert isinstance(annotations, dict), f"{cls.__name__}.list annotations should be a dict"

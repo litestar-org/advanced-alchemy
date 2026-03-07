@@ -223,23 +223,27 @@ def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Generator[Path,
 
 
 async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
+    from advanced_alchemy.utils.sync_tools import async_
+
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]
     for dir in expected_dirs:
-        assert Path(dir).is_dir()
+        assert await async_(Path(dir).is_dir)()
     for file in expected_files:
-        assert Path(file).is_file()
+        assert await async_(Path(file).is_file)()
 
 
 async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
+    from advanced_alchemy.utils.sync_tools import async_
+
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]
     for dir in expected_dirs:
-        assert Path(dir).is_dir()
+        assert await async_(Path(dir).is_dir)()
     for file in expected_files:
-        assert Path(file).is_file()
+        assert await async_(Path(file).is_file)()
     with pytest.raises(CommandError):
         alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
 

@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union, cast
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -136,20 +136,45 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         if self.session_maker:
             return self.session_maker
 
+        from sqlalchemy import event
+
+        from advanced_alchemy._listeners import (
+            AsyncCacheListener,
+            AsyncFileObjectListener,
+            touch_updated_timestamp,
+        )
+
         # Use routing session maker if routing is configured
         if self.routing_config is not None:
             from advanced_alchemy.routing import RoutingAsyncSessionMaker
 
-            routing_maker = RoutingAsyncSessionMaker(
+            routing_maker: Callable[[], AsyncSession] = RoutingAsyncSessionMaker(
                 routing_config=self.routing_config,
                 engine_config=self.engine_config_dict,
                 session_config=self.session_config_dict,
             )
             self.session_maker = routing_maker
-            return routing_maker
+        else:
+            self.session_maker = cast("Callable[[], AsyncSession]", super().create_session_maker())  # type: ignore[redundant-cast]
 
-        # Default behavior from parent
-        return super().create_session_maker()
+        if isinstance(self.session_maker, async_sessionmaker):
+            session_maker = cast(
+                "async_sessionmaker[AsyncSession]",
+                self.session_maker,  # pyright: ignore[reportUnknownMemberType]
+            )
+            if self.enable_file_object_listener:
+                event.listen(session_maker, "before_flush", AsyncFileObjectListener.before_flush)
+                event.listen(session_maker, "after_commit", AsyncFileObjectListener.after_commit)
+                event.listen(session_maker, "after_rollback", AsyncFileObjectListener.after_rollback)
+            if self.enable_touch_updated_timestamp_listener:
+                event.listen(session_maker, "before_flush", touch_updated_timestamp)
+            event.listen(session_maker, "after_commit", AsyncCacheListener.after_commit)
+            event.listen(session_maker, "after_rollback", AsyncCacheListener.after_rollback)
+
+        if self.session_maker is None:  # pyright: ignore
+            msg = "Session maker was not initialized."  # type: ignore[unreachable]
+            raise ImproperConfigurationError(msg)
+        return cast("async_sessionmaker[AsyncSession]", self.session_maker)  # pyright: ignore[reportUnknownMemberType]
 
     @asynccontextmanager
     async def get_session(
@@ -161,6 +186,6 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             AsyncGenerator[AsyncSession, None]: An async context manager that yields an AsyncSession.
         """
         session_maker = self.create_session_maker()
-        set_async_context(True)  # Set context for standalone usage
+        set_async_context(True)
         async with session_maker() as session:
             yield session

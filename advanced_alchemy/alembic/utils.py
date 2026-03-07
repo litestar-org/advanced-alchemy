@@ -6,6 +6,7 @@ from sqlalchemy import Column, Engine, MetaData, String, Table
 from typing_extensions import TypeIs
 
 from advanced_alchemy.exceptions import MissingDependencyError
+from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -133,8 +134,8 @@ async def dump_tables(
                 )
                 json_path.write_text(encode_json([row.to_dict() for row in await repo(session=_session).list()]))
 
-    dump_dir.mkdir(exist_ok=True)
+    await async_(dump_dir.mkdir)(exist_ok=True)
 
     if _is_sync(session):
-        return _dump_table_sync(session)
+        return await async_(_dump_table_sync)(session)
     return await _dump_table_async(session)
