@@ -149,6 +149,7 @@ sqlite = ["aiosqlite>=0.20.0"]
 test = [
   "attrs",
   "cattrs",
+  "sqlmodel",
   "dishka ; python_version >= \"3.10\"",
   "dogpile.cache",
   "pydantic-extra-types",
