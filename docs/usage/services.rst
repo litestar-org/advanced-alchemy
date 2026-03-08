@@ -66,12 +66,12 @@ Let's build upon our blog example by creating services for posts:
     class PostService(SQLAlchemyAsyncRepositoryService[Post]):
         """Post Service."""
 
-        class PostRepository(SQLAlchemyAsyncRepository[Post]):
+        class Repo(SQLAlchemyAsyncRepository[Post]):
             """Post repository."""
 
             model_type = Post
 
-        repository_type = PostRepository
+        repository_type = Repo
 
 Service Operations
 ------------------
@@ -290,32 +290,6 @@ Attrs Classes
     Advanced Alchemy automatically uses ``cattrs.structure()`` and ``cattrs.unstructure()``
     for improved performance and type-aware serialization. This provides better handling of
     complex types, nested structures, and custom converters.
-
-SQLAlchemy Query Result Support
-*******************************
-
-Services now provide comprehensive support for SQLAlchemy query results:
-
-.. code-block:: python
-
-    from sqlalchemy import select
-
-    # Direct support for SQLAlchemy Row objects
-    result = await db_session.execute(select(Post))
-    post = result.scalar_one()  # Returns Post model
-
-    # Convert model to schema type
-    post_data = post_service.to_schema(post, schema_type=PostSchema)
-
-    # Working with multiple results
-    result = await db_session.execute(select(Post))
-    posts = result.scalars().all()  # Returns list of Post models
-    posts_list = post_service.to_schema(posts, schema_type=PostSchema)
-
-    # Also supports RowMapping objects
-    result = await db_session.execute(select(Post))
-    row_mapping = result.mappings().first()
-    mapping_data = post_service.to_schema(row_mapping["Post"], schema_type=PostSchema)
 
 
 Framework Integration
