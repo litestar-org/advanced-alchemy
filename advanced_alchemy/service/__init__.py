@@ -50,6 +50,7 @@ from advanced_alchemy.service.typing import (
     is_schema_or_dict_without_field,
     is_schema_with_field,
     is_schema_without_field,
+    is_sqlmodel_table_model,
     schema_dump,
 )
 
@@ -99,6 +100,7 @@ __all__ = (
     "is_schema_or_dict_without_field",
     "is_schema_with_field",
     "is_schema_without_field",
+    "is_sqlmodel_table_model",
     "model_from_dict",
     "schema_dump",
 )

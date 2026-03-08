@@ -311,6 +311,14 @@ except ImportError:
     CATTRS_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 
+try:
+    import sqlmodel as _sqlmodel  # noqa: F401  # pyright: ignore[reportUnusedImport]
+
+    SQLMODEL_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
+except ImportError:
+    SQLMODEL_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
+
+
 class EmptyEnum(enum.Enum):
     """A sentinel enum used as placeholder."""
 
@@ -327,6 +335,7 @@ __all__ = (
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
+    "SQLMODEL_INSTALLED",
     "UNSET",
     "UNSET_STUB",
     "AttrsInstance",
