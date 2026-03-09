@@ -76,7 +76,7 @@ Configure multiple replicas with custom weights:
 
 .. code-block:: python
 
-    from advanced_alchemy.config.routing import RoutingConfig, ReplicaConfig
+    from advanced_alchemy.config.routing import ReplicaConfig, RoutingConfig, RoutingStrategy
 
     config = RoutingConfig(
         primary_connection_string="postgresql+asyncpg://user:pass@primary:5432/db",
@@ -134,13 +134,15 @@ To disable sticky-after-write:
 Routing Rules
 -------------
 
-The routing layer follows these rules:
+The routing layer evaluates each operation in priority order:
 
-1. **INSERT/UPDATE/DELETE** → Primary
-2. **SELECT with FOR UPDATE** → Primary
-3. **SELECT after write** (if sticky-after-write enabled) → Primary
-4. **SELECT (no writes)** → Replica (round-robin/random)
-5. **After commit** → Reset stickiness, replicas available again
+1. **Explicit bind group** (``use_bind_group()`` or ``bind_group`` parameter) → Named group
+2. **INSERT/UPDATE/DELETE** → Primary
+3. **SELECT with FOR UPDATE** → Primary
+4. **SELECT after write** (if sticky-after-write enabled) → Primary
+5. **``primary_context()`` active** → Primary
+6. **SELECT (no writes)** → Replica (round-robin/random)
+7. **After commit** → Reset stickiness, replicas available again
 
 FOR UPDATE Detection
 ~~~~~~~~~~~~~~~~~~~~
@@ -240,7 +242,10 @@ Use context managers for explicit control over routing:
 Primary Context
 ~~~~~~~~~~~~~~~
 
-Force operations to use the default (primary) group. This is an alias for ``use_bind_group("default")``:
+Force all operations to use the primary database. Unlike ``use_bind_group("default")``,
+``primary_context()`` works by setting an internal flag (``force_primary_var``) rather
+than overriding the group selection directly. This means it is respected even inside
+nested ``use_bind_group`` calls that do not explicitly name the default group:
 
 .. code-block:: python
 
@@ -256,7 +261,10 @@ Force operations to use the default (primary) group. This is an alias for ``use_
 Replica Context
 ~~~~~~~~~~~~~~~
 
-Force operations to use the read group. This is an alias for ``use_bind_group("read")``:
+Temporarily allow reads to use replicas by clearing both the sticky-after-write flag
+(``stick_to_primary_var``) and the force-primary flag (``force_primary_var``). This is
+different from ``use_bind_group("read")``; instead of hard-routing to a specific group,
+it clears the flags so the automatic routing logic can send reads to replicas again:
 
 .. code-block:: python
 
@@ -268,6 +276,11 @@ Force operations to use the read group. This is an alias for ``use_bind_group("r
         # Force read from replica (even if sticky-primary is active)
         with replica_context():
             users = await repo.list()
+
+.. warning::
+
+    Use ``replica_context()`` with caution. Reads inside this block may not reflect
+    writes that have not yet been replicated to all replicas.
 
 Temporarily Disable Routing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -311,23 +324,31 @@ FastAPI
 
 .. code-block:: python
 
-    from fastapi import FastAPI, Depends
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig, get_session
+    from typing import Annotated
 
-    config = SQLAlchemyAsyncConfig(
-        routing_config=RoutingConfig(
-            primary_connection_string="postgresql+asyncpg://primary:5432/db",
-            read_replicas=["postgresql+asyncpg://replica1:5432/db"],
+    from fastapi import Depends, FastAPI
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig
+    from advanced_alchemy.config.routing import RoutingConfig
+
+    alchemy = AdvancedAlchemy(
+        config=SQLAlchemyAsyncConfig(
+            routing_config=RoutingConfig(
+                primary_connection_string="postgresql+asyncpg://primary:5432/db",
+                read_replicas=["postgresql+asyncpg://replica1:5432/db"],
+            ),
         ),
     )
 
     app = FastAPI()
+    alchemy.init_app(app)
+
+    DatabaseSession = Annotated[AsyncSession, Depends(alchemy.provide_session())]
 
     @app.get("/users")
-    async def list_users(session: AsyncSession = Depends(get_session)):
-        repo = UserRepository(session=session)
-        return await repo.list()  # Routes to replica
+    async def list_users(session: DatabaseSession) -> list[dict]:
+        # Reads automatically route to replica
+        ...
 
 Flask
 ~~~~~
@@ -335,16 +356,20 @@ Flask
 .. code-block:: python
 
     from flask import Flask
-    from advanced_alchemy.extensions.flask import SQLAlchemyExtension
+    from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemyAsyncConfig
     from advanced_alchemy.config.routing import RoutingConfig
 
     app = Flask(__name__)
-    app.config["SQLALCHEMY_ROUTING_CONFIG"] = RoutingConfig(
-        primary_connection_string="postgresql://primary:5432/db",
-        read_replicas=["postgresql://replica1:5432/db"],
-    )
 
-    db = SQLAlchemyExtension(app=app)
+    alchemy = AdvancedAlchemy(
+        config=SQLAlchemyAsyncConfig(
+            routing_config=RoutingConfig(
+                primary_connection_string="postgresql+asyncpg://primary:5432/db",
+                read_replicas=["postgresql+asyncpg://replica1:5432/db"],
+            ),
+        ),
+        app=app,
+    )
 
 AWS Aurora / Cloud SQL Example
 -------------------------------
