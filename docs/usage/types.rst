@@ -50,10 +50,10 @@ DateTime UTC
 
     from datetime import datetime
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.types import DateTimeUTC
 
-    class MyModel(DefaultBase):
+    class MyModel(UUIDBase):
         created_at: Mapped[datetime] = mapped_column(DateTimeUTC)
 
 
@@ -70,10 +70,10 @@ For storing encrypted string values with configurable length.
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.types import EncryptedString
 
-    class MyModel(DefaultBase):
+    class MyModel(UUIDBase):
         secret: Mapped[str] = mapped_column(EncryptedString(key="my-secret-key"))
 
 EncryptedText
@@ -84,10 +84,10 @@ For storing larger encrypted text content (CLOB).
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.types import EncryptedText
 
-    class MyModel(DefaultBase):
+    class MyModel(UUIDBase):
         large_secret: Mapped[str] = mapped_column(EncryptedText(key="my-secret-key"))
 
 Encryption Backends
@@ -146,10 +146,10 @@ A JSON type that uses the most efficient JSON storage for each database:
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.types import JsonB
 
-    class MyModel(DefaultBase):
+    class MyModel(UUIDBase):
         data: Mapped[dict] = mapped_column(JsonB)
 
 Password Hash
@@ -164,16 +164,16 @@ A type for storing password hashes with configurable backends.  Currently suppor
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.base import UUIDBase
     from advanced_alchemy.types import PasswordHash
     from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
     from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
 
-    class MyModel(DefaultBase):
+    class MyModel(UUIDBase):
         __tablename__ = "my_model"
         password: Mapped[str] = mapped_column(
-        PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
-    )
+            PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
+        )
 
 File Object Storage
 -------------------
