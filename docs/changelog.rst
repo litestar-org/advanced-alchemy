@@ -10,100 +10,28 @@
         :type: feature
         :pr: 686
 
-        ## Summary
-
-        - **SQLModel `table=True` models** now work seamlessly with Advanced Alchemy repositories and services without requiring AA base classes
-        - `ModelProtocol` no longer requires `to_dict()` — models only need `__mapper__`, `__table__`, and `__name__` (which all SQLAlchemy-mapped models have)
-        - New `model_to_dict()` utility converts any mapped model to a dict using mapper column introspection
-        - `is_schema()` family of functions now correctly **exclude** SQLModel table models (they are ORM models, not transfer schemas)
-        - `schema_dump()` returns SQLModel table instances as-is instead of calling `model_dump()`
-        - New `is_sqlmodel_table_model()` detection function
-
-        ## Changes
-
-        | File | What |
-        |------|------|
-        | `base.py` | Relaxed `ModelProtocol` (removed `to_dict` requirement), added `model_to_dict()` |
-        | `service/typing.py` | Added `is_sqlmodel_table_model()`, updated `is_schema()` family to exclude table models, updated `schema_dump()` |
-        | `service/_async.py` / `_sync.py` | Added SQLModel table model branch in `to_model()` |
-        | `repository/_async.py` / `_sync.py` | Added SQLModel table model branch in `to_model()` |
-        | `service/_typing.py` | Added `SQLMODEL_INSTALLED` flag |
-        | `pyproject.toml` | Added `sqlmodel` to test dependencies |
-        | `tests/unit/test_sqlmodel_compat.py` | 30 comprehensive tests covering all changes |
+        SQLModel ``table=True`` models now work with Advanced Alchemy repositories and
+        services without requiring Advanced Alchemy base classes. This release also adds
+        ``model_to_dict()`` and updates schema detection so mapped SQLModel objects are
+        handled as ORM models instead of transfer schemas.
 
     .. change:: add pre-release version support
         :type: feature
         :pr: 678
 
-        ## Summary
-
-        - Add PEP 440 pre-release (alpha/beta/rc) support to `bump-my-version` config
-        - Add `make pre-release version=X.Y.ZaN` Makefile target
-        - Update `tools/prepare_release.py` to validate pre-release versions and set the GitHub `prerelease` flag on draft releases
-        - Document pre-release workflow in `CONTRIBUTING.rst` and fix version examples in `docs/releases.rst`
+        Adds PEP 440 pre-release support to the release workflow. ``bump-my-version``,
+        ``make pre-release``, and ``tools/prepare_release.py`` now understand alpha,
+        beta, and release-candidate versions and can mark GitHub draft releases as
+        prereleases.
 
     .. change:: add composite primary key support
         :type: feature
         :pr: 640
         :issue: 189
 
-        ## Summary
-
-        This PR adds support for composite (multi-column) primary keys throughout the repository and service layers. Now you can work with association tables, legacy databases with natural keys, or any model that uses multiple columns as its primary key.
-
-        ### What's Changed
-
-        **Repository Layer**
-        - New `PrimaryKeyType` type alias that accepts scalar values, tuples, or dicts
-        - Helper methods for composite key handling (`_build_pk_filter()`, `_extract_pk_value()`, etc.)
-        - `get()`, `delete()`, and `delete_many()` now work with composite keys
-        - Uses `tuple_().in_()` for efficient bulk operations
-        - PK columns are cached in `__init__` for better performance
-
-        **MSSQL Compatibility**
-        - MSSQL doesn't support row value comparisons like `WHERE (col1, col2) IN ((v1, v2), ...)`
-        - Added a dialect-specific fallback that uses OR/AND conditions instead
-        - Automatically detected and applied when using MSSQL
-
-        **Service Layer**
-        - `get()`, `delete()`, and `delete_many()` signatures updated to accept composite keys
-        - Added docstrings with usage examples
-
-        **Memory Repository**
-        - Full composite PK support for testing
-        - New helper properties and methods for key handling
-
-        **Documentation**
-        - Added "Composite Primary Keys" section to repositories docs with examples
-        - Added brief composite PK section to services docs with cross-reference
-
-        **CI Fix**
-        - Added sphinx to mypy's skip-imports list to fix Python 3.12+ syntax errors
-
-        ### Usage
-
-        ```python
-        # Get by composite key (tuple format - values in PK column order)
-        assignment = await repo.get((user_id, role_id))
-
-        # Get by composite key (dict format - explicit column names)
-        assignment = await repo.get({"user_id": 1, "role_id": 5})
-
-        # Bulk delete with composite keys
-        await repo.delete_many([
-            (1, 5),
-            (1, 6),
-            (2, 5),
-        ])
-
-        # Services work the same way
-        item = await service.get((tenant_id, item_id))
-        await service.delete({"tenant_id": 1, "item_id": 42})
-        ```
-
-        ### Follow-up
-
-        - Update `update()` and `upsert()` methods for composite key support (Phase 3.3)
+        Adds composite primary key support throughout the repository and service layers.
+        Tuple and mapping primary-key inputs are now supported for lookup and delete
+        operations, including MSSQL-compatible filtering for bulk operations.
 
         Closes #189
 
@@ -112,55 +40,19 @@
         :pr: 661
         :issue: 606, 651
 
-        ## Summary
-
-        - non-breaking code cleanup/organization  in the repository layer.
-        - Improved serialization and removed duplication between cache handler and normal serializers
-        - Bug Fixes
-
-        ## Detailed Changes
-
-        ### Repository & Caching Refactor
-           * Reduced  Bloat: Moved internal caching helpers (_normalize_cache_key_value, _build_list_cache_key, etc.) out of advanced_alchemy/repository/_async.py and into advanced_alchemy/repository/_util.py.
-           * Unified Serialization:
-               * Refactored advanced_alchemy/_serialization.py to expose encode_complex_type and decode_complex_type.
-               * Updated advanced_alchemy/cache/serializers.py and repository/_util.py to share this logic, removing duplicate handling for types like UUID, datetime, and Decimal.
-           * Cleanup: Removed unused imports (dataclasses, hashlib, etc.) from the repository files.
-
-        ### Bug Fixes
-           * Issue #606 (Error Misclassification):
-               * Problem: StatementError (often caused by transient connection issues) was incorrectly wrapped as IntegrityError.
-               * Fix: Updated advanced_alchemy/exceptions.py to correctly map StatementError to RepositoryError.
-           * Issue #651 (Alembic Migrations):
-               * Problem: Migration templates unconditionally imported optional dependencies (Argon2, Passlib, Pwdlib), causing crashes for users who hadn't installed them.
-               * Fix: Wrapped these imports in try/except ImportError blocks in both sync and asyncio Alembic templates (script.py.mako).
-           * Issue #646 (DTO Regression):
-               * Problem: SQLAlchemyDTO crashed when encountering hybrid_property attributes because inspect.getmembers triggered their evaluation.
-               * Fix: Switched to iterating over the class dictionary (__dict__) and MRO in dto.py to inspect properties safely without executing them.
+        Refactors repository and cache serialization helpers into shared utilities,
+        reduces duplication in the repository layer, and fixes related issues around
+        exception classification, optional Alembic imports, and DTO descriptor
+        inspection.
 
     .. change:: add support .csv files for open_fixture
         :type: feature
         :pr: 615
         :issue: 536
 
-        <!--
-        By submitting this pull request, you agree to:
-        - follow [Litestar's Code of Conduct](https://github.com/litestar-org/.github/blob/main/CODE_OF_CONDUCT.md)
-        - follow [Litestar's contribution guidelines](https://github.com/litestar-org/.github/blob/main/CONTRIBUTING.md)
-        - follow the [PSFs's Code of Conduct](https://www.python.org/psf/conduct/)
-        -->
-        ## Description
-
-        Add comprehensive CSV file support to the `open_fixture` and `open_fixture_async` functions, expanding the fixture loading capabilities beyond JSON to include comma-separated value files.
-
-        <!--
-        Please add in issue numbers this pull request will close, if applicable
-        Examples: Fixes #4321 or Closes #1234
-
-        Ensure you are using a supported keyword to properly link an issue:
-        https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword
-        -->
-        ## Closes
+        Add comprehensive CSV support to ``open_fixture()`` and
+        ``open_fixture_async()``, expanding fixture loading beyond JSON to include
+        comma-separated value files.
 
         Closes #536
 
@@ -175,54 +67,21 @@
         :type: feature
         :pr: 635
 
-        ## Summary
-        - Adds automatic query routing to read replicas for SELECT queries and to primary for writes
-        - Provides context managers (`primary_context`, `replica_context`) for explicit routing control
-        - Integrates with all framework extensions (Litestar, FastAPI, Starlette, Flask, Sanic)
-
-        ## Features
-        - `RoutingSession` / `RoutingAsyncSession` with automatic `get_bind()` routing
-        - `RoutingConfig` for configuring primary and replica connections
-        - Round-robin and random replica selection strategies
-        - Sticky-primary mode for write-then-read consistency
-        - FOR UPDATE query detection for automatic primary routing
-
-        ## Test plan
-        - [x] 97 unit tests for routing components
-        - [x] 21 integration tests with real SQLite databases
-        - [x] All linting passes (`make lint`)
+        Adds automatic query routing between primary and replica database
+        connections. ``RoutingSession`` and ``RoutingAsyncSession`` now route
+        reads to replicas, keep writes on the primary, support explicit
+        ``primary_context()`` and ``replica_context()`` overrides, and integrate
+        with the Litestar, FastAPI, Starlette, Flask, and Sanic extensions.
 
     .. change:: add NullFilter/NotNullFilter and with_for_update to get_one methods
         :type: feature
         :pr: 638
         :issue: 187, 488, 623
 
-        ## Summary
-
-        - Add `NullFilter` class for IS NULL conditions (simple, single-purpose design)
-        - Add `NotNullFilter` class for IS NOT NULL conditions (matches ExistsFilter/NotExistsFilter pattern)
-        - Add `with_for_update` parameter to `get_one()` and `get_one_or_none()` methods in both repository and service layers for API consistency with `get()`
-
-        ## Changes
-
-        ### NullFilter & NotNullFilter (#623)
-        - New filter classes following the established pattern (like ExistsFilter/NotExistsFilter)
-        - Added to FilterMap, MultiFilter._filter_map, and FilterTypes
-        - Comprehensive integration tests with SQLite
-
-        ### get_one with_for_update (#488)
-        - Added `with_for_update: ForUpdateParameter = None` to `get_one()` and `get_one_or_none()`
-        - Updated protocol/overload signatures
-        - Updated service layer to pass through the parameter
-        - Uses existing `_apply_for_update_options()` helper
-
-        ## Test plan
-
-        - [x] All filter tests pass with SQLite
-        - [x] All repository unit tests pass
-        - [x] Linting clean (ruff check)
-        - [x] Type checking clean (mypy)
-        - [x] Sync files generated correctly (unasyncd)
+        Adds ``NullFilter`` and ``NotNullFilter`` for ``IS NULL`` and ``IS NOT
+        NULL`` conditions, and extends ``get_one()`` and ``get_one_or_none()``
+        in the repository and service layers with ``with_for_update`` support
+        for API parity with ``get()``.
 
         Closes #488
         Closes #623
@@ -231,15 +90,13 @@
         :type: bugfix
         :pr: 685
 
-        ## Description
+        Fixes partial updates with model instances where SQLAlchemy-initialized
+        relationship attributes could be mistaken for explicit values and
+        written back to the database. The relationship update loop now uses the
+        same ``was_attribute_set()`` guard as the column loop so only
+        explicitly assigned relationship values are copied during ``update()``.
 
-        Partial updates using model instances (e.g. `Model(id=..., name='new')`) were silently clearing relationships because SQLAlchemy auto-initializes unset relationship attributes to `None/[]`, which then passed the 'is not MISSING' check and got written through to the DB.
-
-        This adds the same `was_attribute_set()` guard that already protects the column loop to the relationship loop, so only explicitly set relationships are copied during `update()`.
-
-        ## Closes
-
-        - #684
+        Closes #684
 
 
     .. change:: nullable relationship detection and FileObject nested metadata
@@ -247,10 +104,10 @@
         :pr: 679
         :issue: 227, 676
 
-        ## Summary
-
-        - **Fix nullable one-to-one relationship detection in DTO (#227)**: `detect_nullable_relationship()` only checked `MANYTOONE` direction, missing `ONETOMANY` with `uselist=False` (inverse side of one-to-one). Also fixed `parse_type_from_element()` to not treat scalar one-to-one relationships as collections.
-        - **Fix FileObject nested metadata serialization (#676)**: Obstore attributes must be strings. Non-string metadata values (lists, dicts, numbers) are now serialized via `encode_json` before passing to obstore's `put()`, fixing `TypeError` when `FileObject` has nested metadata.
+        Fixes nullable one-to-one DTO detection by correctly handling inverse
+        scalar relationships, and fixes ``FileObject`` uploads by JSON
+        serializing non-string obstore metadata values before they are passed to
+        ``put()``.
 
         Closes #227
         Closes #676
@@ -260,10 +117,10 @@
         :pr: 673
         :issue: 668
 
-        ## Summary
-
-        - Make `model` parameter positional-only (`/`) in `model_from_dict()` to prevent `TypeError` when the data dict contains a `"model"` key
-        - Update all call sites in service layer to use positional form
+        Makes the ``model`` parameter positional-only in ``model_from_dict()``
+        so payloads containing a ``"model"`` key do not conflict with the
+        function signature. Service-layer call sites now use the positional
+        form.
 
         Closes #668
 
@@ -272,10 +129,10 @@
         :pr: 674
         :issue: 659
 
-        ## Summary
-        - Replace bare `list[...]` with `typing.List[...]` in all class annotations where the class defines a `list()` method
-        - Prevents Python 3.14 (PEP 649) lazy annotation evaluation from resolving `list` to the class method instead of the builtin type
-        - Add regression test verifying annotations are accessible via `typing.get_type_hints()`
+        Replaces bare ``list[...]`` annotations with ``typing.List[...]`` in
+        classes that also define a ``list()`` method. This avoids Python 3.14
+        lazy annotation evaluation resolving ``list`` to the method instead of
+        the builtin type.
 
         Closes #659
 
@@ -284,26 +141,11 @@
         :pr: 667
         :issue: 666
 
-        **Summary**
-        Fixes a Litestar dependency collision where multiple `*In` query params (generated by `create_service_dependencies` with `in_fields`) overwrite each other’s values. Each generated filter provider now binds its own distinct query parameter name, so `firstNameIn` and `lastNameIn` remain independent.
-
-        **What’s Changed**
-        - Ensure each in-/not-in filter provider uses a unique parameter name instead of a shared `values` argument
-        - Add Litestar unit test verifying multi-field `*In` filters don’t cross‑pollinate
-
-        **How to Test**
-        ```bash
-        uv run main.py
-        curl -X 'GET' \
-          'http://0.0.0.0:8000/api/v1/users?searchIgnoreCase=true&currentPage=1&pageSize=50&firstNameIn=Sezer&lastNameIn=Tasan' \
-          -H 'accept: application/json'
-        ```
-        At the `pdb` prompt, `filters` should show:
-        - `first_name` → `['Sezer']`
-        - `last_name` → `['Tasan']`
-
-        **Notes**
-        - Regression reproduction is tracked in issue #666.
+        Fixes a Litestar dependency collision where multiple ``*In`` query
+        parameters generated by ``create_service_dependencies()`` could
+        overwrite each other. Each generated in/not-in filter provider now
+        binds its own query parameter name so fields like ``firstNameIn`` and
+        ``lastNameIn`` remain independent.
 
     .. change:: Ensure ORM descriptor fields are not evaluated during DTO creation
         :type: bugfix
@@ -321,197 +163,48 @@
         :pr: 637
         :issue: 556
 
-        ## Summary
+        Fixes a regression where ``service.create()`` failed when relationship
+        data was provided as nested dictionaries. ``model_from_dict()`` now
+        detects relationship attributes and recursively converts nested
+        dictionaries or lists of dictionaries into the appropriate related model
+        instances while preserving existing non-nested behavior.
 
-        Fixes #556 - Regression where `service.create()` failed when passing nested dictionaries for relationship data.
-
-        ### Changes
-        - Add `_convert_relationship_value()` helper function to handle relationship conversion
-        - Modify `model_from_dict()` to detect `RelationshipProperty` attributes using SQLAlchemy's `class_mapper`
-        - Recursively convert nested dicts for one-to-one and many-to-one relationships
-        - Convert list of dicts for one-to-many and many-to-many relationships
-        - Handle None, empty lists, and mixed lists (dicts + model instances) correctly
-        - Preserve backward compatibility for non-nested usage
-
-        ### Example Usage
-        ```python
-        data = {
-            "name": "John Doe",
-            "profile": {"bio": "Developer"},  # Converted to Profile instance
-            "addresses": [
-                {"street": "123 Main St"},
-                {"street": "456 Oak Ave"}
-            ]  # Each dict converted to Address instance
-        }
-        user = model_from_dict(User, **data)
-        ```
-
-        ### Tests Added
-        - 17 comprehensive unit tests covering:
-          - Single nested dict (one-to-one)
-          - List of nested dicts (one-to-many)
-          - Deeply nested structures (3+ levels)
-          - None and empty list handling
-          - Mixed lists (dicts + instances)
-          - Many-to-many relationships
-          - Performance benchmarks
-
-        ## Test plan
-        - [x] All 184 unit tests pass
-        - [x] Type checking passes (mypy + pyright)
-        - [x] Linting passes (ruff check + format)
-        - [x] Pre-commit hooks pass
-        - [x] No manual edits to `_sync.py` files
+        Closes #556
 
     .. change:: add click compatibility layer for CLI alias support
         :type: bugfix
         :pr: 645
         :issue: 644
 
-        ## Summary
-
-        - Adds a compatibility layer (`advanced_alchemy/utils/cli_tools.py`) that provides click alias support across all environments
-        - The `aliases` parameter in click groups is a rich-click 1.9+ feature that causes `TypeError` when users have plain click or older rich-click
-        - Implements `AliasedGroup` class that mimics rich-click's alias handling for plain click
-        - Updates all CLI modules to use the new compatibility layer
-
-        ## Problem
-
-        Users encounter failures when using the CLI in these scenarios:
-
-        **Scenario A: Plain click (no rich-click)**
-        ```
-        TypeError: __init__() got an unexpected keyword argument 'aliases'
-        ```
-
-        **Scenario B: Old rich-click (< 1.9.0)**
-        ```
-        TypeError: __init__() got an unexpected keyword argument 'aliases'
-        ```
-
-        ## Solution
-
-        Created `advanced_alchemy/utils/cli_tools.py` with:
-        - `AliasedGroup` class that implements alias resolution for plain click
-        - `group()` and `command()` wrapper decorators that auto-select the appropriate class
-        - Detection constants (`_RICH_CLICK_AVAILABLE`, `_RICH_CLICK_ALIASES_SUPPORTED`)
-
-        ## Changes
-
-        | File | Change |
-        |------|--------|
-        | `advanced_alchemy/utils/cli_tools.py` | New compatibility module |
-        | `tests/unit/test_utils/test_click.py` | Unit tests for the module |
-        | `advanced_alchemy/cli.py` | Updated to use compatibility layer |
-        | `advanced_alchemy/extensions/fastapi/cli.py` | Updated to use compatibility layer |
-        | `advanced_alchemy/extensions/flask/cli.py` | Updated to use compatibility layer |
-        | `advanced_alchemy/extensions/litestar/cli.py` | Updated to use compatibility layer |
-
-        ## Test plan
-
-        - [x] Unit tests for `AliasedGroup` class
-        - [x] Tests with mocked plain click (no rich-click)
-        - [x] Tests with mocked old rich-click (< 1.9.0)
-        - [x] Tests with new rich-click >= 1.9.0
-        - [x] Type checking passes (mypy/pyright)
-        - [x] Linting passes (ruff/pre-commit)
+        Adds a Click compatibility layer so CLI alias support works with plain
+        Click and with older ``rich-click`` versions that do not accept the
+        ``aliases`` parameter on command groups. The new helper provides
+        ``AliasedGroup`` and wrapper decorators used across the core, FastAPI,
+        Flask, and Litestar CLI integrations.
 
     .. change:: resolve session lifecycle timing with generator dependencies
         :type: bugfix
         :pr: 648
         :issue: 647
 
-        ## Summary
+        Fixes the FastAPI and Starlette session lifecycle conflict that could
+        leave asyncpg connections unreturned to the pool when generator-based
+        ``provide_service()`` dependencies were cleaned up after middleware had
+        already closed the session. Generator-managed sessions are now marked so
+        middleware records response status but skips cleanup, allowing the
+        generator to handle commit, rollback, and close at the correct time.
 
-        Fixes #647
-
-        This PR resolves the session lifecycle timing conflict between Starlette middleware and FastAPI's generator-based dependency cleanup (`provide_service()`). The issue was causing asyncpg connections to not be properly returned to the pool, resulting in:
-
-        - `InvalidRequestError: An invalid request was made.`
-        - `SAWarning: The garbage collector is trying to clean up non-checked-in connection...`
-
-        ### Root Cause
-
-        The middleware was closing sessions **before** FastAPI's generator dependency cleanup could run:
-
-        ```
-        1. Request arrives
-        2. FastAPI resolves `provide_service()` dependency (generator)
-        3. Session created and stored in `request.state`
-        4. Generator yields service, suspends
-        5. Route handler executes
-        6. Response is generated
-        7. Middleware runs → session_handler() CLOSES SESSION ← Problem
-        8. FastAPI dependency cleanup resumes generator
-        9. Generator's `async with` tries to exit with closed session
-        10. asyncpg connection not properly returned → GC warning
-        ```
-
-        ### Solution
-
-        - Mark sessions as "generator-managed" when using `provide_service()`
-        - Middleware stores response status but **skips cleanup** for generator-managed sessions
-        - Generator handles commit/rollback/close in its `finally` block with access to the stored response status
-
-        ## Changes
-
-        | File | Changes |
-        |------|---------|
-        | `advanced_alchemy/extensions/fastapi/providers.py` | Add `_should_commit_for_status()` helper, update `provide_service()` to handle lifecycle |
-        | `advanced_alchemy/extensions/starlette/config.py` | Update middleware dispatch to skip generator-managed sessions |
-        | `tests/unit/test_extensions/test_fastapi/test_session_lifecycle.py` | 50 new tests covering session lifecycle scenarios |
-
-        ## Test Plan
-
-        - [x] All 176 FastAPI unit tests pass
-        - [x] 50 new session lifecycle tests covering:
-          - `_should_commit_for_status()` helper function
-          - Commit strategies with autocommit, autocommit_include_redirect, and manual modes
-          - Response status codes (2xx, 3xx, 4xx, 5xx)
-          - Middleware skipping generator-managed sessions
-          - Non-generator sessions still use middleware cleanup
-          - Multiple configs with different session keys
-        - [x] Linting passes
+        Closes #647
 
     .. change:: complete SQLAlchemy inheritance pattern support (STI, JTI, CTI)
         :type: bugfix
         :pr: 611
 
-        ## Summary
-
-        This PR completes the implementation of SQLAlchemy inheritance pattern support in `CommonTableAttributes`, enabling proper handling of Single Table Inheritance (STI), Joined Table Inheritance (JTI), and Concrete Table Inheritance (CTI).
-
-        ## Changes
-
-        ### Core Implementation ([advanced_alchemy/base.py](advanced_alchemy/base.py))
-
-        1. **Added `__init_subclass__` hook** (lines 209-277):
-           - Detects STI children by checking if any parent has `polymorphic_on` in their `__mapper_args__`
-           - Automatically sets `cls.__tablename__ = None` for STI children
-           - Handles both explicit (with `polymorphic_identity`) and implicit (without) STI children
-           - Properly distinguishes between base classes and child classes
-
-        2. **Enhanced `@declared_attr.__tablename__()` method** (lines 281-386):
-           - Returns `None` for explicitly set `None` values (set by `__init_subclass__`)
-           - Provides fallback STI detection for cases where parent doesn't have explicit tablename
-           - Generates snake_case table names for non-STI classes
-
-        ### Supported Patterns
-
-        1. ✅ **Single Table Inheritance (STI)**:
-           - Child classes with `polymorphic_identity` share parent's table
-           - Works with both auto-generated and explicit parent table names
-           - Handles edge case of children without `polymorphic_identity` (with warning)
-
-        2. ✅ **Joined Table Inheritance (JTI)**:
-           - Child classes with explicit `__tablename__` create joined tables
-           - Proper foreign key relationships maintained
-
-        3. ✅ **Concrete Table Inheritance (CTI)**:
-           - Child classes with `concrete=True` create independent tables
-           - No foreign keys to parent table
-
-        ## Related Issues
+        Completes SQLAlchemy inheritance handling in ``CommonTableAttributes`` so
+        single-table, joined-table, and concrete-table inheritance patterns are
+        all supported correctly. The implementation now detects STI subclasses,
+        suppresses table generation for them when appropriate, and preserves
+        proper table naming behavior for joined and concrete inheritance models.
 
         Supersedes PR #600
 
@@ -519,31 +212,10 @@
         :type: bugfix
         :pr: 643
 
-        ## Description
-        In other extensions like Starlette we explicitly set async context in method `_get_session_from_request`, however, in Sanic we do not. Even though it's not critical, it seems reasonable to add this line here.
-
-        ```py
-          @staticmethod
-          def _get_session_from_request(
-              request: Request,
-              config: Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig],  # pragma: no cover
-          ) -> Union["Session", "AsyncSession"]:  # pragma: no cover
-              """Get the session for the given key.
-
-              Args:
-                  request: The request object.
-                  config: The config object.
-
-              Returns:
-                  The session for the given key.
-              """
-              session = getattr(request.state, config.session_key, None)
-              if session is None:
-                  session = config.create_session_maker()()
-                  setattr(request.state, config.session_key, session)
-              set_async_context(isinstance(session, AsyncSession))
-              return session
-        ```
+        Sanic now mirrors the other framework extensions by calling
+        ``set_async_context()`` in ``_get_session_from_request()`` after loading
+        or creating the session. This keeps async-context detection consistent
+        across integrations.
 
     .. change:: linting changes related to latest Starlette
         :type: bugfix
@@ -1037,9 +709,10 @@
         :pr: 450
         :issue: 449
 
-        ## fixes #449 relationship updated on models:
-        - AuthorModel
-        - BookModel
+        Updates the ``litestar_service.py`` example models to correctly handle
+        relationship updates for ``AuthorModel`` and ``BookModel``.
+
+        Fixes #449
 
     .. change:: `create_service_provider` supports any configuration now
         :type: bugfix
