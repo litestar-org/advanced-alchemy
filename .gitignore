@@ -189,3 +189,4 @@ GEMINI.md
 .agent/
 tools/scripts/detect_mcp_tools.py
 .geminiignore
+.agents/

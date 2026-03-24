@@ -17,6 +17,8 @@ Key Features
 - Repository pattern for database operations
 - Service layer for business logic and data transformation
 - Built-in pagination and filtering
+- SQLAlchemy-backed server-side session backend for Litestar middleware
+- FileObject integration for multipart uploads and signed URLs
 - CLI tools for database migrations
 
 Basic Setup
@@ -62,13 +64,13 @@ Define your SQLAlchemy models using Advanced Alchemy's enhanced base classes:
         __tablename__ = "author"
         name: Mapped[str]
         dob: Mapped[Optional[datetime.date]]
-        books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
+        books: Mapped[list["BookModel"]] = relationship(back_populates="author", lazy="selectin")
 
     class BookModel(base.UUIDAuditBase):
         __tablename__ = "book"
         title: Mapped[str]
         author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
-        author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
+        author: Mapped["AuthorModel"] = relationship(lazy="joined", innerjoin=True, viewonly=True)
 
 Using Properties with DTOs
 ---------------------------
@@ -274,10 +276,14 @@ You can access the database session from the controller by using the session par
 
 By default, the session key is named "db_session". You can change this by setting the `session_dependency_key` parameter in the SQLAlchemyAsyncConfig.
 
+When you register multiple Litestar SQLAlchemy configs, session selection is done through distinct dependency keys rather than a runtime
+``provide_session("reporting")`` argument. Give each config a unique ``session_dependency_key`` and ``engine_dependency_key``, then inject
+the matching parameter in your handlers.
+
 .. code-block:: python
 
     from litestar import Litestar, get
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -301,6 +307,30 @@ By default, the session key is named "db_session". You can change this by settin
         plugins=[SQLAlchemyPlugin(config=alchemy_config)],
     )
 
+.. code-block:: python
+
+    primary_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///primary.sqlite",
+        bind_key="primary",
+        session_dependency_key="primary_session",
+        engine_dependency_key="primary_engine",
+    )
+    reporting_config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///reporting.sqlite",
+        bind_key="reporting",
+        session_dependency_key="reporting_session",
+        engine_dependency_key="reporting_engine",
+    )
+
+    app = Litestar(
+        route_handlers=[],
+        plugins=[SQLAlchemyPlugin(config=[primary_config, reporting_config])],
+    )
+
+    @get("/reports")
+    async def get_reports(reporting_session: AsyncSession) -> str:
+        return "Reporting database is available"
+
 Sessions in Application
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -315,7 +345,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     from litestar import Litestar, get
     from litestar.connection import ASGIConnection
     from litestar.handlers.base import BaseRouteHandler
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -353,7 +383,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     from click import Group
     from litestar import Litestar, get
     from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -472,10 +502,15 @@ You can upgrade a database to the latest version by running the following comman
 
     $ litestar database upgrade
 
-Session Middleware
-------------------
+Server-Side Session Backend
+---------------------------
 
 Advanced Alchemy provides SQLAlchemy-based session backends for Litestar's server-side session middleware. This allows you to store session data in your existing SQLAlchemy database instead of using external stores like Redis or file-based storage.
+
+If you need a general-purpose Litestar store outside the session middleware itself, the same
+extension package also exposes ``advanced_alchemy.extensions.litestar.store.SQLAlchemyStore`` and
+``StoreModelMixin``. The examples below focus on the session backend used with
+``ServerSideSessionConfig``.
 
 Overview
 ^^^^^^^^
@@ -501,7 +536,7 @@ To use the SQLAlchemy session backend, you need to:
 
     from litestar import Litestar
     from litestar.middleware.session.server_side import ServerSideSessionConfig
-    from litestar.plugins.sqlalchemy import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
     from advanced_alchemy.extensions.litestar.session import (
         SessionModelMixin,
         SQLAlchemyAsyncSessionBackend,
@@ -592,7 +627,7 @@ For synchronous SQLAlchemy configurations, use ``SQLAlchemySyncSessionBackend``:
 
 .. code-block:: python
 
-    from litestar.plugins.sqlalchemy import SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.litestar import SQLAlchemySyncConfig
     from advanced_alchemy.extensions.litestar.session import SQLAlchemySyncSessionBackend
 
     # Sync configuration
@@ -778,7 +813,7 @@ Here's a complete working example:
     from litestar import Litestar, get, post
     from litestar.connection import ASGIConnection
     from litestar.middleware.session.server_side import ServerSideSessionConfig
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -849,6 +884,13 @@ File Object Storage
 
 Advanced Alchemy provides built-in support for file storage with various backends. Here's how to handle file uploads and storage:
 
+The pattern below mirrors ``examples/litestar/litestar_fileobject.py``:
+
+1. Register a storage backend
+2. Map a ``StoredObject`` column
+3. Expose a signed URL from the response schema
+4. Translate multipart uploads into ``FileObject`` instances before persisting them
+
 .. code-block:: python
 
     from typing import Annotated, Any, Optional, Union
@@ -876,21 +918,18 @@ Advanced Alchemy provides built-in support for file storage with various backend
     from advanced_alchemy.types.file_object.data_type import StoredObject
 
     # Configure file storage backend
-    s3_backend = ObstoreBackend(
-        key="local",
-        fs="s3://static-files/",
-        aws_endpoint="http://localhost:9000",
-        aws_access_key_id="minioadmin",
-        aws_secret_access_key="minioadmin",
+    documents_backend = ObstoreBackend(
+        key="documents",
+        fs="s3://company-documents-prod/",
     )
-    storages.register_backend(s3_backend)
+    storages.register_backend(documents_backend)
 
     # Model with file storage
     class DocumentModel(base.UUIDBase):
         __tablename__ = "document"
 
         name: Mapped[str]
-        file: Mapped[FileObject] = mapped_column(StoredObject(backend="local"))
+        file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
 
     # Schema with file URL generation
     class Document(BaseModel):
@@ -961,7 +1000,7 @@ Advanced Alchemy provides built-in support for file storage with various backend
                 DocumentModel(
                     name=data.name,
                     file=FileObject(
-                        backend="local",
+                        backend="documents",
                         filename=data.file.filename or "uploaded_file",
                         content_type=data.file.content_type,
                         content=await data.file.read(),
@@ -993,7 +1032,7 @@ Advanced Alchemy provides built-in support for file storage with various backend
                 update_data["name"] = data.name
             if data.file:
                 update_data["file"] = FileObject(
-                    backend="local",
+                    backend="documents",
                     filename=data.file.filename or "uploaded_file",
                     content_type=data.file.content_type,
                     content=await data.file.read(),
@@ -1030,6 +1069,10 @@ File storage features:
 - **File validation**: Built-in validation for file types and sizes
 - **Metadata storage**: Store file metadata alongside binary data
 
+For production deployments, avoid development-only endpoints and hardcoded object-store credentials
+in application code. Configure the backend with the real bucket or prefix and rely on the platform's
+ambient credentials, such as IAM roles or workload identity.
+
 **Supported Storage Backends**:
 
 - **Local filesystem**: For development and simple deployments
@@ -1046,7 +1089,6 @@ Alternative Patterns
 
     .. code-block:: python
 
-        from __future__ import annotations
 
         import datetime
         from typing import TYPE_CHECKING, Optional
@@ -1062,7 +1104,7 @@ Alternative Patterns
 
         from advanced_alchemy.base import UUIDAuditBase, UUIDBase
         from advanced_alchemy.config import AsyncSessionConfig
-        from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+        from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
         from advanced_alchemy.filters import LimitOffset
         from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
@@ -1078,7 +1120,28 @@ Alternative Patterns
             __tablename__ = "author"
             name: Mapped[str]
             dob: Mapped[Optional[datetime.date]]
-            books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+            books: Mapped[list["BookModel"]] = relationship(back_populates="author", lazy="selectin")
+
+        class BookModel(UUIDAuditBase):
+            __tablename__ = "book"
+            title: Mapped[str]
+            author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
+            author: Mapped["AuthorModel"] = relationship(lazy="joined", innerjoin=True, viewonly=True)
+
+        class Author(BaseModel):
+            id: Optional[UUID] = None
+            name: str
+            dob: Optional[datetime.date] = None
+
+            model_config = {"from_attributes": True}
+
+        class AuthorCreate(BaseModel):
+            name: str
+            dob: Optional[datetime.date] = None
+
+        class AuthorUpdate(BaseModel):
+            name: Optional[str] = None
+            dob: Optional[datetime.date] = None
 
         # Repository
         class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):

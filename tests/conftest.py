@@ -1,6 +1,7 @@
 import contextlib
 import logging
 from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 import pytest
 from google.cloud import spanner  # pyright: ignore
@@ -11,6 +12,9 @@ from pytest_databases.docker.mysql import MySQLService
 from pytest_databases.docker.oracle import OracleService
 from pytest_databases.docker.postgres import PostgresService
 from pytest_databases.docker.spanner import SpannerService
+
+if TYPE_CHECKING:
+    pass
 
 pytest_plugins = [
     "pytest_databases.docker",

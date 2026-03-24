@@ -14,11 +14,10 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     :maxdepth: 2
     :caption: Core Features
 
-    modeling
-    repositories
+    modeling/index
+    repositories/index
     services
     routing
-    types
     caching
     cli
     database_seeding
@@ -30,6 +29,8 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     frameworks/litestar
     frameworks/flask
     frameworks/fastapi
+    frameworks/sanic
+    frameworks/starlette
 
 The guide follows a practical approach:
 

@@ -2,17 +2,17 @@
 Database Seeding and Fixture Loading
 ====================================
 
-Advanced Alchemy provides utilities for seeding your database with initial data through JSON or CSV fixtures. This documentation will show you how to create and load fixtures in both synchronous and asynchronous applications.
+Advanced Alchemy provides ``open_fixture()`` and ``open_fixture_async()`` helpers for loading JSON
+and CSV fixtures from disk. Use them to keep seed data in version-controlled files while leaving the
+actual upsert logic in your application code.
 
 Creating Fixtures
 -----------------
 
-Fixtures in Advanced Alchemy are JSON or CSV files that contain the data you want to seed. Each fixture file should:
+Fixtures can be stored as JSON or CSV. JSON preserves native types, while CSV returns a list of
+string-valued dictionaries that you should coerce before creating typed models.
 
-1. Contain a JSON object or a JSON array of objects, where each object represents a row in your database table
-2. Include all required fields for your model
-
-**Example Fixture:**
+**Example JSON fixture:**
 
 .. code-block:: json
     :caption: fixtures/products.json
@@ -29,31 +29,11 @@ Fixtures in Advanced Alchemy are JSON or CSV files that contain the data you wan
             "description": "Latest smartphone model with 5G and advanced camera",
             "price": 699.99,
             "in_stock": true
-        },
-        {
-            "name": "Headphones",
-            "description": "Noise-cancelling wireless headphones with 30-hour battery life",
-            "price": 199.99,
-            "in_stock": true
-        },
-        {
-            "name": "Smartwatch",
-            "description": "Fitness tracker with heart rate monitor and GPS",
-            "price": 149.99,
-            "in_stock": false
-        },
-        {
-            "name": "Tablet",
-            "description": "10-inch tablet with high-resolution display",
-            "price": 349.99,
-            "in_stock": true
         }
     ]
 
 Loading Fixtures
 ----------------
-
-Advanced Alchemy provides both synchronous and asynchronous functions for loading fixtures:
 
 Synchronous Loading
 ~~~~~~~~~~~~~~~~~~~
@@ -61,8 +41,9 @@ Synchronous Loading
 .. code-block:: python
 
     from pathlib import Path
+    from typing import Optional
 
-    from sqlalchemy import String, create_engine
+    from sqlalchemy import String
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
@@ -70,68 +51,34 @@ Synchronous Loading
     from advanced_alchemy.repository import SQLAlchemySyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture
 
-    # Database connection string
     DATABASE_URL = "sqlite:///db.sqlite3"
+    fixtures_path = Path("fixtures")
 
     alchemy_config = SQLAlchemySyncConfig(
-        engine_instance=create_engine(DATABASE_URL),
-        session_config=SyncSessionConfig(expire_on_commit=False)
+        connection_string=DATABASE_URL,
+        session_config=SyncSessionConfig(expire_on_commit=False),
     )
 
-    class Product(UUIDBase):
-        """Product model."""
-        __tablename__ = "products"
+    class SyncProduct(UUIDBase):
+        __tablename__ = "sync_products"
 
         name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[str | None] = mapped_column(String(length=500))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
         price: Mapped[float]
         in_stock: Mapped[bool] = mapped_column(default=True)
 
+    class SyncProductRepository(SQLAlchemySyncRepository[SyncProduct]):
+        model_type = SyncProduct
 
-    # Repository
-    class ProductRepository(SQLAlchemySyncRepository[Product]):
-        """Product repository."""
-        model_type = Product
-
-
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-
-    def initialize_database():
-        """Initialize the database and create tables."""
-        print("Creating database tables...")
+    def initialize_database() -> None:
         with alchemy_config.get_engine().begin() as conn:
             UUIDBase.metadata.create_all(conn)
-        print("Tables created successfully")
 
-
-    def seed_database():
-        """Seed the database with fixture data."""
-        print("Seeding database...")
-
-        # Create a session
+    def seed_database() -> None:
         with alchemy_config.get_session() as db_session:
-            # Create repository for product model
-            product_repo = ProductRepository(session=db_session)
-
-            # Load and add product data
-            try:
-                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
-                product_data = open_fixture(fixtures_path, "product")
-                print(f"Loaded {len(product_data)} products from fixture")
-                product_repo.add_many([Product(**item) for item in product_data])
-                db_session.commit()
-            except FileNotFoundError:
-                print(f"Could not find fixture file at {fixtures_path}/product.json")
-
-
-    if __name__ == "__main__":
-        # Initialize the database
-        initialize_database()
-
-        # Seed the database
-        seed_database()
+            repository = SyncProductRepository(session=db_session)
+            fixture_data = open_fixture(fixtures_path, "products")
+            repository.add_many([SyncProduct(**item) for item in fixture_data], auto_commit=True)
 
 
 Asynchronous Loading
@@ -139,12 +86,10 @@ Asynchronous Loading
 
 .. code-block:: python
 
-    import asyncio
     from pathlib import Path
     from typing import Optional
 
     from sqlalchemy import String
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import UUIDBase
@@ -152,361 +97,116 @@ Asynchronous Loading
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
-    # Database connection string
     DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
+    fixtures_path = Path("fixtures")
 
     alchemy_config = SQLAlchemyAsyncConfig(
-        engine_instance=create_async_engine(DATABASE_URL),
-        session_config=AsyncSessionConfig(expire_on_commit=False)
+        connection_string=DATABASE_URL,
+        session_config=AsyncSessionConfig(expire_on_commit=False),
     )
 
-    class Product(UUIDBase):
-        """Product model."""
-        __tablename__ = "products"
+    class AsyncProduct(UUIDBase):
+        __tablename__ = "async_products"
 
         name: Mapped[str] = mapped_column(String(length=100))
         description: Mapped[Optional[str]] = mapped_column(String(length=500))
         price: Mapped[float]
         in_stock: Mapped[bool] = mapped_column(default=True)
 
+    class AsyncProductRepository(SQLAlchemyAsyncRepository[AsyncProduct]):
+        model_type = AsyncProduct
 
-    # Repository
-    class ProductRepository(SQLAlchemyAsyncRepository[Product]):
-        """Product repository."""
-        model_type = Product
-
-
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-
-    async def initialize_database():
-        """Initialize the database and create tables."""
-        print("Creating database tables...")
+    async def initialize_async_database() -> None:
         async with alchemy_config.get_engine().begin() as conn:
             await conn.run_sync(UUIDBase.metadata.create_all)
-        print("Tables created successfully")
 
-
-    async def seed_database():
-        """Seed the database with fixture data."""
-        print("Seeding database...")
-
-        # Create a session
+    async def seed_async_database() -> None:
         async with alchemy_config.get_session() as db_session:
-            # Create repository for product model
-            product_repo = ProductRepository(session=db_session)
-
-            # Load and add product data
-            try:
-                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
-                product_data = await open_fixture_async(fixtures_path, "product")
-                print(f"Loaded {len(product_data)} products from fixture")
-                await product_repo.add_many([Product(**item) for item in product_data])
-                await db_session.commit()
-            except FileNotFoundError:
-                print(f"Could not find fixture file at {fixtures_path}/product.json")
+            repository = AsyncProductRepository(session=db_session)
+            fixture_data = await open_fixture_async(fixtures_path, "products")
+            await repository.add_many([AsyncProduct(**item) for item in fixture_data], auto_commit=True)
 
 
+CSV Fixtures
+~~~~~~~~~~~~
 
-    async def main():
-        """Main async function to run the example."""
-        # Initialize the database
-        await initialize_database()
+.. versionadded:: 1.9.0
 
-        # Seed the database
-        await seed_database()
+CSV fixtures use the header row as dictionary keys, but each value is returned as a string. Coerce
+those values before constructing models or sending data into a service layer.
 
+**Example CSV (products.csv):**
 
+.. code-block:: text
 
-    if __name__ == "__main__":
-        # Run the async main function
-        asyncio.run(main())
+    name,price,in_stock
+    Widget,9.99,true
+    Gadget,19.99,true
+    Thingy,4.99,false
 
-
-Integration with Web Frameworks
--------------------------------
-
-Litestar
-~~~~~~~~
+**Loading CSV Fixtures:**
 
 .. code-block:: python
 
     from pathlib import Path
-    from typing import Optional
+    from typing import Any
 
-    import uvicorn
-    from litestar import Litestar
-    from sqlalchemy import String
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.extensions.litestar import (
-        AsyncSessionConfig,
-        SQLAlchemyAsyncConfig,
-        SQLAlchemyPlugin,
-    )
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
-    # Database connection string
-    DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
+    def coerce_product_row(row: dict[str, str]) -> dict[str, Any]:
+        return {
+            "name": row["name"],
+            "price": float(row["price"]),
+            "in_stock": row["in_stock"].lower() == "true",
+        }
 
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-    session_config = AsyncSessionConfig(expire_on_commit=False)
-    alchemy_config = SQLAlchemyAsyncConfig(
-        connection_string=DATABASE_URL,
-        before_send_handler="autocommit",
-        session_config=session_config,
-        create_all=True,
-    )
-    alchemy = SQLAlchemyPlugin(config=alchemy_config)
+    async def seed_from_csv(repository: AsyncProductRepository, fixtures_path: Path) -> None:
+        raw_rows = await open_fixture_async(fixtures_path, "products")
+        products = [AsyncProduct(**coerce_product_row(item)) for item in raw_rows]
+        await repository.add_many(products, auto_commit=True)
 
 
-    class Product(UUIDBase):
-        """Product model."""
-        __tablename__ = "products"
+Application Integration
+-----------------------
 
-        name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[Optional[str]] = mapped_column(String(length=500))
-        price: Mapped[float]
-        in_stock: Mapped[bool] = mapped_column(default=True)
+The Litestar fullstack reference applications keep schema migration and fixture loading as separate
+application commands. Apply migrations first, then run an app-level command that loads or upserts
+fixtures for your domain services.
 
+.. code-block:: text
 
-    # Repository
-    class ProductRepository(SQLAlchemyAsyncRepository[Product]):
-        """Product repository."""
-        model_type = Product
+    uv run app database upgrade
 
-
-    # Startup function to seed the database
-    async def on_startup() -> None:
-        """Seed the database during application startup."""
-        print("Running startup routine...")
-
-        # Create a session and seed data
-        async with alchemy_config.get_session() as db_session:
-            # Create repository for product model
-            product_repo = ProductRepository(session=db_session)
-            # Load and add product data
-            try:
-                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
-                product_data = await open_fixture_async(fixtures_path, "product")
-                print(f"Loaded {len(product_data)} products from fixture")
-                await product_repo.add_many([Product(**item) for item in product_data])
-                await db_session.commit()
-            except FileNotFoundError:
-                print(f"Could not find fixture file at {fixtures_path}/product.json")
-
-            # Verify data was added
-            products = await product_repo.list()
-            print(f"Database seeded with {len(products)} products")
-
-
-    # Create the Litestar application
-    app = Litestar(
-        on_startup=[on_startup],
-        plugins=[alchemy],
-    )
-
-    if __name__ == "__main__":
-        uvicorn.run(app, host="0.0.0.0", port=8000)
-
-FastAPI
-~~~~~~~
+For the fixture loader itself, keep the mapping logic close to the service that owns the data:
 
 .. code-block:: python
 
-    from contextlib import asynccontextmanager
     from pathlib import Path
-    from typing import Optional
+    from typing import Any
 
-    import uvicorn
-    from fastapi import FastAPI
-    from sqlalchemy import String
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.extensions.fastapi import (
-        AdvancedAlchemy,
-        AsyncSessionConfig,
-        SQLAlchemyAsyncConfig,
-    )
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
-    # Database connection string
-    DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
-
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-
-    class Product(UUIDBase):
-        """Product model."""
-        __tablename__ = "products"
-
-        name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[Optional[str]] = mapped_column(String(length=500))
-        price: Mapped[float]
-        in_stock: Mapped[bool] = mapped_column(default=True)
-
-
-    # Repository
-    class ProductRepository(SQLAlchemyAsyncRepository[Product]):
-        """Product repository."""
-        model_type = Product
-
-
-    # Lifespan context manager
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        """Handle startup and shutdown events."""
-        # Startup: Initialize database and seed data
-        print("Running startup routine...")
-
-        # Create a session and seed data
-        async with alchemy_config.get_session() as db_session:
-            # Create repository for product model
-            product_repo = ProductRepository(session=db_session)
-            # Load and add product data
-            try:
-                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
-                product_data = await open_fixture_async(fixtures_path, "product")
-                print(f"Loaded {len(product_data)} products from fixture")
-                await product_repo.add_many([Product(**item) for item in product_data])
-                await db_session.commit()
-            except FileNotFoundError:
-                print(f"Could not find fixture file at {fixtures_path}/product.json")
-
-            # Verify data was added
-            products = await product_repo.list()
-            print(f"Database seeded with {len(products)} products")
-
-        # Yield control back to FastAPI
-        yield
-
-        # Shutdown: Clean up resources if needed
-        # This section runs when the application is shutting down
-        print("Shutting down...")
-
-
-    session_config = AsyncSessionConfig(expire_on_commit=False)
-    alchemy_config = SQLAlchemyAsyncConfig(
-        connection_string=DATABASE_URL,
-        commit_mode="autocommit",
-        session_config=session_config,
-        create_all=True,
-    )
-
-    # Create the FastAPI application with lifespan
-    app = FastAPI(lifespan=lifespan)
-
-    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
-
-    if __name__ == "__main__":
-        uvicorn.run(app, host="0.0.0.0", port=8000)
-
-Flask
-~~~~~
-
-.. code-block:: python
-
-    from pathlib import Path
-    from typing import Optional
-
-    from flask import Flask
-    from sqlalchemy import String
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.extensions.flask import (
-        AdvancedAlchemy,
-        SQLAlchemySyncConfig,
-        SyncSessionConfig,
-    )
-    from advanced_alchemy.repository import SQLAlchemySyncRepository
-    from advanced_alchemy.utils.fixtures import open_fixture
-
-    # Database connection string
-    DATABASE_URL = "sqlite:///db.sqlite3"
-
-    # Set up fixtures path
-    fixtures_path = Path(__file__).parent / "fixtures"
-
-    class Product(UUIDBase):
-        """Product model."""
-        __tablename__ = "products"
-
-        name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[Optional[str]] = mapped_column(String(length=500))
-        price: Mapped[float]
-        in_stock: Mapped[bool] = mapped_column(default=True)
-
-
-    # Repository
-    class ProductRepository(SQLAlchemySyncRepository[Product]):
-        """Product repository."""
-        model_type = Product
-
-
-    app = Flask(__name__)
-
-    alchemy_config = SQLAlchemySyncConfig(
-        connection_string=DATABASE_URL,
-        commit_mode="autocommit",
-        session_config=SyncSessionConfig(
-            expire_on_commit=False,
-        ),
-        create_all=True
-    )
-
-    alchemy = AdvancedAlchemy(config=alchemy_config)
-    alchemy.init_app(app)
-
-    with app.app_context():  # noqa: SIM117
-        # Seed data
-        with db.get_session() as session:
-            product_repo = ProductRepository(session=db_session)
-            # Load and add product data
-            try:
-                print(f"Attempting to load fixtures from {fixtures_path}/product.json")
-                product_data = open_fixture(fixtures_path, "product")
-                print(f"Loaded {len(product_data)} products from fixture")
-                product_repo.add_many([Product(**item) for item in product_data])
-                db_session.commit()
-            except FileNotFoundError:
-                print(f"Could not find fixture file at {fixtures_path}/product.json")
-
-            # Verify data was added
-            products = product_repo.list()
-            print(f"Database seeded with {len(products)} products")
-
-    if __name__ == "__main__":
-        app.run(host="0.0.0.0", port=5000)
+    async def load_database_fixtures(role_service: Any, fixtures_path: Path) -> None:
+        fixture_data = await open_fixture_async(fixtures_path, "role")
+        await role_service.upsert_many(match_fields=["name"], data=fixture_data, auto_commit=True)
 
 
 Best Practices
 --------------
 
-1. **Directory Structure**: Keep your fixtures in a dedicated directory (e.g., ``fixtures/``).
-2. **Naming Convention**: Name your fixture files after the corresponding table names.
-3. **Idempotent Seeding**: Always check if data exists before seeding to avoid duplicates or update records.
-4. **Dependencies**: Seed tables in the correct order to respect foreign key constraints.
-5. **Data Validation**: Ensure your fixture data meets your model's constraints.
-6. **Environment Separation**: Consider having different fixtures for development, testing, and production.
-7. **Version Control**: Keep your fixtures under version control with your application code.
+1. Keep fixtures in a dedicated directory such as ``fixtures/``.
+2. Keep migration commands and fixture-loading commands separate.
+3. Use ``upsert_many()`` when your seed data should be re-runnable without creating duplicates.
+4. Coerce CSV values before creating strongly typed models.
+5. Seed parent tables before child tables when relationships are involved.
+6. Keep fixtures under version control alongside your application code.
 
 Tips for Efficient Seeding
 --------------------------
 
-- Use ``add_many()`` instead of adding objects one by one for better performance.
-- Use ``upsert_many()`` to update your data if you are updating prices for example.
-- You can use the database seeding from your cli, app startup or any route.
-- For large datasets, consider chunking the data into smaller batches.
-- **Compressed Fixtures**: Large fixture files can be automatically compressed using gzip or zip formats. The system will automatically detect and decompress ``.json.gz``, ``.json.zip``, ``.csv.gz``, and ``.csv.zip`` files when loading fixtures, making it easier to manage large datasets while reducing storage space.
-- **CSV Fixtures**: For tabular data, CSV files can be used instead of JSON. CSV fixtures return a list of dictionaries where each row becomes a dictionary with column headers as keys. Note that CSV values are always strings, unlike JSON which preserves data types. JSON fixtures take priority over CSV when both exist with the same name.
-- When dealing with relationships, seed parent records before child records.
-- Consider using factory libraries like `Polyfactory <https://github.com/litestar-org/polyfactory>`__ for generating test data.
+- Use ``add_many()`` or ``upsert_many()`` instead of inserting one row at a time.
+- Use JSON when you need native numbers, booleans, nested objects, or UUIDs preserved.
+- Use CSV for flatter datasets when string-to-type coercion is straightforward.
+- Large fixture files can be stored as ``.json.gz``, ``.json.zip``, ``.csv.gz``, or ``.csv.zip``.
+- Application startup hooks, background jobs, and CLI commands are all reasonable places to invoke fixture loaders.
+- Consider using `Polyfactory <https://github.com/litestar-org/polyfactory>`__ when you need generated data rather than static fixtures.

@@ -14,7 +14,7 @@ Read/write routing is essential for scaling read-heavy applications:
 - **Scalability**: Distribute read load across multiple replica databases
 - **Performance**: Reduce primary database load by offloading read queries
 - **High Availability**: Continue serving reads even if primary is under maintenance
-- **Cloud-Native**: Leverage managed database replicas (AWS Aurora, Google Cloud SQL, etc.)
+- **Cloud-Native**: Leverage managed database replicas (AWS Aurora, Google Cloud SQL, AlloyDB, etc.)
 
 Quick Start
 -----------
@@ -292,7 +292,7 @@ Litestar
 .. code-block:: python
 
     from litestar import Litestar
-    from litestar.plugins.sqlalchemy import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
     from advanced_alchemy.config.routing import RoutingConfig
 
     config = SQLAlchemyAsyncConfig(
@@ -311,9 +311,13 @@ FastAPI
 
 .. code-block:: python
 
-    from fastapi import FastAPI, Depends
+    from typing import Annotated
+
+    from fastapi import Depends, FastAPI
     from sqlalchemy.ext.asyncio import AsyncSession
-    from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig, get_session
+
+    from advanced_alchemy.config.routing import RoutingConfig
+    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig
 
     config = SQLAlchemyAsyncConfig(
         routing_config=RoutingConfig(
@@ -323,9 +327,12 @@ FastAPI
     )
 
     app = FastAPI()
+    alchemy = AdvancedAlchemy(config=config, app=app)
 
     @app.get("/users")
-    async def list_users(session: AsyncSession = Depends(get_session)):
+    async def list_users(
+        session: Annotated[AsyncSession, Depends(alchemy.provide_session())],
+    ):
         repo = UserRepository(session=session)
         return await repo.list()  # Routes to replica
 
@@ -346,34 +353,59 @@ Flask
 
     db = SQLAlchemyExtension(app=app)
 
-AWS Aurora / Cloud SQL Example
--------------------------------
+Managed PostgreSQL Examples
+---------------------------
 
-AWS Aurora and Google Cloud SQL provide automatic replica endpoints:
+Managed PostgreSQL providers expose primary and read endpoints differently. Advanced Alchemy's routing config stays the same:
+put the writer endpoint in ``primary_connection_string`` and the replica or read-pool endpoints in ``read_replicas``.
 
-.. code-block:: python
+.. tab-set::
 
-    # AWS Aurora configuration
-    config = RoutingConfig(
-        primary_connection_string=(
-            "postgresql+asyncpg://user:pass@mydb-cluster.cluster-xxx.us-east-1.rds.amazonaws.com:5432/mydb"
-        ),
-        read_replicas=[
-            # Aurora reader endpoint (load-balanced across replicas)
-            "postgresql+asyncpg://user:pass@mydb-cluster.cluster-ro-xxx.us-east-1.rds.amazonaws.com:5432/mydb",
-        ],
-    )
+    .. tab-item:: Google Cloud SQL for PostgreSQL
 
-.. code-block:: python
+        Cloud SQL typically gives you one primary instance endpoint plus one endpoint per read replica.
+        Use the primary instance IP or DNS name as the writer and list each replica explicitly.
 
-    # Google Cloud SQL configuration
-    config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://user:pass@primary-ip:5432/mydb",
-        read_replicas=[
-            "postgresql+asyncpg://user:pass@replica1-ip:5432/mydb",
-            "postgresql+asyncpg://user:pass@replica2-ip:5432/mydb",
-        ],
-    )
+        .. code-block:: python
+
+            config = RoutingConfig(
+                primary_connection_string="postgresql+asyncpg://user:pass@primary-instance-ip:5432/mydb",
+                read_replicas=[
+                    "postgresql+asyncpg://user:pass@replica-1-ip:5432/mydb",
+                    "postgresql+asyncpg://user:pass@replica-2-ip:5432/mydb",
+                ],
+            )
+
+    .. tab-item:: Google AlloyDB for PostgreSQL
+
+        AlloyDB exposes a primary instance endpoint and one or more read-pool or read replica endpoints.
+        Point writes at the primary instance and route reads to the read pool.
+
+        .. code-block:: python
+
+            config = RoutingConfig(
+                primary_connection_string=(
+                    "postgresql+asyncpg://user:pass@my-primary.alloydb-xxx.gcp.cloudprovider.example:5432/mydb"
+                ),
+                read_replicas=[
+                    "postgresql+asyncpg://user:pass@my-read-pool.alloydb-xxx.gcp.cloudprovider.example:5432/mydb",
+                ],
+            )
+
+    .. tab-item:: AWS Aurora PostgreSQL
+
+        Aurora provides a cluster writer endpoint plus a reader endpoint that load-balances across replicas.
+
+        .. code-block:: python
+
+            config = RoutingConfig(
+                primary_connection_string=(
+                    "postgresql+asyncpg://user:pass@mydb-cluster.cluster-xxx.us-east-1.rds.amazonaws.com:5432/mydb"
+                ),
+                read_replicas=[
+                    "postgresql+asyncpg://user:pass@mydb-cluster.cluster-ro-xxx.us-east-1.rds.amazonaws.com:5432/mydb",
+                ],
+            )
 
 Best Practices
 --------------
@@ -439,6 +471,6 @@ See Also
 --------
 
 - :doc:`/reference/routing` - API Reference
-- :doc:`/usage/repositories` - Repository Pattern
+- :doc:`/usage/repositories/index` - Repository Pattern
 - :doc:`/usage/services` - Service Layer
 - :doc:`/reference/config/asyncio` - Async Configuration

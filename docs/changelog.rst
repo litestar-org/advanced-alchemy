@@ -3,6 +3,228 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.9.0
+    :date: 2026-03-24
+
+    .. change:: add SQLModel compatibility
+        :type: feature
+        :pr: 686
+
+        SQLModel ``table=True`` models now work with Advanced Alchemy repositories and
+        services without requiring Advanced Alchemy base classes. This release also adds
+        ``model_to_dict()`` and updates schema detection so mapped SQLModel objects are
+        handled as ORM models instead of transfer schemas.
+
+    .. change:: add pre-release version support
+        :type: feature
+        :pr: 678
+
+        Adds PEP 440 pre-release support to the release workflow. ``bump-my-version``,
+        ``make pre-release``, and ``tools/prepare_release.py`` now understand alpha,
+        beta, and release-candidate versions and can mark GitHub draft releases as
+        prereleases.
+
+    .. change:: add composite primary key support
+        :type: feature
+        :pr: 640
+        :issue: 189
+
+        Adds composite primary key support throughout the repository and service layers.
+        Tuple and mapping primary-key inputs are now supported for lookup and delete
+        operations, including MSSQL-compatible filtering for bulk operations.
+
+        Closes #189
+
+    .. change:: refactor serializers & code cleanup
+        :type: feature
+        :pr: 661
+        :issue: 606, 651
+
+        Refactors repository and cache serialization helpers into shared utilities,
+        reduces duplication in the repository layer, and fixes related issues around
+        exception classification, optional Alembic imports, and DTO descriptor
+        inspection.
+
+    .. change:: add support .csv files for open_fixture
+        :type: feature
+        :pr: 615
+        :issue: 536
+
+        Add comprehensive CSV support to ``open_fixture()`` and
+        ``open_fixture_async()``, expanding fixture loading beyond JSON to include
+        comma-separated value files.
+
+        Closes #536
+
+    .. change:: initial support for dogpile caching
+        :type: feature
+        :pr: 636
+
+        Introduce support for dogpile caching, including a new caching configuration and a null region implementation for scenarios where caching is disabled or dogpile.cache is not installed. Add unit tests to validate the caching behavior and configuration options.
+
+
+    .. change:: add read/write replica routing support
+        :type: feature
+        :pr: 635
+
+        Adds automatic query routing between primary and replica database
+        connections. ``RoutingSession`` and ``RoutingAsyncSession`` now route
+        reads to replicas, keep writes on the primary, support explicit
+        ``primary_context()`` and ``replica_context()`` overrides, and integrate
+        with the Litestar, FastAPI, Starlette, Flask, and Sanic extensions.
+
+    .. change:: add NullFilter/NotNullFilter and with_for_update to get_one methods
+        :type: feature
+        :pr: 638
+        :issue: 187, 488, 623
+
+        Adds ``NullFilter`` and ``NotNullFilter`` for ``IS NULL`` and ``IS NOT
+        NULL`` conditions, and extends ``get_one()`` and ``get_one_or_none()``
+        in the repository and service layers with ``with_for_update`` support
+        for API parity with ``get()``.
+
+        Closes #488
+        Closes #623
+
+    .. change:: add `was_attribute_set()` guard to relationship loop in `update()`
+        :type: bugfix
+        :pr: 685
+
+        Fixes partial updates with model instances where SQLAlchemy-initialized
+        relationship attributes could be mistaken for explicit values and
+        written back to the database. The relationship update loop now uses the
+        same ``was_attribute_set()`` guard as the column loop so only
+        explicitly assigned relationship values are copied during ``update()``.
+
+        Closes #684
+
+
+    .. change:: nullable relationship detection and FileObject nested metadata
+        :type: bugfix
+        :pr: 679
+        :issue: 227, 676
+
+        Fixes nullable one-to-one DTO detection by correctly handling inverse
+        scalar relationships, and fixes ``FileObject`` uploads by JSON
+        serializing non-string obstore metadata values before they are passed to
+        ``put()``.
+
+        Closes #227
+        Closes #676
+
+    .. change:: make `model_from_dict` model parameter positional-only
+        :type: bugfix
+        :pr: 673
+        :issue: 668
+
+        Makes the ``model`` parameter positional-only in ``model_from_dict()``
+        so payloads containing a ``"model"`` key do not conflict with the
+        function signature. Service-layer call sites now use the positional
+        form.
+
+        Closes #668
+
+    .. change:: use typing.List to avoid list() method shadowing on Python 3.14
+        :type: bugfix
+        :pr: 674
+        :issue: 659
+
+        Replaces bare ``list[...]`` annotations with ``typing.List[...]`` in
+        classes that also define a ``list()`` method. This avoids Python 3.14
+        lazy annotation evaluation resolving ``list`` to the method instead of
+        the builtin type.
+
+        Closes #659
+
+    .. change:: isolate in-filter query params for multi-field depende…
+        :type: bugfix
+        :pr: 667
+        :issue: 666
+
+        Fixes a Litestar dependency collision where multiple ``*In`` query
+        parameters generated by ``create_service_dependencies()`` could
+        overwrite each other. Each generated in/not-in filter provider now
+        binds its own query parameter name so fields like ``firstNameIn`` and
+        ``lastNameIn`` remain independent.
+
+    .. change:: Ensure ORM descriptor fields are not evaluated during DTO creation
+        :type: bugfix
+        :pr: 664
+        :issue: 578, 646
+
+        Fix #646.
+
+        When processing property fields on SQLAlchemy models for the Litestar DTO, there was sometimes unexpected behaviour caused by the inspecting code evaluating the ORM descriptors such as `hybrid_property`.
+
+        Fix this behaviour by skipping all known ORM fields (as reported by the ORM), and not using `inspect.getmembers`.
+
+    .. change:: recursively convert nested dicts in model_from_dict
+        :type: bugfix
+        :pr: 637
+        :issue: 556
+
+        Fixes a regression where ``service.create()`` failed when relationship
+        data was provided as nested dictionaries. ``model_from_dict()`` now
+        detects relationship attributes and recursively converts nested
+        dictionaries or lists of dictionaries into the appropriate related model
+        instances while preserving existing non-nested behavior.
+
+        Closes #556
+
+    .. change:: add click compatibility layer for CLI alias support
+        :type: bugfix
+        :pr: 645
+        :issue: 644
+
+        Adds a Click compatibility layer so CLI alias support works with plain
+        Click and with older ``rich-click`` versions that do not accept the
+        ``aliases`` parameter on command groups. The new helper provides
+        ``AliasedGroup`` and wrapper decorators used across the core, FastAPI,
+        Flask, and Litestar CLI integrations.
+
+    .. change:: resolve session lifecycle timing with generator dependencies
+        :type: bugfix
+        :pr: 648
+        :issue: 647
+
+        Fixes the FastAPI and Starlette session lifecycle conflict that could
+        leave asyncpg connections unreturned to the pool when generator-based
+        ``provide_service()`` dependencies were cleaned up after middleware had
+        already closed the session. Generator-managed sessions are now marked so
+        middleware records response status but skips cleanup, allowing the
+        generator to handle commit, rollback, and close at the correct time.
+
+        Closes #647
+
+    .. change:: complete SQLAlchemy inheritance pattern support (STI, JTI, CTI)
+        :type: bugfix
+        :pr: 611
+
+        Completes SQLAlchemy inheritance handling in ``CommonTableAttributes`` so
+        single-table, joined-table, and concrete-table inheritance patterns are
+        all supported correctly. The implementation now detects STI subclasses,
+        suppresses table generation for them when appropriate, and preserves
+        proper table naming behavior for joined and concrete inheritance models.
+
+        Supersedes PR #600
+
+    .. change:: add a call `set_async_context` to `_get_session_from_request` in Sanic extension
+        :type: bugfix
+        :pr: 643
+
+        Sanic now mirrors the other framework extensions by calling
+        ``set_async_context()`` in ``_get_session_from_request()`` after loading
+        or creating the session. This keeps async-context detection consistent
+        across integrations.
+
+    .. change:: linting changes related to latest Starlette
+        :type: bugfix
+        :pr: 634
+
+        Update the codebase to align with the latest changes in Starlette, ensuring compatibility and addressing type checking issues.
+
+
+
 .. changelog:: 1.8.2
     :date: 2025-12-12
 
@@ -112,8 +334,6 @@
         :issue: 519
 
         Adds support for SQLAlchemy func() expressions in filter classes to eliminate type checker errors when using database functions like `func.random()` or `func.lower()`
-
-        **Changes**
 
         - Updated `OrderBy`, `BeforeAfter`, `OnBeforeAfter`, `CollectionFilter`, `NotInCollectionFilter`, `ComparisonFilter`
         - Enhanced `_get_instrumented_attr()` to handle new types
@@ -487,9 +707,10 @@
         :pr: 450
         :issue: 449
 
-        ## fixes #449 relationship updated on models:
-        - AuthorModel
-        - BookModel
+        Updates the ``litestar_service.py`` example models to correctly handle
+        relationship updates for ``AuthorModel`` and ``BookModel``.
+
+        Fixes #449
 
     .. change:: `create_service_provider` supports any configuration now
         :type: bugfix
