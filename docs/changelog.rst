@@ -335,8 +335,6 @@
 
         Adds support for SQLAlchemy func() expressions in filter classes to eliminate type checker errors when using database functions like `func.random()` or `func.lower()`
 
-        **Changes**
-
         - Updated `OrderBy`, `BeforeAfter`, `OnBeforeAfter`, `CollectionFilter`, `NotInCollectionFilter`, `ComparisonFilter`
         - Enhanced `_get_instrumented_attr()` to handle new types
         - Mock repositories extract field names from `InstrumentedAttribute`, raise helpful error for func expressions (can't execute SQL in-memory)
