@@ -10,6 +10,16 @@ SHELL := /bin/bash
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
+DOC_TEST_FILES := \
+	docs/usage/modeling/inheritance.rst \
+	docs/usage/modeling/sqlmodel.rst \
+	docs/usage/modeling/types.rst \
+	docs/usage/repositories/advanced.rst \
+	docs/usage/repositories/basics.rst \
+	docs/usage/repositories/filtering.rst \
+	docs/usage/database_seeding.rst \
+	docs/usage/services.rst
+
 # -----------------------------------------------------------------------------
 # Display Formatting and Colors
 # -----------------------------------------------------------------------------
@@ -142,16 +152,22 @@ clean:                                              ## Cleanup temporary build a
 # Testing and Quality Checks
 # =============================================================================
 
+.PHONY: docs-test
+docs-test:                                         ## Run executable documentation examples
+	@echo "${INFO} Running executable documentation examples... 📚"
+	@uv run pytest $(DOC_TEST_FILES) --quiet
+	@echo "${OK} Documentation examples passed ✨"
+
 .PHONY: test
 test:                                              ## Run the tests
 	@echo "${INFO} Running test cases... 🧪"
-	@uv run pytest --dist "loadgroup" -m "" tests -n 2 --quiet
+	@uv run pytest --dist "loadgroup" -m "" -n 2 --quiet
 	@echo "${OK} Tests passed ✨"
 
 .PHONY: coverage
 coverage:                                          ## Run tests with coverage report
 	@echo "${INFO} Running tests with coverage... 📊"
-	@uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 2 --quiet
+	@uv run pytest --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 2 --quiet
 	@uv run coverage html >/dev/null 2>&1
 	@echo "${OK} Coverage report generated ✨"
 

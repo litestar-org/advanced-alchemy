@@ -6,6 +6,17 @@ from sqlalchemy.orm import sessionmaker
 from sybil import Sybil
 from sybil.parsers.rest import PythonCodeBlockParser
 
+EXECUTABLE_DOCS = (
+    "usage/modeling/inheritance.rst",
+    "usage/modeling/sqlmodel.rst",
+    "usage/modeling/types.rst",
+    "usage/repositories/advanced.rst",
+    "usage/repositories/basics.rst",
+    "usage/repositories/filtering.rst",
+    "usage/database_seeding.rst",
+    "usage/services.rst",
+)
+
 
 @pytest.fixture(name="engine")
 async def engine_fixture() -> AsyncGenerator[AsyncEngine, None]:
@@ -25,6 +36,6 @@ async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession
 
 pytest_collect_file = Sybil(
     parsers=[PythonCodeBlockParser()],
-    patterns=["*.rst", "*.md"],
+    patterns=EXECUTABLE_DOCS,
     fixtures=["db_session", "engine"],
 ).pytest()

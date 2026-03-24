@@ -4,6 +4,31 @@ Filtering and Pagination
 
 Advanced Alchemy provides a powerful and flexible system for filtering and paginating your database queries.
 
+.. code-block:: python
+
+    import datetime
+    from typing import Optional
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntAuditBase
+    from advanced_alchemy.filters import CollectionFilter, LimitOffset, NotNullFilter, NullFilter, SearchFilter
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
+
+    class FilteringPost(BigIntAuditBase):
+        __tablename__ = "filtering_post"
+
+        title: Mapped[str]
+        content: Mapped[str]
+        published: Mapped[bool] = mapped_column(default=False)
+        published_at: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
+
+
+    class FilteringPostRepository(SQLAlchemyAsyncRepository[FilteringPost]):
+        model_type = FilteringPost
+
 Basic Filtering
 ---------------
 
@@ -11,14 +36,11 @@ You can pass SQLAlchemy expressions directly to repository methods like ``list``
 
 .. code-block:: python
 
-    import datetime
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    async def get_recent_posts(db_session: AsyncSession) -> list[Post]:
-        repository = PostRepository(session=db_session)
+    async def get_recent_posts(db_session: AsyncSession) -> list[FilteringPost]:
+        repository = FilteringPostRepository(session=db_session)
         return await repository.list(
-            Post.published.is_(True),
-            Post.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7))
+            FilteringPost.published.is_(True),
+            FilteringPost.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7)),
         )
 
 Filter Constructs
@@ -33,10 +55,9 @@ Filters records where a column's value is (or is not) in a collection of values.
 
 .. code-block:: python
 
-    from advanced_alchemy.filters import CollectionFilter
-
-    # Get posts with specific IDs
-    posts = await repository.list(CollectionFilter(field_name="id", values=[1, 2, 3]))
+    async def get_posts_by_ids(db_session: AsyncSession, post_ids: list[int]) -> list[FilteringPost]:
+        repository = FilteringPostRepository(session=db_session)
+        return await repository.list(CollectionFilter(field_name="id", values=post_ids))
 
 Search Filter
 ~~~~~~~~~~~~~
@@ -45,10 +66,9 @@ Provides basic string search capabilities.
 
 .. code-block:: python
 
-    from advanced_alchemy.filters import SearchFilter
-
-    # Case-insensitive search for posts containing "sqlalchemy" in the title
-    posts = await repository.list(SearchFilter(field_name="title", value="sqlalchemy", ignore_case=True))
+    async def search_posts(db_session: AsyncSession, query: str) -> list[FilteringPost]:
+        repository = FilteringPostRepository(session=db_session)
+        return await repository.list(SearchFilter(field_name="title", value=query, ignore_case=True))
 
 Null and Not Null Filters
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -59,13 +79,14 @@ Filters records based on whether a column is ``NULL`` or ``NOT NULL``.
 
 .. code-block:: python
 
-    from advanced_alchemy.filters import NullFilter, NotNullFilter
+    async def get_unpublished_posts(db_session: AsyncSession) -> list[FilteringPost]:
+        repository = FilteringPostRepository(session=db_session)
+        return await repository.list(NullFilter(field_name="published_at"))
 
-    # Get posts that have not been published yet (published_at is NULL)
-    unpublished = await repository.list(NullFilter(field_name="published_at"))
 
-    # Get posts that have been published
-    published = await repository.list(NotNullFilter(field_name="published_at"))
+    async def get_published_posts(db_session: AsyncSession) -> list[FilteringPost]:
+        repository = FilteringPostRepository(session=db_session)
+        return await repository.list(NotNullFilter(field_name="published_at"))
 
 Pagination
 ----------
@@ -74,18 +95,16 @@ The ``LimitOffset`` filter is used for standard limit/offset pagination. The ``l
 
 .. code-block:: python
 
-    from advanced_alchemy.filters import LimitOffset
-
     async def get_paginated_posts(
         db_session: AsyncSession,
         page: int = 1,
-        page_size: int = 20
-    ) -> tuple[list[Post], int]:
-        repository = PostRepository(session=db_session)
+        page_size: int = 20,
+    ) -> tuple[list[FilteringPost], int]:
+        repository = FilteringPostRepository(session=db_session)
         offset = (page - 1) * page_size
 
         return await repository.list_and_count(
-            LimitOffset(offset=offset, limit=page_size)
+            LimitOffset(offset=offset, limit=page_size),
         )
 
 Explicit Routing
@@ -95,5 +114,6 @@ All read and count operations support an optional ``bind_group`` parameter for e
 
 .. code-block:: python
 
-    # Query from a specific bind group
-    posts = await repository.list(bind_group="analytics")
+    async def get_posts_from_analytics_replica(db_session: AsyncSession) -> list[FilteringPost]:
+        repository = FilteringPostRepository(session=db_session)
+        return await repository.list(bind_group="analytics")

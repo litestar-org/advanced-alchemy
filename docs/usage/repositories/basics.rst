@@ -46,6 +46,24 @@ Let's implement a basic repository for a blog post model:
 
 .. code-block:: python
 
+    from advanced_alchemy.base import BigIntAuditBase
+    from advanced_alchemy.mixins import SlugKey
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    class Post(BigIntAuditBase):
+        __tablename__ = "post"
+
+        title: Mapped[str]
+        content: Mapped[str]
+        published: Mapped[bool] = mapped_column(default=False)
+
+    class Tag(BigIntAuditBase, SlugKey):
+        __tablename__ = "tag"
+
+        name: Mapped[str]
+
+.. code-block:: python
+
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
     from sqlalchemy.ext.asyncio import AsyncSession
 

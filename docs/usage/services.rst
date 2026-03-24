@@ -2,9 +2,9 @@
 Services
 ========
 
-Services in Advanced Alchemy build upon repositories to provide higher-level business logic, data transformation,
-and schema validation. While repositories handle raw database operations, services handle the application's
-business rules and data transformation needs.
+Services in Advanced Alchemy build on repositories to provide higher-level business logic, data transformation,
+and schema validation. While repositories handle raw database operations, services coordinate application rules
+and schema conversion.
 
 Understanding Services
 ----------------------
@@ -21,38 +21,93 @@ Services provide:
 
 .. note::
 
-    The following example assumes the existence of the
-    ``Post`` model defined in :ref:`many_to_many_relationships` and the
-    ``Tag`` model defined in :ref:`using_unique_mixin`.
+    The examples below define a minimal ``Post`` / ``Tag`` model inline so the service examples stay self-contained.
 
 Basic Service Usage
 -------------------
 
-Let's build upon our blog example by creating services for posts:
+Let's build upon a blog example by creating services for posts:
 
 .. code-block:: python
 
     import datetime
-    from typing import Optional
+    from typing import Hashable, Optional
 
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
+    from sqlalchemy import Column, ForeignKey, Table
+    from sqlalchemy.orm import Mapped, mapped_column, relationship
+    from sqlalchemy.sql.elements import ColumnElement
 
-    # Pydantic schemas for validation
-    class PostCreate(BaseModel):
+    from advanced_alchemy.base import BigIntAuditBase, orm_registry
+    from advanced_alchemy.mixins import SlugKey, UniqueMixin
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemyAsyncSlugRepository
+    from advanced_alchemy.service import (
+        SQLAlchemyAsyncRepositoryService,
+        is_dict_with_field,
+        is_dict_without_field,
+        schema_dump,
+    )
+    from advanced_alchemy.service.typing import ModelDictT
+    from advanced_alchemy.utils.text import slugify
+
+    blog_post_tag = Table(
+        "blog_service_post_tag",
+        orm_registry.metadata,
+        Column("post_id", ForeignKey("blog_service_post.id", ondelete="CASCADE"), primary_key=True),
+        Column("tag_id", ForeignKey("blog_service_tag.id", ondelete="CASCADE"), primary_key=True),
+    )
+
+
+    class BlogPost(BigIntAuditBase):
+        __tablename__ = "blog_service_post"
+
+        title: Mapped[str] = mapped_column(index=True)
+        content: Mapped[str]
+        published: Mapped[bool] = mapped_column(default=False)
+        tags: Mapped[list["BlogTag"]] = relationship(
+            secondary=blog_post_tag,
+            back_populates="posts",
+            lazy="selectin",
+        )
+
+
+    class BlogTag(BigIntAuditBase, SlugKey, UniqueMixin):
+        __tablename__ = "blog_service_tag"
+
+        name: Mapped[str] = mapped_column(unique=True, index=True)
+        posts: Mapped[list["BlogPost"]] = relationship(
+            secondary=blog_post_tag,
+            back_populates="tags",
+            viewonly=True,
+        )
+
+        @classmethod
+        def unique_hash(cls, name: str, slug: Optional[str] = None) -> Hashable:
+            return slugify(name)
+
+        @classmethod
+        def unique_filter(
+            cls,
+            name: str,
+            slug: Optional[str] = None,
+        ) -> ColumnElement[bool]:
+            return cls.slug == slugify(name)
+
+
+    class BlogPostCreate(BaseModel):
         title: str
         content: str
-        tag_names: list[str]
+        tags: list[str] = Field(default_factory=list)
 
 
-    class PostUpdate(BaseModel):
+    class BlogPostUpdate(BaseModel):
         title: Optional[str] = None
         content: Optional[str] = None
         published: Optional[bool] = None
+        tags: Optional[list[str]] = None
 
 
-    class PostResponse(BaseModel):
+    class BlogPostResponse(BaseModel):
         id: int
         title: str
         content: str
@@ -63,13 +118,11 @@ Let's build upon our blog example by creating services for posts:
         model_config = {"from_attributes": True}
 
 
-    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
-        """Post Service."""
+    class BlogPostService(SQLAlchemyAsyncRepositoryService[BlogPost]):
+        """Post service."""
 
-        class Repo(SQLAlchemyAsyncRepository[Post]):
-            """Post repository."""
-
-            model_type = Post
+        class Repo(SQLAlchemyAsyncRepository[BlogPost]):
+            model_type = BlogPost
 
         repository_type = Repo
 
@@ -80,37 +133,39 @@ Services provide high-level methods for common operations:
 
 .. code-block:: python
 
-    async def create_post(post_service: PostService, data: PostCreate) -> PostResponse:
+    async def create_post(post_service: BlogPostService, data: BlogPostCreate) -> BlogPostResponse:
         post = await post_service.create(data=data, auto_commit=True)
-        return post_service.to_schema(post, schema_type=PostResponse)
+        return post_service.to_schema(post, schema_type=BlogPostResponse)
 
 
     async def update_post(
-        post_service: PostService,
+        post_service: BlogPostService,
         post_id: int,
-        data: PostUpdate,
-    ) -> PostResponse:
-        post = await post_service.update(item_id=post_id, data=data, auto_commit=True)
-        return post_service.to_schema(post, schema_type=PostResponse)
+        data: BlogPostUpdate,
+    ) -> BlogPostResponse:
+        post = await post_service.update(data=data, item_id=post_id, auto_commit=True)
+        return post_service.to_schema(post, schema_type=BlogPostResponse)
 
 .. versionadded:: 1.9.0
 
-Advanced Alchemy's service layer automatically handles recursive model creation from nested dictionaries. When you pass a dictionary containing nested dictionaries that match a model's relationships, the service will automatically instantiate the related models.
+Advanced Alchemy's service layer automatically handles recursive model creation from nested dictionaries. When you pass a
+dictionary containing nested dictionaries that match a model's relationships, the service will instantiate the related models.
 
 .. code-block:: python
 
-    # This dictionary contains nested data for a 'profile' relationship
-    user_data = {
-        "username": "cody",
-        "email": "cody@litestar.dev",
-        "profile": {
-            "bio": "Software Engineer",
-            "twitter": "@cofin"
-        }
-    }
+    from typing import Any
 
-    # The service will automatically create the Profile instance when creating the User
-    user = await user_service.create(data=user_data)
+
+    async def create_user_with_profile(user_service: Any) -> Any:
+        user_data = {
+            "username": "cody",
+            "email": "cody@litestar.dev",
+            "profile": {
+                "bio": "Software Engineer",
+                "twitter": "@cofin",
+            },
+        }
+        return await user_service.create(data=user_data)
 
 Row Locking (FOR UPDATE)
 ************************
@@ -121,8 +176,11 @@ Service retrieval methods like ``get`` support the ``with_for_update`` parameter
 
 .. code-block:: python
 
-    # Lock the user record for the duration of the transaction
-    user = await user_service.get(item_id=user_id, with_for_update=True)
+    from typing import Any
+
+
+    async def get_user_for_update(user_service: Any, user_id: Any) -> Any:
+        return await user_service.get(item_id=user_id, with_for_update=True)
 
 Composite Primary Keys
 **********************
@@ -132,81 +190,70 @@ Pass primary key values as tuples or dictionaries when using ``get``, ``update``
 
 .. code-block:: python
 
-    # Get by composite key (tuple format)
-    user_role = await user_role_service.get((user_id, role_id))
+    from typing import Any, Sequence
 
-    # Update by composite key (dict format)
-    updated = await user_role_service.update(
-        data={"permissions": "admin"},
-        item_id={"user_id": 1, "role_id": 5},
-    )
 
-    # Delete multiple by composite keys
-    await user_role_service.delete_many([(1, 5), (1, 6), (2, 5)])
+    async def update_user_role_permissions(user_role_service: Any, user_id: int, role_id: int) -> Any:
+        _current = await user_role_service.get((user_id, role_id))
+        return await user_role_service.update(
+            data={"permissions": "admin"},
+            item_id={"user_id": user_id, "role_id": role_id},
+        )
+
+
+    async def delete_user_roles(user_role_service: Any) -> Sequence[Any]:
+        return await user_role_service.delete_many([(1, 5), (1, 6), (2, 5)])
 
 See :ref:`composite-primary-keys` in the Repositories documentation for more details on supported formats.
 
 Complex Operations
--------------------
+------------------
 
 Services can handle complex business logic involving multiple models.
 The code below shows a service coordinating posts and tags.
 
 .. code-block:: python
 
-    import datetime
-    from typing import Any
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, schema_dump
-    from advanced_alchemy.service.typing import ModelDictT
-    from advanced_alchemy.filters import LimitOffset
-    from advanced_alchemy.service.pagination import OffsetPagination
-    from advanced_alchemy.utils.text import slugify
-
-    class PostService(SQLAlchemyAsyncRepositoryService[Post]):
+    class TaggedBlogPostService(SQLAlchemyAsyncRepositoryService[BlogPost]):
         """Post service for handling post operations with tag management."""
 
-        class Repo(SQLAlchemyAsyncRepository[Post]):
-            """Post repository."""
+        class Repo(SQLAlchemyAsyncRepository[BlogPost]):
+            model_type = BlogPost
 
-            model_type = Post
-
-        loader_options = [Post.tags]
+        loader_options = [BlogPost.tags]
         repository_type = Repo
         match_fields = ["title"]
 
-        async def to_model_on_create(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
-            """Convert and enrich data for post creation, handling tags."""
+        async def to_model_on_create(self, data: "ModelDictT[BlogPost]") -> "ModelDictT[BlogPost]":
             data = schema_dump(data)
             tags_added = data.pop("tags", [])
-            data = await super().to_model(data)
+            post = await super().to_model(data)
 
             if tags_added:
-                data.tags.extend(
+                post.tags.extend(
                     [
-                        await Tag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
+                        await BlogTag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
                         for tag in tags_added
                     ],
                 )
-            return data
+            return post
 
-        async def to_model_on_update(self, data: ModelDictT[Post]) -> ModelDictT[Post]:
-            """Convert and enrich data for post update, handling tags."""
+        async def to_model_on_update(self, data: "ModelDictT[BlogPost]") -> "ModelDictT[BlogPost]":
             data = schema_dump(data)
             tags_updated = data.pop("tags", [])
             post = await super().to_model(data)
 
-            if tags_updated:
+            if tags_updated is not None:
                 existing_tags = [tag.name for tag in post.tags]
                 tags_to_remove = [tag for tag in post.tags if tag.name not in tags_updated]
                 tags_to_add = [tag for tag in tags_updated if tag not in existing_tags]
 
-                for tag_rm in tags_to_remove:
-                    post.tags.remove(tag_rm)
+                for tag_to_remove in tags_to_remove:
+                    post.tags.remove(tag_to_remove)
 
                 post.tags.extend(
                     [
-                        await Tag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
+                        await BlogTag.as_unique_async(self.repository.session, name=tag, slug=slugify(tag))
                         for tag in tags_to_add
                     ],
                 )
@@ -220,40 +267,31 @@ Here's an example service for managing tags with automatic slug generation:
 
 .. code-block:: python
 
-    from advanced_alchemy.repository import SQLAlchemyAsyncSlugRepository
-    from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, schema_dump, is_dict_without_field, is_dict_with_field
-    from advanced_alchemy.service.typing import ModelDictT
-
-    class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
+    class BlogTagService(SQLAlchemyAsyncRepositoryService[BlogTag]):
         """Tag service with automatic slug generation."""
 
-        class Repo(SQLAlchemyAsyncSlugRepository[Tag]):
-            """Tag repository."""
-
-            model_type = Tag
+        class Repo(SQLAlchemyAsyncSlugRepository[BlogTag]):
+            model_type = BlogTag
 
         repository_type = Repo
         match_fields = ["name"]
 
-        async def to_model_on_create(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
-            """Generate slug on tag creation if not provided."""
+        async def to_model_on_create(self, data: "ModelDictT[BlogTag]") -> "ModelDictT[BlogTag]":
             data = schema_dump(data)
             if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
                 data["slug"] = await self.repository.get_available_slug(data["name"])
             return data
 
-        async def to_model_on_update(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
-            """Update slug if name changes."""
+        async def to_model_on_update(self, data: "ModelDictT[BlogTag]") -> "ModelDictT[BlogTag]":
             data = schema_dump(data)
             if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
                 data["slug"] = await self.repository.get_available_slug(data["name"])
             return data
 
-        async def to_model_on_upsert(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
-            """Generate slug on upsert if needed."""
+        async def to_model_on_upsert(self, data: "ModelDictT[BlogTag]") -> "ModelDictT[BlogTag]":
             data = schema_dump(data)
-            if is_dict_without_field(data, "slug") and (tag_name := data.get("name")) is not None:
-                data["slug"] = await self.repository.get_available_slug(tag_name)
+            if is_dict_without_field(data, "slug") and is_dict_with_field(data, "name"):
+                data["slug"] = await self.repository.get_available_slug(data["name"])
             return data
 
 Schema Integration
@@ -266,10 +304,7 @@ Pydantic Models
 
 .. code-block:: python
 
-    from pydantic import BaseModel
-    from typing import Optional
-
-    class PostSchema(BaseModel):
+    class BlogPostSchema(BaseModel):
         id: int
         title: str
         content: str
@@ -277,43 +312,54 @@ Pydantic Models
 
         model_config = {"from_attributes": True}
 
-    # Convert database model to Pydantic schema
-    post_data = post_service.to_schema(post_model, schema_type=PostSchema)
+
+    def to_pydantic_schema(post_service: BlogPostService, post_model: BlogPost) -> BlogPostSchema:
+        return post_service.to_schema(post_model, schema_type=BlogPostSchema)
 
 Msgspec Structs
 ***************
 
 .. code-block:: python
 
-    from msgspec import Struct
-    from typing import Optional
+    try:
+        from msgspec import Struct
+    except ModuleNotFoundError:  # pragma: no cover - optional dependency in docs examples
+        class Struct:  # type: ignore[no-redef]
+            pass
 
-    class PostStruct(Struct):
+
+    class BlogPostStruct(Struct):
         id: int
         title: str
         content: str
         published: bool
 
-    # Convert database model to Msgspec struct
-    post_data = post_service.to_schema(post_model, schema_type=PostStruct)
+
+    def to_msgspec_schema(post_service: BlogPostService, post_model: BlogPost) -> BlogPostStruct:
+        return post_service.to_schema(post_model, schema_type=BlogPostStruct)
 
 Attrs Classes
 *************
 
 .. code-block:: python
 
-    from attrs import define
-    from typing import Optional
+    try:
+        from attrs import define
+    except ModuleNotFoundError:  # pragma: no cover - optional dependency in docs examples
+        def define(cls):  # type: ignore[misc]
+            return cls
+
 
     @define
-    class PostAttrs:
+    class BlogPostAttrs:
         id: int
         title: str
         content: str
         published: bool
 
-    # Convert database model to attrs class
-    post_data = post_service.to_schema(post_model, schema_type=PostAttrs)
+
+    def to_attrs_schema(post_service: BlogPostService, post_model: BlogPost) -> BlogPostAttrs:
+        return post_service.to_schema(post_model, schema_type=BlogPostAttrs)
 
 .. note::
 

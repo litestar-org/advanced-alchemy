@@ -31,22 +31,26 @@ Repositories automatically detect SQLModel classes and handle them correctly dur
 
 .. code-block:: python
 
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async_session_factory = sessionmaker(engine, class_=AsyncSession)
+    async def create_and_list_heroes() -> list[Hero]:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async_session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    async with async_session_factory() as session:
-        repo = HeroRepository(session=session)
+        async with engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
 
-        # Create
-        hero = Hero(name="Deadpond", secret_name="Dive Wilson")
-        await repo.add(hero)
-        await session.commit()
+        try:
+            async with async_session_factory() as session:
+                repo = HeroRepository(session=session)
 
-        # List
-        heroes = await repo.list()
+                hero = Hero(name="Deadpond", secret_name="Dive Wilson")
+                await repo.add(hero)
+                await session.commit()
+
+                return await repo.list()
+        finally:
+            await engine.dispose()
 
 Limitations
 -----------

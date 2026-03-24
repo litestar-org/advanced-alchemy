@@ -1,7 +1,7 @@
 import contextlib
 import logging
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from google.cloud import spanner  # pyright: ignore
@@ -12,8 +12,6 @@ from pytest_databases.docker.mysql import MySQLService
 from pytest_databases.docker.oracle import OracleService
 from pytest_databases.docker.postgres import PostgresService
 from pytest_databases.docker.spanner import SpannerService
-from sybil import Sybil
-from sybil.parsers.rest import PythonCodeBlockParser
 
 if TYPE_CHECKING:
     pass
@@ -249,13 +247,3 @@ def spanner_url(
     return dsn.format(
         project=spanner_service.project, instance=spanner_service.instance_name, database=spanner_service.database_name
     )
-
-
-def pytest_collect_file(parent: Any, file_path: Any) -> Any:
-    if file_path.suffix in (".rst", ".md") and "docs" in file_path.parts:
-        return Sybil(
-            parsers=[PythonCodeBlockParser()],
-            patterns=["*.rst", "*.md"],
-            fixtures=["db_session", "engine"],
-        ).pytest()(parent, file_path)
-    return None

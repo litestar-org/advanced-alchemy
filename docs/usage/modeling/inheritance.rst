@@ -57,6 +57,8 @@ In JTI, each class in the hierarchy is mapped to its own table. Sub-tables conta
 
 .. code-block:: python
 
+    from uuid import UUID
+
     from sqlalchemy import ForeignKey
     from sqlalchemy.orm import Mapped, mapped_column
     from advanced_alchemy.base import UUIDAuditBase
@@ -109,16 +111,20 @@ Advanced Alchemy's repositories work seamlessly with inheritance. You can create
 
 .. code-block:: python
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
     class EmployeeRepository(SQLAlchemyAsyncRepository[Employee]):
         model_type = Employee
 
-    # This will return Managers, Engineers, and base Employees
-    all_employees = await repo.list()
+    async def list_employees(db_session: AsyncSession) -> list[Employee]:
+        repository = EmployeeRepository(session=db_session)
+        return await repository.list()
 
     class ManagerRepository(SQLAlchemyAsyncRepository[Manager]):
         model_type = Manager
 
-    # This will only return Managers
-    only_managers = await manager_repo.list()
+    async def list_managers(db_session: AsyncSession) -> list[Manager]:
+        repository = ManagerRepository(session=db_session)
+        return await repository.list()

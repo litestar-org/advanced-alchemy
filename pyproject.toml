@@ -265,7 +265,7 @@ markers = [
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
 ]
-testpaths = ["tests"]
+testpaths = ["tests", "docs"]
 
 [tool.coverage.run]
 branch = true
