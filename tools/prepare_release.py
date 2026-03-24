@@ -19,6 +19,9 @@ import msgspec
 _polar = "[Polar.sh](https://polar.sh/litestar-org)"
 _open_collective = "[OpenCollective](https://opencollective.com/litestar)"
 _github_sponsors = "[GitHub Sponsors](https://github.com/sponsors/litestar-org/)"
+_RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+_DEFAULT_HTTP_TIMEOUT = httpx.Timeout(timeout=10.0, connect=10.0, read=30.0)
+_MAX_HTTP_RETRIES = 3
 
 
 class PullRequest(msgspec.Struct, kw_only=True):
@@ -72,11 +75,11 @@ class ReleaseInfo:
         return f"https://github.com/litestar-org/advanced-alchemy/compare/{self.base}...{self.release_tag}"
 
 
-def _pr_number_from_commit(comp: Comp) -> Optional[int]:
+def _pr_number_from_commit_message(message: str) -> Optional[int]:
     # this is an ugly hack, but it appears to actually be the most reliably way to
     # extract the most "reliable" way to extract the info we want from GH ¯\_(ツ)_/¯
-    message_head = comp.commit.message.split("\n\n")[0]
-    match = re.search(r"\(#(\d+)\)$", message_head)
+    message_head = message.split("\n\n", maxsplit=1)[0]
+    match = re.search(r"\(#(\d+)\)$", message_head) or re.search(r"Merge pull request #(\d+)", message_head)
     if not match:
         print(f"Could not find PR number in {message_head}")  # noqa: T201
     return int(match[1]) if match else None
@@ -92,7 +95,8 @@ class _Thing:
         self._base_client = httpx.AsyncClient(
             headers={
                 "Authorization": f"Bearer {gh_token}",
-            }
+            },
+            timeout=_DEFAULT_HTTP_TIMEOUT,
         )
         self._api_client = httpx.AsyncClient(
             headers={
@@ -101,7 +105,55 @@ class _Thing:
                 "Accept": "application/vnd.github+json",
             },
             base_url="https://api.github.com/repos/litestar-org/advanced-alchemy/",
+            timeout=_DEFAULT_HTTP_TIMEOUT,
         )
+
+    async def _request_with_retries(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs: object,
+    ) -> httpx.Response:
+        last_error: Optional[BaseException] = None
+        for attempt in range(_MAX_HTTP_RETRIES):
+            try:
+                response = await client.request(method, url, **kwargs)
+                if response.status_code not in _RETRYABLE_STATUS_CODES or attempt == _MAX_HTTP_RETRIES - 1:
+                    return response
+                last_error = httpx.HTTPStatusError(
+                    f"Retryable response status {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+            except (httpx.NetworkError, httpx.TimeoutException) as exc:
+                last_error = exc
+            delay = 0.5 * (2**attempt)
+            click.secho(
+                f"GitHub API {method} {url} failed ({type(last_error).__name__}), retrying in {delay:.1f}s",
+                fg="yellow",
+            )
+            await asyncio.sleep(delay)
+        if last_error:
+            raise last_error
+        msg = f"Request {method} {url} failed without returning a response"
+        raise RuntimeError(msg)
+
+    @staticmethod
+    def _get_pr_numbers_from_git_range(base: str, release_branch: str) -> list[int]:
+        git_executable = shutil.which("git")
+        if not git_executable:
+            msg = "git executable not found"
+            raise FileNotFoundError(msg)
+        proc = subprocess.run(  # noqa: S603
+            [git_executable, "log", "--format=%s%x00", f"{base}..{release_branch}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        messages = [message for message in proc.stdout.split("\x00") if message.strip()]
+        pr_numbers = [number for number in (_pr_number_from_commit_message(message) for message in messages) if number]
+        return list(dict.fromkeys(pr_numbers))
 
     async def get_closing_issues_references(self, pr_number: int) -> list[int]:
         graphql_query = """{
@@ -119,7 +171,12 @@ class _Thing:
         }
     }"""
         query = graphql_query % (pr_number,)
-        res = await self._base_client.post("https://api.github.com/graphql", json={"query": query})
+        res = await self._request_with_retries(
+            self._base_client,
+            "POST",
+            "https://api.github.com/graphql",
+            json={"query": query},
+        )
         if res.is_client_error:
             return []
         data = res.json()
@@ -129,7 +186,7 @@ class _Thing:
         ]
 
     async def _get_pr_info_for_pr(self, number: int) -> Optional[PRInfo]:
-        res = await self._api_client.get(f"/pulls/{number}")
+        res = await self._request_with_retries(self._api_client, "GET", f"/pulls/{number}")
         if res.is_client_error:
             click.secho(
                 f"Could not get PR info for {number}.  Fetch request returned a status of {res.status_code}",
@@ -144,14 +201,19 @@ class _Thing:
             return None
         pr = msgspec.convert(data, type=PullRequest)
 
-        cc_prefix, clean_title = pr.title.split(":", maxsplit=1)
-        cc_type = cc_prefix.split("(", maxsplit=1)[0].lower()
+        if ":" in pr.title:
+            cc_prefix, clean_title = pr.title.split(":", maxsplit=1)
+            cc_type = cc_prefix.split("(", maxsplit=1)[0].lower()
+            clean_title = clean_title.strip()
+        else:
+            cc_type = "misc"
+            clean_title = pr.title.strip()
         closes_issues = await self.get_closing_issues_references(pr_number=pr.number)
 
         return PRInfo(
             number=pr.number,
             cc_type=cc_type,
-            clean_title=clean_title.strip(),
+            clean_title=clean_title,
             url=f"https://github.com/litestar-org/advanced-alchemy/pull/{pr.number}",
             closes=closes_issues,
             title=pr.title,
@@ -161,10 +223,7 @@ class _Thing:
         )
 
     async def get_prs(self) -> dict[str, list[PRInfo]]:
-        res = await self._api_client.get(f"/compare/{self._base}...{self._release_branch}")
-        res.raise_for_status()
-        compares = msgspec.convert(res.json()["commits"], list[Comp])
-        pr_numbers = list(filter(None, (_pr_number_from_commit(c) for c in compares)))
+        pr_numbers = self._get_pr_numbers_from_git_range(self._base, self._release_branch)
         pulls = await asyncio.gather(*map(self._get_pr_info_for_pr, pr_numbers))
 
         prs: dict[str, list[PRInfo]] = defaultdict(list)
@@ -188,7 +247,9 @@ class _Thing:
 
         async def is_user_first_commit(user_login: str) -> None:
             first_pr = sorted(prs_by_user_login[user_login], key=lambda p: p.created_at)[0]
-            res = await self._api_client.get(
+            res = await self._request_with_retries(
+                self._api_client,
+                "GET",
                 "/commits",
                 params={
                     "author": user_login,
