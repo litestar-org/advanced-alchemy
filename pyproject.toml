@@ -112,6 +112,7 @@ doc = [
   "sphinx-togglebutton>=0.3.2",
   "myst-parser",
   "sphinx-autodoc-typehints",
+  "sybil",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
 fastapi = ["fastapi[all]>=0.115.3", "starlette"]
@@ -439,6 +440,7 @@ strict-imports = true
 [tool.mypy]
 disallow_any_generics = false
 disallow_untyped_decorators = true
+exclude = ["docs/conftest.py"]
 implicit_reexport = false
 packages = ["advanced_alchemy", "tests", "docs", "examples"]
 python_version = "3.9"

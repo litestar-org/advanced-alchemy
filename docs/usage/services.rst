@@ -93,6 +93,37 @@ Services provide high-level methods for common operations:
         post = await post_service.update(item_id=post_id, data=data, auto_commit=True)
         return post_service.to_schema(post, schema_type=PostResponse)
 
+.. versionadded:: 1.9.0
+
+Advanced Alchemy's service layer automatically handles recursive model creation from nested dictionaries. When you pass a dictionary containing nested dictionaries that match a model's relationships, the service will automatically instantiate the related models.
+
+.. code-block:: python
+
+    # This dictionary contains nested data for a 'profile' relationship
+    user_data = {
+        "username": "cody",
+        "email": "cody@litestar.dev",
+        "profile": {
+            "bio": "Software Engineer",
+            "twitter": "@cofin"
+        }
+    }
+
+    # The service will automatically create the Profile instance when creating the User
+    user = await user_service.create(data=user_data)
+
+Row Locking (FOR UPDATE)
+************************
+
+.. versionadded:: 1.9.0
+
+Service retrieval methods like ``get`` support the ``with_for_update`` parameter, which is passed through to the underlying repository.
+
+.. code-block:: python
+
+    # Lock the user record for the duration of the transaction
+    user = await user_service.get(item_id=user_id, with_for_update=True)
+
 Composite Primary Keys
 **********************
 

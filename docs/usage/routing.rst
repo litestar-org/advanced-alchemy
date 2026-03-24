@@ -292,7 +292,7 @@ Litestar
 .. code-block:: python
 
     from litestar import Litestar
-    from litestar.plugins.sqlalchemy import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
     from advanced_alchemy.config.routing import RoutingConfig
 
     config = SQLAlchemyAsyncConfig(
@@ -439,6 +439,6 @@ See Also
 --------
 
 - :doc:`/reference/routing` - API Reference
-- :doc:`/usage/repositories` - Repository Pattern
+- :doc:`/usage/repositories/index` - Repository Pattern
 - :doc:`/usage/services` - Service Layer
 - :doc:`/reference/config/asyncio` - Async Configuration

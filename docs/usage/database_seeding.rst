@@ -83,7 +83,7 @@ Synchronous Loading
         __tablename__ = "products"
 
         name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[str | None] = mapped_column(String(length=500))
+        description: Mapped[Optional[str]] = mapped_column(String(length=500))
         price: Mapped[float]
         in_stock: Mapped[bool] = mapped_column(default=True)
 
@@ -223,6 +223,36 @@ Asynchronous Loading
         # Run the async main function
         asyncio.run(main())
 
+
+CSV Fixtures
+~~~~~~~~~~~~
+
+.. versionadded:: 1.9.0
+
+For simpler, tabular data, you can use CSV fixtures. Advanced Alchemy will automatically parse the header row and map it to your model attributes.
+
+**Example CSV (products.csv):**
+
+.. code-block:: text
+
+    id,name,price,in_stock
+    1,Widget,9.99,true
+    2,Gadget,19.99,true
+    3,Thingy,4.99,false
+
+**Loading CSV Fixtures:**
+
+.. code-block:: python
+
+    from advanced_alchemy.utils.fixtures import open_fixture_async
+
+    async def seed_from_csv(session: AsyncSession):
+        # Load data from products.csv
+        product_data = await open_fixture_async(fixtures_path, "products")
+
+        # Add to database
+        await product_repo.add_many([Product(**item) for item in product_data])
+        await session.commit()
 
 Integration with Web Frameworks
 -------------------------------

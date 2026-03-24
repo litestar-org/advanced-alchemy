@@ -1,6 +1,6 @@
-========
-Modeling
-========
+===============
+Modeling Basics
+===============
 
 Advanced Alchemy enhances SQLAlchemy's modeling capabilities with production-ready base classes, mixins, and specialized types.
 This guide demonstrates modeling for a blog system with posts and tags, showcasing key features and best practices.
@@ -8,7 +8,7 @@ This guide demonstrates modeling for a blog system with posts and tags, showcasi
 Base Classes
 ------------
 
-Advanced Alchemy provides several base classes optimized for different use cases.  Any model can utilize these pre-defined declarative bases from Advanced Alchemy.  Here's a brief overview of the included classes:
+Advanced Alchemy provides several base classes optimized for different use cases. Any model can utilize these pre-defined declarative bases. Here's an overview of the included classes:
 
 .. list-table:: Base Classes and Features
    :header-rows: 1
@@ -53,17 +53,15 @@ Additionally, Advanced Alchemy provides mixins to enhance model functionality:
    * - Mixin
      - Features
    * - ``SlugKey``
-     - | Adds URL-friendly slug field
+     - Adds URL-friendly slug field
    * - ``AuditColumns``
-     - | Automatic created_at/updated_at timestamps
-       | Tracks record modifications
-       | ``updated_at`` refreshes during flush when any mapped column value changes, while preserving explicit timestamp overrides
+     - Automatic created_at/updated_at timestamps. Tracks record modifications.
    * - ``BigIntPrimaryKey``
-     - | Adds BigInt primary key with sequence
+     - Adds BigInt primary key with sequence
    * - ``IdentityPrimaryKey``
-     - | Adds primary key using database IDENTITY feature
+     - Adds primary key using database IDENTITY feature
    * - ``UniqueMixin``
-     - | Automatic Select or Create for many-to-many relationships
+     - Automatic Select or Create for many-to-many relationships
 
 
 Basic Model Example
@@ -80,16 +78,7 @@ Let's start with a simple blog post model:
     from sqlalchemy.orm import Mapped, mapped_column
 
     class Post(BigIntAuditBase):
-        """Blog post model with auto-incrementing ID and audit fields.
-
-        Attributes:
-            title: The post title
-            content: The post content
-            published: Publication status
-            published_at: Timestamp of publication
-            created_at: Timestamp of creation (from BigIntAuditBase)
-            updated_at: Timestamp of last update (from BigIntAuditBase)
-        """
+        """Blog post model with auto-incrementing ID and audit fields."""
 
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
@@ -101,11 +90,7 @@ Let's start with a simple blog post model:
 Many-to-Many Relationships
 --------------------------
 
-Let's implement a tagging system using a many-to-many relationship. This example demonstrates:
-- Association table configuration
-- Relationship configuration with lazy loading
-- Slug key mixin
-- Index creation
+Let's implement a tagging system using a many-to-many relationship.
 
 .. code-block:: python
 
@@ -124,7 +109,6 @@ Let's implement a tagging system using a many-to-many relationship. This example
     )
 
     class Post(BigIntAuditBase):
-
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
         published: Mapped[bool] = mapped_column(default=False)
@@ -137,11 +121,7 @@ Let's implement a tagging system using a many-to-many relationship. This example
         )
 
     class Tag(BigIntAuditBase, SlugKey):
-        """Tag model with automatic slug generation.
-
-        The SlugKey mixin automatically adds a slug field to the model.
-        """
-
+        """Tag model with automatic slug generation."""
         name: Mapped[str] = mapped_column(unique=True, index=True)
         posts: Mapped[List["Post"]] = relationship(
             secondary=post_tag,
@@ -149,47 +129,12 @@ Let's implement a tagging system using a many-to-many relationship. This example
             viewonly=True
         )
 
-If we want to interact with the models above, we might use something like the following:
-
-
-.. code-block:: python
-
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy import select
-    from advanced_alchemy.utils.text import slugify
-
-    async def add_tags_to_post(
-        db_session: AsyncSession,
-        post: Post,
-        tag_names: list[str]
-    ) -> Post:
-        """Add tags to a post, looking up existing tags and creating new ones if needed."""
-        existing_tags = await db_session.scalars(
-            select(Tag).filter(Tag.slug.in_([slugify(name) for name in tag_names]))
-        )
-        new_tags = [Tag(name=name, slug=slugify(name)) for name in tag_names if name not in {tag.name for tag in existing_tags}]
-        post.tags.extend(new_tags + list(existing_tags))
-        await db_session.merge(post)
-        await db_session.flush()
-        return post
-
-
-Fortunately, we can remove some of this logic thanks to :class:`UniqueMixin`.
-
 .. _using_unique_mixin:
 
-Using :class:`UniqueMixin`
---------------------------
+Using ``UniqueMixin``
+---------------------
 
-:class:`UniqueMixin` provides automatic handling of unique constraints and merging of duplicate records. When using the mixin,
-you must implement two classmethods: :meth:`unique_hash <UniqueMixin.unique_hash>` and :meth:`unique_filter <UniqueMixin.unique_hash>`. These methods enable:
-
-- Automatic lookup of existing records
-- Safe merging of duplicates
-- Atomic get-or-create operations
-- Configurable uniqueness criteria
-
-Let's enhance our Tag model with :class:`UniqueMixin`:
+``UniqueMixin`` provides automatic handling of unique constraints and merging of duplicate records.
 
 .. code-block:: python
 
@@ -198,16 +143,10 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
     from advanced_alchemy.utils.text import slugify
     from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.orm import Mapped, mapped_column, relationship
-    from typing import Hashable
+    from typing import Hashable, Optional
 
     class Tag(BigIntAuditBase, SlugKey, UniqueMixin):
-        """Tag model with unique name constraint and automatic slug generation.
-
-        The UniqueMixin provides:
-        - Automatic lookup of existing records
-        - Safe merging of duplicates
-        - Consistent slug generation
-        """
+        """Tag model with unique name constraint."""
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
         posts: Mapped[list["Post"]] = relationship(
@@ -217,7 +156,7 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
         )
 
         @classmethod
-        def unique_hash(cls, name: str, slug: str | None = None) -> Hashable:
+        def unique_hash(cls, name: str, slug: Optional[str] = None) -> Hashable:
             """Generate a unique hash for deduplication."""
             return slugify(name)
 
@@ -225,12 +164,12 @@ Let's enhance our Tag model with :class:`UniqueMixin`:
         def unique_filter(
             cls,
             name: str,
-            slug: str | None = None,
+            slug: Optional[str] = None,
         ) -> ColumnElement[bool]:
             """SQL filter for finding existing records."""
             return cls.slug == slugify(name)
 
-We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the logic.
+We can now use ``as_unique_async`` to simplify creation:
 
 .. code-block:: python
 
@@ -243,10 +182,6 @@ We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the
         tag_names: list[str]
     ) -> Post:
         """Add tags to a post, creating new tags if needed."""
-        # The UniqueMixin automatically handles:
-        # 1. Looking up existing tags
-        # 2. Creating new tags if needed
-        # 3. Merging duplicates
         post.tags = [
           await Tag.as_unique_async(db_session, name=tag_text, slug=slugify(tag_text))
           for tag_text in tag_names
@@ -255,18 +190,15 @@ We can now take advantage of :meth:`UniqueMixin.as_unique_async` to simplify the
         await db_session.flush()
         return post
 
-
-
 Customizing Declarative Base
 -----------------------------
 
-In case one of the built in declarative bases do not meet your needs (or you already have your own), Advanced Alchemy already supports customizing the ``DeclarativeBase`` class.
-
-Here's an example showing a class to generate a server-side UUID primary key for `postgres`:
+Advanced Alchemy supports customizing the ``DeclarativeBase`` class.
 
 .. code-block:: python
 
     import datetime
+    from typing import Optional
     from uuid import UUID, uuid4
 
     from advanced_alchemy.base import CommonTableAttributes, orm_registry
@@ -279,39 +211,25 @@ Here's an example showing a class to generate a server-side UUID primary key for
         orm_insert_sentinel,
     )
 
-
     class ServerSideUUIDPrimaryKey:
         """UUID Primary Key Field Mixin."""
-
         id: Mapped[UUID] = mapped_column(
             default=uuid4,
             primary_key=True,
             server_default=text("gen_random_uuid()"),
         )
-        """UUID Primary key column."""
 
-        # noinspection PyMethodParameters
         @declared_attr
         def _sentinel(cls) -> Mapped[int]:
-            """Sentinel value required for SQLAlchemy bulk DML with UUIDs."""
+            """Sentinel value required for bulk DML."""
             return orm_insert_sentinel(name="sa_orm_sentinel")
 
-
     class ServerSideUUIDBase(ServerSideUUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
-        """Base for all SQLAlchemy declarative models with the custom UUID primary key."""
-
         registry = orm_registry
 
-
-    # Using ServerSideUUIDBase
     class User(ServerSideUUIDBase):
-        """User model with ServerSideUUIDBase."""
-
         username: Mapped[str] = mapped_column(unique=True, index=True)
         email: Mapped[str] = mapped_column(unique=True)
         full_name: Mapped[str]
         is_active: Mapped[bool] = mapped_column(default=True)
-        last_login: Mapped[datetime.datetime | None] = mapped_column(default=None)
-
-
-With this foundation in place, let's look at the repository pattern.
+        last_login: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)

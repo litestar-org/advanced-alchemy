@@ -277,7 +277,7 @@ By default, the session key is named "db_session". You can change this by settin
 .. code-block:: python
 
     from litestar import Litestar, get
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -315,7 +315,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     from litestar import Litestar, get
     from litestar.connection import ASGIConnection
     from litestar.handlers.base import BaseRouteHandler
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -353,7 +353,7 @@ You can use either ``provide_session`` or ``get_session`` to get session instanc
     from click import Group
     from litestar import Litestar, get
     from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -501,7 +501,7 @@ To use the SQLAlchemy session backend, you need to:
 
     from litestar import Litestar
     from litestar.middleware.session.server_side import ServerSideSessionConfig
-    from litestar.plugins.sqlalchemy import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
     from advanced_alchemy.extensions.litestar.session import (
         SessionModelMixin,
         SQLAlchemyAsyncSessionBackend,
@@ -592,7 +592,7 @@ For synchronous SQLAlchemy configurations, use ``SQLAlchemySyncSessionBackend``:
 
 .. code-block:: python
 
-    from litestar.plugins.sqlalchemy import SQLAlchemySyncConfig
+    from advanced_alchemy.extensions.litestar import SQLAlchemySyncConfig
     from advanced_alchemy.extensions.litestar.session import SQLAlchemySyncSessionBackend
 
     # Sync configuration
@@ -778,7 +778,7 @@ Here's a complete working example:
     from litestar import Litestar, get, post
     from litestar.connection import ASGIConnection
     from litestar.middleware.session.server_side import ServerSideSessionConfig
-    from litestar.plugins.sqlalchemy import (
+    from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
@@ -1046,7 +1046,6 @@ Alternative Patterns
 
     .. code-block:: python
 
-        from __future__ import annotations
 
         import datetime
         from typing import TYPE_CHECKING, Optional
@@ -1078,7 +1077,7 @@ Alternative Patterns
             __tablename__ = "author"
             name: Mapped[str]
             dob: Mapped[Optional[datetime.date]]
-            books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+            books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
         # Repository
         class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):

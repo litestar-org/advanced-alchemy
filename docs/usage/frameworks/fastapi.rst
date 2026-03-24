@@ -48,8 +48,8 @@ Define your SQLAlchemy models and Pydantic schemas:
     class AuthorModel(UUIDBase):
         __tablename__ = "author"
         name: Mapped[str]
-        dob: Mapped[date | None]
-        books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
+        dob: Mapped[Optional[date]]
+        books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
     class BookModel(UUIDAuditBase):
         __tablename__ = "book"
@@ -58,17 +58,17 @@ Define your SQLAlchemy models and Pydantic schemas:
         author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
 
     class Author(BaseModel):
-        id: UUID | None
+        id: Optional[UUID]
         name: str
-        dob: datetime.date | None = None
+        dob: Optional[datetime.date] = None
 
     class AuthorCreate(BaseModel):
         name: str
-        dob: datetime.date | None = None
+        dob: Optional[datetime.date] = None
 
     class AuthorUpdate(BaseModel):
-        name: str | None = None
-        dob: datetime.date | None = None
+        name: Optional[str] = None
+        dob: Optional[datetime.date] = None
 
 Repository and Service
 ----------------------
