@@ -11,6 +11,7 @@ SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 DOC_TEST_FILES := \
+	docs/usage/modeling/basics.rst \
 	docs/usage/modeling/inheritance.rst \
 	docs/usage/modeling/sqlmodel.rst \
 	docs/usage/modeling/types.rst \

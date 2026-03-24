@@ -36,7 +36,7 @@ Define your SQLAlchemy models and Pydantic schemas:
 
     import datetime
     from datetime import date
-    from typing import Optional
+    from typing import Optional, Union
     from uuid import UUID
 
     from pydantic import BaseModel as _BaseModel
@@ -198,3 +198,122 @@ Finally, configure your FastAPI application with the router:
 .. code-block:: python
 
     app.include_router(author_router)
+
+File Object Storage
+-------------------
+
+FastAPI works well with ``FileObject``-backed models when you keep the upload flow explicit:
+
+1. Register a storage backend
+2. Map a ``StoredObject`` column on the model
+3. Expose a signed URL from the response schema
+4. Translate multipart uploads into ``FileObject`` values before they reach the repository service
+
+Start by registering a backend and mapping the file column:
+
+.. code-block:: python
+
+    from typing import Optional
+    from uuid import UUID
+
+    from pydantic import BaseModel, Field, computed_field
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.extensions.fastapi import base, repository, service
+    from advanced_alchemy.types import FileObject, storages
+    from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+    from advanced_alchemy.types.file_object.data_type import StoredObject
+
+    documents_backend = ObstoreBackend(
+        key="documents",
+        fs="s3://company-documents-prod/",
+    )
+    storages.register_backend(documents_backend)
+
+    class DocumentModel(base.UUIDBase):
+        __tablename__ = "document"
+
+        name: Mapped[str]
+        file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
+
+    class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
+        class Repo(repository.SQLAlchemyAsyncRepository[DocumentModel]):
+            model_type = DocumentModel
+
+        repository_type = Repo
+
+Use a response schema that hides the raw ``FileObject`` but exposes a signed URL:
+
+.. code-block:: python
+
+    class Document(BaseModel):
+        id: Optional[UUID] = None
+        name: str
+        file: Optional[FileObject] = Field(default=None, exclude=True)
+
+        @computed_field
+        def file_url(self) -> Optional[Union[str, list[str]]]:
+            if self.file is None:
+                return None
+            return self.file.sign()
+
+Then accept multipart form data and construct ``FileObject`` values explicitly:
+
+.. code-block:: python
+
+    from typing import Annotated
+
+    from fastapi import APIRouter, Depends, File, Form, UploadFile
+
+    document_router = APIRouter()
+
+    Documents = Annotated[DocumentService, Depends(alchemy.provide_service(DocumentService))]
+
+    @document_router.post(path="/documents", response_model=Document)
+    async def create_document(
+        documents_service: Documents,
+        name: Annotated[str, Form()],
+        file: Annotated[Optional[UploadFile], File()] = None,
+    ) -> Document:
+        obj = await documents_service.create(
+            DocumentModel(
+                name=name,
+                file=FileObject(
+                    backend="documents",
+                    filename=file.filename or "uploaded_file",
+                    content_type=file.content_type,
+                    content=await file.read(),
+                )
+                if file is not None
+                else None,
+            )
+        )
+        return documents_service.to_schema(obj, schema_type=Document)
+
+    @document_router.patch(path="/documents/{document_id}", response_model=Document)
+    async def update_document(
+        documents_service: Documents,
+        document_id: UUID,
+        name: Annotated[Optional[str], Form()] = None,
+        file: Annotated[Optional[UploadFile], File()] = None,
+    ) -> Document:
+        update_data: dict[str, object] = {}
+        if name is not None:
+            update_data["name"] = name
+        if file is not None:
+            update_data["file"] = FileObject(
+                backend="documents",
+                filename=file.filename or "uploaded_file",
+                content_type=file.content_type,
+                content=await file.read(),
+            )
+
+        obj = await documents_service.update(update_data, item_id=document_id)
+        return documents_service.to_schema(obj, schema_type=Document)
+
+In production, keep object storage credentials out of application code. Point ``ObstoreBackend`` at
+the real bucket or prefix you use in production and let the runtime provide credentials through the
+platform's normal mechanism, such as an IAM role, IRSA, ECS task role, or other ambient credentials.
+
+The storage backend key must match in both places: the ``StoredObject(backend="...")`` column
+definition and the ``FileObject(backend="...")`` values you create from incoming uploads.

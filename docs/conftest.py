@@ -7,6 +7,7 @@ from sybil import Sybil
 from sybil.parsers.rest import PythonCodeBlockParser
 
 EXECUTABLE_DOCS = (
+    "usage/modeling/basics.rst",
     "usage/modeling/inheritance.rst",
     "usage/modeling/sqlmodel.rst",
     "usage/modeling/types.rst",
@@ -15,6 +16,17 @@ EXECUTABLE_DOCS = (
     "usage/repositories/filtering.rst",
     "usage/database_seeding.rst",
     "usage/services.rst",
+)
+
+NON_EXECUTABLE_DOCS = (
+    "usage/caching.rst",
+    "usage/cli.rst",
+    "usage/frameworks/fastapi.rst",
+    "usage/frameworks/flask.rst",
+    "usage/frameworks/litestar.rst",
+    "usage/frameworks/sanic.rst",
+    "usage/frameworks/starlette.rst",
+    "usage/routing.rst",
 )
 
 

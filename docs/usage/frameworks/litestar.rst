@@ -17,6 +17,8 @@ Key Features
 - Repository pattern for database operations
 - Service layer for business logic and data transformation
 - Built-in pagination and filtering
+- SQLAlchemy-backed server-side session backend for Litestar middleware
+- FileObject integration for multipart uploads and signed URLs
 - CLI tools for database migrations
 
 Basic Setup
@@ -500,10 +502,15 @@ You can upgrade a database to the latest version by running the following comman
 
     $ litestar database upgrade
 
-Session Middleware
-------------------
+Server-Side Session Backend
+---------------------------
 
 Advanced Alchemy provides SQLAlchemy-based session backends for Litestar's server-side session middleware. This allows you to store session data in your existing SQLAlchemy database instead of using external stores like Redis or file-based storage.
+
+If you need a general-purpose Litestar store outside the session middleware itself, the same
+extension package also exposes ``advanced_alchemy.extensions.litestar.store.SQLAlchemyStore`` and
+``StoreModelMixin``. The examples below focus on the session backend used with
+``ServerSideSessionConfig``.
 
 Overview
 ^^^^^^^^
@@ -877,6 +884,13 @@ File Object Storage
 
 Advanced Alchemy provides built-in support for file storage with various backends. Here's how to handle file uploads and storage:
 
+The pattern below mirrors ``examples/litestar/litestar_fileobject.py``:
+
+1. Register a storage backend
+2. Map a ``StoredObject`` column
+3. Expose a signed URL from the response schema
+4. Translate multipart uploads into ``FileObject`` instances before persisting them
+
 .. code-block:: python
 
     from typing import Annotated, Any, Optional, Union
@@ -904,21 +918,18 @@ Advanced Alchemy provides built-in support for file storage with various backend
     from advanced_alchemy.types.file_object.data_type import StoredObject
 
     # Configure file storage backend
-    s3_backend = ObstoreBackend(
-        key="local",
-        fs="s3://static-files/",
-        aws_endpoint="http://localhost:9000",
-        aws_access_key_id="minioadmin",
-        aws_secret_access_key="minioadmin",
+    documents_backend = ObstoreBackend(
+        key="documents",
+        fs="s3://company-documents-prod/",
     )
-    storages.register_backend(s3_backend)
+    storages.register_backend(documents_backend)
 
     # Model with file storage
     class DocumentModel(base.UUIDBase):
         __tablename__ = "document"
 
         name: Mapped[str]
-        file: Mapped[FileObject] = mapped_column(StoredObject(backend="local"))
+        file: Mapped[FileObject] = mapped_column(StoredObject(backend="documents"))
 
     # Schema with file URL generation
     class Document(BaseModel):
@@ -989,7 +1000,7 @@ Advanced Alchemy provides built-in support for file storage with various backend
                 DocumentModel(
                     name=data.name,
                     file=FileObject(
-                        backend="local",
+                        backend="documents",
                         filename=data.file.filename or "uploaded_file",
                         content_type=data.file.content_type,
                         content=await data.file.read(),
@@ -1021,7 +1032,7 @@ Advanced Alchemy provides built-in support for file storage with various backend
                 update_data["name"] = data.name
             if data.file:
                 update_data["file"] = FileObject(
-                    backend="local",
+                    backend="documents",
                     filename=data.file.filename or "uploaded_file",
                     content_type=data.file.content_type,
                     content=await data.file.read(),
@@ -1057,6 +1068,10 @@ File storage features:
 - **Content type detection**: Automatic MIME type handling
 - **File validation**: Built-in validation for file types and sizes
 - **Metadata storage**: Store file metadata alongside binary data
+
+For production deployments, avoid development-only endpoints and hardcoded object-store credentials
+in application code. Configure the backend with the real bucket or prefix and rely on the platform's
+ambient credentials, such as IAM roles or workload identity.
 
 **Supported Storage Backends**:
 

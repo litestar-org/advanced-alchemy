@@ -8,7 +8,9 @@ This guide demonstrates modeling for a blog system with posts and tags, showcasi
 Base Classes
 ------------
 
-Advanced Alchemy provides several base classes optimized for different use cases. Any model can utilize these pre-defined declarative bases. Here's an overview of the included classes:
+Advanced Alchemy provides several declarative bases optimized for different use cases. The common
+ID and audit combinations are ready to use, while the lower-level bases let you assemble your own
+model hierarchy without rebuilding SQLAlchemy's declarative setup from scratch.
 
 .. list-table:: Base Classes and Features
    :header-rows: 1
@@ -16,6 +18,10 @@ Advanced Alchemy provides several base classes optimized for different use cases
 
    * - Base Class
      - Features
+   * - ``AdvancedDeclarativeBase``
+     - Low-level registry-aware base for building custom declarative hierarchies
+   * - ``DefaultBase``
+     - Automatic table naming and bind-aware metadata without a predefined primary key
    * - ``BigIntBase``
      - BIGINT primary keys for tables
    * - ``BigIntAuditBase``
@@ -40,6 +46,12 @@ Advanced Alchemy provides several base classes optimized for different use cases
      - URL-friendly unique identifiers, Shorter than UUIDs, collision resistant
    * - ``NanoIDAuditBase``
      - URL-friendly IDs with audit timestamps, Combines Nanoid benefits with audit trails
+   * - ``SQLQuery``
+     - Registry-backed base for custom mapped query objects and other specialized mapped constructs
+
+For most applications, start with one of the opinionated bases such as ``BigIntAuditBase`` or
+``UUIDAuditBase``. Reach for ``DefaultBase`` when you want Advanced Alchemy's table naming and
+metadata handling but need to define your own primary key fields.
 
 Mixins
 -------
@@ -77,8 +89,10 @@ Let's start with a simple blog post model:
     from advanced_alchemy.base import BigIntAuditBase
     from sqlalchemy.orm import Mapped, mapped_column
 
-    class Post(BigIntAuditBase):
+    class BasicBlogPost(BigIntAuditBase):
         """Blog post model with auto-incrementing ID and audit fields."""
+
+        __tablename__ = "basic_blog_post"
 
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
@@ -100,33 +114,38 @@ Let's implement a tagging system using a many-to-many relationship.
     from advanced_alchemy.mixins import SlugKey
     from typing import List
 
-    # Association table for post-tag relationship
-    post_tag = Table(
-        "post_tag",
+    # Association table for post-topic relationships
+    blog_post_topic = Table(
+        "blog_post_topic",
         orm_registry.metadata,
-        Column("post_id", ForeignKey("post.id", ondelete="CASCADE"), primary_key=True),
-        Column("tag_id", ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True)
+        Column("post_id", ForeignKey("tagged_blog_post.id", ondelete="CASCADE"), primary_key=True),
+        Column("topic_id", ForeignKey("blog_topic.id", ondelete="CASCADE"), primary_key=True),
     )
 
-    class Post(BigIntAuditBase):
+    class TaggedBlogPost(BigIntAuditBase):
+        __tablename__ = "tagged_blog_post"
+
         title: Mapped[str] = mapped_column(index=True)
         content: Mapped[str]
         published: Mapped[bool] = mapped_column(default=False)
 
-        # Many-to-many relationship with tags
-        tags: Mapped[List["Tag"]] = relationship(
-            secondary=post_tag,
+        # Many-to-many relationship with topics
+        topics: Mapped[List["BlogTopic"]] = relationship(
+            secondary=blog_post_topic,
             back_populates="posts",
-            lazy="selectin"
+            lazy="selectin",
         )
 
-    class Tag(BigIntAuditBase, SlugKey):
-        """Tag model with automatic slug generation."""
+    class BlogTopic(BigIntAuditBase, SlugKey):
+        """Topic model with automatic slug generation."""
+
+        __tablename__ = "blog_topic"
+
         name: Mapped[str] = mapped_column(unique=True, index=True)
-        posts: Mapped[List["Post"]] = relationship(
-            secondary=post_tag,
-            back_populates="tags",
-            viewonly=True
+        posts: Mapped[List["TaggedBlogPost"]] = relationship(
+            secondary=blog_post_topic,
+            back_populates="topics",
+            lazy="selectin",
         )
 
 .. _using_unique_mixin:
@@ -145,15 +164,12 @@ Using ``UniqueMixin``
     from sqlalchemy.orm import Mapped, mapped_column, relationship
     from typing import Hashable, Optional
 
-    class Tag(BigIntAuditBase, SlugKey, UniqueMixin):
-        """Tag model with unique name constraint."""
+    class UniqueTopic(BigIntAuditBase, SlugKey, UniqueMixin):
+        """Topic model with unique name constraint."""
+
+        __tablename__ = "unique_topic"
 
         name: Mapped[str] = mapped_column(unique=True, index=True)
-        posts: Mapped[list["Post"]] = relationship(
-            secondary=post_tag,
-            back_populates="tags",
-            viewonly=True
-        )
 
         @classmethod
         def unique_hash(cls, name: str, slug: Optional[str] = None) -> Hashable:
@@ -176,24 +192,46 @@ We can now use ``as_unique_async`` to simplify creation:
     from sqlalchemy.ext.asyncio import AsyncSession
     from advanced_alchemy.utils.text import slugify
 
-    async def add_tags_to_post(
+    async def get_or_create_topics(
         db_session: AsyncSession,
-        post: Post,
-        tag_names: list[str]
-    ) -> Post:
-        """Add tags to a post, creating new tags if needed."""
-        post.tags = [
-          await Tag.as_unique_async(db_session, name=tag_text, slug=slugify(tag_text))
-          for tag_text in tag_names
+        topic_names: list[str],
+    ) -> list[UniqueTopic]:
+        """Create or fetch topic rows without duplicating existing slugs."""
+        return [
+            await UniqueTopic.as_unique_async(db_session, name=topic_name, slug=slugify(topic_name))
+            for topic_name in topic_names
         ]
-        await db_session.merge(post)
-        await db_session.flush()
-        return post
+
+Using ``MappedAsDataclass``
+---------------------------
+
+Advanced Alchemy's built-in bases can also be combined with SQLAlchemy's
+``MappedAsDataclass`` helper. ``DefaultBase`` is the best starting point when you want
+dataclass-style construction but need to define your own primary key fields.
+
+.. code-block:: python
+
+    from typing import Optional
+
+    from advanced_alchemy.base import DefaultBase
+    from sqlalchemy.orm import Mapped, MappedAsDataclass, mapped_column
+
+    class DataclassAuthor(MappedAsDataclass, DefaultBase):
+        __tablename__ = "dataclass_author"
+
+        id: Mapped[int] = mapped_column(primary_key=True, init=False)
+        name: Mapped[str]
+        bio: Mapped[Optional[str]] = mapped_column(default=None)
+
+If a field is generated by the database or SQLAlchemy itself, mark it ``init=False`` or provide a
+default so the generated dataclass constructor remains valid.
 
 Customizing Declarative Base
 -----------------------------
 
-Advanced Alchemy supports customizing the ``DeclarativeBase`` class.
+If the built-in primary key strategies are close but not exact, start from ``DefaultBase`` and add
+your own columns or mixins. That keeps the Advanced Alchemy registry and table-name behavior while
+letting you replace the primary key strategy.
 
 .. code-block:: python
 
@@ -201,10 +239,9 @@ Advanced Alchemy supports customizing the ``DeclarativeBase`` class.
     from typing import Optional
     from uuid import UUID, uuid4
 
-    from advanced_alchemy.base import CommonTableAttributes, orm_registry
+    from advanced_alchemy.base import DefaultBase
     from sqlalchemy import text
     from sqlalchemy.orm import (
-        DeclarativeBase,
         Mapped,
         declared_attr,
         mapped_column,
@@ -224,10 +261,12 @@ Advanced Alchemy supports customizing the ``DeclarativeBase`` class.
             """Sentinel value required for bulk DML."""
             return orm_insert_sentinel(name="sa_orm_sentinel")
 
-    class ServerSideUUIDBase(ServerSideUUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
-        registry = orm_registry
+    class ServerSideUUIDBase(ServerSideUUIDPrimaryKey, DefaultBase):
+        __abstract__ = True
 
-    class User(ServerSideUUIDBase):
+    class ServerSideUser(ServerSideUUIDBase):
+        __tablename__ = "server_side_user"
+
         username: Mapped[str] = mapped_column(unique=True, index=True)
         email: Mapped[str] = mapped_column(unique=True)
         full_name: Mapped[str]
