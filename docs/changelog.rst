@@ -3,6 +3,20 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.9.1
+    :date: 2026-03-26
+
+    .. change:: add missing Any import to alembic migration templates
+        :type: bugfix
+        :pr: 697
+
+        ## Description
+        The try/except ImportError fallback for optional password hashers (Argon2Hasher, PasslibHasher, PwdlibHasher) used `Any` as a type placeholder, but `Any` was never imported. This caused a NameError when running migrations without optional dependencies installed.
+
+        ## Closes
+        #691
+
+
 .. changelog:: 1.9.0
     :date: 2026-03-24
 
