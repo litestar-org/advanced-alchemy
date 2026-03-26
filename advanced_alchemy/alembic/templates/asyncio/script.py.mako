@@ -7,7 +7,7 @@ Create Date: ${create_date}
 """
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy as sa
 from alembic import op
