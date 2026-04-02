@@ -60,7 +60,7 @@ def test_add_get_dependencies_cache() -> None:
         assert cache.get_dependencies(key) == deps1  # type: ignore
 
         # Test retrieving non-existent key
-        assert cache.get_dependencies(hash("nonexistent")) is None
+        assert cache.get_dependencies(hash("nonexistent")) is None  # type: ignore[unreachable]
 
 
 def test_create_filter_dependencies_cache_hit() -> None:
@@ -84,7 +84,7 @@ def test_create_filter_dependencies_cache_hit() -> None:
                 assert deps == mock_deps  # type: ignore
 
                 # Verify aggregate function builder was NOT called
-                mock_create.assert_not_called()
+                mock_create.assert_not_called()  # type: ignore[unreachable]
 
                 # Verify cache wasn't updated again
                 mock_add.assert_not_called()

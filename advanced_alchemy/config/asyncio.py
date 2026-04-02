@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional, Union, cast
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import sessionmaker as sync_sessionmaker
 
 from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.config.common import (
@@ -162,14 +163,20 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
                 "async_sessionmaker[AsyncSession]",
                 self.session_maker,  # pyright: ignore[reportUnknownMemberType]
             )
+
+            # async_sessionmaker does not support Session-level events directly.
+            # Create a sync sessionmaker, register events on it, and inject it
+            # as sync_session_class so events fire on the underlying sync Session.
+            sync_maker = sync_sessionmaker()
             if self.enable_file_object_listener:
-                event.listen(session_maker, "before_flush", AsyncFileObjectListener.before_flush)
-                event.listen(session_maker, "after_commit", AsyncFileObjectListener.after_commit)
-                event.listen(session_maker, "after_rollback", AsyncFileObjectListener.after_rollback)
+                event.listen(sync_maker, "before_flush", AsyncFileObjectListener.before_flush)
+                event.listen(sync_maker, "after_commit", AsyncFileObjectListener.after_commit)
+                event.listen(sync_maker, "after_rollback", AsyncFileObjectListener.after_rollback)
             if self.enable_touch_updated_timestamp_listener:
-                event.listen(session_maker, "before_flush", touch_updated_timestamp)
-            event.listen(session_maker, "after_commit", AsyncCacheListener.after_commit)
-            event.listen(session_maker, "after_rollback", AsyncCacheListener.after_rollback)
+                event.listen(sync_maker, "before_flush", touch_updated_timestamp)
+            event.listen(sync_maker, "after_commit", AsyncCacheListener.after_commit)
+            event.listen(sync_maker, "after_rollback", AsyncCacheListener.after_rollback)
+            session_maker.configure(sync_session_class=sync_maker)
 
         if self.session_maker is None:  # pyright: ignore
             msg = "Session maker was not initialized."  # type: ignore[unreachable]

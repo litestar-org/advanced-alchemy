@@ -679,7 +679,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         if default_messages and isinstance(default_messages, dict):
             messages.update(default_messages)
         if error_messages:
-            messages.update(cast("ErrorMessages", error_messages))
+            messages.update(cast("ErrorMessages", error_messages))  # type: ignore[unused-ignore,redundant-cast]
         return messages
 
     @classmethod

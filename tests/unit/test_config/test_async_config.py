@@ -33,7 +33,10 @@ def test_create_session_maker_standard_path() -> None:
             return_value=mock_session_maker,
         ),
         patch("sqlalchemy.event.listen") as mock_listen,
+        patch("advanced_alchemy.config.asyncio.sync_sessionmaker") as mock_sync_maker_factory,
     ):
+        mock_sync_maker = MagicMock()
+        mock_sync_maker_factory.return_value = mock_sync_maker
         result = config.create_session_maker()
 
     assert result is mock_session_maker
@@ -41,6 +44,14 @@ def test_create_session_maker_standard_path() -> None:
     #                  before_flush for timestamp
     #                  after_commit, after_rollback for cache
     assert mock_listen.call_count == 6
+
+    # Verify session_maker.configure was called with the sync_maker
+    mock_session_maker.configure.assert_called_once_with(sync_session_class=mock_sync_maker)
+
+    # Verify listeners are attached to the sync_maker, not the async session_maker
+    for call in mock_listen.call_args_list:
+        assert call.args[0] is mock_sync_maker
+        assert call.args[0] is not mock_session_maker
 
     # Verify file object listeners
     listener_events = [c.args[1] for c in mock_listen.call_args_list]
