@@ -215,7 +215,7 @@ class ResultConverter:
             )
         if MSGSPEC_INSTALLED and issubclass(schema_type, Struct):
             if not isinstance(data, Sequence):
-                return cast(  # type: ignore[redundant-cast]
+                return cast(
                     "ModelDTOT",
                     convert(
                         obj=data,

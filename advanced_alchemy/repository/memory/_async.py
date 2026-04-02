@@ -228,9 +228,9 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             default_messages = None
         messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
         if default_messages:
-            messages.update(cast("ErrorMessages", default_messages))
+            messages.update(cast("ErrorMessages", default_messages))  # type: ignore[unused-ignore,redundant-cast]
         if error_messages:
-            messages.update(cast("ErrorMessages", error_messages))
+            messages.update(cast("ErrorMessages", error_messages))  # type: ignore[unused-ignore,redundant-cast]
         return messages
 
     @classmethod
