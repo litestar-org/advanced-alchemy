@@ -3,6 +3,16 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.9.2
+    :date: 2026-04-03
+
+    .. change:: InvalidRequestError when calling create_session_maker
+        :type: bugfix
+        :pr: 701
+
+        Fixes `sqlalchemy.exc.InvalidRequestError: No such event 'before_flush' for target 'async_sessionmaker(...)'` raised when calling `SQLAlchemyAsyncConfig.create_session_maker()`
+
+
 .. changelog:: 1.9.1
     :date: 2026-03-26
 
@@ -10,11 +20,7 @@
         :type: bugfix
         :pr: 697
 
-        ## Description
         The try/except ImportError fallback for optional password hashers (Argon2Hasher, PasslibHasher, PwdlibHasher) used `Any` as a type placeholder, but `Any` was never imported. This caused a NameError when running migrations without optional dependencies installed.
-
-        ## Closes
-        #691
 
 
 .. changelog:: 1.9.0
@@ -47,8 +53,6 @@
         Tuple and mapping primary-key inputs are now supported for lookup and delete
         operations, including MSSQL-compatible filtering for bulk operations.
 
-        Closes #189
-
     .. change:: refactor serializers & code cleanup
         :type: feature
         :pr: 661
@@ -67,8 +71,6 @@
         Add comprehensive CSV support to ``open_fixture()`` and
         ``open_fixture_async()``, expanding fixture loading beyond JSON to include
         comma-separated value files.
-
-        Closes #536
 
     .. change:: initial support for dogpile caching
         :type: feature
@@ -97,9 +99,6 @@
         in the repository and service layers with ``with_for_update`` support
         for API parity with ``get()``.
 
-        Closes #488
-        Closes #623
-
     .. change:: add `was_attribute_set()` guard to relationship loop in `update()`
         :type: bugfix
         :pr: 685
@@ -109,9 +108,6 @@
         written back to the database. The relationship update loop now uses the
         same ``was_attribute_set()`` guard as the column loop so only
         explicitly assigned relationship values are copied during ``update()``.
-
-        Closes #684
-
 
     .. change:: nullable relationship detection and FileObject nested metadata
         :type: bugfix
@@ -123,9 +119,6 @@
         serializing non-string obstore metadata values before they are passed to
         ``put()``.
 
-        Closes #227
-        Closes #676
-
     .. change:: make `model_from_dict` model parameter positional-only
         :type: bugfix
         :pr: 673
@@ -136,8 +129,6 @@
         function signature. Service-layer call sites now use the positional
         form.
 
-        Closes #668
-
     .. change:: use typing.List to avoid list() method shadowing on Python 3.14
         :type: bugfix
         :pr: 674
@@ -147,8 +138,6 @@
         classes that also define a ``list()`` method. This avoids Python 3.14
         lazy annotation evaluation resolving ``list`` to the method instead of
         the builtin type.
-
-        Closes #659
 
     .. change:: isolate in-filter query params for multi-field depende…
         :type: bugfix
@@ -183,8 +172,6 @@
         dictionaries or lists of dictionaries into the appropriate related model
         instances while preserving existing non-nested behavior.
 
-        Closes #556
-
     .. change:: add click compatibility layer for CLI alias support
         :type: bugfix
         :pr: 645
@@ -207,8 +194,6 @@
         already closed the session. Generator-managed sessions are now marked so
         middleware records response status but skips cleanup, allowing the
         generator to handle commit, rollback, and close at the correct time.
-
-        Closes #647
 
     .. change:: complete SQLAlchemy inheritance pattern support (STI, JTI, CTI)
         :type: bugfix
@@ -238,7 +223,6 @@
         Update the codebase to align with the latest changes in Starlette, ensuring compatibility and addressing type checking issues.
 
 
-
 .. changelog:: 1.8.2
     :date: 2025-12-12
 
@@ -262,6 +246,7 @@
         :pr: 612
 
         Discovered a runtime issue with an inconsistent type declaration when upgrading a litestar project to use version 1.8.0 introduced
+
 
 .. changelog:: 1.8.1
     :date: 2025-12-06
@@ -296,6 +281,7 @@
 
         - Before the change, passing `with_for_update` to service.update() or repository.update() only affected the post-flush session.refresh() call. The row that gets copied and mutated was always retrieved with a plain SELECT, so two concurrent writers could both read the same version
         - Now the `with_for_update` flag is honored when the row is first fetched (both in the  service’s item_id branch and inside SQLAlchemyAsyncRepository.get()). When you call  service.update(..., with_for_update=True) (or pass the richer dict form/ForUpdateArg), the initial SELECT ... FOR UPDATE runs, so the session holds the expected lock before any field copying or merges occur.
+
 
 .. changelog:: 1.8.0
     :date: 2025-10-28
@@ -356,6 +342,7 @@
 
         Note: Different databases use different function names (PostgreSQL: `func.random()`, MySQL: `func.rand()`, SQL Server: `func.newid()`)
 
+
 .. changelog:: 1.7.0
     :date: 2025-10-13
 
@@ -385,7 +372,7 @@
         :pr: 553
         :issue: 552
 
-        This fixes #552 by moving the guard condition up.
+        This fixes `Still errors in SQLAlchemyRepository update method with lazy` by moving the guard condition up.
 
     .. change:: prevent update() from overwriting unset fields with None (#560)
         :type: bugfix
@@ -466,6 +453,7 @@
 
         Enhance thread management in `sync_tools` to improve performance and reliability.
 
+
 .. changelog:: 1.6.2
     :date: 2025-08-29
 
@@ -510,6 +498,7 @@
         - Pass `content_type` as `"Content-Type"` in the `attributes` parameter
         - Include any custom metadata from `FileObject.metadata`
         - Added proper typing for the attributes dictionary
+
 
 .. changelog:: 1.6.1
     :date: 2025-08-26
@@ -638,9 +627,6 @@
 
         `wrap_exceptions` is now correctly passed into the exception handler context manager.
 
-        Fixes #472
-
-
 
 .. changelog:: 1.4.2
     :date: 2025-05-04
@@ -658,8 +644,6 @@
 
         BigIntPrimaryKey will now respect schema names.
 
-        Fixes #466
-
 
 .. changelog:: 1.4.1
     :date: 2025-04-28
@@ -670,8 +654,6 @@
         :issue: 453
 
         Raise exception if filter operator does not exist in operators_map
-
-        Fixes #453
 
     .. change:: `uniquify` respects init method override
         :type: bugfix
@@ -724,8 +706,6 @@
         Updates the ``litestar_service.py`` example models to correctly handle
         relationship updates for ``AuthorModel`` and ``BookModel``.
 
-        Fixes #449
-
     .. change:: `create_service_provider` supports any configuration now
         :type: bugfix
         :pr: 451
@@ -743,6 +723,7 @@
         :pr: 455
 
         This change allows for arguments to also be matched when generating a service provider closure.
+
 
 .. changelog:: 1.3.0
     :date: 2025-04-18
@@ -769,8 +750,6 @@
         :issue: 427
 
         Removes column re-ordering component was incorrectly causing incorrect constraints to be genreated.
-
-        Fixes #427
 
     .. change:: make `SentinelMixin` compatible with `MappedAsDataclass`
         :type: bugfix
@@ -823,8 +802,6 @@
 
         Implements new `Exists` and `NotExists` filters to more easily apply this type of logic to queries.
 
-        Closes #331
-
     .. change:: fully migrate to `pytest-databases`
         :type: feature
         :pr: 430
@@ -867,8 +844,6 @@
         Introduced tests for `sync_tools` utilities, including `maybe_async_`, `maybe_async_context`, `SoonValue`, `TaskGroup`, and others.
 
         Improves coverage for async and sync function handling, context managers, and value management.
-
-
 
     .. change:: remove accidental litestar import
         :type: bugfix
@@ -931,7 +906,6 @@
         - Simplified extension initialization and registration
         - Updated example and test files to reflect new extension structure
         - Removed deprecated methods and simplified the extension interface
-
 
 
 .. changelog:: 0.33.2
@@ -1017,7 +991,6 @@
         Extends the default `msgspec` type decoders to handle Enum types by converting them to their underlying value during serialization
 
 
-
 .. changelog:: 0.31.0
     :date: 2025-02-18
 
@@ -1070,8 +1043,7 @@
         :issue: 356
 
         When `wrap_exceptions` is `False`, the original SQLAlchemy error message will be raised instead of the wrapped Repository error
-
-        Fixes #356 (Bug: `wrap_sqlalchemy_exception` masks db errors)
+        (Bug: `wrap_sqlalchemy_exception` masks db errors)
 
     .. change:: simplify configuration hash
         :type: feature
@@ -1200,7 +1172,6 @@
         Last, but not least, there's an experimental async portal that integrates a long running asyncio loop for running async operations in Flask.  Using `foo = portal.call(<async function>)` you can get the result of an asynchronous function from a sync context.
 
 
-
 .. changelog:: 0.28.0
     :date: 2025-01-13
 
@@ -1226,7 +1197,6 @@
 .. changelog:: 0.27.0
     :date: 2025-01-11
 
-
     .. change:: add `error_messages` as class level configuration
         :type: feature
         :pr: 315
@@ -1244,7 +1214,6 @@
         :pr: 322
 
         Addition typing utilities to help with type checking and validation.
-
 
 
 .. changelog:: 0.26.0
@@ -1266,7 +1235,6 @@
         The Litestar DTO has been enhanced with:
         - The SQLAlchemyDTOConfig's `exclude`, `include`, and `rename_fields` fields will now accept string or `InstrumentedAttributes`
         - DTO supports `WriteOnlyMapped` and `DynamicMapped`
-
 
     .. change:: add default exception handler for `litestar` integration
         :type: feature
@@ -1306,6 +1274,7 @@
         :issue: 286, 287
 
         Removes the use of lambda statements in the repository and service classes.  This has no change on the end user API, however, it should remove strange queries errors seen.
+
 
 .. changelog:: 0.23.0
     :date: 2025-01-11
@@ -1362,7 +1331,6 @@
 
         instead, this looks at the sessionmaker `class_` property for adding the sanic dependency
 
-
     .. change:: correct regex mappings for duplicate and foreign key errors
         :type: bugfix
         :pr: 266
@@ -1385,8 +1353,6 @@
         :type: bugfix
         :pr: 52
         :issue: 51
-
-        Fixes #51
 
         Bug: CollectionFilter returns all entries if values is empty
 
