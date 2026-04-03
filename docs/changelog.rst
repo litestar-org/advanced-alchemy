@@ -10,7 +10,7 @@
         :type: bugfix
         :pr: 701
 
-        - Fixes `sqlalchemy.exc.InvalidRequestError: No such event 'before_flush' for target 'async_sessionmaker(...)'` raised when calling `SQLAlchemyAsyncConfig.create_session_maker()`
+        Fixes `sqlalchemy.exc.InvalidRequestError: No such event 'before_flush' for target 'async_sessionmaker(...)'` raised when calling `SQLAlchemyAsyncConfig.create_session_maker()`
 
 
 .. changelog:: 1.9.1
