@@ -518,3 +518,81 @@ async def test_lifespan_with_custom_lifespan_starlette(
     mock_aa_shutdown.assert_called_once()
     mock_custom_startup.assert_called_once()
     mock_custom_shutdown.assert_called_once()
+
+
+def test_async_session_handler_rollback_failure_still_closes(
+    mocker: MockerFixture,
+) -> None:
+    """Verify session is closed even when rollback raises in async session_handler."""
+    mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.rollback",
+        side_effect=RuntimeError("rollback failed"),
+    )
+    app = Starlette()
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=500)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app, raise_server_exceptions=False) as client:
+        response = client.get("/")
+        assert response.status_code == 500
+        mock_close.assert_called_once()
+
+
+def test_sync_session_handler_rollback_failure_still_closes(
+    mocker: MockerFixture,
+) -> None:
+    """Verify session is closed even when rollback raises in sync session_handler."""
+    mocker.patch("sqlalchemy.orm.Session.commit")
+    mock_close = mocker.patch("sqlalchemy.orm.Session.close")
+    mocker.patch(
+        "sqlalchemy.orm.Session.rollback",
+        side_effect=RuntimeError("rollback failed"),
+    )
+    app = Starlette()
+    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=500)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app, raise_server_exceptions=False) as client:
+        response = client.get("/")
+        assert response.status_code == 500
+        mock_close.assert_called_once()
+
+
+def test_async_session_handler_commit_failure_still_closes(
+    mocker: MockerFixture,
+) -> None:
+    """Verify session is closed even when commit raises in async session_handler."""
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.commit",
+        side_effect=RuntimeError("commit failed"),
+    )
+    mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
+    mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
+    app = Starlette()
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    alchemy = AdvancedAlchemy(config, app=app)
+
+    async def handler(request: Request) -> Response:
+        _session = alchemy.get_session(request)
+        return Response(status_code=200)
+
+    app.router.routes.append(Route("/", endpoint=handler))
+
+    with TestClient(app=app, raise_server_exceptions=False) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        mock_close.assert_called_once()

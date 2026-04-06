@@ -412,3 +412,48 @@ def test_repository_disabled_exception_to_http_response(exc: type[RepositoryErro
     app = Litestar(route_handlers=[], plugins=[plugin])
     assert app.exception_handlers.get(exc) is None
     assert app.exception_handlers.get(RepositoryError) is None
+
+
+async def test_autocommit_handler_rollback_failure_still_closes(create_scope: Callable[..., Scope]) -> None:
+    """Verify session is closed even when rollback raises in async autocommit handler."""
+    config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler=autocommit_before_send_handler,
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
+    mock_session = MagicMock(spec=AsyncSession)
+    mock_session.rollback.side_effect = RuntimeError("rollback failed")
+    http_scope = create_scope(app=app)
+    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": 500,
+        "headers": {},
+    }
+    await autocommit_before_send_handler(http_response_start, http_scope)
+    mock_session.rollback.assert_awaited_once()
+    # http.response.start is a SESSION_TERMINUS event, so close runs too
+    mock_session.close.assert_awaited_once()
+
+
+async def test_autocommit_handler_commit_failure_does_not_crash(create_scope: Callable[..., Scope]) -> None:
+    """Verify commit failure is caught and does not crash the handler."""
+    config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite://",
+        before_send_handler=autocommit_before_send_handler,
+    )
+    app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
+    mock_session = MagicMock(spec=AsyncSession)
+    mock_session.commit.side_effect = RuntimeError("commit failed")
+    http_scope = create_scope(app=app)
+    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    http_response_start: HTTPResponseStartEvent = {
+        "type": "http.response.start",
+        "status": 200,
+        "headers": {},
+    }
+    # Should not raise - the exception is caught
+    await autocommit_before_send_handler(http_response_start, http_scope)
+    mock_session.commit.assert_awaited_once()
+    mock_session.close.assert_awaited_once()
+    mock_session.commit.assert_awaited_once()

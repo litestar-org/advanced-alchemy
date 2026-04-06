@@ -6,6 +6,7 @@ including both synchronous and asynchronous database configurations.
 
 import asyncio
 import contextlib
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, cast
 
@@ -34,6 +35,8 @@ from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.service import schema_dump
+
+logger = logging.getLogger("advanced_alchemy.extensions.sanic")
 
 
 def _make_unique_context_key(app: "Sanic[Any, Any]", key: str) -> str:  # pragma: no cover
@@ -246,8 +249,13 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await session.commit()
             else:
                 await session.rollback()
+        except Exception:  # noqa: BLE001
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
-            await session.close()
+            try:
+                await session.close()
+            except Exception:  # noqa: BLE001
+                logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.ctx, self.session_key)
 
@@ -455,8 +463,13 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 await loop.run_in_executor(None, session.commit)
             else:
                 await loop.run_in_executor(None, session.rollback)
+        except Exception:  # noqa: BLE001
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
-            await loop.run_in_executor(None, session.close)
+            try:
+                await loop.run_in_executor(None, session.close)
+            except Exception:  # noqa: BLE001
+                logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.ctx, self.session_key)
 

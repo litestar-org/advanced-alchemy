@@ -8,6 +8,7 @@ similar to the Litestar extension, but tailored for FastAPI.
 import contextlib
 import datetime
 import inspect
+import logging
 from collections.abc import AsyncGenerator, Generator
 from typing import (
     TYPE_CHECKING,
@@ -52,6 +53,8 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
+
+logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
 
 if TYPE_CHECKING:
     from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -201,7 +204,7 @@ def provide_service(
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
 
 
-def provide_service(  # noqa: PLR0915
+def provide_service(  # noqa: C901, PLR0915
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
     extension: AdvancedAlchemy,
@@ -256,27 +259,41 @@ def provide_service(  # noqa: PLR0915
                 response_status = getattr(request.state, f"{session_key}_response_status", None)
                 commit_mode = async_config.commit_mode if async_config else "manual"
 
-                try:
-                    should_commit = (
-                        exc_info is None
-                        and response_status is not None
-                        and _should_commit_for_status(response_status, commit_mode)
-                    )
+                should_commit = (
+                    exc_info is None
+                    and response_status is not None
+                    and _should_commit_for_status(response_status, commit_mode)
+                )
 
+                # Each cleanup operation is individually protected so that failures
+                # in one step do not prevent subsequent steps or mask the original exception.
+                try:
                     if should_commit:
                         await db_session.commit()
                     else:
                         await db_session.rollback()
-                finally:
+                except Exception:
+                    if exc_info is not None:
+                        logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
+                    else:
+                        raise
+
+                try:
                     await db_session.close()
-                    # Clean up request state
-                    for attr in [
-                        session_key,
-                        f"{session_key}_generator_managed",
-                        f"{session_key}_response_status",
-                    ]:
-                        with contextlib.suppress(AttributeError):
-                            delattr(request.state, attr)
+                except Exception:
+                    if exc_info is not None:
+                        logger.debug("Session close failed during cleanup", exc_info=True)
+                    else:
+                        raise
+
+                # Clean up request state
+                for attr in [
+                    session_key,
+                    f"{session_key}_generator_managed",
+                    f"{session_key}_response_status",
+                ]:
+                    with contextlib.suppress(Exception):
+                        delattr(request.state, attr)
 
         return provide_async_service
 
@@ -312,27 +329,41 @@ def provide_service(  # noqa: PLR0915
             response_status = getattr(request.state, f"{session_key}_response_status", None)
             commit_mode = sync_config.commit_mode if sync_config else "manual"
 
-            try:
-                should_commit = (
-                    exc_info is None
-                    and response_status is not None
-                    and _should_commit_for_status(response_status, commit_mode)
-                )
+            should_commit = (
+                exc_info is None
+                and response_status is not None
+                and _should_commit_for_status(response_status, commit_mode)
+            )
 
+            # Each cleanup operation is individually protected so that failures
+            # in one step do not prevent subsequent steps or mask the original exception.
+            try:
                 if should_commit:
                     db_session.commit()
                 else:
                     db_session.rollback()
-            finally:
+            except Exception:
+                if exc_info is not None:
+                    logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
+                else:
+                    raise
+
+            try:
                 db_session.close()
-                # Clean up request state
-                for attr in [
-                    session_key,
-                    f"{session_key}_generator_managed",
-                    f"{session_key}_response_status",
-                ]:
-                    with contextlib.suppress(AttributeError):
-                        delattr(request.state, attr)
+            except Exception:
+                if exc_info is not None:
+                    logger.debug("Session close failed during cleanup", exc_info=True)
+                else:
+                    raise
+
+            # Clean up request state
+            for attr in [
+                session_key,
+                f"{session_key}_generator_managed",
+                f"{session_key}_response_status",
+            ]:
+                with contextlib.suppress(Exception):
+                    delattr(request.state, attr)
 
     return provide_sync_service
 
