@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator, Coroutine
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -21,6 +22,8 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 from advanced_alchemy.routing.context import reset_routing_context
+
+logger = logging.getLogger("advanced_alchemy.extensions.litestar")
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine
@@ -117,9 +120,14 @@ def autocommit_handler_maker(
                     await session.commit()
                 else:
                     await session.rollback()
+        except Exception:  # noqa: BLE001
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
             if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
-                await session.close()
+                try:
+                    await session.close()
+                except Exception:  # noqa: BLE001
+                    logger.debug("Session close failed during cleanup", exc_info=True)
                 delete_aa_scope_state(scope, session_scope_key)
 
     return handler

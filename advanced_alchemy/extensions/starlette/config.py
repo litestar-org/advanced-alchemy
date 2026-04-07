@@ -5,13 +5,14 @@ including both synchronous and asynchronous database configurations.
 """
 
 import contextlib
+import logging
 from dataclasses import dataclass, field
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool  # pyright: ignore[reportUnknownVariableType]
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from typing_extensions import Literal
 
 from advanced_alchemy._serialization import decode_json, encode_json
@@ -27,8 +28,10 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from starlette.applications import Starlette
     from starlette.middleware.base import RequestResponseEndpoint
-    from starlette.requests import Request
     from starlette.responses import Response
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
+logger = logging.getLogger("advanced_alchemy.extensions.starlette")
 
 
 FASTAPI_CLI_INSTALLED = bool(find_spec("fastapi_cli"))
@@ -65,6 +68,86 @@ def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cov
             return key
         key = f"{key}_{i}"
         i += i
+
+
+class SessionMiddleware:
+    """Pure ASGI middleware for database session lifecycle management.
+
+    Unlike BaseHTTPMiddleware, this intercepts the ``send`` callable directly to capture
+    the response status code at the moment it is sent. This ensures ``response_status``
+    is available on ``request.state`` before generator dependency cleanup runs, and avoids
+    known Starlette issues with BaseHTTPMiddleware and generator dependencies.
+    """
+
+    def __init__(self, app: "ASGIApp", config: Union["SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig"]) -> None:
+        self.app = app
+        self.config = config
+
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope)
+        reset_routing_context()
+
+        status_code = 500
+        response_started = False
+
+        async def send_wrapper(message: Any) -> None:
+            nonlocal status_code, response_started
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+                response_started = True
+                setattr(request.state, f"{self.config.session_key}_response_status", status_code)
+            await send(message)
+
+        exc_to_raise: Optional[BaseException] = None
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception as exc:  # noqa: BLE001
+            exc_to_raise = exc
+            if not response_started:
+                setattr(request.state, f"{self.config.session_key}_response_status", 500)
+        finally:
+            session = getattr(request.state, self.config.session_key, None)
+            is_generator_managed = getattr(request.state, f"{self.config.session_key}_generator_managed", False)
+            if session is not None and not is_generator_managed:
+                await self._handle_session_cleanup(session, request, status_code)
+
+        if exc_to_raise is not None:
+            raise exc_to_raise
+
+    async def _handle_session_cleanup(
+        self, session: Any, request: "Request", status_code: int
+    ) -> None:  # pragma: no cover
+        """Clean up a non-generator-managed session after the response."""
+        config = self.config
+        should_commit = (config.commit_mode == "autocommit" and 200 <= status_code < 300) or (  # noqa: PLR2004
+            config.commit_mode == "autocommit_include_redirect" and 200 <= status_code < 400  # noqa: PLR2004
+        )
+        try:
+            if isinstance(config, SQLAlchemyAsyncConfig):
+                if should_commit:
+                    await session.commit()
+                else:
+                    await session.rollback()
+            elif should_commit:
+                await run_in_threadpool(session.commit)
+            else:
+                await run_in_threadpool(session.rollback)
+        except Exception:  # noqa: BLE001
+            logger.debug("Session commit/rollback failed during middleware cleanup", exc_info=True)
+        finally:
+            try:
+                if isinstance(config, SQLAlchemyAsyncConfig):
+                    await session.close()
+                else:
+                    await run_in_threadpool(session.close)
+            except Exception:  # noqa: BLE001
+                logger.debug("Session close failed during middleware cleanup", exc_info=True)
+            with contextlib.suppress(AttributeError, KeyError):
+                delattr(request.state, config.session_key)
 
 
 def serializer(value: Any) -> str:
@@ -152,7 +235,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             app, f"advanced_alchemy_async_session_maker_{self.session_maker_key}"
         )
 
-        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)  # pyright: ignore[reportUnknownMemberType]
+        app.add_middleware(SessionMiddleware, config=self)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
@@ -198,8 +281,13 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await session.commit()
             else:
                 await session.rollback()
+        except Exception:  # noqa: BLE001
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
-            await session.close()
+            try:
+                await session.close()
+            except Exception:  # noqa: BLE001
+                logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, self.session_key)
 
@@ -310,7 +398,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             app, f"advanced_alchemy_sync_session_maker_{self.session_maker_key}"
         )
         _ = self.create_session_maker()
-        app.add_middleware(BaseHTTPMiddleware, dispatch=self.middleware_dispatch)  # pyright: ignore[reportUnknownMemberType]
+        app.add_middleware(SessionMiddleware, config=self)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
@@ -356,8 +444,13 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 await run_in_threadpool(session.commit)
             else:
                 await run_in_threadpool(session.rollback)
+        except Exception:  # noqa: BLE001
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
-            await run_in_threadpool(session.close)
+            try:
+                await run_in_threadpool(session.close)
+            except Exception:  # noqa: BLE001
+                logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, self.session_key)
 

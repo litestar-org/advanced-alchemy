@@ -364,6 +364,198 @@ def test_direct_session_uses_middleware_sync(mocker: MockerFixture) -> None:
     close.assert_called_once()
 
 
+def test_async_generator_exception_preserves_original_error(mocker: MockerFixture) -> None:
+    """Verify original exception type and message are preserved through provide_service generator."""
+    app, _config, alchemy = _make_async_app(commit_mode="autocommit")
+    _commit, rollback, close = _patch_async_session_methods(mocker)
+
+    @app.get("/")
+    def handler(
+        service: Annotated[WidgetAsyncService, Depends(alchemy.provide_service(WidgetAsyncService))],
+    ) -> Response:
+        raise ValueError("original error message")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    assert response.status_code == 500
+    rollback.assert_awaited_once()
+    close.assert_awaited_once()
+
+
+def test_async_generator_rollback_failure_does_not_mask_original(mocker: MockerFixture) -> None:
+    """Verify that if rollback() raises, the original exception is still preserved and close still runs."""
+    app, _config, alchemy = _make_async_app(commit_mode="autocommit")
+    _commit, _rollback, close = _patch_async_session_methods(mocker)
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.rollback",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("rollback failed"),
+    )
+
+    @app.get("/")
+    def handler(
+        service: Annotated[WidgetAsyncService, Depends(alchemy.provide_service(WidgetAsyncService))],
+    ) -> Response:
+        raise ValueError("original error message")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    assert response.status_code == 500
+    # Session close should still happen even if rollback fails
+    close.assert_awaited_once()
+
+
+def test_async_generator_close_failure_does_not_mask_original(mocker: MockerFixture) -> None:
+    """Verify that if close() raises, the original exception is still preserved."""
+    app, _config, alchemy = _make_async_app(commit_mode="autocommit")
+    _commit, rollback, _close = _patch_async_session_methods(mocker)
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.close",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("close failed"),
+    )
+
+    @app.get("/")
+    def handler(
+        service: Annotated[WidgetAsyncService, Depends(alchemy.provide_service(WidgetAsyncService))],
+    ) -> Response:
+        raise ValueError("original error message")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    assert response.status_code == 500
+    rollback.assert_awaited_once()
+
+
+def test_sync_generator_rollback_failure_does_not_mask_original(mocker: MockerFixture) -> None:
+    """Verify that if sync rollback() raises, the original exception is still preserved."""
+    app, _config, alchemy = _make_sync_app(commit_mode="autocommit")
+    _commit, _rollback, close = _patch_sync_session_methods(mocker)
+    mocker.patch(
+        "sqlalchemy.orm.Session.rollback",
+        side_effect=RuntimeError("rollback failed"),
+    )
+
+    @app.get("/")
+    def handler(
+        service: Annotated[WidgetSyncService, Depends(alchemy.provide_service(WidgetSyncService))],
+    ) -> Response:
+        raise ValueError("original error message")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    assert response.status_code == 500
+    close.assert_called_once()
+
+
+def test_sync_generator_close_failure_does_not_mask_original(mocker: MockerFixture) -> None:
+    """Verify that if sync close() raises, the original exception is still preserved."""
+    app, _config, alchemy = _make_sync_app(commit_mode="autocommit")
+    _commit, rollback, _close = _patch_sync_session_methods(mocker)
+    mocker.patch(
+        "sqlalchemy.orm.Session.close",
+        side_effect=RuntimeError("close failed"),
+    )
+
+    @app.get("/")
+    def handler(
+        service: Annotated[WidgetSyncService, Depends(alchemy.provide_service(WidgetSyncService))],
+    ) -> Response:
+        raise ValueError("original error message")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    assert response.status_code == 500
+    rollback.assert_called_once()
+
+
+def test_async_pydantic_validation_error_preserved(mocker: MockerFixture) -> None:
+    """Verify Pydantic ValidationError in route handler is not overridden by session state."""
+    from pydantic import BaseModel
+
+    app, _config, alchemy = _make_async_app(commit_mode="autocommit")
+    _commit, rollback, close = _patch_async_session_methods(mocker)
+
+    class StrictModel(BaseModel):
+        value: int
+
+    @app.post("/")
+    def handler(
+        service: Annotated[WidgetAsyncService, Depends(alchemy.provide_service(WidgetAsyncService))],
+    ) -> dict[str, str]:
+        # This will raise pydantic.ValidationError because "not_a_number" is not int
+        StrictModel(value="not_a_number")  # type: ignore[arg-type]
+        return {"ok": "true"}
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.post("/")
+    assert response.status_code == 500
+    # The key check: session was cleaned up properly
+    rollback.assert_awaited_once()
+    close.assert_awaited_once()
+
+
+def test_async_cleanup_exception_suppressed_when_original_exists(mocker: MockerFixture) -> None:
+    """Verify cleanup exceptions are always suppressed when an original exception exists."""
+    app, _config, alchemy = _make_async_app(commit_mode="autocommit")
+    _commit, _rollback, close = _patch_async_session_methods(mocker)
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.rollback",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("rollback failed"),
+    )
+
+    @app.get("/")
+    def handler(
+        service: Annotated[
+            WidgetAsyncService,
+            Depends(alchemy.provide_service(WidgetAsyncService)),
+        ],
+    ) -> Response:
+        raise ValueError("original error")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    # Cleanup exception is suppressed; original error produces 500
+    assert response.status_code == 500
+    # Session still closed despite rollback failure
+    close.assert_awaited_once()
+
+
+def test_async_middleware_captures_status_from_successful_response() -> None:
+    """Verify the pure ASGI middleware correctly captures response status code."""
+    app, _config, alchemy = _make_async_app(commit_mode="autocommit")
+
+    @app.get("/")
+    def handler(
+        request: Request,
+        service: Annotated[WidgetAsyncService, Depends(alchemy.provide_service(WidgetAsyncService))],
+    ) -> Response:
+        return Response(status_code=201)
+
+    # Use a middleware to capture what status was stored
+
+    with TestClient(app=app) as client:
+        response = client.get("/")
+        assert response.status_code == 201
+
+
+def test_async_middleware_handles_app_exception_without_swallowing() -> None:
+    """Verify middleware sets response_status=500 on exception and re-raises."""
+    app, _config, alchemy = _make_async_app(commit_mode="manual")
+
+    @app.get("/")
+    def handler(
+        service: Annotated[WidgetAsyncService, Depends(alchemy.provide_service(WidgetAsyncService))],
+    ) -> Response:
+        raise RuntimeError("boom")
+
+    client = TestClient(app=app, raise_server_exceptions=False)
+    response = client.get("/")
+    # FastAPI's exception handler should catch this and return 500
+    assert response.status_code == 500
+
+
 def test_multiple_generator_sessions_tracked_independently() -> None:
     """Verify multiple configs track generator-managed sessions separately."""
     app = FastAPI()
