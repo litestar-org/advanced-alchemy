@@ -236,7 +236,7 @@ async def test_repo_list_and_count_method(seeded_test_session_async: "tuple[Asyn
     session, models = seeded_test_session_async
     author_repo = create_repository(session, models["author"])
 
-    data, count = await maybe_async(author_repo.list_and_count())
+    data, count = await maybe_async(author_repo.get_many_and_count())
     assert len(data) == 2
     assert count == 2
 
@@ -248,7 +248,7 @@ async def test_repo_list_and_count_basic_method(
     session, models = seeded_test_session_async
     author_repo = create_repository(session, models["author"])
 
-    data, count = await maybe_async(author_repo.list_and_count())
+    data, count = await maybe_async(author_repo.get_many_and_count())
     assert len(data) == 2
     assert count == 2
 
@@ -261,10 +261,10 @@ async def test_repo_list_method_with_filters(seeded_test_session_async: "tuple[A
     # Test filtering by name
     if hasattr(session, "bind") and getattr(session.bind, "dialect", {}).name == "mock":
         # Mock repository handling
-        data = await maybe_async(author_repo.list(**{author_repo.model_type.name.key: "Agatha Christie"}))
+        data = await maybe_async(author_repo.get_many(**{author_repo.model_type.name.key: "Agatha Christie"}))
     else:
         # Real repository handling
-        data = await maybe_async(author_repo.list(author_repo.model_type.name == "Agatha Christie"))
+        data = await maybe_async(author_repo.get_many(author_repo.model_type.name == "Agatha Christie"))
 
     assert len(data) == 1
     assert data[0].name == "Agatha Christie"
@@ -276,7 +276,7 @@ async def test_repo_exists_method(seeded_test_session_async: "tuple[AsyncSession
     author_repo = create_repository(session, models["author"])
 
     # Get first author ID
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     first_author_id = authors[0].id
 
     assert await maybe_async(author_repo.exists(id=first_author_id)) is True
@@ -292,7 +292,7 @@ async def test_repo_get_method(seeded_test_session_async: "tuple[AsyncSession, d
     author_repo = create_repository(session, models["author"])
 
     # Get first author ID
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     first_author_id = authors[0].id
 
     author = await maybe_async(author_repo.get(first_author_id))
@@ -305,7 +305,7 @@ async def test_repo_get_one_or_none_method(seeded_test_session_async: "tuple[Asy
     author_repo = create_repository(session, models["author"])
 
     # Get first author ID
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     first_author_id = authors[0].id
 
     author = await maybe_async(author_repo.get_one_or_none(id=first_author_id))
@@ -340,7 +340,7 @@ async def test_repo_update_method(seeded_test_session_async: "tuple[AsyncSession
     author_repo = create_repository(session, models["author"])
 
     # Get first author
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     author = authors[0]
 
     original_name = author.name
@@ -365,7 +365,7 @@ async def test_service_update_with_dict_data_refreshes_timestamp(
     session, models = seeded_test_session_async
     author_service = get_service_from_session((session, models), "author")
 
-    authors = await maybe_async(author_service.list())
+    authors = await maybe_async(author_service.get_many())
     author = authors[0]
 
     original_created_at = author.created_at
@@ -389,7 +389,7 @@ async def test_repo_update_many_method_stale_data_fix(
     author_repo = create_repository(session, models["author"])
 
     # Get first two authors
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     authors = authors[:2]
 
     # Create update data that only updates name, leaving other fields unchanged
@@ -426,7 +426,7 @@ async def test_repo_update_many_mixed_types(seeded_test_session_async: "tuple[As
     author_repo = create_repository(session, models["author"])
 
     # Get authors to update
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     authors = authors[:2]
 
     # Test mixed input types: dict and model instance
@@ -451,7 +451,7 @@ async def test_repo_delete_method(seeded_test_session_async: "tuple[AsyncSession
     author_repo = create_repository(session, models["author"])
 
     # Get first author
-    authors = await maybe_async(author_repo.list())
+    authors = await maybe_async(author_repo.get_many())
     author = authors[0]
     author_id = author.id
 
@@ -460,7 +460,7 @@ async def test_repo_delete_method(seeded_test_session_async: "tuple[AsyncSession
     assert deleted_author.id == author_id
 
     # Verify it was deleted
-    remaining_authors = await maybe_async(author_repo.list())
+    remaining_authors = await maybe_async(author_repo.get_many())
     assert len(remaining_authors) == 1
 
     remaining_ids = [a.id for a in remaining_authors]
@@ -491,7 +491,7 @@ async def test_service_list_method(seeded_test_session_async: "tuple[AsyncSessio
     _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
-    authors = await maybe_async(author_service.list())
+    authors = await maybe_async(author_service.get_many())
     assert len(authors) == 2
 
 
@@ -501,7 +501,7 @@ async def test_service_get_method(seeded_test_session_async: "tuple[AsyncSession
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Get first author ID
-    authors = await maybe_async(author_service.list())
+    authors = await maybe_async(author_service.get_many())
     first_author_id = authors[0].id
 
     author = await maybe_async(author_service.get(first_author_id))
@@ -526,7 +526,7 @@ async def test_service_update_method(seeded_test_session_async: "tuple[AsyncSess
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Get first author
-    authors = await maybe_async(author_service.list())
+    authors = await maybe_async(author_service.get_many())
     author = authors[0]
     author_id = author.id
 
@@ -550,7 +550,7 @@ async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSess
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Get first author
-    authors = await maybe_async(author_service.list())
+    authors = await maybe_async(author_service.get_many())
     author_id = authors[0].id
 
     # Delete via service
@@ -558,7 +558,7 @@ async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSess
     assert deleted_author.id == author_id
 
     # Verify deletion
-    remaining_authors = await maybe_async(author_service.list())
+    remaining_authors = await maybe_async(author_service.get_many())
     assert len(remaining_authors) == 1
 
 
@@ -572,7 +572,7 @@ async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncS
     cutoff_date = datetime.datetime(2023, 4, 1, tzinfo=datetime.timezone.utc)
     filter_obj = BeforeAfter(field_name="created_at", before=cutoff_date, after=None)
 
-    authors = await maybe_async(author_repo.list(filter_obj))
+    authors = await maybe_async(author_repo.get_many(filter_obj))
     # Should get authors created before April 1, 2023
     assert len(authors) >= 1  # At least one author should match
 
@@ -585,7 +585,7 @@ async def test_repo_filter_search(seeded_test_session_async: "tuple[AsyncSession
     # Search for 'Christie' in name
     search_filter = SearchFilter(field_name="name", value="Christie")
 
-    authors = await maybe_async(author_repo.list(search_filter))
+    authors = await maybe_async(author_repo.get_many(search_filter))
     assert len(authors) == 1
     assert "Christie" in authors[0].name
 
@@ -598,7 +598,7 @@ async def test_repo_filter_order_by(seeded_test_session_async: "tuple[AsyncSessi
     # Order by name ascending
     order_filter = OrderBy(field_name="name")
 
-    authors = await maybe_async(author_repo.list(order_filter))
+    authors = await maybe_async(author_repo.get_many(order_filter))
     assert len(authors) == 2
 
     # Verify ordering
@@ -615,7 +615,7 @@ async def test_service_paginated_list(seeded_test_session_async: "tuple[AsyncSes
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Test pagination using LimitOffset filter with consistent ordering
-    paginated = await maybe_async(author_service.list(LimitOffset(limit=1, offset=0), OrderBy(field_name="name")))
+    paginated = await maybe_async(author_service.get_many(LimitOffset(limit=1, offset=0), OrderBy(field_name="name")))
 
     assert len(paginated) == 1
 
@@ -1198,7 +1198,7 @@ async def test_composite_pk_list(
 
     user_role_repo = create_repository(session, models["user_role"])
 
-    results = await maybe_async(user_role_repo.list())
+    results = await maybe_async(user_role_repo.get_many())
     assert len(results) == 3
 
 

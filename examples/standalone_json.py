@@ -64,7 +64,7 @@ async def run_script() -> None:
 
         assert await repo.count(Item.data.op("?")("price")) == 2
 
-        products, total_products = await repo.list_and_count(Item.data.op("?")("not_price"))
+        products, total_products = await repo.get_many_and_count(Item.data.op("?")("not_price"))
         assert len(products) == 1
         assert total_products == 1
         assert products[0].name == "Headphones"

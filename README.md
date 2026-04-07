@@ -124,7 +124,7 @@ with db.get_session() as db_session:
     print(f"Created {len(objs)} new objects.")
 
     # 2) Select paginated data and total row count.  Pass additional filters as kwargs
-    created_objs, total_objs = repo.list_and_count(LimitOffset(limit=10, offset=0), name="Cody")
+    created_objs, total_objs = repo.get_many_and_count(LimitOffset(limit=10, offset=0), name="Cody")
     print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
     # 3) Let's remove the batch of records selected.
@@ -190,7 +190,7 @@ with db.get_session() as db_session:
     print(f"Created {len(objs)} new objects.")
 
     # 2) Select paginated data and total row count.  Pass additional filters as kwargs
-    created_objs, total_objs = service.list_and_count(LimitOffset(limit=10, offset=0), name="Cody")
+    created_objs, total_objs = service.get_many_and_count(LimitOffset(limit=10, offset=0), name="Cody")
     print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
     # 3) Let's remove the batch of records selected.

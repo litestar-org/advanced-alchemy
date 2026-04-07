@@ -158,7 +158,7 @@ Service Integration
         limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
         author_service = AuthorService(session=alchemy.get_sync_session())
-        results, total = author_service.list_and_count(limit_offset)
+        results, total = author_service.get_many_and_count(limit_offset)
         payload = author_service.to_schema(
             results,
             total,

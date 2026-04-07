@@ -10,6 +10,7 @@ from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT  # pyright: ignore[reportPrivateUsage]
+from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -96,8 +97,21 @@ class InMemoryStore(Generic[T]):
     def remove(self, key: Any) -> T:
         return self._store.pop(self._resolve_key(key))
 
-    def list(self) -> List[T]:
+    def get_all(self) -> List[T]:
         return list(self._store.values())
+
+    def list(self) -> List[T]:
+        """.. deprecated:: 1.10.0
+        Use :meth:`get_all` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_all",
+        )
+        return self.get_all()
 
     def remove_all(self) -> None:
         self._store = {}
