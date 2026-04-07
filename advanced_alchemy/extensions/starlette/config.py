@@ -235,7 +235,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             app, f"advanced_alchemy_async_session_maker_{self.session_maker_key}"
         )
 
-        app.add_middleware(SessionMiddleware, config=self)
+        app.add_middleware(SessionMiddleware, config=self)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
@@ -398,7 +398,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             app, f"advanced_alchemy_sync_session_maker_{self.session_maker_key}"
         )
         _ = self.create_session_maker()
-        app.add_middleware(SessionMiddleware, config=self)
+        app.add_middleware(SessionMiddleware, config=self)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
