@@ -3,6 +3,19 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.9.3
+    :date: 2026-04-08
+
+    .. change:: prevent session cleanup from masking original exceptions
+        :type: bugfix
+        :pr: 704
+        :issue: 705
+
+        - Replace `BaseHTTPMiddleware` with pure ASGI `SessionMiddleware` in Starlette/FastAPI extension — fixes timing issue where `response_status` wasn't set before generator cleanup
+        - Protect session cleanup (commit/rollback/close) across **all** framework extensions so cleanup failures never mask the original route handler exception
+        - Each cleanup operation is individually wrapped; when an original exception exists, cleanup errors are logged but suppressed
+
+
 .. changelog:: 1.9.2
     :date: 2026-04-03
 
