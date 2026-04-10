@@ -24,6 +24,7 @@ from advanced_alchemy.extensions.starlette.config import (
 def test_async_create_session_maker_registers_all_listeners() -> None:
     mock_session_maker = MagicMock(spec=async_sessionmaker)
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///")
+    config.engine_instance = MagicMock()
 
     with (
         patch.object(
@@ -49,6 +50,7 @@ def test_async_create_session_maker_file_object_listener_disabled() -> None:
         connection_string="sqlite+aiosqlite:///",
         enable_file_object_listener=False,
     )
+    config.engine_instance = MagicMock()
 
     with (
         patch.object(
@@ -70,6 +72,7 @@ def test_async_create_session_maker_timestamp_listener_disabled() -> None:
         connection_string="sqlite+aiosqlite:///",
         enable_touch_updated_timestamp_listener=False,
     )
+    config.engine_instance = MagicMock()
 
     with (
         patch.object(
@@ -91,6 +94,7 @@ def test_async_create_session_maker_timestamp_listener_disabled() -> None:
 def test_sync_create_session_maker_registers_all_listeners() -> None:
     mock_session_maker = MagicMock(spec=sessionmaker)
     config = SQLAlchemySyncConfig(connection_string="sqlite:///")
+    config.engine_instance = MagicMock()
 
     with (
         patch.object(
@@ -112,6 +116,7 @@ def test_sync_create_session_maker_file_object_listener_disabled() -> None:
         connection_string="sqlite:///",
         enable_file_object_listener=False,
     )
+    config.engine_instance = MagicMock()
 
     with (
         patch.object(
@@ -132,6 +137,7 @@ def test_sync_create_session_maker_timestamp_listener_disabled() -> None:
         connection_string="sqlite:///",
         enable_touch_updated_timestamp_listener=False,
     )
+    config.engine_instance = MagicMock()
 
     with (
         patch.object(
