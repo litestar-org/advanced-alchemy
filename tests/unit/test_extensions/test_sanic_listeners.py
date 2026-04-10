@@ -42,6 +42,10 @@ def test_async_create_session_maker_registers_all_listeners() -> None:
     assert result is mock_session_maker
     assert mock_listen.call_count == 6
     mock_session_maker.configure.assert_called_once_with(sync_session_class=mock_sync_maker)
+    for call in mock_listen.call_args_list:
+        assert call.args[0] is mock_sync_maker
+    listener_events = {c.args[1] for c in mock_listen.call_args_list}
+    assert {"before_flush", "after_commit", "after_rollback"} <= listener_events
 
 
 def test_async_create_session_maker_file_object_listener_disabled() -> None:
