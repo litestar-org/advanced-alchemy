@@ -213,14 +213,17 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     def create_session_maker(self) -> Callable[[], "AsyncSession"]:
         """Get a session maker. If none exists yet, create one.
 
-        Delegates to the base-class implementation so that listener
-        registration (file-object, timestamp, cache) runs. See issue #709.
+        Preserves ``engine_instance`` caching and then delegates to the
+        base-class implementation so that listener registration
+        (file-object, timestamp, cache) runs. See issue #709.
 
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
+        if self.engine_instance is None:
+            self.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     async def session_handler(
@@ -422,14 +425,17 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     def create_session_maker(self) -> Callable[[], "Session"]:
         """Get a session maker. If none exists yet, create one.
 
-        Delegates to the base-class implementation so that listener
-        registration (file-object, timestamp, cache) runs. See issue #709.
+        Preserves ``engine_instance`` caching and then delegates to the
+        base-class implementation so that listener registration runs.
+        See issue #709.
 
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
+        if self.engine_instance is None:
+            self.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     async def session_handler(
