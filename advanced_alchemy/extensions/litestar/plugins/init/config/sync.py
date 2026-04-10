@@ -202,16 +202,15 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     def create_session_maker(self) -> "Callable[[], Session]":
         """Get a session maker. If none exists yet, create one.
 
+        Delegates to the base-class implementation so that listener
+        registration (file-object, timestamp, cache) runs. See issue #709.
+
         Returns:
             Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
-
-        session_kws = self.session_config_dict
-        if session_kws.get("bind") is None:
-            session_kws["bind"] = self.get_engine()
-        return self.session_maker_class(**session_kws)
+        return super().create_session_maker()
 
     @asynccontextmanager
     async def lifespan(
