@@ -1,0 +1,48 @@
+"""Unit tests for FastAPI SQLAlchemy config listener registration.
+
+Regression tests for https://github.com/litestar-org/advanced-alchemy/issues/709.
+
+The FastAPI extension re-exports ``SQLAlchemyAsyncConfig`` /
+``SQLAlchemySyncConfig`` from the Starlette extension, so it inherits the
+listener-registration fix for free. This module pins that claim so a
+future FastAPI-specific override cannot silently drop listeners again.
+
+Shared assertions live in ``tests/unit/test_extensions/_listener_contract.py``.
+"""
+
+from advanced_alchemy.extensions.fastapi import (
+    SQLAlchemyAsyncConfig,
+    SQLAlchemySyncConfig,
+)
+from tests.unit.test_extensions._listener_contract import (
+    assert_async_file_object_listener_disabled,
+    assert_async_registers_all_listeners,
+    assert_async_timestamp_listener_disabled,
+    assert_sync_file_object_listener_disabled,
+    assert_sync_registers_all_listeners,
+    assert_sync_timestamp_listener_disabled,
+)
+
+
+def test_async_create_session_maker_registers_all_listeners() -> None:
+    assert_async_registers_all_listeners(SQLAlchemyAsyncConfig)
+
+
+def test_async_create_session_maker_file_object_listener_disabled() -> None:
+    assert_async_file_object_listener_disabled(SQLAlchemyAsyncConfig)
+
+
+def test_async_create_session_maker_timestamp_listener_disabled() -> None:
+    assert_async_timestamp_listener_disabled(SQLAlchemyAsyncConfig)
+
+
+def test_sync_create_session_maker_registers_all_listeners() -> None:
+    assert_sync_registers_all_listeners(SQLAlchemySyncConfig)
+
+
+def test_sync_create_session_maker_file_object_listener_disabled() -> None:
+    assert_sync_file_object_listener_disabled(SQLAlchemySyncConfig)
+
+
+def test_sync_create_session_maker_timestamp_listener_disabled() -> None:
+    assert_sync_timestamp_listener_disabled(SQLAlchemySyncConfig)
