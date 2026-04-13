@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import UUID
 
 from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
