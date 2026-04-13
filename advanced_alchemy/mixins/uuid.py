@@ -11,7 +11,7 @@ from advanced_alchemy.types import UUID_UTILS_INSTALLED
 _PYTHON_SUPPORTS_UUID6_7 = sys.version_info >= (3, 14)
 
 if _PYTHON_SUPPORTS_UUID6_7:
-    from uuid import uuid4, uuid6, uuid7
+    from uuid import uuid4, uuid6, uuid7 # type: ignore[attr-defined]
 elif UUID_UTILS_INSTALLED and not TYPE_CHECKING:
     from uuid_utils.compat import (  # type: ignore[no-redef,unused-ignore]  # pyright: ignore[reportMissingImports]
         uuid4,
