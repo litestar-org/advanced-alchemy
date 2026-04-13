@@ -1,13 +1,18 @@
 import logging
+import sys
 from typing import TYPE_CHECKING, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
 
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import UUID_UTILS_INSTALLED
 
-if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
+_PYTHON_SUPPORTS_UUID6_7 = sys.version_info >= (3, 14)
+
+if _PYTHON_SUPPORTS_UUID6_7:
+    from uuid import uuid4, uuid6, uuid7
+elif UUID_UTILS_INSTALLED and not TYPE_CHECKING:
     from uuid_utils.compat import (  # type: ignore[no-redef,unused-ignore]  # pyright: ignore[reportMissingImports]
         uuid4,
         uuid6,
