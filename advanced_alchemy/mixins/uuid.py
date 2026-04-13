@@ -12,10 +12,10 @@ _PYTHON_SUPPORTS_UUID6_7 = sys.version_info >= (3, 14)
 
 if _PYTHON_SUPPORTS_UUID6_7:
     from uuid import uuid4, uuid6, uuid7  # type: ignore[attr-defined]
-    
-    uuid6: Callable[[], UUID]
-    uuid7: Callable[[], UUID]
-    
+
+    uuid6: Callable[[], UUID]  # type: ignore[no-redef]
+    uuid7: Callable[[], UUID]  # type: ignore[no-redef]
+
 elif UUID_UTILS_INSTALLED and not TYPE_CHECKING:
     from uuid_utils.compat import (  # type: ignore[no-redef,unused-ignore]  # pyright: ignore[reportMissingImports]
         uuid4,
