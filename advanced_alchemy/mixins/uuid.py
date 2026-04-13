@@ -52,7 +52,7 @@ class UUIDv6PrimaryKey(SentinelMixin):
         ):  # pragma: no cover
             logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v6 generation.")
 
-    id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True, sort_order=-100)
+    id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True, sort_order=-100)  # pyright: ignore[reportUnknownArgumentType]
     """UUID Primary key column."""
 
 
@@ -69,5 +69,5 @@ class UUIDv7PrimaryKey(SentinelMixin):
         ):  # pragma: no cover
             logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v7 generation.")
 
-    id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True, sort_order=-100)
+    id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True, sort_order=-100)  # pyright: ignore[reportUnknownArgumentType]
     """UUID Primary key column."""
