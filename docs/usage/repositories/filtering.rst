@@ -38,7 +38,7 @@ You can pass SQLAlchemy expressions directly to repository methods like ``list``
 
     async def get_recent_posts(db_session: AsyncSession) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
-        return await repository.list(
+        return await repository.get_many(
             FilteringPost.published.is_(True),
             FilteringPost.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7)),
         )
@@ -57,7 +57,7 @@ Filters records where a column's value is (or is not) in a collection of values.
 
     async def get_posts_by_ids(db_session: AsyncSession, post_ids: list[int]) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
-        return await repository.list(CollectionFilter(field_name="id", values=post_ids))
+        return await repository.get_many(CollectionFilter(field_name="id", values=post_ids))
 
 Search Filter
 ~~~~~~~~~~~~~
@@ -68,7 +68,7 @@ Provides basic string search capabilities.
 
     async def search_posts(db_session: AsyncSession, query: str) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
-        return await repository.list(SearchFilter(field_name="title", value=query, ignore_case=True))
+        return await repository.get_many(SearchFilter(field_name="title", value=query, ignore_case=True))
 
 Null and Not Null Filters
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -81,12 +81,12 @@ Filters records based on whether a column is ``NULL`` or ``NOT NULL``.
 
     async def get_unpublished_posts(db_session: AsyncSession) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
-        return await repository.list(NullFilter(field_name="published_at"))
+        return await repository.get_many(NullFilter(field_name="published_at"))
 
 
     async def get_published_posts(db_session: AsyncSession) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
-        return await repository.list(NotNullFilter(field_name="published_at"))
+        return await repository.get_many(NotNullFilter(field_name="published_at"))
 
 Pagination
 ----------
@@ -103,7 +103,7 @@ The ``LimitOffset`` filter is used for standard limit/offset pagination. The ``l
         repository = FilteringPostRepository(session=db_session)
         offset = (page - 1) * page_size
 
-        return await repository.list_and_count(
+        return await repository.get_many_and_count(
             LimitOffset(offset=offset, limit=page_size),
         )
 
@@ -116,4 +116,4 @@ All read and count operations support an optional ``bind_group`` parameter for e
 
     async def get_posts_from_analytics_replica(db_session: AsyncSession) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
-        return await repository.list(bind_group="analytics")
+        return await repository.get_many(bind_group="analytics")

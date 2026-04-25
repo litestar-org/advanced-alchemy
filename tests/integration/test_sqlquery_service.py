@@ -134,13 +134,13 @@ def test_sync_fixture_and_query(engine: Engine, sqlquery_test_tables: None) -> N
         _add_objs = state_service.create_many(
             data=[USStateStruct(**raw_obj) for raw_obj in fixture],
         )
-        _ordered_objs = state_service.list(order_by=(USState.name, True))
+        _ordered_objs = state_service.get_many(order_by=(USState.name, True))
         assert _ordered_objs[0].name == "Wyoming"
-        _ordered_objs_2 = state_service.list_and_count(order_by=[(USState.name, True)])
+        _ordered_objs_2 = state_service.get_many_and_count(order_by=[(USState.name, True)])
         assert _ordered_objs_2[0][0].name == "Wyoming"
         query_count = query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
-        list_query_objs, list_query_count = query_service.repository.list_and_count(
+        list_query_objs, list_query_count = query_service.repository.get_many_and_count(
             statement=select(StateQuery),
         )
         assert list_query_count >= 50
@@ -161,9 +161,9 @@ def test_sync_fixture_and_query(engine: Engine, sqlquery_test_tables: None) -> N
             schema_type=StateQueryStruct,
         )
         assert isinstance(_msgspec_paginated_objs.items[0], StateQueryStruct)
-        _list_service_objs = query_service.repository.list(statement=select(StateQuery))
+        _list_service_objs = query_service.repository.get_many(statement=select(StateQuery))
         assert len(_list_service_objs) >= 50
-        _get_ones = query_service.repository.list(statement=select(StateQuery), state_name="Alabama")
+        _get_ones = query_service.repository.get_many(statement=select(StateQuery), state_name="Alabama")
         assert len(_get_ones) == 1
         _get_one = query_service.repository.get_one(statement=select(StateQuery), state_name="Alabama")
         assert _get_one.state_name == "Alabama"
@@ -213,13 +213,13 @@ async def test_async_fixture_and_query(async_engine: AsyncEngine, sqlquery_test_
         _add_objs = await state_service.create_many(
             data=[USStateBaseModel(**raw_obj) for raw_obj in fixture],
         )
-        _ordered_objs = await state_service.list(order_by=(USState.name, True))
+        _ordered_objs = await state_service.get_many(order_by=(USState.name, True))
         assert _ordered_objs[0].name == "Wyoming"
-        _ordered_objs_2 = await state_service.list_and_count(order_by=(USState.name, True))
+        _ordered_objs_2 = await state_service.get_many_and_count(order_by=(USState.name, True))
         assert _ordered_objs_2[0][0].name == "Wyoming"
         query_count = await query_service.repository.count(statement=select(StateQuery))
         assert query_count > 0
-        list_query_objs, list_query_count = await query_service.repository.list_and_count(
+        list_query_objs, list_query_count = await query_service.repository.get_many_and_count(
             statement=select(StateQuery),
         )
         assert list_query_count >= 50
@@ -240,9 +240,9 @@ async def test_async_fixture_and_query(async_engine: AsyncEngine, sqlquery_test_
             schema_type=StateQueryStruct,
         )
         assert isinstance(_msgspec_paginated_objs.items[0], StateQueryStruct)
-        _list_service_objs = await query_service.repository.list(statement=select(StateQuery))
+        _list_service_objs = await query_service.repository.get_many(statement=select(StateQuery))
         assert len(_list_service_objs) >= 50
-        _get_ones = await query_service.repository.list(statement=select(StateQuery), state_name="Alabama")
+        _get_ones = await query_service.repository.get_many(statement=select(StateQuery), state_name="Alabama")
         assert len(_get_ones) == 1
         _get_one = await query_service.repository.get_one(statement=select(StateQuery), state_name="Alabama")
         assert _get_one.state_name == "Alabama"

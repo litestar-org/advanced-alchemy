@@ -30,7 +30,7 @@ Example:
             user = await repo.get(user_id)
 
         with replica_context():
-            users = await repo.list()
+            users = await repo.get_many()
 """
 
 from advanced_alchemy.routing.context import (

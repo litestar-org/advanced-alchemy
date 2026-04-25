@@ -104,7 +104,7 @@ Update Many
 
     async def publish_posts(db_session: AsyncSession, post_ids: list[int]) -> list[Post]:
         repository = PostRepository(session=db_session)
-        posts = await repository.list(Post.id.in_(post_ids), published=False)
+        posts = await repository.get_many(Post.id.in_(post_ids), published=False)
 
         for post in posts:
             post.published = True
@@ -157,6 +157,6 @@ For complex custom queries or aggregations:
 
     async def get_posts_count_by_status(db_session: AsyncSession) -> list[Row[Any]]:
         repository = SQLAlchemyAsyncQueryRepository(session=db_session)
-        return await repository.list(
+        return await repository.get_many(
             select(Post.published, func.count(Post.id)).group_by(Post.published)
         )

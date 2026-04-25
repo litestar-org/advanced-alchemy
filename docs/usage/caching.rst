@@ -170,8 +170,8 @@ The cache manager integrates with repositories through the ``cache_manager`` par
 
     # These methods support caching:
     user = await repo.get(user_id)  # Cached by entity ID
-    users = await repo.list()  # Cached with version-based invalidation
-    users, count = await repo.list_and_count()  # Cached with version-based invalidation
+    users = await repo.get_many()  # Cached with version-based invalidation
+    users, count = await repo.get_many_and_count()  # Cached with version-based invalidation
 
 Bypassing the Cache
 ~~~~~~~~~~~~~~~~~~~
@@ -182,7 +182,7 @@ You can bypass the cache for specific queries:
 
     # Force database fetch, skip cache
     user = await repo.get(user_id, use_cache=False)
-    users = await repo.list(use_cache=False)
+    users = await repo.get_many(use_cache=False)
 
 Automatic Cache Invalidation
 ----------------------------
@@ -208,7 +208,7 @@ for that model:
 .. code-block:: python
 
     # First call caches with version token "abc123"
-    users = await repo.list()
+    users = await repo.get_many()
 
     # Modify any user
     user.name = "New Name"
@@ -216,7 +216,7 @@ for that model:
     await session.commit()  # Version token bumped to "def456"
 
     # Next call sees new version, fetches fresh data
-    users = await repo.list()
+    users = await repo.get_many()
 
 Singleflight (Stampede Protection)
 ----------------------------------
