@@ -19,7 +19,9 @@ from advanced_alchemy.service._sync import (
     SQLAlchemySyncRepositoryReadService,
     SQLAlchemySyncRepositoryService,
 )
+from advanced_alchemy.service._typing import ServiceProvider, ServiceWithSession
 from advanced_alchemy.service._util import ResultConverter, find_filter
+from advanced_alchemy.service.composition import ServiceComposition
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.typing import ATTRS_INSTALLED
 from advanced_alchemy.utils.serializers import (
@@ -77,6 +79,9 @@ __all__ = (
     "SQLAlchemySyncQueryService",
     "SQLAlchemySyncRepositoryReadService",
     "SQLAlchemySyncRepositoryService",
+    "ServiceComposition",
+    "ServiceProvider",
+    "ServiceWithSession",
     "SupportedSchemaModel",
     "fields",
     "find_filter",
