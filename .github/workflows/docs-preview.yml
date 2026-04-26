@@ -42,7 +42,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ secrets.CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          private-key: ${{ secrets.CLIENT_PRIVATE_KEY }}
           owner: litestar-org
           repositories: advanced-alchemy-docs-preview
           permission-contents: write
