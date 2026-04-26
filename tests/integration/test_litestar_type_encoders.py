@@ -1,16 +1,50 @@
+"""Tests for the Litestar serialization plugin's type-encoder/decoder wiring.
+
+The wiring lives on :class:`SQLAlchemySerializationPlugin` (a
+``SerializationPlugin`` that also implements ``InitPluginProtocol``), not on
+``SQLAlchemyInitPlugin`` — encoder/decoder registration is a serialization
+concern.
+"""
+
 from typing import Any
 from unittest.mock import patch
 
 import pytest
 from litestar.config.app import AppConfig
+from litestar.plugins import InitPluginProtocol, SerializationPlugin
 
 from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.plugin import SQLAlchemyInitPlugin
+from advanced_alchemy.extensions.litestar.plugins.serialization import SQLAlchemySerializationPlugin
+
+
+def test_serialization_plugin_implements_both_protocols() -> None:
+    """It is registered as both a SerializationPlugin and an InitPluginProtocol."""
+    plugin = SQLAlchemySerializationPlugin()
+    assert isinstance(plugin, SerializationPlugin)
+    assert isinstance(plugin, InitPluginProtocol)
+
+
+def test_init_plugin_does_not_touch_type_encoders() -> None:
+    """``SQLAlchemyInitPlugin`` no longer manages type encoders/decoders.
+
+    This guards against regression of the responsibility split: anything
+    related to JSON serialization belongs on the serialization plugin.
+    """
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    plugin = SQLAlchemyInitPlugin(config=config)
+
+    app_config = AppConfig()
+    plugin.on_app_init(app_config)
+
+    # No AA encoders/decoders should have been added by the init plugin.
+    assert not app_config.type_encoders
+    assert not app_config.type_decoders
 
 
 @pytest.mark.anyio
 async def test_aa_type_encoders_merging_logic() -> None:
-    """Verify that AA built-in encoders are added and user encoders take precedence."""
+    """Built-in AA encoders are added; user encoders override on collision."""
 
     class FakeType:
         pass
@@ -18,22 +52,19 @@ async def test_aa_type_encoders_merging_logic() -> None:
     def fake_encoder(_: Any) -> str:
         return "fake"
 
-    # Mock _get_aa_type_encoders to return a predictable set of encoders
-    # This allows testing the merging logic independently of the environment
     with patch(
-        "advanced_alchemy.extensions.litestar.plugins.init.plugin._get_aa_type_encoders",
+        "advanced_alchemy.extensions.litestar.plugins.serialization._get_aa_type_encoders",
         return_value={FakeType: fake_encoder},
     ):
-        config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
-        plugin = SQLAlchemyInitPlugin(config=config)
+        plugin = SQLAlchemySerializationPlugin()
 
-        # 1. No user encoders: built-in should be added
+        # 1. No user encoders: built-in is added.
         app_config = AppConfig()
         plugin.on_app_init(app_config)
         assert app_config.type_encoders is not None
         assert app_config.type_encoders[FakeType] == fake_encoder
 
-        # 2. User encoder for DIFFERENT type: both should exist
+        # 2. User encoder for a different type: both coexist.
         class OtherType:
             pass
 
@@ -46,7 +77,7 @@ async def test_aa_type_encoders_merging_logic() -> None:
         assert app_config.type_encoders[FakeType] == fake_encoder
         assert app_config.type_encoders[OtherType] == other_encoder
 
-        # 3. User encoder OVERRIDES AA encoder: user version must win
+        # 3. User encoder OVERRIDES the AA built-in.
         def override_encoder(_: Any) -> str:
             return "override"
 
@@ -57,13 +88,41 @@ async def test_aa_type_encoders_merging_logic() -> None:
 
 
 @pytest.mark.anyio
+async def test_aa_type_decoders_merging_logic() -> None:
+    """Built-in AA decoders are added; user decoders take precedence."""
+
+    def fake_predicate(_: Any) -> bool:
+        return False
+
+    def fake_decoder(_t: type, _v: Any) -> Any:
+        return None
+
+    def user_predicate(_: Any) -> bool:
+        return False
+
+    def user_decoder(_t: type, _v: Any) -> Any:
+        return None
+
+    with patch(
+        "advanced_alchemy.extensions.litestar.plugins.serialization._get_aa_type_decoders",
+        return_value=[(fake_predicate, fake_decoder)],
+    ):
+        plugin = SQLAlchemySerializationPlugin()
+
+        # User decoders ordered FIRST (higher precedence in Litestar's resolution).
+        app_config = AppConfig(type_decoders=[(user_predicate, user_decoder)])
+        plugin.on_app_init(app_config)
+        assert app_config.type_decoders is not None
+        assert (user_predicate, user_decoder) in app_config.type_decoders
+        assert (fake_predicate, fake_decoder) in app_config.type_decoders
+
+
+@pytest.mark.anyio
 async def test_real_asyncpg_encoder_integration() -> None:
-    """Verify integration with real asyncpg if available."""
+    """Real asyncpg pgproto.UUID gets registered when asyncpg is installed."""
     pgproto = pytest.importorskip("asyncpg.pgproto.pgproto")
 
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
-    plugin = SQLAlchemyInitPlugin(config=config)
-
+    plugin = SQLAlchemySerializationPlugin()
     app_config = AppConfig()
     plugin.on_app_init(app_config)
 
@@ -74,12 +133,10 @@ async def test_real_asyncpg_encoder_integration() -> None:
 
 @pytest.mark.anyio
 async def test_real_uuid_utils_encoder_integration() -> None:
-    """Verify integration with real uuid_utils if available."""
+    """Real uuid_utils.UUID gets registered when uuid_utils is installed."""
     uuid_utils = pytest.importorskip("uuid_utils")
 
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
-    plugin = SQLAlchemyInitPlugin(config=config)
-
+    plugin = SQLAlchemySerializationPlugin()
     app_config = AppConfig()
     plugin.on_app_init(app_config)
 
