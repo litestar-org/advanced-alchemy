@@ -1,14 +1,78 @@
 """Public type shims for optional dependencies.
 
 Re-exports foundational stub types so that internal and external code
-can ``from advanced_alchemy.typing import SQLModelBase`` without
-reaching into private modules.
+can ``from advanced_alchemy.typing import SQLModelBase`` (or any other
+shim) without reaching into private modules.
 """
 
-from advanced_alchemy._typing import SQLMODEL_INSTALLED, SQLModelBase, SQLModelBaseLike
+from advanced_alchemy._typing import (
+    ATTRS_INSTALLED,
+    CATTRS_INSTALLED,
+    LITESTAR_INSTALLED,
+    MSGSPEC_INSTALLED,
+    NUMPY_INSTALLED,
+    ORJSON_INSTALLED,
+    PYDANTIC_INSTALLED,
+    SQLMODEL_INSTALLED,
+    UNSET,
+    AttrsInstance,
+    AttrsLike,
+    BaseModel,
+    BaseModelLike,
+    DataclassProtocol,
+    DictProtocol,
+    DTOData,
+    DTODataLike,
+    FailFast,
+    SQLModelBase,
+    SQLModelBaseLike,
+    Struct,
+    StructLike,
+    T,
+    T_co,
+    TypeAdapter,
+    UnsetType,
+    attrs_asdict,
+    attrs_fields,
+    attrs_has,
+    attrs_nothing,
+    cattrs_structure,
+    cattrs_unstructure,
+    convert,
+)
 
 __all__ = (
+    "ATTRS_INSTALLED",
+    "CATTRS_INSTALLED",
+    "LITESTAR_INSTALLED",
+    "MSGSPEC_INSTALLED",
+    "NUMPY_INSTALLED",
+    "ORJSON_INSTALLED",
+    "PYDANTIC_INSTALLED",
     "SQLMODEL_INSTALLED",
+    "UNSET",
+    "AttrsInstance",
+    "AttrsLike",
+    "BaseModel",
+    "BaseModelLike",
+    "DTOData",
+    "DTODataLike",
+    "DataclassProtocol",
+    "DictProtocol",
+    "FailFast",
     "SQLModelBase",
     "SQLModelBaseLike",
+    "Struct",
+    "StructLike",
+    "T",
+    "T_co",
+    "TypeAdapter",
+    "UnsetType",
+    "attrs_asdict",
+    "attrs_fields",
+    "attrs_has",
+    "attrs_nothing",
+    "cattrs_structure",
+    "cattrs_unstructure",
+    "convert",
 )
