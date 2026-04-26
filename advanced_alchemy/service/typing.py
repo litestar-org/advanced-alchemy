@@ -18,12 +18,13 @@ from typing import (
 from sqlalchemy import RowMapping
 from typing_extensions import TypeAlias, TypeGuard
 
-from advanced_alchemy.service._typing import (
+from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
     LITESTAR_INSTALLED,
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
+    SQLMODEL_INSTALLED,
     UNSET,
     AttrsInstance,
     AttrsLike,
@@ -41,12 +42,11 @@ from advanced_alchemy.service._typing import (
     attrs_nothing,
     convert,
 )
-from advanced_alchemy.service._typing import attrs_asdict as asdict
-from advanced_alchemy.service._typing import attrs_fields as fields
-from advanced_alchemy.service._typing import attrs_has as has
-from advanced_alchemy.service._typing import cattrs_structure as structure
-from advanced_alchemy.service._typing import cattrs_unstructure as unstructure
-from advanced_alchemy.typing import SQLMODEL_INSTALLED
+from advanced_alchemy.typing import attrs_asdict as asdict
+from advanced_alchemy.typing import attrs_fields as fields
+from advanced_alchemy.typing import attrs_has as has
+from advanced_alchemy.typing import cattrs_structure as structure
+from advanced_alchemy.typing import cattrs_unstructure as unstructure
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
